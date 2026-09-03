@@ -30,12 +30,13 @@ The complete terminal, view, and outcome ledger is frozen in
 [`adjudication.json`](adjudication.json). The supporting note gives the
 field-by-field reading and exact owner-section citations.
 
-Round six re-pins the same eight verdict rows after the reference arm was made
-profile-relative. No verdict changes. The canonical-framed transcript view's
-application-domain declaration leaf at `docs-next/pir/fiat-shamir.md:1276` is
-now admitted by the profile-relative `PIRReference` arm at
-`docs-next/pir/interactive-core.md:2256-2259`; the separate family-view
-reference-boundary finding is therefore affirmative.
+Round seven re-pins the same eight verdict rows after the canonical-framed
+page fixed the application-domain declaration body. No verdict changes. The
+transcript view's declaration leaf at `docs-next/pir/fiat-shamir.md:1281` now
+has its exact nominal body and malformed-shape classification at lines 68-76
+and is admitted by the profile-relative `PIRReference` arm at
+`docs-next/pir/interactive-core.md:2251-2259`; the separate family-view
+reference-boundary finding remains affirmative.
 
 ## Executable evidence
 
@@ -96,10 +97,11 @@ that the repaired source map changes none of these frozen holdout verdicts; it
 does not prove `ClaimStatus` for arbitrary Core values.
 
 The pass establishes only the bounded canonical application-domain reference
-transport: the family page recognizes that declaration kind, the generic
-reference body delegates its exact body, and the atomic boundary admits the
-result through `PIRReference`. It does not select application-domain semantics
-or generalize this result to an unlisted future profile or declaration kind.
+transport: the family page recognizes that declaration kind, fixes its exact
+nominal body and malformed-shape result, the generic reference body delegates
+the exact reference body, and the atomic boundary admits the result through
+`PIRReference`. It does not generalize this result to an unlisted future
+profile or declaration kind.
 
 ## Nonclaims
 

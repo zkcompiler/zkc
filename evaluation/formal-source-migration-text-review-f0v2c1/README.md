@@ -1,10 +1,11 @@
 # Migrated owner-text freeze review
 
 This package asks one exact question: does the migrated PIR owner text close
-the nine independent freeze-review questions for decision fidelity, the
+the ten independent freeze-review questions for decision fidelity, the
 Terminal contract, public-coin graph transfers and sinks, owner-view closure,
 manifest closure, publication reconstruction, family-view body closure,
-reference-leaf closure, and static-view law-field selection?
+reference-leaf closure, static-view law-field selection, and declaration-body
+closure?
 
 Run from the repository root:
 
@@ -12,21 +13,34 @@ Run from the repository root:
 python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check
 ```
 
-The round-six frozen answer is
-`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`: all nine questions close. The
-`PIRReference` declaration arm at `docs-next/pir/interactive-core.md:2256-2259`
-now ranges over the declaration kinds recognized by the selected profile's
-exact-used owner-module closure, and `PIRReferenceBody` remains closed under
-that profile at lines 2261-2266.
+The round-seven frozen answer is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`: all ten questions close. The
+`PIRReference` declaration arm remains profile-relative at
+`docs-next/pir/interactive-core.md:2251-2259`, and `PIRReferenceBody` remains
+closed under that profile at lines 2261-2266.
 
 The declaration-kind set is determinate from the three profile pages. The
 Interaction profile recognizes nine kinds at
 `docs-next/pir/interactive-core.md:111-118`. The canonical-framed profile
-imports Interaction at `docs-next/pir/fiat-shamir.md:73-74` and adds
-`pir.fs-application-domain` at lines 68-71, for ten kinds. The duplex profile
+imports Interaction at `docs-next/pir/fiat-shamir.md:78-79` and adds
+`pir.fs-application-domain` at lines 68-76, for ten kinds. The duplex profile
 imports exactly Interaction at `docs-next/pir/duplex-sponge-fiat-shamir.md:58`,
 lists its declaration catalog at lines 68-71, and states its no-extra closure
 at lines 73-76, so it recognizes the inherited nine and adds none.
+
+The declaration-body audit resolves all ten unique kinds to exactly one body
+owner page. The eight nominal Interaction kinds share
+`NominalProtocolDeclarationBody` at
+`docs-next/pir/interactive-core.md:106-108` and are associated with it at
+lines 111-116. The executable `pir.oracle-domain-law` body and admission are
+at `docs-next/pir/interactive-core.md:1011-1038`, with its canonical body at
+lines 3807-3810. The canonical-framed application-domain kind now has its
+exact nominal body, strict field set, malformed-shape classification, and
+reference body at `docs-next/pir/fiat-shamir.md:68-76`. Foundation's common
+recognized-declaration formation rule classifies a wrong constructor, tag,
+record field set or order, or field carrier as `Malformed` at
+`docs-next/foundation/executable-foundations.md:2042`; the checker pins that
+owner line as the common formation law instead of duplicating it in PIR.
 
 The checker pins the six migrated owner pages, eight migrated manifests, and
 the two earlier candidate packet sources. It recursively walks all sixteen
@@ -71,7 +85,7 @@ determinate catalog ordinal, all four imported entries have consuming-schema
 dependencies, all nine new selectors occur exactly once in their source
 fragments, and none of the twenty pre-existing law ordinals moved.
 
-A passing `--check` reproduces the frozen nine-affirmative result and the
+A passing `--check` reproduces the frozen ten-affirmative result and the
 digest of the complete evidence metrics. It does not choose the semantics of
 any nominal declaration, establish that the recognized-kind sets are complete
 for an unlisted future profile, or repair owner text. It also does not publish

@@ -35,14 +35,14 @@ SOURCE_PINS = {
 
 OWNER_PINS = {
     "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
-    "docs-next/pir/fiat-shamir.md": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
+    "docs-next/pir/fiat-shamir.md": "a93525b20c0e9cf77fae9091d263cdf6320181b3313c6ecda3dd84e71890ad7b",
     "docs-next/pir/duplex-sponge-fiat-shamir.md": "54822176a39852d07d72a084d0a56a04f22c1207e16bb2e0196c4f84fa4954c5",
     "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
     "docs-next/oir/projection-contract.md": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6",
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "2b5fd94fbc524c20c0353487810b81bb7c82aa4d9a646433ad80f6d256562fe4",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "8a52e02cc679473f428978be049eab94a42f09968065730fd449eb3802e8e70b",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",
@@ -111,6 +111,11 @@ def _sha256(path: Path) -> str:
 def _canonical_sha256(value: Any) -> str:
     raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(raw).hexdigest()
+
+
+def _line_number(text: str, needle: str) -> int:
+    position = text.find(needle)
+    return 1 if position < 0 else text.count("\n", 0, position) + 1
 
 
 def _pin_finding(name: str, pins: dict[str, str], ok_code: str, bad_code: str) -> Finding:
@@ -605,6 +610,15 @@ def evaluate() -> dict[str, Any]:
         in canonical_text
         and "profile imports are `{PIRInteractionProfileId}`" in canonical_text
     )
+    profile_fixes_application_domain_body = all(
+        marker in canonical_text
+        for marker in (
+            "its declaration body: exactly the companion page's",
+            "`NominalProtocolDeclarationBody`, one nonempty semantic symbol and no other",
+            "and a declaration with any other shape is `Malformed`.",
+            "The reference keeps\nthe companion page's `ModuleDeclarationRefBody`.",
+        )
+    )
     profile_closed_reference_arm = (
         "ProtocolDeclarationRef<K> for a declaration kind K that the exact-used owner-module"
         in compact_reference_union
@@ -622,6 +636,7 @@ def evaluate() -> dict[str, Any]:
         (
             application_domain_leaf,
             profile_recognizes_application_domain,
+            profile_fixes_application_domain_body,
             profile_closed_reference_arm,
             body_closed_under_profile,
             atomic_boundary_admits_reference,
@@ -672,13 +687,33 @@ def evaluate() -> dict[str, Any]:
             "closed_forward_state": closed_forward_state,
             "canonical_family_view_reference_boundary": {
                 "leaf_page": "docs-next/pir/fiat-shamir.md",
-                "leaf_line": 1276,
-                "profile_recognition_line": 69,
-                "profile_import_line": 74,
+                "leaf_line": _line_number(
+                    canonical_text,
+                    'application_domain: ProtocolDeclarationRef<"pir.fs-application-domain">',
+                ),
+                "profile_recognition_line": _line_number(
+                    canonical_text,
+                    '`ProtocolDeclarationRef<"pir.fs-application-domain">`, and this profile fixes',
+                ),
+                "declaration_body_line": _line_number(
+                    canonical_text,
+                    "its declaration body: exactly the companion page's",
+                ),
+                "malformed_shape_line": _line_number(
+                    canonical_text,
+                    "and a declaration with any other shape is `Malformed`.",
+                ),
+                "profile_import_line": _line_number(
+                    canonical_text, "profile imports are"
+                ),
                 "union_page": "docs-next/pir/interactive-core.md",
-                "union_line": 2256,
-                "body_closure_line": 2264,
-                "atomic_boundary_line": 2268,
+                "union_line": _line_number(owner_text, "PIRReference ="),
+                "body_closure_line": _line_number(
+                    owner_text, "PIRReferenceBody(x)"
+                ),
+                "atomic_boundary_line": _line_number(
+                    owner_text, "PIRViewAtomicBoundary ="
+                ),
                 "closed": reference_boundary_closed,
             },
         },

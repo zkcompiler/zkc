@@ -1575,3 +1575,201 @@ row was re-adjudicated with a frozen verdict, not that every protocol fits.
   deletion of the two exact temporary directories completed the cleanup.
 - The lifecycle count pins do not move: this round updates two existing
   packages and adds none.
+
+## Round seven
+
+### Exact question and result
+
+Does the current migrated PIR text close the nine round-six questions and a
+tenth declaration-body question: for every declaration kind recognized by the
+Interaction page or added by a family page, does exactly one owner page state
+its body, and does the owner corpus classify a malformed body shape, with the
+recognition and body lines identified exactly?
+
+Yes, for the exact pinned pages and manifests. All ten findings are
+affirmative, so the aggregate remains
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`.
+
+| Finding | Outcome and stable code |
+|---|---|
+| decision fidelity | `Affirmative/F0V2C1-A-DECISION-FIDELITY` |
+| Terminal contract | `Affirmative/F0V2C1-A-TERMINAL-CONTRACT` |
+| public-coin graph | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` |
+| owner-name closure | `Affirmative/F0V2C1-A-OWNER-CLOSURE` |
+| manifest closure | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` |
+| publication compilers | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` |
+| family-body closure | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` |
+| reference-leaf closure | `Affirmative/F0V2C1-A-PIR-REFERENCE-CLOSURE` |
+| static-view law selection | `Affirmative/F0V2C1-A-STATIC-VIEW-LAW-SELECTION` |
+| declaration-body closure | `Affirmative/F0V2C1-A-DECLARATION-BODY-CLOSURE` |
+
+### Declaration-body closure
+
+The three profiles have 28 inherited-or-local kind instances but ten unique
+declaration kinds. Each unique kind resolves to exactly one body-owner page:
+
+| Declaration kind | Recognition | Exact body and admission | Malformed shape |
+|---|---|---|---|
+| `pir.message-channel` | `docs-next/pir/interactive-core.md:113` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, `docs-next/foundation/executable-foundations.md:2042` |
+| `pir.challenge-domain` | `docs-next/pir/interactive-core.md:113` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.public-coin-law` | `docs-next/pir/interactive-core.md:114` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.coin-correlation-group` | `docs-next/pir/interactive-core.md:114` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.challenge-sharing-contract` | `docs-next/pir/interactive-core.md:115` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.claim-contract` | `docs-next/pir/interactive-core.md:115` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.reduction-contract` | `docs-next/pir/interactive-core.md:116` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.oracle-binding-contract` | `docs-next/pir/interactive-core.md:116` | `NominalProtocolDeclarationBody`, lines 106-108; association lines 111-116 | common Foundation formation law, line 2042 |
+| `pir.oracle-domain-law` | `docs-next/pir/interactive-core.md:117-118` | exact body and owner admission at lines 1011-1038; canonical body at lines 3807-3810 | common Foundation formation law, line 2042 |
+| `pir.fs-application-domain` | `docs-next/pir/fiat-shamir.md:68-69` | exact nominal body and reference treatment at lines 70-76 | kind-local classification at line 73, plus the common Foundation formation law at line 2042 |
+
+The common Foundation rule is the constitutional formation owner for every
+recognized declaration kind: strict decoding into the kind's exact body
+grammar precedes owner admission, and a wrong constructor, tag, record field
+set or order, or field carrier is `Malformed`. The review pins that shared
+owner line rather than demanding that each PIR body repeat it. The
+canonical-framed page additionally states the classification locally.
+
+The checker records an absent body as a missing row carrying the exact
+recognition page and line, and a missing or multiply owned body makes this
+finding `CannotAnswer`. No such row exists in the current census. The new
+canonical-framed paragraph closes the gap that the finite executor had exposed:
+its application-domain kind now uses one nonempty semantic symbol and no other
+field, and the reference continues to use `ModuleDeclarationRefBody`.
+
+### Prior questions, holdouts, and publication cone
+
+The nine prior questions remain affirmative. The recursive static-view census
+still contains 386 reference leaves across sixteen views, all classified under
+exactly one atomic arm. The inserted canonical paragraph only shifts source
+coordinates: the census preimage digest is now
+`3facfabc9e00dfb3eea54baf11ca30aae987b89e08cdef640ad22ecfa5850298`.
+The complete review metrics are frozen at
+`6c432a5a75c25556aded439aa70acb853da0735d2a890705e18ec8b06de3c817`.
+
+The holdout package is re-pinned to the current five owner pages and migration
+record. All eight rows retain their verdicts: five fit, three break, none bend,
+and none disagree. The represented WHIR and WARPfold frontiers still produce
+zero `Unknown` claim states and zero verdict changes. The aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; the four source-specialized
+fitting rows separately retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`.
+
+The reference and independently implemented publication compilers agree on
+all eighteen current profiles and on the migration-base comparison. The cone
+still rotates `interaction`, `canonical-framed-fiat-shamir`,
+`duplex-sponge-fiat-shamir`, `public-setup`, `commitment-opening`,
+`oracle-commitment`, `verifier-derived-query-plan`, `interface-plan`,
+`oir-endpoint-graph`, `endpoint-source-view`, `oir-projection-relation`,
+`relations`, `analysis-cryptographic-property`, `analysis-afk-transport`,
+`analysis-afk-theorem-source-validation`,
+`analysis-incremental-composition`, and
+`analysis-incremental-composition-source-validation`. `analysis-kernel` alone
+is stable, Foundation is unchanged, and no publication table is written.
+
+### Proposed delta
+
+None. The current owner text closes the declaration-body question, so this
+lane proposes no owner-page change and edits no owner page.
+
+## Handoff
+
+Main should commit this complete working tree with subject:
+
+```text
+test: review the declaration bodies and re-pin the holdouts
+```
+
+### Files changed
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py`,
+  `expected-findings.json`, and `README.md` add and freeze the tenth question,
+  pin the common declaration-formation owner, and refresh shifted family-page
+  coordinates.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md` re-pin the
+  current owner and support bytes, require the newly fixed declaration body,
+  and refresh exact citations without changing any verdict finding.
+- `evaluation/README.md` refreshes the two current package rows.
+- This note and `f0v2c2-holdout-readjudication.md` record round seven.
+
+No owner page, profile manifest, check manifest, directory README, lifecycle
+catalog, lifecycle count pin, publication table, real Git index, private
+ledger, or mechanization file was edited. No package was added. No commit,
+push, or pull request was attempted.
+
+### Validation
+
+The lifecycle-sensitive commands used `.lane-index`, a clone-local writable
+object store, the checkout objects as read-only alternates, and a clone-local
+offline dependency cache. The alternate index and temporary object/cache
+directories were removed after the checks.
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| required owner diff inspection | 0 | under 0.1 s | confirmed that the canonical-framed page now fixes the exact nominal body, rejects every other shape as malformed, and retains the existing reference body |
+| pre-edit migration review `--check` | 1 | 0.07 s | the round-six import-line expectation refused the shifted current page |
+| pre-edit holdout `--check` | 1 | 0.04 s | the old owner/support pins and frozen projection drifted while all eight verdict comparisons still agreed |
+| pre-edit publication identity print | 0 | 0.34 s | both compilers agreed on eighteen current profiles without writing the table |
+| final migration review package `--check` | 0 | 1.05 s | reproduced ten findings, all affirmative, with no blocker |
+| final holdout package `--check` | 0 | 0.04 s | reproduced all 26 frozen findings and the affirmative verdict aggregate |
+| publication identity print | 0 | 0.35 s | reference and independent compilers agreed on all eighteen current identities |
+| diagnostic publication package `--check` | 1 | 3.59 s | both compilers agreed, then seven legacy-publication assertions correctly detected that the current rotation cone is not the published table |
+| `python3 -B checks/run.py validate` with the alternate index | 0 | 0.04 s | validated 77 checks across six tiers; manifest digest `7416551c402f3c60e88e5b3704f762c80a466c6a0b95614eeef19667bb7c3587` |
+| `python3 -B checks/run.py run --tier developer` with the alternate index and offline cache | 0 | 1.76 s | all nine developer checks passed |
+| focused review wrapper with the same environment | 0 | 1.12 s | `research.migration-text-review` passed |
+| focused holdout wrapper with the same environment | 0 | 0.10 s | `research.holdout-readjudication` passed |
+| Python/JSON parse and `git diff --check` | 0 | 0.04 s and 0.06 s | compiled both changed Python files, parsed all three changed JSON files, and found no whitespace errors |
+
+### Aggregate outcome
+
+- Migration review: `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`; all ten
+  questions close, including ten unique recognized declaration kinds with one
+  body-owner page each and a malformed-shape admission.
+- Holdout readjudication:
+  `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; all eight verdicts remain
+  frozen, with five fits, three breaks, zero bends, zero disagreements, and no
+  verdict change.
+- Publication reconstruction: both compilers agree on all eighteen profiles;
+  the migration-base cone contains seventeen profiles, `analysis-kernel` is
+  the only stable profile, Foundation is unchanged, and nothing is published.
+
+### Nonclaims
+
+These byte-pinned source checks do not publish owner text or identities, prove
+the owner laws for arbitrary values, establish implementation, runtime,
+provider, or backend correspondence, establish relation satisfaction or
+theorem truth, prove a cryptographic or protocol-security property, validate
+an endpoint or deployment, admit an exact holdout Core, or establish production
+readiness. Declaration-body closure covers only the kinds recognized by these
+three pinned profiles; it does not cover an unlisted future profile or prove
+meaning beyond each stated declaration body. The affirmative holdout aggregate
+says every row was re-adjudicated with a frozen verdict, not that every
+protocol fits.
+
+### Surprises and corrections to the brief
+
+- This clone does not contain `AGENTS.md` or `.claude/CLAUDE.md`; their
+  read-only primary-checkout copies supplied the required instructions.
+- The common malformed-shape classification is owned once by Foundation's
+  recognized-declaration formation law, while the canonical-framed page also
+  restates it locally for the application-domain body. Requiring duplicate PIR
+  copies would conflict with the existing owner split; the checker instead
+  requires one exact body-owner page per kind and the common formation law.
+- The general package discipline requests manifest and lifecycle edits, while
+  the task-specific instruction forbids manifest edits. Both packages and all
+  inventory entries already exist, so no manifest, lifecycle catalog, or count
+  pin changes are needed.
+- The workflow's private status-ledger append conflicts with the express
+  outside-clone write prohibition and read-only mount, so no private ledger was
+  changed.
+- The lifecycle count pins do not move because this round updates existing
+  packages and adds none.
+- The full publication package's legacy-table assertions fail after both
+  compilers agree on the current identities: six frozen upstream rows and the
+  complete published table still describe the pre-migration publication.
+  This is the expected no-publication boundary, not a compiler disagreement;
+  the required direct identity reconstruction exits zero and this lane does
+  not edit the publication table.
+
+The real Git index remains untouched. No commit, push, pull request,
+owner-page edit, profile-manifest edit, directory-README edit, publication, or
+private-ledger write was attempted.

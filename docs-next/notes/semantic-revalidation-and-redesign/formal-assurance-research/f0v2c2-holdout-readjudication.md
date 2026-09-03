@@ -699,3 +699,32 @@ The four source-specialized fitting rows remain
 profile supplies their Check, Reduction, Claim, and failure-guard references.
 That bounded source gap does not alter a frozen holdout verdict and is not an
 owner-page defect.
+
+## Round seven
+
+The five migrated owner pages and migration record are re-pinned after the
+canonical-framed page fixed the application-domain declaration body. The
+canonical page pin is now
+`a93525b20c0e9cf77fae9091d263cdf6320181b3313c6ecda3dd84e71890ad7b`,
+and the refreshed adjudication ledger is frozen at
+`e81d667765ce5f2eb18a96e8bfe19bc3c184df0f651c901fba818764bff2862f`.
+Its canonical family-view citation moves to lines 1240-1637.
+
+All eight rows were re-adjudicated against both comparison sources. Five fit,
+three break at the same named boundaries, none bend, and none disagree. The
+represented WHIR and WARPfold frontiers still have zero `Unknown` claim states
+and zero verdict changes. The verdict aggregate therefore remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+The canonical family-view reference-boundary finding remains
+`Affirmative/F0V2C2-A-FAMILY-VIEW-REFERENCE-BOUNDARY`. The declaration kind is
+recognized at `docs-next/pir/fiat-shamir.md:69`, its exact nominal body begins
+at line 70, a different shape is `Malformed` at line 73, the profile imports
+Interaction at line 79, and the transcript-view leaf is at line 1281. The
+generic reference union, body delegation, and atomic boundary remain at
+`docs-next/pir/interactive-core.md:2251`, line 2261, and line 2268.
+
+The four source-specialized fitting rows still retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`. The declaration-body repair
+does not supply their source-specific Check, Reduction, Claim, or failure-guard
+coordinates and changes no verdict.

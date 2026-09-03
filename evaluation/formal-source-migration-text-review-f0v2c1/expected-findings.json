@@ -49,7 +49,12 @@
       "static-view-law-selection",
       "Affirmative",
       "F0V2C1-A-STATIC-VIEW-LAW-SELECTION"
+    ],
+    [
+      "declaration-body-closure",
+      "Affirmative",
+      "F0V2C1-A-DECLARATION-BODY-CLOSURE"
     ]
   ],
-  "metrics_sha256": "59a5c7fb539dfc8ea60c28e4e3a256002a9e0b8e9b43b1180cd6ed69cc43778b"
+  "metrics_sha256": "6c432a5a75c25556aded439aa70acb853da0735d2a890705e18ec8b06de3c817"
 }

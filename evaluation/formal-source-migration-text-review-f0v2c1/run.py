@@ -84,7 +84,7 @@ def _json(relative: str) -> Any:
 def _source_hashes() -> dict[str, str]:
     return {
         relative: hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
-        for relative in (*PAGES, *MIGRATED_MANIFESTS, *PACKET_SOURCES)
+        for relative in (*PAGES, FOUNDATION, *MIGRATED_MANIFESTS, *PACKET_SOURCES)
     }
 
 
@@ -528,7 +528,7 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
         ),
     }
     _require(
-        profile_import_lines["canonical-framed-fiat-shamir"] == 74
+        profile_import_lines["canonical-framed-fiat-shamir"] == 79
         and profile_import_lines["duplex-sponge-fiat-shamir"] == 58,
         "family profile-import lines drifted",
     )
@@ -882,6 +882,246 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
         "complete": not uncovered
         and not unrecognized_kinds
         and all(row["determinate"] for row in recognition.values()),
+    }
+
+
+def _declaration_body_review(
+    pages: dict[str, str], references: dict[str, Any]
+) -> dict[str, Any]:
+    interaction_path = "docs-next/pir/interactive-core.md"
+    canonical_path = "docs-next/pir/fiat-shamir.md"
+    interaction = pages[interaction_path]
+    canonical = pages[canonical_path]
+    foundation = _read(FOUNDATION)
+
+    recognition = references["recognized_declaration_kinds_by_profile"]
+    recognition_sites: dict[str, dict[str, Any]] = {}
+    for row in recognition["interaction"]["recognized_kinds"]:
+        recognition_sites[row["kind"]] = {
+            "page": row["page"],
+            "line": row["line"],
+        }
+    for profile in ("canonical-framed-fiat-shamir", "duplex-sponge-fiat-shamir"):
+        for row in recognition[profile]["added_kinds"]:
+            _require(
+                row["kind"] not in recognition_sites,
+                f"{row['page']}:{row['line']}: declaration kind is recognized twice",
+            )
+            recognition_sites[row["kind"]] = {
+                "page": row["page"],
+                "line": row["line"],
+            }
+
+    nominal_kinds = {
+        "pir.message-channel",
+        "pir.challenge-domain",
+        "pir.public-coin-law",
+        "pir.coin-correlation-group",
+        "pir.challenge-sharing-contract",
+        "pir.claim-contract",
+        "pir.reduction-contract",
+        "pir.oracle-binding-contract",
+    }
+    nominal_body_line = _line_number(interaction, "NominalProtocolDeclarationBody =")
+    nominal_claim_line = _line_number(
+        interaction,
+        "The exact-used PIR owner-module closure recognizes this body",
+    )
+    nominal_body_present = (
+        _definition_count(interaction, "NominalProtocolDeclarationBody") == 1
+        and "The exact-used PIR owner-module closure recognizes this body for the declaration kinds"
+        in " ".join(interaction.split())
+    )
+    oracle_body_line = _line_number(
+        interaction, "The exact declaration body resolved by a `LogicalAccess.domain_law` is:"
+    )
+    oracle_encoding_line = _line_number(
+        interaction, "OracleDomainLawDeclarationBody(x) = R {"
+    )
+    compact_interaction = " ".join(interaction.split())
+    oracle_body_present = all(
+        marker in compact_interaction
+        for marker in (
+            "The exact declaration body resolved by a `LogicalAccess.domain_law` is:",
+            "OracleDomainLawDeclarationBody = {",
+            "After authenticating its owner module, admission lifts `index_type`",
+            "This finite executable predicate is the complete v0 domain law.",
+            "OracleDomainLawDeclarationBody(x) = R {",
+        )
+    )
+    canonical_body_line = _line_number(
+        canonical, "The exact-used PIR owner-module closure additionally recognizes"
+    )
+    canonical_body_present = all(
+        marker in canonical
+        for marker in (
+            '`ProtocolDeclarationRef<"pir.fs-application-domain">`, and this profile fixes',
+            "its declaration body: exactly the companion page's",
+            "`NominalProtocolDeclarationBody`, one nonempty semantic symbol and no other",
+            "and a declaration with any other shape is `Malformed`.",
+            "The reference keeps\nthe companion page's `ModuleDeclarationRefBody`.",
+        )
+    )
+
+    formation_marker = (
+        "recognized-declaration-formation=for-every-recognized-kind-K,"
+        "strict-decoding-into-K's-exact-typed-body-grammar-precedes-owner-context-interpretation;"
+        "wrong-constructor,tag,record-field-set-or-order,or-field-carrier-is-Malformed;"
+        "only-after-formation-can-closed-owner-admission-run"
+    )
+    formation_line = _line_number(foundation, "recognized-declaration-formation=")
+    generic_malformed_admission = formation_marker in foundation
+    local_canonical_malformed_line = _line_number(
+        canonical, "and a declaration with any other shape is `Malformed`."
+    )
+
+    rows: list[dict[str, Any]] = []
+    missing_bodies: list[dict[str, Any]] = []
+    ambiguous_body_owners: list[dict[str, Any]] = []
+    missing_malformed_admission: list[dict[str, Any]] = []
+    for kind, recognized_at in sorted(recognition_sites.items()):
+        body_claims: list[dict[str, Any]] = []
+        for page, text in pages.items():
+            if not page.startswith("docs-next/pir/"):
+                continue
+            for paragraph in re.finditer(
+                r"(?:\A|\n\n)(.*?)(?=\n\n|\Z)", text, flags=re.DOTALL
+            ):
+                block = paragraph.group(1)
+                if kind in block and any(
+                    phrase in block
+                    for phrase in (
+                        "recognizes this body",
+                        "exact body and admission law",
+                        "declaration body:",
+                    )
+                ):
+                    body_claims.append(
+                        {
+                            "page": page,
+                            "line": text.count("\n", 0, paragraph.start(1)) + 1,
+                        }
+                    )
+        body_claims = [
+            {
+                "page": page,
+                "line": min(
+                    row["line"] for row in body_claims if row["page"] == page
+                ),
+            }
+            for page in sorted({row["page"] for row in body_claims})
+        ]
+        body_owners: list[dict[str, Any]] = []
+        malformed_admissions: list[dict[str, Any]] = []
+        if (
+            kind in nominal_kinds
+            and nominal_body_present
+            and body_claims
+            == [{"page": interaction_path, "line": nominal_claim_line}]
+        ):
+            body_owners.append(
+                {
+                    "page": interaction_path,
+                    "lines": [nominal_body_line, nominal_body_line + 2],
+                    "body": "NominalProtocolDeclarationBody",
+                }
+            )
+        elif (
+            kind == "pir.oracle-domain-law"
+            and oracle_body_present
+            and body_claims
+            == [{"page": interaction_path, "line": nominal_claim_line}]
+        ):
+            body_owners.append(
+                {
+                    "page": interaction_path,
+                    "lines": [oracle_body_line, oracle_body_line + 27],
+                    "encoding_lines": [oracle_encoding_line, oracle_encoding_line + 3],
+                    "body": "OracleDomainLawDeclarationBody",
+                }
+            )
+        elif (
+            kind == "pir.fs-application-domain"
+            and canonical_body_present
+            and body_claims
+            == [{"page": canonical_path, "line": canonical_body_line}]
+        ):
+            body_owners.append(
+                {
+                    "page": canonical_path,
+                    "lines": [canonical_body_line, canonical_body_line + 8],
+                    "body": "NominalProtocolDeclarationBody",
+                }
+            )
+            malformed_admissions.append(
+                {
+                    "page": canonical_path,
+                    "line": local_canonical_malformed_line,
+                    "scope": "kind-local",
+                }
+            )
+        if generic_malformed_admission:
+            malformed_admissions.append(
+                {
+                    "page": FOUNDATION,
+                    "line": formation_line,
+                    "scope": "every recognized declaration kind",
+                }
+            )
+
+        if not body_owners:
+            missing_bodies.append({"kind": kind, "recognized_at": recognized_at})
+        elif len(body_owners) != 1 or len(body_claims) != 1:
+            ambiguous_body_owners.append(
+                {
+                    "kind": kind,
+                    "recognized_at": recognized_at,
+                    "body_claims": body_claims,
+                    "body_owners": body_owners,
+                }
+            )
+        if not malformed_admissions:
+            missing_malformed_admission.append(
+                {"kind": kind, "recognized_at": recognized_at}
+            )
+        rows.append(
+            {
+                "kind": kind,
+                "recognized_at": recognized_at,
+                "body_claims": body_claims,
+                "body_owners": body_owners,
+                "malformed_shape_admissions": malformed_admissions,
+                "closed": len(body_claims) == 1
+                and len(body_owners) == 1
+                and bool(malformed_admissions),
+            }
+        )
+
+    return {
+        "recognized_declaration_kinds": len(recognition_sites),
+        "recognized_profile_kind_instances": sum(
+            len(row["recognized_kinds"]) for row in recognition.values()
+        ),
+        "declaration_body_rows": rows,
+        "declaration_body_owner_pages": sorted(
+            {
+                owner["page"]
+                for row in rows
+                for owner in row["body_owners"]
+            }
+        ),
+        "generic_malformed_formation_owner": {
+            "page": FOUNDATION,
+            "line": formation_line,
+            "present": generic_malformed_admission,
+        },
+        "missing_declaration_bodies": missing_bodies,
+        "ambiguous_declaration_body_owners": ambiguous_body_owners,
+        "missing_malformed_shape_admissions": missing_malformed_admission,
+        "complete": not missing_bodies
+        and not ambiguous_body_owners
+        and not missing_malformed_admission
+        and all(row["closed"] for row in rows),
     }
 
 
@@ -2574,6 +2814,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     view = _view_closure(pages)
     references = _reference_closure_review(pages)
     law_selection = _law_selection_review(pages)
+    declaration_bodies = _declaration_body_review(pages, references)
     terminal = _terminal_review(pages["docs-next/pir/interactive-core.md"])
     pcgraph = _pcgraph_review(pages["docs-next/pir/interactive-core.md"])
     manifests = _manifest_review(pages)
@@ -2616,6 +2857,13 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
             if law_selection["complete"]
             else "F0V2C1-C-STATIC-VIEW-LAW-SELECTION",
         ),
+        Finding(
+            "declaration-body-closure",
+            "Affirmative" if declaration_bodies["complete"] else "CannotAnswer",
+            "F0V2C1-A-DECLARATION-BODY-CLOSURE"
+            if declaration_bodies["complete"]
+            else "F0V2C1-C-DECLARATION-BODY-NOT-CLOSED",
+        ),
     ]
     metrics = {
         "source_sha256": _source_hashes(),
@@ -2625,6 +2873,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         "views": view,
         "references": references,
         "law_selection": law_selection,
+        "declaration_bodies": declaration_bodies,
         "manifests": manifests,
         "publication": publication,
     }
