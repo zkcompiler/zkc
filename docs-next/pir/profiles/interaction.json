@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "interaction",
   "profile_family": "pir.interaction",
-  "revision": 0,
+  "revision": 1,
   "owner_page": "docs-next/pir/interactive-core.md",
   "expected_imports": [],
   "supported_subject_kinds": [
@@ -85,20 +85,12 @@
     {
       "kind": "pir.body-compiler",
       "name": "interactive-core-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-body-grammar",
       "selector": "InteractiveCoreBody(C) = R",
       "dependencies": [
         {"profile": "self", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"}
       ]
-    },
-    {
-      "kind": "pir.body-compiler",
-      "name": "source-authority-envelope-body-v0",
-      "revision": 0,
-      "fragment": "interaction-static-views",
-      "selector": "PIRSourceConsumerRoleBody(x) = R",
-      "dependencies": []
     },
     {
       "kind": "pir.semantic-law",
@@ -111,28 +103,33 @@
     {
       "kind": "pir.semantic-law",
       "name": "core-admission-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-kernel",
       "selector": "## 10. Core admission",
-      "dependencies": []
+      "dependencies": [
+        {"profile": "self", "kind": "pir.semantic-law", "name": "terminal-contract-v0"}
+      ]
     },
     {
       "kind": "pir.semantic-law",
       "name": "execution-and-replay-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-kernel",
       "selector": "## 12. Challenge-parameterized execution",
       "dependencies": [
-        {"profile": "self", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"}
+        {"profile": "self", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"}
       ]
     },
     {
       "kind": "pir.semantic-law",
       "name": "public-coin-eligibility-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-kernel",
       "selector": "## 11. Structural public-coin eligibility",
-      "dependencies": []
+      "dependencies": [
+        {"profile": "self", "kind": "pir.semantic-law", "name": "public-coin-transfer-coordinates-v0"}
+      ]
     },
     {
       "kind": "pir.semantic-law",
@@ -145,10 +142,17 @@
     {
       "kind": "pir.semantic-law",
       "name": "static-view-issuance-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "### 13.3 Issuance, bindings, capabilities, and outcomes",
-      "dependencies": []
+      "dependencies": [
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "public-binding-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "strategy-decision-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "public-coin-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "effect-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "claim-reduction-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "execution-view-v0"}
+      ]
     },
     {
       "kind": "pir.evaluator-signature",
@@ -165,6 +169,178 @@
       "fragment": "interaction-static-views",
       "selector": "PIRStaticViewIssueOutcome =",
       "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-consumer-role-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourceConsumerRoleBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-purpose-role-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourcePurposeRoleBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-binding-payload-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourceBindingPayloadBody(x) =",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "interactive-core-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-capability-requirement-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourceCapabilityRequirementBody(x) =",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "interactive-core-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-no-policy-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourceNoPolicyBody(x) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-policy-closure-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourcePolicyClosureBody(x) =",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "interactive-core-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "static-view-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewBody(view) =",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "interactive-core-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "terminal-contract-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "TerminalContract(t), with o_t",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "public-coin-transfer-coordinates-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "ChallengeTransfer(challenge), with",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "protocol-outcome-partition-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "ProtocolOutcomeLane(P) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "static-view-schema-resolution-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRStaticViewFieldResolution :=",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "public-binding-view-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewSchema(PublicBindingView) = {",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "strategy-decision-view-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewSchema(StrategyDecisionView) = {",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "public-coin-view-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewSchema(PublicCoinView) = {",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "public-coin-eligibility-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "effect-view-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewSchema(EffectView) = {",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "claim-reduction-view-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewSchema(ClaimReductionView) = {",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "execution-view-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "StaticViewSchema(ExecutionView) = {",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "execution-and-replay-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "run-view-issuance-v0"}
+      ]
     }
   ],
   "subjects": [
@@ -198,42 +374,42 @@
     },
     {
       "kind": "pir.source-binding-payload",
-      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-binding-payload-body-v0"},
       "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
       "evaluator": "interaction-evaluator-v0",
       "failure_schema": "interaction-outcome-partition-v0"
     },
     {
       "kind": "pir.source-capability-requirement",
-      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-capability-requirement-body-v0"},
       "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
       "evaluator": "interaction-evaluator-v0",
       "failure_schema": "interaction-outcome-partition-v0"
     },
     {
       "kind": "pir.source-consumer",
-      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-consumer-role-body-v0"},
       "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
       "evaluator": "interaction-evaluator-v0",
       "failure_schema": "interaction-outcome-partition-v0"
     },
     {
       "kind": "pir.source-no-policy",
-      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-no-policy-body-v0"},
       "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
       "evaluator": "interaction-evaluator-v0",
       "failure_schema": "interaction-outcome-partition-v0"
     },
     {
       "kind": "pir.source-policy-closure",
-      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-policy-closure-body-v0"},
       "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
       "evaluator": "interaction-evaluator-v0",
       "failure_schema": "interaction-outcome-partition-v0"
     },
     {
       "kind": "pir.source-purpose",
-      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-purpose-role-body-v0"},
       "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
       "evaluator": "interaction-evaluator-v0",
       "failure_schema": "interaction-outcome-partition-v0"

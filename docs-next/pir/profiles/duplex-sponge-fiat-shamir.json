@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "duplex-sponge-fiat-shamir",
   "profile_family": "pir.duplex-sponge-fiat-shamir",
-  "revision": 0,
+  "revision": 1,
   "owner_page": "docs-next/pir/duplex-sponge-fiat-shamir.md",
   "expected_imports": ["interaction"],
   "supported_subject_kinds": [
@@ -97,10 +97,16 @@
     {
       "kind": "pir.semantic-law",
       "name": "duplex-sponge-source-views-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "## 11. Exact PIR source views",
-      "dependencies": []
+      "dependencies": [
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "duplex-transcript-declaration-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "duplex-encoded-input-coverage-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "duplex-challenge-transition-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "duplex-fs-construction-view-v0"},
+        {"profile": "self", "kind": "pir.static-view-schema", "name": "execution-view-v0"}
+      ]
     },
     {
       "kind": "pir.evaluator-signature",
@@ -117,6 +123,103 @@
       "fragment": "duplex-sponge-fs-boundary",
       "selector": "## 14. Outcomes and nonclaims",
       "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-binding-payload-body-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "DuplexSourceBindingPayloadBody(x) =",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-binding-payload-body-v0"},
+        {"profile": "self", "kind": "pir.body-compiler", "name": "duplex-sponge-transcript-construction-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-capability-requirement-body-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "DuplexSourceCapabilityRequirementBody(x) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-no-policy-body-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "DuplexSourceNoPolicyBody(x) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-policy-closure-body-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "DuplexSourcePolicyClosureBody(x) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "duplex-transcript-declaration-view-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "StaticViewSchema(DuplexTranscriptDeclarationView) = {",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "duplex-encoded-input-coverage-view-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "StaticViewSchema(DuplexEncodedInputCoverageView) = {",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "duplex-challenge-transition-view-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "StaticViewSchema(DuplexChallengeTransitionView) = {",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "duplex-fs-construction-view-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "StaticViewSchema(DuplexFSConstructionView) = {",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"}
+      ]
+    },
+    {
+      "kind": "pir.static-view-schema",
+      "name": "execution-view-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "StaticViewSchema(ExecutionView) = {",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-admission-and-execution-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"}
+      ]
     }
   ],
   "subjects": [
@@ -129,42 +232,42 @@
     },
     {
       "kind": "pir.source-binding-payload",
-      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-binding-payload-body-v0"},
       "laws": ["duplex-sponge-source-views-v0"],
       "evaluator": "duplex-sponge-evaluator-v0",
       "failure_schema": "duplex-sponge-outcome-partition-v0"
     },
     {
       "kind": "pir.source-capability-requirement",
-      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-capability-requirement-body-v0"},
       "laws": ["duplex-sponge-source-views-v0"],
       "evaluator": "duplex-sponge-evaluator-v0",
       "failure_schema": "duplex-sponge-outcome-partition-v0"
     },
     {
       "kind": "pir.source-consumer",
-      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-consumer-role-body-v0"},
       "laws": ["duplex-sponge-source-views-v0"],
       "evaluator": "duplex-sponge-evaluator-v0",
       "failure_schema": "duplex-sponge-outcome-partition-v0"
     },
     {
       "kind": "pir.source-no-policy",
-      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-no-policy-body-v0"},
       "laws": ["duplex-sponge-source-views-v0"],
       "evaluator": "duplex-sponge-evaluator-v0",
       "failure_schema": "duplex-sponge-outcome-partition-v0"
     },
     {
       "kind": "pir.source-policy-closure",
-      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-policy-closure-body-v0"},
       "laws": ["duplex-sponge-source-views-v0"],
       "evaluator": "duplex-sponge-evaluator-v0",
       "failure_schema": "duplex-sponge-outcome-partition-v0"
     },
     {
       "kind": "pir.source-purpose",
-      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-purpose-role-body-v0"},
       "laws": ["duplex-sponge-source-views-v0"],
       "evaluator": "duplex-sponge-evaluator-v0",
       "failure_schema": "duplex-sponge-outcome-partition-v0"

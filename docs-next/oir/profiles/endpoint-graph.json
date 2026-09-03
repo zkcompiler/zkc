@@ -3,7 +3,7 @@
   "key": "oir-endpoint-graph",
   "catalog_namespace": "oir",
   "profile_family": "oir.endpoint-graph",
-  "revision": 0,
+  "revision": 1,
   "expected_imports": [],
   "supported_subject_kinds": [
     "oir.endpoint"
@@ -32,7 +32,7 @@
     {
       "kind": "oir.body-compiler",
       "name": "endpoint-graph-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "endpoint-graph-bodies",
       "selector": "EndpointSemanticGraphBody(x) = R",
       "dependencies": []
@@ -40,7 +40,7 @@
     {
       "kind": "oir.semantic-law",
       "name": "endpoint-contract-derivation-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "endpoint-contract-law",
       "selector": "`DeriveEndpointContractV0` applies the following exact continuation law.",
       "dependencies": []
