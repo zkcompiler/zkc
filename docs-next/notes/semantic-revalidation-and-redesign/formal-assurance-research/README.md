@@ -76,7 +76,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
-  -> F2-O3  provider interpretation in ArkLib            [contract; lane running]
+  -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -622,6 +622,18 @@ provider, extraction tool, or durable schema.
   provider models when its verdict is an option whose empty case two
   producers reach; the lane derives the declaration from the execution
   model and proposes it in the carrier packet's shape.
+- [`f2o3-arklib-interpretation.md`](f2o3-arklib-interpretation.md)
+  runs that contract once: an untrusted generator emits an ArkLib reduction
+  for the three-step specification with prover rounds tied to the Plan's
+  recipes by kernel-checked equations, and an independent checker decides
+  the five clauses on the complete finite domain, all affirmative
+  (`Affirmative/F2O3-A-FINITE-CORRESPONDENCE`, 81 verifier inputs, 81 honest
+  runs, 45 accepted and 36 rejected); the derived declaration is the closed
+  carrier `Option Unit` with modelled lanes `Accepted` and `Rejected`, the
+  challenge oracle carries a uniform draw over the challenge type, the
+  contract's two-producer premise is refused as a source correction, and the
+  provider-map premise stays `CannotAnswer` until the owner publishes a
+  declaration.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions

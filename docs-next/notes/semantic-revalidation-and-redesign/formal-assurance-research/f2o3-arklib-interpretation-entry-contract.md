@@ -7,6 +7,16 @@
 > to a second formal system whose outcome carrier has a different shape.
 > **Authority:** None. A contract fixes what a lane must deliver and what a
 > result may claim; it changes no owner page.
+> **First attempt:** run 2026-09-03 as
+> [`f2o3-arklib-interpretation.md`](f2o3-arklib-interpretation.md); aggregate
+> `Affirmative/F2O3-A-FINITE-CORRESPONDENCE` on all five clauses over the
+> complete finite domain. The attempt refused this contract's Section 3
+> premise that two producers reach the empty verdict
+> (`Refused/F2O3-R-NO-PROVER-FAILURE-PRODUCER`): at the pinned revision the
+> prover's run is lifted from the failure-free base oracle computation, so
+> only verifier rejection produces `none`. Section 3 is corrected below; the
+> declaration it derived is `Option Unit` with modelled lanes `Accepted` and
+> `Rejected`, and the provider-map premise waits on the owner's publication.
 
 ## 1. The question
 
@@ -52,11 +62,14 @@ the Fresh distribution premise binds to the public-coin-law coordinate.
 ## 3. The carrier question this contract must settle
 
 `Reduction.verdict` returns `Option Unit` once the option layer is run. Its
-`none` is produced by the verifier's failure, which is rejection, and by any
-failure of the prover's run, because the prover runs inside the same option
-layer before the verifier. The lane must therefore do what the VCVio round
-did not have to do: decide the provider's declaration from its execution
-model rather than from its verdict type.
+`none` is produced by the verifier's failure, which is rejection. This
+contract first supposed that a failure of the prover's run could produce it
+too, because `Reduction.run` sequences the prover inside the same option
+layer; the first attempt showed that at the pinned revision `Prover.run` is
+lifted from the failure-free base oracle computation and cannot fail, so the
+verdict has one producer of `none`. The question the lane had to answer
+remains the right one for any provider whose verdict is an option: decide
+the declaration from the execution model rather than from the verdict type.
 
 - If the generated prover is total on the finite domain and the lane
   executes prover and verifier separately (`Prover.run`, then
