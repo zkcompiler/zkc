@@ -1,7 +1,7 @@
 {
   "aggregate": "F0V2C2-A-HOLDOUTS-READJUDICATED",
-  "adjudication_sha256": "db842dcba66f72d05f0ba7e97aefeb73b6cee210a6aff7f13923811159eaf1c0",
-  "findings_sha256": "f531c037d0d624ac8c0b89d2baba668a444c3aa76074b41f8c2b62de32d2b0ab",
+  "adjudication_sha256": "1f2b836b28ebc87011189441d0c582016f079dc593bd15a776d30e780a95df29",
+  "findings_sha256": "37972806727fe9214802723dddec210d0d9351272c1a9f940215cff338731fb5",
   "finding_codes": [
     [
       "holdout-source-bytes",
@@ -27,6 +27,11 @@
       "migrated-terminal-view-and-outcome-laws",
       "Affirmative",
       "F0V2C2-A-MIGRATED-OWNER-LAWS"
+    ],
+    [
+      "represented-holdout-closed-forward-state",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUT-CLAIM-STATUS"
     ],
     [
       "nested-guard-must-facts",

@@ -34,7 +34,7 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "86259df9d149668bc23d5887e8f60f04f49eebab6c914ee285b5ac70bea2ed99",
+    "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
     "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
     "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
     "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
@@ -165,6 +165,72 @@ def conjunction(indices: tuple[int, ...]) -> Term:
     return ("if", ("input", indices[0]), conjunction(indices[1:]), ("false",))
 
 
+@dataclass(frozen=True)
+class Region:
+    required_true: frozenset[int]
+    required_false: frozenset[int]
+
+
+def _implies(left: Region, right: Region) -> bool:
+    return right.required_true <= left.required_true and right.required_false <= left.required_false
+
+
+def _disjoint(left: Region, right: Region) -> bool:
+    return bool(
+        left.required_true & right.required_false
+        or right.required_true & left.required_false
+    )
+
+
+def _claim_status(target: Region, source: Region, consumers: tuple[Region, ...]) -> str:
+    if _implies(target, source) and all(_disjoint(target, item) for item in consumers):
+        return "Live"
+    if _disjoint(target, source) or any(_implies(target, item) for item in consumers):
+        return "Dead"
+    return "Unknown"
+
+
+def _closed_forward_holdout_status() -> dict[str, Any]:
+    always = Region(frozenset(), frozenset())
+    accepting = Region(frozenset({0}), frozenset())
+    fallback = Region(frozenset(), frozenset({0}))
+
+    whir = {
+        "accept": {
+            "initial": _claim_status(accepting, always, (accepting,)),
+            "folded": _claim_status(accepting, accepting, (accepting,)),
+        },
+        "fallback": {
+            "initial": _claim_status(fallback, always, (accepting,)),
+            "folded": _claim_status(fallback, accepting, (accepting,)),
+        },
+    }
+    warpfold = {"accept": {}, "fallback": {}}
+    unknown = sum(
+        status == "Unknown"
+        for frontier in whir.values()
+        for status in frontier.values()
+    )
+    if whir != {
+        "accept": {"initial": "Dead", "folded": "Dead"},
+        "fallback": {"initial": "Live", "folded": "Dead"},
+    }:
+        raise ValueError("WHIR closed forward-state classification drifted")
+    if unknown:
+        raise ValueError("a represented holdout frontier produced ClaimStatus Unknown")
+    return {
+        "represented_carriers": 2,
+        "source_specialized_rows_without_exact_carriers": 4,
+        "claim_status_unknown": unknown,
+        "terminal_live_claims": {
+            "WHIR": {"accept": [], "fallback": ["initial"]},
+            "WARPfold": {"accept": [], "fallback": []},
+        },
+        "claim_status": {"WHIR": whir, "WARPfold": warpfold},
+        "verdict_changes": 0,
+    }
+
+
 def evaluate() -> dict[str, Any]:
     findings: list[Finding] = []
     findings.append(
@@ -211,6 +277,9 @@ def evaluate() -> dict[str, Any]:
         "Positive(i) in MustWhenTrue(GuardTerm(o_t))",
         "required_applied_reductions: CanonicalSortedUniqueSeq<ReductionRef>",
         "LiveClaims(o_t) = t.terminal_claims",
+        "Region(o) := {",
+        "ClaimStatus(c, o) :=",
+        "no claim has ClaimStatus Unknown at o_t",
         "GuardImplies(use_guard, source_guard) :=",
         "Scope openings are deterministic, unguarded boundaries",
         "ProtocolOutcomeLane(P) =",
@@ -224,6 +293,23 @@ def evaluate() -> dict[str, Any]:
             "F0V2C2-A-MIGRATED-OWNER-LAWS"
             if owner_laws_present
             else "F0V2C2-C-MIGRATED-OWNER-LAWS",
+        )
+    )
+
+    closed_forward_state = _closed_forward_holdout_status()
+    findings.append(
+        Finding(
+            "represented-holdout-closed-forward-state",
+            "Affirmative"
+            if owner_laws_present
+            and closed_forward_state["claim_status_unknown"] == 0
+            and closed_forward_state["verdict_changes"] == 0
+            else "CannotAnswer",
+            "F0V2C2-A-HOLDOUT-CLAIM-STATUS"
+            if owner_laws_present
+            and closed_forward_state["claim_status_unknown"] == 0
+            and closed_forward_state["verdict_changes"] == 0
+            else "F0V2C2-C-HOLDOUT-CLAIM-STATUS",
         )
     )
 
@@ -536,6 +622,7 @@ def evaluate() -> dict[str, Any]:
             "source_pins": len(SOURCE_PINS),
             "owner_pins": len(OWNER_PINS),
             "whir_guard_valuation_counts": frontier_counts,
+            "closed_forward_state": closed_forward_state,
         },
     }
 

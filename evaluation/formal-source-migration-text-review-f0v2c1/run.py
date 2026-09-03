@@ -7,6 +7,7 @@ import argparse
 from dataclasses import dataclass
 import hashlib
 import importlib.util
+from itertools import product
 import json
 from pathlib import Path
 import re
@@ -345,6 +346,11 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
         and "V(9,AdmittedModuleEffectAtom(effect))" in interaction,
         "the module-effect atomic boundary closure drifted",
     )
+    claim_source_region_closed = (
+        interaction.count("ClaimSourceRegion(c) :=") == 1
+        and "Implies(Region(o), ClaimSourceRegion(c))" in interaction
+        and "Disjoint(Region(o), ClaimSourceRegion(c))" in interaction
+    )
 
     all_fields: dict[str, dict[str, str]] = {}
     forms: dict[str, dict[str, int]] = {}
@@ -368,7 +374,12 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
     return {
         "static_view_schemas": schema_count,
         "resolved_schema_body_displays": body_count,
-        "owner_unresolved_expressions": [],
+        "owner_unresolved_expressions": []
+        if claim_source_region_closed
+        else [
+            "Region(Source(c)) has no region mapping for InitialClaim(BindingRef) or ReductionOutput(ReductionRef, output_ordinal)"
+        ],
+        "claim_source_region_closed": claim_source_region_closed,
         "owner_atomic_boundary_arms": 10,
         "owner_module_effect_body_arm": 9,
         "fs_body_fields": field_count,
@@ -381,14 +392,625 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True)
+class _Occurrence:
+    terminal: bool
+    guard: int | None
+    openings_before: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class _Region:
+    required_true: frozenset[int]
+    required_false: frozenset[int]
+    impossible: bool
+
+
+def _region(schedule: tuple[_Occurrence, ...], position: int) -> _Region:
+    required_true = (
+        frozenset()
+        if schedule[position].guard is None
+        else frozenset({schedule[position].guard})
+    )
+    earlier_terminals = tuple(
+        occurrence
+        for occurrence in schedule[:position]
+        if occurrence.terminal
+    )
+    required_false = frozenset(
+        occurrence.guard
+        for occurrence in earlier_terminals
+        if occurrence.guard is not None
+    )
+    return _Region(
+        required_true,
+        required_false,
+        any(occurrence.guard is None for occurrence in earlier_terminals)
+        or bool(required_true & required_false),
+    )
+
+
+def _boundary_region(
+    schedule: tuple[_Occurrence, ...], before_position: int
+) -> _Region:
+    earlier_terminals = tuple(
+        occurrence
+        for occurrence in schedule[:before_position]
+        if occurrence.terminal
+    )
+    return _Region(
+        frozenset(),
+        frozenset(
+            occurrence.guard
+            for occurrence in earlier_terminals
+            if occurrence.guard is not None
+        ),
+        any(occurrence.guard is None for occurrence in earlier_terminals),
+    )
+
+
+def _region_satisfied(region: _Region, valuation: tuple[bool, ...]) -> bool:
+    return not region.impossible and all(
+        valuation[atom] for atom in region.required_true
+    ) and all(not valuation[atom] for atom in region.required_false)
+
+
+def _path_attempts(
+    schedule: tuple[_Occurrence, ...], valuation: tuple[bool, ...]
+) -> tuple[tuple[bool, ...], frozenset[int]]:
+    live = True
+    attempts: list[bool] = []
+    opened: set[int] = set()
+    for occurrence in schedule:
+        if not live:
+            attempts.append(False)
+            continue
+        opened.update(occurrence.openings_before)
+        active = occurrence.guard is None or valuation[occurrence.guard]
+        attempts.append(active)
+        if active and occurrence.terminal:
+            live = False
+    return tuple(attempts), frozenset(opened)
+
+
+def _implies(left: _Region, right: _Region) -> bool:
+    return (
+        right.required_true <= left.required_true
+        and right.required_false <= left.required_false
+    )
+
+
+def _disjoint(left: _Region, right: _Region) -> bool:
+    return bool(
+        left.required_true & right.required_false
+        or right.required_true & left.required_false
+    )
+
+
+def _claim_status(
+    target: _Region, source: _Region, consumers: tuple[_Region, ...]
+) -> str:
+    live = _implies(target, source) and all(
+        _disjoint(target, consumer) for consumer in consumers
+    )
+    dead = _disjoint(target, source) or any(
+        _implies(target, consumer) for consumer in consumers
+    )
+    _require(
+        not (live and dead),
+        "ClaimStatus produced overlapping Live and Dead verdicts",
+    )
+    return "Live" if live else "Dead" if dead else "Unknown"
+
+
+def _region_and_claim_oracle() -> dict[str, Any]:
+    valuations = tuple(product((False, True), repeat=2))
+    occurrence_shapes = tuple(
+        _Occurrence(terminal, guard)
+        for terminal in (False, True)
+        for guard in (None, 0, 1)
+    )
+    schedule_count = 0
+    region_count = 0
+    attempt_comparisons = 0
+    impossible_regions = 0
+    unreachable_regions = 0
+    opening_boundaries = 0
+    opening_boundary_comparisons = 0
+    claim_cases = 0
+    claim_source_cases = {"occurrence": 0, "scope-boundary": 0}
+    claim_verdicts = {"Live": 0, "Dead": 0, "Unknown": 0}
+    claim_counterexamples = {"Live": 0, "Dead": 0}
+
+    for length in range(1, 5):
+        for raw_schedule in product(occurrence_shapes, repeat=length):
+            for with_openings in (False, True):
+                schedule = tuple(
+                    _Occurrence(
+                        occurrence.terminal,
+                        occurrence.guard,
+                        (position,) if with_openings else (),
+                    )
+                    for position, occurrence in enumerate(raw_schedule)
+                )
+                schedule_count += 1
+                paths = tuple(
+                    _path_attempts(schedule, valuation) for valuation in valuations
+                )
+                opening_boundaries += sum(len(opened) for _attempts, opened in paths)
+                for position in range(length):
+                    region = _region(schedule, position)
+                    observed = tuple(path[0][position] for path in paths)
+                    predicted = tuple(
+                        _region_satisfied(region, valuation) for valuation in valuations
+                    )
+                    _require(observed == predicted, "Region disagrees with attemptedness")
+                    region_count += 1
+                    attempt_comparisons += len(valuations)
+                    impossible_regions += int(region.impossible)
+                    unreachable_regions += int(not any(observed))
+                    _require(
+                        region.impossible == (not any(observed)),
+                        "Region impossible flag disagrees with reachability",
+                    )
+                    if with_openings:
+                        boundary = _boundary_region(schedule, position)
+                        observed_boundary = tuple(
+                            position in path[1] for path in paths
+                        )
+                        predicted_boundary = tuple(
+                            _region_satisfied(boundary, valuation)
+                            for valuation in valuations
+                        )
+                        _require(
+                            observed_boundary == predicted_boundary,
+                            "scope-boundary region disagrees with execution",
+                        )
+                        opening_boundary_comparisons += len(valuations)
+
+            # Give every occurrence a deterministic unguarded opening boundary.
+            # This checks occurrence and initial-claim source regions against the
+            # same path reference.  The latter is evidence for the proposed
+            # typed source map; the owner text does not currently define it.
+            schedule = tuple(
+                _Occurrence(
+                    occurrence.terminal,
+                    occurrence.guard,
+                    (position,),
+                )
+                for position, occurrence in enumerate(raw_schedule)
+            )
+            paths = tuple(
+                _path_attempts(schedule, valuation) for valuation in valuations
+            )
+            for target_position in range(length):
+                reaching = tuple(
+                    path for path in paths if path[0][target_position]
+                )
+                if not reaching:
+                    continue
+                source_regions = tuple(
+                    (
+                        "scope-boundary",
+                        position,
+                        _boundary_region(schedule, position),
+                    )
+                    for position in range(target_position + 1)
+                ) + tuple(
+                    ("occurrence", position, _region(schedule, position))
+                    for position in range(target_position)
+                    if not schedule[position].terminal
+                )
+                for source_kind, source_position, source_region in source_regions:
+                    possible_consumers = tuple(
+                        consumer_position
+                        for consumer_position in range(target_position)
+                        if not schedule[consumer_position].terminal
+                        and (
+                            consumer_position >= source_position
+                            if source_kind == "scope-boundary"
+                            else consumer_position > source_position
+                        )
+                    )
+                    for mask in range(1 << len(possible_consumers)):
+                        consumer_positions = tuple(
+                            position
+                            for index, position in enumerate(possible_consumers)
+                            if mask & (1 << index)
+                        )
+                        consumer_regions = tuple(
+                            _region(schedule, position)
+                            for position in consumer_positions
+                        )
+                        status = _claim_status(
+                            _region(schedule, target_position),
+                            source_region,
+                            consumer_regions,
+                        )
+                        actual = tuple(
+                            (
+                                source_position in path[1]
+                                if source_kind == "scope-boundary"
+                                else path[0][source_position]
+                            )
+                            and not any(
+                                path[0][position]
+                                for position in consumer_positions
+                            )
+                            for path in reaching
+                        )
+                        claim_cases += 1
+                        claim_source_cases[source_kind] += 1
+                        claim_verdicts[status] += 1
+                        if status == "Live" and not all(actual):
+                            claim_counterexamples["Live"] += 1
+                        if status == "Dead" and any(actual):
+                            claim_counterexamples["Dead"] += 1
+
+    _require(
+        impossible_regions == unreachable_regions,
+        "impossible and unreachable region counts differ",
+    )
+    _require(
+        claim_counterexamples == {"Live": 0, "Dead": 0},
+        "ClaimStatus is unsound against the path reference",
+    )
+    _require(claim_verdicts["Unknown"] > 0, "the oracle did not exercise Unknown")
+    return {
+        "guard_atoms": 2,
+        "maximum_schedule_occurrences": 4,
+        "structural_schedules_with_opening_variants": schedule_count,
+        "regions": region_count,
+        "attemptedness_comparisons": attempt_comparisons,
+        "deterministic_scope_opening_visits": opening_boundaries,
+        "scope_boundary_region_comparisons": opening_boundary_comparisons,
+        "impossible_regions": impossible_regions,
+        "unreachable_regions": unreachable_regions,
+        "claim_status_cases": claim_cases,
+        "claim_status_source_cases": claim_source_cases,
+        "claim_status_verdicts": claim_verdicts,
+        "claim_status_counterexamples": claim_counterexamples,
+    }
+
+
+LiteralSet = frozenset[tuple[str, int]]
+_MustResult = tuple[LiteralSet | None, LiteralSet | None]
+_Term = tuple[Any, ...]
+
+
+def _facts_union(left: LiteralSet | None, right: LiteralSet | None) -> LiteralSet | None:
+    if left is None or right is None:
+        return None
+    combined = left | right
+    ordinals = {ordinal for _polarity, ordinal in combined}
+    if any(
+        {("Positive", ordinal), ("Negative", ordinal)} <= combined
+        for ordinal in ordinals
+    ):
+        return None
+    return combined
+
+
+def _facts_meet(left: LiteralSet | None, right: LiteralSet | None) -> LiteralSet | None:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return left & right
+
+
+def _must_env(term: _Term, environment: tuple[_MustResult, ...]) -> _MustResult:
+    tag = term[0]
+    if tag == "variable":
+        return environment[int(term[1])]
+    if tag == "constant":
+        return (frozenset(), None) if term[1] is True else (None, frozenset())
+    if tag == "let":
+        bound = _must_env(term[1], environment)
+        return _must_env(term[2], (bound, *environment))
+    if tag == "if":
+        condition = _must_env(term[1], environment)
+        when_true = _must_env(term[2], environment)
+        when_false = _must_env(term[3], environment)
+        return (
+            _facts_meet(
+                _facts_union(condition[0], when_true[0]),
+                _facts_union(condition[1], when_false[0]),
+            ),
+            _facts_meet(
+                _facts_union(condition[0], when_true[1]),
+                _facts_union(condition[1], when_false[1]),
+            ),
+        )
+    # Primitive calls and every other portable-term constructor contribute no
+    # literal under the frozen owner law.
+    return frozenset(), frozenset()
+
+
+def _term_value(term: _Term, environment: tuple[bool, ...]) -> bool:
+    tag = term[0]
+    if tag == "variable":
+        return environment[int(term[1])]
+    if tag == "constant":
+        return bool(term[1])
+    if tag == "let":
+        bound = _term_value(term[1], environment)
+        return _term_value(term[2], (bound, *environment))
+    if tag == "if":
+        return _term_value(term[2], environment) if _term_value(term[1], environment) else _term_value(term[3], environment)
+    mask = int(term[1])
+    ordinal = sum(int(value) << index for index, value in enumerate(environment[:2]))
+    return bool(mask & (1 << ordinal))
+
+
+def _facts_hold(facts: LiteralSet, valuation: tuple[bool, ...]) -> bool:
+    return all(
+        valuation[ordinal] if polarity == "Positive" else not valuation[ordinal]
+        for polarity, ordinal in facts
+    )
+
+
+def _must_env_oracle() -> dict[str, Any]:
+    def input_must(ordinal: int, is_boolean: bool) -> _MustResult:
+        if not is_boolean:
+            return frozenset(), frozenset()
+        return (
+            frozenset({("Positive", ordinal)}),
+            frozenset({("Negative", ordinal)}),
+        )
+
+    boolean_inputs: tuple[_MustResult, ...] = (
+        input_must(0, True),
+        input_must(1, True),
+    )
+    non_boolean_input = input_must(0, False)
+    bases: tuple[_Term, ...] = (
+        ("variable", 0),
+        ("variable", 1),
+        ("constant", True),
+        ("constant", False),
+        ("primitive", 0b0110),
+        ("record-construct", 0b1001),
+        ("project", 0b1010),
+        ("inject", 0b0101),
+        ("case", 0b0011),
+        ("sequence-construct", 0b1100),
+        ("sequence-length", 0b1110),
+        ("fail", 0b0001),
+        ("strict-index", 0b0111),
+        ("bounded-append", 0b1000),
+        ("bounded-iterate", 0b1011),
+    )
+    terms = list(bases)
+    small = bases[:6]
+    terms.extend(("if", condition, left, right) for condition, left, right in product(small, repeat=3))
+    terms.extend(
+        (
+            "let",
+            bound,
+            ("if", ("variable", 0), ("variable", 1), ("constant", False)),
+        )
+        for bound in small
+    )
+    contradiction = (
+        "if",
+        ("variable", 0),
+        ("if", ("variable", 0), ("constant", False), ("constant", True)),
+        ("constant", False),
+    )
+    terms.append(contradiction)
+
+    valuations = tuple(product((False, True), repeat=2))
+    branch_checks = 0
+    impossible_branches = 0
+    contradictions_normalized = 0
+    for term in terms:
+        result = _must_env(term, boolean_inputs)
+        outputs = tuple(_term_value(term, valuation) for valuation in valuations)
+        for expected, facts in ((True, result[0]), (False, result[1])):
+            matching = tuple(
+                valuation
+                for valuation, output in zip(valuations, outputs)
+                if output is expected
+            )
+            branch_checks += 1
+            if facts is None:
+                impossible_branches += 1
+                _require(not matching, "MustEnv marked a reachable branch Impossible")
+            else:
+                _require(
+                    all(_facts_hold(facts, valuation) for valuation in matching),
+                    "MustEnv invented a literal",
+                )
+        if result[0] is None or result[1] is None:
+            contradictions_normalized += int(term == contradiction)
+
+    _require(
+        _must_env(contradiction, boolean_inputs)[0] is None,
+        "contradictory must-facts did not normalize to Impossible",
+    )
+    _require(
+        non_boolean_input == (frozenset(), frozenset()),
+        "non-Boolean input contributed a literal",
+    )
+    other_tags = tuple(term[0] for term in bases[5:])
+    _require(
+        len(other_tags) == 10
+        and all(
+            _must_env((tag, 0), boolean_inputs) == (frozenset(), frozenset())
+            for tag in other_tags
+        ),
+        "an unnamed portable-term constructor contributed a literal",
+    )
+    return {
+        "terms": len(terms),
+        "valuations_per_term": len(valuations),
+        "branch_soundness_checks": branch_checks,
+        "impossible_branches": impossible_branches,
+        "contradiction_discriminators": contradictions_normalized,
+        "non_boolean_input_literal_count": 0,
+        "other_term_constructors_with_empty_facts": len(other_tags),
+    }
+
+
+def _carrier_claim_status_review() -> dict[str, Any]:
+    projection = (
+        _Occurrence(False, None),
+        _Occurrence(False, 10),
+        _Occurrence(True, 10),
+        _Occurrence(False, None),
+        _Occurrence(True, 11),
+        _Occurrence(True, None),
+    )
+    projection_claims = (
+        (_boundary_region(projection, 0), (1, 3)),
+        (_region(projection, 1), ()),
+        (_region(projection, 3), ()),
+    )
+
+    def statuses(
+        schedule: tuple[_Occurrence, ...],
+        claims: tuple[tuple[_Region, tuple[int, ...]], ...],
+        terminal_positions: tuple[int, ...],
+    ) -> tuple[list[list[int]], int]:
+        live_sets: list[list[int]] = []
+        unknown = 0
+        for terminal in terminal_positions:
+            target = _region(schedule, terminal)
+            current: list[int] = []
+            for claim, (source, consumers) in enumerate(claims):
+                status = _claim_status(
+                    target,
+                    source,
+                    tuple(_region(schedule, consumer) for consumer in consumers if consumer < terminal),
+                )
+                unknown += int(status == "Unknown")
+                if status == "Live":
+                    current.append(claim)
+            live_sets.append(current)
+        return live_sets, unknown
+
+    projection_live, projection_unknown = statuses(
+        projection, projection_claims, (2, 4, 5)
+    )
+    _require(projection_live == [[1], [2], [2]], "terminal projection live sets drifted")
+
+    integrated_live_sets: dict[str, list[list[int]]] = {}
+    integrated_unknown = 0
+    integrated_reusable_claim_live = 0
+    for name, terminal_guards in (
+        ("integrated-baseline", (200, 201, None)),
+        ("private-verifier-output-sink", (200, 201, None)),
+        ("invalid-module-control-sink", (200, 201, None)),
+        ("history-challenge-condition", (200, 201, None)),
+        ("logical-reject-preemption", (300, 201, None)),
+    ):
+        schedule = tuple(_Occurrence(False, None) for _ in range(20)) + tuple(
+            _Occurrence(True, guard) for guard in terminal_guards
+        )
+        claims = (
+            (_boundary_region(schedule, 0), ()),
+            (_region(schedule, 18), ()),
+            (_region(schedule, 19), ()),
+        )
+        live_sets, unknown = statuses(schedule, claims, (20, 21, 22))
+        _require(
+            live_sets == [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+            f"{name} reusable-claim liveness drifted",
+        )
+        integrated_live_sets[name] = live_sets
+        integrated_unknown += unknown
+        integrated_reusable_claim_live += sum(0 in row for row in live_sets)
+
+    whir = (
+        _Occurrence(False, 50),
+        _Occurrence(False, 50),
+        _Occurrence(True, 50),
+        _Occurrence(True, None),
+    )
+    whir_claims = (
+        (_boundary_region(whir, 0), (0,)),
+        (_region(whir, 0), (1,)),
+    )
+    whir_live, whir_unknown = statuses(whir, whir_claims, (2, 3))
+    _require(whir_live == [[], [0]], "WHIR closed-state live sets drifted")
+    warpfold = (
+        _Occurrence(False, None, (0,)),
+        _Occurrence(True, 60),
+        _Occurrence(True, None),
+    )
+    warpfold_live, warpfold_unknown = statuses(warpfold, (), (1, 2))
+    _require(warpfold_live == [[], []], "WARPfold closed-state live sets drifted")
+    _require(
+        projection_unknown + integrated_unknown + whir_unknown + warpfold_unknown == 0,
+        "a frozen represented carrier produced ClaimStatus Unknown",
+    )
+
+    # InitialClaim names a binding opening, not an occurrence.  If a child
+    # scope opens before a guarded occurrence, the source exists even when that
+    # occurrence is inactive.  Region(occurrence) would therefore produce an
+    # erroneous Unknown instead of Live at the following fallback.
+    source_discriminator = (
+        _Occurrence(False, 0, (1,)),
+        _Occurrence(True, None),
+    )
+    correct = _claim_status(
+        _region(source_discriminator, 1),
+        _boundary_region(source_discriminator, 0),
+        (),
+    )
+    occurrence_coercion = _claim_status(
+        _region(source_discriminator, 1),
+        _region(source_discriminator, 0),
+        (),
+    )
+    _require(
+        correct == "Live" and occurrence_coercion == "Unknown",
+        "claim-source boundary discriminator drifted",
+    )
+    return {
+        "terminal_projection": {
+            "carriers": 1,
+            "terminal_live_claims": projection_live,
+            "unknown": projection_unknown,
+        },
+        "integrated": {
+            "carriers": len(integrated_live_sets),
+            "terminal_live_claims": integrated_live_sets,
+            "unknown": integrated_unknown,
+            "reusable_claim_zero_live_terminals": integrated_reusable_claim_live,
+            "owner_declarations_omit_reusable_claim_zero": True,
+        },
+        "holdouts": {
+            "represented_carriers": 2,
+            "terminal_live_claims": {
+                "WHIR": whir_live,
+                "WARPfold": warpfold_live,
+            },
+            "unknown": whir_unknown + warpfold_unknown,
+            "source_specialized_rows_without_exact_carriers": 4,
+        },
+        "claim_source_boundary_discriminator": {
+            "reference": correct,
+            "occurrence_region_coercion": occurrence_coercion,
+        },
+    }
+
+
 def _terminal_review(interaction: str) -> dict[str, Any]:
     required = (
         "AttemptGuards(o) := { Guard(o) } minus { Always }",
         "GuardInputs(o) = [] and GuardTerm(o) = None",
         "MustEnv(let x = e1 in e2, environment) =",
         "MustEnv(e2, [MustEnv(e1, environment)] ++ environment)",
+        "when input i is Boolean, and { when_true: {}, when_false: {} } otherwise",
+        "MustEnv(any other term constructor, environment) =",
+        "Positive(i) and Negative(i) for one input i is Impossible",
+        "Region(o) := {",
+        "ClaimStatus(c, o) :=",
+        "no claim has ClaimStatus Unknown at o_t",
         "Positive(i) in MustWhenTrue(GuardTerm(o_t))",
-        "An impossible `MustWhenTrue` region is refused\nrather than discharged vacuously",
+        "An impossible\nregion is refused rather than discharged vacuously",
     )
     for snippet in required:
         _require(snippet in interaction, "the frozen Terminal-law source drifted")
@@ -439,6 +1061,16 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
                 logical[2] += 1
     _require(baseline == [2, 3, 3], "baseline terminal-region census drifted")
     _require(logical == [2, 1, 1], "logical terminal-region census drifted")
+    oracle = _region_and_claim_oracle()
+    must_env = _must_env_oracle()
+    carriers = _carrier_claim_status_review()
+    mechanization_findings_closed = [
+        "TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED",
+        "TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED",
+        "TERMINAL-C-CONTRADICTION-NORMALIZATION-UNDEFINED",
+        "TERMINAL-C-IMPOSSIBLE-GUARD-PLACEMENT",
+        "TERMINAL-C-FORWARD-STATE-TRANSFER-NOT-CLOSED-HERE",
+    ]
     return {
         "corrected_guard_inclusion_cases": implications,
         "corrected_guard_inclusion_counterexamples": counterexamples,
@@ -446,6 +1078,14 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
         "logical_terminal_region_counts": logical,
         "positive_impossible_terminal_regions": 0,
         "impossible_region_refusal_present": True,
+        "region_and_claim_oracle": oracle,
+        "must_env_oracle": must_env,
+        "frozen_carriers": carriers,
+        "mechanization_underdetermination_findings_closed": (
+            mechanization_findings_closed
+        ),
+        "mechanization_underdetermination_findings_remaining": [],
+        "claim_source_region_mapping_present": "ClaimSourceRegion(c) :=" in interaction,
     }
 
 
@@ -862,11 +1502,25 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     publication = _publication_review()
     decisions = _decision_review(pages, manifests, view)
 
+    terminal_closed = terminal["claim_source_region_mapping_present"]
+    owner_closed = not view["owner_unresolved_expressions"]
     findings = [
         Finding("decision-fidelity", "Affirmative", "F0V2C1-A-DECISION-FIDELITY"),
-        Finding("terminal-contract", "Affirmative", "F0V2C1-A-TERMINAL-CONTRACT"),
+        Finding(
+            "terminal-contract",
+            "Affirmative" if terminal_closed else "CannotAnswer",
+            "F0V2C1-A-TERMINAL-CONTRACT"
+            if terminal_closed
+            else "F0V2C1-C-TERMINAL-CLAIM-SOURCE-REGION",
+        ),
         Finding("public-coin-graph", "Affirmative", "F0V2C1-A-PCGRAPH-TRANSFER"),
-        Finding("owner-name-closure", "Affirmative", "F0V2C1-A-OWNER-CLOSURE"),
+        Finding(
+            "owner-name-closure",
+            "Affirmative" if owner_closed else "CannotAnswer",
+            "F0V2C1-A-OWNER-CLOSURE"
+            if owner_closed
+            else "F0V2C1-C-OWNER-CLAIM-SOURCE-REGION",
+        ),
         Finding("manifest-closure", "Affirmative", "F0V2C1-A-MANIFEST-CLOSURE"),
         Finding("publication-compilers", "Affirmative", "F0V2C1-A-PUBLICATION-COMPILERS"),
         Finding("family-body-closure", "Affirmative", "F0V2C1-A-FS-BODY-CLOSURE"),
@@ -883,6 +1537,21 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     return findings, metrics
 
 
+def _aggregate(findings: list[Finding]) -> dict[str, Any]:
+    blocking = [finding.name for finding in findings if finding.outcome != "Affirmative"]
+    if not blocking:
+        return {
+            "outcome": "Affirmative",
+            "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
+            "blocking_findings": [],
+        }
+    return {
+        "outcome": "CannotAnswer",
+        "code": "F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED",
+        "blocking_findings": blocking,
+    }
+
+
 def _expected() -> dict[str, Any]:
     value = _json(str(EXPECTED.relative_to(ROOT)))
     _require(type(value) is dict, "expected findings have another carrier")
@@ -894,15 +1563,7 @@ def check() -> tuple[list[Finding], dict[str, Any]]:
     expected = _expected()
     _require([item.value() for item in findings] == expected["finding_codes"], "finding classifications drifted")
     _require(metrics == expected["metrics"], "review evidence metrics drifted")
-    _require(
-        expected["aggregate"]
-        == {
-            "outcome": "Affirmative",
-            "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
-            "blocking_findings": [],
-        },
-        "aggregate finding drifted",
-    )
+    _require(expected["aggregate"] == _aggregate(findings), "aggregate finding drifted")
     return findings, metrics
 
 
@@ -917,13 +1578,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"migration text review failed: {error}", file=sys.stderr)
         return 1
     if args.json:
+        aggregate = _aggregate(findings)
         print(
             json.dumps(
                 {
-                    "aggregate": {
-                        "outcome": "Affirmative",
-                        "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
-                    },
+                    "aggregate": aggregate,
                     "finding_codes": [item.value() for item in findings],
                     "metrics": metrics,
                 },
@@ -933,10 +1592,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         blockers = sum(item.outcome != "Affirmative" for item in findings)
+        aggregate = _aggregate(findings)
         print(
             "Migration text freeze review: "
             f"{len(findings)}/{len(findings)} findings reproduced; "
-            f"{blockers} blocking findings; aggregate Affirmative"
+            f"{blockers} blocking findings; aggregate {aggregate['outcome']}"
         )
     return 0
 

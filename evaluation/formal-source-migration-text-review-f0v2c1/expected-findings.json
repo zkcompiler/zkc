@@ -1,8 +1,11 @@
 {
   "aggregate": {
-    "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
-    "outcome": "Affirmative",
-    "blocking_findings": []
+    "code": "F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED",
+    "outcome": "CannotAnswer",
+    "blocking_findings": [
+      "terminal-contract",
+      "owner-name-closure"
+    ]
   },
   "finding_codes": [
     [
@@ -12,8 +15,8 @@
     ],
     [
       "terminal-contract",
-      "Affirmative",
-      "F0V2C1-A-TERMINAL-CONTRACT"
+      "CannotAnswer",
+      "F0V2C1-C-TERMINAL-CLAIM-SOURCE-REGION"
     ],
     [
       "public-coin-graph",
@@ -22,8 +25,8 @@
     ],
     [
       "owner-name-closure",
-      "Affirmative",
-      "F0V2C1-A-OWNER-CLOSURE"
+      "CannotAnswer",
+      "F0V2C1-C-OWNER-CLAIM-SOURCE-REGION"
     ],
     [
       "manifest-closure",
@@ -153,7 +156,7 @@
       "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
       "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
       "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
-      "docs-next/pir/interactive-core.md": "86259df9d149668bc23d5887e8f60f04f49eebab6c914ee285b5ac70bea2ed99",
+      "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
       "docs-next/pir/interfaces-and-plans.md": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
       "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "1bc99ab9c78d11cf3c49009bec501e526acdc429a41b35a21814035a63ba8511",
       "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "b42fa85df8f3222646c253b2174cc9f80c763e8525e4abc5e0d25d202664d4b5",
@@ -170,17 +173,192 @@
         3,
         3
       ],
+      "claim_source_region_mapping_present": false,
       "corrected_guard_inclusion_cases": 16,
       "corrected_guard_inclusion_counterexamples": 0,
+      "frozen_carriers": {
+        "claim_source_boundary_discriminator": {
+          "occurrence_region_coercion": "Unknown",
+          "reference": "Live"
+        },
+        "holdouts": {
+          "represented_carriers": 2,
+          "source_specialized_rows_without_exact_carriers": 4,
+          "terminal_live_claims": {
+            "WARPfold": [
+              [],
+              []
+            ],
+            "WHIR": [
+              [],
+              [
+                0
+              ]
+            ]
+          },
+          "unknown": 0
+        },
+        "integrated": {
+          "carriers": 5,
+          "owner_declarations_omit_reusable_claim_zero": true,
+          "reusable_claim_zero_live_terminals": 15,
+          "terminal_live_claims": {
+            "history-challenge-condition": [
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            "integrated-baseline": [
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            "invalid-module-control-sink": [
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            "logical-reject-preemption": [
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            "private-verifier-output-sink": [
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ],
+              [
+                0,
+                1,
+                2
+              ]
+            ]
+          },
+          "unknown": 0
+        },
+        "terminal_projection": {
+          "carriers": 1,
+          "terminal_live_claims": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              2
+            ]
+          ],
+          "unknown": 0
+        }
+      },
       "impossible_region_refusal_present": true,
       "logical_terminal_region_counts": [
         2,
         1,
         1
       ],
-      "positive_impossible_terminal_regions": 0
+      "mechanization_underdetermination_findings_closed": [
+        "TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED",
+        "TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED",
+        "TERMINAL-C-CONTRADICTION-NORMALIZATION-UNDEFINED",
+        "TERMINAL-C-IMPOSSIBLE-GUARD-PLACEMENT",
+        "TERMINAL-C-FORWARD-STATE-TRANSFER-NOT-CLOSED-HERE"
+      ],
+      "mechanization_underdetermination_findings_remaining": [],
+      "must_env_oracle": {
+        "branch_soundness_checks": 476,
+        "contradiction_discriminators": 1,
+        "impossible_branches": 40,
+        "non_boolean_input_literal_count": 0,
+        "other_term_constructors_with_empty_facts": 10,
+        "terms": 238,
+        "valuations_per_term": 4
+      },
+      "positive_impossible_terminal_regions": 0,
+      "region_and_claim_oracle": {
+        "attemptedness_comparisons": 47280,
+        "claim_status_cases": 18282,
+        "claim_status_counterexamples": {
+          "Dead": 0,
+          "Live": 0
+        },
+        "claim_status_source_cases": {
+          "occurrence": 4134,
+          "scope-boundary": 14148
+        },
+        "claim_status_verdicts": {
+          "Dead": 4582,
+          "Live": 10380,
+          "Unknown": 3320
+        },
+        "deterministic_scope_opening_visits": 14796,
+        "guard_atoms": 2,
+        "impossible_regions": 3868,
+        "maximum_schedule_occurrences": 4,
+        "regions": 11820,
+        "scope_boundary_region_comparisons": 23640,
+        "structural_schedules_with_opening_variants": 3108,
+        "unreachable_regions": 3868
+      }
     },
     "views": {
+      "claim_source_region_closed": false,
       "fs_body_fields": 95,
       "fs_exact_fields": 95,
       "fs_field_form_counts": {
@@ -240,7 +418,9 @@
       "fs_undefined_fields": 0,
       "owner_atomic_boundary_arms": 10,
       "owner_module_effect_body_arm": 9,
-      "owner_unresolved_expressions": [],
+      "owner_unresolved_expressions": [
+        "Region(Source(c)) has no region mapping for InitialClaim(BindingRef) or ReductionOutput(ReductionRef, output_ordinal)"
+      ],
       "packet_review": {
         "body_field_counts": {
           "ChallengeTransitionViewBody": 11,

@@ -1,6 +1,7 @@
 # Migration Text Freeze Review
 
-> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round two
+> **State:** `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED` after round
+> three; five questions remain affirmative and two share one source-region gap
 > **Authority:** None. This verification lane changes no owner page, source
 > profile manifest, or published identity.
 > **Executable evidence:**
@@ -13,17 +14,18 @@ questions for decision fidelity, the Terminal contract, public-coin graph
 transfer and sinks, owner-view definition closure, manifest closure,
 publication reconstruction, and family-view body closure?
 
-Yes after the round-two repairs. All seven answers are affirmative and the
-aggregate is `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`, with no blocking
-finding.
+Round two answered yes. Round three finds one newly introduced type and
+boundary gap in the closed forward state, so five answers remain affirmative
+and the Terminal-contract and owner-name answers are `CannotAnswer`. The
+current aggregate is `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`.
 
 The audit pins the six migrated owner pages and eight migrated manifests. It
 does not treat a resolved selector, a passing source compiler, or a finite
 oracle as proof that the represented semantics are correct.
 
 Sections 2 through 10 preserve the first-round evidence and proposed repairs
-as history. The `Round two` section below supersedes their negative aggregate
-against the current owner bytes.
+as history. The `Round two` section below supersedes their negative aggregate.
+`Round three` supersedes round two against the current owner bytes.
 
 ## 2. Answer one: decision fidelity
 
@@ -612,7 +614,7 @@ index command is insufficient under the read-only object mount without a
 clone-local writable object directory.
 
 
-## Handoff
+## Round-two handoff (historical)
 
 Main should commit this working tree with subject:
 
@@ -682,3 +684,266 @@ workflow's private status-ledger append conflicts with this lane's express
 outside-clone write prohibition and the read-only mount, so status is recorded
 here. The example alternate-index command also needs a writable object store
 under this mount.
+
+## Round three
+
+Round three reruns the same seven questions after the forward abstract state
+was added to Interaction Core Section 10. Five answers remain affirmative.
+The Terminal-contract and owner-name questions are `CannotAnswer` because the
+new `ClaimStatus` law does not define the region of either `ClaimSource` arm.
+
+| Question | Round two | Round three | Current finding |
+|---|---|---|---|
+| decision fidelity | affirmative | unchanged | `Affirmative/F0V2C1-A-DECISION-FIDELITY` |
+| Terminal contract | affirmative | cannot answer | `CannotAnswer/F0V2C1-C-TERMINAL-CLAIM-SOURCE-REGION` |
+| public-coin graph | affirmative | unchanged | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` |
+| owner-name closure | affirmative | cannot answer | `CannotAnswer/F0V2C1-C-OWNER-CLAIM-SOURCE-REGION` |
+| manifest closure | affirmative | unchanged | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` |
+| publication compilers | affirmative | unchanged | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` |
+| family-body closure | affirmative | unchanged | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` |
+
+The aggregate is therefore
+`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`. The affirmative aggregate
+is reserved for a state in which all seven questions close.
+
+### Executable results for the new laws
+
+The independent schedule oracle uses two structurally identified guard atoms,
+all ordinary/terminal and `Always`/guarded occurrence forms through length
+four, and both no-opening and deterministic-opening variants. Across 3,108
+schedules, 11,820 occurrence regions, and 47,280 valuation comparisons,
+`Region(o)` is true exactly when `o` is attempted. Its 3,868 impossible
+regions are exactly its 3,868 unreachable regions. A further 23,640 comparisons
+show that the candidate boundary region is true exactly when its deterministic
+unguarded scope opening is processed.
+
+The path reference evaluates 18,282 claim/source/linear-consumer cases: 4,134
+with occurrence sources and 14,148 with candidate scope-boundary sources.
+Every abstract `Live` verdict is live on every path reaching the target
+occurrence, and every `Dead` verdict is live on none; both counterexample
+counts are zero. The generic corpus exercises 3,320 `Unknown` outcomes,
+confirming that refusal is reachable rather than dead text. The candidate
+boundary results support the proposed repair below; they do not fill the
+missing owner definition.
+
+The must-fact oracle evaluates 238 typed Boolean term shapes over all four
+two-input valuations. It checks 476 true/false branch obligations, including
+all ten catch-all portable-term constructors, a non-Boolean input environment,
+and a nested conditional whose true branch requires both polarities of one
+input. No literal is invented; forty unreachable branches are classified
+`Impossible`, and the contradiction discriminator is one of them. This also
+checks that the standalone impossible-region clause refuses a terminal even
+when it names no required Check.
+
+### Frozen carrier outcomes
+
+No `Unknown` verdict arises in the represented frozen carriers:
+
+- the exact terminal projection has terminal live-Claim sets `[1]`, `[2]`,
+  and `[2]`;
+- each of the five integrated carriers has `[0, 1, 2]` at all three terminal
+  frontiers; reusable claim 0 is therefore `Live` at fifteen of fifteen
+  frontiers, so the existing five-carrier refusal remains sound; and
+- the represented WHIR shape has no live Claim at Accept and only the initial
+  Claim at fallback, while the represented WARPfold shape has empty sets at
+  both frontiers.
+
+Four fitting boundary-analysis holdout rows still lack exact source-profile
+carrier coordinates. Their existing `CannotAnswer` remains; this review does
+not turn the represented-shape result into an exact Circle STARK, WARPfold,
+virtual Sumcheck, or interactive Galois-ring Core. Reapplying the closed state
+changes none of the eight holdout verdicts: five still fit, three still break,
+and there are no bends or disagreements.
+
+### Mechanization-finding reassessment
+
+The five owner-text underdeterminations recorded by the Terminal-contract
+mechanization would close under the current text, without changing that
+package:
+
+| Frozen finding | Current closure |
+|---|---|
+| `TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED` | lines 1472-1473 give every other term constructor empty facts |
+| `TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED` | lines 1449-1450 give non-Boolean inputs empty facts in both branches |
+| `TERMINAL-C-CONTRADICTION-NORMALIZATION-UNDEFINED` | lines 1474-1477 normalize opposite polarities to `Impossible` |
+| `TERMINAL-C-IMPOSSIBLE-GUARD-PLACEMENT` | lines 1505-1507 make the test the first standalone Terminal-contract clause |
+| `TERMINAL-C-FORWARD-STATE-TRANSFER-NOT-CLOSED-HERE` | lines 1480-1503 and 1534-1546 state `Region`, `Implies`, `Disjoint`, `ClaimStatus`, and reusable retention |
+
+This is a source reassessment, not a refreeze of the mechanization package.
+Its committed finding sequence and source pins remain owned by its follow-up
+lane.
+
+### Remaining source defect
+
+`ClaimSource` is the sum `InitialClaim(BindingRef) |
+ReductionOutput(ReductionRef, output_ordinal)` at Interaction Core lines
+792-800. `Region(o)` is defined only for an occurrence at lines 1480-1486, but
+`ClaimStatus(c, o)` applies it to `Source(c)` at lines 1495-1501. No helper
+maps an initial binding's `Initially | BeforeOccurrence` opening or a Reduction
+output to a region.
+
+This is not a cosmetic missing name. A child scope can open before a guarded
+occurrence. Its initial Claim then exists even if that occurrence's guard is
+false. In the executable discriminator, the correct binding-boundary region
+makes the Claim `Live` at the following fallback; coercing the source to the
+guarded occurrence's region yields `Unknown`. Missing evidence therefore
+cannot be converted into an affirmative Terminal result.
+
+### Publication reconstruction
+
+Both independent publication compilers still reconstruct the same eighteen
+profiles. Relative to the pinned migration base, seventeen rotate:
+`interaction`, both Fiat--Shamir families, `public-setup`,
+`commitment-opening`, `oracle-commitment`, `verifier-derived-query-plan`,
+`interface-plan`, all three endpoint/projection profiles, `relations`, and the
+five dependent Analysis profiles. `analysis-kernel` remains the sole stable
+profile. The published identity table is not written.
+
+## Proposed delta
+
+**Owner page and section:** `docs-next/pir/interactive-core.md`, Section 10,
+immediately before `ClaimStatus`, replacing both uses of
+`Region(Source(c))`.
+
+**Exact change:** add one boundary-region helper and one typed claim-source
+helper:
+
+```text
+BoundaryRegion(Initially) := {
+  required_true: {}, required_false: {}, impossible: false
+}
+BoundaryRegion(BeforeOccurrence(o)) := {
+  required_true: {},
+  required_false: { Guard(t') | t' a terminal occurrence earlier than o
+                                with Guard(t') not Always },
+  impossible: an earlier terminal occurrence has Guard Always
+}
+
+ClaimSourceRegion(c) :=
+    BoundaryRegion(ScopeDecl(PublicBindingDecl(binding).scope).opening)
+      when c.source is InitialClaim(binding)
+  | Region(o_r)
+      when c.source is ReductionOutput(r, output_ordinal), with o_r the unique
+      occurrence of ApplyReduction(r)
+
+ClaimStatus(c, o) :=
+    Live     when Implies(Region(o), ClaimSourceRegion(c))
+             and Disjoint(Region(o), Region(u)) for every earlier linear
+             consumer u of c
+  | Dead     when Disjoint(Region(o), ClaimSourceRegion(c))
+             or Implies(Region(o), Region(u)) for some earlier linear
+             consumer u of c
+  | Unknown  otherwise
+```
+
+Here `PublicBindingDecl(binding)` and `ScopeDecl(scope)` are exact dense-table
+lookups;
+the second arm retains the already validated Reduction/output backlink. The
+boundary helper deliberately omits the named occurrence's own guard because
+the scope opens before that guard is evaluated.
+
+**Identity effect:** this changes the source of the Interaction core-admission
+law and therefore rotates the Interaction profile and its current
+seventeen-profile dependent cone; Foundation and `analysis-kernel` remain
+stable if no other source changes. The Interaction manifest's law and profile
+revisions require an owner audit, and both publication compilers must confirm
+the final cone before publication.
+
+**Evidence with gate identifiers:**
+`F0V2C1-C-TERMINAL-CLAIM-SOURCE-REGION` and
+`F0V2C1-C-OWNER-CLAIM-SOURCE-REGION`, including the binding-opening
+discriminator above. The surrounding finite results have zero Region,
+`Live`, or `Dead` counterexamples but do not choose the missing source map.
+
+**Reversal condition:** withdraw this delta if the owner identifies an
+existing total definition of `Source(c)` that maps both `ClaimSource` arms to
+exactly these execution boundaries and the discriminator agrees. No such
+definition occurs in the six migrated owner pages or executable Foundation at
+this cutoff.
+
+**Nonclaims:** this replacement is not a general reachability proof, does not
+admit any exact holdout Core, does not refreeze the mechanization package, and
+does not establish implementation correspondence, relation satisfaction,
+theorem truth or applicability, protocol security, endpoint validity,
+deployment validity, or production readiness.
+
+## Handoff
+
+Main should commit this working tree with subject:
+
+```text
+test: review the closed forward state and re-pin the holdouts
+```
+
+Files changed:
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py`,
+  `expected-findings.json`, and `README.md` extend and refreeze the seven-question
+  review;
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md` re-pin and
+  re-adjudicate the holdouts;
+- this note and `f0v2c2-holdout-readjudication.md` record round three; and
+- `evaluation/README.md` updates the two existing inventory rows.
+
+No owner page, check or profile manifest, lifecycle file or count pin,
+publication table, directory README, real Git index, or private ledger was
+edited. No package was added. The existing check-manifest claim for the
+migration review still says that all seven answers are affirmative; it was
+left untouched under the brief's express prohibition on manifest edits and
+must be reconciled by Main or the check owner.
+
+Validation used a clone-local alternate index and writable object store, with
+this clone's read-only objects as alternates, plus a clone-local offline
+dependency cache.
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| `python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check` | 0 | 0.90 s | seven findings reproduced; two blocking `CannotAnswer` findings |
+| `python3 -B evaluation/formal-source-holdout-readjudication-f0v2c2/run.py --check` | 0 | 0.04 s | 26 findings reproduced; five fits, three breaks, no changed verdict |
+| `python3 -B evaluation/semantic-profile-publication/run.py --print-identities` | 0 | 0.35 s | both compilers reconstructed 18 profiles and the review measured the 17-profile cone |
+| `python3 -B checks/run.py validate` with the alternate index | 0 | 0.05 s | 75-check, 6-tier manifest valid |
+| `UV_NO_SYNC=1 UV_OFFLINE=1 UV_CACHE_DIR=$PWD/.lane-uv-cache python3 -B checks/run.py run --tier developer` with the alternate index | 0 | 1.80 s | 9 of 9 developer checks passed, including lifecycle inventory |
+| `python3 -B checks/run.py run --check research.migration-text-review` with the same environment | 0 | 0.95 s | focused review check passed |
+| `python3 -B checks/run.py run --check research.holdout-readjudication` with the same environment | 0 | 0.10 s | focused holdout check passed |
+| `git diff --check` | 0 | under 0.1 s | no whitespace errors |
+
+Aggregate outcome: the migration review is
+`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`; five questions are
+affirmative, while Terminal-contract and owner-name closure cannot answer
+until both `ClaimSource` arms have typed regions. The holdout package remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; five rows fit, three break,
+none bend or disagree, and no represented holdout verdict changes. Four
+source-specialized rows still lack exact carriers.
+
+The five underdetermination findings from the mechanization note would close
+against the current owner bytes, but that package was not edited or refrozen.
+The integrated five-carrier refusal stands because reusable claim 0 is `Live`
+at all fifteen terminal frontiers and is absent from the authored terminal
+sets.
+
+Nonclaims: these passes are finite, byte-pinned source-level evidence. They do
+not publish an identity, prove the laws for arbitrary Core values, establish
+implementation or backend correspondence, establish relation satisfaction or
+theorem truth, prove a cryptographic or protocol-security property, validate
+an endpoint or deployment, admit an exact holdout Core, or establish
+production readiness.
+
+Surprises: the newly closed forward state exposes a type gap not among the
+five mechanization findings: `ClaimSource` is a binding-or-reduction sum while
+`Region` accepts only occurrences. A guarded scope-opening discriminator makes
+this semantically observable (`Live` at the boundary versus `Unknown` after
+an occurrence coercion). The pre-refreeze review and holdout probes therefore
+failed on stale frozen bytes before the new findings and pins were accepted;
+the refrozen checks pass. One setup attempt mistakenly placed the temporary
+object store under `/tmp`; it was removed, and final validation was repeated
+with all temporary validation state inside this clone.
+
+Where the brief was wrong: `AGENTS.md` and `.claude/CLAUDE.md` are absent from
+this clone, so their read-only primary-checkout copies were used. The workflow
+ledger append conflicts with the explicit outside-clone write prohibition and
+the read-only mount, so no private ledger was changed. The sample alternate-
+index procedure also requires a writable object store because this clone's
+Git object directory is read-only. Finally, closing the five listed
+mechanization choices does not close the seven-question review because the
+new `ClaimStatus` expression introduces the separate source-region gap above.

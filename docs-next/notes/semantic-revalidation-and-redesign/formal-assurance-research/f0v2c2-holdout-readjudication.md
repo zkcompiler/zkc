@@ -19,6 +19,13 @@ finite or virtual subcase distinct from a broader source claim. The migrated
 owner text leaves five rows fitting and three breaking at already named
 boundaries. No row bends and no verdict changes.
 
+The current refreeze also applies the closed `Region` and `ClaimStatus` laws
+to the two represented holdout shapes. Neither produces `Unknown`: WHIR's
+accepting frontier has no live Claim and its fallback has only the initial
+Claim, while both WARPfold frontiers have empty Claim sets. The other four
+fitting boundary-analysis rows still lack exact carrier coordinates, so their
+existing `CannotAnswer` is retained rather than filled with an invented Core.
+
 The migration does change one concrete carrier shape. WHIR's earlier schedule
 guarded the fold by a proper subset of the accepting Checks. Scope openings are
 deterministic and unguarded, and the owner admits a guarded producer only when
@@ -38,7 +45,7 @@ Admission then requires every named Check output to be a direct terminal-guard
 input whose positive literal occurs in `MustWhenTrue`, every named Reduction to
 be attempted whenever the terminal is attempted, and one invariant live-Claim
 set at every activation
-([Interaction Core Section 10, lines 1427-1509](../../../pir/interactive-core.md#10-core-admission-and-consistency)).
+([Interaction Core Section 10, lines 1427-1552](../../../pir/interactive-core.md#10-core-admission-and-consistency)).
 
 For direct Check outputs `c0 ... cn`, this note uses the closed term shape:
 
@@ -459,7 +466,7 @@ research-instrument repair, not an owner-page change.
 
 ## 11. Nonclaims
 
-The 25-finding result is finite executable evidence over exact document bytes.
+The 26-finding result is finite executable evidence over exact document bytes.
 It does not establish an admitted Circle, WARPfold, multiparty, or Galois-ring
 Core; live implementation correspondence; Plan or Relations correctness;
 relation satisfaction; endpoint, OIR, backend, or deployment validity; theorem
@@ -527,7 +534,7 @@ Surprises and brief corrections:
   remain correct.
 
 
-## Handoff
+## Round-two handoff (historical)
 
 Main should commit this working tree with subject:
 
@@ -597,3 +604,21 @@ workflow's private status-ledger append conflicts with this lane's express
 outside-clone write prohibition and the read-only mount, so status is recorded
 here. The example alternate-index command also needs a writable object store
 under this mount.
+
+## Round three
+
+The owner-page pin now authenticates `docs-next/pir/interactive-core.md` at
+SHA-256
+`47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f`.
+The represented WHIR and WARPfold claim-state reconstruction has zero
+`Unknown` verdicts and changes none of the eight holdout judgments. The
+aggregate rule remains the original one: all eight rows must be present and
+must agree with both comparison sources. It still yields
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED` with five fits, three breaks,
+zero bends, and zero disagreements.
+
+This reconstruction explicitly maps an initial Claim to its binding-opening
+boundary and a Reduction output to its `ApplyReduction` occurrence. That is
+enough to re-adjudicate the represented holdout shapes, but it does not repair
+the owner page's missing general `ClaimSource`-to-region map identified by the
+migration-text review.
