@@ -1,10 +1,13 @@
 # Analysis named-premise intake: the owner text
 
 > **Kind:** owner-text record (formal-assurance research, Analysis pass)
-> **State:** Authored 2026-09-03 on a branch stacked on the migration branch
-> and repaired after its first independent review; both publication compilers
-> agree; a second review round is in progress; publication remains the user's
-> gate.
+> **State:** Authored 2026-09-03 on a branch stacked on the migration branch;
+> repaired after its first independent review and again after its second,
+> which closed three of seven questions and left four open on exact grounds
+> that are now repaired in the text; the provider-carrier decision packet's
+> first two items are adopted in the same repair; the existing Analysis
+> packages are not yet migrated to the new fields; a third review round and
+> publication remain, the latter the user's gate.
 > **Inputs:** the migration decisions on the sampling law and the outcome
 > partition (`f0-v2c-decision-inputs.md`, Sections 4, 5, and 10) and the
 > intake design of `analysis-named-premise-intake.md`.
@@ -42,25 +45,50 @@ its five dependents rotate, on top of the migration's seventeen.
   strategy-step coordinate the pages do not define.
 - The Schnorr entries are constructors over the subject tuple of Section 3,
   not literal digests.
+- After the second review: the two law families are bound to the direct
+  profile, `ExactModelBindingLaw<P,K>` and `ExactNamedHypothesis<P,K>`, and
+  a hypothesis's argument sequence is a per-profile closed schema whose first
+  element is the admitted coordinate; every hypothesis declaration and
+  constructor is coordinate-first; the provider arm of the bound value is a
+  dependent variant over the Protocol; the binding-map value is the premise
+  identity under the question's profile and the requirement's kind; the
+  relation, witness, prover-state, honest-commit, and honest-respond entries
+  are exact bodies over three binding laws and two hypotheses; the
+  construction bindings take the statement length; the sampler form is
+  derived from the construction's challenge rules and from the family's
+  total-uniform sampler premise; and all 31 anonymous hypothesis nodes carry
+  their premise set.
+- From the provider-carrier decision packet
+  (`f2o2-provider-carrier-decision-2026-09-03.md`, items 1 and 2): a provider
+  declaration names the lanes its execution model can end in, a lane image is
+  `Image(v)` or the explicit `Unmodelled`, a lane is never collapsed onto
+  another's image, and a statement over the whole outcome partition consumes
+  the tenth premise kind, `OperationalCompletion`.
 
 ## 3. What remains
 
-- The first independent review found the grammar unparameterized, four law
-  families unsigned, prose where canonical law terms belong, a Plan identity
-  the subject tuple could not derive, and the displayed bodies without the
-  new fields. All of these are repaired: the grammar takes the profile
-  parameter and every law family has a signature, the hypothesis terms carry
-  canonical arguments, the subject tuple carries the Fresh Plan with an
-  adequacy clause and the Plan coordinates are typed, the provider map is a
-  separate requirement of provider judgments, and every displayed question,
-  goal, context, node, and support carries its premise fields under the
-  requirement law. A second review round checks the repaired text.
+- Two independent review rounds are absorbed
+  (`f0v2d1-analysis-premise-text-review.md`); the second closed intake
+  soundness, decision fidelity, profile manifests, publication compilers,
+  rotation cone, and probe coverage, and its four open questions, name
+  closure, constructor consistency, Schnorr bindings, and refreeze inputs,
+  are answered in the text as Section 2 records. A third round checks the
+  repaired text and the packet's additions.
+- The intake probe does not yet exercise the tenth kind or the
+  `Image`/`Unmodelled` lane image with `modelled_lanes`; that extension goes
+  with the package migration below.
 - Publication, with the migration: the Analysis profiles rotate through the
   kernel.
 - Migration of existing question, goal, context, proposition, support, and
-  judgment bodies in the Analysis packages to the new fields, at the refreeze.
-- A provider declaration for the first external formal system, which the
-  provider-interpretation work supplies.
+  judgment bodies in the Analysis packages to the new fields: the review's
+  round-two section states the exact plan for the closure package and its
+  dependents (`evaluation/k3-analysis-closure`, the finite cover, the joined
+  boundary), and it starts now that the nonempty premise identities are
+  determined.
+- The provider declaration for VCVio, item 3 of the decision packet: source
+  pin, the closed carrier `Bool`, `modelled_lanes = [Accepted, Rejected]`, and
+  the five-lane map for the Fresh Schnorr Protocol; a profile-level
+  declaration the owner publishes.
 - Two premise kinds the oracle-proof compilation probe found missing for a
   BCS-style soundness statement, round-restoration soundness of the source
   oracle proof and binding of the commitment, together with a coordinate arm
