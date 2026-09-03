@@ -109,7 +109,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
   -> F0-V2C  migrated owner text                       [authored; publication gated]
-  -> F0-V2C1 freeze review of the migrated text         [round five, CannotAnswer; reference arm repaired]
+  -> F0-V2C1 freeze review of the migrated text         [round six complete, Affirmative]
   -> F0-V2C2 holdout re-adjudication                    [complete, Affirmative; carrier corrected]
   -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
