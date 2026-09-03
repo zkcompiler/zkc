@@ -178,6 +178,11 @@ below are reader cross-references rather than inventory edges.
   an identity split without a discriminator; it records the candidate
   repair, its sixteen-profile identity effect, the four gates behind it,
   and the F0-V2C decision gate at which alone the target may change.
+- [Schnorr Claim Binding Reopening Record](schnorr-claim-binding-reopening-2026-09-03.md)
+  records that the admitted Schnorr subject declares no claim while the
+  Relations attachment contract gives the initial claim its meaning, names
+  the fixture-side and contract-side repairs, recommends the first, and
+  routes the decision to the fixture refreeze after publication.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target
