@@ -1,17 +1,17 @@
 {
   "base_branch": "docs/pir-migration-v2c",
-  "base_head": "975d1e98a61880b800f92efe9c115dd728260113",
+  "base_head": "76f49ec1df3d9b5a241768da2fed8f5d46bd0799",
   "frozen_predecessors": {
     "evaluation/formal-kernel-mechanization-m0/vectors/body-digests.json": "dc96ea4cb4791acc6cbb911b56cd1d90d31caa83ace0e4070b8969b6076181f5",
     "evaluation/formal-kernel-mechanization-m0/vectors/pcgraph-construction.json": "4b120c65df1e5592ee5bfa6d65f324874214dc2ed3501990ba6ef0fa909eaf4e",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json": "81bdf8892735005d5241f00bf80b7a12764732f076da7bb69889b58947452b15",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json": "66c74a522e39314b5482fc0cc9f14648c4e297646df96466ba65103e4c0d871d",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json": "e2226368695951dea1371f48951eefbac9b336a528590b0405f727be849449ee",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/expected-findings.json": "65aabc261ad209239e0f9d9afbdd5f2c262e372e4c60e0d1e8f879c941769d69"
   },
   "owner_and_reconstruction_sources": {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7585edf0824b75b2919e9c572c226110b83b596f05ed11e14779d2f0658a1e7f",
-    "docs-next/pir/interactive-core.md": "86259df9d149668bc23d5887e8f60f04f49eebab6c914ee285b5ac70bea2ed99",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "55eb21050c6a193c8254bb3100fa99024f044f038c97993d0e7ebdfba9c9411f",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "3a39d1597827804660534f9e118188c4db7b558023d0cc4a9a4bf638bc4eb379",
+    "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "db842dcba66f72d05f0ba7e97aefeb73b6cee210a6aff7f13923811159eaf1c0",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9cbe6d51fb1ff5e0c9a7585505a55fe4f34ec9685aa02ed7b1ee872092c3f6cc",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "ab4f11eb8eafd7bbcd556be7252af2faaaae9cef06f8b2706174b7d1805eee38"

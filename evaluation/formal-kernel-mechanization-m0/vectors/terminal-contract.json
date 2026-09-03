@@ -1,7 +1,35 @@
 {
-  "base_head": "975d1e98a61880b800f92efe9c115dd728260113",
+  "base_head": "76f49ec1df3d9b5a241768da2fed8f5d46bd0799",
   "carriers": [
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -85,6 +113,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -115,6 +147,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -135,6 +170,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -149,6 +185,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -232,6 +296,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -262,6 +330,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -282,6 +353,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -296,6 +368,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -379,6 +479,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -410,6 +514,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -430,6 +537,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -444,6 +552,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -527,6 +663,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -557,6 +697,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -577,6 +720,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -591,6 +735,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -674,6 +846,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -705,6 +881,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -725,6 +904,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -739,6 +919,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -822,6 +1030,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -853,6 +1065,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -873,6 +1088,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -887,6 +1103,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -970,6 +1214,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -998,6 +1246,9 @@
           "terminal_claims": []
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1018,6 +1269,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -1032,6 +1284,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1115,6 +1395,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -1145,6 +1429,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1165,6 +1452,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -1179,6 +1467,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1262,6 +1578,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -1293,6 +1613,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1313,6 +1636,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -1327,6 +1651,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1410,6 +1762,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -1440,6 +1796,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1460,6 +1819,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 0,
@@ -1482,6 +1844,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1565,6 +1955,9 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 1,
@@ -1587,6 +1980,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1607,6 +2003,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -1621,6 +2018,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1704,6 +2129,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -1734,6 +2163,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1754,6 +2186,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -1768,6 +2201,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            2,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 2
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1851,6 +2312,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -1881,6 +2346,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -1901,6 +2369,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -1915,6 +2384,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            2
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 2
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -1998,6 +2495,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -2028,6 +2529,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -2048,6 +2552,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -2062,6 +2567,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -2137,6 +2670,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -2167,6 +2704,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -2187,6 +2727,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -2201,6 +2742,34 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
       "family": "terminal-projection",
       "initial_claims": [
         0
@@ -2292,6 +2861,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -2322,6 +2895,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -2342,6 +2918,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -2372,6 +2949,31 @@
       "source_precision": "outside the normalized Terminal surface"
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 18
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 19
+          }
+        }
+      ],
       "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
@@ -2592,6 +3194,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -2624,6 +3230,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -2644,6 +3253,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -2658,6 +3268,31 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 18
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 19
+          }
+        }
+      ],
       "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
@@ -2878,6 +3513,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -2910,6 +3549,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -2930,6 +3572,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -2944,6 +3587,31 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 18
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 19
+          }
+        }
+      ],
       "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
@@ -3164,6 +3832,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -3196,6 +3868,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -3216,6 +3891,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -3230,6 +3906,31 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 18
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 19
+          }
+        }
+      ],
       "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
@@ -3450,6 +4151,10 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -3482,6 +4187,9 @@
           ]
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -3502,6 +4210,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -3516,6 +4225,31 @@
       ]
     },
     {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 18
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 19
+          }
+        }
+      ],
       "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
@@ -3736,6 +4470,9 @@
       "source_precision": "exact normalized coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -3753,6 +4490,9 @@
           "terminal_claims": []
         },
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "coordinate": 2,
@@ -3773,6 +4513,7 @@
           ]
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 2,
@@ -3789,6 +4530,7 @@
       ]
     },
     {
+      "claims": [],
       "expected_terminal_outcome": "Affirmative",
       "family": "holdout-shape",
       "initial_claims": [],
@@ -3828,6 +4570,9 @@
       "source_precision": "shape only; no selected source-profile coordinates",
       "terminals": [
         {
+          "guard_input_is_boolean": [
+            true
+          ],
           "guard_inputs": [
             {
               "kind": "occurrence-output",
@@ -3847,9 +4592,596 @@
           "terminal_claims": []
         },
         {
+          "guard_input_is_boolean": [],
           "guard_inputs": [],
           "guard_term": null,
           "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            5
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [
+            6
+          ],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 5
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "holdout-shape",
+      "initial_claims": [
+        0
+      ],
+      "linear_claims": [
+        0,
+        1
+      ],
+      "name": "holdout/whir-finite-terminal-shape",
+      "predecessor_outcome": "fits",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "outputs": []
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            0
+          ]
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 901,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": 901,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 901,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized terminal coordinates from the frozen adjudication",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 1,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 2,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 3,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 4,
+              "output": 0
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "initial"
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 1
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "occurrence",
+            "occurrence": 3
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [
+        0
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "closed-contract/unknown-claim-status",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            0
+          ]
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 12,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "closed-contract/contradictory-zero-check-guard",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 700,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored law control",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 0,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "contradiction"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "closed-contract/non-boolean-guard-input",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 701,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored law control",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            false
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "closed-contract/impossible-terminal-region",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 710,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 710,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored law control",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
           "required_checks": [],
           "required_reductions": [],
           "terminal_claims": []
@@ -3862,20 +5194,24 @@
       1427,
       1442
     ],
+    "forward_state": [
+      1480,
+      1503
+    ],
     "must_env": [
       1444,
-      1474
+      1478
     ],
     "terminal_contract": [
-      1476,
-      1509
+      1505,
+      1519
     ]
   },
   "source_pins": {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7585edf0824b75b2919e9c572c226110b83b596f05ed11e14779d2f0658a1e7f",
-    "docs-next/pir/interactive-core.md": "86259df9d149668bc23d5887e8f60f04f49eebab6c914ee285b5ac70bea2ed99",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "55eb21050c6a193c8254bb3100fa99024f044f038c97993d0e7ebdfba9c9411f",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json": "81bdf8892735005d5241f00bf80b7a12764732f076da7bb69889b58947452b15",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "3a39d1597827804660534f9e118188c4db7b558023d0cc4a9a4bf638bc4eb379",
+    "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "db842dcba66f72d05f0ba7e97aefeb73b6cee210a6aff7f13923811159eaf1c0",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json": "66c74a522e39314b5482fc0cc9f14648c4e297646df96466ba65103e4c0d871d",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json": "e2226368695951dea1371f48951eefbac9b336a528590b0405f727be849449ee",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/expected-findings.json": "65aabc261ad209239e0f9d9afbdd5f2c262e372e4c60e0d1e8f879c941769d69",
@@ -3883,10 +5219,6 @@
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "ab4f11eb8eafd7bbcd556be7252af2faaaae9cef06f8b2706174b7d1805eee38"
   },
   "unrepresented_holdouts": [
-    {
-      "name": "WHIR finite constructive member",
-      "reason": "The frozen replacement uses a guarded fold-scope opening. The migration record calls for unconditional reductions, but no exact replacement schedule, references, or terms are supplied."
-    },
     {
       "name": "Circle STARKs",
       "reason": "The holdout record gives a terminal shape but no exact Check, Reduction, Claim, guard-input, or occurrence coordinates."

@@ -33,4 +33,8 @@ and never on `sorryAx`.
 #print axioms M0.must_when_false_sound
 #print axioms M0.impossible_when_true_cannot_evaluate_true
 #print axioms M0.impossible_when_false_cannot_evaluate_false
+#print axioms M0.attempted_iff_region_holds
+#print axioms M0.region_impossible_iff_unreachable
+#print axioms M0.claimStatus_live_sound
+#print axioms M0.claimStatus_dead_sound
 #print axioms M0.terminalContractDecision_correct

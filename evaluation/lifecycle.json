@@ -89,8 +89,8 @@
     {
       "id": "kernel-mechanization-sequence",
       "disposition": "active-sequence",
-      "purpose": "Bounded measurement of whether core-only Lean can retain the datum, graph, portable-term, and finite-Schnorr layers while proving universal first-active and must-fact soundness, deciding the PIR Terminal contract, and reconstructing its finite carrier outcomes through independent Lean and Python paths.",
-      "exit_rule": "Either the relevant owners adopt selected mechanized definitions and proofs as a durable owner-checked leg after the five Terminal underdeterminations, exact holdout carriers, independent term-evaluation vectors, and the Foundation result-carrier boundary are resolved, or the measurement is recorded as sufficient and the package is removed. Until then the forward claim transfer is package-local, finite carriers and Python rows remain bounded comparison evidence, no Lean text is authority, and no complete admission, implementation-correspondence, theorem-applicability, or security claim follows.",
+      "purpose": "Bounded measurement of whether core-only Lean can retain the datum, graph, portable-term, and finite-Schnorr layers while proving the closed must-fact, occurrence-region, claim-status, and Terminal laws sound and reconstructing finite carrier outcomes through independent Lean and Python paths.",
+      "exit_rule": "Either the relevant owners adopt selected mechanized definitions and proofs as a durable owner-checked leg after exact holdout carriers, independent term-evaluation vectors, and the Foundation result-carrier boundary are resolved, or the measurement is recorded as sufficient and the package is removed. Until then finite carriers and Python rows remain bounded comparison evidence, no Lean text is authority, and no complete admission, implementation-correspondence, theorem-applicability, or security claim follows.",
       "checks": [
         "research.kernel-mechanization-feasibility"
       ]

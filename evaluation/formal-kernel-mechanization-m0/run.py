@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""Run the mechanized portable-term and Terminal-contract gate.
+"""Run the mechanized portable-term and closed Terminal-contract gate.
 
 The gate answers one bounded question: can the K1 portable-term calculus and
-the R1B finite Schnorr check denotation be mechanized in core Lean, while
-retaining M0/M1 and reproducing every available predecessor golden?  The K1
-independent oracle currently contains no term-evaluation operation, so that
-required evidence remains CannotAnswer even when the Lean/R1B comparisons
-pass.  The extension proves first-active and must-fact soundness, executes the
-Terminal decision on frozen carriers through Lean and independent Python
-paths, and fails closed on owner-text underdetermination.  Nothing under
-`lean/` is normative.
+the finite Schnorr check denotation and the closed forward Terminal state be
+mechanized in core Lean while retaining the predecessor goldens?  The
+extension proves must-fact, occurrence-region, and claim-status soundness for
+arbitrary schedules and valuations, then executes the closed Terminal decision
+through Lean and independent Python paths.  Nothing under `lean/` is normative.
 
 When no Lean toolchain is available the Lean-dependent findings are classified
 `Unsupported/M0-U-LEAN-TOOLCHAIN` and the frozen comparison fails; the gate
@@ -54,8 +51,8 @@ ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 FOUNDATION = ROOT / "docs-next/foundation/executable-foundations.md"
 TARGET = ROOT / "docs-next/pir/interactive-core.md"
 
-AFFIRMATIVE_AGGREGATE = "TERMINAL-A-MECHANIZED-CONTRACT"
-CANNOT_ANSWER_AGGREGATE = "TERMINAL-C-OWNER-TEXT-UNDERDETERMINED"
+AFFIRMATIVE_AGGREGATE = "M4-A-FORWARD-STATE-SOUND"
+CANNOT_ANSWER_AGGREGATE = "M4-C-FORWARD-STATE-INCOMPLETE"
 TOOLCHAIN = "leanprover/lean4:v4.33.1"
 LEAN_VERSION = "4.33.1"
 D1_AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
@@ -87,6 +84,10 @@ TERMINAL_THEOREMS = (
     "M0.must_when_false_sound",
     "M0.impossible_when_true_cannot_evaluate_true",
     "M0.impossible_when_false_cannot_evaluate_false",
+    "M0.attempted_iff_region_holds",
+    "M0.region_impossible_iff_unreachable",
+    "M0.claimStatus_live_sound",
+    "M0.claimStatus_dead_sound",
     "M0.terminalContractDecision_correct",
 )
 LATTICE_THEOREMS = (
@@ -386,6 +387,10 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         and "V(13,R{0:N(occurrence_ref),1:N(output_ordinal)})" in target
         and "AttemptedWhenever(o_later, o_earlier)" in target
         and "MustEnv(if c then a else b, environment)" in target
+        and "MustEnv(any other term constructor, environment)" in target
+        and "names a non-Boolean binding carries no literal" in target
+        and "Region(o) := {" in target
+        and "ClaimStatus(c, o) :=" in target
         and "TerminalContract(t), with o_t the occurrence of ReachTerminal(t)" in target,
         "Foundation, graph, or Terminal law text drifted",
     )
@@ -769,7 +774,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     )
     m2_stage4_ok = all((m2_determinism_ok, m2_monotonicity_ok, m2_axioms_ok))
 
-    # Universal Terminal proofs and the two executable reconstruction paths.
+    # Universal closed-state proofs and the two executable reconstruction paths.
     terminal_proofs_ok = proved(TERMINAL_THEOREMS)
     first_active_ok = proved(("M0.attemptedWhenever_sound",))
     must_sound_ok = proved((
@@ -779,7 +784,22 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         "M0.impossible_when_true_cannot_evaluate_true",
         "M0.impossible_when_false_cannot_evaluate_false",
     ))
+    region_proofs_ok = proved((
+        "M0.attempted_iff_region_holds",
+        "M0.region_impossible_iff_unreachable",
+    ))
+    claim_status_proofs_ok = proved((
+        "M0.claimStatus_live_sound",
+        "M0.claimStatus_dead_sound",
+    ))
     decision_proof_ok = proved(("M0.terminalContractDecision_correct",))
+    terminal_laws = report.get("terminal_laws", {})
+    closed_must_rules_ok = all(terminal_laws.get(name) is True for name in (
+        "non_boolean_input_has_no_literal",
+        "contradictory_union_is_impossible",
+        "contradictory_guard_is_impossible",
+        "unnamed_constructors_have_no_literals",
+    ))
     lean_terminal_rows = report.get("terminal", [])
     python_terminal_rows = terminal_checker.evaluate(regenerated_terminal)
     lean_terminal_by_name = {row["name"]: row for row in lean_terminal_rows}
@@ -794,7 +814,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 (
                     terminal["reference"],
                     terminal["passed"] if python else terminal["decision"],
-                    tuple(tuple(claims) for claims in terminal.get("active_live_claims", [])),
+                    terminal.get("region_impossible"),
+                    terminal.get("claim_bindings_well_formed"),
+                    tuple(terminal.get("live_claims", [])),
+                    tuple(
+                        (status["reference"], status["status"])
+                        for status in terminal.get("claim_statuses", [])
+                    ),
                 )
                 for terminal in terminal_rows
             ),
@@ -827,21 +853,85 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         and all(row["admitted"] is False and row["predecessor_outcome"] == "Affirmative"
                 for row in integrated_rows)
         and all(
-            terminal["active_live_claims"] == [[0, 1, 2]]
+            terminal["live_claims"] == [0, 1, 2]
             for row in integrated_rows for terminal in row["terminals"]
         )
     )
     holdout_rows = [row for row in lean_terminal_rows if row["family"] == "holdout-shape"]
     holdout_shape_ok = (
-        len(holdout_rows) == 1 and holdout_rows[0]["admitted"] is True
-        and holdout_rows[0]["predecessor_outcome"] == "fits"
+        len(holdout_rows) == 2
+        and all(row["admitted"] is True and row["predecessor_outcome"] == "fits"
+                for row in holdout_rows)
     )
+    control_rows = {
+        row["name"]: row for row in lean_terminal_rows
+        if row["family"] == "closed-contract-control"
+    }
+    unknown_control = control_rows.get("closed-contract/unknown-claim-status", {})
+    contradiction_control = control_rows.get(
+        "closed-contract/contradictory-zero-check-guard", {}
+    )
+    non_boolean_control = control_rows.get("closed-contract/non-boolean-guard-input", {})
+    impossible_region_control = control_rows.get(
+        "closed-contract/impossible-terminal-region", {}
+    )
+    unknown_refused = (
+        unknown_control.get("admitted") is False
+        and any(
+            status["status"] == "Unknown"
+            for terminal in unknown_control.get("terminals", [])
+            for status in terminal["claim_statuses"]
+        )
+    )
+    contradiction_refused = (
+        contradiction_control.get("admitted") is False
+        and contradiction_control.get("terminals", [{}])[0].get("decision") is False
+    )
+    non_boolean_refused = (
+        non_boolean_control.get("admitted") is False
+        and non_boolean_control.get("terminals", [{}])[0].get("decision") is False
+    )
+    impossible_region_refused = (
+        impossible_region_control.get("admitted") is False
+        and any(
+            terminal["region_impossible"] and not terminal["decision"]
+            for terminal in impossible_region_control.get("terminals", [])
+        )
+    )
+    controls_ok = (
+        len(control_rows) == 4 and unknown_refused and contradiction_refused
+        and non_boolean_refused and impossible_region_refused
+    )
+    finite_state_oracle_ok = all(
+        all(row.get("soundness", {}).values())
+        for row in python_terminal_rows if row.get("admitted") is not None
+    )
+    closed_decisions_ok = all((
+        decision_proof_ok, terminal_two_path_ok, projection_comparison_ok,
+        integrated_claim_gap, holdout_shape_ok, controls_ok,
+    ))
+    forward_stage2_ok = must_sound_ok and closed_must_rules_ok
+    forward_stage3_ok = region_proofs_ok and claim_status_proofs_ok and finite_state_oracle_ok
+    forward_stage4_ok = closed_decisions_ok
+    forward_incomplete_stages = [
+        name for name, passed in (
+            ("must-fact closure", forward_stage2_ok),
+            ("region and claim-status soundness", forward_stage3_ok),
+            ("closed carrier decisions", forward_stage4_ok),
+        ) if not passed
+    ]
     findings.extend(
         (
             lean_finding("first-active-sound-for-every-valuation", first_active_ok,
                          "TERMINAL-A-FIRST-ACTIVE-UNIVERSAL"),
             lean_finding("must-facts-sound-against-m2-evaluator", must_sound_ok,
                          "TERMINAL-A-MUST-FACT-SOUND"),
+            lean_finding("region-exact-for-attemptedness", region_proofs_ok,
+                         "M4-A-REGION-EXACT"),
+            lean_finding("claim-status-live-dead-sound", claim_status_proofs_ok,
+                         "M4-A-CLAIM-STATUS-SOUND"),
+            lean_finding("finite-forward-state-oracle", finite_state_oracle_ok,
+                         "M4-A-FINITE-STATE-ORACLE"),
             lean_finding("terminal-decision-procedure-correct", decision_proof_ok,
                          "TERMINAL-A-DECISION-CORRECT"),
             lean_finding("terminal-theorems-standard-axioms-only", terminal_proofs_ok,
@@ -860,31 +950,36 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 if integrated_claim_gap else
                 _finding("integrated-carriers-terminal-closure", "CannotAnswer",
                          "TERMINAL-C-INTEGRATED-COMPARISON-DIVERGED"),
-            lean_finding("warpfold-finite-terminal-shape", holdout_shape_ok,
-                         "TERMINAL-A-WARPFOLD-SHAPE"),
+            lean_finding("representable-holdout-terminal-shapes", holdout_shape_ok,
+                         "M4-A-HOLDOUT-SHAPES"),
+            lean_finding("closed-contract-controls", controls_ok,
+                         "M4-A-CLOSED-CONTRACT-CONTROLS"),
             _finding("exact-holdout-terminal-carriers", "CannotAnswer",
                      "TERMINAL-C-HOLDOUT-COORDINATES-ABSENT"),
         )
     )
 
-    # Exact owner-text underdetermination.  The line ranges are frozen in the
-    # note and vector; the executable never fills these as owner law.
+    # Each previously open owner-text choice now has one exact transcribed law.
     findings.extend(
         (
-            _finding("must-env-clauses-for-ten-term-constructors", "CannotAnswer",
-                     "TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED"),
-            _finding("non-boolean-input-must-initialization", "CannotAnswer",
-                     "TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED"),
-            _finding("contradictory-fact-normalization", "CannotAnswer",
-                     "TERMINAL-C-CONTRADICTION-NORMALIZATION-UNDEFINED"),
-            _finding("impossible-guard-global-placement", "CannotAnswer",
-                     "TERMINAL-C-IMPOSSIBLE-GUARD-PLACEMENT"),
-            _finding("forward-claim-state-owner-algorithm", "CannotAnswer",
-                     "TERMINAL-C-FORWARD-STATE-TRANSFER-NOT-CLOSED-HERE"),
+            lean_finding("must-env-clauses-for-remaining-term-constructors",
+                         closed_must_rules_ok, "M4-A-MUST-ENV-OTHER-CONSTRUCTORS"),
+            lean_finding("non-boolean-input-must-initialization",
+                         closed_must_rules_ok and non_boolean_refused,
+                         "M4-A-NONBOOLEAN-INPUT-MUST"),
+            lean_finding("contradictory-fact-normalization",
+                         closed_must_rules_ok and contradiction_refused,
+                         "M4-A-CONTRADICTION-NORMALIZATION"),
+            lean_finding("standalone-impossible-region-clause",
+                         impossible_region_refused,
+                         "M4-A-STANDALONE-IMPOSSIBLE-REGION"),
+            lean_finding("closed-forward-claim-state",
+                         forward_stage3_ok and unknown_refused,
+                         "M4-A-CLOSED-FORWARD-CLAIM-STATE"),
         )
     )
 
-    # M2 Stage 6: bounded cost and exact owner-text underdetermination.
+    # Retained evaluator cost boundary.
     findings.append(
         _finding("m2-section-8-no-universal-result-bytes", "CannotAnswer",
                  "M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES")
@@ -910,11 +1005,8 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     )
     if not lean_available:
         findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer", "M0-C-LEAN-TOOLCHAIN-UNAVAILABLE"))
-    elif all((retained_ok, stage1_ok, decoder_canonicity_ok, order_independence_ok,
-              magnitude_equivalence_ok, lean_boundary_ok, k1_boundary_ok,
-              primary_ok, lattice_ok, axioms_ok, m2_stage1_ok, m2_stage2_ok,
-              m2_stage3_ok, m2_stage4_ok, m2_equation_ok, terminal_proofs_ok,
-              terminal_two_path_ok, projection_comparison_ok, holdout_shape_ok)):
+    elif all((build_ok, not boundary["sorry_files"], terminal_proofs_ok,
+              forward_stage2_ok, forward_stage3_ok, forward_stage4_ok)):
         findings.append(_finding("mechanized-kernel-definitions", "Affirmative",
                                  AFFIRMATIVE_AGGREGATE))
     else:
@@ -967,12 +1059,17 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             },
             "terminal": {
                 "proofs_standard_axioms_only": terminal_proofs_ok,
+                "must_stage_passed": forward_stage2_ok,
+                "region_and_claim_stage_passed": forward_stage3_ok,
+                "closed_decision_stage_passed": forward_stage4_ok,
+                "aggregate_incomplete_stages": forward_incomplete_stages,
                 "lean_python_agreement": terminal_two_path_ok,
                 "projection_representable": len(projection_rows),
                 "projection_outside_surface": len(projection_outside_surface),
                 "integrated_refused_by_claim_closure": len(integrated_rows)
                     if integrated_claim_gap else 0,
                 "holdout_shapes_decided": len(holdout_rows),
+                "controls_decided": len(control_rows),
                 "unrepresented_holdouts": regenerated_terminal["unrepresented_holdouts"],
                 "lean": lean_terminal_rows,
                 "python": python_terminal_rows,

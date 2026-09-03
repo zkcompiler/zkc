@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Independent Python decision path for normalized Terminal carriers."""
+"""Independent closed-state decision path for normalized Terminal carriers."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from itertools import product
+from typing import Any, Iterable
 
 
-@dataclass
-class PathState:
-    decisions: dict[int, bool]
-    live_claims: list[int]
-    valid: bool = True
+Literal = tuple[bool, int]
+FactSet = frozenset[Literal] | None
+MustResult = tuple[FactSet, FactSet]
 
 
 def _positions(carrier: dict[str, Any], kind: str) -> dict[int, list[int]]:
@@ -28,9 +26,7 @@ def _unique_position(positions: dict[int, list[int]], reference: int) -> int | N
     return rows[0] if len(rows) == 1 else None
 
 
-def _attempted_whenever(
-    carrier: dict[str, Any], later: int, earlier: int
-) -> bool:
+def _attempted_whenever(carrier: dict[str, Any], later: int, earlier: int) -> bool:
     if not 0 <= earlier < later < len(carrier["schedule"]):
         return False
     earlier_guard = carrier["schedule"][earlier]["guard_atom"]
@@ -38,95 +34,275 @@ def _attempted_whenever(
     return earlier_guard is None or earlier_guard == later_guard
 
 
-def _must_when_true(term: dict[str, Any] | None) -> tuple[bool, set[int]]:
+def _union(left: FactSet, right: FactSet) -> FactSet:
+    if left is None or right is None:
+        return None
+    merged = left | right
+    if any((not polarity, ordinal) in merged for polarity, ordinal in merged):
+        return None
+    return merged
+
+
+def _meet(left: FactSet, right: FactSet) -> FactSet:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return left & right
+
+
+def _conditional(condition: MustResult, when_true: MustResult, when_false: MustResult) -> MustResult:
+    return (
+        _meet(_union(condition[0], when_true[0]), _union(condition[1], when_false[0])),
+        _meet(_union(condition[0], when_true[1]), _union(condition[1], when_false[1])),
+    )
+
+
+def _input_must(ordinal: int, is_boolean: bool) -> MustResult:
+    if not is_boolean:
+        return frozenset(), frozenset()
+    return frozenset({(True, ordinal)}), frozenset({(False, ordinal)})
+
+
+def _false_must() -> MustResult:
+    return None, frozenset()
+
+
+def _true_must() -> MustResult:
+    return frozenset(), None
+
+
+def _conjunction_must(inputs: list[int], kinds: list[bool]) -> MustResult:
+    if not inputs:
+        return _true_must()
+    ordinal = inputs[0]
+    condition = _input_must(ordinal, kinds[ordinal] if ordinal < len(kinds) else False)
+    if len(inputs) == 1:
+        return condition
+    return _conditional(condition, _conjunction_must(inputs[1:], kinds), _false_must())
+
+
+def _must(term: dict[str, Any] | None, kinds: list[bool]) -> MustResult:
     if term is None:
-        return False, set()
-    if term["kind"] == "identity":
-        return False, {int(term["input"])}
-    if term["kind"] == "conjunction":
-        return False, {int(item) for item in term["inputs"]}
-    if term["kind"] == "true":
-        return False, set()
-    if term["kind"] == "false":
-        return True, set()
+        return frozenset(), frozenset()
+    kind = term["kind"]
+    if kind == "identity":
+        ordinal = int(term["input"])
+        return _input_must(ordinal, kinds[ordinal] if ordinal < len(kinds) else False)
+    if kind == "conjunction":
+        return _conjunction_must([int(item) for item in term["inputs"]], kinds)
+    if kind == "true":
+        return _true_must()
+    if kind == "false":
+        return _false_must()
+    if kind == "contradiction":
+        ordinal = int(term["input"])
+        variable = _input_must(ordinal, kinds[ordinal] if ordinal < len(kinds) else False)
+        negation = _conditional(variable, _false_must(), _true_must())
+        return _conditional(variable, negation, _false_must())
     raise ValueError(f"unknown compact guard term {term!r}")
 
 
-def _guard_branches(guard: int | None, path: PathState) -> list[tuple[bool, PathState]]:
-    if guard is None:
-        return [(True, path)]
-    if guard in path.decisions:
-        return [(path.decisions[guard], path)]
-    left = PathState({**path.decisions, guard: True}, list(path.live_claims), path.valid)
-    right = PathState({**path.decisions, guard: False}, list(path.live_claims), path.valid)
-    return [(True, left), (False, right)]
+def _region(carrier: dict[str, Any], occurrence: int) -> dict[str, Any]:
+    schedule = carrier["schedule"]
+    if not 0 <= occurrence < len(schedule):
+        return {"required_true": set(), "required_false": set(), "impossible": True}
+    guard = schedule[occurrence]["guard_atom"]
+    required_true = set() if guard is None else {guard}
+    required_false: set[int] = set()
+    earlier_always = False
+    for row in schedule[:occurrence]:
+        if row["effect"]["kind"] != "terminal":
+            continue
+        if row["guard_atom"] is None:
+            earlier_always = True
+        else:
+            required_false.add(row["guard_atom"])
+    return {
+        "required_true": required_true,
+        "required_false": required_false,
+        "impossible": earlier_always or bool(required_true & required_false),
+    }
 
 
-def _forward_claims(carrier: dict[str, Any]) -> dict[str, Any]:
-    paths = [PathState({}, list(carrier["initial_claims"]))]
-    visits: dict[int, list[tuple[list[int], bool]]] = {}
-    linear = set(carrier["linear_claims"])
-    reductions = carrier["reductions"]
-    for occurrence in carrier["schedule"]:
-        next_paths: list[PathState] = []
-        for path in paths:
-            for active, branch in _guard_branches(occurrence["guard_atom"], path):
-                if not active:
-                    next_paths.append(branch)
-                    continue
-                effect = occurrence["effect"]
-                if effect["kind"] == "terminal":
-                    visits.setdefault(effect["reference"], []).append(
-                        (list(branch.live_claims), branch.valid)
-                    )
-                elif effect["kind"] == "reduction":
-                    reference = effect["reference"]
-                    if not 0 <= reference < len(reductions):
-                        branch.valid = False
-                        next_paths.append(branch)
-                        continue
-                    transfer = reductions[reference]
-                    branch.valid = branch.valid and all(
-                        claim in branch.live_claims for claim in transfer["inputs"]
-                    )
-                    branch.live_claims = [
-                        claim
-                        for claim in branch.live_claims
-                        if not (claim in linear and claim in transfer["inputs"])
-                    ]
-                    for claim in transfer["outputs"]:
-                        if claim not in branch.live_claims:
-                            branch.live_claims.append(claim)
-                    next_paths.append(branch)
-                else:
-                    next_paths.append(branch)
-        paths = next_paths
-    all_valid = all(path.valid for path in paths) and all(
-        valid for rows in visits.values() for _claims, valid in rows
+def _implies(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return right["required_true"] <= left["required_true"] and right["required_false"] <= left["required_false"]
+
+
+def _disjoint(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return bool(
+        left["required_true"] & right["required_false"]
+        or right["required_true"] & left["required_false"]
     )
-    return {"running": paths, "visits": visits, "all_valid": all_valid}
+
+
+def _available_claims(carrier: dict[str, Any], occurrence: int) -> list[dict[str, Any]]:
+    return [
+        claim
+        for claim in carrier["claims"]
+        if claim["source"]["kind"] == "initial"
+        or claim["source"]["occurrence"] < occurrence
+    ]
+
+
+def _source_region(carrier: dict[str, Any], claim: dict[str, Any]) -> dict[str, Any]:
+    if claim["source"]["kind"] == "initial":
+        return {"required_true": set(), "required_false": set(), "impossible": False}
+    return _region(carrier, claim["source"]["occurrence"])
+
+
+def _earlier_consumers(claim: dict[str, Any], occurrence: int) -> list[int]:
+    return [consumer for consumer in claim["linear_consumers"] if consumer < occurrence]
+
+
+def _claim_status(carrier: dict[str, Any], claim: dict[str, Any], occurrence: int) -> str:
+    target = _region(carrier, occurrence)
+    consumers = [_region(carrier, row) for row in _earlier_consumers(claim, occurrence)]
+    live = _implies(target, _source_region(carrier, claim)) and all(
+        _disjoint(target, consumer) for consumer in consumers
+    )
+    if live:
+        return "Live"
+    dead = _disjoint(target, _source_region(carrier, claim)) or any(
+        _implies(target, consumer) for consumer in consumers
+    )
+    return "Dead" if dead else "Unknown"
+
+
+def _claim_well_formed(carrier: dict[str, Any], claim: dict[str, Any], occurrence: int) -> bool:
+    source = claim["source"]
+    source_ok = source["kind"] == "initial" or (
+        0 <= source["occurrence"] < occurrence
+        and source["occurrence"] < len(carrier["schedule"])
+    )
+    consumers_ok = all(
+        0 <= consumer < len(carrier["schedule"])
+        for consumer in _earlier_consumers(claim, occurrence)
+    )
+    return source_ok and consumers_ok
 
 
 def _strictly_increasing(values: list[int]) -> bool:
     return all(left < right for left, right in zip(values, values[1:]))
 
 
+def _guard_holds(guard: int | None, valuation: dict[int, bool]) -> bool:
+    return guard is None or valuation[guard]
+
+
+def _attempted(carrier: dict[str, Any], occurrence: int, valuation: dict[int, bool]) -> bool:
+    if not 0 <= occurrence < len(carrier["schedule"]):
+        return False
+    row = carrier["schedule"][occurrence]
+    return _guard_holds(row["guard_atom"], valuation) and not any(
+        prior["effect"]["kind"] == "terminal"
+        and _guard_holds(prior["guard_atom"], valuation)
+        for prior in carrier["schedule"][:occurrence]
+    )
+
+
+def _valuations(carrier: dict[str, Any]) -> Iterable[dict[int, bool]]:
+    atoms = sorted(
+        {row["guard_atom"] for row in carrier["schedule"] if row["guard_atom"] is not None}
+    )
+    for values in product((False, True), repeat=len(atoms)):
+        yield dict(zip(atoms, values, strict=True))
+
+
+def _region_holds(region: dict[str, Any], valuation: dict[int, bool]) -> bool:
+    return not region["impossible"] and all(
+        valuation[atom] for atom in region["required_true"]
+    ) and all(not valuation[atom] for atom in region["required_false"])
+
+
+def _claim_live_at(
+    carrier: dict[str, Any], claim: dict[str, Any], occurrence: int, valuation: dict[int, bool]
+) -> bool:
+    source = claim["source"]
+    exists = source["kind"] == "initial" or _attempted(carrier, source["occurrence"], valuation)
+    return exists and not any(
+        _attempted(carrier, consumer, valuation)
+        for consumer in _earlier_consumers(claim, occurrence)
+    )
+
+
+def _finite_soundness(carrier: dict[str, Any]) -> dict[str, bool]:
+    valuations = list(_valuations(carrier))
+    region_exact = True
+    unreachable_exact = True
+    for occurrence in range(len(carrier["schedule"])):
+        region = _region(carrier, occurrence)
+        attempted_values = [_attempted(carrier, occurrence, valuation) for valuation in valuations]
+        region_exact &= all(
+            attempted == _region_holds(region, valuation)
+            for attempted, valuation in zip(attempted_values, valuations, strict=True)
+        )
+        unreachable_exact &= region["impossible"] == (not any(attempted_values))
+    status_sound = True
+    terminal_positions = _positions(carrier, "terminal")
+    for terminal in carrier["terminals"]:
+        occurrence = _unique_position(terminal_positions, terminal["reference"])
+        if occurrence is None:
+            continue
+        for claim in _available_claims(carrier, occurrence):
+            status = _claim_status(carrier, claim, occurrence)
+            attempted_valuations = [
+                valuation for valuation in valuations if _attempted(carrier, occurrence, valuation)
+            ]
+            if status == "Live":
+                status_sound &= all(
+                    _claim_live_at(carrier, claim, occurrence, valuation)
+                    for valuation in attempted_valuations
+                )
+            elif status == "Dead":
+                status_sound &= all(
+                    not _claim_live_at(carrier, claim, occurrence, valuation)
+                    for valuation in attempted_valuations
+                )
+    return {
+        "region_exact": region_exact,
+        "unreachable_exact": unreachable_exact,
+        "claim_status_sound": status_sound,
+    }
+
+
 def _terminal_contract(
-    carrier: dict[str, Any], terminal: dict[str, Any], forward: dict[str, Any]
-) -> tuple[bool, list[str]]:
+    carrier: dict[str, Any], terminal: dict[str, Any]
+) -> tuple[bool, list[str], dict[str, Any]]:
     failures: list[str] = []
     terminal_positions = _positions(carrier, "terminal")
     check_positions = _positions(carrier, "check")
     reduction_positions = _positions(carrier, "reduction")
     terminal_position = _unique_position(terminal_positions, terminal["reference"])
     if terminal_position is None:
-        return False, ["terminal backlink is not unique"]
+        failures.append("terminal backlink is not unique")
+        terminal_position = len(carrier["schedule"]) + terminal["reference"] + 1
 
+    local_claims = _available_claims(carrier, terminal_position)
+    if len(terminal["guard_inputs"]) != len(terminal["guard_input_is_boolean"]):
+        failures.append("guard input type coordinates do not match the input arity")
     for label in ("required_checks", "required_reductions", "terminal_claims"):
         if not _strictly_increasing(terminal[label]):
             failures.append(f"{label} is not sorted-unique")
+    if not _strictly_increasing([claim["reference"] for claim in local_claims]):
+        failures.append("claim references are not sorted-unique")
+    if any(not _strictly_increasing(claim["linear_consumers"]) for claim in local_claims):
+        failures.append("claim consumer coordinates are not sorted-unique")
+    if any(not _claim_well_formed(carrier, claim, terminal_position) for claim in local_claims):
+        failures.append("claim binding is not well formed at the terminal")
 
-    impossible, positives = _must_when_true(terminal["guard_term"])
+    region = _region(carrier, terminal_position)
+    when_true, _when_false = _must(
+        terminal["guard_term"], terminal["guard_input_is_boolean"]
+    )
+    if region["impossible"]:
+        failures.append("terminal Region is Impossible")
+    if terminal["guard_term"] is not None and when_true is None:
+        failures.append("terminal GuardTerm has Impossible MustWhenTrue")
+
+    positives = set() if when_true is None else {
+        ordinal for polarity, ordinal in when_true if polarity
+    }
     for check in terminal["required_checks"]:
         check_position = _unique_position(check_positions, check)
         if check_position is None:
@@ -136,8 +312,6 @@ def _terminal_contract(
             failures.append(f"required Check {check} is not attempted whenever the terminal is")
         if terminal["guard_term"] is None:
             failures.append(f"required Check {check} has no terminal GuardTerm")
-        elif impossible:
-            failures.append(f"required Check {check} lies under Impossible MustWhenTrue")
         direct = any(
             source.get("kind") == "occurrence-output"
             and source.get("occurrence") == check_position
@@ -157,14 +331,24 @@ def _terminal_contract(
                 f"required Reduction {reduction} is not attempted whenever the terminal is"
             )
 
-    for live_claims, valid in forward["visits"].get(terminal["reference"], []):
-        if not valid:
-            failures.append("terminal path carries an invalid claim transfer")
-        if live_claims != terminal["terminal_claims"]:
-            failures.append(
-                f"live claims {live_claims} differ from authored {terminal['terminal_claims']}"
-            )
-    return not failures, failures
+    statuses = [
+        {"reference": claim["reference"], "status": _claim_status(carrier, claim, terminal_position)}
+        for claim in local_claims
+    ]
+    if any(row["status"] == "Unknown" for row in statuses):
+        failures.append("at least one claim has Unknown ClaimStatus")
+    live_claims = [row["reference"] for row in statuses if row["status"] == "Live"]
+    if live_claims != terminal["terminal_claims"]:
+        failures.append(f"live claims {live_claims} differ from authored {terminal['terminal_claims']}")
+    details = {
+        "region_impossible": region["impossible"],
+        "claim_bindings_well_formed": all(
+            _claim_well_formed(carrier, claim, terminal_position) for claim in local_claims
+        ),
+        "live_claims": live_claims,
+        "claim_statuses": statuses,
+    }
+    return not failures, failures, details
 
 
 def decide_carrier(carrier: dict[str, Any]) -> dict[str, Any]:
@@ -176,7 +360,6 @@ def decide_carrier(carrier: dict[str, Any]) -> dict[str, Any]:
             "reason": carrier["cannot_answer"],
             "predecessor_outcome": carrier["predecessor_outcome"],
         }
-    forward = _forward_claims(carrier)
     failures: list[str] = []
     terminal_positions = _positions(carrier, "terminal")
     declared = {terminal["reference"] for terminal in carrier["terminals"]}
@@ -190,25 +373,23 @@ def decide_carrier(carrier: dict[str, Any]) -> dict[str, Any]:
         final = carrier["schedule"][-1]
         if final["effect"]["kind"] != "terminal" or final["guard_atom"] is not None:
             failures.append("final occurrence is not an unconditional fallback terminal")
-    if not forward["all_valid"]:
-        failures.append("forward claim state contains an invalid transfer")
     terminal_rows: list[dict[str, Any]] = []
     for terminal in carrier["terminals"]:
-        passed, terminal_failures = _terminal_contract(carrier, terminal, forward)
+        passed, terminal_failures, details = _terminal_contract(carrier, terminal)
         terminal_rows.append(
             {
                 "reference": terminal["reference"],
                 "passed": passed,
                 "failures": terminal_failures,
-                "active_live_claims": [
-                    claims
-                    for claims, _valid in forward["visits"].get(terminal["reference"], [])
-                ],
+                **details,
             }
         )
         failures.extend(
             f"terminal {terminal['reference']}: {failure}" for failure in terminal_failures
         )
+    soundness = _finite_soundness(carrier)
+    if not all(soundness.values()):
+        failures.append("finite independent soundness oracle disagrees with the closed laws")
     admitted = not failures
     return {
         "name": carrier["name"],
@@ -216,9 +397,7 @@ def decide_carrier(carrier: dict[str, Any]) -> dict[str, Any]:
         "admitted": admitted,
         "failures": failures,
         "terminals": terminal_rows,
-        "forward_states": len(forward["running"]) + sum(
-            len(rows) for rows in forward["visits"].values()
-        ),
+        "soundness": soundness,
         "predecessor_outcome": carrier["predecessor_outcome"],
     }
 

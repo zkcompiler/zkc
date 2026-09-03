@@ -5,7 +5,7 @@ The exporter intentionally does not import the historical synthetic-profile
 models.  Those models collide with the real manifests on the migration branch.
 Instead it reconstructs only the finite coordinates consumed by Section 10:
 occurrence order, full structural guard identity, declaration backlinks,
-compact guard terms, claim transfers, and terminal requirements.  Source files
+compact guard terms, closed claim sources and consumers, and terminal requirements.  Source files
 and predecessor findings are hash-pinned so this normalization cannot silently
 outlive its evidence.
 """
@@ -23,7 +23,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "vectors" / "terminal-contract.json"
-BASE_HEAD = "975d1e98a61880b800f92efe9c115dd728260113"
+BASE_HEAD = "76f49ec1df3d9b5a241768da2fed8f5d46bd0799"
 PROJECTION_EXPECTED = (
     ROOT
     / "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2"
@@ -58,7 +58,7 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _predecessor_outcomes() -> tuple[dict[str, str], str, str]:
+def _predecessor_outcomes() -> tuple[dict[str, str], str, dict[str, str]]:
     projection = _read_json(PROJECTION_EXPECTED)
     projection_outcomes = {
         name: outcome for name, outcome, _code in projection["finding_codes"]
@@ -67,13 +67,16 @@ def _predecessor_outcomes() -> tuple[dict[str, str], str, str]:
     if integrated["aggregate"] != "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE":
         raise ValueError("integrated predecessor is no longer affirmative")
     holdout = _read_json(HOLDOUT_ADJUDICATION)
-    warpfold = [
-        row for row in holdout["rows"]
-        if row["name"] == "WARPfold finite fold"
-    ]
-    if len(warpfold) != 1:
-        raise ValueError("WARPfold finite-fold adjudication is not unique")
-    return projection_outcomes, "Affirmative", warpfold[0]["verdict"]
+    wanted = {
+        "WHIR Construction 5.1 with a closed finite query plan",
+        "WARPfold finite fold",
+    }
+    holdout_outcomes = {
+        row["name"]: row["verdict"] for row in holdout["rows"] if row["name"] in wanted
+    }
+    if set(holdout_outcomes) != wanted:
+        raise ValueError("representable holdout adjudications are not unique")
+    return projection_outcomes, "Affirmative", holdout_outcomes
 
 
 def _effect(kind: str, reference: int) -> dict[str, Any]:
@@ -100,6 +103,59 @@ def _identity(input_ordinal: int = 0) -> dict[str, Any]:
 
 def _conjunction(*inputs: int) -> dict[str, Any]:
     return {"kind": "conjunction", "inputs": list(inputs)}
+
+
+def _contradiction(input_ordinal: int = 0) -> dict[str, Any]:
+    return {"kind": "contradiction", "input": input_ordinal}
+
+
+def _positions(carrier: dict[str, Any], kind: str, reference: int) -> list[int]:
+    return [
+        index
+        for index, occurrence in enumerate(carrier["schedule"])
+        if occurrence["effect"] == _effect(kind, reference)
+    ]
+
+
+def _claims(carrier: dict[str, Any]) -> list[dict[str, Any]]:
+    claims: dict[int, dict[str, Any]] = {
+        reference: {
+            "reference": reference,
+            "source": {"kind": "initial"},
+            "linear_consumers": [],
+        }
+        for reference in carrier.get("initial_claims", [])
+    }
+    reductions = carrier.get("reductions", [])
+    for reference, reduction in enumerate(reductions):
+        positions = _positions(carrier, "reduction", reference)
+        source = positions[0] if len(positions) == 1 else len(carrier["schedule"]) + reference + 1
+        for output in reduction["outputs"]:
+            claims[output] = {
+                "reference": output,
+                "source": {"kind": "occurrence", "occurrence": source},
+                "linear_consumers": [],
+            }
+    linear = set(carrier.get("linear_claims", []))
+    for occurrence, row in enumerate(carrier.get("schedule", [])):
+        effect = row["effect"]
+        if effect["kind"] != "reduction" or not 0 <= effect["reference"] < len(reductions):
+            continue
+        for input_claim in reductions[effect["reference"]]["inputs"]:
+            if input_claim in linear and input_claim in claims:
+                claims[input_claim]["linear_consumers"].append(occurrence)
+    return [claims[reference] for reference in sorted(claims)]
+
+
+def _close_carrier(carrier: dict[str, Any]) -> dict[str, Any]:
+    if not carrier.get("representable", False):
+        return carrier
+    for terminal in carrier["terminals"]:
+        terminal.setdefault(
+            "guard_input_is_boolean", [True] * len(terminal["guard_inputs"])
+        )
+    carrier["claims"] = _claims(carrier)
+    return carrier
 
 
 def _terminal_projection() -> dict[str, Any]:
@@ -379,8 +435,179 @@ def _warpfold_shape() -> dict[str, Any]:
     }
 
 
+def _whir_shape() -> dict[str, Any]:
+    accepting_guard = 901
+    return {
+        "name": "holdout/whir-finite-terminal-shape",
+        "family": "holdout-shape",
+        "source_precision": "exact normalized terminal coordinates from the frozen adjudication",
+        "predecessor_outcome": "fits",
+        "representable": True,
+        "expected_terminal_outcome": "Affirmative",
+        "initial_claims": [0],
+        "linear_claims": [0, 1],
+        "reductions": [
+            {"inputs": [0], "outputs": [1]},
+            {"inputs": [1], "outputs": []},
+        ],
+        "schedule": [
+            *(
+                _occurrence(_effect("check", reference), openings=(0,) if reference == 0 else ())
+                for reference in range(5)
+            ),
+            _occurrence(_effect("reduction", 0), accepting_guard),
+            _occurrence(_effect("reduction", 1), accepting_guard),
+            _occurrence(_effect("terminal", 0), accepting_guard),
+            _occurrence(_effect("terminal", 1)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": _conjunction(0, 1, 2, 3, 4),
+                "guard_inputs": [_output(reference) for reference in range(5)],
+                "required_checks": [0, 1, 2, 3, 4],
+                "required_reductions": [0, 1],
+                "terminal_claims": [],
+            },
+            {
+                "reference": 1,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [0],
+            },
+        ],
+    }
+
+
+def _closed_contract_controls() -> list[dict[str, Any]]:
+    unknown = deepcopy(_terminal_projection())
+    unknown.update(
+        name="closed-contract/unknown-claim-status",
+        family="closed-contract-control",
+        predecessor_outcome="not-applicable",
+        expected_terminal_outcome="Refused",
+    )
+    unknown["schedule"][2]["guard_atom"] = 12
+
+    contradiction = {
+        "name": "closed-contract/contradictory-zero-check-guard",
+        "family": "closed-contract-control",
+        "source_precision": "package-authored law control",
+        "predecessor_outcome": "not-applicable",
+        "representable": True,
+        "expected_terminal_outcome": "Refused",
+        "initial_claims": [],
+        "linear_claims": [],
+        "reductions": [],
+        "schedule": [
+            _occurrence(_effect("terminal", 0), 700),
+            _occurrence(_effect("terminal", 1)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": _contradiction(0),
+                "guard_inputs": [_other(0)],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+            {
+                "reference": 1,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+        ],
+    }
+
+    non_boolean = {
+        "name": "closed-contract/non-boolean-guard-input",
+        "family": "closed-contract-control",
+        "source_precision": "package-authored law control",
+        "predecessor_outcome": "not-applicable",
+        "representable": True,
+        "expected_terminal_outcome": "Refused",
+        "initial_claims": [],
+        "linear_claims": [],
+        "reductions": [],
+        "schedule": [
+            _occurrence(_effect("check", 0)),
+            _occurrence(_effect("terminal", 0), 701),
+            _occurrence(_effect("terminal", 1)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": _identity(0),
+                "guard_inputs": [_output(0)],
+                "guard_input_is_boolean": [False],
+                "required_checks": [0],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+            {
+                "reference": 1,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+        ],
+    }
+
+    impossible_region = {
+        "name": "closed-contract/impossible-terminal-region",
+        "family": "closed-contract-control",
+        "source_precision": "package-authored law control",
+        "predecessor_outcome": "not-applicable",
+        "representable": True,
+        "expected_terminal_outcome": "Refused",
+        "initial_claims": [],
+        "linear_claims": [],
+        "reductions": [],
+        "schedule": [
+            _occurrence(_effect("terminal", 0), 710),
+            _occurrence(_effect("terminal", 1), 710),
+            _occurrence(_effect("terminal", 2)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": {"kind": "true"},
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+            {
+                "reference": 1,
+                "guard_term": {"kind": "true"},
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+            {
+                "reference": 2,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+        ],
+    }
+    return [unknown, contradiction, non_boolean, impossible_region]
+
+
 def export() -> dict[str, Any]:
-    projection_outcomes, integrated_outcome, warpfold_outcome = _predecessor_outcomes()
+    projection_outcomes, integrated_outcome, holdout_outcomes = _predecessor_outcomes()
     carriers = [_terminal_projection(), *_terminal_projection_mutations()]
     carriers.extend(
         _integrated(name)
@@ -392,7 +619,7 @@ def export() -> dict[str, Any]:
             "logical-reject-preemption",
         )
     )
-    carriers.append(_warpfold_shape())
+    carriers.extend((_warpfold_shape(), _whir_shape(), *_closed_contract_controls()))
     for carrier in carriers:
         if carrier["family"] == "terminal-projection":
             finding = (
@@ -409,21 +636,24 @@ def export() -> dict[str, Any]:
         elif carrier["family"] == "integrated-graph":
             carrier["predecessor_outcome"] = integrated_outcome
         elif carrier["family"] == "holdout-shape":
-            carrier["predecessor_outcome"] = warpfold_outcome
+            source_name = (
+                "WARPfold finite fold"
+                if "warpfold" in carrier["name"]
+                else "WHIR Construction 5.1 with a closed finite query plan"
+            )
+            carrier["predecessor_outcome"] = holdout_outcomes[source_name]
+        _close_carrier(carrier)
     return {
         "base_head": BASE_HEAD,
         "owner_lines": {
             "attempt_guards": [1427, 1442],
-            "must_env": [1444, 1474],
-            "terminal_contract": [1476, 1509],
+            "must_env": [1444, 1478],
+            "forward_state": [1480, 1503],
+            "terminal_contract": [1505, 1519],
         },
         "source_pins": {source: _sha256(ROOT / source) for source in SOURCES},
         "carriers": carriers,
         "unrepresented_holdouts": [
-            {
-                "name": "WHIR finite constructive member",
-                "reason": "The frozen replacement uses a guarded fold-scope opening. The migration record calls for unconditional reductions, but no exact replacement schedule, references, or terms are supplied.",
-            },
             {
                 "name": "Circle STARKs",
                 "reason": "The holdout record gives a terminal shape but no exact Check, Reduction, Claim, guard-input, or occurrence coordinates.",

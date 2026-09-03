@@ -1,16 +1,11 @@
-# Mechanized Terminal contract over portable terms
+# Mechanized closed forward state of the Terminal contract
 
-This package extends the retained datum, graph, and portable-term
-mechanizations with the Terminal admission contract from
-`docs-next/pir/interactive-core.md` Section 10. It asks four bounded questions:
-
-1. does the structural `AttemptedWhenever` rule imply earlier attemptedness for
-   every valuation of opaque guard atoms;
-2. are the facts computed by `MustEnv` sound against the existing evaluator for
-   every term in the portable calculus;
-3. can the written Terminal contract be decided and independently reconstructed
-   on the frozen finite carriers; and
-4. what remains undecidable from the owner text without adding semantics?
+This package asks one exact question: under the pinned Interactive Core text,
+does a core-Lean transcription prove the amended must-fact analysis and the
+closed `Region`, `Implies`, `Disjoint`, `ClaimStatus`, and `LiveClaims` laws
+sound for every schedule and valuation, and does its closed Terminal decision
+agree with an independent Python decision on every frozen representable
+carrier without `sorry`?
 
 Run from the repository root:
 
@@ -19,156 +14,121 @@ ZKC_LAKE=$HOME/.elan/bin/lake \
   python3 -B evaluation/formal-kernel-mechanization-m0/run.py --check
 ```
 
-The frozen aggregate is
-`CannotAnswer/TERMINAL-C-OWNER-TEXT-UNDERDETERMINED`. The universal proof
-obligations and the two executable decision paths pass. The aggregate remains
-fail-closed because five owner-text choices are not specified, exact holdout
-carriers are absent, and retained portable-term evidence still lacks an
-independent evaluation oracle.
+The frozen answer is `Affirmative/M4-A-FORWARD-STATE-SOUND`.
 
-## Authority and toolchain
+## Authority and source boundary
 
-Nothing in this package is normative. The Terminal owner text is
-`docs-next/pir/interactive-core.md` Sections 6.2--6.4 and 10. The portable term
-and evaluator owners remain `docs-next/foundation/executable-foundations.md`.
-The package records but does not repair underdetermination, and it edits no
-owner page.
+Nothing in this package is normative. The owner is
+`docs-next/pir/interactive-core.md`, particularly Sections 6.2--6.4 and 10;
+the portable term and evaluator owner remains
+`docs-next/foundation/executable-foundations.md`. The package changes no owner
+page and publishes no semantic identity.
 
-The branch cutoff is `975d1e98a61880b800f92efe9c115dd728260113` from
-`docs/pir-migration-v2c`. `source-pins.json` authenticates that cutoff and the
-owner and predecessor files consumed by the Terminal exporter. The older graph
-vector is replayed as a hash-pinned transport because its synthetic profile
-overlay now collides with the migrated live manifest; the runner reports that
-collision as `CannotAnswer` instead of presenting a stale regeneration as live
-evidence.
+`source-pins.json` fixes migration head
+`76f49ec1df3d9b5a241768da2fed8f5d46bd0799`, the current owner text, the
+terminal projection and integrated graph findings, the refrozen holdout
+findings and adjudication, and retained graph vectors. The historical
+integrated exporter still collides with a live manifest definition, so its
+already-frozen graph vector is replayed only after digest authentication. That
+transport limitation remains an explicit `CannotAnswer` finding.
 
-`lean/lean-toolchain` pins `leanprover/lean4:v4.33.1`. Kernel modules import only
-package modules and Lean core. There is no Mathlib, Batteries, Std, VCVio,
-ArkLib, `sorry`, declared axiom, or Lake dependency. JSON transport remains
-isolated in `Transport.lean`.
+The project pins `leanprover/lean4:v4.33.1`. Kernel modules import only package
+modules and Lean core. There is no Mathlib, Batteries, Std, VCVio, ArkLib,
+Lake dependency, declared axiom, or `sorry`. JSON handling remains isolated in
+`Transport.lean` and the executable entry point.
 
-## Mechanized statements
+## Closed definitions and universal results
 
-`M0/Terminal.lean` adds the following definitions and proofs.
+`Terminal.lean` transcribes all five owner closures:
 
-- A finite occurrence schedule records deterministic unguarded scope openings,
-  one `Always` or structurally identified opaque guard atom per occurrence, and
-  whether an occurrence is terminal. An active terminal stops the path.
-  `attemptedWhenever_sound` proves, for an arbitrary schedule, arbitrary guard
-  valuation, and arbitrary earlier and later positions, that a later attempted
-  occurrence plus the written subset law implies that the earlier occurrence
-  was attempted. No truth-table enumeration appears in the statement or proof.
-- `MustEnv` is defined on the complete fifteen-constructor portable `Term`
-  datatype. It transcribes the authored literal, variable, let, conditional,
-  and primitive-call clauses; the ten constructors without an owner clause
-  conservatively yield no facts. `mustEnv_sound_evalCore` proves soundness
-  against the existing evaluator for every fuel, term, primitive denotation,
-  abstract and concrete environment, and successful result. The true and false
-  corollaries quantify over every Boolean input assignment, and the impossible
-  true region is proved unable to evaluate to true.
-- `terminalContractDecision_correct` proves equivalence between an executable
-  Boolean decision and the package's direct transcription of the displayed
-  required-Check, required-Reduction, and active-path claim clauses.
-- A forward abstract claim state splits only at previously unseen guard atoms,
-  reuses the value of structurally identical atoms, stops a path at the first
-  active terminal, consumes linear reduction inputs, preserves reusable inputs,
-  creates outputs, and records the live claims at each terminal.
+- every portable term constructor other than literal, variable, let,
+  conditional, and primitive call contributes no literal;
+- a non-Boolean input contributes no literal on either Boolean result branch;
+- fact union normalizes opposite polarities of one input to `Impossible`;
+- non-impossible occurrence region and guard facts form a standalone first
+  Terminal clause; and
+- the forward state is the closed region and claim-status algebra, with
+  `Unknown` refused.
 
-The forward claim transfer is an experimental finite-carrier interpretation,
-not a claimed owner definition. Section 10 names step 9's forward state but does
-not define its transfer algorithm locally.
+The retained fuel induction against `evalCore` re-proves true- and false-fact
+soundness for mixed Boolean and non-Boolean input environments. Both
+`Impossible` corollaries follow from those universal results.
+
+For every finite schedule and every opaque-guard valuation,
+`attempted_iff_region_holds` proves that an occurrence is attempted exactly
+when its positive and negative region literals hold and the region is
+possible. `region_impossible_iff_unreachable` proves that `impossible` is
+equivalent to absence of any attempted valuation.
+
+For every well-formed claim binding and attempted occurrence,
+`claimStatus_live_sound` proves that `Live` means live on every such path, and
+`claimStatus_dead_sound` proves that `Dead` means live on none. These are
+schedule-parametric theorems, not fixture enumeration. The executable carrier
+comparison separately enumerates each finite carrier's guard valuations as an
+independent falsification oracle.
+
+`terminalContractDecision_correct` proves the Boolean decision equivalent to
+the closed proposition: possible terminal region and guard facts, required
+Check and Reduction attemptedness, direct positive Check use, no `Unknown`
+claim, and exact `LiveClaims` equality. Sorted-unique lists, input-type arity,
+claim-source order, and source existence remain admission-wrapper checks rather
+than additions to `TerminalContract`.
 
 ## Frozen carrier results
 
-The exporter normalizes 24 records. Twenty-two are representable by the exact
-Terminal decision surface, while two deliberately exercise adjacent admission
-boundaries. Lean and an independently structured Python checker agree on all 24
-records, including the two `CannotAnswer` classifications.
+The exporter freezes 29 records. Twenty-seven are representable by the closed
+decision and two exact projection mutations intentionally remain outside this
+Terminal surface. Lean and the independently structured Python checker agree
+on every decision, region flag, claim status, and live-claim list.
 
-| Carrier family | Frozen result |
+| Carrier family | Result |
 |---|---|
-| Exact terminal projection | The positive carrier is admitted and all 15 representable mutations are refused, matching the predecessor package. The `check-abi` and `claim-output-ssa` mutations remain `CannotAnswer` because those laws belong to earlier admission steps, not `TerminalContract`. |
-| Five integrated graph carriers | Refused by the newly executed live-claim clause. Claim 0 is reusable, both reductions preserve it while creating claims 1 and 2, and every terminal therefore sees `[0, 1, 2]`; the authored terminal sets omit claim 0. The predecessor graph package reported affirmative without executing this repaired Terminal closure. |
-| WARPfold finite-fold shape | The minimal one-check, no-claim shape is admitted by both decision paths. It is shape evidence only because the holdout note does not select exact references, terms, types, or failure guards. |
-| Other holdouts | `CannotAnswer`: no exact admitted carrier exists for direct mechanized comparison. The WHIR note relies on a guarded fold-scope opening; the migration record says to replace that sketch with unconditional reductions, but supplies no exact re-authored occurrence, reference, or term carrier. |
+| Exact Terminal projection | The positive carrier is admitted and all 15 representable mutations are refused, matching the pinned predecessor. Check ABI and claim-output SSA mutations remain `CannotAnswer` because they belong to earlier admission steps. |
+| Five integrated graph carriers | All are refused. Claim 0 is reusable, stays `Live`, and is omitted from the authored terminal sets; the predecessor graph check did not execute this closure. |
+| WARPfold finite shape | The one-Check, no-claim accepting shape and unconditional fallback are admitted. |
+| WHIR finite shape | The five direct Checks, two identically guarded linear reductions, accepting terminal with no live claim, and fallback with the initial claim are admitted. |
+| Four controls | Non-Boolean direct-use, contradictory guard, impossible occurrence region, and `Unknown` claim status each refuse at the intended closed clause. |
 
-The integrated refusal follows the owner rules that reusable claims remain live
-through reduction use and must appear in a terminal's exact live-claim set. It
-is routed as a predecessor-instrument gap, not as a proposed owner-page change.
+The two holdout rows are normalized Terminal shapes from the refrozen
+adjudication, not complete admitted source Cores. Exact carrier comparison for
+Circle STARKs, virtual multiparty Sumcheck, interactive Galois-ring protocol,
+and broad cross-system WARPfold remains `CannotAnswer` because those exact
+coordinates are absent.
 
-## Owner-text underdetermination
-
-The decision package does not fill these points:
-
-- Section 10 lines 1454--1470 supplies transfer clauses for only five of the
-  fifteen term constructors. The conservative result for the other ten is
-  package-local.
-- Lines 1449 and 1492--1494 do not define the initial abstract fact for a
-  non-Boolean input; they only say that a non-Boolean binding carries no
-  literal.
-- Lines 1471--1473 do not say whether a union containing both `Positive(i)` and
-  `Negative(i)` normalizes to `Impossible`.
-- Lines 1476--1484 place the non-impossible guard test inside the loop over
-  required Checks, while lines 1497--1499 say every impossible terminal guard
-  is refused. The zero-required-Check case has no unique transcription.
-- Lines 1488--1489 and 1506--1509 refer to step 9's forward live-claim state but
-  do not close its transfer algorithm in Section 10.
-
-These findings control the aggregate. No default is promoted to owner law.
-
-## Retained evidence
-
-The runner also preserves the prior package layers: canonical encoding and
-decoding, graph construction on five integrated carriers, the complete
-portable-term carrier and evaluator, exact Schnorr preimage elaboration, 81
-finite check results and two guard results, evaluator determinism, completion
-monotonicity, and the finite closed Schnorr equation. Their prior
-`CannotAnswer` findings remain frozen, including the absence of independent K1
-term-evaluation vectors and universal noncompletion result bytes.
-
-## Frozen vectors
+## Frozen artifacts
 
 | File | Role |
 |---|---|
-| `terminal-contract.json` | Normalized terminal-projection, integrated, and WARPfold shape records, with source coordinates and predecessor outcomes. |
-| `m2-term-calculus.json` | Exact Schnorr preimages, finite evaluator rows, charges, and oracle inventory. |
-| `k1-encoding-vectors.json` | Retained canonical K1 oracle bodies and malformed cases. |
-| `structural-negatives.json` | Retained malformed encodings. |
-| `body-digests.json` | Retained integrated-carrier body digests. |
-| `pcgraph-construction.json` | Hash-pinned predecessor graph inputs and finite products. |
+| `vectors/terminal-contract.json` | Closed schedules, claim sources and linear consumers, Terminal declarations, controls, source hashes, and predecessor outcomes. |
+| `export_terminal_vectors.py` | Deterministic normalization from pinned predecessor and owner evidence. |
+| `terminal_checker.py` | Independent Python implementation plus exhaustive finite-valuation falsification. |
+| `lean/M0/Terminal.lean` | Core definitions, universal soundness proofs, and proved Terminal decision. |
+| `lean/Main.lean` | JSON transport and executable carrier reports. |
+| `lean/Axioms.lean` | `#print axioms` inventory consumed by the runner. |
+| `expected-findings.json` | Frozen finding names, outcomes, stable codes, checksum, and aggregate. |
 
-## Axioms report
+The retained value, graph, and finite Schnorr vectors remain part of the same
+package and are rechecked unchanged.
 
-`Axioms.lean` prints every theorem used by the gate. The new closures are:
+## Axioms and cost
 
-- `attemptedWhenever_sound`: `propext`;
-- `mustEnv_sound_evalCore`: `propext`, `Quot.sound`;
-- `must_when_true_sound`: `propext`, `Quot.sound`;
-- `must_when_false_sound`: `propext`, `Quot.sound`;
-- `impossible_when_true_cannot_evaluate_true`: `propext`, `Quot.sound`;
-- `impossible_when_false_cannot_evaluate_false`: `propext`, `Quot.sound`; and
-- `terminalContractDecision_correct`: `propext`, `Quot.sound`.
+The new region, claim-status, must-fact, and decision theorems use at most the
+package's existing standard Lean allowance: `propext`, `Classical.choice`, and
+`Quot.sound`. The emitted axiom inventory contains no `sorryAx` or native
+decision axiom.
 
-There is no `sorryAx` or native-decision axiom. These are within the package's
-pre-existing standard Lean allowance of `propext`, `Classical.choice`, and
-`Quot.sound`.
-
-## Cost ledger
-
-Every run emits machine-readable values under `metrics.timings`,
-`metrics.lean_line_counts`, and `metrics.axioms`. One warm measured run took
-80.096 seconds: 74.297 seconds regenerated the portable-term and Terminal
-vectors, 0.411 seconds built Lean, 4.762 seconds ran the executable, and 0.507
-seconds printed the axiom report. These are observations from one run, not
-stable performance claims.
+Every run records wall times, Lean source line counts, and theorem axiom sets
+under `metrics`. These measurements characterize one local run only and are
+not stable performance claims.
 
 ## Nonclaims
 
-This package does not establish normative semantics, a complete Core admission
-checker, exact admission of any cold holdout, general evaluator conformance,
-compiler or backend correspondence, runtime correspondence, relation
-satisfaction, theorem applicability, protocol soundness, Fiat--Shamir or
-random-oracle security, QROM applicability, constant-time behavior, production
-readiness, or a decision to adopt Lean as a durable reference twin. The finite
-decisions and universal local lemmas are evidence for their stated abstractions
-only.
+This package does not establish normative semantics, complete Core admission,
+exact admission of the holdout protocols, general evaluator or primitive
+provider conformance, compiler/backend/runtime correspondence, relation
+satisfaction, theorem applicability, protocol soundness, Fiat--Shamir,
+random-oracle or QROM security, constant-time behavior, deployment validity,
+production readiness, or a decision to adopt Lean as a durable reference
+implementation. Universal theorems apply only to the stated abstraction and
+their explicit well-formedness premises; finite carrier decisions are bounded
+evidence.
