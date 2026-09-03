@@ -73,8 +73,9 @@ AnalysisKernelAdmissionOutcomeV0 =
 ```
 
 The kernel owns only the reusable body calculus, exact source-ingress grammar,
-question/goal/proposition chain, basis/support/validation separation, common
-failure partition, lifecycle, and the family-neutral empty hypothesis context.
+question/goal/proposition chain, named-premise grammar and total intake,
+basis/support/validation separation, common failure partition, lifecycle, and
+the family-neutral empty hypothesis context.
 It imports no downstream profile and establishes no cryptographic or
 composition property.
 
@@ -121,8 +122,10 @@ AnalysisCryptographicPropertyAdmissionOutcomeV0 =
 
 This profile owns the finite relation-bound Fresh special-soundness model, the
 concrete adaptive classical Fiat--Shamir experiment, exact source and relation
-ingress, concrete quantitative language, and their property-specific
-adequacy, rule, use, and authority contracts. It does not own the AFK family
+ingress, concrete quantitative language, the concrete named-premise bodies for
+Fresh public-coin distributions, provider outcome-carrier maps, and the
+relation and Plan premises, and their property-specific adequacy, rule, use,
+and authority contracts. It does not own the AFK family
 transport theorem or theorem-source validation.
 
 <!-- zkc-profile-source:analysis-property-publication:end -->
@@ -160,7 +163,8 @@ AnalysisAFKTransportAdmissionOutcomeV0 =
 
 This profile owns the asymptotic family language, AFK theorem statement,
 family applicability, semantic property transport, member correspondence,
-pointwise specialization, and replay distinctions. A citation, artifact
+pointwise specialization, replay distinctions, and the family sampler-adequacy
+and oracle-process premise bodies. A citation, artifact
 digest, proof-status assertion, or source-validation result is not theorem
 meaning and is excluded from this profile's bodies.
 

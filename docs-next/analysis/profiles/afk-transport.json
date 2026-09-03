@@ -3,7 +3,7 @@
   "key": "analysis-afk-transport",
   "catalog_namespace": "analysis",
   "profile_family": "analysis.afk-transport",
-  "revision": 0,
+  "revision": 1,
   "expected_imports": [
     "analysis-cryptographic-property"
   ],
@@ -23,6 +23,7 @@
     "analysis.judgment-record",
     "analysis.logical-nat-literal",
     "analysis.loss-semantic-import",
+    "analysis.named-premise",
     "analysis.operation-policy",
     "analysis.owner-policy-closure",
     "analysis.pointwise-quantitative-normalization",
@@ -63,7 +64,7 @@
     {
       "kind": "analysis.body-compiler",
       "name": "afk-transport-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "transport-publication",
       "selector": "AnalysisAFKTransportBodyCompilerV0(kind,body) =",
       "dependencies": [
@@ -127,6 +128,7 @@
     {"kind": "analysis.judgment-record", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
     {"kind": "analysis.logical-nat-literal", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
     {"kind": "analysis.loss-semantic-import", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.named-premise", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
     {"kind": "analysis.operation-policy", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
     {"kind": "analysis.owner-policy-closure", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
     {"kind": "analysis.pointwise-quantitative-normalization", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},

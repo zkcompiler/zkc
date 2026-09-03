@@ -3,7 +3,7 @@
   "key": "analysis-kernel",
   "catalog_namespace": "analysis",
   "profile_family": "analysis.kernel",
-  "revision": 0,
+  "revision": 1,
   "expected_imports": [],
   "supported_subject_kinds": [
     "analysis.hypothesis-context"
@@ -48,7 +48,7 @@
     {
       "kind": "analysis.semantic-law",
       "name": "common-analysis-domain-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "kernel-domain-semantics",
       "selector": "### 2.1 Source read slots",
       "dependencies": []

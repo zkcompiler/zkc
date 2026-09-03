@@ -376,6 +376,7 @@ AnalysisCryptographicPropertySupportedKinds = {
   "analysis.hypothesis-context",
   "analysis.judgment-record",
   "analysis.loss-semantic-import",
+  "analysis.named-premise",
   "analysis.operation-policy",
   "analysis.owner-policy-closure",
   "analysis.portable-source-authority-binding",
@@ -410,6 +411,7 @@ AnalysisAFKTransportSupportedKinds = {
   "analysis.judgment-record",
   "analysis.logical-nat-literal",
   "analysis.loss-semantic-import",
+  "analysis.named-premise",
   "analysis.capability-requirement-payload",
   "analysis.operation-policy",
   "analysis.owner-policy-closure",
@@ -1731,6 +1733,7 @@ The active dispatch is exactly:
 "analysis.goal"                     -> AnalysisGoalBody
 "analysis.hypothesis-context"       -> AnalysisHypothesisContextBody
 "analysis.proposition"              -> AnalysisPropositionBody
+"analysis.named-premise"            -> AnalysisNamedPremiseBody
 "analysis.theorem-schema"           -> AnalysisTheoremSchemaBody
 "analysis.theorem-source-validation" -> AnalysisTheoremSourceValidationBody
 "analysis.loss-semantic-import"     -> AnalysisLossSemanticImportBody
@@ -2079,15 +2082,94 @@ AnalysisQuestionContext =
         CanonicalNonEmptySeq<AnalysisExperimentProfileId>
     }
 
+AnalysisNamedPremiseKind =
+    FreshPublicCoinDistribution
+  | FiatShamirSamplerAdequacy
+  | FiatShamirOracleProcess
+  | ProviderOutcomeCarrierMap
+  | RelationPredicate
+  | WitnessType
+  | ProverPrivateState
+  | HonestCommit
+  | HonestRespond
+
+AnalysisPremiseCoordinate =
+    PIRPublicCoinLawCoordinate(
+      ProtocolDeclarationRef<"pir.public-coin-law">)
+  | AnalysisFamilyPremiseCoordinate(
+      AnalysisAsymptoticProtocolFamilyDefinitionId,
+      SamplerAdequacy | OracleProcess)
+  | PIRProtocolOutcomePartitionCoordinate(ProtocolId)
+  | RelationsModelEvaluatorCoordinate(RelationSemanticModelId)
+  | RelationsWitnessPlanJoinCoordinate(
+      RelationInterfaceId, private_witness_ordinal: Natural,
+      PlanWitnessBindingId, witness_edge_ordinal: Natural)
+  | PIRPlanStateCoordinate(ProverPlanId, persistent_state_ordinal: Natural)
+  | PIRPlanRecipeCoordinate(
+      ProverPlanId, decision_ordinal: Natural, recipe_node_ordinal: Natural)
+
+AnalysisProviderDeclaration = AnalysisProfileLawRef<ProviderDeclaration>
+
+AnalysisProviderOutcomeCarrierMapBody = {
+  provider: AnalysisProviderDeclaration,
+  protocol_outcome_partition: PIRProtocolOutcomePartitionCoordinate,
+  provider_carrier: AnalysisProfileLawRef<ClosedProviderCarrier>,
+  total_lane_map:
+    CanonicalMap<ProtocolOutcomeLane, CanonicalValue<provider_carrier>>
+}
+
+AnalysisNamedPremiseBoundValue<K> =
+    BoundModel(TypedSemanticSubjectRef,
+               AnalysisLawTerm<ExactModelBindingLaw<K>>)
+  | BoundHypothesis(AnalysisLawTerm<ExactNamedHypothesis<K>>)
+  | BoundProviderOutcomeCarrierMap(AnalysisProviderOutcomeCarrierMapBody)
+
+AnalysisNamedPremiseSource =
+    OwnerSemanticCoordinate(TypedSemanticSubjectRef)
+  | CandidateOwnerCoordinate(TypedSemanticSubjectRef)
+  | FamilyHypothesisSource(AnalysisFamilyCoordinate)
+  | ProviderDeclarationSource(AnalysisProviderDeclaration)
+
+AnalysisPremiseEvidenceDepth =
+    SourceGroundedMapping
+  | TypedConstructiveBinding
+  | FrozenExecutableFalsification
+
+AnalysisPremiseModelScope =
+    FreshChallengeOnly
+  | OracleModelOnly(AnalysisDistributionProfileId)
+  | ExactSubjectsOnly(
+      CanonicalNonEmptySortedUniqueSeq<TypedSemanticSubjectRef>)
+  | RebindRequired
+
+AnalysisNamedPremiseBody<K> = {
+  kind: exactly K,
+  coordinate: AnalysisPremiseCoordinate admitted for K,
+  bound_model_or_hypothesis: AnalysisNamedPremiseBoundValue<K>,
+  source: AnalysisNamedPremiseSource admitted for K,
+  evidence_depth: AnalysisPremiseEvidenceDepth,
+  model_scope: AnalysisPremiseModelScope
+}
+
+AnalysisNamedPremiseRequirement = {
+  slot: ExactAsciiSymbol,
+  kind: AnalysisNamedPremiseKind,
+  coordinate: AnalysisPremiseCoordinate admitted for kind
+}
+
 AnalysisQuestionBody = {
   family: AnalysisFamilyCoordinate,
   exact_subjects: CanonicalNonEmptySeq<TypedSemanticSubjectRef>,
   context: AnalysisQuestionContext,
-  family_payload: ExactFamilyQuestionPayload<family>
+  family_payload: ExactFamilyQuestionPayload<family>,
+  named_premise_requirements:
+    CanonicalSortedUniqueSeq<AnalysisNamedPremiseRequirement>
 }
 
 AnalysisGoalBody = {
-  question_id: AnalysisQuestionId
+  question_id: AnalysisQuestionId,
+  named_premise_bindings:
+    CanonicalMap<AnalysisNamedPremiseRequirement, AnalysisNamedPremiseId>
 }
 
 GoalFamily(goal_body) =
@@ -2099,16 +2181,30 @@ HypothesisFreeConclusion(goal_body) =
   .question_to_conclusion_reconstruction_law(
     Authenticate(goal_body.question_id))
 
+PremiseIdsOfGoal(goal_id) =
+  the canonical sorted-unique sequence of the values of
+  Authenticate(goal_id).named_premise_bindings
+
 AnalysisHypothesisNode = {
   local_ordinal,
   goal_id: AnalysisGoalId,
-  dependency_ordinals: CanonicalSortedUniqueSeq<EarlierLocalOrdinal>
+  dependency_ordinals: CanonicalSortedUniqueSeq<EarlierLocalOrdinal>,
+  exact_named_premise_ids: exactly PremiseIdsOfGoal(goal_id)
 }
 
 AnalysisHypothesisContextBody = {
   nodes: CanonicalSeq<AnalysisHypothesisNode>,
-  roots: CanonicalSortedUniqueSeq<LocalOrdinal>
+  roots: CanonicalSortedUniqueSeq<LocalOrdinal>,
+  exact_named_premise_ids:
+    the canonical sorted-unique union of node.exact_named_premise_ids over
+    every node reachable from roots
 }
+
+PremiseIdsOfProposition(proposition_id) =
+  the canonical sorted-unique union of
+  PremiseIdsOfGoal(Authenticate(proposition_id).goal_id) and
+  Authenticate(Authenticate(proposition_id).hypothesis_context_id)
+    .exact_named_premise_ids
 
 AnalysisPropositionBody = {
   goal_id: AnalysisGoalId,
@@ -2244,7 +2340,8 @@ AnalysisQuantifiedWitnessRole = {
 }
 
 AnalysisPremiseRequirement =
-    HypothesisNodeRequirement {
+    NamedPremiseRequirement(AnalysisNamedPremiseRequirement)
+  | HypothesisNodeRequirement {
       hypothesis_context_id, node_ordinal, exact_goal_id
     }
   | AffirmativeJudgmentCapabilityRequirement {
@@ -2338,7 +2435,8 @@ CompleteReadPurposeRequirements(concrete_manifest_ids,
   reordered, or extra atom at rule formation
 
 ExactPremiseBinding =
-    PortableAffirmativeJudgmentBinding(PortableAnalysisJudgmentRecordId)
+    ExactNamedPremiseBinding(AnalysisNamedPremiseId)
+  | PortableAffirmativeJudgmentBinding(PortableAnalysisJudgmentRecordId)
   | OwnerLocalAffirmativeJudgmentBinding(
       LocalAnalysisHandle<"analysis.judgment-record",owner,generation>)
   | ExactQuantifiedWitnessBinding(TypedSemanticSubjectRef)
@@ -2737,6 +2835,7 @@ AnalysisSemanticBasisBody = {
 AnalysisSupportInstantiationBody = {
   semantic_basis_id: AnalysisSemanticBasisId,
   proposition_id: AnalysisPropositionId,
+  exact_named_premise_ids: exactly PremiseIdsOfProposition(proposition_id),
   non_hypothesis_premise_bindings:
     CanonicalMap<AnalysisPremiseRequirement,ExactPremiseBinding>,
   established_hypothesis_node_bindings:
@@ -2775,6 +2874,7 @@ AnalysisJudgmentRecordBody = {
   polarity: AnalysisPolarity,
   exact_family_conclusion: ExactFamilyConclusion<GoalFamily>,
   inherited_hypothesis_context_id: AnalysisHypothesisContextId,
+  exact_named_premise_ids: exactly PremiseIdsOfProposition(proposition_id),
   typed_quantitative_result: ExactFamilyQuantitativeResult<GoalFamily>,
   semantic_basis_id: AnalysisSemanticBasisId,
   support_coordinate: AnalysisSupportInstantiationCoordinate,
@@ -2888,6 +2988,9 @@ AnalysisHypothesisContextId =
 AnalysisPropositionId =
   AnalysisId<"analysis.proposition">(B, AnalysisPropositionBody)
 
+AnalysisNamedPremiseId =
+  AnalysisId<"analysis.named-premise">(B, AnalysisNamedPremiseBody)
+
 AnalysisQuantitativeFormulaId<S> =
   AnalysisId<"analysis.quantitative-formula">(
     B, AnalysisQuantitativeFormulaBody<S>)
@@ -2904,7 +3007,51 @@ AnalysisValidationBasisId =
 
 PortableAnalysisJudgmentRecordId =
   AnalysisId<"analysis.judgment-record">(B, AnalysisJudgmentRecordBody)
+
+IntakeAnalysisNamedPremises(
+    exact question,
+    supplied: CanonicalMap<AnalysisNamedPremiseRequirement,
+                           AnalysisNamedPremiseId>) =
+  1. authenticate the question and every supplied premise under the
+     question's exact direct Analysis profile;
+  2. derive the required key set from question.named_premise_requirements;
+  3. return CannotAnswer for a missing key or an absent premise source;
+  4. return Refused when a supplied premise is well formed but its kind or
+     coordinate differs from the requirement at that slot;
+  5. return Malformed for an extra, duplicate, noncanonical, or
+     caller-ordered key;
+  6. require every premise's model_scope to admit the question: a
+     FreshChallengeOnly premise only for a question over a Fresh Protocol, an
+     OracleModelOnly premise only for a question whose experiment uses
+     exactly that distribution profile, an ExactSubjectsOnly premise only for
+     a question over exactly those subjects; RebindRequired admits no
+     question;
+  7. form exactly one AnalysisGoalBody whose binding map has the required
+     key set and no other key; and
+  8. expose PremiseIdsOfGoal to every hypothesis node, hypothesis context,
+     support instantiation, and judgment that uses that goal.
 ```
+
+A named premise is the identity-bearing body of one assumption a question
+consumes: what it binds, the coordinate it binds to, where it came from, what
+evidence accompanies it, and where it may be used. The kind-to-coordinate,
+kind-to-bound-value, and kind-to-source relations are closed profile laws; an
+unknown case is `Unsupported` and a disallowed pairing is `Malformed`. The
+evidence depth records only what evidence accompanies the premise identity:
+a source-grounded mapping, a complete typed constructive binding, or a frozen
+executable falsification. It never turns an assumption into an established
+proposition. A question with an unmet requirement is `CannotAnswer`, never a
+question with a default premise; two questions over the same subjects with
+different premise bindings have distinct goal, proposition, support, and
+judgment identities, because every one of those bodies carries the exact
+premise identities it uses. The concrete premise bodies are owned by the
+profile whose authenticated import closure can name their coordinates: the
+[cryptographic-property profile](cryptographic-properties.md#32-named-premises-of-the-relation-bound-fresh-question)
+owns Fresh public-coin distributions, provider outcome-carrier maps, and the
+relation and Plan premises, and the
+[semantic-transport profile](cryptographic-properties.md#73-family-premises)
+owns the Fiat--Shamir family premises. The kernel owns the grammar and the
+intake and no concrete premise.
 
 The concrete manifest intentionally carries no purpose field. Its source
 profile is the sole authority for slot schema and purpose, while the manifest
@@ -3130,7 +3277,7 @@ support combinators must return an `ExactHypothesisTreatmentPartition` for
 their named target context before either projection is defined.
 
 `non_hypothesis_premise_bindings` binds every and only the semantic basis's
-`AffirmativeJudgmentCapabilityRequirement` and
+`NamedPremiseRequirement`, `AffirmativeJudgmentCapabilityRequirement`, and
 `ExactQuantifiedWitnessRequirement` entries. It is disjoint from hypothesis-
 node treatment. Theorem truth is an ordinary exact goal node in the target
 context, so its established-versus-assumed treatment also belongs only in the
@@ -3261,12 +3408,13 @@ ExactNonHypothesisPremiseBindingMap(
     semantic_basis_id,semantic_basis_body,supplied_bindings) =
   1. authenticate `semantic_basis_id` against `semantic_basis_body`;
   2. derive the canonical key set consisting of every and only
-     `AffirmativeJudgmentCapabilityRequirement` and
-     `ExactQuantifiedWitnessRequirement` entry in
+     `NamedPremiseRequirement`, `AffirmativeJudgmentCapabilityRequirement`,
+     and `ExactQuantifiedWitnessRequirement` entry in
      `semantic_basis_body.exact_premise_schemas`;
   3. authenticate every supplied binding, derive the unique requirement it
-     satisfies from its exact proposition/quantified role, qualification,
-     consumer, purpose, and profile, and reject zero or multiple matches; and
+     satisfies from its exact slot, kind, and coordinate for a named premise,
+     or from its exact proposition/quantified role, qualification, consumer,
+     purpose, and profile otherwise, and reject zero or multiple matches; and
   4. return the canonical map from that exact key set to the matched bindings,
      rejecting a missing, extra, duplicate, or caller-authored key.
 
