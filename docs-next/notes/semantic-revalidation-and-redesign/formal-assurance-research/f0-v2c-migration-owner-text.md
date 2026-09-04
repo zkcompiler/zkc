@@ -340,9 +340,12 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   after round seven. Its repairs rotate sixteen of eighteen profiles again
   and put the family field audit, the migration review's page pins, the
   executor's view projection, and the Analysis review's Fiat--Shamir digest
-  into the first re-pinning class. The eighth review round
-  (`f0v2c1-migration-text-review.md`, "Round eight") closed thirteen of the
-  sixteen questions and left three: the Interface's claim that the draws
+  into the first re-pinning class. The ninth review round
+  (`f0v2c1-migration-text-review.md`, "Round nine") closed all seventeen
+  questions on the repaired text, the sixteen of round eight and the
+  checker-contract definition; the migration text is closed again, with
+  every executable route forming its subjects through the owner equations.
+  The eighth round had closed thirteen of the sixteen and left three: the Interface's claim that the draws
   are derivable from the completion coordinates alone omitted the public
   condition values and prior joint-member challenge values that acceptance
   and decoding consume; the setup view's uniqueness was stated per Protocol

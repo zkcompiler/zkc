@@ -509,7 +509,9 @@ provider, extraction tool, or durable schema.
   by the deep review's own reversal conditions: thirteen of sixteen
   questions close, and three blockers remain at that head, completion
   derivability, the executable model's source-authority preimage, and
-  setup-view uniqueness.
+  setup-view uniqueness. Round nine, after those three repairs and the
+  checker-contract definition, closes all seventeen questions; the holdouts
+  keep their verdicts.
 - [`repaired-source-repin-and-framed-view-projection.md`](repaired-source-repin-and-framed-view-projection.md)
   re-pins twenty-five source-pinning packages to the text repaired after the
   deep review, projects the repaired setup, transition, and influence bodies
