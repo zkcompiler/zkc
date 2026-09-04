@@ -1390,8 +1390,10 @@ occurrence-kind summary: two public bindings emitted at one opening are two
 carries its identifier. `additions` are the Reduction and module values a
 challenge additionally absorbs; `challenge_rules` gives, per challenge in
 ascending `ChallengeRef` order, that challenge's own acceptance ABI, decoder
-ABI, and draw bounds together with its occurrence's `frame_schedule`
-position, projected entry by entry from the construction's `challenge_rules`,
+ABI, and draw bounds together with `position`, the challenge occurrence's
+position in the exact total Core schedule, which every challenge has whether
+or not Section 4 derives a frame for its occurrence, projected entry by entry
+from the construction's `challenge_rules`,
 so a construction whose rules differ in ABI or bounds has one exact view and
 no singleton field that two producers could fill differently, while the laws
 shared by every rule appear once; the three maps are identity maps written
@@ -1548,8 +1550,11 @@ CanonicalFramedExecutionViewBody = {
     challenge_ref: ChallengeRef,
     occurrence_ref: OccurrenceRef,
     value_type: ValueType,
-    frame_schedule_coordinate: the challenge occurrence's entry of the
-      transcript declaration view's frame_schedule,
+    frame_schedule_coordinate:
+      None | Some(the challenge occurrence's entry of the transcript
+      declaration view's frame_schedule), None exactly when Section 4
+      derives no frame for that occurrence, as for an Always challenge
+      without conditions, and otherwise the unique matching entry,
     decoding_coordinate: the challenge's entry of the challenge-transition
       view's challenge_rules
   }>,

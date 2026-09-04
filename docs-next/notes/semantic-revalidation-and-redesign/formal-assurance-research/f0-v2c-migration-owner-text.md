@@ -254,7 +254,18 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
      subject identity where a property-family declaration reference is
      required; the Analysis text now passes the declaration reference.
    The eighth finding, on the prose-pin reversal test, is the user's decision
-   and is carried in the decision packet. Every repair rotates its profile,
+   and is carried in the decision packet.
+11. **An unframed challenge had no schedule coordinate.** Re-pinning the
+   packages to the repaired text
+   (`repaired-source-repin-and-framed-view-projection.md`) found that an
+   `Always` challenge without conditions absorbs no frame under Section 4.3
+   of the canonical-framed page, while the transition rule's `position` and
+   the execution view's `frame_schedule_coordinate` demanded its entry in a
+   schedule of framed occurrences. `position` is now the challenge
+   occurrence's position in the exact total Core schedule, which every
+   challenge has, and the execution view's frame coordinate is an option
+   that is `None` exactly when no frame is derived; no frame is manufactured
+   and the Core is unchanged. Every repair rotates its profile,
    the re-pinning classes of Section 7 apply, and an eighth review round
    checks the repaired text against the review's reversal conditions.
 

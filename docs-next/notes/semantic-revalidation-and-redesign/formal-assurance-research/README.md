@@ -510,6 +510,13 @@ provider, extraction tool, or durable schema.
   questions close, and three blockers remain at that head, completion
   derivability, the executable model's source-authority preimage, and
   setup-view uniqueness.
+- [`repaired-source-repin-and-framed-view-projection.md`](repaired-source-repin-and-framed-view-projection.md)
+  re-pins twenty-five source-pinning packages to the text repaired after the
+  deep review, projects the repaired setup, transition, and influence bodies
+  on their finite carriers, replays 108 runtime records independently, and
+  records the one underdetermination the projection found: an unframed
+  `Always` challenge had no schedule coordinate, repaired on the owner page
+  as a total-schedule position and an optional frame coordinate.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them
