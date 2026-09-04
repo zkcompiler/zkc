@@ -3495,9 +3495,9 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
                 else:
                     baseline[2] += 1
     logical = [0, 0, 0]
-    for l in (False, True):
+    for low in (False, True):
         for h in (False, True):
-            if l:
+            if low:
                 logical[0] += 1
             elif h:
                 logical[1] += 1

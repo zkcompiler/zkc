@@ -81,7 +81,7 @@ def inventory() -> Mapping[str, Any]:
     static_source = fragments["interaction-static-views"]
     body_source = fragments["interaction-body-grammar"]
     static_fragment = _extract(page, static_source["start"], static_source["end"])
-    body_fragment = _extract(page, body_source["start"], body_source["end"])
+    _extract(page, body_source["start"], body_source["end"])
 
     explicit_kinds = {item["kind"] for item in manifest["definitions"]}
     all_kinds = explicit_kinds | {"pir.source-fragment", "pir.subject-language"}

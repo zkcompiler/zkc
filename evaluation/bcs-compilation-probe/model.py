@@ -215,7 +215,6 @@ def admit_source(core: Core) -> None:
 def issue_views(core: Core, names: tuple[str, ...]) -> dict[str, str]:
     if names != VIEW_NAMES:
         raise ProbeError("BCS-R-SOURCE-VIEW-CATALOG")
-    schedule = [item.ref for item in core.occurrences]
     decisions = [item for item in core.occurrences if item.effect == "PublishOracle"]
     graph = _influence(core)
     logical = any(item.mode == "LogicalAccess" for item in core.oracles)

@@ -557,7 +557,6 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     crafted_rejects = [name for name in rejects if name.startswith("crafted/")]
     oracle_reject_ok = bool(oracle_rejects) and all(rejects[name] for name in oracle_rejects)
     crafted_reject_ok = bool(crafted_rejects) and all(rejects[name] for name in crafted_rejects)
-    retained_ok = encoding_ok and roundtrip_ok and oracle_reject_ok and crafted_reject_ok
     findings.extend(
         (
             lean_finding("retained-m0-encoding-goldens", encoding_ok, "M1-A-RETAINED-ENCODING-GOLDENS"),
