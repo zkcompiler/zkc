@@ -50,12 +50,12 @@
         }
       },
       "private_state": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
-      "protocol_id": "zkcidv0:pir.protocol:c060c02c26225779913c9c354f0481e812c918d0de56052cb7689743465a8770",
-      "published_candidate_bodies_sha256": "eda9863a34a2d44f7f2db72f88fe93eac385f29de98fecf83bb268c79b3448f0",
+      "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+      "published_candidate_bodies_sha256": "cd9935dfa7d97266a3ffb0bf24765064fb449e8ef51e12b53a404127d9620a63",
       "relation": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
       "witness": "x in Z/3Z supplied by Plan WitnessIngress key x"
     },
-    "integrated_six_view_findings_sha256": "5a659072b2b698f2e6578121671bff3a2d475510b33f0638877c42d36c9d8ef6"
+    "integrated_six_view_findings_sha256": "fbe1af2f11f28467abd3ad80b9e45d8fddd3892a21a8f3be0c82fc4faf4b0bcd"
   },
   "lane_map": [
     {
@@ -136,15 +136,15 @@
       "StrategyDecisionView": 38
     },
     "body_sha256": {
-      "ClaimReductionView": "99126de348878e7822f756312ad8e4a7de3c997d64d093dfa97fe40ed43a6d68",
-      "EffectView": "916b8ed3976fc99d4f84677994e3073cd549bf8ccb6e0c99a47505a7c5944d1e",
-      "ExecutionView": "ec441c1bdc926f27241670de8e4b1e6bf89c47067e2234e075ef344a99a49748",
-      "PublicBindingView": "e744505dbe36ed91d76f9b2ca51c3ff23edd4739b33d33cb238374e9ec389d9f",
-      "PublicCoinView": "3f04769cb0d53d647b1b42f43205798ef938cb52bff931cc8424e7103d526582",
-      "StrategyDecisionView": "145870557d246c4b79c8db9ff3144909121c82fd167b1e4ed4825803df47c41c"
+      "ClaimReductionView": "edc9e9d0ef0c4c9b80cfd5149124420c631728345d60e1e34f031dbe236797ee",
+      "EffectView": "239e6fbd9d4304eb5eef4c17327bb024bbe39cc842e00a076332db75231e5c49",
+      "ExecutionView": "3ff579a58ea436941981f9ea94ba925a48e0ecbe2b573c10fd32eec15f03e8ff",
+      "PublicBindingView": "08c8bd418857c23dfa51f1d9087ab0a2a386e38a73c6251f1f39906112501b7f",
+      "PublicCoinView": "8185f8906053dc9c18d03a5415440169bdb5ca958fae685da2856d6edd8c4f91",
+      "StrategyDecisionView": "4e5e7615aae3c31aea434bce89d125d26ed22b983bbb8c1e8e8482492a4e4cef"
     },
-    "core_id": "zkcidv0:pir.interactive-core:0e767c0c55fcf8f2fbd45992977780bdd2c53ae36bf5e4f61d199cb29956fd04",
-    "protocol_id": "zkcidv0:pir.protocol:c060c02c26225779913c9c354f0481e812c918d0de56052cb7689743465a8770",
+    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
+    "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
     "source_digest": "c03b6e9b53871a95605310a3c89288dff95ff1d99c725faf4995ccbdd1e3d84a"
   },
   "type_map": [
