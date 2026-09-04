@@ -11,10 +11,13 @@ Run from the repository root:
 python3 -B evaluation/formal-source-fs-runtime-f0v3c/run.py --check
 ```
 
-The frozen aggregate is `Affirmative/F0V3C-A-FS-RUNTIME`. The canonical
-application-domain page now supplies the exact nominal declaration body that
-was absent from the earlier packet, so both construction identities are
-owner-determined at the pinned source revision.
+The frozen aggregate is `CannotAnswer/F0V3C-C-FS-RUNTIME`. The two exact
+constructions admit and execute, but Section 13 requires each challenge rule
+and execution resolver to carry the challenge occurrence's entry in
+`frame_schedule`. The Schnorr challenge is `Always`, has no public conditions,
+and therefore emits no frame under Section 4. The owner text does not say how
+an entry for that unframed occurrence can exist, so this package does not
+invent one.
 
 ## Admitted subjects
 
@@ -28,22 +31,22 @@ framing, and a typed sampling-exhausted failure.
 | retrying | 2 | hash-quartile rejection sampling | accepted quartiles map to `0`, `1`, or `2` |
 | one-shot | 1 | always accepts | all four hash quartiles map totally to `0`, `1`, or `2` |
 
-The retrying construction and Protocol identities remain:
+The retrying construction and Protocol identities are:
 
 ```text
-zkcidv0:pir.transcript-construction:84873ab6046a1ec005fed9b90cdabb9b6532ffbba890b00dadad53558b94f4ee
-zkcidv0:pir.protocol:83554765ae235514d1e77a72ca179315020c7d9efc320276a019ec6ce5827ae9
+zkcidv0:pir.transcript-construction:6bfe6bd860dffbe99ae9aaca09f333154c6ba1a3eeaad3d9cf249b36d79eb172
+zkcidv0:pir.protocol:886af07bc6b90e05dc8618218bd7af7e9e875d9e0b7dcd0dabfee6045bb2df92
 ```
 
 The one-shot construction and Protocol identities are:
 
 ```text
-zkcidv0:pir.transcript-construction:eaebbb902e26db8af22147b867676769bdeebfa9dc95c58af007b25d53876a78
-zkcidv0:pir.protocol:4a80c29a982ac7ba9dfca5fd86d7c7f1507e2005da407b14691191f79f9bfc21
+zkcidv0:pir.transcript-construction:26c2fe4fb19dd4b85672edda0fd590e011fa38ceae507889740cc0c83cdbdf5a
+zkcidv0:pir.protocol:12112c333504fa0e6184997c5fd44c0d773cc39803d845ea83c44d4d9add6f64
 ```
 
 Both share Core
-`zkcidv0:pir.interactive-core:dcb652fdca792d8664c51f2b98dca17d530607ff994c1eab15a59ed5c61cf2b8`.
+`zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6`.
 Each has occurrence, value, and challenge maps of sizes six, five, and one,
 and each construction check concludes `StructurallyConstructed`.
 
@@ -65,16 +68,16 @@ Each subject has all 27 `(statement, witness, nonce)` strategy runs and all 27
 
 | Lane | Retrying | One-shot |
 |---|---:|---:|
-| `Accepted` | 24 | 22 |
-| `Rejected` | 24 | 32 |
+| `Accepted` | 24 | 20 |
+| `Rejected` | 30 | 34 |
 | `Aborted` | 0 | 0 |
-| `InterpretationFailed` | 6 | 0 |
+| `InterpretationFailed` | 0 | 0 |
 | `StrategyStopped` | 0 | 0 |
 | `OperationalNoncompletion` | 0 | 0 |
 
-The six retrying interpretation failures remain genuine two-draw sampling
-exhaustions. The one-shot subject is total over the finite domain and therefore
-has no exhaustion run.
+At the repaired identities, neither finite corpus exhausts sampling. This is a
+measured fact for these exact 54-run corpora, not a totality statement about
+the retrying sampler.
 
 ## Frozen outputs
 
@@ -90,9 +93,19 @@ the second subject independently. The one-shot table is total:
 | `(1,0)`, `(2,2)` | 1 |
 | `(1,1)` | 2 |
 
-Both subjects derive the four canonical-framed construction views and the
-execution view, and both current schema compilers accept the reproduced view
-values.
+Both subjects derive and validate the transcript-declaration,
+required-influence, and checked-construction views through both current schema
+compilers. Their challenge-transition and execution views remain
+`CannotAnswer` at the unframed-coordinate gap above.
+
+## Repaired-body pressure suite
+
+A separate admitted Core has two root public bindings and two challenges at
+occurrence positions 1 and 3. Its construction uses distinct decoder result
+types and draw bounds `(1,1)` and `(2,3)`. The projected transition body keeps
+one ordered rule per challenge; the influence body keeps both binding atoms
+and one symbolic `EveryActualDrawOf` entry for the earlier challenge. Both
+schema compilers accept all three construction-owned values.
 
 ## Frozen findings
 
@@ -101,22 +114,25 @@ values.
 | owner admission | `Affirmative/F0V3C-A-OWNER-ADMISSION` |
 | retrying execution | `Affirmative/F0V3C-A-FINITE-EXECUTION` |
 | retrying replay | `Affirmative/F0V3C-A-INDEPENDENT-REPLAY` |
-| view reproduction | `Affirmative/F0V3C-A-VIEW-REPRODUCTION` |
+| Schnorr transition/execution views | `CannotAnswer/F0V3C-C-UNFRAMED-CHALLENGE-POSITION` |
+| repaired-body pressure projection | `Affirmative/F0V3C-A-REPAIRED-VIEW-PROJECTION` |
 | six-lane partition | `Affirmative/F0V3C-A-SIX-LANE-PARTITION` |
 | retrying derivation table | `Affirmative/F0V3C-A-DERIVATION-VECTORS` |
 | one-shot execution | `Affirmative/F0V3C-A-ONE-SHOT-EXECUTION` |
-| aggregate | `Affirmative/F0V3C-A-FS-RUNTIME` |
+| aggregate | `CannotAnswer/F0V3C-C-FS-RUNTIME` |
 
 ## Result boundary
 
 A passing check establishes owner-determined construction for the two exact
 subjects, exhaustive execution of their finite corpora, equality of two
 runtime paths, exact-field replay refusal, measured lane counts, frozen
-derivation tables, and conformance of reproduced view values to the pinned
-schemas.
+derivation tables, the three determined Schnorr construction views, and the
+repaired-body pressure projection.
 
-It does not establish publication, arbitrary-Core behavior, general evaluator
-correctness, compiler/backend/provider correspondence, theorem applicability
-or truth, protocol soundness, zero knowledge, Fiat--Shamir security,
-random-oracle or quantum-random-oracle security, concrete-hash suitability,
-duplex-sponge behavior, or production readiness.
+It does not supply the missing unframed challenge coordinate, establish either
+Schnorr challenge-transition or execution view, publish owner text, cover
+arbitrary Cores, prove general evaluator correctness, establish
+compiler/backend/provider correspondence, prove theorem applicability or
+truth, protocol soundness, zero knowledge, Fiat--Shamir security, random-oracle
+or quantum-random-oracle security, concrete-hash suitability, duplex-sponge
+behavior, or production readiness.

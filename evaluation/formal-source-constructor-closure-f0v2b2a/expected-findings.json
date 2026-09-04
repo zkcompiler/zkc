@@ -239,13 +239,13 @@
     "fragments": {
       "interaction_body_grammar_sha256": "4b2988a8069ddc2b6316feb813955de5678ee5cc74fc31ba725b0233a9b7347c",
       "interaction_kernel_sha256": "776b959942a0fa2d13c467e822a6ff270da062919b7b37c6931f0a000c716a86",
-      "interaction_static_views_sha256": "657fbbf33b5a333650a1ec369486100427be1351b34439b52b4129efaf043eae"
+      "interaction_static_views_sha256": "fea42019c4bf753fced85b7ffbda1ff447e806756b7d10fd043ddb5d00de337e"
     },
     "pressure_family_count": 23,
     "profile": {
-      "body_sha256": "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70",
-      "profile_digest": "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f",
-      "revision": 2
+      "body_sha256": "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a",
+      "profile_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474",
+      "revision": 3
     },
     "prohibited_shortcut_count": 8,
     "required_schema_repair_count": 14,

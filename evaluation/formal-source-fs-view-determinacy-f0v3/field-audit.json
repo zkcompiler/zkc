@@ -5,28 +5,28 @@
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.1",
       "body_selector": "TranscriptDeclarationViewBody = {",
-      "body_line": 1266,
+      "body_line": 1271,
       "fields": ["transcript_construction_id", "core_id", "state_type", "absorbed_bytes_type", "initial_state", "initialization_schedule_law", "absorb", "squeeze_bytes", "advance_state", "application_domain", "sampling_failure_coordinate", "frame_body_law", "frame_schedule"]
     },
     "CanonicalRequiredInfluenceView": {
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.2",
       "body_selector": "RequiredInfluenceViewBody = {",
-      "body_line": 1294,
-      "fields": ["transcript_construction_id", "core_id", "influence_atom_kinds", "scope_bindings", "required_influence", "additions", "exact_prefix_law"]
+      "body_line": 1302,
+      "fields": ["transcript_construction_id", "core_id", "scope_bindings", "required_influence", "additions", "exact_prefix_law"]
     },
     "CanonicalChallengeTransitionView": {
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.3",
       "body_selector": "ChallengeTransitionViewBody = {",
-      "body_line": 1316,
-      "fields": ["transcript_construction_id", "core_id", "namespace_derivation_law", "acceptance_abi", "decoder_abi", "draw_bounds", "exact_length_law", "state_update_before_decode_law", "retry_law", "sampling_failure_law", "challenge_coordinates"]
+      "body_line": 1331,
+      "fields": ["transcript_construction_id", "core_id", "namespace_derivation_law", "exact_length_law", "state_update_before_decode_law", "retry_law", "sampling_failure_law", "challenge_rules"]
     },
     "CanonicalFSConstructionView": {
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.4",
       "body_selector": "FSConstructionViewBody = {",
-      "body_line": 1333,
+      "body_line": 1342,
       "fields": ["result_schema", "fresh_protocol_id", "fiat_shamir_protocol_id", "shared_core_id", "transcript_construction_id", "occurrence_map", "value_map", "challenge_map", "structural_conclusion"]
     },
     "DuplexTranscriptDeclarationView": {

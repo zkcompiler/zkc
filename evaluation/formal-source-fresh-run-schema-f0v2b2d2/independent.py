@@ -28,7 +28,7 @@ CANDIDATE_SCHEMA_FORMAT = (
 )
 CANDIDATE_SCHEMA_SCOPE = "fresh-completed-record-schema-over-five-d1-carriers"
 PREDECESSOR_SCHEMA_SHA256 = (
-    "c06c9e13e1c10d33943325c5b234f1f7178b3aec3502df874284451ac0195ee7"
+    "c87b09d89ddbe92f8a6cdad8eae6bb0dbcfea6ed69e65e335e551efba0f6e03d"
 )
 OPERATIONAL_NONCOMPLETION_NAMES = (
     "Unsupported",

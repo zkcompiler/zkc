@@ -250,7 +250,7 @@ def compile_source(
                 "profile_body_sha256",
             }
             or profile["key"] != key
-            or profile["revision"] != 2
+            or profile["revision"] != 3
         ):
             raise IndependentError("cold owner-profile pin is malformed")
     for key, cap in (

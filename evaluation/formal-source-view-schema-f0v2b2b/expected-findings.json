@@ -53,21 +53,21 @@
     },
     "owner_profile": {
       "key": "interaction",
-      "profile_body_sha256": "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70",
-      "profile_digest": "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f",
-      "revision": 2
+      "profile_body_sha256": "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a",
+      "profile_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474",
+      "revision": 3
     },
     "predecessor": {
       "bounded_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686",
       "census_format": "zkc.formal-source-constructor-closure-f0v2b2a.inventory.v0",
-      "census_sha256": "7d0eac60af6ee3351615e39300349f6f28c6f44eda2d5f532a12927f4a175dbe"
+      "census_sha256": "ed1a25db9b5b923b8e8f6ce0e0f2eab65e2ce3ca4c7b5fcd99a6307ed7c02392"
     },
     "recursive_compiler": {
       "definition_count": 88,
       "maximum_source_depth": 17,
       "source_node_count": 453
     },
-    "source_digest": "2ab0f30aacf707d2aa3c6e1eefb86ed30fb08761f339015371610b77643b3e1d",
+    "source_digest": "ae2a06e7cd47de9943269b18d985b9c0129e6849e20cd635008519f79b708dce",
     "total_coverage_requirements": 914,
     "total_inhabitants": 302,
     "views": {
@@ -108,7 +108,7 @@
         "variant_cases": 27
       },
       "ExecutionView": {
-        "inhabitant_suite_digest": "b3a2f7b09ff636e829978df6804bda21588ed0d2e183ade2b7e2e716b6c65a49",
+        "inhabitant_suite_digest": "d22120eef67506a9eb0c7f988a5d9581b8ab877cd8831192ee64748115be29be",
         "inhabitants": 15,
         "maximum_depth": 6,
         "minimum_one_sequences": 2,
@@ -162,7 +162,7 @@
         "variant_cases": 162
       },
       "StrategyDecisionView": {
-        "inhabitant_suite_digest": "ef8b92123d0e0943d2c53203072d614f89cc1f8a3839c97aa69da405506d9707",
+        "inhabitant_suite_digest": "75f102ecb455a718c018a21aa8d429271a255c3624853f869dfe41f6efaa7185",
         "inhabitants": 25,
         "maximum_depth": 7,
         "minimum_one_sequences": 1,

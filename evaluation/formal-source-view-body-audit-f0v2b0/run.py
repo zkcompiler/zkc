@@ -127,7 +127,7 @@ def _observations() -> dict[str, Any]:
             for token in (
                 "[challenges[S.challenge_ref].challenge_ref]",
                 "[challenges[S.challenge_ref].domain]",
-                "[scope_openings,bindings]",
+                "[scopes,bindings]",
                 "[decision_points,prover_view_formation,guaranteed_prover_reads,",
                 "[claims,reductions,terminal_dispositions]",
                 "[protocol_id,core_id,challenge_interpretation,visible_history_law,",

@@ -139,8 +139,8 @@ def _field_inventory() -> tuple[dict[str, Any], dict[str, int]]:
         if line != entry["body_line"] or observed != entry["fields"]:
             raise AuditFailure(f"{view} no longer has its exact transcribed field body")
         counts[view] = len(observed)
-    if sum(counts.values()) != 95:
-        raise AuditFailure("the migrated eight-view census is not 95 top-level fields")
+    if sum(counts.values()) != 91:
+        raise AuditFailure("the migrated eight-view census is not 91 top-level fields")
     return audit, counts
 
 
@@ -613,7 +613,7 @@ def _findings() -> list[Finding]:
             "current-eight-view-field-census",
             "Affirmative",
             "F0V3-A-EIGHT-VIEW-CENSUS",
-            "all 95 migrated top-level fields are transcribed from exact owner bodies",
+            "all 91 migrated top-level fields are transcribed from exact owner bodies",
         ),
         Finding(
             "published-static-view-schema-catalogs",
@@ -643,7 +643,7 @@ def _findings() -> list[Finding]:
             "k2-typed-cold-current-values",
             "Affirmative",
             "F0V3-A-K2-TYPED-COLD-BYTES",
-            "typed and cold paths byte-agree on four canonical-framed views for both carriers",
+            "typed and cold paths byte-agree on every owner-determined canonical-framed view for both carriers",
         ),
         Finding(
             "duplex-typed-cold-current-values",
@@ -668,6 +668,12 @@ def _findings() -> list[Finding]:
             "Affirmative",
             "F0V3-A-ROTATION-CONTROL",
             "both publication compilers reproduce the direct 17-profile migration cone without writing identities",
+        ),
+        Finding(
+            "unframed-challenge-position",
+            "CannotAnswer",
+            "F0V3-C-UNFRAMED-CHALLENGE-POSITION",
+            "the owner requires a challenge rule to name its occurrence's frame-schedule position but an unconditional challenge with no condition emits no frame-schedule entry",
         ),
         Finding(
             "witness-as-owner-definition",
@@ -696,6 +702,7 @@ def run_audit() -> dict[str, Any]:
         raise AuditFailure("recursive and iterative current-schema compilers disagree")
 
     projections: dict[str, dict[str, dict[str, Any]]] = {}
+    unavailable: dict[str, list[str]] = {}
     first_transition: dict[str, Any] | None = None
     first_result: dict[str, Any] | None = None
     for name, raw, typed_values in typed_projection.k2_cases():
@@ -727,7 +734,18 @@ def run_audit() -> dict[str, Any]:
                 "typed_cold_byte_equal": True,
                 "leaf_count": model.value_leaf_count(schemas[view], typed_value),
             }
-        if first_transition is None:
+        missing = sorted(
+            {
+                "CanonicalTranscriptDeclarationView",
+                "CanonicalRequiredInfluenceView",
+                "CanonicalChallengeTransitionView",
+                "CanonicalFSConstructionView",
+            }
+            - set(typed_values)
+        )
+        if missing:
+            unavailable["k2-" + name] = missing
+        if first_transition is None and "CanonicalChallengeTransitionView" in typed_values:
             first_transition = typed_values["CanonicalChallengeTransitionView"]
             first_result = typed_values["CanonicalFSConstructionView"]
 
@@ -802,13 +820,14 @@ def run_audit() -> dict[str, Any]:
         "recursive_metrics": recursive_metrics,
         "iterative_metrics": iterative_metrics,
         "current_values": projections,
+        "underdetermined_values": unavailable,
         "mutation_kills": mutation_kills,
         "duplex_checked_result_witnessed": False,
     }
     findings = _findings()
     aggregate = {
-        "outcome": "Affirmative",
-        "code": "F0V3-A-MIGRATED-FS-VIEW-DETERMINACY",
+        "outcome": "CannotAnswer",
+        "code": "F0V3-C-MIGRATED-FS-VIEW-DETERMINACY",
     }
     projection = {
         "aggregate": aggregate,

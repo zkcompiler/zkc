@@ -83,6 +83,7 @@ EXPECTED_STATIC_FRAGMENT_BODY_FUNCTIONS = (
     "PIRStaticViewCapabilityRequirementBody",
     "PIRStaticViewNoPolicyBody",
     "PIRStaticViewPolicyClosureBody",
+    "SourceSubjectBody",
     "PIRSourceBindingPayloadBody",
     "PIRSourceCapabilityRequirementBody",
     "PIRSourceNoPolicyBody",

@@ -2358,6 +2358,7 @@ class OwnerIssuedViewContractTest(unittest.TestCase):
             tuple(item.binding_ref.input_name for item in baseline.view.entries),
             ("g", "q", "p", "session"),
         )
+        self.assertEqual(baseline.view.run_established, ())
         self.assertFalse(hasattr(baseline.source_binding, "invocation"))
         self.assertFalse(hasattr(baseline.view, "invocation"))
 

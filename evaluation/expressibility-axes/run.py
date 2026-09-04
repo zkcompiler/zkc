@@ -45,11 +45,11 @@ EXPECTED_AXES = {
 
 OWNER_PINS = {
     "docs-next/pir/interactive-core.md":
-        "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
+        "9ef8181f88c3145319c4608c599f51b409157cfe9fdab7c1821fbb57f9da4bce",
     "docs-next/pir/fiat-shamir.md":
-        "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
+        "f3a8b2a13f16528101cf4894262c187bcb89ace695f9ca290b29bab63c7f3c0f",
     "docs-next/pir/interfaces-and-plans.md":
-        "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
+        "e3888d7d2ba6c84ceafdf457255a02079b13d95af4f94fce8a6d3c7e8ae6041c",
     "docs-next/pir/verifier-derived-query-plans.md":
         "9c27ad452e83b264bf63c2b744f5ab29e5d8d72488c7a4a93e77598a2759d651",
     (

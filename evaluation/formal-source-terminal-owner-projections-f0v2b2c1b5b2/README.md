@@ -16,7 +16,7 @@ The frozen bounded result is
 
 ## Candidate carried by the experiment
 
-The experiment constructs a synthetic revision-2 Interaction profile over the
+The experiment constructs a synthetic revision-3 Interaction profile over the
 already checked F0-V1 publication topology. It adds reachable body, view, and
 admission declarations for this candidate:
 
@@ -42,11 +42,11 @@ profile then names that grammar digest, and the final schema source names the
 resulting profile:
 
 - Interaction profile digest:
-  `76cf68774060fbe667ce5f1a7d0b67de525449d8fad92b262c7fd4adfd9b6b79`;
+  `0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474`;
 - owner-free grammar SHA-256:
-  `725ecb1fa099aa7490bc9c1012d4370c0a6a1b183aff6c11d8129f11e464be9a`;
+  `f88b5a5e48046cf4e9079410dbb6ea572316aa51de175d2ed009f18ec6e48292`;
 - attached schema-source SHA-256:
-  `376cefb165ff92f0152856996a96ae02f7e04b9e6c679d01f85e10471c10ca41`.
+  `c87b09d89ddbe92f8a6cdad8eae6bb0dbcfea6ed69e65e335e551efba0f6e03d`.
 
 Both publication compilers agree on all 18 profiles. Interaction and its 15
 transitive dependents rotate; `analysis-kernel` and `oir-endpoint-graph` remain

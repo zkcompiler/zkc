@@ -13,13 +13,6 @@ class ColdProjectionError(ValueError):
     """An inert witness record did not have the selected finite shape."""
 
 
-def _ordered_unique(values: list[dict[str, str]]) -> list[dict[str, str]]:
-    return sorted(
-        {json.dumps(value, sort_keys=True): value for value in values}.values(),
-        key=lambda value: json.dumps(value, sort_keys=True),
-    )
-
-
 def _scope(scope: dict[str, Any]) -> dict[int, Any]:
     if set(scope) != {"name", "parent", "open_before"}:
         raise ColdProjectionError("cold K2 scope has another shape")
@@ -32,6 +25,161 @@ def _scope(scope: dict[str, Any]) -> dict[int, Any]:
             else variant(1, ref("occurrence-ref-body-v0", scope["open_before"]))
         ),
     )
+
+
+def _framed_occurrence(item: dict[str, Any]) -> bool:
+    return (
+        item["guard_nontrivial"]
+        or item["kind"]
+        in {
+            "prover-message",
+            "verifier-message",
+            "oracle-publish",
+            "oracle-query",
+            "oracle-answer",
+        }
+        or (item["kind"] == "challenge" and bool(item["dependencies"]))
+    )
+
+
+def _scope_path(scopes: list[dict[str, Any]], name: str) -> list[dict[str, str]]:
+    by_name = {item["name"]: item for item in scopes}
+    path: list[str] = []
+    current: str | None = name
+    while current is not None:
+        path.append(current)
+        current = by_name[current]["parent"]
+    return [ref("scope-ref-body-v0", item) for item in reversed(path)]
+
+
+def _static_atom(tag: int, payload: Any, required: bool) -> dict[int, Any]:
+    return record(variant(0, variant(tag, payload)), required)
+
+
+def _symbolic_draw(challenge: str) -> dict[int, Any]:
+    return record(
+        variant(1, ref("challenge-ref-body-v0", challenge)),
+        True,
+    )
+
+
+def _value_type(raw: dict[str, Any], value_ref: dict[str, str]) -> dict[str, str]:
+    if value_ref["kind"] == "input":
+        selected = tuple(item for item in raw["inputs"] if item["name"] == value_ref["name"])
+        if len(selected) != 1:
+            raise ColdProjectionError("cold fixture condition names another input")
+        sort = selected[0]["value_sort"]
+    else:
+        selected = tuple(item for item in raw["schedule"] if item["name"] == value_ref["name"])
+        if len(selected) != 1:
+            raise ColdProjectionError("cold fixture condition names another occurrence")
+        occurrence = selected[0]
+        if occurrence["kind"] == "challenge":
+            sort = "nat"
+        elif occurrence["kind"] == "prover-message":
+            sort = occurrence["prover_value_sort"]
+        else:
+            raise ColdProjectionError("cold fixture condition result type is not represented")
+    names = {"bytes": "Bytes", "nat": "Natural", "bool": "Boolean", "oracle": "Oracle"}
+    return ref("value-type-body-v0", names[sort])
+
+
+def _required_entries(raw: dict[str, Any], cid: Any, tid: Any) -> list[dict[int, Any]]:
+    scopes = raw["scopes"]
+    schedule = raw["schedule"]
+    challenges = [
+        (index, item)
+        for index, item in enumerate(schedule)
+        if item["kind"] == "challenge"
+    ]
+    action_tags = {
+        "prover-message": 6,
+        "verifier-message": 7,
+        "oracle-publish": 8,
+        "oracle-query": 9,
+        "oracle-answer": 10,
+    }
+    by_scope = {item["name"]: item for item in scopes}
+
+    def ancestry(scope: str) -> set[str]:
+        result: set[str] = set()
+        current: str | None = scope
+        while current is not None:
+            result.add(current)
+            current = by_scope[current]["parent"]
+        return result
+
+    result = []
+    for challenge_index, challenge in challenges:
+        required_scopes = ancestry(challenge["scope"])
+        entries = [
+            _static_atom(0, cid, True),
+            _static_atom(1, tid, True),
+            _static_atom(
+                2,
+                body(
+                    "protocol-declaration-ref-body-v0",
+                    raw["construction"]["application_domain"],
+                ),
+                True,
+            ),
+        ]
+
+        def add_scopes(open_before: str | None) -> None:
+            for scope in scopes:
+                if scope["open_before"] != open_before:
+                    continue
+                is_required = scope["name"] in required_scopes
+                entries.append(
+                    _static_atom(3, _scope_path(scopes, scope["name"]), is_required)
+                )
+                for binding in raw["inputs"]:
+                    if binding["scope"] == scope["name"] and binding["role"] != "verifier-private":
+                        entries.append(
+                            _static_atom(
+                                4,
+                                ref("binding-ref-body-v0", binding["name"]),
+                                is_required,
+                            )
+                        )
+
+        add_scopes(None)
+        for index, occurrence in enumerate(schedule[: challenge_index + 1]):
+            add_scopes(occurrence["name"])
+            if occurrence["guard_nontrivial"]:
+                entries.append(
+                    _static_atom(
+                        5,
+                        ref("occurrence-ref-body-v0", occurrence["name"]),
+                        True,
+                    )
+                )
+            if occurrence["kind"] == "challenge":
+                entries.extend(
+                    _static_atom(
+                        11,
+                        record(
+                            ref("challenge-ref-body-v0", occurrence["name"]),
+                            ordinal,
+                        ),
+                        index == challenge_index,
+                    )
+                    for ordinal, _dependency in enumerate(occurrence["dependencies"])
+                )
+                if index < challenge_index:
+                    entries.append(_symbolic_draw(occurrence["name"]))
+            elif index < challenge_index and occurrence["kind"] in action_tags:
+                entries.append(
+                    _static_atom(
+                        action_tags[occurrence["kind"]],
+                        ref("occurrence-ref-body-v0", occurrence["name"]),
+                        True,
+                    )
+                )
+        result.append(
+            record(ref("challenge-ref-body-v0", challenge["name"]), entries)
+        )
+    return result
 
 
 def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
@@ -69,26 +217,14 @@ def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
             ref("occurrence-kind-body-v0", item["kind"]),
         )
         for index, item in enumerate(schedule)
+        if _framed_occurrence(item)
     ]
     challenges = [
         (index, item)
         for index, item in enumerate(schedule)
         if item["kind"] == "challenge"
     ]
-    influence_entries = []
-    for index, challenge in challenges:
-        prior_atoms = [
-            record(
-                ref("occurrence-ref-body-v0", prior["name"]),
-                [ref("occurrence-kind-body-v0", kind) for kind in prior["influence_kinds"]],
-                prior["guard_nontrivial"],
-            )
-            for prior in schedule[:index]
-            if prior["influence_kinds"]
-        ]
-        influence_entries.append(
-            record(ref("challenge-ref-body-v0", challenge["name"]), prior_atoms)
-        )
+    influence_entries = _required_entries(raw, cid, tid)
     additions_by_challenge = {
         item["challenge"]: item["publications"] for item in raw["additions"]
     }
@@ -102,15 +238,6 @@ def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
         )
         for _index, challenge in challenges
     ]
-    influence_kinds = _ordered_unique(
-        [
-            ref("occurrence-kind-body-v0", kind)
-            for item in schedule
-            for kind in item["influence_kinds"]
-        ]
-    )
-    if not influence_kinds:
-        raise ColdProjectionError("cold K2 carrier has no influence constructor")
     transcript = record(
         tid,
         cid,
@@ -129,36 +256,49 @@ def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
     influence = record(
         tid,
         cid,
-        influence_kinds,
         [_scope(scope) for scope in raw["scopes"]],
         influence_entries,
         additions,
         law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
     )
-    transition = record(
-        tid,
-        cid,
-        law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
-        record(
-            algorithm_use("big-endian-rejection-accept-v1", "k2-accept-contract-v1"),
-            [ref("value-type-body-v0", "Bytes"), ref("value-type-body-v0", "Natural")],
-            ref("value-type-body-v0", "Boolean"),
-        ),
-        record(
-            algorithm_use("big-endian-rejection-decode-v1", "k2-decode-contract-v1"),
-            [ref("value-type-body-v0", "Bytes"), ref("value-type-body-v0", "Natural")],
-            ref("value-type-body-v0", "Natural"),
-        ),
-        record(construction["sample_bytes"], construction["max_attempts"]),
-        law("canonical-framed", "canonical-framed-body-grammar-v0"),
-        law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-        law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-        law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-        [
-            record(ref("challenge-ref-body-v0", item["name"]), index)
-            for index, item in challenges
-        ],
-    )
+    framed_positions = {
+        item["name"]: index
+        for index, item in enumerate(schedule)
+        if _framed_occurrence(item)
+    }
+    transition = None
+    if all(item["name"] in framed_positions for _index, item in challenges):
+        rules = []
+        for _index, item in challenges:
+            input_types = [ref("value-type-body-v0", "Bytes")]
+            input_types.extend(_value_type(raw, dependency) for dependency in item["dependencies"])
+            rules.append(
+                record(
+                    ref("challenge-ref-body-v0", item["name"]),
+                    framed_positions[item["name"]],
+                    record(
+                        algorithm_use("big-endian-rejection-accept-v1", "k2-accept-contract-v1"),
+                        input_types,
+                        ref("value-type-body-v0", "Boolean"),
+                    ),
+                    record(
+                        algorithm_use("big-endian-rejection-decode-v1", "k2-decode-contract-v1"),
+                        input_types,
+                        ref("value-type-body-v0", "Natural"),
+                    ),
+                    record(construction["sample_bytes"], construction["max_attempts"]),
+                )
+            )
+        transition = record(
+            tid,
+            cid,
+            law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
+            law("canonical-framed", "canonical-framed-body-grammar-v0"),
+            law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
+            law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
+            law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
+            rules,
+        )
     result = raw["result"]
     result_value = record(
         body("runtime-schema-body-v0", "CheckedFSConstruction"),
@@ -183,12 +323,14 @@ def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
             law("canonical-framed", "canonical-framed-same-core-construction-v0"),
         ),
     )
-    return {
+    values = {
         "CanonicalTranscriptDeclarationView": transcript,
         "CanonicalRequiredInfluenceView": influence,
-        "CanonicalChallengeTransitionView": transition,
         "CanonicalFSConstructionView": result_value,
     }
+    if transition is not None:
+        values["CanonicalChallengeTransitionView"] = transition
+    return values
 
 
 def _canonical_json(value: Any) -> bytes:

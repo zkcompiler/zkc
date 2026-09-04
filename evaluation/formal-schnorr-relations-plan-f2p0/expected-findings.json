@@ -177,7 +177,7 @@
   "findings_sha256": "9501e11056383c0acea33c2ad892e021be4e73929211ff20512a83eb5f2e29a4",
   "measurements": {
     "accepted_honest_runs": 36,
-    "agreement_sha256": "7998ead666368cada6f46dbc7fe9ba792af469533d9ec48da99602811142f84e",
+    "agreement_sha256": "802b2a2aaa84f3e500098dc19cd522c31f5c79e78c2dcfb4d1303ec2d474b85e",
     "anchors": 51,
     "cited_ranges": 18,
     "conditional_owner_coordinate_families": 5,

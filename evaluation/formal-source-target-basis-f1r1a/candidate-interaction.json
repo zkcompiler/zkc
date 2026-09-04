@@ -3,9 +3,9 @@
   "status": "migration rehearsal; not published",
   "profile": {
     "profile_family": "pir.interaction",
-    "revision": 2,
-    "body_length": 173602,
-    "body_sha256": "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70",
-    "profile_digest": "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f"
+    "revision": 3,
+    "body_length": 175271,
+    "body_sha256": "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a",
+    "profile_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474"
   }
 }

@@ -3,29 +3,89 @@
   "admission_wall_time_limit_ns": 250000000,
   "aggregate": "FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE",
   "finding_codes": [
-    ["six-finite-core-admissions", "Affirmative", "FAMILYINSTANCE-A-SIX-CORES"],
-    ["parameter-rotates-core-identity", "Affirmative", "FAMILYINSTANCE-A-CORE-ROTATION"],
-    ["fri-instance-measurements", "Affirmative", "FAMILYINSTANCE-A-FRI-MEASUREMENTS"],
-    ["sumcheck-instance-measurements", "Affirmative", "FAMILYINSTANCE-A-SUMCHECK-MEASUREMENTS"],
-    ["regular-finite-variation", "Affirmative", "FAMILYINSTANCE-A-REGULAR-VARIATION"],
-    ["bounded-admission-time", "Affirmative", "FAMILYINSTANCE-A-ADMISSION-TIME"],
-    ["adjacent-identity-substitution", "Refused", "FAMILYINSTANCE-R-ADJACENT-IDENTITY"],
-    ["fixture-graph-measurements", "Affirmative", "FAMILYINSTANCE-A-FIXTURE-GRAPH"],
-    ["target-pcgraph-equivalence", "CannotAnswer", "FAMILYINSTANCE-C-TARGET-PCGRAPH"],
-    ["family-theorem-source-reuse", "Affirmative", "FAMILYINSTANCE-A-THEOREM-REUSE"],
-    ["internal-template-necessity", "CannotAnswer", "FAMILYINSTANCE-C-TEMPLATE-NECESSITY"],
-    ["family-profile-attachment", "CannotAnswer", "FAMILYINSTANCE-C-PROFILE-ATTACHMENT"],
-    ["theorem-proof-or-soundness", "CannotAnswer", "FAMILYINSTANCE-C-THEOREM-OR-SOUNDNESS"],
-    ["target-design-adoption", "CannotAnswer", "FAMILYINSTANCE-C-DESIGN-ADOPTION"],
-    ["family-instance-recommendation", "Affirmative", "FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE"]
+    [
+      "six-finite-core-admissions",
+      "Affirmative",
+      "FAMILYINSTANCE-A-SIX-CORES"
+    ],
+    [
+      "parameter-rotates-core-identity",
+      "Affirmative",
+      "FAMILYINSTANCE-A-CORE-ROTATION"
+    ],
+    [
+      "fri-instance-measurements",
+      "Affirmative",
+      "FAMILYINSTANCE-A-FRI-MEASUREMENTS"
+    ],
+    [
+      "sumcheck-instance-measurements",
+      "Affirmative",
+      "FAMILYINSTANCE-A-SUMCHECK-MEASUREMENTS"
+    ],
+    [
+      "regular-finite-variation",
+      "Affirmative",
+      "FAMILYINSTANCE-A-REGULAR-VARIATION"
+    ],
+    [
+      "bounded-admission-time",
+      "Affirmative",
+      "FAMILYINSTANCE-A-ADMISSION-TIME"
+    ],
+    [
+      "adjacent-identity-substitution",
+      "Refused",
+      "FAMILYINSTANCE-R-ADJACENT-IDENTITY"
+    ],
+    [
+      "fixture-graph-measurements",
+      "Affirmative",
+      "FAMILYINSTANCE-A-FIXTURE-GRAPH"
+    ],
+    [
+      "target-pcgraph-equivalence",
+      "CannotAnswer",
+      "FAMILYINSTANCE-C-TARGET-PCGRAPH"
+    ],
+    [
+      "family-theorem-source-reuse",
+      "Affirmative",
+      "FAMILYINSTANCE-A-THEOREM-REUSE"
+    ],
+    [
+      "internal-template-necessity",
+      "CannotAnswer",
+      "FAMILYINSTANCE-C-TEMPLATE-NECESSITY"
+    ],
+    [
+      "family-profile-attachment",
+      "CannotAnswer",
+      "FAMILYINSTANCE-C-PROFILE-ATTACHMENT"
+    ],
+    [
+      "theorem-proof-or-soundness",
+      "CannotAnswer",
+      "FAMILYINSTANCE-C-THEOREM-OR-SOUNDNESS"
+    ],
+    [
+      "target-design-adoption",
+      "CannotAnswer",
+      "FAMILYINSTANCE-C-DESIGN-ADOPTION"
+    ],
+    [
+      "family-instance-recommendation",
+      "Affirmative",
+      "FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE"
+    ]
   ],
   "findings_sha256": "1294103d9eb884f02435b7acc3b547ff9b4d45eabc9111366251525af2ca8950",
   "measurements": {
     "fri-like-folding": [
       {
+        "admission_wall_time_class": "at-most-250000000-ns",
         "body_bytes": 7625,
         "core_id": "pir.interactive-core@8c158862bb8e61e9c0e4b12acd92a5c5a2f4a8aa5231b5241707f7dd0a138d0c",
-        "admission_wall_time_class": "at-most-250000000-ns",
         "declarations": 19,
         "declarations_different_from_previous": 0,
         "family": "fri-like-folding",
@@ -36,9 +96,9 @@
         "varying_body_fields_from_previous": []
       },
       {
+        "admission_wall_time_class": "at-most-250000000-ns",
         "body_bytes": 8815,
         "core_id": "pir.interactive-core@298ea61f2db12301645bccbbdabf7a8c5390dc1cdaec2b24316310df0c09be61",
-        "admission_wall_time_class": "at-most-250000000-ns",
         "declarations": 21,
         "declarations_different_from_previous": 5,
         "family": "fri-like-folding",
@@ -46,12 +106,15 @@
         "parameter_name": "fold_count",
         "pcgraph_edges": 67,
         "pcgraph_nodes": 48,
-        "varying_body_fields_from_previous": ["schedule", "reductions"]
+        "varying_body_fields_from_previous": [
+          "schedule",
+          "reductions"
+        ]
       },
       {
+        "admission_wall_time_class": "at-most-250000000-ns",
         "body_bytes": 10005,
         "core_id": "pir.interactive-core@332a7b9cb17f805fa0b19b2640987f3724671bfde3b1c1201d5a9f021773f269",
-        "admission_wall_time_class": "at-most-250000000-ns",
         "declarations": 23,
         "declarations_different_from_previous": 5,
         "family": "fri-like-folding",
@@ -59,14 +122,17 @@
         "parameter_name": "fold_count",
         "pcgraph_edges": 76,
         "pcgraph_nodes": 54,
-        "varying_body_fields_from_previous": ["schedule", "reductions"]
+        "varying_body_fields_from_previous": [
+          "schedule",
+          "reductions"
+        ]
       }
     ],
     "sumcheck-like-rounds": [
       {
+        "admission_wall_time_class": "at-most-250000000-ns",
         "body_bytes": 4190,
         "core_id": "pir.interactive-core@aef62014b432f7913ba475a17a31d95b8abe12fc6568ba6d468c281552b3cfef",
-        "admission_wall_time_class": "at-most-250000000-ns",
         "declarations": 12,
         "declarations_different_from_previous": 0,
         "family": "sumcheck-like-rounds",
@@ -77,9 +143,9 @@
         "varying_body_fields_from_previous": []
       },
       {
+        "admission_wall_time_class": "at-most-250000000-ns",
         "body_bytes": 7003,
         "core_id": "pir.interactive-core@7820272d0c8d0e31e24cf35e9f5f6204b777b4519dc146876c6600be3ce0c9c7",
-        "admission_wall_time_class": "at-most-250000000-ns",
         "declarations": 17,
         "declarations_different_from_previous": 6,
         "family": "sumcheck-like-rounds",
@@ -87,12 +153,16 @@
         "parameter_name": "variable_count",
         "pcgraph_edges": 51,
         "pcgraph_nodes": 35,
-        "varying_body_fields_from_previous": ["schedule", "reductions", "claim_uses"]
+        "varying_body_fields_from_previous": [
+          "schedule",
+          "reductions",
+          "claim_uses"
+        ]
       },
       {
+        "admission_wall_time_class": "at-most-250000000-ns",
         "body_bytes": 12629,
         "core_id": "pir.interactive-core@79ed21123a33b59b1bf0ba129c7a6f138e4ac04991998dc5d26c9dda468ffffd",
-        "admission_wall_time_class": "at-most-250000000-ns",
         "declarations": 27,
         "declarations_different_from_previous": 11,
         "family": "sumcheck-like-rounds",
@@ -100,27 +170,71 @@
         "parameter_name": "variable_count",
         "pcgraph_edges": 91,
         "pcgraph_nodes": 57,
-        "varying_body_fields_from_previous": ["schedule", "reductions", "claim_uses"]
+        "varying_body_fields_from_previous": [
+          "schedule",
+          "reductions",
+          "claim_uses"
+        ]
       }
     ]
   },
   "regularity": [
-    {"family": "fri-like-folding", "intercept": 5245, "metric": "body_bytes", "slope": 1190},
-    {"family": "fri-like-folding", "intercept": 30, "metric": "pcgraph_nodes", "slope": 6},
-    {"family": "fri-like-folding", "intercept": 40, "metric": "pcgraph_edges", "slope": 9},
-    {"family": "fri-like-folding", "intercept": 15, "metric": "declarations", "slope": 2},
-    {"family": "sumcheck-like-rounds", "intercept": 1377, "metric": "body_bytes", "slope": 2813},
-    {"family": "sumcheck-like-rounds", "intercept": 13, "metric": "pcgraph_nodes", "slope": 11},
-    {"family": "sumcheck-like-rounds", "intercept": 11, "metric": "pcgraph_edges", "slope": 20},
-    {"family": "sumcheck-like-rounds", "intercept": 7, "metric": "declarations", "slope": 5}
+    {
+      "family": "fri-like-folding",
+      "intercept": 5245,
+      "metric": "body_bytes",
+      "slope": 1190
+    },
+    {
+      "family": "fri-like-folding",
+      "intercept": 30,
+      "metric": "pcgraph_nodes",
+      "slope": 6
+    },
+    {
+      "family": "fri-like-folding",
+      "intercept": 40,
+      "metric": "pcgraph_edges",
+      "slope": 9
+    },
+    {
+      "family": "fri-like-folding",
+      "intercept": 15,
+      "metric": "declarations",
+      "slope": 2
+    },
+    {
+      "family": "sumcheck-like-rounds",
+      "intercept": 1377,
+      "metric": "body_bytes",
+      "slope": 2813
+    },
+    {
+      "family": "sumcheck-like-rounds",
+      "intercept": 13,
+      "metric": "pcgraph_nodes",
+      "slope": 11
+    },
+    {
+      "family": "sumcheck-like-rounds",
+      "intercept": 11,
+      "metric": "pcgraph_edges",
+      "slope": 20
+    },
+    {
+      "family": "sumcheck-like-rounds",
+      "intercept": 7,
+      "metric": "declarations",
+      "slope": 5
+    }
   ],
   "source_sha256": {
-    "docs-next/analysis/cryptographic-properties.md": "df29e7c025f1841da88f4c52f2468c25aeecf712ab247506c9a3ba5318716cfe",
-    "docs-next/pir/fiat-shamir.md": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
-    "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
+    "docs-next/analysis/cryptographic-properties.md": "0b2783c39ecc57744721e862d28edb9301a45ab828051c32cc8016b510bab20b",
+    "docs-next/pir/fiat-shamir.md": "f3a8b2a13f16528101cf4894262c187bcb89ace695f9ca290b29bab63c7f3c0f",
+    "docs-next/pir/interactive-core.md": "9ef8181f88c3145319c4608c599f51b409157cfe9fdab7c1821fbb57f9da4bce",
     "docs-next/relations/relation-model.md": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
     "evaluation/indexed-core-elaboration/reference_model.py": "dc7eeb0e3736e16e35e1faca926c32f7bde2b1cfadfd2b15a75801bed1d42abc",
-    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "402bd72f24571828b3f76bc3fe7fd103798841e736d3bf672c025843c1b8071a"
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "c977c1c98e29b9caf09838b1a0f83f7cb3f60f73ad292cb1b330b59672e61617"
   },
   "theorem_binding": {
     "applicability_coordinates": [
@@ -167,7 +281,11 @@
       "field_cardinality_coordinate",
       "family_instance_correspondence_judgment_id"
     ],
-    "quantifiers": ["variable_count", "degree_bound", "field_cardinality"],
+    "quantifiers": [
+      "variable_count",
+      "degree_bound",
+      "field_cardinality"
+    ],
     "theorem_source": "sumcheck-soundness-family-source"
   }
 }

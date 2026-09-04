@@ -1,6 +1,6 @@
 {
   "aggregate": "F0V2B2C1B5B2-A-EXACT-TERMINAL-OWNER-PROJECTIONS",
-  "findings_sha256": "583c0dfca38bc7a7d99b380039044eb936e58e7ca0409f36610975572601f437",
+  "findings_sha256": "49e2260d0106fc65bf0f00d919045afc06cb32043cc27f13174de8101dda871c",
   "finding_codes": [
     [
       "predecessor-pin",
@@ -40,7 +40,7 @@
     [
       "interaction-revision-and-identity",
       "Affirmative",
-      "F0V2B2C1B5B2-A-INTERACTION-R2"
+      "F0V2B2C1B5B2-A-INTERACTION-R3"
     ],
     [
       "complete-profile-catalog",

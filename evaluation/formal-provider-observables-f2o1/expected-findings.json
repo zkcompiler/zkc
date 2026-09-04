@@ -63,31 +63,135 @@
   },
   "findings_sha256": "7ae31f812d137c3ee37359b71810e0d9bc3aab62c477c58864ded6b947a7f8f6",
   "finding_codes": [
-    ["predecessor-pins", "Affirmative", "F2O1-A-PREDECESSOR-PINS"],
-    ["generator-checker-separation", "Affirmative", "F2O1-A-CODE-SEPARATION"],
-    ["cold-subject-authentication", "Affirmative", "F2O1-A-SUBJECT-AUTHENTICATED"],
-    ["generated-fixtures-reproduced", "Affirmative", "F2O1-A-GENERATED-FIXTURES"],
-    ["integrated-public-coin-view", "Affirmative", "F2O1-A-PUBLIC-COIN-VIEW"],
-    ["five-integrated-owner-views-unissued", "CannotAnswer", "F2O1-C-INTEGRATED-VIEW-PROJECTIONS"],
-    ["ledger-total-over-occurrences", "Affirmative", "F2O1-A-SCHEDULE-TOTAL"],
-    ["ledger-coordinate-injectivity", "Affirmative", "F2O1-A-COORDINATE-INJECTIVE"],
-    ["ledger-coordinate-validity", "Affirmative", "F2O1-A-COORDINATES-VALID"],
-    ["ledger-gap-enumeration", "Affirmative", "F2O1-A-GAPS-ENUMERATED"],
-    ["integrated-discriminators-rendered", "Affirmative", "F2O1-A-INTEGRATED-DISCRIMINATORS"],
-    ["four-d1-neighbour-controls", "Refused", "F2O1-R-D1-NEIGHBOURS"],
-    ["duplicate-shared-challenge-equal-draws", "Refused", "F2O1-R-SHARED-CHALLENGE-DUPLICATED"],
-    ["reorder-interleaved-occurrences", "Refused", "F2O1-R-SCHEDULE-ORDER"],
-    ["drop-reduction-required-challenge-backlink", "Refused", "F2O1-R-REDUCTION-CHALLENGE-BACKLINK"],
-    ["logical-oracle-as-committed-table", "Refused", "F2O1-R-ORACLE-MODE-MISMATCH"],
-    ["verifier-only-query-to-public", "Refused", "F2O1-R-QUERY-VISIBILITY"],
-    ["omit-fallback-terminal-preemption", "Refused", "F2O1-R-TERMINAL-PREEMPTION"],
-    ["operational-observable-list", "CannotAnswer", "F2O1-C-MISSING-OPERATIONAL-OBSERVABLE"],
-    ["property-premise-list", "CannotAnswer", "F2O1-C-PROPERTY-PREMISES"],
-    ["elaboration-receipt-bound", "Affirmative", "F2O1-A-RECEIPT-BOUND"],
-    ["elaboration-recorded", "Affirmative", "F2O1-A-ELABORATION-RECORDED"],
-    ["target-authority-untouched", "Affirmative", "F2O1-A-NONPUBLICATION"],
-    ["provider-correspondence", "CannotAnswer", "F2O1-C-PROVIDER-CORRESPONDENCE"],
-    ["property-proof-or-security", "CannotAnswer", "F2O1-C-PROPERTY"],
-    ["provider-observable-audit-integrated", "CannotAnswer", "F2O1-C-MISSING-OPERATIONAL-OBSERVABLE"]
+    [
+      "predecessor-pins",
+      "Affirmative",
+      "F2O1-A-PREDECESSOR-PINS"
+    ],
+    [
+      "generator-checker-separation",
+      "Affirmative",
+      "F2O1-A-CODE-SEPARATION"
+    ],
+    [
+      "cold-subject-authentication",
+      "Affirmative",
+      "F2O1-A-SUBJECT-AUTHENTICATED"
+    ],
+    [
+      "generated-fixtures-reproduced",
+      "Affirmative",
+      "F2O1-A-GENERATED-FIXTURES"
+    ],
+    [
+      "integrated-public-coin-view",
+      "Affirmative",
+      "F2O1-A-PUBLIC-COIN-VIEW"
+    ],
+    [
+      "five-integrated-owner-views-unissued",
+      "CannotAnswer",
+      "F2O1-C-INTEGRATED-VIEW-PROJECTIONS"
+    ],
+    [
+      "ledger-total-over-occurrences",
+      "Affirmative",
+      "F2O1-A-SCHEDULE-TOTAL"
+    ],
+    [
+      "ledger-coordinate-injectivity",
+      "Affirmative",
+      "F2O1-A-COORDINATE-INJECTIVE"
+    ],
+    [
+      "ledger-coordinate-validity",
+      "Affirmative",
+      "F2O1-A-COORDINATES-VALID"
+    ],
+    [
+      "ledger-gap-enumeration",
+      "Affirmative",
+      "F2O1-A-GAPS-ENUMERATED"
+    ],
+    [
+      "integrated-discriminators-rendered",
+      "Affirmative",
+      "F2O1-A-INTEGRATED-DISCRIMINATORS"
+    ],
+    [
+      "four-d1-neighbour-controls",
+      "Refused",
+      "F2O1-R-D1-NEIGHBOURS"
+    ],
+    [
+      "duplicate-shared-challenge-equal-draws",
+      "Refused",
+      "F2O1-R-SHARED-CHALLENGE-DUPLICATED"
+    ],
+    [
+      "reorder-interleaved-occurrences",
+      "Refused",
+      "F2O1-R-SCHEDULE-ORDER"
+    ],
+    [
+      "drop-reduction-required-challenge-backlink",
+      "Refused",
+      "F2O1-R-REDUCTION-CHALLENGE-BACKLINK"
+    ],
+    [
+      "logical-oracle-as-committed-table",
+      "Refused",
+      "F2O1-R-ORACLE-MODE-MISMATCH"
+    ],
+    [
+      "verifier-only-query-to-public",
+      "Refused",
+      "F2O1-R-QUERY-VISIBILITY"
+    ],
+    [
+      "omit-fallback-terminal-preemption",
+      "Refused",
+      "F2O1-R-TERMINAL-PREEMPTION"
+    ],
+    [
+      "operational-observable-list",
+      "CannotAnswer",
+      "F2O1-C-MISSING-OPERATIONAL-OBSERVABLE"
+    ],
+    [
+      "property-premise-list",
+      "CannotAnswer",
+      "F2O1-C-PROPERTY-PREMISES"
+    ],
+    [
+      "elaboration-receipt-bound",
+      "Affirmative",
+      "F2O1-A-RECEIPT-BOUND"
+    ],
+    [
+      "elaboration-recorded",
+      "Affirmative",
+      "F2O1-A-ELABORATION-RECORDED"
+    ],
+    [
+      "target-authority-untouched",
+      "Affirmative",
+      "F2O1-A-NONPUBLICATION"
+    ],
+    [
+      "provider-correspondence",
+      "CannotAnswer",
+      "F2O1-C-PROVIDER-CORRESPONDENCE"
+    ],
+    [
+      "property-proof-or-security",
+      "CannotAnswer",
+      "F2O1-C-PROPERTY"
+    ],
+    [
+      "provider-observable-audit-integrated",
+      "CannotAnswer",
+      "F2O1-C-MISSING-OPERATIONAL-OBSERVABLE"
+    ]
   ]
 }

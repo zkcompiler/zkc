@@ -11,14 +11,14 @@
     }
   ],
   "candidate_identities": {
-    "candidate_bundle": "candidatev0:evaluation.f2p1-candidate-bundle:cc722af93a69f08177062fc9bf984035dd4829d53715e985e9c0516300cc32bf",
+    "candidate_bundle": "candidatev0:evaluation.f2p1-candidate-bundle:6ff6656524529bac2a30b8d81ec6a7fef53a1cc63de5ae8eba051e266b0105dc",
     "commit_algorithm": "candidatev0:foundation.portable-algorithm:8496b32069952e09b30b6a24eb3f4a1a25ef93f827e315f0c0654008952be8d7",
     "definition_model_question": "candidatev0:relations.definition-model-question:16a937e5e2a11ab25985f3d9daf06ef82f6c9c84199816c44149a33c661bf071",
     "instance_family": "candidatev0:relations.instance-family:720645f0c28be1bd1a9fe932e31c7ab080f66747ac708e0aeecb41c45ee6649e",
-    "plan_witness_binding": "candidatev0:relations.plan-witness-binding:4113d3634d3a28b39a78e1b78b79eaa3042629054ce8bc7f6cd19818d225a214",
-    "plan_witness_surface": "candidatev0:pir.plan-witness-surface:de62fe3bd1b3172f6f7a2f6b7cb45931dfd575e5219c793307dba26b23ae3bca",
-    "protocol_binding": "candidatev0:relations.protocol-binding:f017f08fe6eebfdc98b9db16d8cd2301f1be6475d30939101cf6d54d98a30156",
-    "prover_plan": "candidatev0:pir.prover-plan:50845c5134a1dae6c2276a60df25a030bf99cf19c0852f529fcca380628c3fb4",
+    "plan_witness_binding": "candidatev0:relations.plan-witness-binding:d3857764824758492f09bdeb6fef320f13567ed3dda9235728befc222dc47a8c",
+    "plan_witness_surface": "candidatev0:pir.plan-witness-surface:12c797f8cc7ae7ce3d66849544c815422013530733cd8a8fa8d33f0bf69669d1",
+    "protocol_binding": "candidatev0:relations.protocol-binding:7c8023a471f57c891cfbe6e72f66dd312f709de86a5dc7c12a7a51a9fcc75dd2",
+    "prover_plan": "candidatev0:pir.prover-plan:5fec953dd68943e2616f6c85058948ac39ba5ab234c315f94a8261ddc7fdee9c",
     "relation_definition": "candidatev0:relations.definition:e11c6e0038c396748b03ea6ffb11d9358c1dfdafd54d9db697805b4c4be36164",
     "relation_evaluator_algorithm": "candidatev0:foundation.portable-algorithm:37b393a57d206baac3d3902172ed086e0f37538c363bdade5ee61ef506d469df",
     "relation_interface": "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
@@ -227,7 +227,7 @@
   "findings_sha256": "2f3d9226c4a56591e842cd2e15f95a9f2bee047e7938b0cc60ebf78de6ac6a3f",
   "measurements": {
     "accepted_honest_runs": 27,
-    "agreement_sha256": "6cdee09a6d99d09899ec9603435fad9afbe4d214ee7da18250a3bb471f82f4a2",
+    "agreement_sha256": "20fa708df9a8ce73cd2c0c56c8dc6b3f018f4e84945459d51015da24fba9bfbb",
     "anchors": 37,
     "blockers": 1,
     "candidate_identities": 15,
@@ -284,7 +284,7 @@
       "operand": "candidatev0:foundation.portable-algorithm:df1bf38e0eaf450189b62706535b8bb7f937032d51bdc786075cb58bfa52f541"
     },
     "prover-private-state": {
-      "coordinate": "ProverPlan(candidatev0:pir.prover-plan:50845c5134a1dae6c2276a60df25a030bf99cf19c0852f529fcca380628c3fb4).persistent_state[0] -> PlanExecutionState[0]",
+      "coordinate": "ProverPlan(candidatev0:pir.prover-plan:5fec953dd68943e2616f6c85058948ac39ba5ab234c315f94a8261ddc7fdee9c).persistent_state[0] -> PlanExecutionState[0]",
       "meaning": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
       "operand": "k1-value-type-v0:059512f1b17e2d3fcefc2003b8b6be6cac57e4afbb2a84eb766594a6a00c781a"
     },

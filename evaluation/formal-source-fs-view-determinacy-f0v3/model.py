@@ -111,7 +111,7 @@ def _preamble(source: dict[str, Any]) -> tuple[dict[str, Any], set[str], set[str
                 "profile_body_sha256",
             }
             or profile["key"] != key
-            or profile["revision"] != 2
+            or profile["revision"] != 3
             or any(
                 type(profile[name]) is not str or len(profile[name]) != 64
                 for name in ("profile_digest", "profile_body_sha256")

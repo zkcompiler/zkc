@@ -70,7 +70,7 @@ MAX_LOCAL_ITEMS = 1 << 14
 CANDIDATE_SCHEMA_FORMAT = (
     "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-source.v0"
 )
-CANDIDATE_SCHEMA_SCOPE = "interaction-r2-expanded-terminal-normalized-six-view-grammar"
+CANDIDATE_SCHEMA_SCOPE = "interaction-r3-expanded-terminal-normalized-six-view-grammar"
 
 
 class FamilyFailure(ValueError):
@@ -250,7 +250,7 @@ def candidate_schema_source() -> dict[str, Any]:
     artifact = candidate_profile_artifact()
     template["owner_profile"] = {
         "key": "interaction",
-        "revision": 2,
+        "revision": 3,
         "profile_digest": artifact.profile_id.digest.hex(),
         "profile_body_sha256": hashlib.sha256(artifact.body_bytes).hexdigest(),
     }

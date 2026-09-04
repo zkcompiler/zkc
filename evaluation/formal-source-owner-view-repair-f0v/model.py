@@ -61,12 +61,12 @@ DIRECT_REPAIR_PROFILES = (
 )
 DEPENDENT_REPAIR_PROFILES = DIRECT_REPAIR_PROFILES[1:]
 EXPECTED_REVISIONS = {
-    "interaction": 2,
-    "canonical-framed-fiat-shamir": 2,
-    "duplex-sponge-fiat-shamir": 2,
-    "public-setup": 1,
-    "interface-plan": 1,
-    "endpoint-source-view": 1,
+    "interaction": 3,
+    "canonical-framed-fiat-shamir": 3,
+    "duplex-sponge-fiat-shamir": 3,
+    "public-setup": 2,
+    "interface-plan": 2,
+    "endpoint-source-view": 2,
 }
 EXPECTED_ROTATION = (
     "analysis-afk-theorem-source-validation",

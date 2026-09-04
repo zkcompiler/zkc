@@ -3789,6 +3789,7 @@ class PublicSetupInvocationView:
     protocol_id: object
     core_id: object
     entries: tuple[PublicSetupInvocationEntry, ...]
+    run_established: tuple[PublicSetupBindingRef, ...]
 
 
 ExactPublicSetupInvocationViewAuthorityBinding = k1.PortableSourceAuthorityBinding
@@ -3852,6 +3853,15 @@ def public_setup_invocation_view_body(view: PublicSetupInvocationView) -> bytes:
                         )
                     ),
                 ),
+                (
+                    3,
+                    k1.DatumSeq(
+                        tuple(
+                            _symbol(item.input_name, "run-established binding")
+                            for item in view.run_established
+                        )
+                    ),
+                ),
             )
         )
     )
@@ -3888,6 +3898,7 @@ def _public_setup_manifest_body() -> object:
             k1.Symbol("protocol-id"),
             k1.Symbol("core-id"),
             k1.Symbol("public-context-and-parameter-entries"),
+            k1.Symbol("run-established-binding-refs"),
         )
     )
 
@@ -3936,7 +3947,15 @@ def issue_public_setup_invocation_view(
         for item in core.inputs
         if item.role in {InputRole.PUBLIC_CONTEXT, InputRole.PUBLIC_PARAMETER}
     )
-    view = PublicSetupInvocationView(pid, core_id(core, profiles=profiles), entries)
+    # This bounded Schnorr carrier represents public bindings only as invocation
+    # inputs, so every covered binding is invocation-determined.  The authored
+    # body nevertheless carries the complementary sequence explicitly.
+    view = PublicSetupInvocationView(
+        pid,
+        core_id(core, profiles=profiles),
+        entries,
+        (),
+    )
     view_id = public_setup_invocation_view_id(view, profiles=profiles)
     _authenticate_k2_profiled_subject(
         view_id,

@@ -166,7 +166,7 @@ def evaluate() -> tuple[tuple[BoundaryResult, ...], Mapping[str, Any]]:
 
     manifest = target.manifest
     _require(
-        manifest["profile_family"] == "pir.interaction" and manifest["revision"] == 2,
+        manifest["profile_family"] == "pir.interaction" and manifest["revision"] == 3,
         "target Interaction family or revision changed",
     )
     _require(

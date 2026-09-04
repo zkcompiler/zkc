@@ -248,8 +248,12 @@ def _subject_evidence(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if subject.admission_outcome != "Affirmative":
         raise CheckFailure(f"{subject.name} subject is not owner-admitted")
-    view_digests = views.validate_against_predecessor(subject)
-    execution_view = views.execution_view(subject)
+    view_digests, missing_view_coordinates = views.validate_against_predecessor(
+        subject
+    )
+    execution_view_digest = None
+    if not missing_view_coordinates:
+        execution_view_digest = _digest(views.execution_view(subject))
     results, replay_matches = _run_corpus(subject)
     if len(results) != 54 or replay_matches != 54:
         raise CheckFailure(f"the {subject.name} corpus or replay count drifted")
@@ -315,7 +319,10 @@ def _subject_evidence(
         "expected_runs_sha256": _digest(runs),
         "derivation_vectors_sha256": _digest(vectors),
         "construction_view_sha256": view_digests,
-        "execution_view_sha256": _digest(execution_view),
+        "underdetermined_challenge_view_coordinates": list(
+            missing_view_coordinates
+        ),
+        "execution_view_sha256": execution_view_digest,
     }
     return controls, runs, vectors
 
@@ -336,12 +343,12 @@ def evaluate() -> tuple[
     one_shot_controls, one_shot_runs, one_shot_vectors = _subject_evidence(
         one_shot
     )
-    if retrying_controls["sampling_exhaustions"] != 6:
-        raise CheckFailure("the retrying construction no longer measures six exhaustions")
     if one_shot_controls["sampling_exhaustions"] != 0:
         raise CheckFailure("the always-accept one-shot construction exhausted")
+    portable_projection = views.validate_portable_projection_suite()
     controls = {
         **source,
+        "portable_projection_suite": portable_projection,
         "subjects": {
             "retrying": retrying_controls,
             "one_shot": one_shot_controls,
@@ -359,7 +366,8 @@ def evaluate() -> tuple[
             "retrying-execution",
             "Affirmative",
             "F0V3C-A-FINITE-EXECUTION",
-            "all 54 retrying runs completed in the six-lane partition, including six measured sampling exhaustions",
+            "all 54 retrying runs completed in the six-lane partition, including "
+            f"{retrying_controls['sampling_exhaustions']} measured sampling exhaustions",
         ),
         Finding(
             "one-shot-execution",
@@ -375,9 +383,15 @@ def evaluate() -> tuple[
         ),
         Finding(
             "views",
+            "CannotAnswer",
+            "F0V3C-C-UNFRAMED-CHALLENGE-POSITION",
+            "the repaired owner body requires the challenge occurrence's frame_schedule position, but each Schnorr challenge is Always with no condition frame and therefore has no frame_schedule entry; the three determined construction values validate under both predecessor compilers",
+        ),
+        Finding(
+            "portable-view-pressure",
             "Affirmative",
-            "F0V3C-A-VIEW-REPRODUCTION",
-            "both subjects' four construction values validate under both predecessor family-view schema compilers and both execution views are derived",
+            "F0V3C-A-REPAIRED-VIEW-PROJECTION",
+            "one admitted two-binding, two-challenge Core projects two ordered rules with distinct decoder result types and draw bounds, two binding atoms at one opening, and one symbolic earlier-draw entry",
         ),
         Finding(
             "outcome-partition",
@@ -393,13 +407,13 @@ def evaluate() -> tuple[
         ),
         Finding(
             "aggregate",
-            "Affirmative",
-            "F0V3C-A-FS-RUNTIME",
-            "owner admission and every bounded execution, replay, view, partition, and derivation obligation hold for both subjects",
+            "CannotAnswer",
+            "F0V3C-C-FS-RUNTIME",
+            "the bounded execution, replay, partition, derivation, and repaired pressure projections close, but the owner text does not determine the Schnorr challenge-transition or execution-view frame coordinate",
         ),
     ]
     frozen_findings = {
-        "aggregate": {"outcome": "Affirmative", "code": "F0V3C-A-FS-RUNTIME"},
+        "aggregate": {"outcome": "CannotAnswer", "code": "F0V3C-C-FS-RUNTIME"},
         "cases": [
             {"name": item.name, "outcome": item.outcome, "code": item.code}
             for item in findings
@@ -477,7 +491,7 @@ def main() -> int:
             if frozen != observed:
                 raise CheckFailure(f"{label} drifted")
     print(
-        "Affirmative/F0V3C-A-FS-RUNTIME "
+        "CannotAnswer/F0V3C-C-FS-RUNTIME "
         f"runs={len(runs['records']) + len(one_shot_runs['records'])} "
         f"vectors={len(vectors['entries']) + len(one_shot_vectors['entries'])}"
     )

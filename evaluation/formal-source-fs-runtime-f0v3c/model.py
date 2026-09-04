@@ -9,7 +9,7 @@ body, so both exact constructions are owner-determined admitted subjects.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import importlib.util
 from pathlib import Path
 import sys
@@ -122,6 +122,16 @@ class Subject:
     admission_outcome: str
     admission_code: str
     admission_detail: str
+
+
+@dataclass(frozen=True)
+class PortableProjectionSuite:
+    """One admitted pressure Core and its heterogeneous portable construction."""
+
+    core: Any
+    admitted_core: Any
+    construction: TranscriptConstruction
+    challenge_occurrences: tuple[int, ...]
 
 
 def _record(*values: Any) -> Any:
@@ -357,13 +367,15 @@ def _failure_type_body(failure: Any) -> Any:
 
 
 def construction_domain_datum(construction: TranscriptConstruction) -> Any:
-    rule = construction.challenge_rules[0]
-    rule_body = _record(
-        k1.Nat(rule.challenge),
-        k1.Nat(rule.draw_bytes),
-        k1.Nat(rule.maximum_draws),
-        _algorithm_use_body(rule.accept),
-        _algorithm_use_body(rule.decode),
+    rule_bodies = tuple(
+        _record(
+            k1.Nat(rule.challenge),
+            k1.Nat(rule.draw_bytes),
+            k1.Nat(rule.maximum_draws),
+            _algorithm_use_body(rule.accept),
+            _algorithm_use_body(rule.decode),
+        )
+        for rule in construction.challenge_rules
     )
     return _record(
         k1.BytesValue(construction.core_id.internal_reference()),
@@ -376,7 +388,7 @@ def construction_domain_datum(construction: TranscriptConstruction) -> Any:
         _algorithm_use_body(construction.advance_state),
         _module_ref_body(construction.application_domain),
         _failure_type_body(construction.sampling_exhausted_failure),
-        _seq((rule_body,)),
+        _seq(rule_bodies),
     )
 
 
@@ -587,4 +599,112 @@ def make_subject(name: str = "retrying") -> Subject:
             "docs-next/pir/fiat-shamir.md Section 2 fixes the application-domain "
             "declaration as the companion page's NominalProtocolDeclarationBody"
         ),
+    )
+
+
+def make_portable_projection_suite() -> PortableProjectionSuite:
+    """Build the admitted mixed-rule, multi-binding projection pressure case."""
+
+    base = make_subject("retrying")
+    core = base.fixture.core_candidate.core
+    first_challenge = replace(
+        core.challenges[0],
+        public_conditions=(target.PublicInputRef(0),),
+    )
+    second_challenge = replace(first_challenge, value_type=k1.BOOL)
+    second_occurrence = target.OccurrenceDecl(
+        0,
+        target.AlwaysGuard(),
+        target.ChallengeEffect(1),
+    )
+    guarded_terminal = core.occurrences[4]
+    shifted_terminal = replace(
+        guarded_terminal,
+        guard=replace(
+            guarded_terminal.guard,
+            inputs=(target.OccurrenceOutputRef(4, 0),),
+        ),
+    )
+    occurrences = (
+        *core.occurrences[:3],
+        second_occurrence,
+        core.occurrences[3],
+        shifted_terminal,
+        core.occurrences[5],
+    )
+    pressure_core = replace(
+        core,
+        public_inputs=core.public_inputs + (target.InputDecl(Z3),),
+        public_bindings=core.public_bindings
+        + (
+            target.PublicBindingDecl(
+                0,
+                target.BindingClass.PUBLIC_PARAMETER,
+                target.PublicInputRef(1),
+            ),
+        ),
+        challenges=(first_challenge, second_challenge),
+        occurrences=occurrences,
+    )
+    candidate = target.make_core_candidate(
+        pressure_core,
+        base.fixture.environment.profile_id,
+    )
+    environment = target.environment_for_core(base.fixture.environment, pressure_core)
+    admitted = target.admit_core(candidate, environment)
+    if admitted.outcome != "Affirmative" or admitted.handle is None:
+        raise SubjectError(
+            "portable projection pressure Core did not admit: "
+            f"{admitted.outcome}/{admitted.code}"
+        )
+
+    contract = EVALUATION_CONTRACT
+
+    def constant_algorithm(name: str, result_type: Any, result: Any) -> Any:
+        algorithm = k1.CanonicalAlgorithm(
+            k1.Symbol(name),
+            (TRANSCRIPT_BYTES_TYPE, Z3),
+            _literal(result_type, result),
+        )
+        k1.check_algorithm_syntax_and_types(algorithm)
+        return algorithm
+
+    accept_first = constant_algorithm("ProjectionAcceptZ3", k1.BOOL, True)
+    decode_first = constant_algorithm("ProjectionDecodeZ3", Z3, k1.Nat(0))
+    accept_second = constant_algorithm("ProjectionAcceptBoolean", k1.BOOL, True)
+    decode_second = constant_algorithm("ProjectionDecodeBoolean", k1.BOOL, False)
+    rules = (
+        ChallengeRule(
+            0,
+            1,
+            1,
+            AlgorithmUse(accept_first, contract),
+            AlgorithmUse(decode_first, contract),
+        ),
+        ChallengeRule(
+            1,
+            2,
+            3,
+            AlgorithmUse(accept_second, contract),
+            AlgorithmUse(decode_second, contract),
+        ),
+    )
+    placeholder = replace(
+        base.construction,
+        core_id=candidate.asserted_id,
+        challenge_rules=rules,
+        identifier=None,
+    )
+    identifier = k1.profiled_content_id(
+        "pir.transcript-construction",
+        placeholder.profile_id,
+        construction_domain_datum(placeholder),
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+    construction = replace(placeholder, identifier=identifier)
+    return PortableProjectionSuite(
+        pressure_core,
+        admitted.handle,
+        construction,
+        (1, 3),
     )

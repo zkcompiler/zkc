@@ -31,11 +31,11 @@ INVENTORY = ROOT / "evaluation/formal-source-constructor-closure-f0v2b2a/invento
 TARGET_SOURCE = ROOT / "docs-next/pir/interactive-core.md"
 
 AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
-PROFILE_DIGEST = "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f"
-PROFILE_BODY_SHA256 = "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70"
-GRAMMAR_SHA256 = "b380d872d7400ea6d22c225733700ba2506427b16a03b7491d2136ac2f23c23b"
+PROFILE_DIGEST = "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474"
+PROFILE_BODY_SHA256 = "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a"
+GRAMMAR_SHA256 = "f88b5a5e48046cf4e9079410dbb6ea572316aa51de175d2ed009f18ec6e48292"
 SCHEMA_SOURCE_SHA256 = (
-    "c06c9e13e1c10d33943325c5b234f1f7178b3aec3502df874284451ac0195ee7"
+    "c87b09d89ddbe92f8a6cdad8eae6bb0dbcfea6ed69e65e335e551efba0f6e03d"
 )
 EXPECTED_SCENARIOS = {
     "integrated-baseline": (91, 151, (55, 28, 5, 3), 49, 9, 0, 0, True),
@@ -284,7 +284,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     _require(
         predecessor["aggregate"] == "F0V2B2C1B5B2-A-EXACT-TERMINAL-OWNER-PROJECTIONS"
         and predecessor["findings_sha256"]
-        == "583c0dfca38bc7a7d99b380039044eb936e58e7ca0409f36610975572601f437",
+        == "49e2260d0106fc65bf0f00d919045afc06cb32043cc27f13174de8101dda871c",
         "B5B2 predecessor result drifted",
     )
     findings.append(

@@ -365,8 +365,8 @@ def _validate_inventory(inventory: dict[str, Any]) -> dict[str, Any]:
         "profile_body_sha256",
     }:
         raise CensusError("owner-profile pin is malformed")
-    if owner["key"] != "interaction" or owner["revision"] != 2:
-        raise CensusError("constructor census is not pinned to Interaction revision 2")
+    if owner["key"] != "interaction" or owner["revision"] != 3:
+        raise CensusError("constructor census is not pinned to Interaction revision 3")
     for key in ("profile_digest", "profile_body_sha256"):
         if (
             type(owner[key]) is not str

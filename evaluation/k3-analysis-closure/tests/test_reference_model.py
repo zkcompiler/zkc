@@ -2846,6 +2846,10 @@ class PointwiseSpecializationTest(unittest.TestCase):
             setup._source_views.fresh_public_setup.view.entries,
             setup._source_views.fiat_shamir_public_setup.view.entries,
         )
+        self.assertEqual(
+            setup._source_views.fresh_public_setup.view.run_established,
+            (),
+        )
         self.assertEqual(setup.core_id, source.protocol_source.core_id)
         self.assertEqual(
             (setup.group_generator, setup.subgroup_order, setup.group_modulus),

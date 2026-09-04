@@ -62,11 +62,11 @@
     },
     {
       "path": "docs-next/pir/interfaces-and-plans.md",
-      "sha256": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
+      "sha256": "e3888d7d2ba6c84ceafdf457255a02079b13d95af4f94fce8a6d3c7e8ae6041c",
       "ranges": [
         {
           "id": "PROVER-PLAN",
-          "start": 728,
+          "start": 747,
           "end": 1008,
           "anchors": [
             "ProverPlan = {",
@@ -76,8 +76,8 @@
         },
         {
           "id": "PLAN-REALIZES",
-          "start": 1009,
-          "end": 1233,
+          "start": 1028,
+          "end": 1251,
           "anchors": [
             "PlanLifecycleReadBasis = {",
             "PlanRealizes(",
@@ -86,7 +86,7 @@
         },
         {
           "id": "PLAN-STRATEGY-STEP",
-          "start": 1234,
+          "start": 1253,
           "end": 1521,
           "anchors": [
             "PlanStrategyStep(",
@@ -96,8 +96,8 @@
         },
         {
           "id": "PLAN-WITNESS-SURFACE",
-          "start": 1666,
-          "end": 1732,
+          "start": 1685,
+          "end": 1750,
           "anchors": [
             "PlanWitnessSurfaceBody = {",
             "SuppliedForGeneration",
@@ -128,11 +128,11 @@
     },
     {
       "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
-      "sha256": "fddd4a44a9bffc21868b2134ab6a5844cb4d518744aa2e5c2b3e8ee7d41f7904"
+      "sha256": "293dedaa4c831ce1238d722d72f4c3fa130d3cdbdbd4b047a699b214712366af"
     },
     {
       "path": "evaluation/formal-schnorr-relations-plan-f2p0/expected-findings.json",
-      "sha256": "6cfe3dd1b8c727c07a1b3b84a369e4108d6b595035070d20ba4cca5ee072884a"
+      "sha256": "16791274dcecfccc5501cda94ea0a1f4cfe05842d7d37813fba818336353ba6b"
     },
     {
       "path": "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o0-provider-observable-audit.md",
