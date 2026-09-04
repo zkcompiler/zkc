@@ -1,8 +1,7 @@
 # Mixed-Challenge, Multi-Binding End-to-End Pressure
 
-> **State:** `CannotAnswer/F0V4-C-END-TO-END-COMPOSITION`; the bounded PIR
-> composition is executable, while four exact Analysis inputs are not formable
-> from current owner text and evidence
+> **State:** `Affirmative/F0V4-A-END-TO-END-COMPOSITION`; every determined
+> stage composes, with three exact Analysis holds reported separately
 > **Authority:** None. This record changes no owner page, profile manifest,
 > publication table, or semantic identity.
 > **Executable evidence:**
@@ -14,22 +13,28 @@ does one admitted Core with heterogeneous challenges and several public
 bindings compose through every activated contract without an owner
 underdetermination?
 
-Not completely. One exact finite subject composes through Core and Protocol
+Yes, under this record's aggregate rule, by which a hold that is declared
+and reported separately does not defeat the composition of the determined
+stages. One exact finite subject composes through Core and Protocol
 admission, canonical-framed construction admission, the owner checker
 equation, ten static owner views, both public-setup variants, Interface
 admission, Fresh and Fiat--Shamir execution, independent replay, and the
-package-local outcome map. Analysis premise formation stops at four separate
-boundaries:
+package-local outcome map. The Analysis text and the executable model now
+form the named-premise owner algebra and the exact uniform three-element Fresh
+premise. Three separately declared boundaries remain:
 
-1. the active Analysis requirement grammar has no named-premise case;
-2. no exact Boolean Fresh-distribution premise is supplied;
-3. the available relation and Plan premise fixture names another Core and
+1. the property profile declares no exact uniform Boolean Fresh-distribution
+   profile for the first law leaf;
+2. the available relation and Plan premise fixture names another Core and
    requires rebind; and
-4. no provider declaration has been published.
+3. no provider declaration has been published.
 
-Those absences are not converted into affirmatives. The 28 frozen findings are
-21 `Affirmative`, two expected `Refused`, and five `CannotAnswer`, including
-the aggregate.
+Only the three-element premise is supplied to the eight-requirement intake.
+It returns `CannotAnswer/F0V2D2-C-MISSING-BINDING-KEY` before a goal identity
+forms. The aggregate is affirmative under that rule, with the three holds
+reported separately; it is not a claim that a complete Analysis judgment
+formed. The 29 frozen findings are 24
+`Affirmative`, two expected `Refused`, and three `CannotAnswer` holds.
 
 ## 2. The discriminating subject
 
@@ -177,38 +182,72 @@ to unpresented later commitment/response values do not affect it. This is
 
 ## 7. Exact Analysis boundary
 
-The package derives this ordered premise requirement sequence without claiming
-that the owner can currently admit it:
+`analysis-model.md` Section 4.1 now owns the closed ten-kind algebra, typed
+coordinates, body and scope laws, exact requirement keys, and fail-closed
+`IntakeAnalysisNamedPremises`. Lines 3140--3162 return `CannotAnswer` for a
+missing key or source and refuse `RebindRequired` before a goal forms. Lines
+3165--3190 make the property profile the concrete premise owner and require
+premise IDs to rotate every dependent goal, proposition, support, and
+judgment. `cryptographic-properties.md` Section 3.2 supplies the Fresh,
+provider, completion, relation, and Plan constructors and states that a Fresh
+question needs one distribution premise per selected `pir.public-coin-law`
+coordinate.
+
+The package forms a canonically sorted eight-entry pressure question
+candidate:
 
 | Slot | Kind | Exact source status |
 |---|---|---|
-| `challenge-law-0` | Fresh public-coin distribution | Boolean `pir.public-coin-law` leaf; no matching exact-coordinate premise fixture |
-| `challenge-law-1` | Fresh public-coin distribution | `RootNat(2)` `pir.public-coin-law` leaf; one proposal fixture coordinate matches |
-| `outcome-carrier` | provider outcome-carrier map | exact Fiat--Shamir Protocol outcome partition; no provider declaration |
-| `relation-predicate` | relation predicate | proposal fixture for another Core; rebind required |
-| `witness-type` | witness type | proposal fixture for another Core; rebind required |
-| `prover-private-state` | Prover private state | proposal fixture for another Core; rebind required |
-| `honest-commit` | honest commitment step | proposal fixture for another Core; rebind required |
-| `honest-respond` | honest response step | proposal fixture for another Core; rebind required |
+| `challenge-law-0` | Fresh public-coin distribution | exact Boolean law leaf; no exact uniform Boolean distribution profile is declared |
+| `challenge-law-1` | Fresh public-coin distribution | exact three-element law leaf; bound to the existing exact uniform profile |
+| `outcome-carrier` | provider outcome-carrier map | exact Fiat--Shamir Protocol partition and candidate six-lane map; declaration unpublished |
+| `relation-predicate` | relation predicate | typed executable control for another subject; rebind required |
+| `witness-type` | witness type | typed executable control for another subject; rebind required |
+| `prover-private-state` | Prover private state | typed executable control for another subject; rebind required |
+| `honest-commit` | honest commitment step | typed executable control for another subject; rebind required |
+| `honest-respond` | honest response step | typed executable control for another subject; rebind required |
 
-The two Fresh-law leaves are distinct and exact, which supports
-`F0V4-A-FRESH-LAW-COORDINATES`. The second coordinate's match and the five
-available relation/Plan coordinates support only
-`F0V4-A-RELATION-PLAN-COORDINATES`: the source record is a proposal fixture,
-and its Core identity differs from this subject's Core identity.
+The two law coordinates are formed from the owner module-declaration bodies,
+not inferred from challenge position. For the three-element coordinate the
+executable model forms distribution profile
+`zkcidv0:analysis.distribution-profile:b51bdcd25a30373d706e12c376bb455645744780c4412795a71e97cc906f8114`
+with support `[0,1,2]` and point mass `1/3`, then forms premise
+`zkcidv0:analysis.named-premise:3c2c2513cefd4c9377d797456526cc146b741690e67f06300c98d5dce23c19df`.
+This replaces the named-premise owner hold this record carried before the
+Analysis named-premise text existed with
+`Affirmative/F0V4-A-NAMED-PREMISE-OWNER-CONTRACT`.
 
-The owner text then fails to determine an admitted premise object.
-`analysis-model.md` lines 2246--2261 lists only hypothesis-node,
-affirmative-judgment-capability, and exact-quantified-witness requirements; it
-has no named-premise requirement. `cryptographic-properties.md` lines
-968--973 says the Fresh distribution remains an explicit premise, but the
-exact Boolean instance is absent. The relation/Plan fixture names another Core
-at line 5 and marks the five relevant entries `RebindRequired` at lines
-154--259. Finally, the carrier decision record says `Authority: None` at line
-7, while `cryptographic-properties.md` proceeds from Section 3.1 at line 1299
-to Section 4 at line 2167 without a provider declaration or provider
-outcome-map body. The four resulting `CannotAnswer` findings remain
-independent.
+The Boolean coordinate does not receive the executable model's generic
+cardinality-two helper as an invented owner selection. The concrete declaration
+site is `cryptographic-properties.md` Section 3: lines 321--369 define one
+singular selected challenge and lines 2543--2551 bind that selected challenge's
+domain model, but the section contains no `AnalysisDistributionProfileId`
+constructor for this pressure subject's Boolean leaf. The result is therefore
+`CannotAnswer/F0V4-C-BOOLEAN-DISTRIBUTION-PROFILE`.
+
+The relation/Plan fixture still names another Core. Each of its five typed
+executable controls is assigned `RebindRequired`; a one-requirement intake for
+each returns `Refused/F0V2D2-R-REBIND-REQUIRED-SCOPE`. This preserves
+`CannotAnswer/F0V4-C-RELATION-PLAN-REBIND` for the pressure subject rather than
+repinning a foreign premise. The provider body and total six-lane map validate,
+but premise formation returns that it lacks an authenticated published provider
+declaration, preserving `CannotAnswer/F0V4-C-PROVIDER-DECLARATION`.
+
+Only the three-element premise is supplied to the full candidate. Intake sees
+seven missing keys and returns
+`CannotAnswer/F0V2D2-C-MISSING-BINDING-KEY`; it exposes no bindings. The exact
+first unformed stage is `analysis.goal`. No hypothesis context, proposition,
+support instantiation, or judgment record is formed, so there is no downstream
+premise-ID set to report. The positive intake-boundary finding establishes this
+fail-closed stop, not a completed Analysis derivation.
+
+Relative to this record's earlier freeze, before the Analysis named-premise
+text, the named-premise owner finding changes from
+`CannotAnswer` to `Affirmative`; the Boolean finding remains `CannotAnswer` but
+is narrowed to the absent exact profile declaration and receives the required
+new code; relation/Plan and provider remain separate holds; the aggregate moves
+to `Affirmative` under the declared-hold rule; and one positive intake
+boundary finding is added.
 
 ## 8. Finite outcome-preserving map
 
@@ -232,117 +271,90 @@ each have mass `42/81 = 14/27`; the four unmodelled lanes jointly have mass
 it does not condition on the 63 modelled outcomes and inflate acceptance to
 `21/63 = 1/3`.
 
-That arithmetic gives `F0V4-A-SIX-LANE-PROVIDER-MAP` and
-`F0V4-A-MEASURE-PRESERVATION` only as finite package-local evidence. Because
-the provider declaration and owner premise constructor are absent,
-`F0V4-C-PROVIDER-DECLARATION` remains and no Analysis judgment forms.
+That arithmetic directly exercises the owner clause at
+`cryptographic-properties.md` lines 2627--2635: `mu(true) = mu(Accepted)`
+while `2/9` remains unmodelled and no denominator changes. It gives
+`F0V4-A-SIX-LANE-PROVIDER-MAP` and `F0V4-A-MEASURE-PRESERVATION` only as finite
+package-local evidence. Because the provider declaration is absent,
+`F0V4-C-PROVIDER-DECLARATION` remains and no provider premise or Analysis
+judgment forms.
 
 ## 9. Proposed delta
 
 Nothing below has been applied. Each change requires the named owner and an
 authorized identity refreeze.
 
-### 9.1 Named-premise intake
-
-**Owner page and section.** `docs-next/analysis/analysis-model.md`, Section
-4.1, at the `AnalysisPremiseRequirement` grammar on lines 2246--2261.
-
-**Exact change.** Add one closed `NamedPremiseRequirement` variant whose body
-contains an exact slot symbol, one closed premise kind, and one typed owner
-coordinate. Add authenticated named-premise bodies and exact bindings; derive
-the required key set from the question; return `CannotAnswer` for a missing
-key/source, `Refused` for a wrong kind or coordinate, and `Malformed` for an
-extra, duplicate, or noncanonical key. Carry the exact named-premise ID set
-through goals, hypothesis contexts, support instantiations, and judgments.
-
-**Identity effect.** The marked Analysis kernel source and kernel profile
-rotate. Every dependent question, goal, premise, support, and judgment identity
-rotates. No PIR Core, Protocol, construction, Interface, or owner-view identity
-changes.
-
-**Evidence.** `F0V4-C-NAMED-PREMISE-OWNER-CONTRACT`; the exact eight-slot
-sequence and its digest in the frozen report.
-
-**Reversal condition.** Do not add this grammar if the Analysis owner selects
-an existing requirement variant and publishes an exact, equally fail-closed
-encoding of all eight slots through it. Merely storing names in prose or in a
-research fixture does not satisfy the condition.
-
-**Nonclaims.** The grammar would admit assumptions as assumptions. It would
-not prove a premise, theorem, property, or provider correspondence.
-
-### 9.2 Per-challenge Fresh distribution premise
+### 9.1 Exact uniform Boolean Fresh profile
 
 **Owner page and section.** `docs-next/analysis/cryptographic-properties.md`,
-Section 3, immediately after the explicit Fresh-distribution requirement at
-lines 968--973.
+Section 3, at `AnalysisChallengeDomainBody(S)` and
+`SchnorrNamedPremiseBindings(S)` (lines 494--526 and 2543--2551). The profile
+manifest's existing `analysis.distribution-profile` subject declaration is the
+publication surface; this record does not edit it.
 
-**Exact change.** Define a Fresh distribution requirement for every selected
-challenge as the tuple of exact Protocol and Core identities, `ChallengeRef`,
-the `PublicCoinView` path to `challenges[ChallengeRef].fresh_law`, that exact
-`pir.public-coin-law` declaration reference, challenge value type, and the
-bound distribution/hypothesis. Require one exact binding for each selected
-Fresh challenge and no others. Publish a Boolean-law binding for this subject
-only after its distribution and independence hypothesis is supplied and
-checked; do not copy the three-element-law fixture into that slot.
+**Exact change.** Define an identity-bearing Fresh uniform distribution body
+for the exact selected challenge of `S`: output type and support are exactly
+`AnalysisChallengeDomainId(S)`'s authenticated model values, each value has
+mass `1/ModelCardinality`, draws are fresh and independent of the prior prover
+view, sampling is total, and failure/nontermination is absent. Define its
+`AnalysisDistributionProfileId` and make the Fresh binding name that ID. Form
+one exact `S` selecting the pressure Boolean leaf before using this profile;
+do not infer it from cardinality two, reuse the three-element profile, or use
+the executable model's generic cardinality helper as owner authority.
 
-**Identity effect.** The cryptographic-property profile and each dependent
-premise, question, support, and judgment rotate. The two PIR Fresh-law
-declaration coordinates and all PIR subject identities remain unchanged.
+**Identity effect.** The cryptographic-property profile rotates, followed by
+the Boolean distribution profile, its Fresh premise, the eight-requirement
+question, and every downstream goal, proposition, support, and judgment. The
+PIR Core, Protocols, construction, law declaration refs, and owner views do
+not rotate solely because Analysis publishes this profile.
 
-**Evidence.** `F0V4-A-FRESH-LAW-COORDINATES` and
-`F0V4-C-BOOLEAN-FRESH-PREMISE`; challenge refs 0 and 1 resolve to distinct
-nominal law coordinates, while only ref 1 has a matching proposal fixture.
+**Evidence with gate IDs.**
+`CannotAnswer/F0V4-C-BOOLEAN-DISTRIBUTION-PROFILE` and
+`Affirmative/F0V4-A-FRESH-LAW-COORDINATES`; the frozen report records both
+exact law refs, the existing three-element profile, and the absent Boolean
+profile ID.
 
-**Reversal condition.** Omit the challenge-qualified tuple only if the owner
-proves that its smaller law coordinate uniquely fixes value type,
-distribution, correlation obligations, and Protocol applicability. If the
-Boolean challenge is removed from the target subject, retire rather than
-default its requirement.
+**Reversal condition.** Withdraw this delta if the property owner identifies
+an already published exact Boolean profile and proves its body and selected
+law coordinate are the required ones, or if the Boolean challenge leaves the
+target question.
 
-**Nonclaims.** A supplied uniform-law premise would remain an assumption. It
-would not establish that an implementation samples it or that Fiat--Shamir
-preserves it.
+**Nonclaims.** Publication would make the missing binding formable. It would
+not establish the Fresh hypothesis, sampler correspondence, theorem
+applicability, or protocol security.
 
-### 9.3 Provider map and measure clause
+### 9.2 Concrete provider declaration
 
 **Owner page and section.** `docs-next/analysis/cryptographic-properties.md`,
-new Section 3.2 after the currently present Section 3.1; shared carrier grammar
-belongs in `docs-next/analysis/analysis-model.md` under the named-premise body
-introduced above.
+Section 3.2, especially lines 2258--2279 and 2619--2635, plus the property
+profile declaration catalog.
 
-**Exact change.** Define
-`ProviderLaneImage<T> = Image(CanonicalValue<T>) | Unmodelled` and a total
-provider outcome-carrier body containing the exact provider declaration, exact
-Protocol outcome-partition coordinate, closed carrier, and a map from every
-profile-qualified PIR lane to `ProviderLaneImage`. A declaration must name the
-provider artifact/source identity, toolchain identity, carrier, and producible
-outcomes. Add the measure law over the unmodified run distribution: the mass
-of each provider event equals the mass of its exact preimage under the lane
-map; `Unmodelled` mass remains in the measure, and neither conditioning nor
-renormalization is permitted. For the Boolean event `true` in this subject,
-the required equation is exactly `mu(true) = mu(Accepted)`.
+**Exact change.** Publish the exact finite Boolean provider declaration and
+closed Boolean carrier. Its modelled lanes are exactly `Accepted` and
+`Rejected`; the other four canonical-framed lanes map to `Unmodelled`. Bind
+the resulting declaration to the already defined provider outcome-carrier
+constructor. Retain the existing measure law unchanged: the transported true
+event has mass `mu(Accepted)`, with unmodelled and missing-run mass retained
+and no renormalization.
 
-**Identity effect.** The Analysis kernel rotates for the shared grammar; the
-cryptographic-property profile rotates for the declaration and measure law.
-Provider-map premises and every consuming support/judgment rotate. PIR's
-six-lane partition and this Core, Protocol, and view identity cone do not.
+**Identity effect.** The property profile rotates, followed by the provider
+premise, pressure question, and every dependent goal, support, and judgment.
+PIR's outcome partition and all PIR subject identities remain unchanged.
 
-**Evidence.** `F0V4-C-PROVIDER-DECLARATION`,
-`F0V4-A-SIX-LANE-PROVIDER-MAP`, and `F0V4-A-MEASURE-PRESERVATION`; exact masses
-are `7/27`, `14/27`, and `2/9` with denominator 81 retained.
+**Evidence with gate IDs.** `CannotAnswer/F0V4-C-PROVIDER-DECLARATION`,
+`Affirmative/F0V4-A-SIX-LANE-PROVIDER-MAP`, and
+`Affirmative/F0V4-A-MEASURE-PRESERVATION`; the finite masses are `7/27`,
+`14/27`, and `2/9` over denominator 81.
 
-**Reversal condition.** Withdraw this shape if the selected provider publishes
-a richer carrier that models all six lanes, or if the Analysis owner requires
-every provider to model every lane. In the latter case this Boolean provider
-is inapplicable; unmodelled lanes must not be coerced to `false`.
+**Reversal condition.** Withdraw this declaration if the provider owner
+rejects the source/toolchain pin, chooses another carrier, or publishes a
+different exact modelled-lane set. Never coerce an unmodelled lane to false.
 
-**Nonclaims.** The finite table is not a provider declaration, provider
-execution, correspondence theorem, completeness premise, or security
-transport. The proposed measure clause does not prove the source distribution
-or a theorem about it.
+**Nonclaims.** The finite candidate map is not publication, provider
+execution, correspondence, operational completion, or a theorem/security
+result.
 
-### 9.4 Required evidence rebind, not an owner-page edit
+### 9.3 Required evidence rebind, not an owner-page edit
 
 The relation/Plan hold does not expose an underdetermined owner grammar. Build
 and admit the relation definition, interface, instance,
@@ -368,115 +380,113 @@ theorem applicability, protocol soundness, Fiat--Shamir security, a
 random-oracle or concrete-hash model, compiler/backend correspondence, or
 production evidence.
 
-The four `CannotAnswer` inputs are not semantic defects hidden as pin drift.
+The three `CannotAnswer` inputs are not semantic defects hidden as pin drift.
 The two deliberate refusals are expected semantic consequences of the current
-owner contracts. A passing frozen check preserves these classifications; it
-does not make the aggregate affirmative.
+owner contracts. A passing frozen check preserves these classifications. The
+affirmative aggregate is only a composition-modulo-declared-holds
+result; it does not turn any hold affirmative or form a downstream judgment.
 
-## Handoff
+## 11. Evidence run and observations
 
 ### Files changed
 
-- Added `evaluation/formal-source-end-to-end-pressure-f0v4/README.md`,
-  `expected-findings.json`, `model.py`, and `run.py`.
-- Added this note at
-  `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/mixed-challenge-multi-binding-end-to-end-pressure.md`.
-- Registered the package in `checks/manifest.json`,
-  `evaluation/lifecycle.json`, and `evaluation/README.md`; advanced the exact
-  count pins in `checks/tests/test_evaluation_lifecycle.py` to 61 research
-  checks, 63 packages, and 35 active-source entries.
-- Generalized the portable canonical-framed libraries in
-  `evaluation/formal-source-fs-runtime-f0v3c/executor.py`, `model.py`,
-  `replay.py`, and `views.py`. The original fixture and its frozen semantics
-  are retained.
-- Added pure projection entry points in
-  `evaluation/formal-source-integrated-graph-f0v2b2d1/model.py` and
-  `evaluation/formal-source-integrated-views-f0v2b2d3/model.py`. Refreshed only
-  the resulting source digest in the latter package's
-  `expected-findings.json`; all semantic vectors were unchanged.
-- No owner page, owner profile manifest, publication table, private ledger,
-  primary checkout, or real repository Git index was edited.
+- Extended
+  `evaluation/formal-source-end-to-end-pressure-f0v4/model.py` and `run.py`
+  through the current named-premise intake; refroze
+  `expected-findings.json`; and updated the package `README.md`.
+- Updated this record with the Analysis result, the comparison with the
+  earlier freeze, the three exact holds, and the proposed owner deltas.
+- Regenerated
+  `evaluation/formal-provider-interpretation-fs-arklib-f2o4/generated/certificate.json`.
+  Its only changes are four authenticated runtime-source digests.
+- Updated the integrated-graph model digest in
+  `evaluation/formal-kernel-mechanization-m0/source-pins.json` and the same
+  embedded provenance field in `vectors/terminal-contract.json`. All 33
+  carrier bodies and outcomes are unchanged.
+- No owner page, profile or check manifest, lifecycle file, directory README,
+  or publication table was edited. No file was added or removed.
 
 ### Commands and outcomes
 
-- `python3 -B checks/run.py validate`: exit 0, wall 0.05 s; 78 checks, six
-  tiers, manifest digest
-  `65a7597232bd603fbb4d67b1694fd854f94771bf94e82df82b1de81360ef4ecc`.
-- With `GIT_INDEX_FILE=.cache/f0v4-index`, clone-local object storage and
-  alternates, `UV_NO_SYNC=1`, `UV_OFFLINE=1`, and
-  `UV_CACHE_DIR=.cache/uv`,
-  `python3 -B checks/run.py run --check research.formal-source-end-to-end-pressure`:
-  exit 0, wall 168.45 s (check 168.395 s), result
-  `target/checks/20260904T154514Z/result.json`.
-- With the same alternate index,
-  `python3 -B -m unittest checks.tests.test_evaluation_lifecycle -v`: exit 0,
-  wall 0.08 s; four tests passed.
-- With the same alternate index and offline uv environment,
-  `python3 -B checks/run.py run --tier developer`: exit 0, wall 1.96 s; all
-  nine checks passed, result `target/checks/20260904T154811Z/result.json`.
-- `python3 -B checks/run.py run --check research.owner-view-integrated-pcgraph`:
-  exit 0, runner elapsed 3.765 s. The first combined successor regression then
-  exited 1 after 8.419 s because the intentional helper extraction changed one
-  authenticated source digest. This was source-pin drift only. After refreshing
-  that exact pin,
-  `python3 -B checks/run.py run --check research.owner-view-integrated-projections`
-  exited 0, wall 4.79 s (check 4.729 s).
-- `python3 -B checks/run.py run --check research.formal-source-fs-runtime`:
-  exit 0, wall 65.78 s (check 65.716 s), preserving the portable suite's
-  original frozen report.
-- The focused presented-value replay mutation probe exited 0 in 4.88 s, and
-  the setup-view/admission variant probe exited 0 in 5.00 s.
-- `git diff --check`: exit 0. The alternate index listed exactly the 16 files
-  above as modified or added.
+- The final package report used to refreeze the expected findings exited 0 in
+  186.22 s. A focused frozen comparison then exited 0 in 186.76 s.
+- The first research-checkpoint run, with `--keep-going`: exit 1, shell wall 1281.39 s, runner duration 1281.340 s;
+  64 passed and three failed. Besides the permitted publication hold, the
+  Fiat--Shamir/ArkLib certificate and kernel mechanization pins were red.
+- `python3 -B
+  evaluation/formal-provider-interpretation-fs-arklib-f2o4/generator.py
+  --write`: exit 0, wall 1.21 s. The focused gate then exited 0 in 49.06 s.
+- The first kernel rerun after its outer source-pin update exited 1 in 73.71 s
+  at the embedded Terminal-vector provenance check. An independently generated
+  vector diff changed only that same digest. After updating it, the focused
+  kernel gate exited 0 in 82.35 s.
+- The final research-checkpoint run, with `--keep-going`: exit 1, shell wall
+  1392.82 s, runner duration 1392.775 s; 66 passed and only
+  `research.profile-publication` failed, the publication hold that stays red
+  by design until the identity table is published.
+  Result: `target/checks/20260904T170249Z/result.json`.
 
-Development reds were retained rather than disguised: the first focused run
-exited 1 after check time 165.716 s because of the authored field-name typo
-`construction.state_type`; changing it to the owner field
-`construction.transcript_state_type` repaired that transcription defect. The
-integrated-view regression red was the source-pin drift described above. A
-developer run against the deliberately untouched real index exited 1 in 0.54 s
-because lifecycle and public-tree checks correctly saw the new package and note
-as untracked; this was the expected semantic consequence of the required
-read-only-index lane, and the specified alternate-index run passed.
+- `python3 -B checks/run.py validate`: exit 0, wall 0.04 s; 81 checks, six tiers, manifest digest
+  `e2bb42d02053c827f887e38a6826a5cdf7f656a48553a7d05177447001f93006`.
+- `python3 -B checks/run.py run --tier developer`: exit 0, wall 2.07 s; all nine checks passed. Result:
+  `target/checks/20260904T172706Z/result.json`.
+- `python3 -B checks/run.py run --check
+  research.formal-source-end-to-end-pressure`: exit 0, wall 186.17 s, check duration 186.111 s. Result:
+  `target/checks/20260904T172717Z/result.json`.
+- `git diff --check` and Python AST parsing of both edited package modules
+  exited 0.
+
+The two repair classifications are both **pin drift**. The current
+Fiat--Shamir/ArkLib red changed four source-code digests on top of the earlier
+interpretation's already re-derived finite table; it did not repeat that earlier
+semantic-consequence transition. The kernel red changed one outer input pin
+and the matching embedded vector pin only. No authored-text transcription or
+semantic-consequence red occurred in this run.
 
 ### Aggregate outcome
 
-`CannotAnswer/F0V4-C-END-TO-END-COMPOSITION`: executable composition closes,
-but named-premise formation, one Fresh distribution premise, exact-subject
-relation/Plan evidence, and the provider declaration do not.
+`Affirmative/F0V4-A-END-TO-END-COMPOSITION`.
 
-The frozen report contains 28 findings: 21 `Affirmative`, two `Refused`, and
-five `CannotAnswer` including the aggregate. The separately declared provider
-hold is `CannotAnswer/F0V4-C-PROVIDER-DECLARATION`; the aggregate is not
-silently promoted around it or the other three evidence holds.
+The frozen report contains 29 findings: 24 `Affirmative`, two expected
+`Refused`, and three separately declared `CannotAnswer` holds:
 
-### Surprises and where the brief was wrong
+1. `F0V4-C-BOOLEAN-DISTRIBUTION-PROFILE`: the property profile does not
+   declare an exact uniform Boolean distribution profile for the selected law
+   leaf;
+2. `F0V4-C-RELATION-PLAN-REBIND`: the five available typed premise controls
+   belong to another Core and each refuses under `RebindRequired`; and
+3. `F0V4-C-PROVIDER-DECLARATION`: the six-lane candidate body validates, but
+   no authenticated provider declaration is published.
 
-- `AGENTS.md` is absent from this clone. The requested read-only source copy
-  was used as workflow guidance.
-- The brief names a provider measure-preservation clause in
-  `cryptographic-properties.md` Section 3.2. At migration head `1ce298cb`, that
-  page moves from Section 3.1 at line 1299 to Section 4 at line 2167. It has no
-  provider-map body or provider-lane-map measure-preservation clause. Generic
-  Analysis distribution profiles do have separate probability/measure-law
-  fields; this record does not claim that all measure grammar is absent.
-- The brief anticipates a separately declared provider hold, but the live
-  Analysis grammar also lacks named-premise intake, the available premise
-  fixture lacks the Boolean law, and its relation/Plan coordinates belong to a
-  different Core. The aggregate therefore cannot be affirmative under the
-  brief's own missing-evidence rule.
-- A heterogeneous Boolean/`RootNat(2)` joint challenge group is not admitted
-  by the current common-value-type rule. The final subject uses two independent
-  Fresh challenges, preserving the requested heterogeneity without inventing
-  an owner exception.
-- The Interface grammar has no Check or Terminal transport target. The package
-  therefore transports every formable target (occurrences 0 through 6), carries
-  terminals through completion entries, and does not invent transports for the
-  literal remainder of the ten-occurrence schedule.
+The exact three-element Fresh premise forms. The eight-requirement question
+candidate carries its identity, but the intake sees seven missing keys and
+returns `CannotAnswer/F0V2D2-C-MISSING-BINDING-KEY` with no bindings. The
+first unformed stage is `analysis.goal`; no goal, hypothesis context,
+proposition, support, or judgment identity forms. The finite provider map
+independently preserves `mu(true) = mu(Accepted) = 7/27`, retains `2/9`
+unmodelled mass, and does not renormalize.
 
-### Nonclaims
+### Observations
 
-No commit, push, pull request, profile publication, semantic refreeze, owner
-adoption, provider run, theorem proof, security result, or implementation
-correspondence is claimed. Main may commit the complete working tree with the
-requested subject after reviewing this handoff.
+- Whether the property profile already declares an exact uniform Boolean
+  distribution profile resolves negatively. The exact declaration point is the cryptographic-property profile's Fresh premise
+  constructor at lines 2230--2256 and its subject-specific binding at lines
+  2543--2551; the latter refers to an exact finite uniform model but defines no
+  `AnalysisDistributionProfileBody` or
+  `AnalysisDistributionProfileId` for this Boolean leaf.
+- Downstream premise-ID propagation cannot begin: fail-closed
+  intake stops before `analysis.goal`, not at a later context, support, or
+  judgment stage.
+- The research-checkpoint tier selected 67 checks and completed in about
+  23 minutes. The complete manifest contains 81 checks.
+- The first full checkpoint exposed the two stale dependent pins above. Both
+  were absent from the package's focused check but were reproduced and
+  repaired at their current owning evidence.
+
+### Non-claims of the run
+
+This is bounded finite evidence and a composition-modulo-declared-holds
+aggregate. It is not a completed Analysis derivation, owner adoption,
+publication, provider execution or correspondence, relation truth, theorem
+applicability, protocol soundness, Fiat--Shamir or random-oracle security,
+compiler/backend correspondence, production evidence, or a semantic refreeze.

@@ -23,14 +23,15 @@ FS_PAGE = ROOT / "docs-next/pir/fiat-shamir.md"
 INTERFACE_PAGE = ROOT / "docs-next/pir/interfaces-and-plans.md"
 ANALYSIS_PAGE = ROOT / "docs-next/analysis/cryptographic-properties.md"
 ANALYSIS_MODEL_PAGE = ROOT / "docs-next/analysis/analysis-model.md"
+ANALYSIS_PROFILE = ROOT / "docs-next/analysis/profiles/cryptographic-property.json"
 PROVIDER_PACKET = (
     ROOT
     / "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research"
     / "f2o2-provider-carrier-decision-2026-09-03.md"
 )
 
-AGGREGATE_OUTCOME = "CannotAnswer"
-AGGREGATE_CODE = "F0V4-C-END-TO-END-COMPOSITION"
+AGGREGATE_OUTCOME = "Affirmative"
+AGGREGATE_CODE = "F0V4-A-END-TO-END-COMPOSITION"
 
 
 class CheckFailure(RuntimeError):
@@ -76,6 +77,7 @@ def _source_gate() -> dict[str, Any]:
     interface = INTERFACE_PAGE.read_text(encoding="utf-8")
     analysis = ANALYSIS_PAGE.read_text(encoding="utf-8")
     analysis_model = ANALYSIS_MODEL_PAGE.read_text(encoding="utf-8")
+    analysis_profile = json.loads(ANALYSIS_PROFILE.read_text(encoding="utf-8"))
     provider_packet = PROVIDER_PACKET.read_text(encoding="utf-8")
 
     required_core = (
@@ -103,6 +105,11 @@ def _source_gate() -> dict[str, Any]:
         "AFKCanonicalFramedAdditionalSourceSlotCatalog = CanonicalConcat",
         "both entry sequences must be\nbyte-identical and contain exactly every `PublicParameter` and `SessionContext`",
         "retains the\ntruth and exact PIR-to-experiment correspondence of the Fresh uniform independent\nchallenge distribution as explicit premises",
+        "### 3.2 Named premises of the relation-bound Fresh question",
+        "FreshPublicCoinDistributionPremise(",
+        "ProviderOutcomeCarrierPremise(",
+        "with the mass of `Unmodelled` lanes and of missing runs left where it\nis",
+        "never by\nrenormalizing over the lanes the provider models",
     )
     if any(token not in core for token in required_core):
         raise CheckFailure("interactive Core owner clauses drifted")
@@ -113,13 +120,17 @@ def _source_gate() -> dict[str, Any]:
     if any(token not in analysis for token in required_analysis):
         raise CheckFailure("cryptographic-property owner clauses drifted")
     premise_grammar = analysis_model[
-        analysis_model.index("AnalysisPremiseRequirement =") :
+        analysis_model.index("AnalysisNamedPremiseKind =") :
         analysis_model.index("AnalysisReadPurposeRequirement =")
     ]
     _require(
         all(
             token in premise_grammar
             for token in (
+                "AnalysisNamedPremiseRequirement =",
+                "AnalysisProviderOutcomeCarrierMapBody",
+                "FreshChallengeOnly",
+                "RebindRequired",
                 "HypothesisNodeRequirement",
                 "AffirmativeJudgmentCapabilityRequirement",
                 "ExactQuantifiedWitnessRequirement",
@@ -128,10 +139,17 @@ def _source_gate() -> dict[str, Any]:
         "Analysis premise-requirement grammar drifted",
     )
     _require(
-        "NamedPremiseRequirement" not in premise_grammar
-        and "AnalysisProviderOutcomeCarrierMapBody" not in analysis
-        and "### 3.2" not in analysis,
-        "the recorded named-premise owner gap changed",
+        "IntakeAnalysisNamedPremises(" in analysis_model,
+        "Analysis named-premise intake drifted",
+    )
+    property_section_three = analysis[
+        analysis.index("## 3. Relation-bound Fresh special soundness") :
+        analysis.index("## 4. Classical adaptive Fiat--Shamir experiment")
+    ]
+    _require(
+        "analysis.distribution-profile" in analysis_profile["supported_subject_kinds"]
+        and "AnalysisDistributionProfileId(" not in property_section_three,
+        "the Boolean Fresh distribution declaration boundary changed",
     )
     _require(
         "**Authority:** None." in provider_packet
@@ -152,12 +170,16 @@ def _source_gate() -> dict[str, Any]:
         "analysis_model_sha256": hashlib.sha256(
             ANALYSIS_MODEL_PAGE.read_bytes()
         ).hexdigest(),
+        "analysis_property_profile_sha256": hashlib.sha256(
+            ANALYSIS_PROFILE.read_bytes()
+        ).hexdigest(),
         "provider_carrier_packet_sha256": hashlib.sha256(
             PROVIDER_PACKET.read_bytes()
         ).hexdigest(),
         "provider_carrier_packet_authority": "None",
-        "named_premise_owner_constructor_present": False,
-        "provider_map_section_present": False,
+        "named_premise_owner_constructor_present": True,
+        "provider_map_section_present": True,
+        "uniform_boolean_fresh_profile_declared": False,
     }
 
 
@@ -345,6 +367,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         "sampling-failure completion presentation drifted",
     )
     boundary = observed["analysis_boundary"]
+    chain = boundary["named_premise_chain"]
     _require(
         boundary["fresh_law_leaf_count"] == 2
         and boundary["unique_fresh_law_coordinate_count"] == 2
@@ -352,6 +375,18 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         and boundary["fixture_fresh_law_unmatched"] == [0]
         and not boundary["fixture_subject_matches_current"]
         and len(boundary["premise_requirement_sequence"]) == 8
+        and len(boundary["canonical_requirement_slots"]) == 8
+        and set(boundary["canonical_requirement_slots"])
+        == {
+            "challenge-law-0",
+            "challenge-law-1",
+            "outcome-carrier",
+            "relation-predicate",
+            "witness-type",
+            "prover-private-state",
+            "honest-commit",
+            "honest-respond",
+        }
         and boundary["fixture_rebind_required"]
         == [
             "relation-predicate",
@@ -362,12 +397,77 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         ]
         and boundary["missing"]
         == [
-            "owner named-premise constructor",
-            "Boolean Fresh distribution premise",
+            "exact uniform Boolean distribution profile",
             "exact-subject relation and Plan rebind",
             "provider declaration",
         ],
         "Analysis premise boundary drifted",
+    )
+    _require(
+        boundary["owner_boundary"]["named_requirement_variant_present"]
+        and boundary["owner_boundary"][
+            "cryptographic_properties_section_3_2_present"
+        ]
+        and boundary["z3_distribution_profile"]["support"] == [0, 1, 2]
+        and boundary["z3_distribution_profile"]["point_mass"] == [1, 3]
+        and boundary["z3_distribution_profile"]["profile_id"].startswith(
+            "zkcidv0:analysis.distribution-profile:"
+        )
+        and boundary["z3_distribution_profile"]["premise_id"].startswith(
+            "zkcidv0:analysis.named-premise:"
+        )
+        and not boundary["boolean_distribution_profile"]["declared"]
+        and boundary["boolean_distribution_profile"]["profile_id"] is None
+        and boundary["provider_requirement"]["formed"]
+        and not boundary["provider_requirement"]["premise_formed"]
+        and "published provider declaration"
+        in boundary["provider_requirement"]["formation_error"],
+        "Analysis premise formation drifted",
+    )
+    _require(
+        chain["question_requirement_count"] == 8
+        and chain["supplied_binding_count"] == 1
+        and len(chain["supplied_premise_ids"]) == 1
+        and set(chain["missing_slots"])
+        == {
+            "challenge-law-0",
+            "outcome-carrier",
+            "relation-predicate",
+            "witness-type",
+            "prover-private-state",
+            "honest-commit",
+            "honest-respond",
+        }
+        and chain["intake_outcome"] == "CannotAnswer"
+        and chain["intake_code"] == "F0V2D2-C-MISSING-BINDING-KEY"
+        and chain["first_unformed_stage"] == "analysis.goal"
+        and all(
+            chain[key] is None
+            for key in (
+                "goal_id",
+                "hypothesis_context_id",
+                "proposition_id",
+                "support_instantiation_id",
+                "judgment_record_id",
+            )
+        )
+        and set(chain["rebind_probes"])
+        == {
+            "relation-predicate",
+            "witness-type",
+            "prover-private-state",
+            "honest-commit",
+            "honest-respond",
+        }
+        and all(
+            item
+            == {
+                "outcome": "Refused",
+                "code": "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            }
+            for item in chain["rebind_probes"].values()
+        ),
+        "named-premise intake stop or downstream non-formation drifted",
     )
     provider = observed["provider_map"]
     _require(
@@ -483,9 +583,9 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
             "F0V4-A-FRESH-LAW-COORDINATES",
         ),
         Finding(
-            "boolean-fresh-distribution-premise",
+            "boolean-distribution-profile",
             "CannotAnswer",
-            "F0V4-C-BOOLEAN-FRESH-PREMISE",
+            "F0V4-C-BOOLEAN-DISTRIBUTION-PROFILE",
         ),
         Finding(
             "relation-and-plan-fixture-coordinates",
@@ -499,8 +599,13 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         ),
         Finding(
             "named-premise-owner-formation",
-            "CannotAnswer",
-            "F0V4-C-NAMED-PREMISE-OWNER-CONTRACT",
+            "Affirmative",
+            "F0V4-A-NAMED-PREMISE-OWNER-CONTRACT",
+        ),
+        Finding(
+            "named-premise-intake-boundary",
+            "Affirmative",
+            "F0V4-A-NAMED-PREMISE-INTAKE-BOUNDARY",
         ),
         Finding(
             "provider-declaration",
