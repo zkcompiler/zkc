@@ -7,7 +7,9 @@
 > question except the declared hold on the unpublished VCVio declaration;
 > the provider-carrier decision packet's first two items are adopted; the
 > existing Analysis packages are migrated to the new fields and re-pinned to
-> the repaired owner text; publication remains, the user's gate.
+> the repaired owner text; the deep review's end-to-end pressure case forms
+> its premises through the intake and stops fail-closed at three declared
+> holds; publication remains, the user's gate.
 > **Inputs:** the migration decisions on the sampling law and the outcome
 > partition (`f0-v2c-decision-inputs.md`, Sections 4, 5, and 10) and the
 > intake design of `analysis-named-premise-intake.md`.
@@ -131,6 +133,22 @@ its five dependents rotate, on top of the migration's seventeen.
   mass the statement fixes or an `OperationalCompletion` premise. The fifth
   review round closed these changes: twelve of thirteen questions
   affirmative, the thirteenth the VCVio hold.
+- The deep review's end-to-end pressure case
+  (`mixed-challenge-multi-binding-end-to-end-pressure.md`) now forms its
+  premises through this text: the three-element Fresh premise forms from the
+  owner's law leaf and the existing uniform profile, and the intake returns
+  `CannotAnswer` before a goal forms because seven of the eight requirements
+  have no binding. Three of those are this text's remaining fixture
+  boundaries rather than defects: the property profile declares the uniform
+  Fresh distribution for the Schnorr subject's selected challenge only, so a
+  Boolean law leaf of another subject has no profile to bind (an input to
+  the family-and-instance decision: a profile-level uniform distribution
+  constructor over any authenticated finite challenge domain model would form
+  it without a per-subject declaration); the relation and Plan premises exist
+  for the Schnorr Core only and refuse under `RebindRequired` for any other;
+  and the provider declaration is unpublished. The case's six-lane map
+  exercises the measure clause on a finite corpus: acceptance keeps mass
+  `7/27` with `2/9` unmodelled and no renormalization.
 - An independent review of this text, as for the migration.
 
 ## 4. Non-claims

@@ -546,9 +546,13 @@ provider, extraction tool, or durable schema.
   a guarded occurrence, and a two-rule construction, through admission, the
   checker equation, ten owner views, both public-setup variants, Interface
   admission with its replay-input refusal, exhaustive execution and
-  independent replay, and a finite six-lane outcome map: twenty-one findings
-  affirmative, two expected refusals, and, on the migration branch, four
-  Analysis-side holds that the stacked Analysis text is to absorb.
+  independent replay, a finite six-lane outcome map, and the named-premise
+  intake: twenty-four findings affirmative, two expected refusals, and three
+  holds reported separately (no uniform Boolean distribution profile is
+  declared for the subject's first law leaf, the relation and Plan premises
+  name another Core, no provider declaration is published); the
+  three-element Fresh premise forms and the intake stops fail-closed before
+  a goal forms.
 - [`analysis-source-package-repins-2026-09-05.md`](analysis-source-package-repins-2026-09-05.md)
   re-pins the Analysis branch's packages to the repaired owner text: the
   thirteen research checks that the deep-review repairs and the migration
