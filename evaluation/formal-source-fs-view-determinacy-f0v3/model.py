@@ -101,7 +101,7 @@ def _preamble(source: dict[str, Any]) -> tuple[dict[str, Any], set[str], set[str
         or set(profiles) != {"canonical-framed", "duplex-sponge"}
     ):
         raise SchemaError("owner profile catalog is malformed")
-    expected_revisions = {"canonical-framed": 4, "duplex-sponge": 3}
+    expected_revisions = {"canonical-framed": 5, "duplex-sponge": 4}
     for key, profile in profiles.items():
         if (
             type(profile) is not dict

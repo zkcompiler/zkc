@@ -125,6 +125,12 @@ rewritten as PIR subjects. The finite Interface manifest maps the represented
 top-level read kinds and their selected elements to owner path steps. It is a
 bounded carrier check, not the durable recursive Interface field resolver.
 
+The imported protocol profile also carries the canonical checked-construction
+declaration catalog and owner-derived checker-contract equation. This package
+rederives identities from that profile but forms no checked-construction
+binding of its own; the executable byte-level checked-payload discriminators
+remain in the protocol package.
+
 ## Evidence boundary
 
 Passing the 50-test gate demonstrates only the finite positive and mutation

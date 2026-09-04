@@ -4,15 +4,15 @@
   "owner_profiles": {
     "canonical-framed": {
       "key": "canonical-framed",
-      "revision": 4,
-      "profile_digest": "026c8bf37837d1de698d859626debd118c1141d4d0679f22e2f91af30b08d41e",
-      "profile_body_sha256": "a0216af58cd0cc80a7c89c4f6ec006fd9b5b7caca7750c5a808b4a8979d27878"
+      "revision": 5,
+      "profile_digest": "180a1a793a899f6a16aa17e3e02dcbcef0bf0baa54f88ec2d9f5610a02cd4809",
+      "profile_body_sha256": "816cd615a950f45b7bfb80632fc12a0f8a335cef0da9d19f4c82a52f5ab2f190"
     },
     "duplex-sponge": {
       "key": "duplex-sponge",
-      "revision": 3,
-      "profile_digest": "9629ae8ab75f343b2b32f7ccd1d68a90a96bdc9c75ac4e7ea049c8a389cac7ee",
-      "profile_body_sha256": "c2f4af9d27e0ed12051a0a404d14a4290e1cb38c50a84ab6bb77d5aba2187b36"
+      "revision": 4,
+      "profile_digest": "0116b0df403b01b34fd0858745da83a4efb5d38d4b54c8946ecbf5bc4095d1a6",
+      "profile_body_sha256": "4569ad2459f9d4a824eb1969e1f102df1e9713380231c735d78000c8a964fb1c"
     }
   },
   "maximum_sequence_length": 512,

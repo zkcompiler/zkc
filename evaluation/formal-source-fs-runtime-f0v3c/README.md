@@ -34,15 +34,15 @@ framing, and a typed sampling-exhausted failure.
 The retrying construction and Protocol identities are:
 
 ```text
-zkcidv0:pir.transcript-construction:c8d7a037c4ba85d9824d33217f5e0101711f1fe515f0a8da8bd8ebdc811d233f
-zkcidv0:pir.protocol:6af3a4c7c224014f49c236b73a6bc64e0365429cd969a7ac2eef06d64ff0d3a8
+zkcidv0:pir.transcript-construction:9e942f8c34961d6e6fbdb72942667d49ad4bc99919758035ac91e99d544f161e
+zkcidv0:pir.protocol:ed231700282293c3ddefee27b668b34a30cfb4fc53dc1784bfe18a6a84dd1c6e
 ```
 
 The one-shot construction and Protocol identities are:
 
 ```text
-zkcidv0:pir.transcript-construction:8bee78815de3b3beaf327e8d8032ea516857e991e2ef6b3f5db7360d01c405d4
-zkcidv0:pir.protocol:8bde0b353976922b49cc9eb35f5ad34f7c307f3767103d7cca91dcc2a7a5aeb0
+zkcidv0:pir.transcript-construction:5a5c06c1cfbbed72fcc033d3851776e6f5d6c4a5cdb62d06c2467a4e90ee946b
+zkcidv0:pir.protocol:025d56bc115790dd71e0390eb36cf3b7dcb9c0f5cc2eb310d10214e6ffe58730
 ```
 
 Both share Core
@@ -68,8 +68,8 @@ Each subject has all 27 `(statement, witness, nonce)` strategy runs and all 27
 
 | Lane | Retrying | One-shot |
 |---|---:|---:|
-| `Accepted` | 22 | 18 |
-| `Rejected` | 32 | 36 |
+| `Accepted` | 22 | 20 |
+| `Rejected` | 32 | 34 |
 | `Aborted` | 0 | 0 |
 | `InterpretationFailed` | 0 | 0 |
 | `StrategyStopped` | 0 | 0 |
@@ -88,15 +88,21 @@ the second subject independently. The one-shot table is total:
 
 | `(statement, commitment)` | Derived challenge |
 |---|---:|
-| `(0,0)`, `(0,1)`, `(2,0)`, `(2,1)` | 2 |
-| `(0,2)`, `(1,2)` | 0 |
-| `(1,0)`, `(2,2)` | 1 |
-| `(1,1)` | 2 |
+| `(0,0)` | 0 |
+| `(0,1)`, `(0,2)`, `(1,0)`, `(2,0)`, `(2,1)`, `(2,2)` | 1 |
+| `(1,1)`, `(1,2)` | 2 |
 
 Both subjects derive and validate all four construction views through both
 current schema compilers. They also derive the execution view. The transition
 view uses the total schedule position for the unframed challenge, and the
 execution view records that no frame-schedule entry exists.
+
+The construction and Protocol identities, transcript prefixes, challenges,
+lane counts, view digests, and replay certificates above are frozen against
+canonical-framed profile revision 5. That profile revision adds the
+profile-owned checker-contract declarations and therefore changes the profile
+identity used by the transcript domain. The changed finite observations are a
+replay-verified identity re-pin, not evidence of a runtime replay defect.
 
 ## Repaired-body pressure suite
 

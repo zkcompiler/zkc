@@ -4,16 +4,16 @@
   "publication": "forbidden",
   "owner_pages": [
     {"path": "docs-next/pir/interactive-core.md", "sha256": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"},
-    {"path": "docs-next/pir/fiat-shamir.md", "sha256": "edb11d719330ddbb181d95168506ed902ae64ba0c7e3bc71f8cabd3bed1ea25a"},
-    {"path": "docs-next/pir/duplex-sponge-fiat-shamir.md", "sha256": "323ddf9b7bc3d0cc3837f05adf8034e9a8db5965d5c452a5fde246b875f11640"},
+    {"path": "docs-next/pir/fiat-shamir.md", "sha256": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e"},
+    {"path": "docs-next/pir/duplex-sponge-fiat-shamir.md", "sha256": "1627955c74526d0f211d4abad433d6438fab0ce93ff3684f4b428f5bc4d46664"},
     {"path": "docs-next/pir/interfaces-and-plans.md", "sha256": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745"},
     {"path": "docs-next/pir/endpoint-projection-views.md", "sha256": "d9a89afe089a802554b889622f9b4cb8521d8b588ca263005010a419430b7378"},
     {"path": "docs-next/oir/projection-contract.md", "sha256": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6"}
   ],
   "profile_manifests": [
     {"key": "interaction", "path": "docs-next/pir/profiles/interaction.json", "sha256": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4"},
-    {"key": "canonical-framed-fiat-shamir", "path": "docs-next/pir/profiles/canonical-framed-fiat-shamir.json", "sha256": "6e6e3dfad90f8c742ce603c6836e7bc51800bc08c88802769bae5e73c648b3b7"},
-    {"key": "duplex-sponge-fiat-shamir", "path": "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json", "sha256": "16e4176d9ef1fa9e826e6b6230e52c9070907cf993d16cd8a75b0778099f65bc"},
+    {"key": "canonical-framed-fiat-shamir", "path": "docs-next/pir/profiles/canonical-framed-fiat-shamir.json", "sha256": "ee666e2a028571a117f84a0fc235547850e4a424452666440201d68ad38386ff"},
+    {"key": "duplex-sponge-fiat-shamir", "path": "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json", "sha256": "f41e78f381743cafae3711ab89c7606e30b49891f82f7d6998fd895d3e711e67"},
     {"key": "public-setup", "path": "docs-next/pir/profiles/public-setup.json", "sha256": "72c15bcb2d98597fd662ba854b194e7209c3d7d0a082e6f5005eb4155082aa48"},
     {"key": "interface-plan", "path": "docs-next/pir/profiles/interface-plan.json", "sha256": "c7edf4cba0709ec65f1293219ffa9b59c81dc8a001efa3023529fef0081af0e4"},
     {"key": "endpoint-source-view", "path": "docs-next/pir/profiles/endpoint-source-view.json", "sha256": "f9579efc0fcc8bb5e6aa4ed392e403affdb1b4a85c08dae32cfea358dd759c88"},

@@ -75,17 +75,39 @@ six-field payload because the model now hashes the selected owner's tagged
 equation. The tests reconstruct the canonical-framed execution payload from
 its coordinate and ordered field-coordinate bodies, reject both the former
 untagged record and an Interaction-family wrapper. A separate discriminator
-compiles the current duplex owner profile from source, reconstructs its static
-payload, rejects both predecessor shapes, and checks the two tagged arms of
-every duplex source compiler.
+compiles both current family profiles from source, reconstructs their
+declaration coordinates and checker-contract bodies, and checks the canonical
+and duplex checked payloads byte for byte. It also rejects the former local
+checker coordinate, while retaining the static-payload and two-arm
+source-compiler controls.
+
+Against the current live owner profiles, those equations derive:
+
+| Family | Contract body | Contract identity |
+|---|---|---|
+| canonical-framed | 1,871 bytes; SHA-256 `f8f79c99a8e74702367b7bfa6fc0a7ccc16427282aae23f24666c0c2ceff97fb` | `zkcidv0:pir.checker-contract:ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701` |
+| duplex-sponge | 5,243 bytes; SHA-256 `75eb2fe3aa516c17e0ae365df9bd8d4c7c218c7a8852ae39e1dc927ee5b64765` | `zkcidv0:pir.checker-contract:393ff59dfef32f77fee523fc0708dbe591c964369fb2b9461947ff93d9c83210` |
+
+The finite executable applies the same canonical body under its selected
+witness profile, whose identity is
+`zkcidv0:foundation.semantic-language-profile:4f3fe82bebe7fd1dc54edbfb220ba73067f8c0d68eb5ff7f61c5b6056af40852`;
+its resulting checker contract is therefore
+`zkcidv0:pir.checker-contract:448babeabf337b1daf7a0a276547cab5475221375a89a37f189ce58f5d5e9c3b`.
+The live identities in the table are source-derived controls, not aliases for
+that witness-profile identity.
 
 The static-view manifest remains bounded to this package's finite field
 catalog. Each represented field maps to one owner path and atomic boundary;
 the instrument does not implement the durable recursive field resolver. The
-checked-result payload uses the required six-field owner shape, but its
-`checker_contract` coordinate is package-local because the owner page does not
-define a content-ID constructor for that coordinate. Passing the gate therefore
-does not establish target-wide checked-result authority correspondence.
+checked-result payload uses the required six-field owner shape. Its
+`checker_contract` is the `pir.checker-contract` identity formed under the
+owning profile from that profile catalog's check-operation, same-Core law, and
+defect-schema references plus the exact checked-result description. The finite
+canonical issuer resolves ordinals from its named catalog; the live-source
+discriminator independently confirms ordinals 1, 3, and 1 for canonical-framed
+and 1, 6, and 1 for duplex. This closes the former identity-model mismatch for
+the represented payloads, but does not turn the witness-local profiles into
+published target profiles or establish checker correctness.
 
 Two narrow contract-vector families are target-exact rather than merely
 fixture-shaped. They are built and admitted through K1 directly:

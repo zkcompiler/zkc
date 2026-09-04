@@ -125,6 +125,65 @@ def _language_profile_catalog(
     )
 
 
+def _named_declaration_body(name: str) -> object:
+    return k1.DatumRecord(((0, k1.Symbol(name)),))
+
+
+def _language_profile_catalogs(
+    catalogs: Mapping[str, tuple[str, ...]],
+) -> object:
+    """Form named finite catalogs in the owner's kind and ordinal order."""
+
+    return k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol(kind)),
+                    (
+                        1,
+                        k1.DatumSeq(
+                            tuple(
+                                _named_declaration_body(name)
+                                for name in declarations
+                            )
+                        ),
+                    ),
+                )
+            )
+            for kind, declarations in sorted(catalogs.items())
+        )
+    )
+
+
+_CANONICAL_CHECKER_DECLARATION_CATALOGS = MappingProxyType(
+    {
+        "pir.evaluator-signature": (
+            "canonical-framed-evaluator-v0",
+            "canonical-framed-construction-check-v0",
+        ),
+        "pir.failure-schema": (
+            "canonical-framed-outcome-partition-v0",
+            "canonical-framed-construction-defects-v0",
+        ),
+        "pir.semantic-law": (
+            "canonical-framed-admission-and-execution-v0",
+            "canonical-framed-body-grammar-v0",
+            "canonical-framed-prefix-and-domain-v0",
+            "canonical-framed-same-core-construction-v0",
+            "canonical-framed-source-views-v0",
+            "canonical-framed-protocol-execution-v0",
+            "canonical-framed-replay-v0",
+        ),
+        "pir.transcript-declaration": (
+            "fs-protocol-body-v1",
+            "pir-transcript-and-fs-view-catalog-v0",
+            "pir-source-authority-envelope-specialization-v0",
+            "transcript-construction-body-v1",
+        ),
+    }
+)
+
+
 def _sorted_profile_imports(*profiles: object) -> tuple[object, ...]:
     return tuple(
         sorted(
@@ -220,19 +279,12 @@ def make_k2_semantic_profiles(
                     "pir.source-no-policy",
                     "pir.source-policy-closure",
                     "pir.source-purpose",
+                    "pir.checker-contract",
                     "pir.transcript-construction",
                 )
             )
         ),
-        _language_profile_catalog(
-            "pir.transcript-declaration",
-            (
-                "fs-protocol-body-v1",
-                "pir-transcript-and-fs-view-catalog-v0",
-                "pir-source-authority-envelope-specialization-v0",
-                "transcript-construction-body-v1",
-            ),
-        ),
+        _language_profile_catalogs(_CANONICAL_CHECKER_DECLARATION_CATALOGS),
         transcript_fs_law,
     )
     public_view = k1.SemanticLanguageProfile(
@@ -2166,6 +2218,22 @@ class PIRSourceOwnerCompiler(str, Enum):
     INTERFACE_PLAN = "interface-plan"
 
 
+_CHECKER_CONTRACT_DECLARATIONS = MappingProxyType(
+    {
+        PIRSourceOwnerCompiler.CANONICAL_FRAMED: (
+            ("pir.evaluator-signature", "canonical-framed-construction-check-v0"),
+            ("pir.semantic-law", "canonical-framed-same-core-construction-v0"),
+            ("pir.failure-schema", "canonical-framed-construction-defects-v0"),
+        ),
+        PIRSourceOwnerCompiler.DUPLEX_SPONGE: (
+            ("pir.evaluator-signature", "duplex-sponge-construction-check-v0"),
+            ("pir.semantic-law", "duplex-sponge-same-core-construction-v0"),
+            ("pir.failure-schema", "duplex-sponge-construction-defects-v0"),
+        ),
+    }
+)
+
+
 class PIRSourceFamily(str, Enum):
     STATIC_VIEW = "StaticView"
     CHECKED_CONSTRUCTION = "CheckedConstruction"
@@ -2496,6 +2564,20 @@ def _pir_record_description(
     )
 
 
+def _pir_variant_description(
+    arms: tuple[tuple[str, object], ...],
+) -> object:
+    return k1.DatumVariant(
+        1,
+        k1.DatumSeq(
+            tuple(
+                k1.DatumRecord(((0, k1.Symbol(name)), (1, description)))
+                for name, description in arms
+            )
+        ),
+    )
+
+
 def _pir_sequence_description(element: object) -> object:
     return k1.DatumVariant(2, element)
 
@@ -2504,22 +2586,91 @@ def _checked_fs_result_schema_body() -> object:
     """Finite PIRDescriptionBody for the checked result carried by this model."""
 
     content_ref = _pir_atom_description(4)
-    name_pair = _pir_record_description(
+    reference_pair = _pir_record_description(
         (
-            ("source", _pir_atom_description(3)),
-            ("target", _pir_atom_description(3)),
+            ("source", _pir_atom_description(7)),
+            ("target", _pir_atom_description(7)),
         )
     )
-    name_map = _pir_sequence_description(name_pair)
+    reference_map = _pir_sequence_description(reference_pair)
     return _pir_record_description(
         (
             ("source_protocol_id", content_ref),
             ("target_protocol_id", content_ref),
             ("shared_core_id", content_ref),
             ("transcript_construction_id", content_ref),
-            ("occurrence_map", name_map),
-            ("value_map", name_map),
-            ("challenge_map", name_map),
+            ("occurrence_map", reference_map),
+            ("value_map", reference_map),
+            ("challenge_map", reference_map),
+            ("conclusion", _pir_atom_description(3)),
+        )
+    )
+
+
+def _checked_duplex_fs_result_schema_body() -> object:
+    """Owner PIRDescriptionBody for the checked duplex result."""
+
+    content_ref = _pir_atom_description(4)
+    reference = _pir_atom_description(7)
+    profile_law = _pir_atom_description(8)
+    reference_pair = _pir_record_description(
+        (("source", reference), ("target", reference))
+    )
+    reference_map = _pir_sequence_description(reference_pair)
+    reference_sequence = _pir_sequence_description(reference)
+    material_coordinate = _pir_record_description(
+        (
+            (
+                "site",
+                _pir_variant_description(
+                    (
+                        ("None", _pir_atom_description(0)),
+                        ("Occurrence", reference),
+                        ("Challenge", reference),
+                    )
+                ),
+            ),
+            ("ordinal", _pir_atom_description(1)),
+        )
+    )
+    material_schema = _pir_record_description(
+        (
+            ("coordinate", material_coordinate),
+            ("value_type", _pir_atom_description(5)),
+            ("length", _pir_atom_description(1)),
+        )
+    )
+    schedule_correspondence = _pir_record_description(
+        (
+            ("source", reference_sequence),
+            ("target", reference_sequence),
+            ("map", reference_map),
+            ("law", profile_law),
+        )
+    )
+    return _pir_record_description(
+        (
+            ("source_protocol_id", content_ref),
+            ("target_protocol_id", content_ref),
+            ("shared_core_id", content_ref),
+            ("transcript_construction_id", content_ref),
+            ("occurrence_map", reference_map),
+            ("value_map", reference_map),
+            ("challenge_map", reference_map),
+            (
+                "instance_projection",
+                _pir_record_description(
+                    (("bindings", reference_sequence), ("law", profile_law))
+                ),
+            ),
+            (
+                "construction_material_map",
+                _pir_record_description(
+                    (("target", material_coordinate), ("schema", material_schema))
+                ),
+            ),
+            ("prover_schedule_correspondence", schedule_correspondence),
+            ("verifier_schedule_correspondence", schedule_correspondence),
             ("conclusion", _pir_atom_description(3)),
         )
     )
@@ -3832,11 +3983,122 @@ class CheckedFSConstructionIssue(_NonTransferableAuthority):
     _issuer: object
 
 
-def _checked_fs_checker_contract_id(profile: object) -> object:
+def _profile_local_declaration_ref(
+    profile: object,
+    declaration_kind: str,
+    declaration_name: str,
+) -> object:
+    if type(profile) is not k1.SemanticLanguageProfile:
+        raise ModelError("checker contract needs one exact owner profile")
+    try:
+        catalog = k1.profile_declaration_catalogs(profile).get(declaration_kind)
+    except (k1.ModelError, k1.CanonicalError) as error:
+        raise ModelError("checker contract owner catalog is malformed") from error
+    if catalog is None:
+        raise ModelError("checker contract declaration kind is absent")
+    matches: list[int] = []
+    for ordinal, body in enumerate(catalog.values):
+        if type(body) is not k1.DatumRecord:
+            continue
+        fields = dict(body.fields)
+        name = fields.get(0)
+        if type(name) is k1.Symbol and name.value == declaration_name:
+            matches.append(ordinal)
+    if len(matches) != 1:
+        raise ModelError("checker contract declaration name is not unique and present")
+    return k1.ProfileLocalDeclarationRef(declaration_kind, matches[0])
+
+
+def _checked_construction_checker_contract_body(
+    profile: object,
+    owner_compiler: PIRSourceOwnerCompiler,
+    result_schema_body: object,
+) -> object:
+    try:
+        declarations = _CHECKER_CONTRACT_DECLARATIONS[owner_compiler]
+    except KeyError as error:
+        raise ModelError("selected owner has no checked-construction contract") from error
+    references = tuple(
+        _profile_local_declaration_ref(profile, kind, name)
+        for kind, name in declarations
+    )
+    try:
+        reference_bodies = tuple(
+            k1.profile_declaration_ref_datum(reference)
+            for reference in references
+        )
+        k1.encode_datum(result_schema_body)
+    except (k1.ModelError, k1.CanonicalError) as error:
+        raise ModelError("checker contract body is not canonical") from error
+    return k1.DatumRecord(
+        (
+            (0, reference_bodies[0]),
+            (1, reference_bodies[1]),
+            (2, reference_bodies[2]),
+            (3, result_schema_body),
+        )
+    )
+
+
+def _checked_construction_checker_contract_id(
+    profile: object,
+    owner_compiler: PIRSourceOwnerCompiler,
+    result_schema_body: object,
+) -> object:
     return _authority_id(
         profile,
-        "pir.fs-construction-checker-contract",
-        k1.DatumRecord(((0, k1.Symbol("bounded-check-fs-construction-v0")),)),
+        "pir.checker-contract",
+        _checked_construction_checker_contract_body(
+            profile,
+            owner_compiler,
+            result_schema_body,
+        ),
+    )
+
+
+def _checked_fs_checker_contract_id(profile: object) -> object:
+    return _checked_construction_checker_contract_id(
+        profile,
+        PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+        _checked_fs_result_schema_body(),
+    )
+
+
+def _checked_construction_binding_payload_local_body(
+    source_protocol_id: object,
+    target_protocol_id: object,
+    shared_core_id: object,
+    transcript_construction_id: object,
+    profile: object,
+    owner_compiler: PIRSourceOwnerCompiler,
+    result_schema_body: object,
+) -> object:
+    checker_contract_id = _checked_construction_checker_contract_id(
+        profile,
+        owner_compiler,
+        result_schema_body,
+    )
+    return k1.DatumRecord(
+        (
+            (0, _any_content_ref(source_protocol_id, "fresh Protocol")),
+            (1, _any_content_ref(target_protocol_id, "Fiat-Shamir Protocol")),
+            (2, _any_content_ref(shared_core_id, "shared Core")),
+            (
+                3,
+                _any_content_ref(
+                    transcript_construction_id,
+                    "transcript construction",
+                ),
+            ),
+            (4, result_schema_body),
+            (
+                5,
+                _any_content_ref(
+                    checker_contract_id,
+                    "checked-construction checker contract",
+                ),
+            ),
+        )
     )
 
 
@@ -3844,27 +4106,14 @@ def _checked_fs_binding_payload_local_body(
     result: CheckedFSConstruction,
     profile: object,
 ) -> object:
-    return k1.DatumRecord(
-        (
-            (0, _any_content_ref(result.source_protocol_id, "fresh Protocol")),
-            (1, _any_content_ref(result.target_protocol_id, "Fiat-Shamir Protocol")),
-            (2, _any_content_ref(result.shared_core_id, "shared Core")),
-            (
-                3,
-                _any_content_ref(
-                    result.transcript_construction_id,
-                    "transcript construction",
-                ),
-            ),
-            (4, _checked_fs_result_schema_body()),
-            (
-                5,
-                _any_content_ref(
-                    _checked_fs_checker_contract_id(profile),
-                    "FS checker contract",
-                ),
-            ),
-        )
+    return _checked_construction_binding_payload_local_body(
+        result.source_protocol_id,
+        result.target_protocol_id,
+        result.shared_core_id,
+        result.transcript_construction_id,
+        profile,
+        PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+        _checked_fs_result_schema_body(),
     )
 
 
@@ -3885,7 +4134,13 @@ def check_fs_construction(
             profiles.transcript_fs,
             required_subject_kinds=(
                 _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
-                | frozenset({"pir.protocol", "pir.transcript-construction"})
+                | frozenset(
+                    {
+                        "pir.checker-contract",
+                        "pir.protocol",
+                        "pir.transcript-construction",
+                    }
+                )
             ),
         )
         admit_core(source_core)
@@ -3943,6 +4198,19 @@ def check_fs_construction(
         transcript_construction_id,
         "pir.transcript-construction",
         construction_body(source_core, construction, profiles=profiles),
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profiles.transcript_fs,
+    )
+    checker_contract_body = _checked_construction_checker_contract_body(
+        profiles.transcript_fs,
+        PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+        _checked_fs_result_schema_body(),
+    )
+    _authenticate_k2_profiled_subject(
+        _checked_fs_checker_contract_id(profiles.transcript_fs),
+        "pir.checker-contract",
+        checker_contract_body,
         profiles=profiles,
         profile_support=profile_support,
         selected_profile=profiles.transcript_fs,
@@ -4069,7 +4337,13 @@ def issue_fs_construction_view(
             profiles.transcript_fs,
             required_subject_kinds=(
                 _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
-                | frozenset({"pir.protocol", "pir.transcript-construction"})
+                | frozenset(
+                    {
+                        "pir.checker-contract",
+                        "pir.protocol",
+                        "pir.transcript-construction",
+                    }
+                )
             ),
         )
         k1.validate_owner_local_source_authority_binding(checked.source_binding)

@@ -230,11 +230,11 @@
   ],
   "source_sha256": {
     "docs-next/analysis/cryptographic-properties.md": "0b2783c39ecc57744721e862d28edb9301a45ab828051c32cc8016b510bab20b",
-    "docs-next/pir/fiat-shamir.md": "edb11d719330ddbb181d95168506ed902ae64ba0c7e3bc71f8cabd3bed1ea25a",
+    "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
     "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
     "docs-next/relations/relation-model.md": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
     "evaluation/indexed-core-elaboration/reference_model.py": "dc7eeb0e3736e16e35e1faca926c32f7bde2b1cfadfd2b15a75801bed1d42abc",
-    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "fb73d18cbc2c5f5cf59c0216787fdad9e147c148c23c673f83d1f85a82baea92"
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "993dc934fb9b03a1199784605ba7900f0e581b7f1af571cd7ed4a64e46fe7996"
   },
   "theorem_binding": {
     "applicability_coordinates": [

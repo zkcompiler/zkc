@@ -19410,7 +19410,7 @@ def _selected_statement_template_body(
 # from the body it authenticates: a statement edit must fail closed until a
 # reviewer deliberately rotates the literal and the accompanying source record.
 AFK_SELECTED_STATEMENT_CONTENT_SHA256 = (
-    "13d270f6f386241d7c1d62e1a007432fd8522b1ad00b26f9ede5a91312505a1c"
+    "0aa14752b5f6bae7fdde366a9eab073f69eacbb2bd3b572f9a5b113adf5521df"
 )
 
 

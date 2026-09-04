@@ -40,8 +40,15 @@ The current profile identities are:
 
 | Family | Revision | Profile digest | Body SHA-256 |
 |---|---:|---|---|
-| canonical-framed | 4 | `026c8bf37837d1de698d859626debd118c1141d4d0679f22e2f91af30b08d41e` | `a0216af58cd0cc80a7c89c4f6ec006fd9b5b7caca7750c5a808b4a8979d27878` |
-| duplex-sponge | 3 | `9629ae8ab75f343b2b32f7ccd1d68a90a96bdc9c75ac4e7ea049c8a389cac7ee` | `c2f4af9d27e0ed12051a0a404d14a4290e1cb38c50a84ab6bb77d5aba2187b36` |
+| canonical-framed | 5 | `180a1a793a899f6a16aa17e3e02dcbcef0bf0baa54f88ec2d9f5610a02cd4809` | `816cd615a950f45b7bfb80632fc12a0f8a335cef0da9d19f4c82a52f5ab2f190` |
+| duplex-sponge | 4 | `0116b0df403b01b34fd0858745da83a4efb5d38d4b54c8946ecbf5bc4095d1a6` | `4569ad2459f9d4a824eb1969e1f102df1e9713380231c735d78000c8a964fb1c` |
+
+These revisions add the profile-owned checked-construction checker contract,
+its declaration references, body compiler, and subject kind. The eight view
+field bodies remain textually unchanged but move by 30 source lines, while
+profile-bound finite values rotate with their owning profile identities. The
+duplex fixture still exposes no checked result, so this package does not
+manufacture one.
 
 ## Projection checks
 

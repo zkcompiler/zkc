@@ -218,10 +218,13 @@ implements the owner equations instead of hashing a generic six-field record.
 The gate consumes the newly derived identities rather than preserving fixture
 aliases for their predecessors.
 
-For checked construction, this remains conditional finite evidence: the local
-model supplies its own checker-contract coordinate, while the owner page gives
-the field but no content-ID constructor for it. The resulting source view does
-not establish target-wide checked-result authority correspondence.
+For checked construction, the imported protocol model now forms the
+profile-owned `pir.checker-contract` identity from the catalog references for
+the check operation, same-Core law, and defect schema plus the exact result
+description. The checked payload therefore follows the owner equation instead
+of the former local coordinate. This remains conditional finite evidence: it
+does not prove the checker, the Analysis laws, or any target-wide security
+claim.
 
 ## Quantitative boundary
 

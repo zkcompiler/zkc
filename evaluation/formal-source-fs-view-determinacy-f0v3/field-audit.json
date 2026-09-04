@@ -5,56 +5,56 @@
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.1",
       "body_selector": "TranscriptDeclarationViewBody = {",
-      "body_line": 1271,
+      "body_line": 1301,
       "fields": ["transcript_construction_id", "core_id", "state_type", "absorbed_bytes_type", "initial_state", "initialization_schedule_law", "absorb", "squeeze_bytes", "advance_state", "application_domain", "sampling_failure_coordinate", "frame_body_law", "frame_schedule"]
     },
     "CanonicalRequiredInfluenceView": {
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.2",
       "body_selector": "RequiredInfluenceViewBody = {",
-      "body_line": 1302,
+      "body_line": 1332,
       "fields": ["transcript_construction_id", "core_id", "scope_bindings", "required_influence", "additions", "exact_prefix_law"]
     },
     "CanonicalChallengeTransitionView": {
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.3",
       "body_selector": "ChallengeTransitionViewBody = {",
-      "body_line": 1331,
+      "body_line": 1361,
       "fields": ["transcript_construction_id", "core_id", "namespace_derivation_law", "exact_length_law", "state_update_before_decode_law", "retry_law", "sampling_failure_law", "challenge_rules"]
     },
     "CanonicalFSConstructionView": {
       "file": "docs-next/pir/fiat-shamir.md",
       "section": "13.4",
       "body_selector": "FSConstructionViewBody = {",
-      "body_line": 1342,
+      "body_line": 1372,
       "fields": ["result_schema", "fresh_protocol_id", "fiat_shamir_protocol_id", "shared_core_id", "transcript_construction_id", "occurrence_map", "value_map", "challenge_map", "structural_conclusion"]
     },
     "DuplexTranscriptDeclarationView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.1",
       "body_selector": "DuplexTranscriptDeclarationViewBody = {",
-      "body_line": 989,
+      "body_line": 1019,
       "fields": ["transcript_construction_id", "core_id", "construction_family", "alphabet_type", "zero_symbol", "rate", "capacity", "state_carrier", "instance_carrier", "instance_binding_projection", "hash_to_capacity", "permutation_forward", "fixed_start_absorb_squeeze_law", "edge_case_law", "construction_material_schema", "message_encoders", "semantic_argument_shape", "prover_required_schedule", "verifier_complete_schedule", "operational_resource_projection"]
     },
     "DuplexEncodedInputCoverageView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.2",
       "body_selector": "DuplexEncodedInputCoverageViewBody = {",
-      "body_line": 1049,
+      "body_line": 1079,
       "fields": ["transcript_construction_id", "core_id", "instance_binding_sequence", "salt_coordinate", "encoded_input_coverage", "message_coverage", "challenge_coverage", "prover_required_prefix_law", "verifier_complete_schedule_law", "prohibited_additions"]
     },
     "DuplexChallengeTransitionView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.3",
       "body_selector": "DuplexChallengeTransitionViewBody = {",
-      "body_line": 1076,
+      "body_line": 1106,
       "fields": ["transcript_construction_id", "core_id", "squeeze_and_decoder_map", "decoder_totality_law", "decode_after_state_transition_law", "acceptance_rule", "retry_rule", "semantic_sampling_failure", "prover_execution_domain", "verifier_execution_domain", "squeeze_event_projection"]
     },
     "DuplexFSConstructionView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.4",
       "body_selector": "DuplexFSConstructionViewBody = {",
-      "body_line": 1114,
+      "body_line": 1144,
       "fields": ["result_schema", "fresh_protocol_id", "fiat_shamir_protocol_id", "shared_core_id", "transcript_construction_id", "construction_family", "occurrence_map", "value_map", "challenge_map", "instance_projection", "construction_material_map", "prover_schedule_correspondence", "verifier_schedule_correspondence", "structural_conclusion"]
     }
   }

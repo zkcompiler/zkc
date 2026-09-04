@@ -47,7 +47,7 @@ OWNER_PINS = {
     "docs-next/pir/interactive-core.md":
         "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
     "docs-next/pir/fiat-shamir.md":
-        "edb11d719330ddbb181d95168506ed902ae64ba0c7e3bc71f8cabd3bed1ea25a",
+        "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
     "docs-next/pir/interfaces-and-plans.md":
         "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
     "docs-next/pir/verifier-derived-query-plans.md":

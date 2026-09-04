@@ -117,19 +117,19 @@
       "duplex-finite": {
         "DuplexChallengeTransitionView": {
           "body_bytes": 2721,
-          "body_sha256": "40b90ad719a0aefd2a3a6a7293799a45e0548125fe860d44874b9f55667eee0a",
+          "body_sha256": "9f3f83c1084a929eb0450faa410f57e5a02587e8343458c7764d8f8a8da711a2",
           "leaf_count": 34,
           "typed_cold_byte_equal": true
         },
         "DuplexEncodedInputCoverageView": {
           "body_bytes": 2491,
-          "body_sha256": "faeb380a460966142e5f627f586ff6370b818a67fe8742e7cc87229ecc55f146",
+          "body_sha256": "8fc7592ff7507e9b6834cba88b498447625495c94e08fb2b943692f00e41c702",
           "leaf_count": 31,
           "typed_cold_byte_equal": true
         },
         "DuplexTranscriptDeclarationView": {
           "body_bytes": 6130,
-          "body_sha256": "80a3f309f17a8236a1a0160a9daca5adabdb4566df89fac32e8005449cf766a3",
+          "body_sha256": "125f8de53c8e9b210441ca34a818713b7585ed0328e1bd9693910224fc83aa8a",
           "leaf_count": 86,
           "typed_cold_byte_equal": true
         }
@@ -137,25 +137,25 @@
       "k2-oracle": {
         "CanonicalChallengeTransitionView": {
           "body_bytes": 4169,
-          "body_sha256": "83cfbb204a735c258590e7be5f775646460cfd0c42c47e49278bf614c3a90d71",
+          "body_sha256": "9519f692590b84306c2f0e08e8b6a51ce78673f1d86a659b3c68e17114b517c0",
           "leaf_count": 31,
           "typed_cold_byte_equal": true
         },
         "CanonicalFSConstructionView": {
           "body_bytes": 5971,
-          "body_sha256": "06837165d9782bfa4d14316d0956b54a9553b0a61590f0d521277757a72d9289",
+          "body_sha256": "6eefddbe6008a92703fb58078fb680f604a7d74fc255db889ff3c9cdd412201a",
           "leaf_count": 39,
           "typed_cold_byte_equal": true
         },
         "CanonicalRequiredInfluenceView": {
           "body_bytes": 7643,
-          "body_sha256": "20d745793fd004ad881bad43abdf48fbfe4d00b898bbae20c8b3f65ff1627b0f",
+          "body_sha256": "db760899a71a393359f8247014b0e0fc9fde8a881c37cef9d3442699372ba83c",
           "leaf_count": 45,
           "typed_cold_byte_equal": true
         },
         "CanonicalTranscriptDeclarationView": {
           "body_bytes": 3759,
-          "body_sha256": "fdd8ca3a32d5b36371762f43e176f73c089857fc6141a041a441e982e445bdff",
+          "body_sha256": "d27771150ced809e35a1a2afda784e1905c15c526801a264fc267e1dde99b487",
           "leaf_count": 24,
           "typed_cold_byte_equal": true
         }
@@ -163,25 +163,25 @@
       "k2-schnorr": {
         "CanonicalChallengeTransitionView": {
           "body_bytes": 3465,
-          "body_sha256": "43296282dcbf52b939791335b363c21a5cd5355c206dfb08317efdf8da38a04d",
+          "body_sha256": "aab3a02590018af18d07341fbcee669f97db2d5d95bf822dbfa00a90147f324b",
           "leaf_count": 21,
           "typed_cold_byte_equal": true
         },
         "CanonicalFSConstructionView": {
           "body_bytes": 5707,
-          "body_sha256": "8572cb881f6ba7960c322188bc1534e9cdd77714b0cb4d220ed4288ecfeae7eb",
+          "body_sha256": "53435a62451feaf592b90a249215f2815d30a94e6df49d2fd1a447c2a4400508",
           "leaf_count": 37,
           "typed_cold_byte_equal": true
         },
         "CanonicalRequiredInfluenceView": {
           "body_bytes": 5150,
-          "body_sha256": "3e05d921686d4c67ce85fd093a2478e050e0a42fb6dad22207fedc43e14d517b",
+          "body_sha256": "306ce55e3f7462afe766d1d6fa0cc0bc4e145db54b11b8877d61774d0370de02",
           "leaf_count": 32,
           "typed_cold_byte_equal": true
         },
         "CanonicalTranscriptDeclarationView": {
           "body_bytes": 3779,
-          "body_sha256": "c2b4da50be7968003f52025fba5d6b169a1e851f1de6fe884895312cccfe9608",
+          "body_sha256": "13a05eab3c6bf13b331dfe911739bb5a9529a67fb030e18d06ab7d7a104d7282",
           "leaf_count": 24,
           "typed_cold_byte_equal": true
         }
@@ -222,9 +222,9 @@
       "compiler_agreement": true,
       "families": {
         "canonical-framed": {
-          "manifest_revision": 4,
-          "profile_body_sha256": "a0216af58cd0cc80a7c89c4f6ec006fd9b5b7caca7750c5a808b4a8979d27878",
-          "profile_digest": "026c8bf37837d1de698d859626debd118c1141d4d0679f22e2f91af30b08d41e",
+          "manifest_revision": 5,
+          "profile_body_sha256": "816cd615a950f45b7bfb80632fc12a0f8a335cef0da9d19f4c82a52f5ab2f190",
+          "profile_digest": "180a1a793a899f6a16aa17e3e02dcbcef0bf0baa54f88ec2d9f5610a02cd4809",
           "static_view_schemas": [
             "challenge-transition-view-v0",
             "execution-view-v0",
@@ -234,9 +234,9 @@
           ]
         },
         "duplex-sponge": {
-          "manifest_revision": 3,
-          "profile_body_sha256": "c2f4af9d27e0ed12051a0a404d14a4290e1cb38c50a84ab6bb77d5aba2187b36",
-          "profile_digest": "9629ae8ab75f343b2b32f7ccd1d68a90a96bdc9c75ac4e7ea049c8a389cac7ee",
+          "manifest_revision": 4,
+          "profile_body_sha256": "4569ad2459f9d4a824eb1969e1f102df1e9713380231c735d78000c8a964fb1c",
+          "profile_digest": "0116b0df403b01b34fd0858745da83a4efb5d38d4b54c8946ecbf5bc4095d1a6",
           "static_view_schemas": [
             "duplex-challenge-transition-view-v0",
             "duplex-encoded-input-coverage-view-v0",
@@ -294,18 +294,18 @@
       "source_node_count": 297
     },
     "source_sha256": {
-      "docs-next/pir/duplex-sponge-fiat-shamir.md": "323ddf9b7bc3d0cc3837f05adf8034e9a8db5965d5c452a5fde246b875f11640",
-      "docs-next/pir/fiat-shamir.md": "edb11d719330ddbb181d95168506ed902ae64ba0c7e3bc71f8cabd3bed1ea25a",
-      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "6e6e3dfad90f8c742ce603c6836e7bc51800bc08c88802769bae5e73c648b3b7",
-      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "16e4176d9ef1fa9e826e6b6230e52c9070907cf993d16cd8a75b0778099f65bc",
+      "docs-next/pir/duplex-sponge-fiat-shamir.md": "1627955c74526d0f211d4abad433d6438fab0ce93ff3684f4b428f5bc4d46664",
+      "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
+      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "ee666e2a028571a117f84a0fc235547850e4a424452666440201d68ad38386ff",
+      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "f41e78f381743cafae3711ab89c7606e30b49891f82f7d6998fd895d3e711e67",
       "docs-next/pir/profiles/interaction.json": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4",
       "docs-next/pir/profiles/published-identities.json": "f9ae6791ffaad95ec0c965164bc03e156c9985050b9064684bfe0257780da30a",
       "evaluation/duplex-sponge-transcript/cases/construction.json": "e057df04559b277d70af6ca4009ac626fa1e56e9e2d1977d45275576111daf1f",
       "evaluation/duplex-sponge-transcript/duplexmodel/construction.py": "edd9782270fa7e9030ca2389bea57c3a34d92ff73641d526c1df34cf5d766fc4",
-      "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "1a7e01fcba27588868cb23d7dfa8d76efa6d713b5318b556e698a8169b210e8b",
-      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "33d400a45eab49862ae5c201635435f3605cc63a8b5f5c7fbe05c0ef37eb00ed",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "ac446c57deb0f0750402142a597e24ed598bd482a139cb7f1eb5d2dcb35734b4",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "76903c1c51e6e0d7f36d559176bc1e6a204ee3b6a41e4d85d266f253d24d2e29",
       "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json": "da3c8387828c61b1f5f0558c8cfd44f1fb8a94fa9dc0f3eb4b97f278b9b7f818",
-      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "fb73d18cbc2c5f5cf59c0216787fdad9e147c148c23c673f83d1f85a82baea92"
+      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "993dc934fb9b03a1199784605ba7900f0e581b7f1af571cd7ed4a64e46fe7996"
     },
     "underdetermined_values": {}
   }
