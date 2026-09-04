@@ -2624,7 +2624,15 @@ is the union of the lanes whose images lie in the statement's event, and to
 nothing outside `modelled_lanes`; a question whose stated PIR event is not
 such a union, one that says every run is accepted, for instance, carries an
 `OperationalCompletion` requirement in its family's requirement sequence,
-and forms without it only as `CannotAnswer`.
+and forms without it only as `CannotAnswer`. Transport preserves measure as
+well as events: the transported statement's probability is the mass that the
+run's subdistribution of Section 3.3 of the Analysis model gives the PIR
+event, with the mass of `Unmodelled` lanes and of missing runs left where it
+is; a provider statement stated as a probability conditional on completion,
+or on the modelled lanes, transports only when the conditioning event is
+itself a lane union whose mass the statement also fixes or when an
+`OperationalCompletion` premise makes that mass one, and never by
+renormalizing over the lanes the provider models.
 
 `SchnorrNamedPremiseRequirements(S)` is the exact premise requirement
 sequence of the relation-bound Fresh question over `S`, fixed by

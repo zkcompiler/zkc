@@ -3,7 +3,7 @@
   "key": "analysis-cryptographic-property",
   "catalog_namespace": "analysis",
   "profile_family": "analysis.cryptographic-property",
-  "revision": 1,
+  "revision": 2,
   "expected_imports": [
     "analysis-kernel",
     "canonical-framed-fiat-shamir",
@@ -90,7 +90,7 @@
     {
       "kind": "analysis.semantic-law",
       "name": "property-core-v0",
-      "revision": 1,
+      "revision": 2,
       "fragment": "property-semantics",
       "selector": "## 1. Selection and research basis",
       "dependencies": []

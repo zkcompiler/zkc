@@ -121,7 +121,15 @@ its five dependents rotate, on top of the migration's seventeen.
   run-established bindings; the Schnorr fixed-setup formation now requires
   that sequence to be empty in both issued views as its own premise. The review's
   catalog repair (owner field names, `result_ref` removed) landed with the
-  migration text. A fifth review round checks these changes.
+  migration text. The review's Section 12 named the next adversarial
+  obligation, a typed, event-and-measure preserving transport argument, and
+  gave the illicit move it must exclude, normalizing a subdistribution with
+  half its mass accepted and half missing into conditional probability one;
+  the provider-map clause of Section 3.2 now states that transport preserves
+  measure, that unmodelled and missing mass stays where it is, and that a
+  conditional provider statement transports only through a lane union whose
+  mass the statement fixes or an `OperationalCompletion` premise. A fifth
+  review round checks these changes.
 - An independent review of this text, as for the migration.
 
 ## 4. Non-claims
