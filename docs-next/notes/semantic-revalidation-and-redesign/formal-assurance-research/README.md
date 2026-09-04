@@ -517,6 +517,15 @@ provider, extraction tool, or durable schema.
   records the one underdetermination the projection found: an unframed
   `Always` challenge had no schedule coordinate, repaired on the owner page
   as a total-schedule position and an optional frame coordinate.
+- [`total-schedule-and-owner-compiled-source-authority.md`](total-schedule-and-owner-compiled-source-authority.md)
+  projects the total-schedule challenge position and the optional frame
+  coordinate in the finite executor and the family view packages, replaces
+  the executable model's untagged source-authority helper with the owner
+  profiles' compilers and tagged family values (with canonical and duplex
+  discriminators), re-pins the packages that rotate with it, and records
+  the one owner underdetermination the alignment found: the checked
+  construction's `checker_contract` content identity has no owner
+  definition.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them
