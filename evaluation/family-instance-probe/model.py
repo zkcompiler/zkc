@@ -16,7 +16,7 @@ import statistics
 import sys
 import time
 from types import ModuleType
-from typing import Any, Callable
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[2]
