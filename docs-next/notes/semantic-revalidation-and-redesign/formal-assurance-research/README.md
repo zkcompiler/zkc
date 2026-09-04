@@ -549,6 +549,14 @@ provider, extraction tool, or durable schema.
   independent replay, and a finite six-lane outcome map: twenty-one findings
   affirmative, two expected refusals, and, on the migration branch, four
   Analysis-side holds that the stacked Analysis text is to absorb.
+- [`analysis-source-package-repins-2026-09-05.md`](analysis-source-package-repins-2026-09-05.md)
+  re-pins the Analysis branch's packages to the repaired owner text: the
+  thirteen research checks that the deep-review repairs and the migration
+  package repairs had turned red on this branch are classified as pin,
+  transcribed model, or semantic consequence and repaired in place, with the
+  provider interpretations re-derived at the rotated subject identities and
+  the migration review's cones asserted relative to the migration head so
+  the stacked branch's Analysis rotation is exact rather than tolerated.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them

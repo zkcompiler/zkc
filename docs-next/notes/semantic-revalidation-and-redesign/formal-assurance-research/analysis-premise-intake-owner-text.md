@@ -6,9 +6,8 @@
 > after the pre-freeze deep review's repairs; the fifth round closed every
 > question except the declared hold on the unpublished VCVio declaration;
 > the provider-carrier decision packet's first two items are adopted; the
-> existing Analysis packages are migrated to the new fields; the re-pins of
-> this branch's packages to the repaired owner text and publication remain,
-> the latter the user's gate.
+> existing Analysis packages are migrated to the new fields and re-pinned to
+> the repaired owner text; publication remains, the user's gate.
 > **Inputs:** the migration decisions on the sampling law and the outcome
 > partition (`f0-v2c-decision-inputs.md`, Sections 4, 5, and 10) and the
 > intake design of `analysis-named-premise-intake.md`.

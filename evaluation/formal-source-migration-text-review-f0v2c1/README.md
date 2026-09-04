@@ -111,3 +111,15 @@ random-oracle, concrete-sponge, quantum-random-oracle, protocol-security,
 deployment, or production-readiness claims. It makes no finding about the
 Analysis-owned fixed-setup premise and does not edit any owner source or
 manifest.
+
+## The stacked Analysis branch
+
+The Analysis branch carries this package unchanged while its own pages rotate
+the Analysis profiles. The rotation cones are therefore asserted relative to
+the pinned migration head: the current tree may rotate, beyond each recorded
+cone, exactly the profiles that differ from that head, and every such profile
+must be Analysis-owned. On the migration branch the current tree equals the
+head, so the recorded cones apply unchanged; on the Analysis branch the
+kernel and the five Analysis profiles rotate additionally, and the frozen
+metrics digest of this copy records that.
+
