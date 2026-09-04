@@ -756,3 +756,38 @@ supplies their exact Check, Reduction, Claim, or failure-guard references. The
 migration review's completion-derivation, executable-preimage, and public-setup
 findings are separate cross-contract blockers and do not change any frozen
 holdout verdict.
+
+## Round nine
+
+The five migrated owner pages and the migration record are re-pinned after the
+replay-input, total-schedule, owner-compiler, and checker-contract repairs. The
+Interaction, canonical-framed, duplex, endpoint, and OIR page pins are now,
+respectively:
+
+```text
+e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af
+840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e
+1627955c74526d0f211d4abad433d6438fab0ce93ff3684f4b428f5bc4d46664
+d9a89afe089a802554b889622f9b4cb8521d8b588ca263005010a419430b7378
+235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6
+```
+
+The migration record pin is
+`f9c59a4a06ab5c2c8e31c0268dbaed1cb0f0b4a0ba9dd0ac0135f962c837e3af`.
+The refreshed adjudication ledger is frozen at
+`65222397363d60ef8d59f9ddd0a65b48cf0d0b8a2728ebd6b38a0ca596d2c188`;
+its canonical and duplex family-view citations move to lines 1270-1717 and
+869-1325. The endpoint and OIR citation ranges do not move.
+
+All eight rows were re-adjudicated against both comparison sources. Five fit,
+three break at the same named boundaries, none bend, none disagree, and none
+change verdict. The represented WHIR and WARPfold frontiers still have zero
+`Unknown` claim states and zero verdict changes. The verdict aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+The canonical family-view reference boundary remains affirmative. The four
+source-specialized fitting rows retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`: the repaired general owner and
+executable contracts do not supply their exact protocol-specific Check,
+Reduction, Claim, or failure-guard references. No target owner-page defect or
+changed holdout verdict is inferred from that missing source evidence.

@@ -34,15 +34,15 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "9ef8181f88c3145319c4608c599f51b409157cfe9fdab7c1821fbb57f9da4bce",
-    "docs-next/pir/fiat-shamir.md": "f3a8b2a13f16528101cf4894262c187bcb89ace695f9ca290b29bab63c7f3c0f",
-    "docs-next/pir/duplex-sponge-fiat-shamir.md": "323ddf9b7bc3d0cc3837f05adf8034e9a8db5965d5c452a5fde246b875f11640",
+    "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
+    "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
+    "docs-next/pir/duplex-sponge-fiat-shamir.md": "1627955c74526d0f211d4abad433d6438fab0ce93ff3684f4b428f5bc4d46664",
     "docs-next/pir/endpoint-projection-views.md": "d9a89afe089a802554b889622f9b4cb8521d8b588ca263005010a419430b7378",
     "docs-next/oir/projection-contract.md": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6",
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "cb3d3c27a1fb33602c028aa1402eabefbbad7076cb660c5de311dd31dfd73139",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "f9c59a4a06ab5c2c8e31c0268dbaed1cb0f0b4a0ba9dd0ac0135f962c837e3af",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",

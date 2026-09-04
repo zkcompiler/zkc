@@ -6,8 +6,8 @@
     "outcome_partition": "docs-next/pir/interactive-core.md Sections 12.3 and 12.4, lines 1895-2165",
     "normalized_views": "docs-next/pir/interactive-core.md Sections 13.1 and 13.2, lines 2175-2754",
     "view_read_closure": "docs-next/pir/interactive-core.md Section 13.2, lines 2706-2736",
-    "canonical_family_views": "docs-next/pir/fiat-shamir.md Section 13, lines 1240-1676",
-    "duplex_family_views": "docs-next/pir/duplex-sponge-fiat-shamir.md Section 11, lines 839-1289",
+    "canonical_family_views": "docs-next/pir/fiat-shamir.md Section 13, lines 1270-1717",
+    "duplex_family_views": "docs-next/pir/duplex-sponge-fiat-shamir.md Section 11, lines 869-1325",
     "endpoint_terminal_projection": "docs-next/pir/endpoint-projection-views.md Sections 7.2 and 7.3, lines 892-1144",
     "oir_terminal_projection": "docs-next/oir/projection-contract.md Sections 5 and 11, lines 256-398 and 671-700"
   },

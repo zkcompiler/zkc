@@ -47,6 +47,15 @@ separate completion, executable-preimage, and public-setup blockers neither
 supply nor remove those source carriers. The verdict aggregate therefore
 remains `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
 
+Round nine re-pins the same five owner pages and migration record after the
+replay-input, total-schedule, owner-compiler, and checker-contract repairs. The
+family-view citation ranges move, but the adjudication is unchanged: five rows
+fit, three break, none bend, none disagree, and none change verdict. The four
+source-specialized fitting rows still retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`; the new general owner and
+executable contracts do not provide the missing protocol-specific Core tables,
+guards, or carrier references.
+
 ## Executable evidence
 
 Run from the repository root:

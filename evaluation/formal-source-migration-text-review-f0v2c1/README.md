@@ -2,11 +2,14 @@
 
 ## Exact question
 
-Does the current migrated PIR owner text close all sixteen verification
-questions: the ten previously frozen owner-text questions, plus exact Interface
-completion derivability, source-authority preimage equations, heterogeneous
-challenge-transition representability, required-influence exactness, the
-Analysis owner-read join, and public-setup view totality?
+Does the current migrated PIR owner text close all seventeen verification
+questions: decision fidelity, the terminal contract, public-coin transfer,
+owner-name closure, manifest closure, publication-compiler agreement, family
+body closure, PIR reference closure, static-view law selection, declaration-body
+closure, Interface completion derivability, source-authority preimage equations,
+the checked-construction checker contract, heterogeneous challenge-transition
+representability, required-influence exactness, the Analysis owner-read join,
+and public-setup view totality?
 
 Run from the repository root:
 
@@ -16,101 +19,95 @@ python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check
 
 ## Frozen answer
 
-No. The current result is
-`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`. The ten earlier questions
-remain affirmative, and three of the six new questions close. Three are
-blocked:
+Yes. All seventeen findings are affirmative and the frozen aggregate is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`. The three blockers retained by
+the previous freeze are closed, and the checker-contract question added in
+this round is affirmative.
 
-- `CannotAnswer/F0V2C1-C-INTERFACE-COMPLETION-DERIVATION`: the Interface
-  presents the construction, challenge, prefix receipt count, and prefix state,
-  but the owner transition evaluates acceptance with public-condition values
-  and prior joint-member challenge values at
-  `docs-next/pir/fiat-shamir.md:863-866`. Those inputs are not among the
-  completion coordinates and are not recoverable from a potentially
-  noninjective transcript state.
-- `CannotAnswer/F0V2C1-C-CANONICAL-BINDING-PREIMAGE`: the PIR text has one
-  tagged compiler route for every audited source-authority constructor, but the
-  Analysis executable requests its Fiat--Shamir execution view at
-  `evaluation/k3-analysis-closure/reference_model.py:16521` through a common
-  helper that forms and hashes an untagged six-field payload record at
-  `evaluation/k2-protocol-fiat-shamir/reference_model.py:2262-2283`. It never
-  invokes the canonical-framed source compiler.
-- `CannotAnswer/F0V2C1-C-PUBLIC-SETUP-VIEW-TOTALITY`: the owner correctly places
-  the review countermodel's occurrence-derived binding in `run_established`,
-  but the claim at `docs-next/pir/interactive-core.md:3062-3063` that every
-  Protocol has exactly one view ignores invocation-valued entries. The current
-  Schnorr fixed-setup formation at
-  `docs-next/analysis/cryptographic-properties.md:523-525,561-566` neither
-  requires `run_established` to be empty nor permits it as the complement of
-  the entry sequence.
+For completion derivability, the owner defines `SamplingInputTypes(c)` as the
+transcript bytes followed by the challenge's public conditions and prior joint
+members. The Interface names exactly those two trailing operand sequences; it
+does not present the transcript bytes as a replay operand. Each non-occurrence
+operand is a protocol-fixed constant, a slot-bound public input, or a derived
+value of those. Although the raw `ValueRef` carrier has a verifier-private arm,
+the Core transfer rule and canonical Fiat--Shamir admission rule refuse a
+verifier-private dependency from an admitted public condition. The previous
+occurrence-valued countermodel is refused when its
+`ExternalApplication` transport entry is absent and passes this admission gate
+when the entry is present. The owner transition and replay equations then make
+each draw, acceptance result, and final state a function of the presented
+operand values and prefix state.
 
-The completion coordinate types themselves fit the Foundation bounds. The
-fixed worst tuples are `(11,1,0,0)` for the challenge natural,
-`(12,1,0,0)` for the receipt-count natural, and `(64,3,2,1)` for the domain
-payload record. Both state coordinates inherit the construction's stricter
-tagged-completion preflight. The six coordinate constructors and the six body
-arms agree exactly.
+The completion coordinate types remain within the Foundation bounds. The fixed
+worst tuples are `(11,1,0,0)` for the challenge natural, `(12,1,0,0)` for the
+receipt-count natural, and `(64,3,2,1)` for the domain-payload record. Both
+state coordinates inherit the construction's stricter tagged-completion
+preflight, and the six coordinate constructors match the six body arms.
 
-## Closed repaired questions
+For source authority, the audit scans every top-level PIR Markdown page,
+fourteen identity-constructor sites, and twenty-four profile compiler
+definitions. It forms the binding payload, capability requirement, no-policy,
+and policy-closure subjects for canonical-framed execution and checked
+construction routes and for the corresponding duplex compiler arms. All
+sixteen encoded subject bodies are byte-equal to independently assembled owner
+equations. The two issued canonical bindings also carry the four expected
+identities; the duplex comparison exercises the executable compiler directly
+because this bounded model has no duplex issuer.
 
-The heterogeneous two-rule countermodel now has one exact
-`challenge_rules` sequence. Rule zero retains Boolean decoding and bounds
-`(1,1)` at position zero; rule one retains `RootNat(2)` decoding and bounds
-`(2,3)` at position one. No rule is selected, dropped, or changed.
+The checked-construction payload now carries the owner-defined checker
+contract. For the canonical-framed family, the evaluator-signature,
+semantic-law, and failure-schema references resolve at catalog ordinals
+`(1,3,1)`; for the duplex family they resolve at `(1,6,1)`. Both bind the
+checker-contract body compiler at ordinal 5. The canonical body is 1,871 bytes
+with SHA-256
+`f8f79c99a8e74702367b7bfa6fc0a7ccc16427282aae23f24666c0c2ceff97fb`
+and live identity
+`zkcidv0:pir.checker-contract:ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701`.
+The duplex body is 5,243 bytes with SHA-256
+`75eb2fe3aa516c17e0ae365df9bd8d4c7c218c7a8852ae39e1dc927ee5b64765`
+and live identity
+`zkcidv0:pir.checker-contract:393ff59dfef32f77fee523fc0708dbe591c964369fb2b9461947ff93d9c83210`.
+The executable bodies equal the owner equations byte for byte, while the former
+package-local checker coordinate is rejected.
 
-The influence view also closes. For a first challenge after a root opening with
-two public bindings, its required entries are the exact Core, construction, and
-application-domain headers, the root scope atom, and distinct binding atoms
-zero and one. For a second challenge, the static sequence additionally carries
-one required `EveryActualDrawOf(0)` entry, expanded at runtime to the exact
-tag-13 draw atoms in order. `InfluenceAtom` has one definition, its body has
-tags zero through thirteen, and the view explicitly includes the requirements
-from items 9 and 10 of the owner law.
+For public setup, the occurrence-derived countermodel still projects exactly
+to empty `entries` and `run_established = [0]`. The repaired statement is now
+uniqueness per protocol and invocation, up to the quotient's covered-value
+equivalence. A second executable discriminator gives distinct view bodies to
+two invocations of one protocol whose covered public input differs, exactly as
+that statement requires. The fixed-setup premise owned by Analysis is outside
+this round's scope and is recorded as `OutsideScope`, not converted into a
+`CannotAnswer` finding.
 
-The Analysis read catalog contains ten literal view selections and 66 selected
-top-level fields. Every name resolves to a field of the selected owner body.
-The owner law says these names are ordinal subtree paths and expands them to
-every atomic leaf, so no current selection is ambiguous between a leaf and a
-subtree. The developer control covers all ten current literal calls and is
-sufficient for this field-existence join; it does not by itself prove the
-recursive semantic meaning of the expanded leaves.
+The heterogeneous two-rule transition and symbolic prior-draw countermodels
+remain exact. The Analysis read catalog still contains ten literal selections
+and 66 selected fields, all resolved to owner body fields and exact ordinal
+subtrees. The ten earlier verification questions also remain affirmative.
 
-The source-authority text audit scans all top-level PIR Markdown pages, fourteen
-identity constructors, and twenty-four profile compiler definitions. All ten
-direct constructors apply a same-page compiler to an enumerated family tag;
-all four generic static-view constructors dispatch through the owner profile.
-Both Fiat--Shamir family pages enumerate `StaticView` and
-`CheckedConstruction` arms for all four family-valued source subject kinds.
-The frozen failure is confined to the executable preimage route described
-above, not the current owner prose.
-
-## Earlier questions and publication reconstruction
-
-The earlier decision-fidelity, Terminal, public-coin graph, owner-name,
-manifest, publication-compiler, family-body, PIR-reference, static-view-law,
-and declaration-body findings remain affirmative. The current family-view
-census contains 91 exact fields across the eight construction/result bodies.
-The existing bounded schedule, terminal, region, claim-status, reference-leaf,
-law-selection, declaration-body, and manifest checks are rerun unchanged apart
-from current source and revision pins.
+## Publication reconstruction
 
 The reference and independent publication compilers agree on all eighteen
-profiles at the current tree, the round-seven tree, and the migration base.
-Relative to round seven, sixteen profiles rotate. `oir-endpoint-graph` and
-`analysis-kernel` are stable, Foundation is unchanged, and no publication table
-is written. Relative to the migration base, the previously frozen
-seventeen-profile cone remains, with only `analysis-kernel` stable.
+profiles at the current tree, the earlier comparison tree, and the migration
+base. Relative to the previous round, fourteen profiles rotate; `interaction`,
+`verifier-derived-query-plan`, `oir-endpoint-graph`, and `analysis-kernel`
+remain stable. Relative to the earlier comparison tree, sixteen profiles rotate and
+only `oir-endpoint-graph` and `analysis-kernel` remain stable. Relative to the
+migration base, seventeen profiles rotate and only `analysis-kernel` remains
+stable. Foundation is unchanged. The check does not write the publication
+table; the checked-in legacy table is expected to differ for six profiles.
 
 ## What a passing check establishes
 
-A passing `--check` establishes that the exact pinned sources reproduce all
-sixteen finding outcomes, including the three explicit `CannotAnswer`
-boundaries, the three closed repair countermodels, the ten retained findings,
-and agreement of the two publication compilers. It does not turn a missing
-premise into an affirmative result and does not edit an owner source.
+A passing `--check` establishes that the exact pinned sources reproduce the
+seventeen frozen outcomes and evidence digest, including the replay-input
+countermodel, all sixteen source-subject byte comparisons, both live
+checker-contract equations, the per-invocation public-setup discriminator, and
+agreement of the two publication compilers.
 
-It does not publish or bless an identity, prove any owner law for arbitrary
-values, validate a live compiler, runtime, provider, backend, or endpoint,
+It does not publish or bless an identity, prove an owner law for arbitrary
+values, validate an external compiler, runtime, provider, backend, or endpoint,
 establish relation satisfaction or theorem truth, or prove Fiat--Shamir,
-random-oracle, concrete-sponge, QROM, protocol-security, deployment, or
-production-readiness claims.
+random-oracle, concrete-sponge, quantum-random-oracle, protocol-security,
+deployment, or production-readiness claims. It makes no finding about the
+Analysis-owned fixed-setup premise and does not edit any owner source or
+manifest.

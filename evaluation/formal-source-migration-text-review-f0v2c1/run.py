@@ -21,6 +21,7 @@ HERE = Path(__file__).resolve().parent
 EXPECTED = HERE / "expected-findings.json"
 MIGRATION_BASE_COMMIT = "b82ce5e"
 ROUND_SEVEN_COMMIT = "0590fc5f"
+ROUND_EIGHT_COMMIT = "16eed00f"
 
 PAGES = (
     "docs-next/pir/interactive-core.md",
@@ -583,11 +584,119 @@ def _interface_completion_review(pages: dict[str, str]) -> dict[str, Any]:
         "terminal output coordinate no longer inherits an admitted Foundation type",
     )
 
+    sampling_input_block = canonical.split("SamplingInputTypes(c) =", 1)[1].split(
+        "ChallengeRule =", 1
+    )[0]
+    sampling_input_terms = re.findall(
+        r"\[(TranscriptBytesType)\]|core\.challenges\[c\]\.(public_conditions)|"
+        r"core\.challenges\[c\]\.correlation\.(prior_members)",
+        sampling_input_block,
+    )
+    normalized_sampling_terms = [next(item for item in row if item) for row in sampling_input_terms]
+    _require(
+        normalized_sampling_terms
+        == ["TranscriptBytesType", "public_conditions", "prior_members"],
+        "SamplingInputTypes(c) operand order drifted",
+    )
+    replay_operands = [
+        "public_condition_values",
+        "prior_joint_member_challenge_values",
+    ]
+    _require(
+        all(
+            snippet in interface
+            for snippet in (
+                "the values of the challenge's `public_conditions` and the accepted values of\n"
+                "its `correlation.prior_members`",
+                "the operands of the owner's\n`SamplingInputTypes(c)`",
+                "Each such operand is a constant that `ProtocolId` fixes, a public\n"
+                "input that Section 3.2 binds to a slot, a derived value of those, or an\n"
+                "occurrence value with a transport entry of Section 3.4.",
+            )
+        ),
+        "Interface replay-operand statement drifted",
+    )
+
+    value_ref_block = interaction.split("ValueRef =", 1)[1].split(
+        "TypedValueRef =", 1
+    )[0]
+    value_ref_arms = re.findall(r"(?:^|\n)\s*(?:\|\s*)?([A-Z][A-Za-z]+)\(", value_ref_block)
+    _require(
+        value_ref_arms
+        == [
+            "PublicInput",
+            "VerifierPrivateInput",
+            "Constant",
+            "Derived",
+            "OccurrenceOutput",
+        ],
+        "Core ValueRef arms drifted",
+    )
+    public_condition_verifier_private_rejected = all(
+        snippet in text
+        for text, snippet in (
+            (
+                interaction,
+                "Each Challenge has exactly one occurrence and one output. Its public\n"
+                "conditions are available and public before that occurrence.",
+            ),
+            (
+                interaction,
+                "| VerifierPrivate  else if VerifierPrivate in deps\n"
+                "  | Invalid          else if some public_condition class is not StaticPublic",
+            ),
+            (
+                canonical,
+                "require `PublicCoinEligible(core) = true",
+            ),
+            (
+                canonical,
+                "refuse any missing action, unsupported effect, invalid scope,\n"
+                "   verifier-private influence, or bound crossing",
+            ),
+        )
+    )
+    _require(
+        public_condition_verifier_private_rejected,
+        "verifier-private challenge-condition exclusion drifted",
+    )
+
+    # Re-run the round-eight countermodel at the repaired Interface boundary.
+    # Its public condition is an earlier public occurrence output.  The value is
+    # available to the Core, but omission of the ExternalApplication transport
+    # makes the interpretation-failure presentation inadmissible at item 6.
+    occurrence_replay_operands = {("message", 0)}
+    missing_transport: set[tuple[str, int, str]] = set()
+    complete_transport = {("message", 0, "ExternalApplication")}
+
+    def replay_transport_admitted(
+        operands: set[tuple[str, int]],
+        transport: set[tuple[str, int, str]],
+    ) -> bool:
+        return all((*operand, "ExternalApplication") in transport for operand in operands)
+
+    countermodel_without_transport_refused = not replay_transport_admitted(
+        occurrence_replay_operands, missing_transport
+    )
+    countermodel_with_transport_admitted = replay_transport_admitted(
+        occurrence_replay_operands, complete_transport
+    )
+    _require(
+        countermodel_without_transport_refused and countermodel_with_transport_admitted,
+        "replay-input transport discriminator drifted",
+    )
+    _require(
+        "for a canonical-framed\n   Protocol the replay-input transport of Section 3.5"
+        in interface,
+        "Interface admission item 6 no longer enforces replay-input transport",
+    )
+
     presented = {
         "construction",
         "challenge",
         "prefix_receipt_count",
         "prefix_state",
+        *replay_operands,
     }
     # This is a dependency derivation from the transition equations.  Leaves
     # not produced by another displayed equation are operation inputs.  The
@@ -673,6 +782,36 @@ def _interface_completion_review(pages: dict[str, str]) -> dict[str, Any]:
         "coordinate_body_arms": body_arms,
         "coordinate_body_matches_list": len(coordinates) == len(body_arms),
         "presented_derivation_inputs": sorted(presented),
+        "sampling_input_terms": normalized_sampling_terms,
+        "sampling_inputs_without_transcript_bytes": replay_operands,
+        "interface_names_exact_trailing_sampling_operands": True,
+        "value_ref_arms": value_ref_arms,
+        "non_occurrence_operand_classes": ["Constant", "PublicInput", "Derived"],
+        "public_input_assignment_is_total": (
+            "Domain(invocation_assignment) =" in interface
+            and "{ Public(p) | p in core.public_inputs }" in interface
+        ),
+        "verifier_private_public_condition_admissible": False,
+        "verifier_private_public_condition_rejection_lines": {
+            "core_public_requirement": _line_number(
+                interaction, "conditions are available and public before that occurrence"
+            ),
+            "core_transfer": _line_number(
+                interaction, "| VerifierPrivate  else if VerifierPrivate in deps"
+            ),
+            "fiat_shamir_public_coin_gate": _line_number(
+                canonical, "require `PublicCoinEligible(core) = true"
+            ),
+            "fiat_shamir_private_influence_refusal": _line_number(
+                canonical, "verifier-private influence, or bound crossing"
+            ),
+        },
+        "round_eight_occurrence_countermodel": {
+            "operand": "OccurrenceOutput(message,0)",
+            "without_external_application_transport": "Refused",
+            "with_external_application_transport": "AdmissibleAtReplayInputGate",
+            "admission_item": 6,
+        },
         "draw_receipt_dependency_roots": sorted(draw_roots),
         "final_state_dependency_roots": sorted(final_state_roots),
         "missing_draw_inputs": missing_draw_inputs,
@@ -701,6 +840,9 @@ def _interface_completion_review(pages: dict[str, str]) -> dict[str, Any]:
         "complete": (
             not missing_draw_inputs
             and not missing_final_state_inputs
+            and public_condition_verifier_private_rejected
+            and countermodel_without_transport_refused
+            and countermodel_with_transport_admitted
             and state_types_admitted
             and terminal_output_types_admitted
             and len(coordinates) == len(body_arms)
@@ -883,49 +1025,584 @@ def _source_identity_review() -> dict[str, Any]:
         model_selects_transcript_profile,
         "executable execution-view owner-profile selection drifted",
     )
-    model_compiler_calls = protocol_model.count(
-        "CanonicalFramedSourceBindingPayloadBody("
+    _require(
+        all(
+            snippet in protocol_model
+            for snippet in (
+                "def compile_pir_source_subject_body(",
+                "payload_body = compile_pir_source_subject_body(",
+                "no_policy_body = compile_pir_source_subject_body(",
+                "requirement_body = compile_pir_source_subject_body(",
+                "closure_body = compile_pir_source_subject_body(",
+            )
+        ),
+        "executable source-subject compiler dispatch drifted",
     )
-    common_untagged_body = all(
-        snippet in protocol_model
-        for snippet in (
-            "payload_body = k1.DatumRecord(",
-            '(0, k1.Symbol(owner_domain))',
-            '(1, family)',
-            '(2, source_body)',
-            '"pir.source-binding-payload",\n        payload_body,',
+
+    k2 = _load_module(
+        "_migration_review_k2",
+        ROOT / PROTOCOL_REFERENCE_MODEL,
+    )
+    publication_model = _load_module(
+        "_migration_review_source_publication",
+        ROOT / "evaluation/semantic-profile-publication/reference_model.py",
+    )
+    publication = publication_model.compile_repository()
+    k1 = k2.k1
+
+    def encoded(value: object) -> bytes:
+        return k1.encode_datum(value)
+
+    def body_observation(value: object) -> dict[str, Any]:
+        raw = encoded(value)
+        return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+
+    def source_bundle(
+        profile: object,
+        owner_compiler: object,
+        source_family: object,
+        arm: int,
+        local_payload: object,
+        capability_family: str,
+        consumer_id: object,
+        purpose_id: object,
+        binding: object | None = None,
+    ) -> dict[str, Any]:
+        family = k1.Symbol(capability_family)
+        consumer_role_body = k1.DatumRecord(
+            ((0, family), (1, k2._any_content_ref(consumer_id, "review consumer")))
+        )
+        purpose_role_body = k1.DatumRecord(
+            ((0, family), (1, k2._any_content_ref(purpose_id, "review purpose")))
+        )
+        consumer_role_id = k2._authority_id(
+            profile, "pir.source-consumer", consumer_role_body
+        )
+        purpose_role_id = k2._authority_id(
+            profile, "pir.source-purpose", purpose_role_body
+        )
+        payload_body = k1.DatumVariant(arm, local_payload)
+        no_policy_body = k1.DatumVariant(
+            arm,
+            k1.DatumRecord(
+                ((0, k2._any_content_ref(profile.identity, "review owner profile")),)
+            ),
+        )
+        requirement_body = k1.DatumVariant(
+            arm,
+            k1.DatumRecord(
+                (
+                    (0, k2._any_content_ref(consumer_role_id, "review consumer role")),
+                    (1, k2._any_content_ref(purpose_role_id, "review purpose role")),
+                )
+            ),
+        )
+        payload_id = k2._authority_id(
+            profile, "pir.source-binding-payload", payload_body
+        )
+        no_policy_id = k2._authority_id(
+            profile, "pir.source-no-policy", no_policy_body
+        )
+        requirement_id = k2._authority_id(
+            profile, "pir.source-capability-requirement", requirement_body
+        )
+        closure_body = k1.DatumVariant(
+            arm,
+            k1.DatumRecord(
+                (
+                    (0, k2._any_content_ref(payload_id, "review payload")),
+                    (1, k2._any_content_ref(no_policy_id, "review no-policy")),
+                    (2, k2._any_content_ref(requirement_id, "review requirement")),
+                )
+            ),
+        )
+        closure_id = k2._authority_id(
+            profile, "pir.source-policy-closure", closure_body
+        )
+        expected_bodies = {
+            k2.PIRSourceSubjectKind.BINDING_PAYLOAD: payload_body,
+            k2.PIRSourceSubjectKind.CAPABILITY_REQUIREMENT: requirement_body,
+            k2.PIRSourceSubjectKind.NO_POLICY: no_policy_body,
+            k2.PIRSourceSubjectKind.POLICY_CLOSURE: closure_body,
+        }
+        for subject_kind, expected_body in expected_bodies.items():
+            observed_body = k2.compile_pir_source_subject_body(
+                owner_compiler,
+                subject_kind,
+                source_family,
+                expected_body.payload,
+            )
+            _require(
+                encoded(observed_body) == encoded(expected_body),
+                f"{owner_compiler.value} {source_family.value} {subject_kind.value} "
+                "differs from the owner equation",
+            )
+        if binding is not None:
+            _require(
+                binding.owner_binding_payload == payload_id
+                and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+                and binding.capability_requirement.owner_requirement == requirement_id
+                and binding.owner_policy_closure == closure_id,
+                f"{owner_compiler.value} issued source-authority identities drifted",
+            )
+        return {
+            "owner_compiler": owner_compiler.value,
+            "family": source_family.value,
+            "arm": arm,
+            "subjects": {
+                subject_kind.value: {
+                    **body_observation(body),
+                    "identity": {
+                        k2.PIRSourceSubjectKind.BINDING_PAYLOAD: payload_id,
+                        k2.PIRSourceSubjectKind.CAPABILITY_REQUIREMENT: requirement_id,
+                        k2.PIRSourceSubjectKind.NO_POLICY: no_policy_id,
+                        k2.PIRSourceSubjectKind.POLICY_CLOSURE: closure_id,
+                    }[subject_kind].carrier(),
+                    "byte_equal": True,
+                }
+                for subject_kind, body in expected_bodies.items()
+            },
+            "issued_binding_checked": binding is not None,
+            "issued_binding_matches_expected": True if binding is not None else None,
+        }
+
+    checker_declarations = {
+        "canonical-framed-fiat-shamir": (
+            k2.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+            (
+                ("pir.evaluator-signature", "canonical-framed-construction-check-v0"),
+                ("pir.semantic-law", "canonical-framed-same-core-construction-v0"),
+                ("pir.failure-schema", "canonical-framed-construction-defects-v0"),
+            ),
+            (1, 3, 1),
+            k2._checked_fs_result_schema_body(),
+            1871,
+            "f8f79c99a8e74702367b7bfa6fc0a7ccc16427282aae23f24666c0c2ceff97fb",
+            "zkcidv0:pir.checker-contract:ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701",
+        ),
+        "duplex-sponge-fiat-shamir": (
+            k2.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+            (
+                ("pir.evaluator-signature", "duplex-sponge-construction-check-v0"),
+                ("pir.semantic-law", "duplex-sponge-same-core-construction-v0"),
+                ("pir.failure-schema", "duplex-sponge-construction-defects-v0"),
+            ),
+            (1, 6, 1),
+            k2._checked_duplex_fs_result_schema_body(),
+            5243,
+            "75eb2fe3aa516c17e0ae365df9bd8d4c7c218c7a8852ae39e1dc927ee5b64765",
+            "zkcidv0:pir.checker-contract:393ff59dfef32f77fee523fc0708dbe591c964369fb2b9461947ff93d9c83210",
+        ),
+    }
+    expected_checker_field_types = {
+        "operation": 'ProfileDeclarationRef<"pir.evaluator-signature">',
+        "law": "PIRProfileLawReference",
+        "defects": 'ProfileDeclarationRef<"pir.failure-schema">',
+        "result_schema": "PIRRuntimeSchema",
+    }
+    checker_owner_specs = {
+        "canonical-framed-fiat-shamir": (
+            "docs-next/pir/fiat-shamir.md",
+            "CheckedFSConstructionCheckerContract",
+            "CheckedFSConstructionCheckerContractId",
+            "CheckedFSConstructionCheckerContractBody",
+            "PIRCanonicalFramedFSProfileId",
+            "exactly the description of CheckedFSConstruction",
+        ),
+        "duplex-sponge-fiat-shamir": (
+            "docs-next/pir/duplex-sponge-fiat-shamir.md",
+            "CheckedDuplexFSConstructionCheckerContract",
+            "CheckedDuplexFSConstructionCheckerContractId",
+            "CheckedDuplexFSConstructionCheckerContractBody",
+            "PIRDuplexSpongeFSProfileId",
+            "exactly the description of the checked duplex construction result",
+        ),
+    }
+    checker_owner_definitions: dict[str, dict[str, Any]] = {}
+    for key, (
+        page,
+        contract_symbol,
+        identity_symbol,
+        body_symbol,
+        profile_symbol,
+        result_description,
+    ) in checker_owner_specs.items():
+        owner_text = _read(page)
+        contract_block, contract_line = _definition_block(owner_text, contract_symbol)
+        field_types = _record_field_types(owner_text, contract_symbol)
+        _require(
+            field_types == expected_checker_field_types,
+            f"{key} checker-contract field types drifted",
+        )
+        declarations = checker_declarations[key][1]
+        _require(
+            all(f"exactly this profile's {name}" in contract_block for _kind, name in declarations)
+            and result_description in contract_block,
+            f"{key} checker-contract declaration names drifted",
+        )
+        identity_equation = (
+            f'{identity_symbol} =\n'
+            '  ProfiledSemanticId<"pir.checker-contract">(\n'
+            f"    B, {profile_symbol},\n"
+            f"    {body_symbol}(contract))"
+        )
+        body_equation = (
+            f"{body_symbol}(x) = R {{\n"
+            "  0: ProfileDeclarationRefBody(x.operation),\n"
+            "  1: ProfileDeclarationRefBody(x.law),\n"
+            "  2: ProfileDeclarationRefBody(x.defects),\n"
+            "  3: PIRDescriptionBody(x.result_schema)\n"
+            "}"
+        )
+        binding_sentence = (
+            f"The binding's `checker_contract` is exactly `{identity_symbol}`."
+        )
+        _require(
+            identity_equation in owner_text
+            and body_equation in owner_text
+            and binding_sentence in owner_text,
+            f"{key} checker-contract identity equation drifted",
+        )
+        checker_owner_definitions[key] = {
+            "page": page,
+            "contract_line": contract_line,
+            "identity_line": _line_number(owner_text, identity_equation),
+            "body_line": _line_number(owner_text, body_equation),
+            "binding_line": _line_number(owner_text, binding_sentence),
+            "field_types": field_types,
+            "declaration_names_exact": True,
+            "identity_equation_exact": True,
+            "body_equation_exact": True,
+            "binding_uses_identity_exactly": True,
+        }
+    checker_contracts: dict[str, dict[str, Any]] = {}
+    checker_objects: dict[str, tuple[object, object, object]] = {}
+    for key, (
+        owner_compiler,
+        declarations,
+        expected_ordinals,
+        result_schema,
+        expected_bytes,
+        expected_sha256,
+        expected_identity,
+    ) in checker_declarations.items():
+        compiled = publication.profiles[key]
+        ordinals = tuple(compiled.declaration_index[item] for item in declarations)
+        _require(ordinals == expected_ordinals, f"{key} checker declaration ordinals drifted")
+        catalogs = k1.profile_declaration_catalogs(compiled.profile)
+        for (kind, name), ordinal in zip(declarations, ordinals):
+            declaration = catalogs[kind].values[ordinal]
+            _require(
+                type(declaration) is k1.DatumRecord
+                and dict(declaration.fields).get(0) == k1.Symbol(name),
+                f"{key} checker declaration reference does not resolve",
+            )
+        expected_body = k1.DatumRecord(
+            tuple(
+                (
+                    field,
+                    k1.profile_declaration_ref_datum(
+                        k1.ProfileLocalDeclarationRef(kind, ordinal)
+                    ),
+                )
+                for field, ((kind, _name), ordinal) in enumerate(
+                    zip(declarations, ordinals)
+                )
+            )
+            + ((3, result_schema),)
+        )
+        observed_body = k2._checked_construction_checker_contract_body(
+            compiled.profile, owner_compiler, result_schema
+        )
+        _require(
+            encoded(observed_body) == encoded(expected_body),
+            f"{key} executable checker contract differs from the owner equation",
+        )
+        contract_id = k2._checked_construction_checker_contract_id(
+            compiled.profile, owner_compiler, result_schema
+        )
+        observation = body_observation(expected_body)
+        _require(
+            observation == {"bytes": expected_bytes, "sha256": expected_sha256}
+            and contract_id.carrier() == expected_identity
+            and compiled.declaration_index[
+                ("pir.body-compiler", "checker-contract-body-v0")
+            ]
+            == 5
+            and k1.Symbol("pir.checker-contract")
+            in compiled.profile.supported_subject_kinds,
+            f"{key} checker-contract identity route drifted",
+        )
+        checker_contracts[key] = {
+            "declaration_references": [
+                {"kind": kind, "name": name, "ordinal": ordinal}
+                for (kind, name), ordinal in zip(declarations, ordinals)
+            ],
+            "body_compiler_ordinal": 5,
+            "body": observation,
+            "identity": contract_id.carrier(),
+            "executable_owner_body_byte_equal": True,
+        }
+        checker_objects[key] = (compiled.profile, result_schema, contract_id)
+
+    core, construction, _invocation, _strategy = k2.schnorr_fixture()
+    execution_manifest = k2.required_static_view_read_closure(
+        k2.StaticViewKind.EXECUTION,
+        (k2.StaticViewField.EX_REPLAY,),
+    )
+    execution_outcome = k2.issue_execution_view(
+        core,
+        construction,
+        k2.ChallengeInterpretation.FIAT_SHAMIR,
+        execution_manifest,
+    )
+    _require(
+        execution_outcome.kind is k2.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        "canonical-framed execution view did not issue",
+    )
+    issued = execution_outcome.value
+    coordinate_body = k2._canonical_static_view_coordinate_body(
+        issued.projection.coordinate, issued.capability._source
+    )
+    canonical_static_local = k1.DatumRecord(
+        (
+            (0, coordinate_body),
+            (
+                1,
+                k1.DatumSeq(
+                    tuple(
+                        k2._static_view_field_coordinate_body(
+                            coordinate_body,
+                            issued.projection.coordinate.view_kind,
+                            field,
+                        )
+                        for field in issued.projection.manifest
+                    )
+                ),
+            ),
         )
     )
-    _require(common_untagged_body, "executable source-payload construction drifted")
-    model_uses_bound_canonical_compiler = model_compiler_calls > 0
-    model_interaction_compiler_calls = protocol_model.count(
-        "PIRSourceBindingPayloadBody("
+    _require(
+        encoded(
+            k2._static_binding_payload_local_body(
+                issued.projection,
+                issued.capability._source,
+                k2.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+            )
+        )
+        == encoded(canonical_static_local),
+        "canonical execution-view local payload differs from the owner equation",
     )
-    model_uses_current_interaction_compiler = model_interaction_compiler_calls > 0
-    expected_canonical_preimage = (
-        "V",
-        0,
+    source_bundles = {
+        "canonical-execution-static-view": source_bundle(
+            k2.K2_SEMANTIC_PROFILES.transcript_fs,
+            k2.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+            k2.PIRSourceFamily.STATIC_VIEW,
+            0,
+            canonical_static_local,
+            "static-view",
+            issued.capability.consumer_id,
+            issued.capability.purpose_id,
+            issued.source_binding,
+        )
+    }
+
+    checked_outcome = k2.check_fs_construction(core, core, construction)
+    _require(
+        checked_outcome.kind is k2.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        "canonical checked construction did not issue",
+    )
+    checked = checked_outcome.value
+    witness_profile = k2.K2_SEMANTIC_PROFILES.transcript_fs
+    witness_result_schema = k2._checked_fs_result_schema_body()
+    witness_declarations = checker_declarations["canonical-framed-fiat-shamir"][1]
+    witness_catalogs = k1.profile_declaration_catalogs(witness_profile)
+    witness_ordinals: list[int] = []
+    for kind, name in witness_declarations:
+        matches = [
+            ordinal
+            for ordinal, declaration in enumerate(witness_catalogs[kind].values)
+            if type(declaration) is k1.DatumRecord
+            and dict(declaration.fields).get(0) == k1.Symbol(name)
+        ]
+        _require(
+            len(matches) == 1,
+            "runtime canonical checker declaration does not resolve uniquely",
+        )
+        witness_ordinals.append(matches[0])
+    expected_witness_contract_body = k1.DatumRecord(
+        tuple(
+            (
+                field,
+                k1.profile_declaration_ref_datum(
+                    k1.ProfileLocalDeclarationRef(kind, ordinal)
+                ),
+            )
+            for field, ((kind, _name), ordinal) in enumerate(
+                zip(witness_declarations, witness_ordinals)
+            )
+        )
+        + ((3, witness_result_schema),)
+    )
+    witness_contract_body = k2._checked_construction_checker_contract_body(
+        witness_profile,
+        k2.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+        witness_result_schema,
+    )
+    _require(
+        encoded(witness_contract_body) == encoded(expected_witness_contract_body),
+        "runtime canonical checker contract differs from the owner equation",
+    )
+    witness_contract_id = k2._authority_id(
+        witness_profile, "pir.checker-contract", expected_witness_contract_body
+    )
+    result = checked.result
+    canonical_checked_local = k1.DatumRecord(
         (
-            "R",
-            {
-                0: "CanonicalFramedViewCoordinateBody(coordinate)",
-                1: "CanonicalFramedFieldCoordinateBody(manifest)",
-            },
-        ),
+            (0, k2._any_content_ref(result.source_protocol_id, "source Protocol")),
+            (1, k2._any_content_ref(result.target_protocol_id, "target Protocol")),
+            (2, k2._any_content_ref(result.shared_core_id, "shared Core")),
+            (
+                3,
+                k2._any_content_ref(
+                    result.transcript_construction_id, "transcript construction"
+                ),
+            ),
+            (4, witness_result_schema),
+            (5, k2._any_content_ref(witness_contract_id, "checker contract")),
+        )
     )
-    executable_preimage = (
-        "R",
-        {
-            0: "owner_domain",
-            1: "family",
-            2: "source_body",
-            3: "manifest_body",
-            4: "consumer_ref",
-            5: "purpose_ref",
-        },
+    _require(
+        encoded(k2._checked_fs_binding_payload_local_body(result, witness_profile))
+        == encoded(canonical_checked_local),
+        "canonical checked local payload differs from the owner equation",
     )
-    executable_preimage_matches_owner = (
-        executable_preimage == expected_canonical_preimage
+    source_bundles["canonical-checked-construction"] = source_bundle(
+        witness_profile,
+        k2.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+        k2.PIRSourceFamily.CHECKED_CONSTRUCTION,
+        1,
+        canonical_checked_local,
+        "checked-fs-construction",
+        checked.capability.consumer_id,
+        checked.capability.purpose_id,
+        checked.source_binding,
+    )
+
+    duplex_profile, duplex_result_schema, duplex_contract_id = checker_objects[
+        "duplex-sponge-fiat-shamir"
+    ]
+    protocol_id = k2.protocol_id(
+        core, construction, k2.ChallengeInterpretation.FIAT_SHAMIR
+    )
+    core_id = k2.core_id(core)
+    construction_id = k2.construction_id(core, construction)
+    duplex_coordinate_body = k1.DatumRecord(
+        (
+            (
+                0,
+                k1.DatumVariant(
+                    0,
+                    k1.DatumRecord(
+                        ((0, k2._any_content_ref(protocol_id, "duplex Protocol")),)
+                    ),
+                ),
+            ),
+            (1, k2._any_content_ref(duplex_profile.identity, "duplex profile")),
+        )
+    )
+    duplex_field_coordinate = k1.DatumRecord(
+        (
+            (0, duplex_coordinate_body),
+            (1, k1.DatumSeq((k1.DatumVariant(0, k1.Nat(0)),))),
+            (2, k1.DatumVariant(4, k1.UNIT)),
+        )
+    )
+    duplex_static_local = k1.DatumRecord(
+        (
+            (0, duplex_coordinate_body),
+            (1, k1.DatumSeq((duplex_field_coordinate,))),
+        )
+    )
+    source_bundles["duplex-static-view"] = source_bundle(
+        duplex_profile,
+        k2.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+        k2.PIRSourceFamily.STATIC_VIEW,
+        0,
+        duplex_static_local,
+        "static-view",
+        core_id,
+        core_id,
+    )
+    duplex_checked_local = k1.DatumRecord(
+        (
+            (0, k2._any_content_ref(protocol_id, "duplex source Protocol")),
+            (1, k2._any_content_ref(protocol_id, "duplex target Protocol")),
+            (2, k2._any_content_ref(core_id, "duplex shared Core")),
+            (3, k2._any_content_ref(construction_id, "duplex construction")),
+            (4, duplex_result_schema),
+            (5, k2._any_content_ref(duplex_contract_id, "duplex checker contract")),
+        )
+    )
+    _require(
+        encoded(
+            k2._checked_construction_binding_payload_local_body(
+                protocol_id,
+                protocol_id,
+                core_id,
+                construction_id,
+                duplex_profile,
+                k2.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                duplex_result_schema,
+            )
+        )
+        == encoded(duplex_checked_local),
+        "duplex checked local payload differs from the owner equation",
+    )
+    source_bundles["duplex-checked-construction"] = source_bundle(
+        duplex_profile,
+        k2.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+        k2.PIRSourceFamily.CHECKED_CONSTRUCTION,
+        1,
+        duplex_checked_local,
+        "checked-fs-construction",
+        core_id,
+        core_id,
+    )
+
+    former_contract_id = k2._authority_id(
+        witness_profile,
+        "pir.fs-construction-checker-contract",
+        k1.DatumRecord(((0, k1.Symbol("bounded-check-fs-construction-v0")),)),
+    )
+    former_checked_local = k1.DatumRecord(
+        canonical_checked_local.fields[:-1]
+        + ((5, k2._any_content_ref(former_contract_id, "former checker")),)
+    )
+    former_local_coordinate_rejected = (
+        encoded(k1.DatumVariant(1, former_checked_local))
+        != encoded(k1.DatumVariant(1, canonical_checked_local))
+    )
+    _require(former_local_coordinate_rejected, "former checker coordinate was accepted")
+
+    checker_contract_complete = (
+        len(checker_owner_definitions) == 2
+        and len(checker_contracts) == 2
+        and all(
+            row["executable_owner_body_byte_equal"]
+            and len(row["declaration_references"]) == 3
+            for row in checker_contracts.values()
+        )
+        and former_local_coordinate_rejected
+    )
+    executable_preimage_matches_owner = all(
+        all(subject["byte_equal"] for subject in bundle["subjects"].values())
+        for bundle in source_bundles.values()
+    )
+    model_compiler_calls = protocol_model.count("compile_pir_source_subject_body(")
+    model_uses_bound_canonical_compiler = executable_preimage_matches_owner
+    model_uses_current_interaction_compiler = (
+        "PIRSourceOwnerCompiler.INTERACTION" in protocol_model
     )
     textual_complete = sites == direct_sites + dispatched_sites
     return {
@@ -947,24 +1624,25 @@ def _source_identity_review() -> dict[str, Any]:
         "owner_profile_selection_line": _line_number(
             protocol_model, "owner_profile = ("
         ),
-        "untagged_payload_body_line": _line_number(
-            protocol_model, "payload_body = k1.DatumRecord("
-        ),
-        "untagged_payload_identity_line": _line_number(
-            protocol_model,
-            'payload_id = _authority_id(\n        profile,\n        "pir.source-binding-payload",',
-        ),
-        "untagged_payload_authentication_end_line": _line_number(
-            protocol_model, "selected_profile=profile,\n    )\n    no_policy_body ="
-        ),
         "canonical_compiler_calls_in_model": model_compiler_calls,
-        "interaction_compiler_calls_in_model": model_interaction_compiler_calls,
         "model_selects_transcript_profile": model_selects_transcript_profile,
         "model_uses_current_interaction_compiler": model_uses_current_interaction_compiler,
         "model_uses_bound_canonical_compiler": model_uses_bound_canonical_compiler,
-        "owner_required_canonical_preimage_shape": expected_canonical_preimage,
-        "executable_preimage_shape": executable_preimage,
+        "source_subject_bundles": source_bundles,
         "executable_preimage_matches_owner": executable_preimage_matches_owner,
+        "source_subject_byte_comparisons": sum(
+            len(bundle["subjects"]) for bundle in source_bundles.values()
+        ),
+        "checker_owner_definitions": checker_owner_definitions,
+        "checker_contracts": checker_contracts,
+        "runtime_canonical_checker_contract": {
+            "declaration_ordinals": witness_ordinals,
+            "body": body_observation(expected_witness_contract_body),
+            "identity": witness_contract_id.carrier(),
+            "executable_owner_body_byte_equal": True,
+        },
+        "checker_contract_complete": checker_contract_complete,
+        "former_checker_coordinate_rejected": former_local_coordinate_rejected,
         "complete": (
             textual_complete
             and model_selects_transcript_profile
@@ -1088,7 +1766,9 @@ def _challenge_transition_representability(pages: dict[str, str]) -> dict[str, A
         if source != target
     ]
     _require(
-        "projected entry by entry from the construction's `challenge_rules`"
+        "projected entry by entry\nfrom the construction's `challenge_rules`"
+        in canonical
+        and "the challenge occurrence's\nposition in the exact total Core schedule"
         in canonical,
         "challenge-rule projection equation drifted",
     )
@@ -1570,9 +2250,10 @@ def _public_setup_review(pages: dict[str, str]) -> dict[str, Any]:
         "both entry sequences must be\nbyte-identical and contain exactly every `PublicParameter` and `SessionContext`"
         in fixed_setup_fragment
     )
-    protocol_uniqueness_claim = (
-        "Both sequences are decided by the Protocol alone, so every admitted Protocol\n"
-        "has exactly one setup view"
+    protocol_and_invocation_uniqueness_claim = (
+        "Membership in both sequences is decided by the Protocol alone, and the\n"
+        "entries' values by the invocation, so every admitted Protocol has a setup\n"
+        "view and has exactly one per invocation up to the covered-value equivalence"
         in interaction
     )
     protocol_only_complete_sequences = not (
@@ -1595,9 +2276,18 @@ def _public_setup_review(pages: dict[str, str]) -> dict[str, Any]:
             "true_body": true_view["body"],
         },
         "protocol_only_complete_sequences": protocol_only_complete_sequences,
-        "owner_claims_one_view_per_protocol": protocol_uniqueness_claim,
+        "owner_claims_one_view_per_protocol": False,
+        "owner_claims_one_view_per_protocol_and_invocation": (
+            protocol_and_invocation_uniqueness_claim
+        ),
         "one_view_per_protocol_is_derivable": False,
-        "one_view_per_protocol_and_invocation_is_derivable": True,
+        "one_view_per_protocol_and_invocation_is_derivable": (
+            countermodel_represented_exactly
+            and same_protocol_two_public_input_values_yield_two_views
+            and protocol_and_invocation_uniqueness_claim
+        ),
+        "analysis_fixed_setup_scope": "OutsideScope",
+        "analysis_fixed_setup_judged_here": False,
         "analysis_requires_run_established_empty": analysis_requires_empty,
         "analysis_still_requires_all_bindings_in_entries": analysis_requires_complete_entries,
         "analysis_fixed_setup_projection_line": _line_number(
@@ -1608,14 +2298,13 @@ def _public_setup_review(pages: dict[str, str]) -> dict[str, Any]:
             analysis, "both entry sequences must be"
         ),
         "owner_uniqueness_claim_line": _line_number(
-            interaction, "Both sequences are decided by the Protocol alone"
+            interaction, "Membership in both sequences is decided by the Protocol alone"
         ),
         "statement_invariance_exclusion_exact": statement_invariance_exclusion_exact,
         "complete": (
             countermodel_represented_exactly
-            and protocol_only_complete_sequences
-            and analysis_requires_empty
-            and not analysis_requires_complete_entries
+            and same_protocol_two_public_input_values_yield_two_views
+            and protocol_and_invocation_uniqueness_claim
             and statement_invariance_exclusion_exact
         ),
     }
@@ -3681,6 +4370,47 @@ def _publication_review() -> dict[str, Any]:
         and stable == ["oir-endpoint-graph", "analysis-kernel"],
         "the repair rotation cone drifted",
     )
+    reference_round_eight, cold_round_eight = compile_at(ROUND_EIGHT_COMMIT)
+    _require(
+        reference_round_eight == cold_round_eight,
+        "publication compilers disagree at the round-eight head",
+    )
+    round_eight_rotated = [
+        key
+        for key in reference.PROFILE_KEYS
+        if reference_table["profiles"][key]
+        != reference_round_eight["profiles"][key]
+    ]
+    round_eight_stable = [
+        key for key in reference.PROFILE_KEYS if key not in round_eight_rotated
+    ]
+    _require(
+        round_eight_rotated
+        == [
+            "canonical-framed-fiat-shamir",
+            "duplex-sponge-fiat-shamir",
+            "public-setup",
+            "commitment-opening",
+            "oracle-commitment",
+            "interface-plan",
+            "endpoint-source-view",
+            "oir-projection-relation",
+            "relations",
+            "analysis-cryptographic-property",
+            "analysis-afk-transport",
+            "analysis-afk-theorem-source-validation",
+            "analysis-incremental-composition",
+            "analysis-incremental-composition-source-validation",
+        ]
+        and round_eight_stable
+        == [
+            "interaction",
+            "verifier-derived-query-plan",
+            "oir-endpoint-graph",
+            "analysis-kernel",
+        ],
+        "the round-eight-to-current rotation cone drifted",
+    )
     reference_migration_base, cold_migration_base = compile_at(MIGRATION_BASE_COMMIT)
     _require(
         reference_migration_base == cold_migration_base,
@@ -3722,12 +4452,17 @@ def _publication_review() -> dict[str, Any]:
     return {
         "compiler_agreement": True,
         "round_seven_compiler_agreement": True,
+        "round_eight_compiler_agreement": True,
         "migration_base_compiler_agreement": True,
         "compiled_profiles": len(reference_table["profiles"]),
         "comparison_head": ROUND_SEVEN_COMMIT,
         "rotated_profiles": rotated,
         "rotation_count": len(rotated),
         "stable_profiles": stable,
+        "round_eight_head": ROUND_EIGHT_COMMIT,
+        "round_eight_rotated_profiles": round_eight_rotated,
+        "round_eight_rotation_count": len(round_eight_rotated),
+        "round_eight_stable_profiles": round_eight_stable,
         "migration_base": MIGRATION_BASE_COMMIT,
         "migration_base_rotated_profiles": migration_rotated,
         "migration_base_rotation_count": len(migration_rotated),
@@ -3854,10 +4589,11 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
             ("oir.semantic-law", "exact-endpoint-projection-v0"): 1,
         },
         "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": {
-            ("pir.semantic-law", "canonical-framed-source-views-v0"): 2,
+            ("pir.semantic-law", "canonical-framed-same-core-construction-v0"): 1,
+            ("pir.semantic-law", "canonical-framed-source-views-v0"): 4,
         },
         "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": {
-            ("pir.semantic-law", "duplex-sponge-source-views-v0"): 1,
+            ("pir.semantic-law", "duplex-sponge-source-views-v0"): 2,
         },
         "docs-next/pir/profiles/endpoint-source-view.json": {
             ("pir.body-compiler", "endpoint-source-view-body-v0"): 1,
@@ -3885,8 +4621,8 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
     expected_profile_revisions = {
         "docs-next/oir/profiles/endpoint-graph.json": 1,
         "docs-next/oir/profiles/projection-relation.json": 1,
-        "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": 3,
-        "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": 3,
+        "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": 5,
+        "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": 4,
         "docs-next/pir/profiles/endpoint-source-view.json": 2,
         "docs-next/pir/profiles/interaction.json": 3,
         "docs-next/pir/profiles/interface-plan.json": 2,
@@ -3897,8 +4633,8 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
         "docs-next/oir/profiles/projection-relation.json": {},
         "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": {
             ("pir.static-view-schema", "required-influence-view-v0"): 1,
-            ("pir.static-view-schema", "challenge-transition-view-v0"): 1,
-            ("pir.static-view-schema", "execution-view-v0"): 2,
+            ("pir.static-view-schema", "challenge-transition-view-v0"): 2,
+            ("pir.static-view-schema", "execution-view-v0"): 3,
         },
         "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": {
             ("pir.body-compiler", "source-binding-payload-body-v0"): 1,
@@ -3908,6 +4644,7 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
             ("pir.static-view-schema", "duplex-encoded-input-coverage-view-v0"): 1,
             ("pir.static-view-schema", "duplex-fs-construction-view-v0"): 1,
             ("pir.static-view-schema", "execution-view-v0"): 1,
+            ("pir.semantic-law", "duplex-sponge-same-core-construction-v0"): 1,
         },
         "docs-next/pir/profiles/endpoint-source-view.json": {
             ("pir.body-compiler", "source-binding-payload-body-v0"): 1,
@@ -4047,7 +4784,7 @@ def _decision_review(
         [
             _json(path)["revision"]
             for path in MIGRATED_MANIFESTS
-        ] == [1, 1, 3, 3, 2, 3, 2, 2],
+        ] == [1, 1, 5, 4, 2, 3, 2, 2],
         not any(path.startswith("docs-next/analysis/") or path.startswith("docs-next/relations/") or path.startswith("docs-next/foundation/") for path in (*PAGES, *MIGRATED_MANIFESTS)),
     ]
     _require(applied == [True] * 8, "decision-fidelity census drifted")
@@ -4134,6 +4871,13 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
             "F0V2C1-A-SOURCE-AUTHORITY-PREIMAGES"
             if source_identity["complete"]
             else "F0V2C1-C-CANONICAL-BINDING-PREIMAGE",
+        ),
+        Finding(
+            "checked-construction-checker-contract",
+            "Affirmative" if source_identity["checker_contract_complete"] else "CannotAnswer",
+            "F0V2C1-A-CHECKER-CONTRACT-IDENTITY-DERIVED"
+            if source_identity["checker_contract_complete"]
+            else "F0V2C1-C-CHECKER-CONTRACT-IDENTITY",
         ),
         Finding(
             "challenge-transition-representability",

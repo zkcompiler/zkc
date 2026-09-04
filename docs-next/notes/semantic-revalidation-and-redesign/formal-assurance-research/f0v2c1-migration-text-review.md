@@ -1,9 +1,8 @@
 # Migration Text Freeze Review
 
-> **State:** `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED` after round
-> eight; the ten earlier questions and three repaired-countermodel questions
-> close, while completion derivability, the executable canonical binding
-> preimage, and public-setup totality remain blocked
+> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round nine;
+> all seventeen questions close, including the three round-eight blockers and
+> the newly added checker-contract question
 > **Authority:** None. This verification lane changes no owner page, source
 > profile manifest, or published identity.
 > **Executable evidence:**
@@ -11,15 +10,16 @@
 
 ## 1. Exact question and aggregate
 
-Does the current migrated PIR owner text close all sixteen verification
+Does the current migrated PIR owner text close all seventeen verification
 questions: the ten questions frozen in round seven, plus Interface completion
 derivability, source-authority preimage equations, heterogeneous
 challenge-transition representability, required-influence exactness, the
-Analysis owner-read join, and public-setup view totality?
+Analysis owner-read join, public-setup view totality, and the exact
+checked-construction checker contract?
 
-Round eight answers no for the exact current sources. Thirteen questions close
-and three remain `CannotAnswer`, so the current aggregate is
-`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`.
+Round nine answers yes for the exact current sources. All seventeen questions
+are affirmative, so the current aggregate is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`.
 
 The audit pins the six migrated owner pages and eight migrated manifests. It
 does not treat a resolved selector, a passing source compiler, or a finite
@@ -27,7 +27,7 @@ oracle as proof that the represented semantics are correct.
 
 Sections 2 through 10 preserve the first-round evidence and proposed repairs
 as history. The numbered round sections record each later recheck; `Round
-eight` is the current result and supersedes the earlier aggregates without
+nine` is the current result and supersedes the earlier aggregates without
 rewriting their historical evidence.
 
 ## 2. Answer one: decision fidelity
@@ -2274,3 +2274,351 @@ every protocol fits.
 
 The real Git index remains untouched. The working tree is intentionally
 uncommitted for Main.
+
+## Round nine
+
+### Exact question and result
+
+Does the current migrated PIR owner text close all seventeen verification
+questions: the sixteen questions rerun in round eight and the additional exact
+checked-construction checker-contract question?
+
+Yes, for the exact sources at migration head `5295ef09`. All seventeen
+findings are affirmative, so the aggregate is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`.
+
+| Finding | Outcome and stable code |
+|---|---|
+| decision fidelity | `Affirmative/F0V2C1-A-DECISION-FIDELITY` |
+| Terminal contract | `Affirmative/F0V2C1-A-TERMINAL-CONTRACT` |
+| public-coin graph | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` |
+| owner-name closure | `Affirmative/F0V2C1-A-OWNER-CLOSURE` |
+| manifest closure | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` |
+| publication compilers | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` |
+| family-body closure | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` |
+| reference-leaf closure | `Affirmative/F0V2C1-A-PIR-REFERENCE-CLOSURE` |
+| static-view law selection | `Affirmative/F0V2C1-A-STATIC-VIEW-LAW-SELECTION` |
+| declaration-body closure | `Affirmative/F0V2C1-A-DECLARATION-BODY-CLOSURE` |
+| Interface completion derivability | `Affirmative/F0V2C1-A-INTERFACE-COMPLETION-DERIVABILITY` |
+| source-authority preimage equations | `Affirmative/F0V2C1-A-SOURCE-AUTHORITY-PREIMAGES` |
+| checked-construction checker contract | `Affirmative/F0V2C1-A-CHECKER-CONTRACT-IDENTITY-DERIVED` |
+| challenge-transition representability | `Affirmative/F0V2C1-A-CHALLENGE-TRANSITION-REPRESENTABLE` |
+| influence-view exactness | `Affirmative/F0V2C1-A-INFLUENCE-VIEW-EXACT` |
+| Analysis read-catalog join | `Affirmative/F0V2C1-A-ANALYSIS-READ-CATALOG-JOIN` |
+| public-setup view totality | `Affirmative/F0V2C1-A-PUBLIC-SETUP-VIEW-TOTAL` |
+
+The retained questions rerun their bounded schedule, terminal, region,
+claim-status, view-body, reference-leaf, law-selection, declaration-body,
+manifest, and publication controls against current source bytes. Their
+affirmative outcomes remain bounded evidence rather than general proofs.
+
+### Completion derivability
+
+The two values the Interface presents in addition to transcript state are
+exactly the two trailing operands of the owner definition. The Fiat--Shamir
+page defines `SamplingInputTypes(c)` at lines 211-215 as transcript bytes,
+`public_conditions`, then `correlation.prior_members`. The Interface names the
+public-condition and accepted prior-member values at lines 541-545 and does
+not list transcript bytes as a separate replay operand.
+
+The remaining classification is exhaustive for an admitted canonical-framed
+Protocol:
+
+- the raw Core `ValueRef` carrier has public-input, verifier-private, constant,
+  derived, and occurrence-output arms at
+  `docs-next/pir/interactive-core.md:506-511`;
+- the Interface permits only a protocol-fixed constant, a public input bound
+  to a slot, a derived value of those, or an occurrence value with transport
+  at `docs-next/pir/interfaces-and-plans.md:545-551`;
+- the invocation assignment is total over the public inputs at Interface lines
+  358-361; and
+- a verifier-private dependency causes `ChallengeTransfer` to return
+  `VerifierPrivate`, while any non-static-public condition is invalid, at Core
+  lines 1688-1696. Construction admission additionally requires
+  `PublicCoinEligible` and refuses verifier-private influence at
+  `docs-next/pir/fiat-shamir.md:937-956`.
+
+Thus a verifier-private public-condition reference is syntactically possible
+in an unauthenticated raw carrier but is not admissible in the construction
+under review. There is no missing owner premise and no `CannotAnswer` at this
+boundary.
+
+The round-eight countermodel has one public occurrence output as a challenge
+operand. With no transport entry to `ExternalApplication`, it is refused by
+the requirement at Interface lines 547-553 and admission item 6 at lines
+611-612. Adding exactly that transport entry makes the countermodel pass this
+gate. No transcript-state injectivity is assumed.
+
+The transition at Fiat--Shamir lines 850-889 makes each squeeze output,
+post-state, acceptance result, decoded value, and final state a deterministic
+function of the construction, challenge, prefix state, and the two presented
+operand sequences. Replay explicitly recomputes those quantities at lines
+1028-1036. Consequently every draw, acceptance result, and `final_state` is a
+function of presented values and `prefix_state`, as the Interface concludes at
+lines 553-559. The six completion coordinates and six body arms still agree,
+and their previously checked Foundation bounds remain unchanged.
+
+### Source-authority preimages
+
+The owner equations are now implemented rather than merely present in prose.
+The canonical-framed page defines the local static-view payload,
+checked-construction payload, requirement, no-policy, and closure records at
+lines 1665-1692, then wraps both issued families through all four profile
+compilers at lines 1694-1707. The duplex page gives the corresponding equations
+at lines 1275-1317.
+
+The executable model declares both owner compilers and every source-subject
+kind at
+`evaluation/k2-protocol-fiat-shamir/reference_model.py:2211-2250`, binds both
+families to distinct arms at lines 2278-2289, and applies the selected compiler
+at lines 2304-2322. Its authority constructor forms the binding payload,
+no-policy declaration, capability requirement, and policy closure through
+that compiler beginning at lines 2444-2493. The checked-construction issuance
+route supplies the owner-local payload at lines 4246-4259.
+
+The frozen evaluator independently assembles and encodes four subjects for
+each of these routes:
+
+1. canonical-framed execution static view;
+2. canonical-framed checked construction;
+3. duplex static view; and
+4. duplex checked construction.
+
+All sixteen executable subject bodies equal the corresponding owner equations
+byte for byte. Both actually issued canonical bindings also carry the expected
+payload, no-policy, requirement, and closure identities. The duplex profile is
+checked through its live publication profile and executable owner compiler;
+this bounded executable model does not expose a duplex issuance operation, so
+no duplex live-capability claim is made.
+
+### Checker-contract identity
+
+The canonical owner definition at
+`docs-next/pir/fiat-shamir.md:1153-1181` requires the exact operation, same-Core
+law, defect schema, and checked-result schema. Its canonical body equation is
+at lines 1669-1674. The duplex definition is at
+`docs-next/pir/duplex-sponge-fiat-shamir.md:832-860`, with its body equation at
+lines 1279-1284. Both family manifests support
+`pir.checker-contract` and bind `checker-contract-body-v0` at body-compiler
+ordinal 5.
+
+The reference and independent publication compilers assign these declaration
+references:
+
+| Family | Operation ordinal | Law ordinal | Defect ordinal | Body bytes | Body SHA-256 |
+|---|---:|---:|---:|---:|---|
+| canonical framed | 1 | 3 | 1 | 1,871 | `f8f79c99a8e74702367b7bfa6fc0a7ccc16427282aae23f24666c0c2ceff97fb` |
+| duplex sponge | 1 | 6 | 1 | 5,243 | `75eb2fe3aa516c17e0ae365df9bd8d4c7c218c7a8852ae39e1dc927ee5b64765` |
+
+At each ordinal, the referenced catalog declaration is a record whose name is
+exactly the owner-required declaration. The executable helper at
+`evaluation/k2-protocol-fiat-shamir/reference_model.py:3986-4056` resolves the
+same unique declarations and emits the same four-field body byte for byte. The
+current live identities are:
+
+```text
+zkcidv0:pir.checker-contract:ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701
+zkcidv0:pir.checker-contract:393ff59dfef32f77fee523fc0708dbe591c964369fb2b9461947ff93d9c83210
+```
+
+The checked-construction local payload formed at executable lines 4067-4117
+carries that profile-relative checker contract. A payload carrying the former
+package-local checker coordinate encodes differently and is rejected by the
+frozen discriminator.
+
+### Public-setup view totality
+
+The round-eight occurrence-derived countermodel remains represented exactly:
+
+```text
+entries = []
+run_established = [0]
+body = R{0:ContentRef(protocol-id),1:ContentRef(core-id),2:S[],3:S[N(0)]}
+```
+
+The owner formation law is at
+`docs-next/pir/interactive-core.md:3041-3059`. The repaired sentence at lines
+3062-3065 now distinguishes protocol-determined membership from
+invocation-determined entry values and claims exactly one view per Protocol and
+invocation, up to the quotient's covered-value equivalence. The executable
+discriminator projects two invocations of one Protocol with false and true
+values for one covered public input. Their bodies differ, as required, while
+each Protocol-and-invocation input produces exactly one body. A Statement-only
+input remains excluded under lines 3073-3080.
+
+The Analysis-owned fixed-setup half is deliberately not judged here. It is
+recorded in the frozen metrics as `OutsideScope`, not as affirmative and not as
+`CannotAnswer`; its branch must adjudicate its own fixed-setup premises.
+
+### Retained transition, influence, and read-join results
+
+The heterogeneous two-rule transition still preserves both rules, including
+their distinct acceptance and decoder interfaces and bounds. Its newly total
+`position` field is the challenge occurrence's position in the exact total Core
+schedule at `docs-next/pir/fiat-shamir.md:1421-1427`; an absent frame-schedule
+coordinate is never invented. The required-influence projection still carries
+one symbolic entry for every actual draw of a prior challenge. The Analysis
+read catalog still resolves all ten literal selections and 66 selected fields
+to exact owner subtrees.
+
+### Holdout re-adjudication
+
+The holdout package now pins the current Interaction, canonical-framed,
+duplex, endpoint, OIR, migration-note, and structural-axis bytes. Its canonical
+and duplex family-view citation ranges move to lines 1270-1717 and 869-1325.
+All eight rows retain their prior verdict against both comparison sources:
+five fit, three break, none bend, none disagree, and none change. The aggregate
+remains `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+The four source-specialized fitting rows still retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`. The general replay-input,
+owner-compiler, and checker-contract repairs do not supply their missing
+protocol-specific Check, Reduction, Claim, or failure-guard coordinates. This
+is a retained source-evidence boundary, not a changed holdout verdict or an
+owner-page defect.
+
+### Publication reconstruction
+
+The reference and independent compilers agree byte for byte on all eighteen
+profiles at the current tree, the round-eight tree, the earlier comparison
+tree, and the migration base. Relative to round eight, fourteen profiles
+rotate. The stable profiles are `interaction`,
+`verifier-derived-query-plan`, `oir-endpoint-graph`, and `analysis-kernel`.
+Relative to the earlier comparison tree, sixteen rotate and only
+`oir-endpoint-graph` and `analysis-kernel` remain stable. Relative to the
+migration base, seventeen rotate and only `analysis-kernel` remains stable.
+Foundation is unchanged.
+
+The checked-in legacy publication table differs for six upstream profiles.
+That is the expected no-publication boundary: both compilers agree on the
+derived current table, but this lane writes neither the table nor an owner
+manifest.
+
+### Proposed delta
+
+None. The completion, executable source-authority, and PIR public-setup
+reversal conditions proposed in round eight are now satisfied. Those earlier
+proposals remain in this note only as historical audit records. The separate
+Analysis fixed-setup question is outside this round and receives no proposed
+owner-page change from this lane.
+
+## Handoff
+
+Main may commit this working tree with subject:
+
+```text
+test: review the replay-input and preimage repairs and re-pin the holdouts
+```
+
+### Files changed
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py` now reruns
+  seventeen questions. It derives the repaired completion inputs, tests the
+  missing-transport countermodel, excludes verifier-private conditions at the
+  admission boundary, compares sixteen source-subject bodies byte for byte,
+  resolves both checker-contract definitions and catalog references, tests
+  public-setup uniqueness per invocation, and reconstructs all publication
+  cones.
+- `evaluation/formal-source-migration-text-review-f0v2c1/expected-findings.json`
+  freezes seventeen affirmative findings and evidence digest
+  `90ee4311f65e04e2d2776c62a49fc15e6fca842209c4ce151915c0b7893386b4`.
+- `evaluation/formal-source-migration-text-review-f0v2c1/README.md` states the
+  exact question, affirmative answer, evidence, and non-claims.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py` re-pins the
+  current owner and migration-support bytes.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json`
+  moves the two family-view citation ranges without changing a verdict.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json`
+  freezes adjudication digest
+  `65222397363d60ef8d59f9ddd0a65b48cf0d0b8a2728ebd6b38a0ca596d2c188`.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/README.md` records the
+  unchanged five-fit, three-break result and retained exact-carrier boundary.
+- `evaluation/README.md` updates the two existing package rows.
+- `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2c1-migration-text-review.md`
+  adds this round-nine adjudication and handoff.
+- `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2c2-holdout-readjudication.md`
+  adds the round-nine re-pin record.
+
+No owner page, profile manifest, check manifest, lifecycle inventory,
+publication table, directory README, or private artifact was edited. These are
+existing packages, so no lifecycle file count changed.
+
+### Commands and results
+
+All commands ran from the clone root. The check-control rows used
+`GIT_INDEX_FILE=$PWD/.cache/lane-index`,
+`GIT_OBJECT_DIRECTORY=$PWD/.cache/lane-objects`,
+`GIT_ALTERNATE_OBJECT_DIRECTORIES=/home/wonjae/code/zkc/.git/objects`,
+`UV_NO_SYNC=1`, `UV_OFFLINE=1`, and
+`UV_CACHE_DIR=$PWD/.cache/uv`.
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| `python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check` | 0 | 2.46 s | 17 of 17 reproduced; no blocker; affirmative aggregate |
+| `python3 -B evaluation/formal-source-holdout-readjudication-f0v2c2/run.py --check` | 0 | 0.04 s | five fit, three break, no changed verdict |
+| `python3 -B evaluation/k2-protocol-fiat-shamir/run.py --check` | 0 | 6.45 s | 86 of 86 tests passed |
+| `python3 -B evaluation/semantic-profile-publication/run.py --print-identities` | 0 | 0.36 s | both compilers emitted the same eighteen-profile table |
+| `git read-tree HEAD` with the clone-local alternate index | 0 | 0.00 s | alternate index initialized |
+| `git add -A` with the clone-local alternate index and object store | 0 | 0.49 s | all ten changed tracked files represented; real index untouched |
+| `python3 -B checks/run.py validate` | 0 | 0.05 s | 77 checks, six tiers; manifest digest `926710c3c5c29534782ebc0856538807db44d3a8bde10caace17ad5fb1602539` |
+| `python3 -B checks/run.py run --tier developer` | 0 | 2.02 s | all nine checks passed, including lifecycle inventory |
+| `python3 -B checks/run.py run --check research.migration-text-review` | 0 | 2.55 s | focused check passed; inner time 2.490 s |
+| `python3 -B checks/run.py run --check research.holdout-readjudication` | 0 | 0.10 s | focused check passed; inner time 0.044 s |
+| `git diff --check` | 0 | 0.07 s | no whitespace error |
+| owner-path diff audit over PIR, Foundation, Relations, Analysis, and OIR | 0 | 0.00 s | no changed owner path |
+
+The real `.git/index` SHA-256 was
+`c68c393b64a5bf2bca41105b1d01a70f6d066e3160b5b33d2b4f48a90b225bf1`
+before the alternate-index run and remained the same after cleanup. Generated
+check results and clone-local index, object, and cache files were removed.
+
+### Aggregate outcome
+
+The migrated owner-text review is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`: all seventeen questions close at
+the pinned tree with no proposed owner delta. The holdout aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`: five rows fit and three break,
+with no bend, disagreement, or verdict change. Four fitting source-specialized
+rows deliberately retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`; the repairs do not manufacture
+their protocol-specific terminal evidence.
+
+Both publication compilers agree on all eighteen profiles. Fourteen rotate
+from round eight, sixteen from the earlier comparison tree, and seventeen from
+the migration base. The respective stable sets are
+`{interaction, verifier-derived-query-plan, oir-endpoint-graph,
+analysis-kernel}`, `{oir-endpoint-graph, analysis-kernel}`, and
+`{analysis-kernel}`. Foundation does not rotate. Six rows of the legacy
+checked-in publication table remain stale by design and were not treated as
+defects or written by this lane.
+
+### Non-claims
+
+This is frozen, bounded source and executable evidence. It does not prove an
+owner law for arbitrary values, publish or bless an identity, establish
+external compiler, runtime, provider, backend, or endpoint correspondence,
+prove relation satisfaction, theorem truth, random-oracle or protocol
+security, or establish deployment or production readiness. It does not judge
+the Analysis-owned fixed-setup premise. The duplex comparison exercises the
+owner compiler directly and does not claim that this bounded model issues a
+live duplex capability.
+
+### Surprises and corrections to the brief
+
+- The semantic expectations in the brief were borne out. A raw Core value
+  reference can name verifier-private data, but the Core transfer and
+  canonical construction-admission rules reject that route; it is not a new
+  `CannotAnswer` boundary.
+- The requested Analysis fixed-setup half is correctly outside this round. It
+  is recorded as `OutsideScope`, rather than as an affirmative finding or a
+  missing-evidence finding.
+- `AGENTS.md` is absent from this dedicated clone. Its read-only primary-copy
+  counterpart was used for the required repository guidance;
+  `.github/CONTRIBUTING.md` and `.claude/CLAUDE.md` are present locally.
+- The package-registration and lifecycle-count instructions apply when adding
+  a package. This round modifies two already registered packages, and the
+  brief separately forbids manifest edits, so no count pin moved.
+- During diagnosis, temporary captures named under `/tmp/round9-*` were
+  created outside the clone and then deleted. This was a process deviation;
+  no such artifact remains, and no primary-checkout or private file was
+  written.
