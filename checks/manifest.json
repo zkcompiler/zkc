@@ -1282,8 +1282,8 @@
     {
       "id": "research.analysis-premise-text-review",
       "title": "Analysis named-premise owner-text review",
-      "subject": "The repaired Analysis named-premise grammar, exact hypothesis argument schemas, constructor and intake closure, provider lane and completion law, profile manifests, and premise identities in the migrated evaluation packages.",
-      "claim": "A pinned fourth-round source audit closes eight of nine owner-text questions and independently reproduces the migrated relation-bound Fresh, fixed-extractor, and selected family goals. The former identity-input and completion-law defects are closed. The aggregate remains CannotAnswer only because the property owner has not published the provider and closed Boolean carrier declarations proposed by the provider/carrier decision packet.",
+      "subject": "The repaired Analysis named-premise grammar, family-source typing, fixed-setup domain, provider event-and-measure transport, owner-read catalog, profile manifests, and owner-determined premise identity inputs.",
+      "claim": "A pinned fifth-round source audit closes twelve of thirteen owner-text questions and returns an affirmative closure aggregate under the stated rule that reports the unchanged unpublished VCVio provider declaration and carrier as a separate CannotAnswer hold. It independently derives the two corrected family premise bodies, rejects a run-established fixed-setup countermodel, preserves subdistribution mass without renormalization, and joins every Analysis owner-read selection to its PIR owner field.",
       "classification": "research-falsifier",
       "methods": ["known-answer", "negative", "differential", "static-analysis"],
       "source_paths": ["evaluation/formal-source-analysis-premise-review-f0v2d1/run.py", "evaluation/formal-source-analysis-premise-review-f0v2d1/README.md", "evaluation/formal-source-analysis-premise-review-f0v2d1/expected-findings.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2d1-analysis-premise-text-review.md"],
@@ -1292,7 +1292,7 @@
       "environment": "python-stdlib",
       "shardability": "none",
       "blocking": true,
-      "nonclaims": ["This pinned source review does not repair or publish Analysis owner semantics, form or validate a provider premise, establish a relation or Plan fact, prove a theorem or cryptographic property, verify a compiler or backend, or authorize deployment."],
+      "nonclaims": ["This pinned source review does not repair or publish Analysis owner semantics, synchronize separately assigned downstream packages, form or validate a provider premise, establish a relation or Plan fact, prove a theorem or cryptographic property, verify a compiler or backend, or authorize deployment."],
       "execution": {
         "kind": "command",
         "argv": ["{python}", "-B", "evaluation/formal-source-analysis-premise-review-f0v2d1/run.py", "--check"],

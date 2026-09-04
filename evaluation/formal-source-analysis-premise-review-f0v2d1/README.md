@@ -1,23 +1,23 @@
 # Analysis named-premise owner-text review
 
-This package runs the fourth verification review over the current Analysis
-owner text and the reproduced premise-bearing packages. Its one exact question
-is:
+This package runs the fifth verification review over the current Analysis and
+PIR owner text. Its one exact question is:
 
-> Do the reviewed Analysis owner pages close all nine named-premise questions,
-> including the profile-specific hypothesis argument schemas and the provider
-> lane/completion law, and do the migrated evaluation packages now carry only
-> owner-determined premise identities?
+> Do the current owner pages close all thirteen reviewed named-premise
+> questions, including family-source typing, fixed-setup domain, provider
+> measure transport, and owner-read catalog resolution, apart from the
+> separately reported unpublished VCVio provider declaration and carrier hold?
 
 Run from the repository root:
 
     python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py --check
 
-The frozen aggregate is
-`CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`. Eight review
-questions are affirmative. The ninth remains `CannotAnswer` only because the
-property owner has not published the provider and closed Boolean carrier
-declarations proposed by the provider/carrier decision packet.
+The frozen closure aggregate is
+`Affirmative/F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED`. Twelve questions are
+affirmative. The unchanged provider-publication question remains separately
+`CannotAnswer/F0V2D1-C-VCVIO-PROVIDER-DECLARATION`; under this review's stated
+aggregate rule, that declared hold does not block owner-text closure of the
+other twelve questions.
 
 | Review question | Outcome | Stable finding |
 |---|---|---|
@@ -27,58 +27,79 @@ declarations proposed by the provider/carrier decision packet.
 | Decision fidelity | Affirmative | F0V2D1-A-DECISION-FIDELITY |
 | Schnorr coordinate and binding formation | Affirmative | F0V2D1-A-SCHNORR-BINDINGS |
 | Profile and manifest closure | Affirmative | F0V2D1-A-PROFILE-MANIFESTS |
-| Existing-package refreeze | Affirmative | F0V2D1-A-MIGRATED-IDENTITY-INPUTS |
+| Owner-determined package refreeze inputs | Affirmative | F0V2D1-A-MIGRATED-IDENTITY-INPUTS |
 | Hypothesis argument-schema closure | Affirmative | F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS |
 | Provider lane and completion consistency | CannotAnswer | F0V2D1-C-VCVIO-PROVIDER-DECLARATION |
+| Family-source kind | Affirmative | F0V2D1-A-FAMILY-SOURCE-KIND |
+| Fixed-setup domain | Affirmative | F0V2D1-A-FIXED-SETUP-DOMAIN |
+| Provider measure preservation | Affirmative | F0V2D1-A-MEASURE-PRESERVATION |
+| Owner-read catalog join | Affirmative | F0V2D1-A-OWNER-READ-CATALOG-JOIN |
+
+The three supporting findings cover publication-compiler agreement, the exact
+owner-profile rotation cone, and predecessor-probe coverage.
 
 ## What the check covers
 
-The checker freezes the hashes of the owner pages, profile manifests, intake
-probe, migrated Analysis closure model, direct migrated consumers, Foundation
-identity former, provider decision packet, and provider package finding that it
-uses. It verifies:
+The checker freezes every owner page, profile manifest, executable control,
+finite fixture, and comparison source that it reads. It reruns the nine prior
+questions and additionally verifies that:
 
-- every reviewed law family has one closed definition and every constructor,
-  intake branch, profile declaration, and argument schema required by the nine
-  questions remains explicit;
-- the authenticated public-coin projection carries the Fresh declaration and
-  the Fresh premise consumes that declaration rather than an occurrence proxy;
-- construction sampler form is derived from admitted challenge rules and each
-  rule's maximum draw count rather than the legacy aggregate attempt field;
-- the exact operational-completion declaration is published and an unknown
-  declaration reference is refused;
-- an independent encoder, using the owner-prescribed fields but neither the
-  migrated premise-body encoders nor its identity former, reproduces the
-  relation-bound Fresh goal `e813415c...7f6d`, the fixed-extractor goal
-  `925d5f66...af3e`, and the selected family goal `cedc9143...ebf0`, together
-  with every premise identity in those three frozen vectors; and
-- the only remaining `CannotAnswer` is the absent
-  `VCVioProviderDeclaration` and `VCVioBooleanCarrier` owner publication named
-  by Section 4a of the provider/carrier decision packet. The review finds no
-  `CannotAnswer` for an artifact already determined by the owner text.
+- `FamilyHypothesisSource` receives a transport-profile
+  `analysis.property-family` declaration reference. The independently encoded
+  sampler and oracle-process premise bodies use declaration ordinals 13 and 11
+  respectively, while the asymptotic family remains the subject of each
+  premise coordinate. Their current premise digests are
+  `61580220...2d66b` and `91ff07a9...a2f81` under transport profile
+  `35a50055...cc769`.
+- Both the fixed-setup body projection and formation require the Fresh and
+  Fiat--Shamir setup views to have empty `run_established` sequences. The
+  selected Schnorr views have lengths zero and equal four-entry sequences. An
+  independently evaluated `OccurrenceOutput` countermodel enters
+  `run_established`, cannot form fixed setup, and is never replaced by a copied
+  run value.
+- A provider event keeps the mass assigned by the run subdistribution. In the
+  frozen counterexample, acceptance has mass `1/2`, modelled lanes have mass
+  `3/4`, and missing runs have mass `1/4`; replacing the transported value by
+  the renormalized `2/3` is forbidden. Conditional transport requires the
+  conditioning lane union's mass to be fixed or an operational-completion
+  premise to make it one. The check scans every Analysis owner page and records
+  an exact location as `CannotAnswer` if another clause could permit
+  renormalization.
+- The developer owner-read control passes both tests. Ten literal selections
+  and 66 selected-field occurrences resolve against 12 PIR owner bodies,
+  including `ExecutionViewBody` for the Fresh axis and
+  `CanonicalFramedExecutionViewBody` for the Fiat--Shamir axis.
 
-The exact remaining refreeze inputs are:
+The publication check compares the source at `20074d1c` with the current
+source. It observes property and transport profile revisions `1 -> 2`, the
+`property-core-v0` and `afk-application-v0` declaration revisions, agreement
+between the two publication compilers, and rotation of exactly the property,
+transport, and theorem-source-validation profiles.
 
-- a new owner block in `docs-next/analysis/cryptographic-properties.md`,
-  Section 3.2, defining `VCVioProviderDeclaration`,
-  `VCVioBooleanCarrier`, and the provider outcome-map premise in the exact
-  shape stated by the decision packet's Section 4a;
-- manifest definitions `vcvio-provider-declaration-v0` and
-  `vcvio-boolean-carrier-v0`, both at revision zero, with `property-core-v0`
-  depending on both definitions and the property profile revision advanced;
-  and
-- the resulting property-profile identity and every dependent provider
-  premise, intake display, qualified judgment, and frozen package vector.
+The family premise bodies are reconstructed from owner-prescribed fields and
+the Foundation identity primitive. Synchronization of separately assigned
+downstream closure packages is intentionally outside this check; their stale
+pins are neither classified as an owner-text defect nor repaired here.
+
+## Declared provider hold
+
+The property owner still publishes neither `VCVioProviderDeclaration` nor
+`VCVioBooleanCarrier`, and the property manifest publishes neither proposed
+declaration. Consequently a VCVio provider-map premise still cannot form. The
+generic provider carrier, lane map, operational-completion, and measure laws
+are closed; this concrete publication absence is reported separately and is
+not converted into an affirmative.
 
 ## What a pass establishes
 
-A pass establishes only that the nine review classifications, three supporting
-findings, three independent finite identity reconstructions, and one genuine
-owner-publication absence are reproduced from the pinned checkout.
+A pass establishes only that the thirteen review classifications, three
+supporting findings, independently derived finite vectors, exact owner-source
+hashes, and the declared provider hold reproduce the frozen fifth-round result.
 
 ## What a pass does not establish
 
-This source and finite-identity review does not edit or publish Analysis
-semantics, form or establish a provider premise, prove relation satisfaction or
-Plan honesty, prove theorem truth or applicability, validate a compiler or
-backend, establish cryptographic security, or authorize deployment.
+This review does not edit or publish owner semantics, synchronize another
+evaluation package, form or establish the missing provider premise, prove
+relation satisfaction or Plan honesty, prove theorem truth or applicability,
+validate a compiler or backend, establish cryptographic security, or authorize
+deployment.

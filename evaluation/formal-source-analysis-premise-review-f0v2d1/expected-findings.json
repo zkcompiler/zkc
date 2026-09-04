@@ -1,9 +1,10 @@
 {
   "aggregate": {
-    "outcome": "CannotAnswer",
-    "code": "F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
+    "outcome": "Affirmative",
+    "code": "F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED",
     "blocking_findings": [],
-    "cannot_answer_findings": [
+    "cannot_answer_findings": [],
+    "declared_hold_findings": [
       "F0V2D1-C-VCVIO-PROVIDER-DECLARATION"
     ]
   },
@@ -14,9 +15,13 @@
     ["decision-fidelity", "Affirmative", "F0V2D1-A-DECISION-FIDELITY"],
     ["schnorr-coordinate-formation", "Affirmative", "F0V2D1-A-SCHNORR-BINDINGS"],
     ["profile-manifest-closure", "Affirmative", "F0V2D1-A-PROFILE-MANIFESTS"],
-    ["existing-package-refreeze", "Affirmative", "F0V2D1-A-MIGRATED-IDENTITY-INPUTS"],
+    ["owner-determined-refreeze-inputs", "Affirmative", "F0V2D1-A-MIGRATED-IDENTITY-INPUTS"],
     ["hypothesis-argument-schema-closure", "Affirmative", "F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS"],
     ["provider-lane-and-completion-consistency", "CannotAnswer", "F0V2D1-C-VCVIO-PROVIDER-DECLARATION"],
+    ["family-source-kind", "Affirmative", "F0V2D1-A-FAMILY-SOURCE-KIND"],
+    ["fixed-setup-domain", "Affirmative", "F0V2D1-A-FIXED-SETUP-DOMAIN"],
+    ["provider-measure-preservation", "Affirmative", "F0V2D1-A-MEASURE-PRESERVATION"],
+    ["owner-read-catalog-join", "Affirmative", "F0V2D1-A-OWNER-READ-CATALOG-JOIN"],
     ["publication-compiler-agreement", "Affirmative", "F0V2D1-A-PUBLICATION-COMPILERS"],
     ["identity-rotation-cone", "Affirmative", "F0V2D1-A-ROTATION-CONE"],
     ["predecessor-probe-coverage", "Affirmative", "F0V2D1-A-PROBE-COVERAGE"]
@@ -24,18 +29,18 @@
   "source_sha256": {
     "docs-next/analysis/README.md": "04e0250aec7118f6e2083db2d0001957a2dce05eace55371593dfdabfa5f3419",
     "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
-    "docs-next/analysis/cryptographic-properties.md": "afbf2f223a24762fba21fe5cb973d0a9ea57b08d6e702bb49f199f4ec4da3186",
+    "docs-next/analysis/cryptographic-properties.md": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
     "docs-next/analysis/incremental-composition.md": "7d52b8a7c30435e0dec2f7304f08a662f0772b8d8aae22a0dce64384735c4581",
     "docs-next/analysis/profile-publication.md": "90820fe7cf2e5e8db33161542639befa0fc4891cde9499b98e23161e59f0da72",
-    "docs-next/analysis/profiles/afk-transport.json": "eed28c997c64e3b7aca7f94d351ee3fc6d2690adadb87bfbb8978fa15247e476",
-    "docs-next/analysis/profiles/cryptographic-property.json": "68bc442056849e2ef7af3cbcc031146675e6e5c85d375fabb0fac9cb60578c17",
+    "docs-next/analysis/profiles/afk-transport.json": "091333efd23c4fa8d28e757052d8ebc130c343571d1cc75da74cead9750e9446",
+    "docs-next/analysis/profiles/cryptographic-property.json": "60adb5568522e374872ff2df1d5001d07819519f60a1c654e54f7b93e1d74a1d",
     "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
     "docs-next/analysis/semantic-relations.md": "e073e1f5a1fbf836361c6dcdf3a16908f262fbee4b2197d2f8474b102eeff495",
     "docs-next/analysis/transport-composition-and-replay.md": "b775d0c775482f2f70786d58927328a3c1018c4142d1ad139ecef5c4b2a37df6",
     "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md": "73dd3a2f7817817a78fbc5fa18c3fc87b1c42e054c5f52fa9f62ed279774e33b",
-    "docs-next/pir/fiat-shamir.md": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
-    "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
-    "docs-next/pir/interfaces-and-plans.md": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
+    "docs-next/pir/fiat-shamir.md": "edb11d719330ddbb181d95168506ed902ae64ba0c7e3bc71f8cabd3bed1ea25a",
+    "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
+    "docs-next/pir/interfaces-and-plans.md": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
     "docs-next/relations/relation-model.md": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
     "evaluation/analysis-premise-intake-probe/expected-findings.json": "e39edf7cb1cb49955479e5ac50df79cbe57c0baf2d4d8b36a5cd6736d537be62",
     "evaluation/analysis-premise-intake-probe/fixture.json": "151124be6c318f032df6ef92254ab1930f02aa27a7f3df7b9da9d120e7dfce42",
@@ -45,10 +50,13 @@
     "evaluation/finite-cover-analysis/tests/test_finite_cover.py": "bd68a40ecc237d729c0ae41e88d1ea42b58036a162aedf2f75814e302918069e",
     "evaluation/formal-provider-interpretation-f2o2/expected-findings.json": "fe69e50a275a7ab73689b8a71fb18f3392cd7038b41f1a4466e631bdbbe34d65",
     "evaluation/k1-executable-foundations/reference_model.py": "657e4beb56e5481260cc66a0d3d1d1abf7662246d3235b038163771705bd4e00",
-    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "0de51f5197c416aa23f8f25d7d39da9671027dd0feb9376e35ca5fa8ba200d48",
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "d2391eb98c60a131460d54cec408c2a05e501097932497e78a367b7064a18284",
     "evaluation/k3-analysis-closure/README.md": "2bdd07b61530fcaeb6ed145b70491b6807ebf237f7b3f981057233484bd469b1",
-    "evaluation/k3-analysis-closure/reference_model.py": "93b75d0d13026ed5e89d1e4311172a5b3cbe31897df26b475f1a02414751e5d7",
-    "evaluation/k3-analysis-closure/tests/test_reference_model.py": "146def73a6ee4ce83f18c517a1bf08f57d8a9b85a5398a061da4b92c5d9928ec",
-    "evaluation/k3-integrated-closure/tests/test_reference_model.py": "b67a2820e1bc95d653b11ae3de2ba177a4c37439d1f140a103d233309a887724"
+    "evaluation/k3-analysis-closure/reference_model.py": "90eaff915855f8ebc1cd3511c4314eb7828a1940690499a02fa0c0601058716a",
+    "evaluation/k3-analysis-closure/tests/test_reference_model.py": "500e8bf982ebb305176b4cf332b57e22bfdaee7ee00e27abb242e2284dac5b2a",
+    "evaluation/k3-integrated-closure/tests/test_reference_model.py": "b67a2820e1bc95d653b11ae3de2ba177a4c37439d1f140a103d233309a887724",
+    "evaluation/semantic-profile-publication/reference_model.py": "79b7f82dd859a8501697fa0b69f19447dd8d951c07731e2e049a700fb8359e2a",
+    "evaluation/semantic-profile-publication/independent.py": "cc0f5faf02282fd0a8d64c612fdf61ccfbfeb196ae9a736524df4a0374468896",
+    "checks/tests/test_analysis_owner_read_catalog.py": "636a9ddf6ed05616035d2c3dd0b5d0c5558ceba454a4697e33d34ce8dfed82a9"
   }
 }

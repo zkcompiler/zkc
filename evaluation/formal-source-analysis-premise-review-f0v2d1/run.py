@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 from dataclasses import dataclass
+from fractions import Fraction
 import hashlib
 import importlib.util
 import json
@@ -19,7 +20,7 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXPECTED = HERE / "expected-findings.json"
-BASE_COMMIT = "27871e7"
+BASE_COMMIT = "20074d1c"
 FENCE_END = "\n" + chr(96) * 3 + "\n"
 
 ANALYSIS_PAGES = (
@@ -60,6 +61,8 @@ SOURCE_PINS = (
     "evaluation/analysis-premise-intake-probe/independent.py",
     "evaluation/analysis-premise-intake-probe/fixture.json",
     "evaluation/analysis-premise-intake-probe/expected-findings.json",
+    "evaluation/semantic-profile-publication/reference_model.py",
+    "evaluation/semantic-profile-publication/independent.py",
     "evaluation/k1-executable-foundations/reference_model.py",
     "evaluation/k3-analysis-closure/reference_model.py",
     "evaluation/k3-analysis-closure/tests/test_reference_model.py",
@@ -69,6 +72,7 @@ SOURCE_PINS = (
     "evaluation/k3-integrated-closure/tests/test_reference_model.py",
     "evaluation/formal-provider-interpretation-f2o2/expected-findings.json",
     "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md",
+    "checks/tests/test_analysis_owner_read_catalog.py",
 )
 
 LAW_FAMILY_NAMES = (
@@ -683,14 +687,15 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
         )
     _require(all(sequence_equal.values()), "an owner catalog and manifest sequence differ")
 
+    observed_profile_revisions: dict[str, list[int]] = {}
     observed_definition_bumps: dict[str, list[str]] = {}
     for relative in MIGRATED_MANIFESTS:
         old = json.loads(_old_bytes(relative))
         current = _json(relative)
-        _require(
-            old["revision"] == 1 and current["revision"] == 1,
-            "a profile revision transition drifted",
-        )
+        observed_profile_revisions[current["key"]] = [
+            old["revision"],
+            current["revision"],
+        ]
         old_definitions = {(row["kind"], row["name"]): row for row in old["definitions"]}
         observed_definition_bumps[current["key"]] = [
             row["name"]
@@ -699,11 +704,20 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
             != old_definitions[(row["kind"], row["name"])]["revision"]
         ]
     _require(
+        observed_profile_revisions
+        == {
+            "analysis-kernel": [1, 1],
+            "analysis-cryptographic-property": [1, 2],
+            "analysis-afk-transport": [1, 2],
+        },
+        "the reviewed profile revision transitions drifted",
+    )
+    _require(
         observed_definition_bumps
         == {
             "analysis-kernel": [],
-            "analysis-cryptographic-property": [],
-            "analysis-afk-transport": [],
+            "analysis-cryptographic-property": ["property-core-v0"],
+            "analysis-afk-transport": ["afk-application-v0"],
         },
         "the profile-law revision set drifted",
     )
@@ -743,23 +757,27 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
         if base_reference["profiles"][key] != value
     ]
     expected_cone = [
-        "analysis-kernel",
         "analysis-cryptographic-property",
         "analysis-afk-transport",
         "analysis-afk-theorem-source-validation",
-        "analysis-incremental-composition",
-        "analysis-incremental-composition-source-validation",
     ]
     _require(cone == expected_cone, "the Analysis identity-rotation cone drifted")
     return {
         "catalog_sequence_equal": sequence_equal,
-        "profile_revision_bumps_in_review_range": 0,
+        "profile_revisions": observed_profile_revisions,
         "observed_definition_bumps": observed_definition_bumps,
         "compiler_agreement_current": True,
         "compiler_agreement_base": True,
         "compiled_profiles": len(current_reference["profiles"]),
         "all_declarations_reachable": True,
         "rotation_cone": cone,
+        "selected_profile_digests": {
+            key: current_reference["profiles"][key]["profile_digest"]
+            for key in (
+                "analysis-cryptographic-property",
+                "analysis-afk-transport",
+            )
+        },
     }
 
 
@@ -797,7 +815,6 @@ def _class_fields(tree: ast.Module, selected: Iterable[str]) -> dict[str, list[s
 
 RELATION_GOAL_DIGEST = "e813415c366ec70eb24e98c1ece3de6303211b481f692abb1cc3b0fe08b67f6d"
 FIXED_EXTRACTOR_GOAL_DIGEST = "925d5f664c0726675296928201c1b0bb086a37a8a11eddfdaa1d0f3eff69af3e"
-FAMILY_GOAL_DIGEST = "cedc9143445b45c483884ddc1d42b6fdd7e3221845a59beef91d652f549aebf0"
 
 FROZEN_OWNER_VECTORS = {
     "relation": {
@@ -823,12 +840,11 @@ FROZEN_OWNER_VECTORS = {
         },
     },
     "family": {
-        "profile": "e7262be0f0d040b5f9bf69165c5d6458f88dbf63723941b1aa4e2e6a81d4f2d7",
+        "profile": "35a5005529a152da9c52a6b5a0e38888a926c4c6ccbe52e343aa24bcaeacc769",
         "question": "c7c1e70be1b805cbfde1a028bdebb57e1f77877f1aabdfee5b11521a08b5d169",
-        "goal": FAMILY_GOAL_DIGEST,
         "premises": {
-            "sampler": "813aa76ca03821aeca72208621b0799abee8bf9e82764ff4350c8f13e7ae14d3",
-            "oracle-process": "4c229b9c2c9965ff1b8ec87f858ed575eaff08e46e8f76ae6d999cee9c7ba816",
+            "sampler": "61580220a03990c796b3a6fc1fa5f3625d98082157028c6d39984f94aff2d66b",
+            "oracle-process": "91ff07a96dd5989f8c25ac39393c604343b060112aa66f8cf90f6b155a2a2f81",
         },
     },
 }
@@ -838,9 +854,21 @@ def _owner_text_goal_reconstructions() -> dict[str, dict[str, Any]]:
     """Form three goal vectors from owner fields without importing package code."""
 
     k1 = _load_module(
-        "_analysis_premise_round4_foundation",
+        "_analysis_premise_round5_foundation",
         ROOT / "evaluation/k1-executable-foundations/reference_model.py",
     )
+    transport_families = _coordinate_sequence(
+        _read("docs-next/analysis/cryptographic-properties.md"),
+        "AnalysisAFKTransportFamilyCoordinates = CanonicalSeq",
+    )
+    family_source_ordinals = {
+        "sampler": transport_families.index(
+            "TotalUniformChallengeSamplerAdequacy"
+        ),
+        "oracle-process": transport_families.index(
+            "ExactClassicalRandomOracleProcess"
+        ),
+    }
 
     def identifier(subject_kind: str, digest: str) -> Any:
         return k1.TypedContentId(
@@ -1060,7 +1088,18 @@ def _owner_text_goal_reconstructions() -> dict[str, dict[str, Any]]:
                 (0, kind_body(slot)),
                 (1, coordinates[slot]),
                 (2, k1.DatumVariant(1, law_term)),
-                (3, k1.DatumVariant(2, id_datum(family))),
+                (
+                    3,
+                    k1.DatumVariant(
+                        2,
+                        k1.profile_declaration_ref_datum(
+                            k1.ProfileLocalDeclarationRef(
+                                "analysis.property-family",
+                                family_source_ordinals[slot],
+                            )
+                        ),
+                    ),
+                ),
                 (4, k1.DatumVariant(0, k1.UNIT)),
                 (5, k1.DatumVariant(1, id_datum(family_distribution))),
             )
@@ -1150,12 +1189,21 @@ def _owner_text_goal_reconstructions() -> dict[str, dict[str, Any]]:
     }
 
 
+_MIGRATED_ANALYSIS: Any | None = None
+
+
 def _load_migrated_analysis() -> Any:
+    global _MIGRATED_ANALYSIS
+    if _MIGRATED_ANALYSIS is not None:
+        return _MIGRATED_ANALYSIS
     package = ROOT / "evaluation/k3-analysis-closure"
     path = package / "reference_model.py"
     sys.path.insert(0, str(package))
     try:
-        return _load_module("_analysis_premise_round3_migrated", path)
+        _MIGRATED_ANALYSIS = _load_module(
+            "_analysis_premise_round5_migrated", path
+        )
+        return _MIGRATED_ANALYSIS
     finally:
         sys.path.pop(0)
 
@@ -1481,10 +1529,10 @@ def _package_impact_review() -> dict[str, Any]:
 
     module = _load_migrated_analysis()
     relation_goal = _registry_identifier(module, "analysis.goal", RELATION_GOAL_DIGEST)
-    # The fixed-extractor and family goals are lazy in the migrated instrument.
-    # Invoke their public constructors only to obtain comparison values and
-    # populate the body registry.  The reconstruction below uses neither those
-    # constructors nor the migrated body encoders or identity former.
+    # The fixed-extractor goal is lazy in the migrated instrument. Invoke its
+    # public constructor only to obtain a comparison value and populate the
+    # body registry. The reconstruction below uses neither that constructor nor
+    # the migrated body encoders or identity former.
     fixed_extractor_goal = module.fixed_extractor_goal_id(
         module._SCHNORR_PINNED_SOURCE, module._SCHNORR_PINNED_PROFILE
     )
@@ -1492,39 +1540,42 @@ def _package_impact_review() -> dict[str, Any]:
         fixed_extractor_goal.digest.hex() == FIXED_EXTRACTOR_GOAL_DIGEST,
         "the frozen migrated fixed-extractor goal identity drifted",
     )
-    family_goal = module.family_goal_id(
-        module.SELECTED_AFK_FAMILY, "target-adaptive-knowledge-q-lt-N"
-    )
-    _require(
-        family_goal.digest.hex() == FAMILY_GOAL_DIGEST,
-        "the frozen migrated family goal identity drifted",
-    )
     relation_reconstruction = _independent_goal_reconstruction(
         module, relation_goal, module.ANALYSIS_PROPERTY_PROFILE_ID
     )
     fixed_extractor_reconstruction = _independent_goal_reconstruction(
         module, fixed_extractor_goal, module.ANALYSIS_PROPERTY_PROFILE_ID
     )
-    family_reconstruction = _independent_goal_reconstruction(
-        module, family_goal, module.ANALYSIS_TRANSPORT_PROFILE_ID
-    )
     package_reconstructions = {
         "relation": relation_reconstruction,
         "fixed-extractor": fixed_extractor_reconstruction,
-        "family": family_reconstruction,
     }
     owner_reconstructions = _owner_text_goal_reconstructions()
     for name, frozen in FROZEN_OWNER_VECTORS.items():
-        for source, rebuilt in (
-            ("package-body", package_reconstructions[name]),
-            ("owner-text", owner_reconstructions[name]),
-        ):
-            _require(
-                rebuilt["question_digest"] == frozen["question"]
-                and rebuilt["goal_digest"] == frozen["goal"]
-                and rebuilt["premise_digests"] == frozen["premises"],
-                f"the {source} reconstruction of {name} disagrees with the frozen package vector",
+        reconstructions = (
+            (("owner-text", owner_reconstructions[name]),)
+            if name == "family"
+            else (
+                ("package-body", package_reconstructions[name]),
+                ("owner-text", owner_reconstructions[name]),
             )
+        )
+        for source, rebuilt in reconstructions:
+            if name == "family":
+                _require(
+                    rebuilt["question_digest"] == frozen["question"]
+                    and rebuilt["premise_digests"] == frozen["premises"],
+                    "the owner-text reconstruction of the family premise bodies drifted",
+                )
+            else:
+                _require(
+                    rebuilt["question_digest"] == frozen["question"]
+                    and rebuilt["goal_digest"] == frozen["goal"]
+                    and rebuilt["premise_digests"] == frozen["premises"],
+                    f"the {source} reconstruction of {name} disagrees with the frozen package vector",
+                )
+        if name == "family":
+            continue
         package_vectors = [
             ("analysis.goal", frozen["goal"]),
             *(("analysis.named-premise", item) for item in frozen["premises"].values()),
@@ -1642,13 +1693,19 @@ def _package_impact_review() -> dict[str, Any]:
         "affected_reference_constructor_calls": combined,
         "owner_text_relation_goal": owner_reconstructions["relation"],
         "owner_text_fixed_extractor_goal": owner_reconstructions["fixed-extractor"],
-        "owner_text_family_goal": owner_reconstructions["family"],
+        "owner_text_family_premise_vector": {
+            "profile": FROZEN_OWNER_VECTORS["family"]["profile"],
+            "question_digest_input": owner_reconstructions["family"]["question_digest"],
+            "premise_digests": owner_reconstructions["family"]["premise_digests"],
+            "used_migrated_package_code": False,
+        },
         "independent_package_body_reconstructions": package_reconstructions,
         "frozen_owner_vectors": FROZEN_OWNER_VECTORS,
         "owner_determined_premise_identities": True,
-        "owner_determined_family_goal": True,
+        "owner_determined_family_premise_bodies": True,
         "owner_determined_relation_fresh_goal": True,
         "owner_determined_fixed_extractor_goal": True,
+        "dependent_package_synchronization_checked": False,
         "remaining_cannot_answer": {
             "artifact": "VCVio provider declaration and closed Boolean carrier",
             "owner_page": "docs-next/analysis/cryptographic-properties.md Section 3.2",
@@ -1767,8 +1824,433 @@ def _probe_review() -> dict[str, Any]:
     }
 
 
+def _line_ref(relative: str, text: str, needle: str) -> str:
+    position = text.find(needle)
+    _require(position >= 0, f"source anchor is absent from {relative}: {needle}")
+    return f"{relative}:{text.count(chr(10), 0, position) + 1}"
+
+
+def _coordinate_sequence(text: str, selector: str) -> list[str]:
+    start = text.find(selector)
+    _require(start >= 0, f"property-family sequence is absent: {selector}")
+    opening = text.find("[", start)
+    closing = text.find("]", opening)
+    _require(opening >= 0 and closing > opening, f"property-family sequence is malformed: {selector}")
+    return re.findall(r"^  ([A-Z][A-Za-z0-9]+),?$", text[opening + 1 : closing], re.MULTILINE)
+
+
+def _active_family_set(text: str) -> list[str]:
+    heading = "The active Analysis property-family declaration set is exactly:"
+    start = text.find(heading)
+    _require(start >= 0, "the active Analysis property-family declaration set is absent")
+    opening = text.find("```text", start)
+    closing = text.find("```", opening + len("```text"))
+    _require(opening >= 0 and closing > opening, "the active property-family set is malformed")
+    return re.findall(
+        r"^([A-Z][A-Za-z0-9]+)$",
+        text[opening + len("```text") : closing],
+        re.MULTILINE,
+    )
+
+
+def _family_source_kind_review(
+    pages: dict[str, str], current_transport_profile_digest: str
+) -> dict[str, Any]:
+    model = pages["docs-next/analysis/analysis-model.md"]
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
+    active = _active_family_set(model)
+    transport = _coordinate_sequence(
+        crypto, "AnalysisAFKTransportFamilyCoordinates = CanonicalSeq"
+    )
+    selected = {
+        "sampler": "TotalUniformChallengeSamplerAdequacy",
+        "oracle-process": "ExactClassicalRandomOracleProcess",
+    }
+    _require(
+        len(active) == len(set(active)) and len(transport) == len(set(transport)),
+        "an owner property-family declaration sequence contains a duplicate",
+    )
+    _require(
+        all(family in active and family in transport for family in selected.values()),
+        "a selected family source is not active and owned by the transport profile",
+    )
+    family_block = _definition_block(
+        crypto, "FiatShamirFamilyPremiseBindings(F) =", FENCE_END
+    )
+    premise_body_block = _definition_block(
+        crypto,
+        "FiatShamirFamilySamplerPremise(",
+        "\n\nAFKTransportPropertyFamilyRef(family) =",
+    )
+    source_ref_block = _definition_block(
+        crypto,
+        "AFKTransportPropertyFamilyRef(family) =",
+        "\n\nFiatShamirNamedPremiseRequirements",
+    )
+    _require(
+        "AnalysisProfileDeclarationRef<AnalysisAFKTransportLanguageProfileId," in source_ref_block
+        and '"analysis.property-family">' in source_ref_block
+        and "a member of\n  AnalysisAFKTransportFamilyCoordinates" in source_ref_block,
+        "the transport family-source constructor lost its exact declaration-ref kind or owner set",
+    )
+    for family in selected.values():
+        _require(
+            f"AFKTransportPropertyFamilyRef(\n                              {family})" in family_block,
+            f"the family premise binding does not source {family} through the transport profile",
+        )
+    _require(
+        family_block.count("PremiseIdOf(") == 2
+        and current_transport_profile_digest
+        == FROZEN_OWNER_VECTORS["family"]["profile"],
+        "the two family bodies are not formed directly under the current transport profile",
+    )
+    _require(
+        "AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy)" in premise_body_block
+        and "AnalysisFamilyPremiseCoordinate(F, OracleProcess)" in premise_body_block
+        and "semantic subject identity, not a declaration reference" in crypto,
+        "the family subject is no longer retained solely in the premise coordinate",
+    )
+
+    k1 = _load_module(
+        "_analysis_premise_round5_family_foundation",
+        ROOT / "evaluation/k1-executable-foundations/reference_model.py",
+    )
+    source_datums = {
+        slot: k1.profile_declaration_ref_datum(
+            k1.ProfileLocalDeclarationRef(
+                "analysis.property-family", transport.index(family)
+            )
+        )
+        for slot, family in selected.items()
+    }
+    encoded_sources = {
+        slot: k1.encode_datum(k1.DatumVariant(2, datum)).hex()
+        for slot, datum in source_datums.items()
+    }
+    _require(
+        encoded_sources["sampler"] != encoded_sources["oracle-process"],
+        "the two family declarations collapsed to one source encoding",
+    )
+    vector = _owner_text_goal_reconstructions()["family"]
+    _require(
+        vector["premise_digests"] == FROZEN_OWNER_VECTORS["family"]["premises"],
+        "the owner-derived family premise bodies drifted from the round-five vector",
+    )
+    return {
+        "active_family_declarations": len(active),
+        "transport_family_declarations": len(transport),
+        "selected_declarations": selected,
+        "transport_declaration_ordinals": {
+            slot: transport.index(family) for slot, family in selected.items()
+        },
+        "encoded_family_sources": encoded_sources,
+        "family_subject_location": "premise-coordinate",
+        "family_profile_digest": FROZEN_OWNER_VECTORS["family"]["profile"],
+        "family_question_digest_input": vector["question_digest"],
+        "derived_family_premise_digests": vector["premise_digests"],
+        "owner_lines": [
+            _line_ref(
+                "docs-next/analysis/analysis-model.md",
+                model,
+                "The active Analysis property-family declaration set is exactly:",
+            ),
+            _line_ref(
+                "docs-next/analysis/cryptographic-properties.md",
+                crypto,
+                "AnalysisAFKTransportFamilyCoordinates = CanonicalSeq",
+            ),
+            _line_ref(
+                "docs-next/analysis/cryptographic-properties.md",
+                crypto,
+                "AFKTransportPropertyFamilyRef(family) =",
+            ),
+            _line_ref(
+                "docs-next/analysis/cryptographic-properties.md",
+                crypto,
+                "FiatShamirFamilyPremiseBindings(F) =",
+            ),
+        ],
+    }
+
+
+def _fixed_setup_domain_review(pages: dict[str, str]) -> dict[str, Any]:
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
+    pir = _read("docs-next/pir/interactive-core.md")
+    projection = _definition_block(
+        crypto, "AFKFixedPublicSetupBody(S) =", "\n\nAFKFixedPublicSetupId"
+    )
+    formation = _definition_block(
+        crypto,
+        "Every leaf other than `analysis_challenge_values`",
+        "\n\nOwner-qualified view coordinates are derived, never supplied:",
+    )
+    setup_view = _definition_block(
+        pir, "PublicSetupInvocationViewBody = {", "\n\n### 13.5"
+    )
+    _require(
+        "first requires both\n    views' `run_established` sequences to be empty" in projection
+        and "Both views'\n`run_established` sequences must be empty" in formation,
+        "fixed-setup projection and formation do not both require empty run-established sequences",
+    )
+    _require(
+        "InvocationDetermined(P, OccurrenceOutput(_, _)) = false" in setup_view
+        and "entries         = every SessionContext or PublicParameter binding b of P" in setup_view
+        and "run_established = every SessionContext or PublicParameter binding b of P" in setup_view
+        and "requires\n`run_established` to be empty as its own premise" in setup_view,
+        "the PIR setup view no longer partitions invocation-determined and run-established bindings",
+    )
+
+    value_sources: dict[str, tuple[Any, ...]] = {
+        "parameter": ("PublicInput",),
+        "derived-context": ("Derived", "parameter"),
+        "late-context": ("OccurrenceOutput", 0, 0),
+    }
+
+    def invocation_determined(name: str, seen: frozenset[str] = frozenset()) -> bool:
+        _require(name not in seen, "the fixed-setup countermodel contains a derived-value cycle")
+        source = value_sources[name]
+        if source[0] in {"PublicInput", "Constant"}:
+            return True
+        if source[0] == "Derived":
+            return invocation_determined(str(source[1]), seen | {name})
+        if source[0] in {"OccurrenceOutput", "VerifierPrivateInput"}:
+            return False
+        raise ReviewError("the fixed-setup countermodel uses an unknown value source")
+
+    entries = tuple(name for name in value_sources if invocation_determined(name))
+    run_established = tuple(
+        name for name in value_sources if not invocation_determined(name)
+    )
+    _require(
+        entries == ("parameter", "derived-context")
+        and run_established == ("late-context",),
+        "the setup-view countermodel did not derive the owner partition",
+    )
+
+    module = _load_migrated_analysis()
+    views = module._issue_pir_analysis_source_views(module._SCHNORR_PINNED_SOURCE)
+    issued = (views.fresh_public_setup.view, views.fiat_shamir_public_setup.view)
+    schnorr_run_established = [len(view.run_established) for view in issued]
+    schnorr_entries = [len(view.entries) for view in issued]
+    _require(
+        schnorr_run_established == [0, 0] and issued[0].entries == issued[1].entries,
+        "the selected Schnorr subject does not provide equal, invocation-determined setup views",
+    )
+    return {
+        "projection_requires_empty_run_established": True,
+        "formation_requires_empty_run_established": True,
+        "schnorr_run_established_lengths": schnorr_run_established,
+        "schnorr_entry_lengths": schnorr_entries,
+        "schnorr_entries_byte_equal": True,
+        "countermodel": {
+            "entries": list(entries),
+            "run_established": list(run_established),
+            "fixed_setup_forms": False,
+            "forbidden_substitution": "copy-run-value-into-entries",
+        },
+        "owner_lines": [
+            _line_ref(
+                "docs-next/analysis/cryptographic-properties.md",
+                crypto,
+                "AFKFixedPublicSetupBody(S) =",
+            ),
+            _line_ref(
+                "docs-next/analysis/cryptographic-properties.md",
+                crypto,
+                "Both views'\n`run_established` sequences must be empty",
+            ),
+            _line_ref(
+                "docs-next/pir/interactive-core.md",
+                pir,
+                "PublicSetupInvocationViewBody = {",
+            ),
+            _line_ref(
+                "docs-next/pir/interactive-core.md",
+                pir,
+                "InvocationDetermined(P, OccurrenceOutput(_, _)) = false",
+            ),
+        ],
+    }
+
+
+def _measure_transport_review(
+    pages: dict[str, str],
+) -> tuple[dict[str, Any], Finding]:
+    model = pages["docs-next/analysis/analysis-model.md"]
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
+    section = _definition_block(
+        crypto, "### 3.2 Named premises of the relation-bound Fresh question", "\n\n## 4."
+    )
+    required = (
+        "Transport preserves measure as\nwell as events",
+        "run's subdistribution of Section 3.3 of the Analysis model gives the PIR\nevent",
+        "mass of `Unmodelled` lanes and of missing runs left where it\nis",
+        "conditioning event is\nitself a lane union whose mass the statement also fixes",
+        "`OperationalCompletion` premise makes that mass one",
+        "never by\nrenormalizing over the lanes the provider models",
+    )
+    issues: list[str] = []
+    if not all(fragment in section for fragment in required):
+        issues.append(
+            "docs-next/analysis/cryptographic-properties.md Section 3.2: the complete measure-preservation clause is absent"
+        )
+    if (
+        "maps parameters and legal strategy\nmodules to a subdistribution over terminated records" not in model
+        or "Missing\nprobability mass denotes genuine nontermination" not in model
+    ):
+        issues.append(
+            "docs-next/analysis/analysis-model.md Section 3.3: the run subdistribution or missing-mass meaning is absent"
+        )
+
+    renormalization_occurrences: list[str] = []
+    permitting_occurrences: list[str] = []
+    for relative in ANALYSIS_PAGES:
+        text = pages[relative]
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            if "renormali" not in line.lower():
+                continue
+            reference = f"{relative}:{index + 1}"
+            renormalization_occurrences.append(reference)
+            context = " ".join(lines[max(0, index - 2) : index + 2]).lower()
+            if not any(denial in context for denial in ("never", "must not", "does not", "cannot", "no ")):
+                permitting_occurrences.append(reference)
+    issues.extend(
+        f"{reference}: another owner clause may permit renormalization"
+        for reference in permitting_occurrences
+    )
+
+    run_mass = {
+        "Accepted": Fraction(1, 2),
+        "Rejected": Fraction(1, 4),
+    }
+    modelled_mass = sum(run_mass.values(), Fraction(0))
+    missing_mass = Fraction(1) - modelled_mass
+    transported_acceptance = run_mass["Accepted"]
+    renormalized_acceptance = transported_acceptance / modelled_mass
+    _require(
+        transported_acceptance == Fraction(1, 2)
+        and missing_mass == Fraction(1, 4)
+        and renormalized_acceptance == Fraction(2, 3),
+        "the finite measure counterexample drifted",
+    )
+    outcome = "CannotAnswer" if issues else "Affirmative"
+    code = (
+        "F0V2D1-C-MEASURE-TRANSPORT-UNDERDETERMINED"
+        if issues
+        else "F0V2D1-A-MEASURE-PRESERVATION"
+    )
+    return (
+        {
+            "transported_event": ["Accepted"],
+            "transported_probability": "1/2",
+            "modelled_lane_mass": "3/4",
+            "missing_run_mass": "1/4",
+            "forbidden_renormalized_probability": "2/3",
+            "conditional_transport_requires_fixed_conditioning_mass_or_completion": True,
+            "renormalization_occurrences": renormalization_occurrences,
+            "permitting_occurrences": permitting_occurrences,
+            "cannot_answer_locations": issues,
+            "owner_lines": [
+                _line_ref(
+                    "docs-next/analysis/analysis-model.md",
+                    model,
+                    "Semantically, an instantiated experiment maps parameters",
+                ),
+                _line_ref(
+                    "docs-next/analysis/cryptographic-properties.md",
+                    crypto,
+                    "Transport preserves measure as",
+                ),
+            ],
+        },
+        Finding("provider-measure-preservation", outcome, code),
+    )
+
+
+def _owner_read_catalog_review() -> dict[str, Any]:
+    owner_paths = (
+        "docs-next/pir/interactive-core.md",
+        "docs-next/pir/fiat-shamir.md",
+    )
+    body_pattern = re.compile(r"^(\w+ViewBody) = \{\n(.*?)^\}", re.S | re.M)
+    field_pattern = re.compile(r"^  (\w+):", re.M)
+    selection_pattern = re.compile(
+        r"Analysis(Static|Execution)ViewFields\(subject,(\w+),\s*\[(.*?)\]\)",
+        re.S,
+    )
+    axis_body = {
+        "FreshExecutionView": "ExecutionViewBody",
+        "FiatShamirExecutionView": "CanonicalFramedExecutionViewBody",
+    }
+    bodies: dict[str, list[str]] = {}
+    for relative in owner_paths:
+        for match in body_pattern.finditer(_read(relative)):
+            name = match.group(1)
+            _require(name not in bodies, f"owner body is declared twice: {name}")
+            bodies[name] = field_pattern.findall(match.group(2))
+
+    catalog_relative = "docs-next/analysis/cryptographic-properties.md"
+    catalog = _read(catalog_relative)
+    selections: list[dict[str, Any]] = []
+    for match in selection_pattern.finditer(catalog):
+        view = match.group(2)
+        body = axis_body.get(view, f"{view}Body")
+        names = [
+            name.strip()
+            for name in match.group(3).replace("\n", " ").split(",")
+            if name.strip()
+        ]
+        missing = [name for name in names if name not in bodies.get(body, [])]
+        _require(body in bodies and len(names) == len(set(names)) and not missing,
+                 f"the Analysis owner-read selection for {view} does not resolve")
+        selections.append(
+            {
+                "view": view,
+                "owner_body": body,
+                "selected_fields": names,
+                "line": catalog.count("\n", 0, match.start()) + 1,
+            }
+        )
+    _require(
+        len(selections) == 10
+        and {item["view"] for item in selections}.issuperset(axis_body),
+        "the owner-read selection census or execution-axis coverage drifted",
+    )
+    control = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-m",
+            "unittest",
+            "checks.tests.test_analysis_owner_read_catalog",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    _require(
+        control.returncode == 0,
+        "the developer owner-read catalog control failed",
+    )
+    return {
+        "owner_bodies": len(bodies),
+        "literal_selections": len(selections),
+        "selected_field_occurrences": sum(
+            len(item["selected_fields"]) for item in selections
+        ),
+        "execution_axis_resolution": axis_body,
+        "unresolved_fields": [],
+        "developer_control_tests": 2,
+        "developer_control_exit_status": control.returncode,
+        "selections": selections,
+    }
+
+
 def evaluate() -> dict[str, Any]:
     pages = {relative: _read(relative) for relative in ANALYSIS_PAGES}
+    measure_metrics, measure_finding = _measure_transport_review(pages)
+    publication_metrics = _publication_review(pages)
     metrics = {
         "source_sha256": _source_hashes(),
         "names": _name_review(pages),
@@ -1777,10 +2259,19 @@ def evaluate() -> dict[str, Any]:
         "decision_fidelity": _decision_review(pages),
         "schnorr": _schnorr_review(pages),
         "hypothesis_argument_schemas": _hypothesis_schema_review(pages),
-        "publication": _publication_review(pages),
+        "publication": publication_metrics,
         "package_impact": _package_impact_review(),
         "lane_and_completion": _lane_and_completion_review(pages),
         "predecessor_probe": _probe_review(),
+        "family_source_kind": _family_source_kind_review(
+            pages,
+            publication_metrics["selected_profile_digests"][
+                "analysis-afk-transport"
+            ],
+        ),
+        "fixed_setup_domain": _fixed_setup_domain_review(pages),
+        "provider_measure_preservation": measure_metrics,
+        "owner_read_catalog_join": _owner_read_catalog_review(),
     }
     review_findings = [
         Finding("name-closure", "Affirmative", "F0V2D1-A-NAME-CLOSURE"),
@@ -1802,7 +2293,7 @@ def evaluate() -> dict[str, Any]:
             "F0V2D1-A-PROFILE-MANIFESTS",
         ),
         Finding(
-            "existing-package-refreeze",
+            "owner-determined-refreeze-inputs",
             "Affirmative",
             "F0V2D1-A-MIGRATED-IDENTITY-INPUTS",
         ),
@@ -1815,6 +2306,22 @@ def evaluate() -> dict[str, Any]:
             "provider-lane-and-completion-consistency",
             "CannotAnswer",
             "F0V2D1-C-VCVIO-PROVIDER-DECLARATION",
+        ),
+        Finding(
+            "family-source-kind",
+            "Affirmative",
+            "F0V2D1-A-FAMILY-SOURCE-KIND",
+        ),
+        Finding(
+            "fixed-setup-domain",
+            "Affirmative",
+            "F0V2D1-A-FIXED-SETUP-DOMAIN",
+        ),
+        measure_finding,
+        Finding(
+            "owner-read-catalog-join",
+            "Affirmative",
+            "F0V2D1-A-OWNER-READ-CATALOG-JOIN",
         ),
     ]
     supporting = [
@@ -1834,18 +2341,23 @@ def evaluate() -> dict[str, Any]:
             "F0V2D1-A-PROBE-COVERAGE",
         ),
     ]
+    declared_hold = "F0V2D1-C-VCVIO-PROVIDER-DECLARATION"
+    closure_findings = [
+        finding for finding in review_findings if finding.code != declared_hold
+    ]
     unanswered = [
-        finding.code for finding in review_findings if finding.outcome == "CannotAnswer"
+        finding.code for finding in closure_findings if finding.outcome == "CannotAnswer"
     ]
     negatives = [
-        finding.code for finding in review_findings if finding.outcome == "Negative"
+        finding.code for finding in closure_findings if finding.outcome == "Negative"
     ]
-    if all(finding.outcome == "Affirmative" for finding in review_findings):
+    if all(finding.outcome == "Affirmative" for finding in closure_findings):
         aggregate = {
             "outcome": "Affirmative",
             "code": "F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED",
             "blocking_findings": [],
             "cannot_answer_findings": [],
+            "declared_hold_findings": [declared_hold],
         }
     elif negatives:
         aggregate = {
@@ -1853,6 +2365,7 @@ def evaluate() -> dict[str, Any]:
             "code": "F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
             "blocking_findings": negatives,
             "cannot_answer_findings": unanswered,
+            "declared_hold_findings": [declared_hold],
         }
     else:
         aggregate = {
@@ -1860,6 +2373,7 @@ def evaluate() -> dict[str, Any]:
             "code": "F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
             "blocking_findings": [],
             "cannot_answer_findings": unanswered,
+            "declared_hold_findings": [declared_hold],
         }
     return {
         "aggregate": aggregate,
@@ -1872,8 +2386,8 @@ def evaluate() -> dict[str, Any]:
             "Static name and constructor checks are not an Analysis implementation or mechanized proof.",
             "Publication compiler agreement is not evidence that the owner text is semantically closed.",
             "The finite Schnorr coordinates establish no relation truth, Plan honesty, theorem, or cryptographic property.",
-            "Independent identity reconstruction checks canonical formation and owner-text agreement of three finite vectors, not premise truth.",
-            "The remaining CannotAnswer does not imply that an unformed provider premise is false.",
+            "Independent identity reconstruction checks canonical formation and owner-text agreement of finite vectors, not premise truth or downstream package synchronization.",
+            "The separately reported provider hold does not imply that an unformed provider premise is false.",
         ],
     }
 

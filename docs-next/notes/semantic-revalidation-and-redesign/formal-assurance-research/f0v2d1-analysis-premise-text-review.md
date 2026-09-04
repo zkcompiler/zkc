@@ -1337,3 +1337,300 @@ register and delta ledger are likewise absent from this clone and were not
 written elsewhere. No lifecycle object or count pin changed because this round
 updates an existing tracked package. The branch remains uncommitted for Main
 to commit with the requested subject.
+
+## Round five
+
+### Exact question and source pin
+
+This round asks the package's same one exact question, extended by four
+deep-review consequences, against the source at `56f238d1`: do the current
+Analysis and PIR owner pages close all thirteen reviewed named-premise
+questions, including family-source typing, fixed-setup domain, provider
+measure transport, and owner-read catalog resolution, apart from the
+separately reported unpublished VCVio provider declaration and carrier hold?
+
+The review read the complete pre-freeze deep review, the migration review's
+round-eight analysis, the full commit list after `20074d1c`, and the complete
+diff of every intervening documentation commit. The checker now uses
+`20074d1c` as its historical publication comparison point and freezes the
+current Analysis pages and manifests, all three relevant PIR pages, the
+Relations page, the owner-read developer control, both publication compilers,
+the Foundation identity former, the intake probe, the finite comparison
+surfaces, and the provider-publication evidence it actually reads.
+
+The closure aggregate is
+`Affirmative/F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED`. There are no negative
+findings and no closure-blocking `CannotAnswer` findings. Twelve of the
+thirteen review questions are affirmative. The thirteenth remains the declared
+`CannotAnswer/F0V2D1-C-VCVIO-PROVIDER-DECLARATION`; as required by this
+round's aggregate rule, it is reported separately rather than converted into
+an affirmative or used to block closure of the other twelve questions.
+
+| Review question | Outcome | Stable finding |
+|---|---|---|
+| Name closure | Affirmative | F0V2D1-A-NAME-CLOSURE |
+| Constructor consistency | Affirmative | F0V2D1-A-CONSTRUCTOR-CONSISTENCY |
+| Intake soundness | Affirmative | F0V2D1-A-INTAKE-SOUNDNESS |
+| Decision fidelity | Affirmative | F0V2D1-A-DECISION-FIDELITY |
+| Schnorr coordinate and binding formation | Affirmative | F0V2D1-A-SCHNORR-BINDINGS |
+| Profile and manifest closure | Affirmative | F0V2D1-A-PROFILE-MANIFESTS |
+| Owner-determined package refreeze inputs | Affirmative | F0V2D1-A-MIGRATED-IDENTITY-INPUTS |
+| Hypothesis argument-schema closure | Affirmative | F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS |
+| Provider lane and completion consistency | CannotAnswer | F0V2D1-C-VCVIO-PROVIDER-DECLARATION |
+| Family-source kind | Affirmative | F0V2D1-A-FAMILY-SOURCE-KIND |
+| Fixed-setup domain | Affirmative | F0V2D1-A-FIXED-SETUP-DOMAIN |
+| Provider measure preservation | Affirmative | F0V2D1-A-MEASURE-PRESERVATION |
+| Owner-read catalog join | Affirmative | F0V2D1-A-OWNER-READ-CATALOG-JOIN |
+
+The three supporting findings remain affirmative:
+`F0V2D1-A-PUBLICATION-COMPILERS`, `F0V2D1-A-ROTATION-CONE`, and
+`F0V2D1-A-PROBE-COVERAGE`.
+
+### Family-source kind derivation
+
+The derivation starts from owner text, not from the prose that described the
+repair:
+
+1. `docs-next/analysis/analysis-model.md:1819-1864` publishes the exact active
+   42-member Analysis property-family declaration set. It includes
+   `ExactClassicalRandomOracleProcess` and
+   `TotalUniformChallengeSamplerAdequacy` at lines 1842 and 1844.
+2. `docs-next/analysis/cryptographic-properties.md:142-165` assigns the exact
+   22-member `AnalysisAFKTransportFamilyCoordinates` sequence to the transport
+   profile. The oracle-process declaration is ordinal 11 and the sampler
+   declaration is ordinal 13 in that sequence.
+3. The source constructor at lines 5935-5939 has type
+   `AnalysisProfileDeclarationRef` under
+   `AnalysisAFKTransportLanguageProfileId` with declaration kind
+   `analysis.property-family`, and requires membership in that 22-member set.
+4. The two bindings at lines 5949-5965 pass those two declaration refs to
+   `FamilyHypothesisSource`. The premise constructors at lines 5896-5933 keep
+   `F` in `AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy)` and
+   `AnalysisFamilyPremiseCoordinate(F, OracleProcess)`. Lines 5968-5972 make
+   the type distinction explicit: `F` is a semantic subject identity, not the
+   declaration ref accepted by the source constructor.
+
+The independent encoder represents the two sources as profile-local
+`analysis.property-family` declaration refs at ordinals 13 and 11. It then
+forms both complete named-premise bodies under current transport profile
+`35a5005529a152da9c52a6b5a0e38888a926c4c6ccbe52e343aa24bcaeacc769`.
+The sampler premise digest is
+`61580220a03990c796b3a6fc1fa5f3625d98082157028c6d39984f94aff2d66b`;
+the oracle-process premise digest is
+`91ff07a96dd5989f8c25ac39393c604343b060112aa66f8cf90f6b155a2a2f81`.
+The encoder never substitutes the asymptotic family ID into either source
+payload.
+
+This establishes the two owner-determined premise-body inputs. It deliberately
+does not claim that a separately assigned downstream package has already
+adopted or frozen them.
+
+### Fixed-setup domain derivation
+
+The property projection at
+`docs-next/analysis/cryptographic-properties.md:532-552` first requires both
+issued setup views' `run_established` sequences to be empty and only then
+requires their entry sequences to be byte-identical. The independent formation
+paragraph at lines 577-593 repeats the emptiness premise and says that a
+run-established `SessionContext` or `PublicParameter` binding cannot form this
+fixed-setup ID and cannot be replaced by a copied assignment.
+
+The PIR owner body at `docs-next/pir/interactive-core.md:2995-3023` encodes
+both `entries` and `run_established`. Its issuance law at lines 3041-3070 puts
+exactly invocation-determined public bindings in `entries`, puts every other
+public setup binding in `run_established`, declares
+`OccurrenceOutput(_, _)` not invocation-determined, and leaves the empty-
+`run_established` requirement to the consumer.
+
+The executable derivation checks both sides:
+
+- the selected Schnorr Fresh and Fiat--Shamir setup views each contain four
+  byte-identical entries and zero `run_established` refs; and
+- a three-binding countermodel places a direct public parameter and a derived
+  session context in `entries`, but places a session context sourced from an
+  occurrence output in `run_established`. The latter view does not form fixed
+  setup, and copying its eventual run value into `entries` is not an admitted
+  alternative.
+
+Thus both the body projection and formation have the same pre-run domain, and
+the owner setup view supplies the negative case that prevents entry equality
+alone from being mistaken for fixedness.
+
+### Provider measure derivation
+
+`docs-next/analysis/analysis-model.md:1335-1350` gives an instantiated
+experiment a subdistribution over terminated records and reserves missing mass
+for genuine nontermination. The provider clause at
+`docs-next/analysis/cryptographic-properties.md:2622-2635` first maps a
+provider event to the union of corresponding PIR lanes and then fixes its
+probability to the mass of that PIR event in the run subdistribution. It leaves
+both unmodelled-lane mass and missing-run mass in place. A statement
+conditional on completion or on modelled lanes transports only if its
+conditioning lane union's mass is also fixed or an
+`OperationalCompletion` premise makes that mass one. The final sentence
+expressly forbids renormalizing over modelled lanes.
+
+The finite counterexample assigns mass `1/2` to `Accepted`, `1/4` to
+`Rejected`, and leaves `1/4` missing. The transported acceptance probability is
+therefore `1/2`. Dividing by the modelled-lane mass `3/4` would instead produce
+`2/3`; that is the forbidden renormalized value, not the transported
+probability. The checker also scans all Analysis owner pages for another
+renormalization clause. It finds only the prohibition at line 2635. If another
+clause could permit renormalization, this question returns
+`CannotAnswer/F0V2D1-C-MEASURE-TRANSPORT-UNDERDETERMINED` and records the exact
+page and line rather than choosing a convenient interpretation.
+
+### Owner-read catalog join
+
+The owner-read catalog begins at
+`docs-next/analysis/cryptographic-properties.md:796`. The executable join
+finds ten literal selections containing 66 field occurrences and resolves each
+against one of 12 view bodies declared by the PIR owners. No selected field is
+missing and no selection contains a duplicate. In particular, the two
+Protocol-level axes resolve independently:
+
+- `FreshExecutionView` selects nine fields of `ExecutionViewBody`; and
+- `FiatShamirExecutionView` selects the corresponding nine fields of
+  `CanonicalFramedExecutionViewBody`.
+
+The remaining selections resolve the owner names `scopes`,
+`prover_view_formation_law`, `verifier_private_predecessors`,
+`frame_schedule`, `required_influence`, `challenge_rules`, and all other listed
+fields. The developer control
+`checks/tests/test_analysis_owner_read_catalog.py` runs both tests successfully
+inside the package review; this is a literal owner-body join, not evidence that
+any consumer implementation uses every selected field correctly.
+
+### Publication and source rotation
+
+The two independent publication compilers agree on both the historical and
+current sources. From `20074d1c` to the reviewed source:
+
+- the kernel profile remains at revision 1;
+- the property profile advances from revision 1 to 2 and
+  `property-core-v0` advances to revision 2;
+- the transport profile advances from revision 1 to 2 and
+  `afk-application-v0` advances to revision 2; and
+- the exact Analysis rotation cone is the property profile, the transport
+  profile, and the theorem-source-validation child profile.
+
+The current property and transport profile digests are respectively
+`dec43114062065ddcd711fd9dd234f5c9a3b1860479fa22f2dba7e75743ac0cd`
+and
+`35a5005529a152da9c52a6b5a0e38888a926c4c6ccbe52e343aa24bcaeacc769`.
+The changed PIR pages are frozen as reviewed sources, but this lane makes no
+migration-cone claim and does not treat another package's pin synchronization
+as an owner-text finding.
+
+### Declared provider hold
+
+The sole retained hold is
+`CannotAnswer/F0V2D1-C-VCVIO-PROVIDER-DECLARATION`. The generic provider
+carrier, total lane map, operational-completion premise, and measure-transport
+law are now all explicit. Nevertheless,
+`docs-next/analysis/cryptographic-properties.md` Section 3.2 still does not
+publish either `VCVioProviderDeclaration` or `VCVioBooleanCarrier`, and the
+property manifest still contains neither corresponding declaration. The
+provider/carrier decision packet remains a proposal rather than owner
+authority. No missing evidence was converted into an affirmative.
+
+### Proposed delta
+
+- **Owner page and section:**
+  `docs-next/analysis/cryptographic-properties.md`, Section 3.2, plus the
+  semantic-law definitions and dependency list in
+  `docs-next/analysis/profiles/cryptographic-property.json`.
+- **Exact change:** publish `VCVioProviderDeclaration`,
+  `VCVioBooleanCarrier`, and the corresponding Schnorr outcome-map premise in
+  the exact shape already specified by the provider/carrier decision packet.
+  Add manifest semantic-law definitions named
+  `vcvio-provider-declaration-v0` and `vcvio-boolean-carrier-v0`, both at
+  revision zero; make `property-core-v0` depend on them and advance the
+  property profile revision. The provider models exactly `Accepted` and
+  `Rejected`; every other Fresh outcome lane remains `Unmodelled`.
+- **Identity effect:** the property profile rotates, followed by each importing
+  Analysis profile and every provider-bound premise, goal, intake result,
+  qualified judgment, and frozen consumer identity. The PIR Protocol and its
+  views do not rotate solely because Analysis publishes this provider.
+- **Evidence with gate IDs:** `research.analysis-premise-text-review` freezes
+  the owner absence and the separate fail-closed result;
+  `research.provider-interpretation` freezes the proposed finite provider map
+  and the same publication absence.
+- **Reversal condition:** withdraw this proposal if the property owner rejects
+  this provider, chooses a different carrier or modelled-lane set, or publishes
+  another exact provider declaration that supersedes the proposal.
+- **Non-claims:** publication would make the provider-bound premise formable;
+  it would not establish that premise, prove provider correspondence, prove
+  theorem truth or applicability, validate a backend, or establish
+  cryptographic security.
+
+## Handoff
+
+Files changed:
+
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/run.py` now uses
+  `20074d1c` as the prior-review publication base, freezes the current source
+  set, applies the declared-hold aggregate rule, independently derives the two
+  family-source bodies, checks both fixed-setup emptiness sites and a
+  run-established countermodel, evaluates raw measure transport and scans for
+  conflicting renormalization clauses, and runs the owner-read catalog join.
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/expected-findings.json`
+  freezes the affirmative aggregate, thirteen review findings, three
+  supporting findings, one separate provider hold, and current source hashes.
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/README.md` states
+  the exact question, evidence, aggregate rule, downstream synchronization
+  boundary, and non-claims.
+- `checks/manifest.json` and `evaluation/README.md` describe the fifth-round
+  result for the existing package.
+- This note adds round five, the derivations, proposed owner delta, and this
+  handoff. No lifecycle entry or count pin changes because no package was
+  added.
+
+Commands run, with observed exit status and wall time:
+
+- Before the edit,
+  `python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py --check`
+  exited 1 in 0.21 s at the obsolete profile-revision transition assertion.
+  This was review-instrument drift, not an owner-text semantic finding.
+- The completed direct package check,
+  `python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py --check`,
+  exited 0 in 17.90 s: 16/16 findings reproduced, with zero negative, one
+  separately reported `CannotAnswer`, and the affirmative closure aggregate.
+- Alternate-index initialization used `.cache/analysis-review5-index`, a
+  clone-local writable object directory, and the checkout object store as a
+  read-only alternate. `git read-tree HEAD` exited 0 in 0.00 s and
+  `git add -A` exited 0 in 0.49 s.
+- `python3 -B checks/run.py validate` under that alternate index exited 0 in
+  0.05 s: 80 checks and 6 tiers validated.
+- `UV_NO_SYNC=1 UV_OFFLINE=1` with the clone-local uv cache and
+  `python3 -B checks/run.py run --tier developer` under the alternate index
+  exited 0 in 1.85 s: 9/9 checks passed.
+- Under the same alternate-index and uv environment,
+  `python3 -B checks/run.py run --check research.analysis-premise-text-review`
+  exited 0 in 17.66 s: 1/1 check passed.
+
+Aggregate outcome:
+`Affirmative/F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED`. Twelve review questions
+are affirmative and there are no negative or closure-blocking
+`CannotAnswer` findings. The unpublished VCVio declaration and carrier remain
+separately `CannotAnswer/F0V2D1-C-VCVIO-PROVIDER-DECLARATION` exactly as
+required; the affirmative aggregate makes no affirmative claim about that
+artifact.
+
+Non-claims: this review does not edit or publish owner semantics, synchronize
+another evaluation package, form or establish the missing provider premise,
+prove a relation or Plan fact, prove theorem truth or applicability, validate
+a compiler or backend, establish cryptographic security, or authorize
+deployment. Passing finite source, identity, and countermodel checks is bounded
+review evidence only.
+
+Surprises and corrections to the brief: `AGENTS.md` is absent from this clone,
+so that requested file could not be read; `.github/CONTRIBUTING.md` and
+`.claude/CLAUDE.md` are present and were read completely. The private workflow
+file was read from its required read-only location, while no private tracking
+artifact exists in or was written by this lane. The owner-read catalog contains
+ten literal selections (the developer control requires at least nine), and all
+ten resolve. The anticipated downstream package repins remain outside this
+lane and were neither edited nor classified as another defect. The branch is
+left uncommitted for Main to commit with subject
+`test: review the analysis premise text after the deep-review repairs`.
