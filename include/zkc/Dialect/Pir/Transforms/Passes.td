@@ -193,6 +193,12 @@ def PirProject : Pass<"pir-project", "mlir::ModuleOp"> {
               "std::string", /*default=*/[{""}],
               "Construction-profile registry used in the same admission "
               "environment">,
+       Option<"protocolName", "protocol", "std::string", /*default=*/[{""}],
+              "Project only the sealed protocol with this name; empty projects "
+              "every sealed protocol in the module. Composition leaves the "
+              "operands alongside their composite, and an operand that only "
+              "exports a claim has no verifier face of its own, so projecting "
+              "a composite requires naming it">,
   ];
   let dependentDialects = ["zkc::oir::OirDialect"];
 }

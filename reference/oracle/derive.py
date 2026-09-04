@@ -25,7 +25,7 @@ from fractions import Fraction
 from typing import Any, NamedTuple
 
 from . import model
-from .model import Refusal, canon_json
+from .canonical import Refusal, canon_json
 from .signature import (
     QUANTIFICATIONS,
     Binding,

@@ -1,0 +1,142 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "verifier-derived-query-plan",
+  "catalog_namespace": "pir",
+  "profile_family": "pir.verifier-derived-query-plan",
+  "revision": 0,
+  "expected_imports": [
+    "interaction"
+  ],
+  "supported_subject_kinds": [
+    "pir.verifier-derived-query-elaboration",
+    "pir.verifier-derived-query-plan",
+    "pir.verifier-derived-word-program"
+  ],
+  "fragments": [
+    {
+      "name": "verifier-derived-query-plan-semantics",
+      "owner_page": "docs-next/pir/verifier-derived-query-plans.md",
+      "start": "zkc-profile-source:verifier-derived-query-plan-semantics:start",
+      "end": "zkc-profile-source:verifier-derived-query-plan-semantics:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "verifier-derived-query-plan-body-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "VerifierDerivedQueryPlanDomainBodyV0(x) =",
+      "dependencies": [
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "algorithm-use-body-v0"
+        },
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "interactive-core-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "verifier-derived-program-admission-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "## 4. Verifier-derived word programs",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "verifier-derived-static-elaboration-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "## 6. Static elaboration",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "verifier-derived-observation-boundary-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "## 7. Visibility, observations, and Fiat--Shamir",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "verifier-derived-query-plan-nonclaims-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "## 12. Evidence and nonclaims",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "verifier-derived-query-plan-evaluator-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "CheckVerifierDerivedQueryElaboration(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "verifier-derived-query-plan-outcome-partition-v0",
+      "revision": 0,
+      "fragment": "verifier-derived-query-plan-semantics",
+      "selector": "## 9. Closed outcomes",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.verifier-derived-query-elaboration",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "verifier-derived-query-plan-body-v0"
+      },
+      "laws": [
+        "verifier-derived-observation-boundary-v0",
+        "verifier-derived-program-admission-v0",
+        "verifier-derived-query-plan-nonclaims-v0",
+        "verifier-derived-static-elaboration-v0"
+      ],
+      "evaluator": "verifier-derived-query-plan-evaluator-v0",
+      "failure_schema": "verifier-derived-query-plan-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.verifier-derived-query-plan",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "verifier-derived-query-plan-body-v0"
+      },
+      "laws": [
+        "verifier-derived-observation-boundary-v0",
+        "verifier-derived-program-admission-v0",
+        "verifier-derived-query-plan-nonclaims-v0",
+        "verifier-derived-static-elaboration-v0"
+      ],
+      "evaluator": "verifier-derived-query-plan-evaluator-v0",
+      "failure_schema": "verifier-derived-query-plan-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.verifier-derived-word-program",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "verifier-derived-query-plan-body-v0"
+      },
+      "laws": [
+        "verifier-derived-observation-boundary-v0",
+        "verifier-derived-program-admission-v0",
+        "verifier-derived-query-plan-nonclaims-v0",
+        "verifier-derived-static-elaboration-v0"
+      ],
+      "evaluator": "verifier-derived-query-plan-evaluator-v0",
+      "failure_schema": "verifier-derived-query-plan-outcome-partition-v0"
+    }
+  ]
+}

@@ -1,0 +1,250 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "endpoint-source-view",
+  "catalog_namespace": "pir",
+  "profile_family": "pir.endpoint-source-view",
+  "revision": 0,
+  "expected_imports": [
+    "canonical-framed-fiat-shamir",
+    "interaction",
+    "interface-plan",
+    "oir-endpoint-graph"
+  ],
+  "supported_subject_kinds": [
+    "pir.endpoint-owner-schema-set",
+    "pir.endpoint-owner-supplement",
+    "pir.endpoint-read-manifest",
+    "pir.endpoint-source-view",
+    "pir.source-binding-payload",
+    "pir.source-capability-requirement",
+    "pir.source-consumer",
+    "pir.source-no-policy",
+    "pir.source-policy-closure",
+    "pir.source-purpose"
+  ],
+  "fragments": [
+    {
+      "name": "endpoint-source-view-semantics",
+      "owner_page": "docs-next/pir/endpoint-projection-views.md",
+      "start": "zkc-profile-source:endpoint-source-view-semantics:start",
+      "end": "zkc-profile-source:endpoint-source-view-semantics:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "endpoint-source-view-body-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "EndpointSourceViewDomainBody(x) = R",
+      "dependencies": [
+        {
+          "profile": "canonical-framed-fiat-shamir",
+          "kind": "pir.body-compiler",
+          "name": "canonical-framed-transcript-construction-body-v0"
+        },
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "interactive-core-body-v0"
+        },
+        {
+          "profile": "interface-plan",
+          "kind": "pir.body-compiler",
+          "name": "interface-plan-body-v0"
+        },
+        {
+          "profile": "oir-endpoint-graph",
+          "kind": "oir.body-compiler",
+          "name": "endpoint-graph-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "endpoint-source-mapping-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "MapEndpointPurposeV0(PIR purpose) -> OIR EndpointPurposeBody",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "owner-read-completeness-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "RootGrammarLawV0Body = V(0,U)",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "supplement-authority-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "FutureOwnerSupplementBodyV0(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "support-classification-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "ClassifyEndpointProjectionSupport(request) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "endpoint-source-view-evaluator-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "ExtractEndpointSourceView(SupportedExtractionBasis, exact PIR evaluator)",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "endpoint-extraction-outcome-v0",
+      "revision": 0,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "EndpointExtractionOutcomeBody =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.endpoint-owner-schema-set",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "owner-read-completeness-v0",
+        "support-classification-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.endpoint-owner-supplement",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "owner-read-completeness-v0",
+        "supplement-authority-v0",
+        "support-classification-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.endpoint-read-manifest",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "owner-read-completeness-v0",
+        "support-classification-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.endpoint-source-view",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "endpoint-source-mapping-v0",
+        "owner-read-completeness-v0",
+        "support-classification-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.source-binding-payload",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "supplement-authority-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.source-capability-requirement",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "supplement-authority-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.source-consumer",
+      "body_compiler": {
+        "profile": "interaction",
+        "kind": "pir.body-compiler",
+        "name": "source-authority-envelope-body-v0"
+      },
+      "laws": [
+        "supplement-authority-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.source-no-policy",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "supplement-authority-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.source-policy-closure",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "endpoint-source-view-body-v0"
+      },
+      "laws": [
+        "supplement-authority-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    },
+    {
+      "kind": "pir.source-purpose",
+      "body_compiler": {
+        "profile": "interaction",
+        "kind": "pir.body-compiler",
+        "name": "source-authority-envelope-body-v0"
+      },
+      "laws": [
+        "supplement-authority-v0"
+      ],
+      "evaluator": "endpoint-source-view-evaluator-v0",
+      "failure_schema": "endpoint-extraction-outcome-v0"
+    }
+  ]
+}

@@ -1,0 +1,294 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "relations",
+  "catalog_namespace": "relations",
+  "profile_family": "relations.correspondence",
+  "revision": 0,
+  "expected_imports": [
+    "interaction",
+    "interface-plan"
+  ],
+  "supported_subject_kinds": [
+    "relations.artifact-comparison-question",
+    "relations.artifact-observation",
+    "relations.artifact-profile",
+    "relations.artifact-profile-count-question",
+    "relations.commitment-grounding",
+    "relations.correspondence-question",
+    "relations.definition",
+    "relations.definition-model-question",
+    "relations.grounding-equation",
+    "relations.instance",
+    "relations.interface",
+    "relations.plan-witness-binding",
+    "relations.protocol-binding",
+    "relations.recursion-binding-coverage-schema",
+    "relations.refinement-question",
+    "relations.semantic-model",
+    "relations.source-binding-payload",
+    "relations.source-capability-requirement",
+    "relations.source-consumer",
+    "relations.source-no-policy",
+    "relations.source-policy-closure",
+    "relations.source-purpose",
+    "relations.transform",
+    "relations.value-bridge"
+  ],
+  "fragments": [
+    {
+      "name": "relations-core-semantics",
+      "owner_page": "docs-next/relations/relation-model.md",
+      "start": "zkc-profile-source:relations-core-semantics:start",
+      "end": "zkc-profile-source:relations-core-semantics:end"
+    },
+    {
+      "name": "relations-body-compiler",
+      "owner_page": "docs-next/relations/relation-model.md",
+      "start": "zkc-profile-source:relations-body-compiler:start",
+      "end": "zkc-profile-source:relations-body-compiler:end"
+    },
+    {
+      "name": "relations-correspondence-semantics",
+      "owner_page": "docs-next/relations/protocol-correspondence.md",
+      "start": "zkc-profile-source:relations-correspondence-semantics:start",
+      "end": "zkc-profile-source:relations-correspondence-semantics:end"
+    },
+    {
+      "name": "relations-recursive-grounding-semantics",
+      "owner_page": "docs-next/relations/recursive-composition-grounding.md",
+      "start": "zkc-profile-source:relations-recursive-grounding-semantics:start",
+      "end": "zkc-profile-source:relations-recursive-grounding-semantics:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "relations.body-compiler",
+      "name": "relations-body-v0",
+      "revision": 0,
+      "fragment": "relations-body-compiler",
+      "selector": "RB(Unit)                    = U",
+      "dependencies": [
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "interactive-core-body-v0"
+        },
+        {
+          "profile": "interface-plan",
+          "kind": "pir.body-compiler",
+          "name": "interface-plan-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "relations.semantic-law",
+      "name": "core-language-v0",
+      "revision": 0,
+      "fragment": "relations-core-semantics",
+      "selector": "RelationsSemanticSubjectKindCatalogV0 = [",
+      "dependencies": []
+    },
+    {
+      "kind": "relations.semantic-law",
+      "name": "protocol-correspondence-v0",
+      "revision": 0,
+      "fragment": "relations-correspondence-semantics",
+      "selector": "CorrespondenceQuestion =",
+      "dependencies": []
+    },
+    {
+      "kind": "relations.semantic-law",
+      "name": "recursive-grounding-v0",
+      "revision": 0,
+      "fragment": "relations-recursive-grounding-semantics",
+      "selector": "RecursionBindingCoverageSchemaBody = {",
+      "dependencies": []
+    },
+    {
+      "kind": "relations.evaluator-signature",
+      "name": "relations-subject-admission-v0",
+      "revision": 0,
+      "fragment": "relations-core-semantics",
+      "selector": "AdmitRelationsSubjectV0(",
+      "dependencies": []
+    },
+    {
+      "kind": "relations.failure-schema",
+      "name": "relations-subject-admission-outcome-v0",
+      "revision": 0,
+      "fragment": "relations-core-semantics",
+      "selector": "RelationsSubjectAdmissionOutcomeV0 =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "relations.artifact-comparison-question",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.artifact-observation",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.artifact-profile",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.artifact-profile-count-question",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.commitment-grounding",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.correspondence-question",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.definition",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.definition-model-question",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.grounding-equation",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.instance",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.interface",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.plan-witness-binding",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.protocol-binding",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.recursion-binding-coverage-schema",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.refinement-question",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.semantic-model",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.source-binding-payload",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.source-capability-requirement",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.source-consumer",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.source-no-policy",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.source-policy-closure",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.source-purpose",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.transform",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    },
+    {
+      "kind": "relations.value-bridge",
+      "body_compiler": {"profile": "self", "kind": "relations.body-compiler", "name": "relations-body-v0"},
+      "laws": ["core-language-v0", "protocol-correspondence-v0", "recursive-grounding-v0"],
+      "evaluator": "relations-subject-admission-v0",
+      "failure_schema": "relations-subject-admission-outcome-v0"
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "schema": "zkc.source-first-protocol-holdouts.v1",
+  "frozen_candidate_commit": "63c48b22c7aac56d9af3ab460e4ea135a87039f3",
+  "sources": [
+    {
+      "key": "whir-paper-2024-1586",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "WHIR: Reed-Solomon Proximity Testing with Super-Fast Verification",
+      "authors": [
+        "Gal Arnon",
+        "Alessandro Chiesa",
+        "Giacomo Fenzi",
+        "Eylon Yogev"
+      ],
+      "url": "https://eprint.iacr.org/2024/1586.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2024-11-21",
+      "pages": 83,
+      "sha256": "ccacc62cf5529ff95c3cf115cf730b020336f8d95c310c8deb64e3beac30ce61",
+      "used_sections": [
+        "2.1",
+        "2.1.4",
+        "3.1",
+        "4.1-4.4",
+        "5",
+        "5.1"
+      ]
+    },
+    {
+      "key": "whir-reference-implementation-c274cd5",
+      "role": "supplemental_implementation_evidence",
+      "title": "worldfnd/whir",
+      "url": "https://github.com/worldfnd/whir",
+      "retrieved_utc_date": "2026-09-01",
+      "commit": "c274cd5898d31af2cd9be1707a44ccad92c22eaa",
+      "commit_date": "2026-08-26T16:12:34+05:30",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "364095a18cb76d5bf40f6b3d4715fa4058161ae44b035504d678cdcb9603b43c"
+        },
+        {
+          "path": "src/protocols/whir/verifier.rs",
+          "sha256": "54cca76b1b0f2ec60a63327dc46d0094fc1aa5b573bca7a25c9c6a932c7b69a3"
+        }
+      ],
+      "limitations": [
+        "The repository has evolved beyond the paper's literal Construction 5.1 schedule.",
+        "The repository identifies itself as an academic prototype and is not production evidence.",
+        "Implementation behavior does not establish source theorem truth or semantic correspondence."
+      ]
+    },
+    {
+      "key": "circle-starks-paper-2024-278",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "Circle STARKs",
+      "authors": [
+        "Ulrich Haboeck",
+        "David Levit",
+        "Shahar Papini"
+      ],
+      "url": "https://eprint.iacr.org/2024/278.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2024-12-17",
+      "pages": 46,
+      "sha256": "8e60498a671ff147c211ac7733435057dff27b31b8bd3211485b85b4035d296d",
+      "used_sections": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "Appendix B",
+        "Appendix C"
+      ]
+    },
+    {
+      "key": "warpfold-paper-2024-354",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "WARPfold: Wrongfield ARithmetic for Protostar folding",
+      "authors": [
+        "Lev Soukhanov"
+      ],
+      "url": "https://eprint.iacr.org/2024/354.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2024-02-28",
+      "pages": 15,
+      "sha256": "3b9f614910b1434213d2b172a788a5e66e0c8f295c5b07b5c483f03d769b20ee",
+      "used_sections": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "4.1",
+        "4.2",
+        "5"
+      ]
+    },
+    {
+      "key": "multiparty-sumcheck-paper-2025-177",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "On the Power of Sumcheck in Secure Multiparty Computation",
+      "authors": [
+        "Zhe Li",
+        "Chaoping Xing",
+        "Yizhou Yao",
+        "Chen Yuan"
+      ],
+      "url": "https://eprint.iacr.org/2025/177.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2025-05-26",
+      "pages": 58,
+      "sha256": "59c69979f51a66c00eead42e84df2bb2f966d700ceb14fee748d51cabe0549f7",
+      "used_sections": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "Appendix A",
+        "Appendix D",
+        "Appendix E"
+      ]
+    },
+    {
+      "key": "galois-ring-snarks-paper-2025-263",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "Transparent SNARKs over Galois Rings",
+      "authors": [
+        "Yuanju Wei",
+        "Xinxuan Zhang",
+        "Yi Deng"
+      ],
+      "url": "https://eprint.iacr.org/2025/263.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2025-02-19",
+      "pages": 53,
+      "sha256": "51b93823a94cb83d4aa899621ebbadc93ea73a31568dfedfb2f77ba1bbb29f61",
+      "used_sections": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "4.1",
+        "4.2",
+        "5",
+        "6",
+        "Appendices A-F"
+      ]
+    }
+  ]
+}

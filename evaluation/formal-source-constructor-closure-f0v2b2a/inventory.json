@@ -1,0 +1,438 @@
+{
+  "format": "zkc.formal-source-constructor-closure-f0v2b2a.inventory.v0",
+  "owner_profile": {
+    "key": "interaction",
+    "revision": 0,
+    "profile_digest": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
+    "profile_body_sha256": "46a4b92b28962ace15009ca2a05ee26e92b0729fb6d7231fd46f3aa6735d1365"
+  },
+  "core_fields": [
+    "used_modules",
+    "public_inputs",
+    "verifier_private_inputs",
+    "constants",
+    "derived_values",
+    "scopes",
+    "bindings",
+    "challenges",
+    "oracles",
+    "checks",
+    "claims",
+    "reductions",
+    "terminals",
+    "occurrences"
+  ],
+  "canonical_variant_tables": [
+    {
+      "name": "ValueRefBody",
+      "start": "ValueRefBody =",
+      "end": "\n\nDerivedValueBody",
+      "tags": [0, 1, 2, 3, 4],
+      "cases": ["PublicInput", "VerifierPrivateInput", "Constant", "Derived", "OccurrenceOutput"]
+    },
+    {
+      "name": "ScopeOpeningBody",
+      "start": "ScopeOpeningBody =",
+      "line_only": true,
+      "tags": [0, 1],
+      "cases": ["Initially", "BeforeOccurrence"]
+    },
+    {
+      "name": "PublicBindingClassBody",
+      "start": "PublicBindingClassBody =",
+      "line_only": true,
+      "tags": [0, 1, 2],
+      "cases": ["Statement", "SessionContext", "PublicParameter"]
+    },
+    {
+      "name": "CoinCorrelationBody",
+      "start": "CoinCorrelationBody =",
+      "end": "\n\nReductionUsePolicyBody",
+      "tags": [0, 1],
+      "cases": ["Independent", "JointMember"]
+    },
+    {
+      "name": "ReductionUsePolicyBody",
+      "start": "ReductionUsePolicyBody =",
+      "end": "\n\nChallengeBody",
+      "tags": [0, 1],
+      "cases": ["Exclusive", "Shared"]
+    },
+    {
+      "name": "OracleOriginBody",
+      "start": "OracleOriginBody =",
+      "line_only": true,
+      "tags": [0, 1],
+      "cases": ["InitialOracle", "ProverOracle"]
+    },
+    {
+      "name": "OraclePublicationModeBody",
+      "start": "OraclePublicationModeBody =",
+      "end": "\n\nOracleBody",
+      "tags": [0, 1, 2],
+      "cases": ["FullCanonicalOracle", "PublicBinding", "LogicalAccess"]
+    },
+    {
+      "name": "ClaimUsageBody",
+      "start": "ClaimUsageBody =",
+      "line_only": true,
+      "tags": [0, 1],
+      "cases": ["Linear", "Reusable"]
+    },
+    {
+      "name": "ClaimSourceBody",
+      "start": "ClaimSourceBody =",
+      "end": "\n\nClaimBody",
+      "tags": [0, 1],
+      "cases": ["InitialClaim", "ReductionOutput"]
+    },
+    {
+      "name": "TerminalVerdictBody",
+      "start": "TerminalVerdictBody =",
+      "line_only": true,
+      "tags": [0, 1, 2],
+      "cases": ["Accept", "Reject", "Abort"]
+    },
+    {
+      "name": "ClaimDispositionBody",
+      "start": "ClaimDispositionBody =",
+      "line_only": true,
+      "tags": [0, 1],
+      "cases": ["Consume", "Discharge"]
+    },
+    {
+      "name": "GuardBody",
+      "start": "GuardBody =",
+      "end": "\n\nProverMessageBody",
+      "tags": [0, 1],
+      "cases": ["Always", "EvaluateBoolean"]
+    },
+    {
+      "name": "OracleEffectBody",
+      "start": "OracleEffectBody =",
+      "end": "\n\nModuleEffectRefBody",
+      "tags": [0, 1, 2],
+      "cases": ["PublishOracle", "QueryOracle", "AnswerOracle"]
+    },
+    {
+      "name": "CoreEffectBody",
+      "start": "CoreEffectBody =",
+      "end": "\n\nOccurrenceBody",
+      "tags": [0, 1, 2, 3, 4, 5, 6, 7],
+      "cases": ["ProverMessage", "DeterministicVerifierMessage", "Challenge", "InvokeCheck", "ApplyReduction", "ReachTerminal", "StandardOracle", "ModuleEffect"]
+    },
+    {
+      "name": "ChallengeInterpretationBody",
+      "start": "ChallengeInterpretationBody =",
+      "end": "\n\nProtocolBody",
+      "tags": [0, 1],
+      "cases": ["Fresh", "FiatShamir"]
+    },
+    {
+      "name": "PCNodeBody",
+      "start": "PCNodeBody =",
+      "end": "\n\n`NoneOrSomeOrdinalBody`",
+      "tags": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      "cases": ["PublicInputNode", "VerifierPrivateInputNode", "ConstantNode", "DerivedValueNode", "ScopeOpeningNode", "BindingObservationNode", "OccurrenceActivityNode", "OccurrenceEffectNode", "OccurrenceOutputNode", "ClaimStateNode", "ReductionStateNode", "TerminalDecisionNode", "ModuleControlNode", "ModuleOutputNode"]
+    }
+  ],
+  "derived_semantic_algebras": [
+    {
+      "name": "OracleQueryVisibility",
+      "source_needles": ["visibility: Public | VerifierOnly", "Verifier-only Query/Answer is `VerifierPrivate`"],
+      "cases": ["Public", "VerifierOnly"]
+    },
+    {
+      "name": "ModuleDecisionClass",
+      "source_needles": ["`NoProverDecision`, `ProverDecision`, or", "`ProverPublication`"],
+      "cases": ["NoProverDecision", "ProverDecision", "ProverPublication"]
+    },
+    {
+      "name": "ProverDecisionKind",
+      "source_needles": ["SupplyMessage(payload_type)", "SupplyOracle(oracle_schema, publication_mode)", "ModuleDecision(module_defined_type)"],
+      "cases": ["SupplyMessage", "SupplyOracle", "ModuleDecision"]
+    },
+    {
+      "name": "InteractiveCoreProverReadCoordinate",
+      "source_needles": ["StaticConstant(ConstantRef)", "PublicInvocationInput(PublicInputRef)", "OpenedBinding(BindingRef)", "ObservedMessage(OccurrenceRef)", "ObservedChallenge(OccurrenceRef)", "ObservedOraclePublication(OccurrenceRef)", "ObservedOracleQuery(OccurrenceRef)", "ObservedOracleAnswer(OccurrenceRef)", "ObservedModuleValue(OccurrenceRef, observation_ordinal)", "PriorOwnMove(ProverDecisionPointRef)"],
+      "cases": ["StaticConstant", "PublicInvocationInput", "OpenedBinding", "ObservedMessage", "ObservedChallenge", "ObservedOraclePublication", "ObservedOracleQuery", "ObservedOracleAnswer", "ObservedModuleValue", "PriorOwnMove"]
+    },
+    {
+      "name": "PCClass",
+      "source_needles": ["PCClass = StaticPublic | PublicHistory | VerifierPrivate | Invalid"],
+      "cases": ["StaticPublic", "PublicHistory", "VerifierPrivate", "Invalid"]
+    }
+  ],
+  "b1_gap": {
+    "missing_variant_tags": {
+      "CoinCorrelation": [1],
+      "ReductionUse": [1],
+      "CoreEffect": [1, 4, 6, 7],
+      "PCNode": [1, 2, 3, 9, 10, 12, 13],
+      "ProverMoveType": [1, 2],
+      "ReadCoordinate": [0, 5, 6, 7, 8]
+    },
+    "empty_references": [
+      "ChallengeEntry/record/10/1",
+      "ClaimReductionViewBody/record/1/1",
+      "ClaimReductionViewBody/record/2/1",
+      "ClaimReductionViewBody/record/3/1",
+      "EffectViewBody/record/4/1",
+      "EffectViewBody/record/7/1",
+      "RuntimeSchema/record/2/1",
+      "TerminalEntry/record/4/1"
+    ],
+    "required_schema_repairs": [
+      "joint-correlation-and-shared-reduction-use",
+      "deterministic-verifier-message-effect",
+      "apply-reduction-effect",
+      "standard-oracle-effect-and-lifecycle",
+      "admitted-module-effect-atom",
+      "all-fourteen-pcnode-cases",
+      "oracle-and-module-prover-moves",
+      "all-ten-prover-read-coordinates",
+      "challenge-reduction-consumers",
+      "oracle-lifecycle-view-entries",
+      "supported-extension-view-entries",
+      "claim-creation-use-and-reduction-entries",
+      "terminal-claim-dispositions",
+      "runtime-oracle-receipt-schema"
+    ]
+  },
+  "required_pressure_families": [
+    {
+      "id": "verifier-private-dependency",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView"],
+      "positive_carrier": "one dead private input and one private-to-sink carrier",
+      "negative_discriminator": "a private predecessor reaching a sink makes eligibility false",
+      "stage": "B2C"
+    },
+    {
+      "id": "constant-and-derived-value",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView"],
+      "positive_carrier": "one typed constant and one total derived value",
+      "negative_discriminator": "wrong ABI, type, predecessor, or topological order refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "child-scope-and-nontrivial-guard",
+      "owner": "pir.interactive-core",
+      "views": ["PublicBindingView", "StrategyDecisionView", "PublicCoinView", "EffectView"],
+      "positive_carrier": "one child scope opening before an occurrence under EvaluateBoolean",
+      "negative_discriminator": "wrong parent path, opening boundary, or GuardImplies edge refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "deterministic-verifier-message",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView"],
+      "positive_carrier": "one total deterministic public Verifier message",
+      "negative_discriminator": "input, ABI, output type, or deterministic-public transfer drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-initial-full",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "InitialOracle with FullCanonicalOracle publication, query, and answer",
+      "negative_discriminator": "origin, carrier type, publication output, or lifecycle backlink drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-initial-binding",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "InitialOracle with PublicBinding publication, query, and answer",
+      "negative_discriminator": "binding contract, algorithm, ABI, or replay-schema drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-initial-logical",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "InitialOracle with zero-output LogicalAccess fixation and dead influence cone",
+      "negative_discriminator": "domain law, fixation arity, or acceptance intersection drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-prover-full",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "ProverOracle with FullCanonicalOracle publication, query, and answer",
+      "negative_discriminator": "missing decision, wrong move type, or publication transfer refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-prover-binding",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "ProverOracle with PublicBinding publication, query, and answer",
+      "negative_discriminator": "carrier/binding substitution or absent public observation refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-prover-logical",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "ProverOracle with LogicalAccess fixation, query, and answer",
+      "negative_discriminator": "carrier exposure, nonzero publication arity, or decision-class drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-query-public",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "one Public query and matching Answer",
+      "negative_discriminator": "query/answer scope, guard, visibility, or one-to-one backlink drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "oracle-query-verifier-only",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView", "ExecutionView"],
+      "positive_carrier": "one VerifierOnly query and matching Answer in a Fresh-admissible Core",
+      "negative_discriminator": "a dependent public sink is classified VerifierPrivate and is not FS-eligible",
+      "stage": "B2C"
+    },
+    {
+      "id": "claim-initial-linear",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "ClaimReductionView", "EffectView"],
+      "positive_carrier": "one linear InitialClaim from a Statement binding",
+      "negative_discriminator": "wrong scope, source class, duplicate use, or unresolved disposition refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "claim-reduction-output-reusable",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "ClaimReductionView", "EffectView"],
+      "positive_carrier": "one reusable ReductionOutput claim",
+      "negative_discriminator": "wrong output contract, creation coordinate, or consumer set refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "reduction-publication-before-after",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "ClaimReductionView", "EffectView"],
+      "positive_carrier": "one reduction with side input and before/after-challenge publication requirements",
+      "negative_discriminator": "wrong publication kind/order, least-next challenge, or Last-Challenge closure refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "joint-challenge-group",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "ExecutionView"],
+      "positive_carrier": "two dense JointMember challenges with exact prior-member closure",
+      "negative_discriminator": "group, index, prior member, type, law, or scope drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "shared-challenge-consumers",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "ClaimReductionView"],
+      "positive_carrier": "one Shared challenge consumed by at least two exact reductions",
+      "negative_discriminator": "contract or complete ReductionConsumers set drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "module-no-decision",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView"],
+      "positive_carrier": "supported ModuleEffect with NoProverDecision and authenticated dependency law",
+      "negative_discriminator": "payload, owner, edge, output, or control declaration drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "module-prover-decision",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView"],
+      "positive_carrier": "supported ModuleEffect with ProverDecision and exact move type",
+      "negative_discriminator": "decision class, move type, visibility, or dependency edge drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "module-prover-publication",
+      "owner": "pir.interactive-core",
+      "views": ["StrategyDecisionView", "PublicCoinView", "EffectView"],
+      "positive_carrier": "supported ModuleEffect with ProverPublication and public ModuleObservation",
+      "negative_discriminator": "missing observation, reconstruction, publication transfer, or owner edge refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "terminal-abort-consume-discharge",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView", "EffectView", "ClaimReductionView", "ExecutionView"],
+      "positive_carrier": "Accept, Reject, and Abort terminals with public outputs and both dispositions",
+      "negative_discriminator": "verdict, output type, check, disposition coordinate, or fallback drift refuses",
+      "stage": "B2C"
+    },
+    {
+      "id": "pcgraph-invalid-private-logical",
+      "owner": "pir.interactive-core",
+      "views": ["PublicCoinView"],
+      "positive_carrier": "isolated StaticPublic, PublicHistory, VerifierPrivate, Invalid, and logical-cone results",
+      "negative_discriminator": "wrong edge, transfer, sink, terminal-preemption edge, or cone intersection refuses",
+      "stage": "B2D"
+    },
+    {
+      "id": "fresh-runtime-oracle-receipts",
+      "owner": "pir.protocol",
+      "views": ["ExecutionView"],
+      "positive_carrier": "Fresh completed-record schema with every Oracle receipt branch and exact output arity",
+      "negative_discriminator": "receipt branch, coordinate, visibility, arity, type, or terminal schema drift refuses",
+      "stage": "B2D"
+    }
+  ],
+  "reuse_boundaries": [
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/reference_model.py",
+      "use": "reuse exact target identity machinery, K1 environment, and bounded admitted-handle lifecycle",
+      "nonclaim": "its selected evaluator is not constructor-complete"
+    },
+    {
+      "path": "evaluation/native-fri-ior/friiormodel/native.py",
+      "use": "reuse Oracle pressure scenarios and lifecycle questions",
+      "nonclaim": "its carrier is not the exact target InteractiveCore"
+    },
+    {
+      "path": "evaluation/k3-oir-projection/reference_model.py",
+      "use": "reuse claim/reduction consumer-pressure scenarios",
+      "nonclaim": "its downstream projection does not admit the target Core"
+    },
+    {
+      "path": "evaluation/k3-dependent-surfaces/reference_model.py",
+      "use": "reuse module-effect dependency and ownership pressure",
+      "nonclaim": "its surface witness is not an Interaction owner evaluator"
+    }
+  ],
+  "stages": [
+    {
+      "id": "B2A",
+      "result": "constructor census, explicit B1 delta, and pressure topology"
+    },
+    {
+      "id": "B2B",
+      "result": "constructor-complete six-view schema source with dual compilation and inhabitance"
+    },
+    {
+      "id": "B2C",
+      "result": "isolation carriers admitted by an extended offline evaluator and independently projected"
+    },
+    {
+      "id": "B2D",
+      "result": "integrated cross-family carrier, complete PCGraph transfers, and mutation closure"
+    }
+  ],
+  "prohibited_shortcuts": [
+    "generic-any-or-host-reflection-schema",
+    "promote-maximum-zero-b1-identities",
+    "carrier-formation-without-offline-admission",
+    "eligibility-boolean-without-retained-pcgraph",
+    "module-effect-without-authenticated-owner-law",
+    "logical-access-without-acceptance-influence-check",
+    "single-integrated-fixture-without-isolation-carriers",
+    "token-catalog-as-owner-schema-authority"
+  ]
+}

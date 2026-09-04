@@ -1,0 +1,242 @@
+{
+  "definition_additions": [
+    {
+      "dependencies": [
+        {
+          "kind": "pir.body-compiler",
+          "name": "static-view-body-v0",
+          "profile": "interaction"
+        }
+      ],
+      "fragment": "canonical-framed-fs-body-grammar",
+      "kind": "pir.body-compiler",
+      "name": "canonical-framed-static-view-body-v0",
+      "revision": 0,
+      "selector": "CanonicalFramedStaticViewBodyV0(schema,value) ="
+    },
+    {
+      "dependencies": [
+        {
+          "kind": "pir.body-compiler",
+          "name": "canonical-framed-static-view-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-binding-payload-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-capability-requirement-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-no-policy-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-policy-closure-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "static-view-schema-resolution-v0",
+          "profile": "interaction"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-body-grammar-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-source-views-v0",
+          "profile": "self"
+        }
+      ],
+      "fragment": "canonical-framed-fs-semantics",
+      "kind": "pir.static-view-schema",
+      "name": "canonical-transcript-declaration-view-v0",
+      "revision": 0,
+      "selector": "F0V3BStaticViewSchemaV0(canonical-transcript-declaration-view-v0) = Owner(pir.transcript-construction);Tag(TranscriptDeclarationView);Body(canonical-framed-static-view-body-v0)"
+    },
+    {
+      "dependencies": [
+        {
+          "kind": "pir.body-compiler",
+          "name": "canonical-framed-static-view-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-binding-payload-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-capability-requirement-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-no-policy-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-policy-closure-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "static-view-schema-resolution-v0",
+          "profile": "interaction"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-prefix-and-domain-v0",
+          "profile": "self"
+        }
+      ],
+      "fragment": "canonical-framed-fs-semantics",
+      "kind": "pir.static-view-schema",
+      "name": "canonical-required-influence-view-v0",
+      "revision": 0,
+      "selector": "F0V3BStaticViewSchemaV0(canonical-required-influence-view-v0) = Owner(pir.transcript-construction);Tag(RequiredInfluenceView);Body(canonical-framed-static-view-body-v0)"
+    },
+    {
+      "dependencies": [
+        {
+          "kind": "pir.body-compiler",
+          "name": "canonical-framed-static-view-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-binding-payload-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-capability-requirement-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-no-policy-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-policy-closure-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "static-view-schema-resolution-v0",
+          "profile": "interaction"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-admission-and-execution-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-body-grammar-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-prefix-and-domain-v0",
+          "profile": "self"
+        }
+      ],
+      "fragment": "canonical-framed-fs-semantics",
+      "kind": "pir.static-view-schema",
+      "name": "canonical-challenge-transition-view-v0",
+      "revision": 0,
+      "selector": "F0V3BStaticViewSchemaV0(canonical-challenge-transition-view-v0) = Owner(pir.transcript-construction);Tag(ChallengeTransitionView);Body(canonical-framed-static-view-body-v0)"
+    },
+    {
+      "dependencies": [
+        {
+          "kind": "pir.body-compiler",
+          "name": "canonical-framed-static-view-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-binding-payload-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-capability-requirement-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-no-policy-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.body-compiler",
+          "name": "source-policy-closure-body-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "static-view-schema-resolution-v0",
+          "profile": "interaction"
+        },
+        {
+          "kind": "pir.semantic-law",
+          "name": "canonical-framed-same-core-construction-v0",
+          "profile": "self"
+        }
+      ],
+      "fragment": "canonical-framed-fs-semantics",
+      "kind": "pir.static-view-schema",
+      "name": "canonical-fs-construction-view-v0",
+      "revision": 0,
+      "selector": "F0V3BStaticViewSchemaV0(canonical-fs-construction-view-v0) = Owner(pir.checked-fs-construction);Tag(FSConstructionView);Body(canonical-framed-static-view-body-v0)"
+    }
+  ],
+  "dependency_additions": [
+    {
+      "consumer": {
+        "kind": "pir.semantic-law",
+        "name": "canonical-framed-source-views-v0"
+      },
+      "dependencies": [
+        {
+          "kind": "pir.static-view-schema",
+          "name": "canonical-transcript-declaration-view-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.static-view-schema",
+          "name": "canonical-required-influence-view-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.static-view-schema",
+          "name": "canonical-challenge-transition-view-v0",
+          "profile": "self"
+        },
+        {
+          "kind": "pir.static-view-schema",
+          "name": "canonical-fs-construction-view-v0",
+          "profile": "self"
+        }
+      ]
+    }
+  ],
+  "format": "zkc.f0v3b.fs-family-manifest-overlay.v0",
+  "profile_key": "canonical-framed-fiat-shamir",
+  "supported_subject_kinds_add": []
+}

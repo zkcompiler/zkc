@@ -1,0 +1,105 @@
+{
+  "format": "zkc.pir.semantic-profile-source.v0",
+  "key": "commitment-opening",
+  "profile_family": "pir.commitment-opening",
+  "revision": 0,
+  "owner_page": "docs-next/pir/commitment-opening-verification.md",
+  "expected_imports": ["interaction", "public-setup"],
+  "supported_subject_kinds": [
+    "pir.commitment-opening-use",
+    "pir.commitment-opening-verifier-profile"
+  ],
+  "fragments": [
+    {
+      "name": "commitment-opening-body-dispatch",
+      "start": "zkc-profile-source:commitment-opening-body-dispatch:start",
+      "end": "zkc-profile-source:commitment-opening-body-dispatch:end"
+    },
+    {
+      "name": "commitment-opening-semantics",
+      "start": "zkc-profile-source:commitment-opening-semantics:start",
+      "end": "zkc-profile-source:commitment-opening-semantics:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "commitment-opening-use-body-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-body-dispatch",
+      "selector": "CommitmentOpeningUseBodyV0(u) =",
+      "dependencies": [
+        {"profile": "public-setup", "kind": "pir.body-compiler", "name": "public-setup-invocation-view-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "commitment-opening-verifier-profile-body-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-body-dispatch",
+      "selector": "CommitmentOpeningVerifierProfileBodyV0(p) =",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "commitment-opening-profile-admission-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-semantics",
+      "selector": "AdmitCommitmentOpeningVerifierProfile(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "commitment-opening-profile-families-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-semantics",
+      "selector": "## 6. Exact profile families",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "commitment-opening-use-and-replay-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-semantics",
+      "selector": "## 4. Exact Core use",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "commitment-opening-verifier-profile-body-v0"},
+        {"profile": "public-setup", "kind": "pir.semantic-law", "name": "public-setup-projection-and-issuance-v0"}
+      ]
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "commitment-opening-evaluator-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-semantics",
+      "selector": "AdmitCommitmentOpeningVerifierProfile(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "commitment-opening-outcome-partition-v0",
+      "revision": 0,
+      "fragment": "commitment-opening-semantics",
+      "selector": "### 4.3 Defects and outcomes",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.commitment-opening-use",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "commitment-opening-use-body-v0"},
+      "laws": ["commitment-opening-profile-admission-v0", "commitment-opening-profile-families-v0", "commitment-opening-use-and-replay-v0"],
+      "evaluator": "commitment-opening-evaluator-v0",
+      "failure_schema": "commitment-opening-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.commitment-opening-verifier-profile",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "commitment-opening-verifier-profile-body-v0"},
+      "laws": ["commitment-opening-profile-admission-v0", "commitment-opening-profile-families-v0", "commitment-opening-use-and-replay-v0"],
+      "evaluator": "commitment-opening-evaluator-v0",
+      "failure_schema": "commitment-opening-outcome-partition-v0"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "axioms": {
+    "ZkcF2O0.interaction": [],
+    "ZkcF2O0.providerShape": []
+  },
+  "classification": "environment fact only: the pinned toolchain elaborated the untrusted generated file; no correspondence, applicability, property, or security claim",
+  "command": [
+    "lake",
+    "env",
+    "lean",
+    "/home/wonjae/code/zkc/.claude/worktrees/agent-a4ceb128b6402058e/evaluation/formal-provider-observables-f2o0/generated/Schnorr.lean"
+  ],
+  "exit_status": 0,
+  "format": "zkc.formal-provider-observables-f2o0.elaboration-receipt.v0",
+  "generated_file": "generated/Schnorr.lean",
+  "generated_sha256": "d74197fc2fd2a73171809f379a72e24c2f49d32064043507c9986499a304915c",
+  "ledger_file": "generated/ledger.json",
+  "ledger_sha256": "5caa422405cb7b6fa542124e48d55348b569104b35afbdd386d39ad942f467e4",
+  "observed_at": "2026-09-02T19:22:56+00:00",
+  "provider": {
+    "checkout": "/tmp/zkc-f0-sources.b66lUO/VCVio",
+    "imported_module": "VCVio.CryptoFoundations.SigmaProtocol",
+    "lake_manifest_sha256": "b4b094936808380b97898e72e962df48052df6c69c03c3698b85faac6919d4ab",
+    "lean_version": "Lean (version 4.33.1, x86_64-unknown-linux-gnu, commit 819816b2e0a3bf405af45ae5c7af2491d8f5bee6, Release)",
+    "name": "VCVio",
+    "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",
+    "toolchain": "leanprover/lean4:v4.33.1"
+  },
+  "stderr": "",
+  "stdout": "'ZkcF2O0.interaction' does not depend on any axioms\n'ZkcF2O0.providerShape' does not depend on any axioms\n",
+  "wall_seconds": 2.392
+}

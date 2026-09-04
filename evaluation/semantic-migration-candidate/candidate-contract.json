@@ -1,0 +1,107 @@
+{
+  "format": "zkc.semantic-migration-candidate.v0",
+  "base_commit": "4ff8358108b6acf4355fa178b9b70529c6fb3778",
+  "scope": [
+    "terminal-contract-repair",
+    "normalized-owner-view-publication",
+    "endpoint-terminal-obligations",
+    "public-coin-transfer-wording"
+  ],
+  "publication": "forbidden",
+  "identity_finalization": "forbidden",
+  "foundation_boundary": {
+    "status": "awaiting-m1",
+    "evaluator-aligns-to-published-law": {
+      "semantic_regime_rotation": false,
+      "profile_effect": "the common sixteen-profile Interaction cone remains the complete rotation"
+    },
+    "published-law-changes": {
+      "semantic_regime_rotation": true,
+      "profile_effect": "all eighteen indexed profile identities rotate and every profiled subject must be reconstructed"
+    },
+    "selection": null
+  },
+  "open_alternatives": [
+    {
+      "axis": "algorithm-observable",
+      "selection": null,
+      "options": [
+        {
+          "key": "algorithm-read-in-owner-view",
+          "changes": "Add an authenticated algorithm-preimage observable to the Interaction owner-view schema and required-read closure.",
+          "target_profile_rotation": "computed by the two publication compilers",
+          "identity_note": "The Interaction-rooted cone receives an alternative identity table."
+        },
+        {
+          "key": "algorithm-preimage-in-source-package",
+          "changes": "Keep PIR views unchanged; require the formal-source package to carry and authenticate the exact K1 algorithm and module preimages.",
+          "target_profile_rotation": [],
+          "identity_note": "No additional PIR profile rotation beyond the common candidate."
+        }
+      ]
+    },
+    {
+      "axis": "public-coin-law",
+      "selection": null,
+      "options": [
+        {
+          "key": "public-coin-denotation-in-pir",
+          "changes": "Give pir.public-coin-law and pir.challenge-domain an exact denotational body consumable from the authenticated owner source.",
+          "target_profile_rotation": "computed by the two publication compilers",
+          "identity_note": "The Interaction-rooted cone and affected module/Core identities receive alternative identities."
+        },
+        {
+          "key": "public-coin-binding-in-analysis",
+          "changes": "Keep PIR structural eligibility only; add an Analysis-owned distribution binding from exact domain/law references to a provider kernel.",
+          "target_profile_rotation": [],
+          "identity_note": "No additional PIR rotation; the selected or new Analysis profile rotates instead."
+        }
+      ]
+    },
+    {
+      "axis": "outcome-map-owner",
+      "selection": null,
+      "options": [
+        {
+          "key": "outcome-map-in-owner",
+          "changes": "Publish one PIR-owned total map from verdict and run-outcome lanes to a provider-neutral failure partition.",
+          "target_profile_rotation": "computed by the two publication compilers",
+          "identity_note": "The Interaction-rooted cone receives an alternative identity table."
+        },
+        {
+          "key": "outcome-map-per-analysis-provider",
+          "changes": "Keep PIR outcomes unmapped; require each Analysis provider binding to define and justify its own total result map.",
+          "target_profile_rotation": [],
+          "identity_note": "No additional PIR rotation; each provider Analysis profile owns its map and identity."
+        }
+      ]
+    }
+  ],
+  "integration_slots": [
+    {
+      "lane": "D2 schema",
+      "required_input": "Fresh generation, execution, replay, and run-view schema result",
+      "candidate_location": "R1C0 downstream hold and ExecutionView source entry"
+    },
+    {
+      "lane": "F0-V3",
+      "required_input": "canonical-framed and duplex family-local construction/result view determinacy",
+      "candidate_location": "sibling profile-local view catalogs"
+    },
+    {
+      "lane": "F2-O1",
+      "required_input": "integrated provider-observable audit and any new missing coordinate",
+      "candidate_location": "provider-observable alternative decision record"
+    },
+    {
+      "lane": "M1",
+      "required_input": "natural byte-bound owner decision and mechanized edge/canonicity result",
+      "candidate_location": "Foundation boundary branch before identity finalization"
+    },
+    {
+      "lane": "gates-green",
+      "required_input": "answer-taint, independent-Core, and current red-gate reclosure",
+      "candidate_location": "pre-freeze gate replay"
+    }
+  ]
+}

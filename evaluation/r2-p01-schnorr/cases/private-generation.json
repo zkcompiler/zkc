@@ -1,0 +1,17 @@
+{
+  "schema": "zkc.r2.p01.private-generation-input.v3",
+  "classification": "DeclassifiedTestVectorPopulatesPrivateSemanticRoles",
+  "witness": 7,
+  "nonce": 4,
+  "local_resource_plan": {
+    "max_strategy_steps": 2,
+    "max_public_reads": 1,
+    "max_private_reads": 2
+  },
+  "policy": {
+    "portable_identity": false,
+    "public_report_digest": false,
+    "cross_process_authority_replay": false,
+    "allowed_use": "owner-local precommitment audit and public-projection comparison"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "aggregate": "RA-A-AXES-CLOSED-AND-DERIVED",
+  "findings_sha256": "ee7970e8fe8b15a55ce58cddd8e1892f18a2c613b991bdf9fa9248229cb17eee",
+  "finding_codes": [
+    ["axis-schema-closure", "Affirmative", "RA-A-AXIS-SCHEMA-CLOSED"],
+    ["destination-totality", "Affirmative", "RA-A-DESTINATIONS-TOTAL"],
+    ["authority-coordinate-resolution", "Affirmative", "RA-A-AUTHORITY-COORDINATES"],
+    ["owner-source-pins", "Affirmative", "RA-A-OWNER-SOURCE-PINS"],
+    ["case-matrix-totality", "Affirmative", "RA-A-CASE-MATRIX-TOTAL"],
+    ["portfolio-census", "Affirmative", "RA-A-PORTFOLIO-CENSUS"],
+    ["peer-map-census", "Affirmative", "RA-A-PEER-MAP-CENSUS"],
+    ["unconsidered-class-census", "Affirmative", "RA-A-UNCONSIDERED-CENSUS"],
+    ["primary-source-citations", "Affirmative", "RA-A-PRIMARY-SOURCES-PINNED"],
+    ["derived-prediction-agreement", "Affirmative", "RA-A-DERIVED-PREDICTIONS"],
+    ["recorded-holdout-agreement", "Affirmative", "RA-A-HOLDOUT-ADJUDICATION"],
+    ["recorded-peer-review-agreement", "Affirmative", "RA-A-PEER-REVIEW-MAP"],
+    ["mutation-refusals", "Affirmative", "RA-A-MUTATIONS-REFUSED"],
+    ["boundary-destination-census", "Affirmative", "RA-A-BOUNDARIES-ENUMERATED"],
+    ["universal-expressibility", "CannotAnswer", "RA-C-UNIVERSAL-EXPRESSIBILITY"],
+    ["source-protocol-correspondence", "CannotAnswer", "RA-C-SOURCE-CORRESPONDENCE"],
+    ["cryptographic-properties", "CannotAnswer", "RA-C-CRYPTOGRAPHIC-PROPERTIES"],
+    ["expressibility-axes", "Affirmative", "RA-A-AXES-CLOSED-AND-DERIVED"]
+  ]
+}

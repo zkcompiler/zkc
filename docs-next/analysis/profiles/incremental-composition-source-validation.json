@@ -1,0 +1,271 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "analysis-incremental-composition-source-validation",
+  "catalog_namespace": "analysis",
+  "profile_family": "analysis.incremental-composition-source-validation",
+  "revision": 0,
+  "expected_imports": [
+    "analysis-incremental-composition"
+  ],
+  "supported_subject_kinds": [
+    "analysis.capability-requirement-payload",
+    "analysis.checked-result-coordinate",
+    "analysis.consumer",
+    "analysis.judgment-record",
+    "analysis.operation-policy",
+    "analysis.owner-policy-closure",
+    "analysis.portable-source-authority-binding",
+    "analysis.source-authority-contract",
+    "analysis.source-support",
+    "analysis.support-instantiation",
+    "analysis.theorem-source-validation",
+    "analysis.use-purpose",
+    "analysis.validation-basis"
+  ],
+  "fragments": [
+    {
+      "name": "incremental-validation-semantics",
+      "owner_page": "docs-next/analysis/incremental-composition.md",
+      "start": "zkc-profile-source:analysis-incremental-validation-semantics:start",
+      "end": "zkc-profile-source:analysis-incremental-validation-semantics:end"
+    },
+    {
+      "name": "incremental-validation-publication",
+      "owner_page": "docs-next/analysis/profile-publication.md",
+      "start": "zkc-profile-source:analysis-incremental-validation-publication:start",
+      "end": "zkc-profile-source:analysis-incremental-validation-publication:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "analysis.body-compiler",
+      "name": "incremental-composition-source-validation-body-v0",
+      "revision": 0,
+      "fragment": "incremental-validation-publication",
+      "selector": "AnalysisIncrementalCompositionSourceValidationBodyCompilerV0(kind,body) =",
+      "dependencies": [
+        {
+          "profile": "analysis-incremental-composition",
+          "kind": "analysis.body-compiler",
+          "name": "incremental-composition-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "incremental-source-validation-v0",
+      "revision": 0,
+      "fragment": "incremental-validation-semantics",
+      "selector": "### 4.2 Source and theorem truth",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "incremental-validation-profile-boundary-v0",
+      "revision": 0,
+      "fragment": "incremental-validation-publication",
+      "selector": "AnalysisIncrementalCompositionSourceValidationProfileSourceV0 = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.evaluator-signature",
+      "name": "incremental-composition-source-validation-admission-v0",
+      "revision": 0,
+      "fragment": "incremental-validation-publication",
+      "selector": "AdmitAnalysisIncrementalCompositionSourceValidationSubjectV0(",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.failure-schema",
+      "name": "incremental-composition-source-validation-admission-outcome-v0",
+      "revision": 0,
+      "fragment": "incremental-validation-publication",
+      "selector": "AnalysisIncrementalCompositionSourceValidationAdmissionOutcomeV0 =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "analysis.capability-requirement-payload",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.checked-result-coordinate",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.consumer",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.judgment-record",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.operation-policy",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.owner-policy-closure",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.portable-source-authority-binding",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.source-authority-contract",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.source-support",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.support-instantiation",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.theorem-source-validation",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.use-purpose",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.validation-basis",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-source-validation-body-v0"
+      },
+      "laws": [
+        "incremental-source-validation-v0",
+        "incremental-validation-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-source-validation-admission-v0",
+      "failure_schema": "incremental-composition-source-validation-admission-outcome-v0"
+    }
+  ]
+}

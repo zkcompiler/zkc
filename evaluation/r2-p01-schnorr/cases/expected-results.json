@@ -1,0 +1,782 @@
+{
+  "cases": {
+    "analysis/exhaustive-shvzk-distribution.v2": {
+      "boundary": "analysis:finite-shvzk:exhaustive",
+      "code": "P01-SHVZK-OK",
+      "detail": "real and simulator transcript distributions are exactly equal for every frozen-profile Statement and fixed challenge",
+      "evidence": {
+        "challenge_count_per_statement": 8,
+        "conditional_distribution_count": 88,
+        "non_claim": "not malicious-verifier ZK, a general SHVZK theorem, or ROM/QROM simulation",
+        "simulator_inputs": [
+          "statement",
+          "fixed challenge",
+          "simulator randomness"
+        ],
+        "simulator_omits": "witness",
+        "statement_count": 11,
+        "support_points_per_distribution_per_side": 11,
+        "total_samples_per_side": 968
+      },
+      "evidence_id": "evidence-sha256:c88f844c0ded7504cb043fed06920315ec8c18f75773205df621573baee4dfeb",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+        "relation": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/exhaustive-special-soundness-algebra.v2": {
+      "boundary": "analysis:finite-special-soundness:exhaustive",
+      "code": "P01-SS-ENUM-OK",
+      "detail": "every frozen-profile accepting fork extracts the unique enumerated scalar and passes Relations-owned satisfaction",
+      "evidence": {
+        "accepting_transcript_count": 968,
+        "challenge_count_per_statement_nonce": 8,
+        "coverage": "all x, all nonces, and all unordered distinct challenge pairs in the frozen profile",
+        "non_claim": "not a general special-soundness theorem or knowledge extractor",
+        "nonce_count_per_statement": 11,
+        "statement_count": 11,
+        "unordered_distinct_challenge_fork_count": 3388
+      },
+      "evidence_id": "evidence-sha256:3bf474c947804d1b077deda94b4a9114e5bcf96ae7fcf224305cbee9c285d269",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+        "relation": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/fresh-public-transcript.v2": {
+      "boundary": "analysis:finite-transcript",
+      "code": "P01-TRN-OK",
+      "detail": "finite transcript satisfies the Schnorr verifier equation",
+      "evidence": {
+        "non_claim": "not a replay-qualified Fresh or Fiat-Shamir execution"
+      },
+      "evidence_id": "evidence-sha256:bcaf096b04fc9a91b415687c1ce640a9a18b91c36e2f46a07bbc11f36854decd",
+      "operand_ids": {
+        "execution_qualification": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+        "transcript": "sha256:9ef5ef3bd1cea90b4c9686d9f4c36063dccb43b6a1edae635721787797879edd"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:9ef5ef3bd1cea90b4c9686d9f4c36063dccb43b6a1edae635721787797879edd",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/fs-public-transcript.v2": {
+      "boundary": "analysis:finite-transcript",
+      "code": "P01-TRN-OK",
+      "detail": "finite transcript satisfies the Schnorr verifier equation",
+      "evidence": {
+        "non_claim": "not a replay-qualified Fresh or Fiat-Shamir execution"
+      },
+      "evidence_id": "evidence-sha256:54f79e2c730e572484b8edb917243788f71e5cdaf48b4aa9cf2c6672e4e803bd",
+      "operand_ids": {
+        "execution_qualification": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+        "transcript": "sha256:3fa4268b9713501327e42c92a9c5219c76954bab111a28a2dc896cd1fdfb6834"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:3fa4268b9713501327e42c92a9c5219c76954bab111a28a2dc896cd1fdfb6834",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/theorem-refusal/FiatShamirQROM.v2": {
+      "boundary": "analysis:applicability:FiatShamirQROM",
+      "code": "P01-APP-106",
+      "detail": "classical finite transcript algebra does not establish a Fiat-Shamir QROM theorem",
+      "evidence": {
+        "available_evidence": [
+          "FiniteSpecialSoundnessAlgebra",
+          "FiniteSHVZKDistribution"
+        ],
+        "missing_capability": "exact QROM theorem, quantum query access, reprogram rights, adversary map, and loss transformer",
+        "non_promotion_law": "finite evidence cannot author theorem applicability"
+      },
+      "evidence_id": "evidence-sha256:e7f88be7f3c0149bfb888545ae1817f1d632833c14c50ec7d5dd76ce040dda25",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Refused",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/theorem-refusal/FiatShamirROM.v2": {
+      "boundary": "analysis:applicability:FiatShamirROM",
+      "code": "P01-APP-105",
+      "detail": "finite transcript algebra does not establish a Fiat-Shamir ROM theorem",
+      "evidence": {
+        "available_evidence": [
+          "FiniteSpecialSoundnessAlgebra",
+          "FiniteSHVZKDistribution"
+        ],
+        "missing_capability": "exact ROM theorem, oracle interface, adversary map, correspondence, and loss transformer",
+        "non_promotion_law": "finite evidence cannot author theorem applicability"
+      },
+      "evidence_id": "evidence-sha256:cd53294dcc5fd0af064165b28032f5ceaf8ac809b82a51b85ffaad57582a802b",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Refused",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/theorem-refusal/GeneralHVZKTheorem.v2": {
+      "boundary": "analysis:applicability:GeneralHVZKTheorem",
+      "code": "P01-APP-103",
+      "detail": "SHVZK evidence is not silently retyped as an independently scoped HVZK result",
+      "evidence": {
+        "available_evidence": [
+          "FiniteSpecialSoundnessAlgebra",
+          "FiniteSHVZKDistribution"
+        ],
+        "missing_capability": "honest-verifier view definition and exact joint-distribution theorem",
+        "non_promotion_law": "finite evidence cannot author theorem applicability"
+      },
+      "evidence_id": "evidence-sha256:261fc9fec0355e5aafecd37f56f05bea47deb2f9c6de092d8e0d3b583979b57f",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Refused",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/theorem-refusal/GeneralSpecialHVZKTheorem.v2": {
+      "boundary": "analysis:applicability:GeneralSpecialHVZKTheorem",
+      "code": "P01-APP-102",
+      "detail": "finite fixed-challenge equality cannot mint a general special-HVZK theorem",
+      "evidence": {
+        "available_evidence": [
+          "FiniteSpecialSoundnessAlgebra",
+          "FiniteSHVZKDistribution"
+        ],
+        "missing_capability": "fixed-challenge simulator theorem over the declared protocol family",
+        "non_promotion_law": "finite evidence cannot author theorem applicability"
+      },
+      "evidence_id": "evidence-sha256:47c841e00cf70516ee35f0680dd823033201b2489eb39da4083b414ab02fd478",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Refused",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/theorem-refusal/GeneralSpecialSoundnessTheorem.v2": {
+      "boundary": "analysis:applicability:GeneralSpecialSoundnessTheorem",
+      "code": "P01-APP-101",
+      "detail": "finite enumeration cannot mint a general special-soundness theorem",
+      "evidence": {
+        "available_evidence": [
+          "FiniteSpecialSoundnessAlgebra",
+          "FiniteSHVZKDistribution"
+        ],
+        "missing_capability": "authenticated theorem capability with exact protocol/relation correspondence",
+        "non_promotion_law": "finite evidence cannot author theorem applicability"
+      },
+      "evidence_id": "evidence-sha256:164f5ab548c4efe8bec1618485f349f927a2dd2259b9ae287054828d508a5c4b",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Refused",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "analysis/theorem-refusal/KnowledgeSoundness.v2": {
+      "boundary": "analysis:applicability:KnowledgeSoundness",
+      "code": "P01-APP-104",
+      "detail": "a direct two-transcript extractor is not a strategy-level proof-of-knowledge extractor",
+      "evidence": {
+        "available_evidence": [
+          "FiniteSpecialSoundnessAlgebra",
+          "FiniteSHVZKDistribution"
+        ],
+        "missing_capability": "adversarial strategy, rewinding rights, threshold, extractor, and quantitative bound",
+        "non_promotion_law": "finite evidence cannot author theorem applicability"
+      },
+      "evidence_id": "evidence-sha256:36f8d1421cf32df1e93a464e57451a1a512f04baae06a797621f9ddaae5d8cfd",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Refused",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "execution/fresh-public-evaluation.v2": {
+      "boundary": "fresh-public-verification",
+      "code": "P01-FRESH-PUBLIC-OK",
+      "detail": "Fresh transcript satisfies exact public replay and verifier evaluation",
+      "evidence": {
+        "non_claim": "not evidence that the challenge support point was honestly sampled"
+      },
+      "evidence_id": "evidence-sha256:7fc1f8a24711eca9a455013019549b39cf375a03f6689f2a56c8ecd2b365a5df",
+      "operand_ids": {
+        "qualification": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+        "record": "sha256:1627def62e9e7591724f1ccf7db1e3cc02576497cca0aab70c852accd24a27af"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+      "validation_basis_id": "validation-sha256:a7bafc0a04e1809569d3fce4f9740eeb4113935e56fa675047736c7fdae5574e"
+    },
+    "execution/fresh-public-replay.v2": {
+      "boundary": "checked-public-execution",
+      "code": "P01-CHECKED-OK",
+      "detail": "checked public execution survives exact portable replay",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:40a8332dc9ac4796ef28542760d9b8f4dc9a34bb4ef9d95adcaf7486faf0df74",
+      "operand_ids": {
+        "public_fixture": "sha256:394cb2ce5192acacc36b0a7dddabe3912e453fbc4be88b6da4490580b0009646",
+        "qualification": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+        "record": "sha256:1627def62e9e7591724f1ccf7db1e3cc02576497cca0aab70c852accd24a27af"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+      "validation_basis_id": "validation-sha256:a7bafc0a04e1809569d3fce4f9740eeb4113935e56fa675047736c7fdae5574e"
+    },
+    "execution/fs-public-replay.v2": {
+      "boundary": "checked-public-execution",
+      "code": "P01-CHECKED-OK",
+      "detail": "checked public execution survives exact portable replay",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:c3dd8acea682906ee685b0d734b1b21f37f97b0e4350d164cafea85848aab409",
+      "operand_ids": {
+        "public_fixture": "sha256:394cb2ce5192acacc36b0a7dddabe3912e453fbc4be88b6da4490580b0009646",
+        "qualification": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+        "record": "sha256:2b853950a9b0352a2e2998546e8635aca1947a97ca5c27328adeca57f16ebd99"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+      "validation_basis_id": "validation-sha256:a7bafc0a04e1809569d3fce4f9740eeb4113935e56fa675047736c7fdae5574e"
+    },
+    "interface/fs-abi-admitted.v2": {
+      "boundary": "fs-proof-interface",
+      "code": "P01-IFACE-OK",
+      "detail": "exact statement-external, challenge-recomputing FS ABI is admitted",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:44ad933be62575115a7f455f8326e7592d6a624470a0310ab7fdd2c0d77f4f0c",
+      "operand_ids": {
+        "interface": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+        "protocol": "sha256:9bea48b71d7930ab82e0fb791c52c66ba84b5307a3b1de077a9d07d695510aaf"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "interface/fs-execution-projection.v2": {
+      "boundary": "fs-execution-projection",
+      "code": "P01-FS-PROJECTION-OK",
+      "detail": "checked FS execution projects exactly to external inputs, proof bytes, challenge, and terminal",
+      "evidence": {
+        "interface_id": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+        "proof_artifact_id": "sha256:5c6037e17112ad2502ced33a32a65e1df780e7996de2b65aff08f47c4c58a3d0",
+        "verification_record_id": "evidence-sha256:6f6c70e2d1f1bca457b8ccade4e56acacaa5b374f99dbcd452f31759a58bc506"
+      },
+      "evidence_id": "evidence-sha256:14eac513d99648441f7d239c03fce8ec768e4cdada90be342b6d6f7a870ccfc0",
+      "operand_ids": {
+        "execution_qualification": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+        "interface": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+        "proof": "sha256:5c6037e17112ad2502ced33a32a65e1df780e7996de2b65aff08f47c4c58a3d0"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "interface/fs-proof-accepted.v2": {
+      "boundary": "fs-proof-verification",
+      "code": "P01-VERIFY-OK",
+      "detail": "proof reached the shared public verifier's Accept terminal",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:15ec5a331016571a0a0548ab20322820bb935c99e44c6ae65f0ab30a8219c0f0",
+      "operand_ids": {
+        "proof": "sha256:5c6037e17112ad2502ced33a32a65e1df780e7996de2b65aff08f47c4c58a3d0",
+        "verification": "evidence-sha256:6f6c70e2d1f1bca457b8ccade4e56acacaa5b374f99dbcd452f31759a58bc506",
+        "verifier_basis": "validation-sha256:a7bafc0a04e1809569d3fce4f9740eeb4113935e56fa675047736c7fdae5574e"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:6f6c70e2d1f1bca457b8ccade4e56acacaa5b374f99dbcd452f31759a58bc506",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "negative/analysis/equal-challenge-fork.v3": {
+      "boundary": "analysis:finite-special-soundness:distinct-challenges",
+      "code": "P01-SS-006",
+      "detail": "special-soundness fork requires distinct challenges",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:1c247ac6267a32e930119a278e070b5201bb433eed1a20023bf817b047295c83",
+      "operand_ids": {
+        "left_transcript": "sha256:9ef5ef3bd1cea90b4c9686d9f4c36063dccb43b6a1edae635721787797879edd",
+        "right_transcript": "sha256:9ef5ef3bd1cea90b4c9686d9f4c36063dccb43b6a1edae635721787797879edd"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:b5c209d2e2e860311cc43bcc0cc3f7518ce7de7c1d02055179dfad9c1badf077",
+      "validation_basis_id": "validation-sha256:10933ef85f6f59e3161d726d466a3a5819e798f3d88babc685e1978154c61207"
+    },
+    "negative/execution/public-replay-resource-ceiling.v3": {
+      "boundary": "public-replay:resources",
+      "code": "P01-REPLAY-004",
+      "detail": "exact public replay exceeds caller or evaluator resource bounds",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:babf846159b4df89e00175275f10aa480a386da4ca8a3b9e9c2f93d6c5168511",
+      "operand_ids": {
+        "candidate_request": "sha256:df395753cc849e29cb5ac1fb4032d708213089353fba62145caf0ed98ac9d438",
+        "evaluator_basis": "validation-sha256:a7bafc0a04e1809569d3fce4f9740eeb4113935e56fa675047736c7fdae5574e"
+      },
+      "outcome": "ResourceExceeded",
+      "subject": "sha256:df395753cc849e29cb5ac1fb4032d708213089353fba62145caf0ed98ac9d438",
+      "validation_basis_id": "validation-sha256:a7bafc0a04e1809569d3fce4f9740eeb4113935e56fa675047736c7fdae5574e"
+    },
+    "negative/fs/application-authority-changed.v2": {
+      "boundary": "transcript-initialization:application-authority",
+      "code": "P01-FS-023",
+      "detail": "runtime application context is not owned by the application boundary",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:8fd64316e3a7aa08caa5eda3345acb775586eee92cc507dc44f5bd19cc73fac5",
+      "operand_ids": {
+        "candidate_construction": "sha256:5df2b34cea641bf8574c393f0b4e10d8cc44adaddaf9faa1ff946b1e475e6ed5",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:5df2b34cea641bf8574c393f0b4e10d8cc44adaddaf9faa1ff946b1e475e6ed5",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/atom-codec-changed.v2": {
+      "boundary": "transcript-atom:typed-occurrence-source",
+      "code": "P01-FS-007",
+      "detail": "challenge atom has the wrong kind, domain, or codec",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:b8e69849777544663377305ffa8558721856ba3de3a6a5fec182ac99747a1ded",
+      "operand_ids": {
+        "candidate_construction": "sha256:16bd33951edcc6a99453bcb0643a4e81be74bc95c1cff28f8d6e8a59ac8fdfaf",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:16bd33951edcc6a99453bcb0643a4e81be74bc95c1cff28f8d6e8a59ac8fdfaf",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/challenge-namespace-changed.v2": {
+      "boundary": "squeeze-sample:namespace",
+      "code": "P01-FS-011",
+      "detail": "challenge occurrence namespace is not the exact P01 FS v3 namespace",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:0f123252dd85caafc7d5acd620b391c986e3dfa25d5becf0b63cb2570b9fc906",
+      "operand_ids": {
+        "candidate_construction": "sha256:84f5035ec023c6785bda9725b71f61d46770c13ca6ffa93711950c6cfb4e4a33",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:84f5035ec023c6785bda9725b71f61d46770c13ca6ffa93711950c6cfb4e4a33",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/commitment-omitted.v2": {
+      "boundary": "transcript-prefix:challenge:c",
+      "code": "P01-FS-005",
+      "detail": "a required challenge source is missing",
+      "evidence": {
+        "expected_source": "message:commitment"
+      },
+      "evidence_id": "evidence-sha256:99ce117372e4333c88dcd0a13aa64bc5818693e77b6407e1f99a7c14df6ea94e",
+      "operand_ids": {
+        "candidate_construction": "sha256:523fac37a97b3e32c77042bee00f1ae199cc9b408db88cf410d2670c35e8fa37",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:523fac37a97b3e32c77042bee00f1ae199cc9b408db88cf410d2670c35e8fa37",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/framing-changed.v2": {
+      "boundary": "transcript-framing:injectivity",
+      "code": "P01-FS-012",
+      "detail": "transcript framing is not the pinned injective framing",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:a85863d8e652e5220fe6e84367b7da525f21f711c3029cf9b061c5a6c6306981",
+      "operand_ids": {
+        "candidate_construction": "sha256:86d3d681cd67581ad1975b630fd9d0556788352b9f47c1da05d7ad9b66bd705d",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:86d3d681cd67581ad1975b630fd9d0556788352b9f47c1da05d7ad9b66bd705d",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/prefix-reordered.v2": {
+      "boundary": "transcript-prefix:ordered-exactness:c",
+      "code": "P01-FS-006",
+      "detail": "challenge atom cites the wrong occurrence or order",
+      "evidence": {
+        "actual_source": "message:commitment",
+        "expected_source": "statement:y"
+      },
+      "evidence_id": "evidence-sha256:e13c8614f710d229b3008c458188a96ad783e523aa2a86c81aa32275e94e5d5f",
+      "operand_ids": {
+        "candidate_construction": "sha256:990244427c380b88ad3b66e5b238c9486f296b3c6325e5e4191faaeab4fb5ae4",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:990244427c380b88ad3b66e5b238c9486f296b3c6325e5e4191faaeab4fb5ae4",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/source-fresh-protocol-changed.v2": {
+      "boundary": "transcript-construction:source-public-coin-basis",
+      "code": "P01-FS-021",
+      "detail": "construction does not bind the exact admitted Fresh realization and conditional kernel basis",
+      "evidence": {
+        "expected_fresh_protocol_id": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+        "expected_fresh_realization_id": "sha256:fac92b15cd27832be59063a40e9adb7ff82ec641e41d9d1c6a4a72d1b5a3ac97",
+        "expected_source_public_coin_basis_id": "sha256:e61b4f9b7b1fe5f4802c5d073d2aa91568d8b2d8659e472f2cd603b73b11b6dc"
+      },
+      "evidence_id": "evidence-sha256:c2ab39661991cbabde2ecff914f960dc8e69db11944308040a5224be71f6a14a",
+      "operand_ids": {
+        "candidate_construction": "sha256:49ad51bbe538a94a7d7e9f20ab1a4e8304162b018b46b81e885fb538be30db2e",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "Mismatch",
+      "subject": "sha256:49ad51bbe538a94a7d7e9f20ab1a4e8304162b018b46b81e885fb538be30db2e",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/fs/statement-omitted.v2": {
+      "boundary": "transcript-prefix:challenge:c",
+      "code": "P01-FS-005",
+      "detail": "a required challenge source is missing",
+      "evidence": {
+        "expected_source": "statement:y"
+      },
+      "evidence_id": "evidence-sha256:b67edc110a84af1332d193c2c86cfcacf3bdad8fc3c256f23e93b104b481d131",
+      "operand_ids": {
+        "candidate_construction": "sha256:08789be4263bdbfade0e2aaa4ac07eed306f9012ebe54e9d60dcb1acd5cc66a9",
+        "expected_construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:08789be4263bdbfade0e2aaa4ac07eed306f9012ebe54e9d60dcb1acd5cc66a9",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "negative/interface/proof-field-outside-domain.v2": {
+      "boundary": "fs-proof-decoding:field-domain",
+      "code": "P01-PROOF-002",
+      "detail": "decoded commitment or response is outside its declared domain",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:2f8cc0a1ae10ecc26dbcdb74cf1b0a8e869af0af1326c10742861f0f4d9210b1",
+      "operand_ids": {
+        "candidate_proof": "sha256:fcf0a6c700dd13e274b6fba8deea8dd9b26e4eedde3495717cac8408c9c5177f",
+        "interface": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "negative/interface/proof-trailing-byte.v2": {
+      "boundary": "fs-proof-decoding:length",
+      "code": "P01-PROOF-001",
+      "detail": "proof bytes do not have the exact fixed product width",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:0eca4c99bc5f2c25af02bcaf01586094a568c66d107734fd8804d87d86c5f6da",
+      "operand_ids": {
+        "candidate_proof": "sha256:31adc328e5f689790ae893f5286784517656655e2cc08e96205663ed1d11d7e2",
+        "interface": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0"
+      },
+      "outcome": "Malformed",
+      "subject": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "negative/interface/proof-truncated.v2": {
+      "boundary": "fs-proof-decoding:length",
+      "code": "P01-PROOF-001",
+      "detail": "proof bytes do not have the exact fixed product width",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:7f35ea7624e79abb2d36076aa0a291b12f0f8260941d780ea5b2cbe6327fd161",
+      "operand_ids": {
+        "candidate_proof": "sha256:c555eab45d08845ae9f10d452a99bfcb06f74a50b988fe7e48dd323789b88ee3",
+        "interface": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0"
+      },
+      "outcome": "Malformed",
+      "subject": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "negative/interface/proof-verification-resource-ceiling.v3": {
+      "boundary": "fs-proof-verification:resources",
+      "code": "P01-VERIFY-004",
+      "detail": "FS proof verification exceeds the public evaluator hard caps",
+      "evidence": {
+        "required_usage": {
+          "hash_queries": 2,
+          "trace_events": 5,
+          "transcript_atoms": 2
+        },
+        "required_verification_executions": 1
+      },
+      "evidence_id": "evidence-sha256:39feb26c4751553698faf4a03b380dc84b19aa8e9266f1a0b2b5c33b2b1ff7b4",
+      "operand_ids": {
+        "candidate_basis": "validation-sha256:9d5abac259b0f762767525e85add7d2f3d63ac706b612ec458a13f0a1db798dd",
+        "proof_artifact": "sha256:5c6037e17112ad2502ced33a32a65e1df780e7996de2b65aff08f47c4c58a3d0"
+      },
+      "outcome": "ResourceExceeded",
+      "subject": "validation-sha256:9d5abac259b0f762767525e85add7d2f3d63ac706b612ec458a13f0a1db798dd",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "negative/interface/rejecting-proof.v2": {
+      "boundary": "fs-proof-verification:terminal",
+      "code": "P01-VERIFY-002",
+      "detail": "proof reached the shared public verifier's Reject terminal",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:e722bf6007437a275dd99916d12805eb251a1504c6887e5d1f30021773f8a466",
+      "operand_ids": {
+        "candidate_proof": "sha256:14016934aaeb3931346dc771e97afbcb3f95d1e132f53d5c068b01479d36af9b",
+        "interface": "sha256:2893cf81eeba86eee5a330648e4db55d167dc2e6b5d529d83e929071be63fff0"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "evidence-sha256:329849f21fecff4e6cae5723ed32ecda53b5bf2dd4ea1bf8a220e30da92a0816",
+      "validation_basis_id": "validation-sha256:0cbb199d8ad593ad9ba5a293ab84560d87a48a36323ef616fc4ab1b2d89f4828"
+    },
+    "negative/relations/statement-value-mismatch.v2": {
+      "boundary": "relations:execution-grounding-shape:value",
+      "code": "P01-GRD-008",
+      "detail": "checked execution Statement differs from the relation-instance value",
+      "evidence": {
+        "relation_instance_id": "sha256:03f7b3a09db88f462c7105caf99e522489c80e2b1475fecb7b671ce74e26d6e4",
+        "statement_occurrence_id": "sha256:a8a8701f354a9509185911ae0a2c9854fb141f76e7f0f44539d4f67bf36ca85d"
+      },
+      "evidence_id": "evidence-sha256:3fe87416eca545d21e8b19fab6c4028c1460d8d6f0f6ca489e2425fc64c86709",
+      "operand_ids": {
+        "execution_qualification": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+        "relation_instance": "sha256:03f7b3a09db88f462c7105caf99e522489c80e2b1475fecb7b671ce74e26d6e4",
+        "statement_event": "sha256:a8a8701f354a9509185911ae0a2c9854fb141f76e7f0f44539d4f67bf36ca85d"
+      },
+      "outcome": "Mismatch",
+      "subject": "evidence-sha256:a63c11fa4c6e90c3a952a90281656b0f031d704c7e9909c47ee2d03bf19b377e",
+      "validation_basis_id": "validation-sha256:f73a8f3ee1528d8a4df4c5c89b75e82ebbd4c7016047d16a83b94ac083a03f7b"
+    },
+    "negative/semantic/prover-owned-challenge.v3": {
+      "boundary": "source-correspondence:public-coin-eligibility",
+      "code": "P01-PCOIN-001",
+      "detail": "challenge slot is not an external, public, operand-free resolution point",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:70561043498855b565ea739120128bcb63a9855f53e2ea83d8cbcba8f370ad7e",
+      "operand_ids": {
+        "candidate_core": "sha256:10b2cdb6891071cf7f9faf35bb31e4cf040ad1d1812b201fca9faecb38e9a406",
+        "expected_core": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b"
+      },
+      "outcome": "SemanticNegative",
+      "subject": "sha256:10b2cdb6891071cf7f9faf35bb31e4cf040ad1d1812b201fca9faecb38e9a406",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "relations/fresh-execution-grounding.v2": {
+      "boundary": "relations:execution-grounding-shape",
+      "code": "P01-GRD-SHAPE-OK",
+      "detail": "grounding has exact operands and same-domain checked Statement equality",
+      "evidence": {
+        "public_execution_qualification_id": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+        "public_execution_record_id": "sha256:1627def62e9e7591724f1ccf7db1e3cc02576497cca0aab70c852accd24a27af",
+        "relation_id": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442",
+        "relation_instance_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275",
+        "statement_occurrence_id": "sha256:a8a8701f354a9509185911ae0a2c9854fb141f76e7f0f44539d4f67bf36ca85d"
+      },
+      "evidence_id": "evidence-sha256:3c1943e8f25ac3520a0c526e53366c663137e68cd1409c7c8cc9f5ea03807e4f",
+      "operand_ids": {
+        "grounding": "evidence-sha256:1d6990776e905738f4c37a3be6ec8811009f16f06995e4e4e04e16fb23f4c0bf",
+        "qualification": "evidence-sha256:f743c1ceec02e1357654ebef6a86593edfc97261157658ee3e51fbc8d73b1728",
+        "statement_event": "sha256:a8a8701f354a9509185911ae0a2c9854fb141f76e7f0f44539d4f67bf36ca85d"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:1d6990776e905738f4c37a3be6ec8811009f16f06995e4e4e04e16fb23f4c0bf",
+      "validation_basis_id": "validation-sha256:f73a8f3ee1528d8a4df4c5c89b75e82ebbd4c7016047d16a83b94ac083a03f7b"
+    },
+    "relations/fs-execution-grounding.v2": {
+      "boundary": "relations:execution-grounding-shape",
+      "code": "P01-GRD-SHAPE-OK",
+      "detail": "grounding has exact operands and same-domain checked Statement equality",
+      "evidence": {
+        "public_execution_qualification_id": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+        "public_execution_record_id": "sha256:2b853950a9b0352a2e2998546e8635aca1947a97ca5c27328adeca57f16ebd99",
+        "relation_id": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442",
+        "relation_instance_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275",
+        "statement_occurrence_id": "sha256:5682ff8a75fdccbfff165622ba7a2b026a818f22c48be2af194b7c30ca6b56c7"
+      },
+      "evidence_id": "evidence-sha256:f61b42739a370be3c1763dad90a4230081ce8586891ae412b0a227f6c762fc29",
+      "operand_ids": {
+        "grounding": "evidence-sha256:bb0bc8f0974f0e6dc1dc106cd0f3a68fd4760c1d69700edfb0354fb43e983de2",
+        "qualification": "evidence-sha256:aeda830508453556de62273f09db384704bae77488fa09545f82e3870bd72757",
+        "statement_event": "sha256:5682ff8a75fdccbfff165622ba7a2b026a818f22c48be2af194b7c30ca6b56c7"
+      },
+      "outcome": "Affirmative",
+      "subject": "evidence-sha256:bb0bc8f0974f0e6dc1dc106cd0f3a68fd4760c1d69700edfb0354fb43e983de2",
+      "validation_basis_id": "validation-sha256:f73a8f3ee1528d8a4df4c5c89b75e82ebbd4c7016047d16a83b94ac083a03f7b"
+    },
+    "relations/honest-prover-correspondence.v2": {
+      "boundary": "relations:honest-prover-correspondence",
+      "code": "P01-RHC-OK",
+      "detail": "the admitted relation is the exact precondition of the admitted Schnorr honest prover",
+      "evidence": {
+        "core_id": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+        "honest_prover_contract_id": "sha256:44cc6255fce17660f6522b3cbd37a9b88cf49fef787f1010323cb786fa5644fe",
+        "non_claim": "not witness satisfaction, completeness, acceptance, or security",
+        "relation_id": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "evidence_id": "evidence-sha256:65d72fb54307dd131ee2538946d723c6a8020a8c7eb1e6a0fb0fb2ab3b6b9f6c",
+      "operand_ids": {
+        "correspondence": "sha256:4aef923444ed64e9428508f63c562388bde60d3e8b426780f4b0ed091ec76c50",
+        "honest_contract": "sha256:44cc6255fce17660f6522b3cbd37a9b88cf49fef787f1010323cb786fa5644fe",
+        "relation": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:4aef923444ed64e9428508f63c562388bde60d3e8b426780f4b0ed091ec76c50",
+      "validation_basis_id": "validation-sha256:f73a8f3ee1528d8a4df4c5c89b75e82ebbd4c7016047d16a83b94ac083a03f7b"
+    },
+    "relations/instance-admitted.v2": {
+      "boundary": "relations:instance-admission",
+      "code": "P01-INS-OK",
+      "detail": "Schnorr relation instance is admitted without asserting witness possession or satisfaction",
+      "evidence": {
+        "relation_id": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "evidence_id": "evidence-sha256:41757cd1588839e7c56dfa08ba6feec844ccc71cd1632bd83a7892944762e1d2",
+      "operand_ids": {
+        "instance": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275",
+        "relation": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275",
+      "validation_basis_id": "validation-sha256:f73a8f3ee1528d8a4df4c5c89b75e82ebbd4c7016047d16a83b94ac083a03f7b"
+    },
+    "relations/relation-admitted.v2": {
+      "boundary": "relations:relation-admission",
+      "code": "P01-REL-OK",
+      "detail": "prime-order Schnorr relation is admitted",
+      "evidence": {
+        "group_parameters_id": "sha256:2c61683ec8d320a2eec5d15b8920a8a3a779969abc42479e0ce01668472f7849"
+      },
+      "evidence_id": "evidence-sha256:9fbd555a8ba34f5683dc59591a8b9b2eb47da93dfcf125813e711b86dd003fa9",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+        "relation": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442",
+      "validation_basis_id": "validation-sha256:f73a8f3ee1528d8a4df4c5c89b75e82ebbd4c7016047d16a83b94ac083a03f7b"
+    },
+    "semantic/algebra-admitted.v2": {
+      "boundary": "algebra-profile",
+      "code": "P01-ALG-OK",
+      "detail": "the finite algebra profile is admitted",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:e75df9d132f716852c30c5a2aea2b59acd6fafde5581d3db85197e971260cd12",
+      "operand_ids": {
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "semantic/core-admitted.v2": {
+      "boundary": "core-admission",
+      "code": "P01-CORE-OK",
+      "detail": "typed challenge-neutral finite Core is admitted",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:09fbd1b8a40d64f3a56cc0702ba61482a267439305ad3e75f3b4a5a1e149a2dd",
+      "operand_ids": {
+        "core": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "semantic/fresh-fs-factorization.v2": {
+      "boundary": "relations:fresh-fs-factorization",
+      "code": "P01-FACT-OK",
+      "detail": "Fresh and FS are distinct variants over one neutral Core",
+      "evidence": {
+        "core_id": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+        "fresh_protocol_id": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+        "fs_protocol_id": "sha256:9bea48b71d7930ab82e0fb791c52c66ba84b5307a3b1de077a9d07d695510aaf",
+        "honest_prover_contract_id": "sha256:44cc6255fce17660f6522b3cbd37a9b88cf49fef787f1010323cb786fa5644fe",
+        "source_fresh_protocol_id": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+        "source_public_coin_basis_id": "sha256:e61b4f9b7b1fe5f4802c5d073d2aa91568d8b2d8659e472f2cd603b73b11b6dc"
+      },
+      "evidence_id": "evidence-sha256:95327010c994554064fa70daad3590366820d48366434a5ab8e303b9eed50de7",
+      "operand_ids": {
+        "construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93",
+        "fresh_protocol": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+        "fs_protocol": "sha256:9bea48b71d7930ab82e0fb791c52c66ba84b5307a3b1de077a9d07d695510aaf"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:0ea1b84dd22ce96078e30a2f9ee58951907acd16bce7c9207bcbe6d94fbe39a6",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "semantic/fresh-protocol-admitted.v2": {
+      "boundary": "protocol-admission",
+      "code": "P01-PROTO-OK",
+      "detail": "Protocol variant is admitted",
+      "evidence": {
+        "core_id": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b"
+      },
+      "evidence_id": "evidence-sha256:5fd198b5de1316b77ccfdaa30ef13cacedfd3764c2db5a0aa9d3e6942d617674",
+      "operand_ids": {
+        "core": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+        "protocol": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+        "realization": "sha256:fac92b15cd27832be59063a40e9adb7ff82ec641e41d9d1c6a4a72d1b5a3ac97"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "semantic/fs-construction-admitted.v2": {
+      "boundary": "transcript-construction",
+      "code": "P01-FS-OK",
+      "detail": "strong statement- and commitment-bound construction is admitted",
+      "evidence": {
+        "challenge_decoder_contract_id": "sha256:fbdd4cd811af152e70ad1da07bdfb42dd19ecbaeba61234174c83c045a05c98e",
+        "decoder_distribution": "ExactUniformOn[0,8)",
+        "decoder_failure_probability": "0",
+        "required_sources": [
+          "statement:y",
+          "message:commitment"
+        ],
+        "runtime_context_contract_id": "sha256:ed06badee187878a0e640e25b569d2118da1b69566fce7ddfc8b3ce02c78d917",
+        "self_binding_law": "the construction identity is bound by query execution, never stored in its own preimage",
+        "source_fresh_protocol_id": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362",
+        "source_fresh_realization_id": "sha256:fac92b15cd27832be59063a40e9adb7ff82ec641e41d9d1c6a4a72d1b5a3ac97",
+        "source_public_coin_basis_id": "sha256:e61b4f9b7b1fe5f4802c5d073d2aa91568d8b2d8659e472f2cd603b73b11b6dc",
+        "theorem_non_claim": "construction admission grants no ROM, QROM, knowledge-soundness, or zero-knowledge theorem"
+      },
+      "evidence_id": "evidence-sha256:a6875f7d68fa32a53778d2c0d8672b7a3e882333215527f49c30abb37a0d0dd6",
+      "operand_ids": {
+        "construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93",
+        "source_fresh_protocol": "sha256:00270086ad8a8dfbc5eb39a7c1d67b3e0c8d05b0630af927344e94d582533362"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "semantic/fs-protocol-admitted.v2": {
+      "boundary": "protocol-admission",
+      "code": "P01-PROTO-OK",
+      "detail": "Protocol variant is admitted",
+      "evidence": {
+        "core_id": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b"
+      },
+      "evidence_id": "evidence-sha256:e212092bd91e4fe9a89e8f8e176716d41a425f4e0935d66077c14b60fbf43e45",
+      "operand_ids": {
+        "construction": "sha256:90cacd0d626b9c7cec83e14382a7831a148abdd053983112e4828db3e0e75b93",
+        "protocol": "sha256:9bea48b71d7930ab82e0fb791c52c66ba84b5307a3b1de077a9d07d695510aaf"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:9bea48b71d7930ab82e0fb791c52c66ba84b5307a3b1de077a9d07d695510aaf",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    },
+    "semantic/public-coin-eligible.v3": {
+      "boundary": "source-correspondence:public-coin-eligibility",
+      "code": "P01-PCOIN-OK",
+      "detail": "Core exposes the exact public challenge slot required by Fresh and Fiat-Shamir",
+      "evidence": {},
+      "evidence_id": "evidence-sha256:95be6ad0e45b856345f2e47ce6375ac676cfb920d318e167e508071af0e09fe0",
+      "operand_ids": {
+        "core": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+        "profile": "sha256:e714cb45dde887d5957b64b6fd5b8d79786d80f20ae476a19d381a2d5357c4c2"
+      },
+      "outcome": "Affirmative",
+      "subject": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b",
+      "validation_basis_id": "validation-sha256:936903b2bc531afee3404ea71e3e63a41e2d47f700761e75d3f7bd8c08d259af"
+    }
+  },
+  "public_input_artifact_id": "sha256:394cb2ce5192acacc36b0a7dddabe3912e453fbc4be88b6da4490580b0009646",
+  "report_id": "evidence-sha256:a74b746e60a3fd344f00d8673011ce53749291d51fef2e4d126a7109bc091006",
+  "report_schema": "zkc.r2.p01.public-report.v3",
+  "schema": "zkc.r2.p01.expected-projection.v3",
+  "source_ledger_artifact_id": "sha256:84c64cfd37a027fd151c725c93b101168640463960cf137224b8fe1a13e6cc43"
+}

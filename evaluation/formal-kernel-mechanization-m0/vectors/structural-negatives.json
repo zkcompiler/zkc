@@ -1,0 +1,166 @@
+{
+ "reject": [
+  {
+   "hex": "0a",
+   "name": "crafted/unknown-tag",
+   "python_detail": "unknown canonical datum tag 0x0a",
+   "reason": "unknown tag 0x0a",
+   "source": "crafted"
+  },
+  {
+   "hex": "",
+   "name": "crafted/empty-input",
+   "python_detail": "truncated canonical datum",
+   "reason": "no tag octet at all",
+   "source": "crafted"
+  },
+  {
+   "hex": "0000",
+   "name": "crafted/trailing-octet",
+   "python_detail": "trailing bytes in canonical datum",
+   "reason": "one value followed by a trailing octet",
+   "source": "crafted"
+  },
+  {
+   "hex": "030000000000000000",
+   "name": "crafted/nat-empty-magnitude",
+   "python_detail": "integer magnitude is not minimal",
+   "reason": "zero-length magnitude; zero is one zero octet",
+   "source": "crafted"
+  },
+  {
+   "hex": "0300000000000000020001",
+   "name": "crafted/nat-leading-zero",
+   "python_detail": "integer magnitude is not minimal",
+   "reason": "overlong magnitude with a leading zero octet",
+   "source": "crafted"
+  },
+  {
+   "hex": "03000000000000000201",
+   "name": "crafted/nat-truncated-magnitude",
+   "python_detail": "truncated canonical datum",
+   "reason": "magnitude frame longer than the input",
+   "source": "crafted"
+  },
+  {
+   "hex": "0401000000000000000100",
+   "name": "crafted/int-negative-zero",
+   "python_detail": "negative zero is not canonical",
+   "reason": "negative zero",
+   "source": "crafted"
+  },
+  {
+   "hex": "0402000000000000000101",
+   "name": "crafted/int-sign-two",
+   "python_detail": "Int sign must be zero or one",
+   "reason": "sign octet other than 0 or 1",
+   "source": "crafted"
+  },
+  {
+   "hex": "04",
+   "name": "crafted/int-missing-sign",
+   "python_detail": "truncated canonical datum",
+   "reason": "signed integer with no sign octet",
+   "source": "crafted"
+  },
+  {
+   "hex": "060000000000000000",
+   "name": "crafted/symbol-empty",
+   "python_detail": "Symbol must be nonempty bytes in the range 0x21..0x7e",
+   "reason": "empty symbol",
+   "source": "crafted"
+  },
+  {
+   "hex": "060000000000000003612062",
+   "name": "crafted/symbol-space",
+   "python_detail": "Symbol must be nonempty bytes in the range 0x21..0x7e",
+   "reason": "symbol octet 0x20 below the printable range",
+   "source": "crafted"
+  },
+  {
+   "hex": "060000000000000002617f",
+   "name": "crafted/symbol-del",
+   "python_detail": "Symbol must be nonempty bytes in the range 0x21..0x7e",
+   "reason": "symbol octet 0x7f above the printable range",
+   "source": "crafted"
+  },
+  {
+   "hex": "060000000000000002c3a9",
+   "name": "crafted/symbol-high-bit",
+   "python_detail": "Symbol must be ASCII",
+   "reason": "symbol octet 0xc3 outside ASCII",
+   "source": "crafted"
+  },
+  {
+   "hex": "0500000000000000036162",
+   "name": "crafted/bytes-length-short",
+   "python_detail": "truncated canonical datum",
+   "reason": "bytes frame declares more octets than follow",
+   "source": "crafted"
+  },
+  {
+   "hex": "070000000000000002000000000000000100",
+   "name": "crafted/seq-count-short",
+   "python_detail": "truncated canonical datum",
+   "reason": "sequence declares two children but carries one",
+   "source": "crafted"
+  },
+  {
+   "hex": "07000000000000000100000000000000020000",
+   "name": "crafted/seq-child-trailing",
+   "python_detail": "trailing bytes in canonical datum",
+   "reason": "child frame carries a trailing octet",
+   "source": "crafted"
+  },
+  {
+   "hex": "070000000000000001000000000000000200",
+   "name": "crafted/seq-child-frame-short",
+   "python_detail": "truncated canonical datum",
+   "reason": "child frame longer than the remaining input",
+   "source": "crafted"
+  },
+  {
+   "hex": "08000000000000000200000000000000000000000000000001000000000000000000000000000000000100",
+   "name": "crafted/record-duplicate-ordinal",
+   "python_detail": "Record field ordinals must be strictly increasing",
+   "reason": "two fields with ordinal 0",
+   "source": "crafted"
+  },
+  {
+   "hex": "08000000000000000200000000000000010000000000000001000000000000000000000000000000000100",
+   "name": "crafted/record-unsorted-ordinals",
+   "python_detail": "Record field ordinals must be strictly increasing",
+   "reason": "field ordinal 1 before ordinal 0",
+   "source": "crafted"
+  },
+  {
+   "hex": "080000000000000001",
+   "name": "crafted/record-count-short",
+   "python_detail": "truncated canonical datum",
+   "reason": "record declares one field but carries none",
+   "source": "crafted"
+  },
+  {
+   "hex": "090000000000000000000000000000000b0300000000000000010100",
+   "name": "crafted/variant-payload-trailing",
+   "python_detail": "trailing bytes in canonical datum",
+   "reason": "variant payload frame carries a trailing octet",
+   "source": "crafted"
+  },
+  {
+   "hex": "090000000000000000",
+   "name": "crafted/variant-missing-payload",
+   "python_detail": "truncated canonical datum",
+   "reason": "variant with a case but no payload frame",
+   "source": "crafted"
+  },
+  {
+   "hex": "0900000000000000000000000000000001ff",
+   "name": "crafted/variant-payload-unknown-tag",
+   "python_detail": "unknown canonical datum tag 0xff",
+   "reason": "variant payload with an unknown tag",
+   "source": "crafted"
+  }
+ ],
+ "source": "docs-next/foundation/executable-foundations.md Section 2.1 malformation list"
+}

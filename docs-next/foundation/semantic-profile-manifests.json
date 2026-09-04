@@ -1,0 +1,77 @@
+{
+  "format": "zkc.semantic-profile-manifest-index.v0",
+  "manifests": [
+    {
+      "key": "interaction",
+      "source": "docs-next/pir/profiles/interaction.json"
+    },
+    {
+      "key": "canonical-framed-fiat-shamir",
+      "source": "docs-next/pir/profiles/canonical-framed-fiat-shamir.json"
+    },
+    {
+      "key": "duplex-sponge-fiat-shamir",
+      "source": "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json"
+    },
+    {
+      "key": "public-setup",
+      "source": "docs-next/pir/profiles/public-setup.json"
+    },
+    {
+      "key": "commitment-opening",
+      "source": "docs-next/pir/profiles/commitment-opening.json"
+    },
+    {
+      "key": "oracle-commitment",
+      "source": "docs-next/pir/profiles/oracle-commitment.json"
+    },
+    {
+      "key": "verifier-derived-query-plan",
+      "source": "docs-next/pir/profiles/verifier-derived-query-plan.json"
+    },
+    {
+      "key": "interface-plan",
+      "source": "docs-next/pir/profiles/interface-plan.json"
+    },
+    {
+      "key": "oir-endpoint-graph",
+      "source": "docs-next/oir/profiles/endpoint-graph.json"
+    },
+    {
+      "key": "endpoint-source-view",
+      "source": "docs-next/pir/profiles/endpoint-source-view.json"
+    },
+    {
+      "key": "oir-projection-relation",
+      "source": "docs-next/oir/profiles/projection-relation.json"
+    },
+    {
+      "key": "relations",
+      "source": "docs-next/relations/profiles/relations.json"
+    },
+    {
+      "key": "analysis-kernel",
+      "source": "docs-next/analysis/profiles/kernel.json"
+    },
+    {
+      "key": "analysis-cryptographic-property",
+      "source": "docs-next/analysis/profiles/cryptographic-property.json"
+    },
+    {
+      "key": "analysis-afk-transport",
+      "source": "docs-next/analysis/profiles/afk-transport.json"
+    },
+    {
+      "key": "analysis-afk-theorem-source-validation",
+      "source": "docs-next/analysis/profiles/afk-theorem-source-validation.json"
+    },
+    {
+      "key": "analysis-incremental-composition",
+      "source": "docs-next/analysis/profiles/incremental-composition.json"
+    },
+    {
+      "key": "analysis-incremental-composition-source-validation",
+      "source": "docs-next/analysis/profiles/incremental-composition-source-validation.json"
+    }
+  ]
+}

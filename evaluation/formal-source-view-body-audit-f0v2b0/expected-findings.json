@@ -1,0 +1,105 @@
+{
+  "aggregate": {
+    "outcome": "CannotAnswer",
+    "code": "F0V2B0-C-OWNER-BODY-DETERMINACY"
+  },
+  "evidence_control": {
+    "static_fragment_digest": "88150594e22852ba7d20f85497204262fecf6714c7cf39de3e3b7242aa66e90e",
+    "body_fragment_digest": "13ad407118fd36dc4ff7351668bf19018bb38c39da47c82a656a9f3459e675c3",
+    "view_display_digest": "8a6f0d8f5eecc15be3c8ce4e3926bab3b4386cbb7153a8f8aea2abaadc237dde",
+    "consumer_pressure_digest": "d75f370cd02658e529d32deea7097fa01285a367ebb49241a1931a84590737ad",
+    "manifest_digest": "fc6f31c332f0eae9fa680bcd8bc3e4c5d5170e027806650af889bd86aed5c124"
+  },
+  "cases": [
+    {
+      "name": "authenticated-static-view-source",
+      "outcome": "Affirmative",
+      "code": "F0V2B0-A-AUTHENTICATED-SOURCE"
+    },
+    {
+      "name": "exact-core-protocol-body-basis",
+      "outcome": "Affirmative",
+      "code": "F0V2B0-A-OWNER-BASIS"
+    },
+    {
+      "name": "six-view-display-inventory",
+      "outcome": "Affirmative",
+      "code": "F0V2B0-A-SIX-DISPLAYS"
+    },
+    {
+      "name": "nested-consumer-leaf-pressure",
+      "outcome": "Affirmative",
+      "code": "F0V2B0-A-CONSUMER-GRANULARITY"
+    },
+    {
+      "name": "exact-module-effect-owner-boundary",
+      "outcome": "Affirmative",
+      "code": "F0V2B0-A-MODULE-BOUNDARY"
+    },
+    {
+      "name": "pir-reference-boundary-definition",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-PIR-REFERENCE"
+    },
+    {
+      "name": "prover-view-coordinate-definition",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-PROVER-VIEW-COORDINATE"
+    },
+    {
+      "name": "strategy-guard-coordinate-definition",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-GUARD-REFERENCE"
+    },
+    {
+      "name": "six-canonical-view-body-functions",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-VIEW-BODIES"
+    },
+    {
+      "name": "derived-coordinate-and-closure-bodies",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-DERIVED-FIELDS"
+    },
+    {
+      "name": "public-coin-retained-graph-body",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-PCGRAPH-BODY"
+    },
+    {
+      "name": "fresh-resolver-coordinate-body",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-FRESH-RESOLVER"
+    },
+    {
+      "name": "completed-run-record-schema-body",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-RUN-SCHEMA"
+    },
+    {
+      "name": "constructor-complete-executable-basis",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-CONSTRUCTOR-COVERAGE"
+    },
+    {
+      "name": "published-static-view-schema-catalog",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B0-C-PUBLISHED-CATALOG"
+    },
+    {
+      "name": "verbatim-display-as-canonical-grammar",
+      "outcome": "Refused",
+      "code": "F0V2B0-R-VERBATIM-DISPLAY"
+    },
+    {
+      "name": "consumer-authored-shadow-schema",
+      "outcome": "Refused",
+      "code": "F0V2B0-R-CONSUMER-SCHEMA"
+    },
+    {
+      "name": "generic-module-payload-reflection",
+      "outcome": "Refused",
+      "code": "F0V2B0-R-MODULE-REFLECTION"
+    }
+  ]
+}

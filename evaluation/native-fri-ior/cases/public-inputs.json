@@ -1,0 +1,324 @@
+{
+  "application_context": {
+    "application": "native-fri-ior-validation",
+    "case": "primary",
+    "suffix": 71394
+  },
+  "profile": {
+    "domains": [
+      {
+        "generator": 8,
+        "name": "D0",
+        "order": 16,
+        "pairing": "first-half-index-with-index-plus-half-order",
+        "point_order": "successive-generator-powers"
+      },
+      {
+        "generator": 64,
+        "name": "D1",
+        "order": 8,
+        "pairing": "first-half-index-with-index-plus-half-order",
+        "point_order": "successive-generator-powers"
+      },
+      {
+        "generator": 22,
+        "name": "D2",
+        "order": 4,
+        "pairing": "first-half-index-with-index-plus-half-order",
+        "point_order": "successive-generator-powers"
+      }
+    ],
+    "field": {
+      "extension": {
+        "degree": 2,
+        "polynomial": [
+          -5,
+          0,
+          1
+        ]
+      },
+      "modulus": 97,
+      "primitive_generator": 5
+    },
+    "folding_arity": 2,
+    "initial_degree_bound_exclusive": 8,
+    "name": "zkc.fri-ior.f97-binary-two-round-algebra.v1",
+    "ordered_query_count": 4,
+    "query_occurrences_preserve_order_and_multiplicity": true,
+    "round_count": 2,
+    "semantic_law_ids": [
+      {
+        "digest": "6d20f8e6dc7832f9c79195b805163b67bd4831aeee1bdb580851d2091cf8d05f",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "6ff532985bf3474bb1267f3f7d655f1dffb19490f628dd290284007b329a2f86",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "ff2cb9d83d37796c8ccfd2f33d7ad6f57826a9d58f87540381b581abfe9bfb6b",
+        "domain": "fri-ior.occurrence-map-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-occurrence-map-law",
+        "version": 1
+      },
+      {
+        "digest": "aee8a67406e77366a502f52452bb6f842ac74a37c78637fdf29e50c9e3e291a5",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      }
+    ],
+    "terminal_degree_bound_exclusive": 2,
+    "terminal_representation": {
+      "max_coefficient_count": 5,
+      "nonzero_polynomial": "final-coefficient-must-be-nonzero",
+      "zero_polynomial": "one-zero-coefficient"
+    }
+  },
+  "schema": "zkc.fri-ior.committed-public-inputs.v1",
+  "statement": {
+    "initial_oracle_role": "relation-supplied",
+    "profile": "f97-binary-two-round",
+    "schema": "zkc.fri-ior.statement.v1"
+  },
+  "transcript_plan": {
+    "algebra_profile_id": {
+      "digest": "443d47a7c2d840be688e156a3c0245ccae4625240a26e8b9711084484c35bf36",
+      "domain": "fri-ior.algebra-profile.v1",
+      "kind": "SemanticId",
+      "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+      "subject_kind": "fri-algebra-profile",
+      "version": 1
+    },
+    "commitment_profile_id": {
+      "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+      "domain": "fri-ior.commitment-profile.v1",
+      "kind": "SemanticId",
+      "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+      "subject_kind": "fri-commitment-profile",
+      "version": 1
+    },
+    "grinding_profile_id": {
+      "digest": "27e79ff49aa3abace49f6eddbd118d50768db477284534ef6dae45bb5019932a",
+      "domain": "fri-ior.grinding-profile.v1",
+      "kind": "SemanticId",
+      "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+      "subject_kind": "fri-grinding-profile",
+      "version": 1
+    },
+    "model": "FriIorTypedSha256FiatShamir.v1",
+    "query_count": 4,
+    "query_domain_size": 16,
+    "semantic_law_ids": [
+      {
+        "digest": "8a8b3bff1a322eeecffd0ed75885ed38237e85d4382a5fb29952458b389d22d5",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "f380acb7edd4942ad4b98373dffdfedec061a472edb6f5a4df0a6f2f829661e0",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "eb4291ce129d4e60665597e673c5a874039c4f51ff144d2e452776f9615fa774",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "d112768c7e02cd28b69ee7d32ace7f05cbddae46848709ed85fc16230c730624",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "0cfbd5571687649b947a839a7c61e9b61cc4745900929b88fb548eb83d707ad9",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "bd70f6ca03f24315f724120a583130b86c38c10704828b29cabba54b27ca0563",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      }
+    ],
+    "steps": [
+      {
+        "codec": "closed-finite-term.v1",
+        "feeds_transcript_state": true,
+        "kind": "AbsorbPublication",
+        "namespace": "zkc/fri-ior/statement/v1",
+        "occurrence": "statement",
+        "protected_occurrences": [
+          "fold-challenge[0]",
+          "fold-challenge[1]",
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": null
+      },
+      {
+        "codec": "closed-finite-term.v1",
+        "feeds_transcript_state": true,
+        "kind": "AbsorbPublication",
+        "namespace": "zkc/fri-ior/application-context/v1",
+        "occurrence": "application-context",
+        "protected_occurrences": [
+          "fold-challenge[0]",
+          "fold-challenge[1]",
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": null
+      },
+      {
+        "codec": "sha256-two-node-cap.v1",
+        "feeds_transcript_state": true,
+        "kind": "AbsorbPublication",
+        "namespace": "zkc/fri-ior/cap/0/v1",
+        "occurrence": "cap[0]",
+        "protected_occurrences": [
+          "fold-challenge[0]",
+          "fold-challenge[1]",
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": null
+      },
+      {
+        "codec": "fp97-extension2-u8-pair.v1",
+        "feeds_transcript_state": true,
+        "kind": "DeriveChallenge",
+        "namespace": "zkc/fri-ior/fold-challenge/0/v1",
+        "occurrence": "fold-challenge[0]",
+        "protected_occurrences": [
+          "fold-challenge[1]",
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": "sha256-u16be-rejection-fp97-extension2.v1"
+      },
+      {
+        "codec": "sha256-two-node-cap.v1",
+        "feeds_transcript_state": true,
+        "kind": "AbsorbPublication",
+        "namespace": "zkc/fri-ior/cap/1/v1",
+        "occurrence": "cap[1]",
+        "protected_occurrences": [
+          "fold-challenge[1]",
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": null
+      },
+      {
+        "codec": "fp97-extension2-u8-pair.v1",
+        "feeds_transcript_state": true,
+        "kind": "DeriveChallenge",
+        "namespace": "zkc/fri-ior/fold-challenge/1/v1",
+        "occurrence": "fold-challenge[1]",
+        "protected_occurrences": [
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": "sha256-u16be-rejection-fp97-extension2.v1"
+      },
+      {
+        "codec": "ascending-fp2-coefficients.v1",
+        "feeds_transcript_state": true,
+        "kind": "AbsorbPublication",
+        "namespace": "zkc/fri-ior/terminal-polynomial/v1",
+        "occurrence": "terminal-polynomial",
+        "protected_occurrences": [
+          "work-seed",
+          "query-seed"
+        ],
+        "sampler": null
+      },
+      {
+        "codec": "bytes32.v1",
+        "feeds_transcript_state": true,
+        "kind": "DeriveChallenge",
+        "namespace": "zkc/fri-ior/work-seed/v1",
+        "occurrence": "work-seed",
+        "protected_occurrences": [
+          "work-check",
+          "query-seed"
+        ],
+        "sampler": "sha256-bytes32.v1"
+      },
+      {
+        "codec": "u32be.v1",
+        "feeds_transcript_state": true,
+        "kind": "AbsorbPublication",
+        "namespace": "zkc/fri-ior/grinding-nonce/v1",
+        "occurrence": "grinding-nonce",
+        "protected_occurrences": [
+          "work-check",
+          "query-seed"
+        ],
+        "sampler": null
+      },
+      {
+        "codec": "bytes32.v1",
+        "feeds_transcript_state": false,
+        "kind": "CheckWork",
+        "namespace": "zkc/fri-ior/work-check/v1",
+        "occurrence": "work-check",
+        "protected_occurrences": [
+          "query-seed"
+        ],
+        "sampler": "sha256-leading-zero-bits.v1"
+      },
+      {
+        "codec": "bytes32.v1",
+        "feeds_transcript_state": true,
+        "kind": "DeriveChallenge",
+        "namespace": "zkc/fri-ior/query-seed/v1",
+        "occurrence": "query-seed",
+        "protected_occurrences": [
+          "query-occurrences"
+        ],
+        "sampler": "sha256-bytes32.v1"
+      },
+      {
+        "codec": "u16be-low-bits-initial-domain-index.v1",
+        "feeds_transcript_state": false,
+        "kind": "SampleOccurrences",
+        "namespace": "zkc/fri-ior/query-occurrences/v1",
+        "occurrence": "query-occurrences",
+        "protected_occurrences": [],
+        "sampler": "sha256-u16be-low-bits-power-of-two-range.v1"
+      }
+    ]
+  }
+}

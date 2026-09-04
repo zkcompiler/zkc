@@ -1,0 +1,39 @@
+{
+  "schema": "zkc.r2.p01.public-inputs.v3",
+  "disclosure": "PublicPortableReplayInput",
+  "algebra": {
+    "p": 23,
+    "q": 11,
+    "generator": 2,
+    "challenge_size": 8
+  },
+  "application_context": {
+    "value": "zkc/p01/test-session/alpha",
+    "authority": "Application"
+  },
+  "statement": 13,
+  "fresh_transcript": {
+    "commitment": 16,
+    "challenge": 3,
+    "response": 3,
+    "coin_source": "FrozenPublicSupportPointNotSamplingEvidence"
+  },
+  "fs_proof": {
+    "encoding_hex": "1002"
+  },
+  "public_resource_plan": {
+    "max_transcript_atoms": 2,
+    "max_hash_queries": 2,
+    "max_trace_events": 5,
+    "max_replay_executions": 1
+  },
+  "non_claims": [
+    "CFRG conformance",
+    "production security",
+    "hardness",
+    "ROM or QROM security",
+    "proof of knowledge",
+    "malicious-verifier zero knowledge",
+    "confidential prover-generation replay"
+  ]
+}

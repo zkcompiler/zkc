@@ -1,0 +1,134 @@
+[
+  {
+    "name": "constructor-schema-source-agreement",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-SCHEMA-SOURCE",
+    "detail": "recursive and topological B2B compilers supply identical six-view schemas"
+  },
+  {
+    "name": "exact-atom-compiler-registry",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-ATOM-REGISTRY",
+    "detail": "all 22 candidate leaf compilers have one exact decodable sample body"
+  },
+  {
+    "name": "exact-profile-law-bodies",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-LAW-BODIES",
+    "detail": "all three used laws resolve to exact profile-local declaration bodies"
+  },
+  {
+    "name": "module-effect-atom-framing",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-MODULE-FRAMING",
+    "detail": "one authenticated module/declaration pair frames a payload as one opaque atom"
+  },
+  {
+    "name": "dual-exact-value-codecs",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-DUAL-CODEC",
+    "detail": "recursive and iterative codecs agree on all 302 materialized inhabitants"
+  },
+  {
+    "name": "six-view-root-coverage",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-SIX-ROOTS",
+    "detail": "every constructor-complete view root has exact encoded witnesses"
+  },
+  {
+    "name": "exact-value-roundtrip",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-ROUNDTRIP",
+    "detail": "all 302 exact view bodies decode fully and re-encode byte-identically"
+  },
+  {
+    "name": "target-body-sorted-unique-order",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-TARGET-ORDER",
+    "detail": "both exact codecs accept PCNode cases 2 then 10 under K1 body order"
+  },
+  {
+    "name": "diagnostic-order-inapplicability",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-DIAGNOSTIC-INVERSION",
+    "detail": "JSON orders the same PCNodes 10 then 2 and cannot validate target sets"
+  },
+  {
+    "name": "content-reference-atom-wrapper",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C1A-A-CONTENT-REF-WRAPPER",
+    "detail": "raw ContentRefV0 bytes refuse; exact MetaBytes wrapping forms the atom body"
+  },
+  {
+    "name": "compiler-substitution",
+    "outcome": "Refused",
+    "code": "F0V2B2C1A-R-COMPILER-SUBSTITUTION",
+    "detail": "a well-formed body under another leaf compiler cannot substitute"
+  },
+  {
+    "name": "malformed-atom-hex",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-ATOM-HEX",
+    "detail": "a non-hexadecimal canonical-body payload refuses"
+  },
+  {
+    "name": "trailing-atom-body",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-ATOM-TRAILING",
+    "detail": "a canonical atom body must consume all bytes"
+  },
+  {
+    "name": "missing-record-field",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-RECORD-FIELD",
+    "detail": "the exact root record refuses an omitted field"
+  },
+  {
+    "name": "unknown-variant-case",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-VARIANT-CASE",
+    "detail": "an absent PCNode constructor cannot encode"
+  },
+  {
+    "name": "duplicate-sorted-unique-element",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-DUPLICATE",
+    "detail": "equal exact element bodies cannot occur twice in a sorted-unique sequence"
+  },
+  {
+    "name": "diagnostic-order-substitution",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-TARGET-ORDER",
+    "detail": "JSON-sorted PCNodes refuse under exact target-body ordering"
+  },
+  {
+    "name": "law-substitution",
+    "outcome": "Refused",
+    "code": "F0V2B2C1A-R-LAW-SUBSTITUTION",
+    "detail": "another existing semantic-law declaration cannot satisfy a fixed law atom"
+  },
+  {
+    "name": "law-profile-substitution",
+    "outcome": "KindMismatch",
+    "code": "F0V2B2C1A-K-LAW-PROFILE",
+    "detail": "a law diagnostic from another profile cannot select the local law body"
+  },
+  {
+    "name": "module-payload-trailing-bytes",
+    "outcome": "Malformed",
+    "code": "F0V2B2C1A-M-MODULE-PAYLOAD",
+    "detail": "an opaque module payload is still one exact fully consumed datum"
+  },
+  {
+    "name": "isolated-owner-projections",
+    "outcome": "CannotAnswer",
+    "code": "F0V2B2C1A-C-OWNER-PROJECTIONS",
+    "detail": "the 21 B2C pressure families still require admitted carriers and dual projection"
+  },
+  {
+    "name": "target-publication-and-migration",
+    "outcome": "CannotAnswer",
+    "code": "F0V2B2C1A-C-TARGET-PUBLICATION",
+    "detail": "the codec registry and schemas remain research inputs until F0-V2C"
+  }
+]

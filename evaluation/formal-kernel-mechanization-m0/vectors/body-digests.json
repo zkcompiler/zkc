@@ -1,0 +1,76 @@
+{
+ "bodies": [
+  {
+   "carrier": "integrated-baseline",
+   "length": 38596,
+   "name": "d1/integrated-baseline/core-body",
+   "sha256": "bec6b1f246dc7681c348efed254ea6636b6936b49658df3faa49602a23426279",
+   "source": "d1-core-body"
+  },
+  {
+   "carrier": "integrated-baseline",
+   "length": 47403,
+   "name": "d1/integrated-baseline/public-coin-body",
+   "sha256": "fd976460b00869c5b0b0b7da0e90b7b76bf708299486972da582f0dabda82752",
+   "source": "d1-public-coin-body"
+  },
+  {
+   "carrier": "private-verifier-output-sink",
+   "length": 38596,
+   "name": "d1/private-verifier-output-sink/core-body",
+   "sha256": "3ba7fa7a578788ac562462c5d47218e32a7491b2462291350255263c694ca56c",
+   "source": "d1-core-body"
+  },
+  {
+   "carrier": "private-verifier-output-sink",
+   "length": 47438,
+   "name": "d1/private-verifier-output-sink/public-coin-body",
+   "sha256": "468b340e53a7d1aaf76cd396db7bed87104ea80c4b69c0b08709fcf2eeb3ceb7",
+   "source": "d1-public-coin-body"
+  },
+  {
+   "carrier": "invalid-module-control-sink",
+   "length": 38596,
+   "name": "d1/invalid-module-control-sink/core-body",
+   "sha256": "540df4b2b57c735c2f7b66168d7478cca3489e947d636678b8c311158efe8081",
+   "source": "d1-core-body"
+  },
+  {
+   "carrier": "invalid-module-control-sink",
+   "length": 47610,
+   "name": "d1/invalid-module-control-sink/public-coin-body",
+   "sha256": "7e38535cb0f0260b2c8a89f94c2e8b2dd33c5793519c14542a59c9a66e9a7120",
+   "source": "d1-public-coin-body"
+  },
+  {
+   "carrier": "history-challenge-condition",
+   "length": 38647,
+   "name": "d1/history-challenge-condition/core-body",
+   "sha256": "ee8321c4208fed95445ae552fd9efb90b8c9380cac79202e418d6a5bd8c8d86d",
+   "source": "d1-core-body"
+  },
+  {
+   "carrier": "history-challenge-condition",
+   "length": 47696,
+   "name": "d1/history-challenge-condition/public-coin-body",
+   "sha256": "a3813a65383f9b6a0b5c755e411f404b2ca7c429488bedfd14a2f8a84ea28963",
+   "source": "d1-public-coin-body"
+  },
+  {
+   "carrier": "logical-reject-preemption",
+   "length": 38472,
+   "name": "d1/logical-reject-preemption/core-body",
+   "sha256": "1bb9070a6ecba4b1b255d310fd605a7500d57b243cfd8aad9df890ff050d8636",
+   "source": "d1-core-body"
+  },
+  {
+   "carrier": "logical-reject-preemption",
+   "length": 47152,
+   "name": "d1/logical-reject-preemption/public-coin-body",
+   "sha256": "3c1b1fc3312972c1014732c61ec70782f2be3509a333a8199f7c80c49557f950",
+   "source": "d1-public-coin-body"
+  }
+ ],
+ "note": "Regenerated at check time from the D1 typed model and compared with these digests before use.",
+ "source": "evaluation/formal-source-integrated-graph-f0v2b2d1"
+}

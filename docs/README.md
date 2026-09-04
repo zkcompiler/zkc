@@ -13,6 +13,7 @@ mistaken for one another.
 | How does the target architecture fit together? | [Architecture](architecture.md) |
 | How does zkc relate to relation compilers, formal systems, backends, and zkVMs? | [Ecosystem](ecosystem.md) |
 | How do I build it? | [Getting Started](getting-started.md) |
+| Where does the build fall short of the specification? | [Gap Ledger](gap-ledger.md) |
 | What comes next? | [Roadmap](roadmap.md) |
 | What are the exact artifact and judgment semantics? | [Specification Overview](spec/overview.md) |
 | What formal evidence is currently recorded? | [Formalization Evidence](formalization.md) |

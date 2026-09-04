@@ -1,0 +1,133 @@
+{
+  "authority": "owner-relation-grounding-input-not-public-report-input",
+  "disclosure": {
+    "classification": "declassified-public-test-input",
+    "contains_real_secret": false
+  },
+  "nonclaims": [
+    "does-not-establish-the-statement-to-oracle-predicate",
+    "separate-file-supply-does-not-establish-independent-provenance"
+  ],
+  "oracle": {
+    "declared_strategy_dependency": null,
+    "domain": "D0",
+    "entries": [
+      {
+        "point": 1,
+        "value": [
+          1,
+          0
+        ]
+      },
+      {
+        "point": 8,
+        "value": [
+          54,
+          0
+        ]
+      },
+      {
+        "point": 64,
+        "value": [
+          7,
+          0
+        ]
+      },
+      {
+        "point": 27,
+        "value": [
+          33,
+          0
+        ]
+      },
+      {
+        "point": 22,
+        "value": [
+          17,
+          0
+        ]
+      },
+      {
+        "point": 79,
+        "value": [
+          27,
+          0
+        ]
+      },
+      {
+        "point": 50,
+        "value": [
+          50,
+          0
+        ]
+      },
+      {
+        "point": 12,
+        "value": [
+          14,
+          0
+        ]
+      },
+      {
+        "point": 96,
+        "value": [
+          83,
+          0
+        ]
+      },
+      {
+        "point": 89,
+        "value": [
+          22,
+          0
+        ]
+      },
+      {
+        "point": 33,
+        "value": [
+          27,
+          0
+        ]
+      },
+      {
+        "point": 70,
+        "value": [
+          11,
+          0
+        ]
+      },
+      {
+        "point": 75,
+        "value": [
+          60,
+          0
+        ]
+      },
+      {
+        "point": 18,
+        "value": [
+          83,
+          0
+        ]
+      },
+      {
+        "point": 47,
+        "value": [
+          70,
+          0
+        ]
+      },
+      {
+        "point": 85,
+        "value": [
+          71,
+          0
+        ]
+      }
+    ],
+    "name": "O0",
+    "origin": "InitialOracle",
+    "publication_mode": "LogicalAccess"
+  },
+  "schema": "zkc.native-fri-ior.relation-initial-oracle.v1"
+}

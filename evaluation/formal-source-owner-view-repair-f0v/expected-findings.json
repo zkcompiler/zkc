@@ -1,0 +1,102 @@
+{
+  "aggregate": {
+    "outcome": "Affirmative",
+    "code": "F0V1-A-PUBLICATION-TOPOLOGY"
+  },
+  "interaction_profile_digests": {
+    "before": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
+    "after": "ab74407099935edb863832b357973071b5c5193d16123d811f8289bbbc9be559"
+  },
+  "cases": [
+    {
+      "name": "independent-publication-agreement",
+      "outcome": "Affirmative",
+      "code": "F0V1-A-INDEPENDENT-PUBLICATION"
+    },
+    {
+      "name": "six-entry-owner-schema-catalog",
+      "outcome": "Affirmative",
+      "code": "F0V1-A-SCHEMA-CATALOG"
+    },
+    {
+      "name": "common-role-local-family-routing",
+      "outcome": "Affirmative",
+      "code": "F0V1-A-SOURCE-ROUTING"
+    },
+    {
+      "name": "exact-rotation-cone",
+      "outcome": "Affirmative",
+      "code": "F0V1-A-ROTATION-CONE"
+    },
+    {
+      "name": "outside-cone-stability",
+      "outcome": "Affirmative",
+      "code": "F0V1-A-OUTSIDE-STABLE"
+    },
+    {
+      "name": "changed-profile-revisions",
+      "outcome": "Affirmative",
+      "code": "F0V1-A-REVISION-DISCIPLINE"
+    },
+    {
+      "name": "canonical-view-body-grammar",
+      "outcome": "CannotAnswer",
+      "code": "F0V1-C-CANONICAL-GRAMMAR"
+    },
+    {
+      "name": "proper-subset-read-closure",
+      "outcome": "CannotAnswer",
+      "code": "F0V1-C-PARTIAL-CLOSURE"
+    },
+    {
+      "name": "missing-owner-schema",
+      "outcome": "Refused",
+      "code": "F0V1-R-MISSING-SCHEMA"
+    },
+    {
+      "name": "extra-owner-schema",
+      "outcome": "Refused",
+      "code": "F0V1-R-EXTRA-SCHEMA"
+    },
+    {
+      "name": "schema-owner-substitution",
+      "outcome": "Refused",
+      "code": "F0V1-R-SCHEMA-OWNER"
+    },
+    {
+      "name": "schema-law-substitution",
+      "outcome": "Refused",
+      "code": "F0V1-R-SCHEMA-LAW"
+    },
+    {
+      "name": "common-role-as-family-body",
+      "outcome": "Refused",
+      "code": "F0V1-R-CROSS-KIND-COMPILER"
+    },
+    {
+      "name": "unreachable-schema-declaration",
+      "outcome": "Refused",
+      "code": "F0V1-R-UNREACHABLE-SCHEMA"
+    },
+    {
+      "name": "absent-owner-source-selector",
+      "outcome": "Refused",
+      "code": "F0V1-R-ABSENT-SELECTOR"
+    },
+    {
+      "name": "retained-revision-after-source-change",
+      "outcome": "Refused",
+      "code": "F0V1-R-RETAINED-REVISION"
+    },
+    {
+      "name": "dependent-family-body-import",
+      "outcome": "Refused",
+      "code": "F0V1-R-IMPORTED-FAMILY-BODY"
+    },
+    {
+      "name": "consumer-purpose-role-swap",
+      "outcome": "Refused",
+      "code": "F0V1-R-ROLE-SWAP"
+    }
+  ]
+}

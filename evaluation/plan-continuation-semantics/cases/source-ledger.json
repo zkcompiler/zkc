@@ -1,0 +1,10 @@
+{
+  "authority": "inert source metadata; presence is not source authentication, theorem authority, or semantic identity",
+  "sources": [
+    {"case": "Nova", "url": "https://eprint.iacr.org/2021/370", "revision": "2024-07-20", "pdf_sha256": "2a912c9715d0c8a6ae573addedb1d77643c5540e3968a95a9d82059dee0bf6e1"},
+    {"case": "HyperNova", "url": "https://eprint.iacr.org/2023/573", "revision": "2026-02-20", "pdf_sha256": "08fdc3b155a9b681baecb48aad26993f53c0cb08511c0771154bd5a349761572"},
+    {"case": "ProtoStar", "url": "https://eprint.iacr.org/2023/620", "revision": "2023-12-21", "pdf_sha256": "e93bc711df7bc2e733d446f1f273c5d2bc9d769da2f2e4643f2bc506e87d0509"},
+    {"case": "LatticeFold+", "url": "https://eprint.iacr.org/2025/247", "revision": "2025-08-10", "pdf_sha256": "48f40d28f42978236d7fcaa335022d124df76061ef48ccbd400127e7eb130ea1"},
+    {"case": "CycleFold", "url": "https://eprint.iacr.org/2023/573", "revision": "2026-02-20", "pdf_sha256": "08fdc3b155a9b681baecb48aad26993f53c0cb08511c0771154bd5a349761572"}
+  ]
+}

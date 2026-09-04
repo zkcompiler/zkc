@@ -1,0 +1,69 @@
+{
+  "aggregate": "Q3A-C-OBSERVATION-NOT-AUTHENTICATED-RESULT",
+  "finding_codes": [
+    ["exact-predecessor-sources-pinned", "Affirmative", "Q3A-A-SOURCE-PINS"],
+    ["ten-receipt-inventory", "Affirmative", "Q3A-A-INVENTORY"],
+    ["six-arklib-four-outside-partition", "Affirmative", "Q3A-A-CHECKABILITY-PARTITION"],
+    ["clean-exact-pin-reading-observed", "Affirmative", "Q3A-A-LIVE-READING"],
+    ["six-printed-statements-reproduced", "Affirmative", "Q3A-A-STATEMENT-READING"],
+    ["six-axiom-sets-reproduced", "Affirmative", "Q3A-A-AXIOM-READING"],
+    ["one-standard-axiom-only-declaration", "Affirmative", "Q3A-A-NO-SORRY-DECLARATION"],
+    ["driver-and-direct-auditor-separated", "Affirmative", "Q3A-A-PATH-SEPARATION"],
+    ["four-external-receipts-authenticated", "CannotAnswer", "Q3A-C-EXTERNAL-RECEIPTS"],
+    ["durable-q3-result-envelope", "CannotAnswer", "Q3A-C-RESULT-ENVELOPE"],
+    ["checker-toolchain-dependency-result-binding", "CannotAnswer", "Q3A-C-ENVIRONMENT-BINDING"],
+    ["driver-enforced-clean-checkout", "CannotAnswer", "Q3A-C-CHECKOUT-CLEANLINESS"],
+    ["independent-kernel-replay", "CannotAnswer", "Q3A-C-KERNEL-REPLAY"],
+    ["pir-subject-to-theorem-correspondence", "CannotAnswer", "Q3A-C-SUBJECT-CORRESPONDENCE"],
+    ["qualified-property-consumption", "CannotAnswer", "Q3A-C-PROPERTY-CONSUMPTION"],
+    ["offline-baseline", "Affirmative", "Q3A-A-OFFLINE-BASELINE"],
+    ["empty-declaration", "Refused", "Q3A-R-DECLARATION-EMPTY"],
+    ["wrong-arklib-pin", "Refused", "Q3A-R-PIN-MISMATCH"],
+    ["empty-covers", "Refused", "Q3A-R-COVERS-EMPTY"],
+    ["mechanized-with-sorry", "Refused", "Q3A-R-MECHANIZED-SORRY"],
+    ["incomplete-without-sorry", "Refused", "Q3A-R-INCOMPLETE-NO-SORRY"],
+    ["proof-to-subject-relabel", "CannotAnswer", "Q3A-C-INCOMPLETENESS-CLASS"],
+    ["subject-to-proof-relabel", "CannotAnswer", "Q3A-C-INCOMPLETENESS-CLASS-REVERSE"],
+    ["covers-text-substitution", "CannotAnswer", "Q3A-C-COVERS-MEANING"],
+    ["does-not-cover-deletion", "CannotAnswer", "Q3A-C-EXCLUSION-MEANING"],
+    ["offline-statement-substitution", "CannotAnswer", "Q3A-C-OFFLINE-STATEMENT"],
+    ["offline-nonsorry-axiom-substitution", "CannotAnswer", "Q3A-C-OFFLINE-AXIOM-SET"],
+    ["unknown-incomplete-state", "CannotAnswer", "Q3A-C-DRIVER-STATE-ENUM"],
+    ["arklib-statement-deletion", "CannotAnswer", "Q3A-C-CHECKABILITY-DOWNGRADE"]
+  ],
+  "findings_sha256": "bfef3b7ab6c22b64968286b4898d988d2550d27c84d2be6404622ffa4daab011",
+  "measurements": {
+    "accepted_cases": 9,
+    "arklib_revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+    "checkable": 6,
+    "checkable_declarations": [
+      "RandomQuery.oracleReduction_completeness",
+      "Sumcheck.Spec.reduction_perfectCompleteness",
+      "RandomQuery.oracleVerifier_rbrKnowledgeSoundness",
+      "OracleVerifier.seqCompose_rbrSoundness",
+      "OracleVerifier.seqCompose_rbrKnowledgeSoundness",
+      "Sumcheck.Spec.oracleVerifier_rbrKnowledgeSoundness"
+    ],
+    "black_box_cases": 14,
+    "observation_body_sha256": "a8bc4d14b58c6004cbf76c88fede139ab8f28e3014dc59a47b0c0bd115cc6dc2",
+    "outcomes": {
+      "Affirmative": 9,
+      "CannotAnswer": 15,
+      "Refused": 5
+    },
+    "outside": 4,
+    "outside_declarations": [
+      "FRI_RBR_Soundness",
+      "FRI_RBR_Soundness",
+      "FRI_RBR_Soundness",
+      "Sumcheck_Protocol (Garvia Bosshard, Sprenger, Bootle; CSF 2024)"
+    ],
+    "refused_cases": 5,
+    "state_counts": {
+      "mechanized": 5,
+      "proof_incomplete": 2,
+      "subject_incomplete": 3
+    },
+    "total": 10
+  }
+}

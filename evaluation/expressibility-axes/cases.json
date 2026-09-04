@@ -1,0 +1,708 @@
+{
+  "schema_version": 1,
+  "source_sets": {
+    "portfolio": {
+      "path": "docs-next/notes/semantic-revalidation-and-redesign/r2-protocol-witnesses/expressibility-validation-portfolio.md",
+      "sha256": "c0f7eb2fcb70e886860ef9e4fa426be5d0d5d0d2f53adda186a3352904b8fbd8"
+    },
+    "holdout_adjudication": {
+      "path": "docs-next/notes/semantic-revalidation-and-redesign/semantic-closure-and-freeze/cold-protocol-holdouts/portfolio-adjudication-and-freeze-decision.md",
+      "sha256": "a40acbf3f467e6084f4cbfa45ecf4fe3f2ec204976c9a713b791c1531d251028"
+    },
+    "peer_review_map": {
+      "path": "docs/private/notes/semantic-redesign-peer-review-2026-08-28.md",
+      "sha256": "f188af14e170ff98d6cce45cca5b5f1b8019b65c9ecb699c136845ab0df35c2d",
+      "distributed": false,
+      "frozen_extract": "Section 7 rows 1-20 and Section 8.4; the checker consumes the explicit records below and does not require the private file."
+    }
+  },
+  "axis_order": [
+    "party_structure",
+    "oracle_publishers",
+    "verifier_input_privacy",
+    "query_privacy",
+    "verifier_randomness_privacy",
+    "challenge_source",
+    "challenge_interpretation",
+    "round_structure",
+    "statement_timing",
+    "oracle_kinds",
+    "oracle_access_modes",
+    "commitment_relation",
+    "setup_kind",
+    "setup_trust",
+    "composition_modes",
+    "termination_modes",
+    "randomness_sources",
+    "statement_adaptivity",
+    "query_adaptivity",
+    "communication_kind"
+  ],
+  "required_coverage": {
+    "portfolio_ids": ["H01", "H02", "H03", "H04", "H05", "P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "V01", "V02", "V03", "V04", "V05"],
+    "peer_review_rows": ["PR01", "PR02", "PR03", "PR04", "PR05", "PR06", "PR07", "PR08", "PR09", "PR10", "PR11", "PR12", "PR13", "PR14", "PR15", "PR16", "PR17", "PR18", "PR19", "PR20"],
+    "unconsidered_classes": ["anonymous_credentials", "commit_and_prove", "designated_verifier", "distributed_multi_verifier", "fhe_verifiable_computation", "multi_prover", "pcp_based", "private_coin", "prover_chosen_rounds", "quantum_interaction", "verifiable_delay_function"]
+  },
+  "cases": [
+    {
+      "id": "P01",
+      "name": "Minimal Schnorr or Sigma identification",
+      "portfolio_id": "P01",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.1 P01"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["none"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P02",
+      "name": "Native FRI or IOR family before a generic plan is fixed",
+      "portfolio_id": "P02",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.1 P02"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["algorithmic_carrier_without_closed_plan", "codeword", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-ORACLE-LIFECYCLE"]
+    },
+    {
+      "id": "P03",
+      "name": "Classical Sumcheck at one explicit finite instance",
+      "portfolio_id": "P03",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.2 P03"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P04",
+      "name": "GKR layered reduction at one explicit finite instance",
+      "portfolio_id": "P04",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.2 P04"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "shared_occurrence", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P05",
+      "name": "KZG single and batched polynomial openings",
+      "portfolio_id": "P05",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.2 P05"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "fixed", "before_all_challenges", ["algebraic_polynomial", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "universal_updatable_crs", "trusted_crs", ["shared_challenge"], ["first_active_terminal"], ["prover_local", "public_environment", "setup_generator"], "nonadaptive", "nonadaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P06",
+      "name": "PLONK with permutation and one lookup argument",
+      "portfolio_id": "P06",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.2 P06"}],
+      "feature_vector": ["two_role", ["prover", "public_environment"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "shared_occurrence", "finite_elaborated_instance", "before_all_challenges", ["algebraic_polynomial", "explicit_table", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "universal_updatable_crs", "updatable_crs", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "setup_generator", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P07",
+      "name": "Groth16 or QAP preprocessing SNARK",
+      "portfolio_id": "P07",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.2 P07"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "none", "none", "no_challenge", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "circuit_specific_crs", "trusted_crs", ["none"], ["first_active_terminal"], ["prover_local", "setup_generator"], "nonadaptive", "none", "no_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P08",
+      "name": "Bulletproofs range proof and inner-product argument at one finite size",
+      "portfolio_id": "P08",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.2 P08"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P09-nova-committed-fold",
+      "name": "Nova committed relaxed-R1CS fold",
+      "portfolio_id": "P09",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 Nova committed relaxed-R1CS fold"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "opaque_external_commitment", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-MODULE-SEMANTICS"]
+    },
+    {
+      "id": "P09-corrected-cycle-nova",
+      "name": "Corrected two-cycle Nova one-step witness",
+      "portfolio_id": "P09",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 corrected two-cycle Nova"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P09-hypernova",
+      "name": "HyperNova multi-fold family",
+      "portfolio_id": "P09",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 HyperNova multi-fold"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "shared_occurrence", "symbolic_instance_indexed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step", "shared_challenge"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-SYMBOLIC-RECURRENCE"]
+    },
+    {
+      "id": "P09-cyclefold",
+      "name": "CycleFold recurrence family",
+      "portfolio_id": "P09",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 CycleFold"}],
+      "feature_vector": ["two_role", ["none"], "private_relation_grounding", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-PRIVATE-GROUNDING"]
+    },
+    {
+      "id": "P09-protostar",
+      "name": "ProtoStar public accumulation step",
+      "portfolio_id": "P09",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 ProtoStar public accumulation"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P09-latticefold-plus",
+      "name": "LatticeFold+ three-to-two finite fold",
+      "portfolio_id": "P09",
+      "coverage": ["portfolio", "recent_variant"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 LatticeFold+ three-to-two fold"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "P10",
+      "name": "Imported verifier and finite recursive proof verification",
+      "portfolio_id": "P10",
+      "coverage": ["portfolio"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.3 imported recursive verification"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "none", "none", "no_challenge", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["finite_recursion", "imported_verifier"], ["first_active_terminal"], ["none"], "nonadaptive", "none", "no_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "V01",
+      "name": "Duplex-sponge Fiat-Shamir transformation",
+      "portfolio_id": "V01",
+      "coverage": ["portfolio", "recent_variant"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3 V01"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "duplex_squeeze", "rejection_sampled", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal", "interpretation_failure"], ["duplex_state", "prover_local"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "V02",
+      "name": "Binary-field zero-knowledge polynomial commitment",
+      "portfolio_id": "V02",
+      "coverage": ["portfolio", "recent_variant"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3 V02"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "shared_occurrence", "finite_elaborated_instance", "before_all_challenges", ["algorithmic_carrier_with_closed_plan", "codeword", "logical_virtual"], ["logical", "public_binding", "verifier_derived"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "V03",
+      "name": "Packed Boolean GKR at one finite instance",
+      "portfolio_id": "V03",
+      "coverage": ["portfolio", "recent_variant"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.1 packed Boolean GKR"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "shared_occurrence", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "V04",
+      "name": "LatticeFold+ finite three-to-two fold",
+      "portfolio_id": "V04",
+      "coverage": ["portfolio", "recent_variant"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3 V04 and 4.3.3 LatticeFold+"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "V05",
+      "name": "LogUp-GKR and Logup star at one finite instance",
+      "portfolio_id": "V05",
+      "coverage": ["portfolio", "recent_variant"],
+      "source_refs": [{"set": "portfolio", "coordinate": "4.3.2 V05"}],
+      "feature_vector": ["two_role", ["prover", "public_environment"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "shared_occurrence", "finite_elaborated_instance", "before_all_challenges", ["algebraic_polynomial", "explicit_table", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "universal_updatable_crs", "updatable_crs", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "setup_generator", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "H01",
+      "name": "WHIR Construction 5.1 with a closed finite query plan",
+      "portfolio_id": "H01",
+      "coverage": ["holdout_adjudication", "portfolio"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.1 H01"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["algorithmic_carrier_with_closed_plan", "codeword", "logical_virtual"], ["logical", "public_binding", "verifier_derived"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "ProfileOrModule", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "H02",
+      "name": "Circle STARK boundary analysis at one finite instance",
+      "portfolio_id": "H02",
+      "coverage": ["holdout_adjudication", "portfolio"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.2 H02"}],
+      "feature_vector": ["two_role", ["prover", "public_environment"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "rejection_sampled", "finite_elaborated_instance", "before_all_challenges", ["algorithmic_carrier_with_closed_plan", "codeword", "logical_virtual"], ["logical", "public_binding", "verifier_derived"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["abort", "first_active_terminal", "interpretation_failure"], ["prover_local", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "ProfileOrModule", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "H03",
+      "name": "WARPfold finite fold",
+      "portfolio_id": "H03",
+      "coverage": ["holdout_adjudication", "portfolio"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.3 H03 fold"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "ProfileOrModule", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "H03-cross-system",
+      "name": "WARPfold broad cross-system application",
+      "portfolio_id": "H03",
+      "coverage": ["holdout_adjudication"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.3 H03 broad application"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "externally_imported", "imported_semantics", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["cross_execution", "folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "chosen_across_executions", "cross_execution", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-CROSS-EXECUTION", "B-IMPORTED-CHALLENGE"],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "Undetermined", "projected_verdict": "breaks", "required_destinations": ["B-CROSS-EXECUTION", "B-IMPORTED-CHALLENGE"]}]
+    },
+    {
+      "id": "H04",
+      "name": "Physical multiparty Sumcheck",
+      "portfolio_id": "H04",
+      "coverage": ["holdout_adjudication", "portfolio"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.4 H04 physical MPC"}],
+      "feature_vector": ["independent_noncommunicating_provers", ["multiple_provers"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table"], ["logical"], "logical_only", "correlated_multiparty_preprocessing", "multiparty_assumption", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment", "setup_generator"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-MULTIPARTY"],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "IntentionalBoundary", "projected_verdict": "breaks", "required_destinations": ["B-MULTIPARTY"]}]
+    },
+    {
+      "id": "H04-virtual",
+      "name": "Commitment-anchored virtual two-role Sumcheck proof",
+      "portfolio_id": "H04",
+      "coverage": ["holdout_adjudication"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.4 H04 virtual proof"}],
+      "feature_vector": ["virtual_two_role_distributed_prover", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "ProfileOrModule", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "H05",
+      "name": "Complete noninteractive transparent SNARK over Galois rings with an omitted transform",
+      "portfolio_id": "H05",
+      "coverage": ["holdout_adjudication", "portfolio"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.5 H05 complete noninteractive SNARK"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "source_omits_transform", "source_omits_interpretation", "finite_elaborated_instance", "before_all_challenges", ["codeword", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "transparent_public_parameter", "source_underdetermined", ["interleaved"], ["source_omits_terminal_semantics"], ["prover_local", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-SOURCE-INCOMPLETE"],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "Undetermined", "projected_verdict": "breaks", "required_destinations": ["B-SOURCE-INCOMPLETE"]}]
+    },
+    {
+      "id": "H05-interactive",
+      "name": "Explicit interactive Galois-ring components",
+      "portfolio_id": "H05",
+      "coverage": ["holdout_adjudication"],
+      "source_refs": [{"set": "holdout_adjudication", "coordinate": "3 and 4.5 H05 interactive components"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["codeword", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal", "interpretation_failure"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "holdout_adjudication", "recorded": "ProfileOrModule", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR01",
+      "name": "Sigma protocols",
+      "peer_review_rows": ["PR01"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 1"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["none"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR02",
+      "name": "Public-coin interactive proofs",
+      "peer_review_rows": ["PR02"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 2"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR03",
+      "name": "Private-coin interactive proofs as Fresh",
+      "peer_review_rows": ["PR03"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 3"}],
+      "feature_vector": ["two_role", ["none"], "verifier_private", ["none"], "verifier_private", "verifier_fresh", "private_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "verifier_local"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits as Fresh", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR04",
+      "name": "Sumcheck or GKR as a symbolic family",
+      "peer_review_rows": ["PR04"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 4"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "symbolic_instance_indexed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-SYMBOLIC-RECURRENCE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "bends on the family axis", "projected_verdict": "bends", "required_destinations": ["RC-SYMBOLIC-RECURRENCE"]}]
+    },
+    {
+      "id": "PR05",
+      "name": "FRI, STIR, or WHIR family with an unspecified algorithmic carrier",
+      "peer_review_rows": ["PR05"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 5"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "symbolic_instance_indexed", "before_all_challenges", ["algorithmic_carrier_without_closed_plan", "codeword", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-ORACLE-LIFECYCLE", "RC-SYMBOLIC-RECURRENCE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "bends hard", "projected_verdict": "bends", "required_destinations": ["RC-ORACLE-LIFECYCLE", "RC-SYMBOLIC-RECURRENCE"]}]
+    },
+    {
+      "id": "PR06",
+      "name": "KZG or BDFG polynomial commitments",
+      "peer_review_rows": ["PR06"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 6"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "fixed", "before_all_challenges", ["algebraic_polynomial", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "universal_updatable_crs", "trusted_crs", ["none"], ["first_active_terminal"], ["prover_local", "public_environment", "setup_generator"], "nonadaptive", "nonadaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR07",
+      "name": "IPA or Bulletproofs as a symbolic family",
+      "peer_review_rows": ["PR07"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 7"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "symbolic_instance_indexed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-SYMBOLIC-RECURRENCE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "bends on the family axis", "projected_verdict": "bends", "required_destinations": ["RC-SYMBOLIC-RECURRENCE"]}]
+    },
+    {
+      "id": "PR08",
+      "name": "Preprocessing or holographic systems without a selected indexer lifecycle",
+      "peer_review_rows": ["PR08"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 8"}],
+      "feature_vector": ["two_role", ["public_environment"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table"], ["public_binding"], "checked_commitment_compilation", "checked_preprocessing", "updatable_crs", ["sequential"], ["first_active_terminal"], ["prover_local", "setup_generator", "transcript_oracle"], "nonadaptive", "nonadaptive", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-ORACLE-LIFECYCLE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "bends; no indexer home", "projected_verdict": "bends", "required_destinations": ["RC-ORACLE-LIFECYCLE"]}]
+    },
+    {
+      "id": "PR09",
+      "name": "Plookup, LogUp, or Lasso at one finite instance",
+      "peer_review_rows": ["PR09"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 9"}],
+      "feature_vector": ["two_role", ["prover", "public_environment"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "shared_occurrence", "finite_elaborated_instance", "before_all_challenges", ["explicit_table", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "universal_updatable_crs", "updatable_crs", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "setup_generator", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR10",
+      "name": "One Nova, ProtoStar, or ProtoGalaxy folding step",
+      "peer_review_rows": ["PR10"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 10"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR11",
+      "name": "IVC, accumulation streams, or PCD networks",
+      "peer_review_rows": ["PR11"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 11"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["cross_execution", "folding_step"], ["accepted_continuation", "first_active_terminal"], ["prover_local", "transcript_oracle"], "chosen_across_executions", "cross_execution", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-CROSS-EXECUTION"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "breaks deliberately", "projected_verdict": "breaks", "required_destinations": ["B-CROSS-EXECUTION"]}]
+    },
+    {
+      "id": "PR12",
+      "name": "Reified recursion family",
+      "peer_review_rows": ["PR12"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 12"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "none", "none", "no_challenge", "symbolic_instance_indexed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["reified_symbolic_recursion"], ["first_active_terminal"], ["none"], "nonadaptive", "none", "no_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-SYMBOLIC-RECURRENCE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "bends", "projected_verdict": "bends", "required_destinations": ["RC-SYMBOLIC-RECURRENCE"]}]
+    },
+    {
+      "id": "PR13-shared",
+      "name": "Shared challenge composition",
+      "peer_review_rows": ["PR13"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 13 shared challenge"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "shared_occurrence", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["interleaved", "shared_challenge"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR13-imported",
+      "name": "Imported challenge composition",
+      "peer_review_rows": ["PR13"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 13 imported challenge"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "externally_imported", "imported_semantics", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-IMPORTED-CHALLENGE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "breaks", "projected_verdict": "breaks", "required_destinations": ["B-IMPORTED-CHALLENGE"]}]
+    },
+    {
+      "id": "PR14",
+      "name": "Plain IOP or IOPP at witness scale",
+      "peer_review_rows": ["PR14"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 14"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["codeword", "logical_virtual"], ["logical"], "logical_only", "none", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits at witness scale", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR15",
+      "name": "Significant prover-private state",
+      "peer_review_rows": ["PR15"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 15"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR16",
+      "name": "Grinding or rejection sampling",
+      "peer_review_rows": ["PR16"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 16"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "grinding_search", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal", "interpretation_failure"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR17",
+      "name": "MPC-in-the-head or VOLE-in-the-head proof",
+      "peer_review_rows": ["PR17"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 17"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR18-distributed-prover",
+      "name": "Distributed proving with one logical Prover transcript role",
+      "peer_review_rows": ["PR18"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 18 DIZK or Pianist"}],
+      "feature_vector": ["virtual_two_role_distributed_prover", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table"], ["logical"], "logical_only", "none", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits as a non-event", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "PR18-mip",
+      "name": "True noncommunicating multi-prover interaction",
+      "peer_review_rows": ["PR18"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 18 noncommunicating MIP"}],
+      "feature_vector": ["independent_noncommunicating_provers", ["multiple_provers"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table"], ["logical"], "logical_only", "none", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-MULTIPARTY"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "excluded", "projected_verdict": "breaks", "required_destinations": ["B-MULTIPARTY"]}]
+    },
+    {
+      "id": "PR19",
+      "name": "Lattice protocols as a symbolic family",
+      "peer_review_rows": ["PR19"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 19"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "symbolic_instance_indexed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-SYMBOLIC-RECURRENCE"],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "bends", "projected_verdict": "bends", "required_destinations": ["RC-SYMBOLIC-RECURRENCE"]}]
+    },
+    {
+      "id": "PR20",
+      "name": "Binius or small-field arithmetization at one finite instance",
+      "peer_review_rows": ["PR20"],
+      "coverage": ["peer_review"],
+      "source_refs": [{"set": "peer_review_map", "coordinate": "7 row 20"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["algebraic_polynomial", "codeword", "logical_virtual"], ["logical", "public_binding"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "transcript_oracle"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": [],
+      "recorded_verdicts": [{"set": "peer_review_map", "recorded": "fits", "projected_verdict": "fits", "required_destinations": []}]
+    },
+    {
+      "id": "U01-quicksilver",
+      "name": "QuickSilver designated-verifier VOLE proof",
+      "unconsidered_classes": ["designated_verifier"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://eprint.iacr.org/2021/076.pdf", "coordinate": "Sections 3-5 designated-verifier VOLE setup and proof"}],
+      "feature_vector": ["two_role", ["none"], "verifier_private", ["none"], "mixed_private", "verifier_fresh", "private_coin", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "checked_preprocessing", "designated_verifier_secret", ["sequential"], ["first_active_terminal"], ["prover_local", "verifier_local"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-ORACLE-LIFECYCLE"]
+    },
+    {
+      "id": "U02a-wesolowski-vdf",
+      "name": "Wesolowski verifiable delay function proof",
+      "unconsidered_classes": ["verifiable_delay_function"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://eprint.iacr.org/2018/623.pdf", "coordinate": "Sections 3-4 proof and noninteractive Fiat-Shamir transform"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "rejection_sampled", "fixed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["none"], ["first_active_terminal", "interpretation_failure"], ["transcript_oracle"], "nonadaptive", "none", "no_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "U02b-pietrzak-vdf",
+      "name": "Pietrzak recursive verifiable delay function family",
+      "unconsidered_classes": ["verifiable_delay_function"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://eprint.iacr.org/2018/627.pdf", "coordinate": "Sections 3-4 recursive proof and noninteractive transform"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "transcript_derived", "public_coin", "symbolic_instance_indexed", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal"], ["transcript_oracle"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "bends",
+      "predicted_destinations": ["RC-SYMBOLIC-RECURRENCE"]
+    },
+    {
+      "id": "U03-legosnark",
+      "name": "LegoSNARK commit-and-prove SNARK",
+      "unconsidered_classes": ["commit_and_prove"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://eprint.iacr.org/2019/142", "coordinate": "Abstract and Sections 3-5 commit-and-prove construction"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "none", "none", "no_challenge", "fixed", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "universal_updatable_crs", "updatable_crs", ["sequential"], ["first_active_terminal"], ["prover_local", "setup_generator"], "nonadaptive", "none", "no_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "U04-kilian-pcp",
+      "name": "Kilian PCP-based interactive argument",
+      "unconsidered_classes": ["pcp_based"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://doi.org/10.1145/129712.129782", "coordinate": "PCP commitment and interactive argument construction"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["algorithmic_carrier_with_closed_plan", "explicit_table", "logical_virtual"], ["logical", "public_binding", "verifier_derived"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "nonadaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "U05-micali-cs-proof",
+      "name": "Micali noninteractive computationally sound PCP-based proof",
+      "unconsidered_classes": ["pcp_based"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://people.csail.mit.edu/silvio/Selected%20Scientific%20Papers/Proof%20Systems/Computationally_Sound_Proofs.pdf", "coordinate": "Sections 3-5 computationally sound proof construction"}],
+      "feature_vector": ["two_role", ["prover"], "public_only", ["public"], "public_reconstructible", "transcript_derived", "rejection_sampled", "finite_elaborated_instance", "before_all_challenges", ["algorithmic_carrier_with_closed_plan", "explicit_table", "logical_virtual"], ["logical", "public_binding", "verifier_derived"], "checked_commitment_compilation", "transparent_public_parameter", "transparent", ["sequential"], ["first_active_terminal", "interpretation_failure"], ["prover_local", "transcript_oracle"], "nonadaptive", "nonadaptive", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "U06-fhe-vc",
+      "name": "FHE-based verifiable computation on encrypted data",
+      "unconsidered_classes": ["fhe_verifiable_computation"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://eprint.iacr.org/2014/202.pdf", "coordinate": "Sections 3-5 setup, input preprocessing, evaluation, and verification"}],
+      "feature_vector": ["two_role", ["public_environment"], "verifier_private", ["verifier_private"], "verifier_private", "none", "no_challenge", "fixed", "before_all_challenges", ["encrypted_dataset"], ["mutable"], "no_oracle_commitment", "encrypted_data_preprocessing", "designated_verifier_secret", ["cross_execution", "sequential"], ["first_active_terminal"], ["prover_local", "setup_generator", "verifier_local"], "chosen_across_executions", "cross_execution", "encrypted_classical_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-CROSS-EXECUTION"]
+    },
+    {
+      "id": "U07-anonymous-credentials",
+      "name": "Anonymous credential issuance and showing lifecycle",
+      "unconsidered_classes": ["anonymous_credentials"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://www.iacr.org/archive/eurocrypt2001/20450093.pdf", "coordinate": "Sections 2-4 organizations, users, issuance, and showing"}],
+      "feature_vector": ["more_than_two_lifecycle_roles", ["none"], "verifier_private", ["none"], "mixed_private", "verifier_fresh", "private_coin", "verifier_or_scheduler_chosen", "before_all_challenges", ["none"], ["none"], "commitment_native_statement", "transparent_public_parameter", "transparent", ["concurrent_sessions", "cross_execution", "sequential"], ["abort", "first_active_terminal"], ["prover_local", "verifier_local"], "chosen_across_executions", "cross_execution", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-CONCURRENT-SESSIONS", "B-CROSS-EXECUTION", "B-DYNAMIC-SCHEDULE", "B-MULTIROLE-LIFECYCLE"]
+    },
+    {
+      "id": "U08-prover-chosen-rounds",
+      "name": "Interactive-machine protocol with prover-chosen continuation count",
+      "unconsidered_classes": ["prover_chosen_rounds"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://doi.org/10.1145/22145.22178", "coordinate": "Interactive-machine and halting model used as a model-level pressure source, not a named ZK family claim"}],
+      "feature_vector": ["two_role", ["none"], "public_only", ["none"], "public_reconstructible", "verifier_fresh", "public_coin", "prover_chosen", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["abort", "first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-DYNAMIC-SCHEDULE"]
+    },
+    {
+      "id": "U09-private-coin",
+      "name": "Goldwasser-Sipser private-coin interactive-proof source shape",
+      "unconsidered_classes": ["private_coin"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://www.cs.toronto.edu/tss/files/papers/goldwasser-Sipser.pdf", "coordinate": "Private-coin interactive proof model and public-coin transformation"}],
+      "feature_vector": ["two_role", ["none"], "verifier_private", ["none"], "verifier_private", "verifier_fresh", "private_coin", "finite_elaborated_instance", "before_all_challenges", ["none"], ["none"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "verifier_local"], "nonadaptive", "none", "classical_typed_messages"],
+      "predicted_verdict": "fits",
+      "predicted_destinations": []
+    },
+    {
+      "id": "U10-mip",
+      "name": "Ben-Or-Goldwasser-Kilian-Wigderson noncommunicating multi-prover interaction",
+      "unconsidered_classes": ["multi_prover"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://www.math.ias.edu/~avi/PUBLICATIONS/MYPAPERS/GKBW88/GKBW88.pdf", "coordinate": "Multiprover interactive-proof model with isolated provers"}],
+      "feature_vector": ["independent_noncommunicating_provers", ["multiple_provers"], "public_only", ["public"], "public_reconstructible", "verifier_fresh", "public_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table"], ["logical"], "logical_only", "none", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "public_environment"], "nonadaptive", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-MULTIPARTY"]
+    },
+    {
+      "id": "U11-distributed-verifiers",
+      "name": "Distributed interactive proof with split verifier knowledge",
+      "unconsidered_classes": ["distributed_multi_verifier"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://arxiv.org/abs/2006.16191", "coordinate": "Distributed interactive proofs with shared and private randomness"}],
+      "feature_vector": ["multiple_verifiers_distributed_knowledge", ["prover"], "partitioned_across_verifiers", ["partitioned_across_verifiers"], "partitioned_across_verifiers", "verifier_fresh", "private_coin", "finite_elaborated_instance", "before_all_challenges", ["explicit_table"], ["logical"], "logical_only", "none", "transparent", ["interleaved"], ["first_active_terminal"], ["prover_local", "verifier_local"], "partitioned_across_verifiers", "transcript_adaptive", "classical_typed_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-MULTIVERIFIER"]
+    },
+    {
+      "id": "U12-quantum-interaction",
+      "name": "Quantum interactive proof with quantum messages",
+      "unconsidered_classes": ["quantum_interaction"],
+      "coverage": ["unconsidered"],
+      "source_refs": [{"kind": "primary", "url": "https://arxiv.org/abs/cs/9901015", "coordinate": "Quantum interactive proof model with quantum computations and messages"}],
+      "feature_vector": ["two_role", ["none"], "verifier_private", ["verifier_private"], "verifier_private", "verifier_fresh", "private_coin", "finite_elaborated_instance", "before_all_challenges", ["quantum_state"], ["quantum"], "no_oracle_commitment", "none", "transparent", ["sequential"], ["first_active_terminal"], ["prover_local", "quantum_measurement", "verifier_local"], "nonadaptive", "answer_adaptive_explicit_core", "quantum_messages"],
+      "predicted_verdict": "breaks",
+      "predicted_destinations": ["B-QUANTUM-CARRIER"]
+    }
+  ]
+}

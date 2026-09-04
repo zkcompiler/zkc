@@ -1,0 +1,18 @@
+{
+  "bus": {
+    "path": "test/Encoding/logup-bus.mlir",
+    "sha256": "5623d87877e2609d959a6d01c5edfd4f212bc1826a2ebdee02cdb5db98bd0f16"
+  },
+  "range_check": {
+    "path": "test/Encoding/logup-range-check.mlir",
+    "sha256": "ec398b7da40409b10e69e6b9e0d7a440202a0748c7d25e6a655eac8b48d3dbc8"
+  },
+  "role_widened": {
+    "path": "test/Soundness/Inputs/logup-role-widened.mlir",
+    "sha256": "0c1a5f3e3b48a50e67db7014f074d334f478a2272ba8c37a5b3974283fb4b10d"
+  },
+  "unanchored": {
+    "path": "test/Soundness/Inputs/logup-unanchored-inclusion.mlir",
+    "sha256": "58366b97859b66cdecaa9ba66fe20b68199296dd6a17e24232c4d90d1fb4f134"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "source": "docs-next/foundation/executable-foundations.md Section 2.1",
+  "vectors": [
+    {
+      "case": "natural-exact-canonical-byte-bound",
+      "kind": "nat",
+      "magnitude_octets": 1048567,
+      "expected": {
+        "outcome": "Completed",
+        "encoded_octets": 1048576
+      }
+    },
+    {
+      "case": "natural-crosses-canonical-byte-bound",
+      "kind": "nat",
+      "magnitude_octets": 1048568,
+      "expected": {
+        "outcome": "Malformed",
+        "code": "CanonicalByteBound",
+        "encoded_octets": 1048577
+      }
+    }
+  ]
+}

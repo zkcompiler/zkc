@@ -1,0 +1,199 @@
+{
+  "schema": "zkc.fs-assurance-source-ledger.v1",
+  "retrieved_on": "2026-09-01",
+  "sources": [
+    {
+      "id": "cfrg-fs-03",
+      "kind": "standards-draft",
+      "title": "Fiat-Shamir Transformation",
+      "authors": "Michele Orru",
+      "locator": "https://www.ietf.org/archive/id/draft-irtf-cfrg-fiat-shamir-03.txt",
+      "revision": "draft-irtf-cfrg-fiat-shamir-03, 2026-08-17",
+      "sha256": "4ed563b26f3e366545e280a979d46b6ce623e27a29b53b73fa7cb92c5287fc28",
+      "role": "current implementation guidance for session identifiers, codecs, instance binding, serialization, parsing, and negative tests",
+      "boundary": "work in progress, not a final RFC or a substitute for protocol-specific theorem applicability"
+    },
+    {
+      "id": "bcs16",
+      "kind": "primary-paper",
+      "title": "Interactive Oracle Proofs",
+      "authors": "Eli Ben-Sasson, Alessandro Chiesa, and Nicholas Spooner",
+      "locator": "https://eprint.iacr.org/2016/116",
+      "revision": "2016-02-10 snapshot",
+      "sha256": "a2dc9bd042665081664287281b9bcf64735be2c818ce9207cce57cc43939fa2f",
+      "role": "IOP model, BCS compiler, Merkle/oracle compilation, and state-restoration characterization",
+      "boundary": "the compiler theorem requires exact source properties and random-oracle assumptions; it is not verifier implementation verification"
+    },
+    {
+      "id": "bpw16",
+      "kind": "primary-paper",
+      "title": "How not to Prove Yourself: Pitfalls of the Fiat-Shamir Heuristic and Applications to Helios",
+      "authors": "David Bernhard, Olivier Pereira, and Bogdan Warinschi",
+      "locator": "https://eprint.iacr.org/2016/771",
+      "revision": "snapshot downloaded 2026-09-01",
+      "sha256": "772a2117914058f72fa1560b9d261420bb0e4591771dbcaa94d0e7d017ae7902",
+      "role": "strong-versus-weak FS and adaptive Statement binding",
+      "boundary": "three-move/adaptive theorem scope must not be generalized without a separate result"
+    },
+    {
+      "id": "dmwg23",
+      "kind": "primary-paper",
+      "title": "Weak Fiat-Shamir Attacks on Modern Proof Systems",
+      "authors": "Quang Dao, Jim Miller, Opal Wright, and Paul Grubbs",
+      "locator": "https://eprint.iacr.org/2023/691",
+      "revision": "snapshot downloaded 2026-09-01",
+      "sha256": "44286b6e197b44c5a7a464be732630099e8c0c695cfe0a2e15bd2c3fa875904e",
+      "role": "modern weak-FS survey and attacks across deployed proof-system families",
+      "boundary": "case-study prevalence is not a theorem about every protocol or implementation"
+    },
+    {
+      "id": "nhb24",
+      "kind": "primary-paper",
+      "title": "Fiat-Shamir in the Wild",
+      "authors": "Hieu Nguyen, Uyen Ho, and Alex Biryukov",
+      "locator": "https://eprint.iacr.org/2024/1565",
+      "revision": "snapshot downloaded 2026-09-01",
+      "sha256": "f54b3a6d35f5842ff5cd81c2af24854fc0b73b18eb9128c40756ca2ea2857b00",
+      "role": "implementation-error taxonomy: Statement omission, ambiguous encoding, missing messages, brute force, and multi-round issues",
+      "boundary": "taxonomy and examples do not supply a security proof for zkc"
+    },
+    {
+      "id": "cpv24",
+      "kind": "primary-paper",
+      "title": "The Last Challenge Attack on Fiat-Shamir in KZG-based SNARKs",
+      "authors": "Oana Ciobotaru, Maxim Peter, and Vesselin Velichkov",
+      "locator": "https://eprint.iacr.org/2024/398",
+      "revision": "snapshot downloaded 2026-09-01",
+      "sha256": "e75620cd44f7ca40275423ae0c38813d9bc3265e53604727174b9601f260acdf",
+      "role": "concrete final-challenge dependency and proof-forgery case",
+      "boundary": "KZG batching case does not imply a universal dependency rule beyond its selected protocol semantics"
+    },
+    {
+      "id": "krs25",
+      "kind": "primary-paper",
+      "title": "How to Prove False Statements: Practical Attacks on Fiat-Shamir",
+      "authors": "Dmitry Khovratovich, Ron D. Rothblum, and Lev Soukhanov",
+      "locator": "https://eprint.iacr.org/2025/118",
+      "revision": "2025-12-11 snapshot",
+      "sha256": "deac65104cd4f2c143a0b75cfb9a0ff99e4f042a891e9bb0b87969260b882035",
+      "role": "natural-protocol pressure on concrete random-oracle instantiation and circuit-dependent security",
+      "boundary": "an attack family against selected GKR-derived constructions is not a universal concrete-hash impossibility"
+    },
+    {
+      "id": "afk22",
+      "kind": "primary-paper",
+      "title": "Fiat-Shamir Transformation of Multi-Round Interactive Proofs",
+      "authors": "Thomas Attema, Serge Fehr, and Michael Klooss",
+      "locator": "https://eprint.iacr.org/2021/1377",
+      "revision": "version 2, 2022-02-16",
+      "sha256": "93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c",
+      "role": "multi-round special-soundness transport and quantitative security loss",
+      "boundary": "the current zkc import is a selected classical adaptive family, not a generic FS theorem"
+    },
+    {
+      "id": "dfm20",
+      "kind": "primary-paper",
+      "title": "The Measure-and-Reprogram Technique 2.0: Multi-Round Fiat-Shamir and More",
+      "authors": "Jelle Don, Serge Fehr, and Christian Majenz",
+      "locator": "https://eprint.iacr.org/2020/282",
+      "revision": "snapshot downloaded 2026-09-01",
+      "sha256": "8f0265eb66d7cbb258987e6c8d26b7e32d52653804b939236793b2a8df4f0cd5",
+      "role": "multi-input QROM reprogramming, ordered extraction, and query-loss pressure",
+      "boundary": "QROM transport needs its own adversary model and theorem applicability; it is not inherited from classical ROM"
+    },
+    {
+      "id": "th24",
+      "kind": "primary-paper-and-mechanization",
+      "title": "VCVio: A Formally Verified Forking Lemma and Fiat-Shamir Transform, via a Flexible and Expressive Oracle Representation",
+      "authors": "Devon Tuma and Nicholas Hopper",
+      "locator": "https://eprint.iacr.org/2024/1819",
+      "revision": "revised 2024-11-15",
+      "sha256": "d59a856cb8e26fd1332436fd1d55a667f63987cbef5c5759ade94af5c38a7ad7",
+      "role": "evidence that computational FS reductions and oracle operations can be mechanized",
+      "boundary": "the formalization covers its selected sigma-protocol framework; it does not verify arbitrary zkc protocols, codecs, lowerings, or deployments"
+    },
+    {
+      "id": "co26",
+      "kind": "primary-paper",
+      "title": "A Fiat-Shamir Transformation From Duplex Sponges",
+      "authors": "Alessandro Chiesa and Michele Orru",
+      "locator": "https://eprint.iacr.org/2025/536",
+      "revision": "2026-03-27 snapshot",
+      "sha256": "fca7ba09ebe59141c3c041ac660b4e3e161fdab8a709aee67e236db8d8da3a35",
+      "role": "ideal-permutation duplex construction, codec bias, salt, state-restoration, and indifferentiability limitations",
+      "boundary": "zkc's recorded proof-level source-validation findings block theorem activation pending repair or independent validation"
+    },
+    {
+      "id": "bgtz23",
+      "kind": "primary-paper",
+      "title": "On Soundness Notions for Interactive Oracle Proofs",
+      "authors": "Alexander R. Block, Albert Garreta, Pratyush Ranjan Tiwari, and Michal Zajac",
+      "locator": "https://eprint.iacr.org/2023/1256",
+      "revision": "latest revision 2024-03-05",
+      "sha256": "94718c7c37593c863c1a2f2fbce2bffd6340d8bcf3a79755e6aff13ec6a9c780",
+      "role": "relationships among special, RBR, and RBR-knowledge soundness and selected QROM transport",
+      "boundary": "the implications are directional; one soundness notion must not be substituted for another"
+    },
+    {
+      "id": "bgkttz24",
+      "kind": "primary-paper",
+      "title": "Fiat-Shamir Security of FRI and Related SNARKs",
+      "authors": "Alexander R. Block, Albert Garreta, Jonathan Katz, Justin Thaler, Pratyush Ranjan Tiwari, and Michal Zajac",
+      "locator": "https://eprint.iacr.org/2023/1071",
+      "revision": "2024-02-15 snapshot",
+      "sha256": "bb7a7e87b9000c98106de99c9af9d289def2a1b91919a3507ee78bf9bfd16947",
+      "role": "FRI and related-SNARK RBR analysis and BCS compilation boundary",
+      "boundary": "protocol-specific RBR results and assumptions cannot be inferred from a FRI-shaped schedule"
+    },
+    {
+      "id": "plonky3-2026-binding",
+      "kind": "maintainer-advisory",
+      "title": "Plonky3 MultiField32Challenger: transcript malleability and challenge entropy loss",
+      "authors": "Plonky3 maintainers and reporters",
+      "locator": "https://github.com/advisories/GHSA-vj64-rjf3-w3v7",
+      "revision": "published 2026-05-15, updated 2026-06-11, reviewed live 2026-09-01",
+      "role": "distinct transcript aliases from missing length separation, radix mismatch, modular collapse, and high-bit truncation",
+      "boundary": "the package's finite aliases are class witnesses, not an exploit reproduction or audit of patched releases"
+    },
+    {
+      "id": "plonky3-2025-openings",
+      "kind": "maintainer-advisory",
+      "title": "Purported opened values not included in transcript",
+      "authors": "Plonky3 maintainers",
+      "locator": "https://github.com/Plonky3/Plonky3/security/advisories/GHSA-vrmm-4mm5-38vm",
+      "revision": "published 2025-01-27, reviewed live 2026-09-01",
+      "role": "missing prover-controlled values before later challenges",
+      "boundary": "incident evidence is implementation-specific and does not itself prove the repaired protocol"
+    },
+    {
+      "id": "plonky3-2026-padding",
+      "kind": "maintainer-advisory",
+      "title": "PaddingFreeSponge is not collision resistant for inputs of different lengths",
+      "authors": "Plonky3 maintainers and reporters",
+      "locator": "https://github.com/advisories/GHSA-3g92-f9ch-qjcm",
+      "revision": "published 2026-04-16, reviewed live 2026-09-01",
+      "role": "variable-length sponge-state aliases and the fixed-length-use boundary",
+      "boundary": "the advisory explicitly narrows impact when input length is fixed in advance"
+    },
+    {
+      "id": "solana-2025-zk-elgamal",
+      "kind": "official-incident-report",
+      "title": "Post Mortem: ZK ElGamal Proof Program Bug",
+      "authors": "Solana Foundation",
+      "locator": "https://solana.com/news/post-mortem-may-2-2025",
+      "revision": "published 2025-05-02, reviewed live 2026-09-01",
+      "role": "omitted algebraic proof components enabled arbitrary accepted proofs",
+      "boundary": "the report states no known exploitation and is not a general proof-system analysis"
+    },
+    {
+      "id": "frozen-heart-2022",
+      "kind": "official-disclosure-analysis",
+      "title": "The Frozen Heart Vulnerability in PlonK",
+      "authors": "Trail of Bits",
+      "locator": "https://blog.trailofbits.com/2022/04/18/the-frozen-heart-vulnerability-in-plonk/",
+      "revision": "published 2022-04-18, reviewed 2026-09-01",
+      "role": "public-input omission and weak-FS incident family",
+      "boundary": "disclosure analysis supports the attack class, not a theorem or current implementation status"
+    }
+  ]
+}

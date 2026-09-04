@@ -1,0 +1,422 @@
+{
+  "disclosure": {
+    "classification": "declassified-validation-only-complete-trace",
+    "establishes_confidentiality": false,
+    "forbidden_consumer": "committed-verifier",
+    "permitted_consumers": [
+      "native-execution",
+      "relations-grounding"
+    ]
+  },
+  "events": [
+    {
+      "index": 0,
+      "kind": "PublishOracle",
+      "subject": "O0"
+    },
+    {
+      "index": 1,
+      "kind": "FreshChallenge",
+      "subject": "beta0"
+    },
+    {
+      "index": 2,
+      "kind": "PublishOracle",
+      "subject": "O1"
+    },
+    {
+      "index": 3,
+      "kind": "FreshChallenge",
+      "subject": "beta1"
+    },
+    {
+      "index": 4,
+      "kind": "TerminalMaterial",
+      "subject": "terminal"
+    },
+    {
+      "index": 5,
+      "kind": "RandomQueryDraw",
+      "subject": "query-draw[0]"
+    },
+    {
+      "index": 6,
+      "kind": "RandomQueryDraw",
+      "subject": "query-draw[1]"
+    },
+    {
+      "index": 7,
+      "kind": "RandomQueryDraw",
+      "subject": "query-draw[2]"
+    },
+    {
+      "index": 8,
+      "kind": "RandomQueryDraw",
+      "subject": "query-draw[3]"
+    }
+  ],
+  "first_challenge": {
+    "name": "beta0",
+    "value": [
+      1,
+      59
+    ]
+  },
+  "initial_oracle": {
+    "declared_strategy_dependency": null,
+    "domain": "D0",
+    "entries": [
+      {
+        "point": 1,
+        "value": [
+          1,
+          0
+        ]
+      },
+      {
+        "point": 8,
+        "value": [
+          54,
+          0
+        ]
+      },
+      {
+        "point": 64,
+        "value": [
+          7,
+          0
+        ]
+      },
+      {
+        "point": 27,
+        "value": [
+          33,
+          0
+        ]
+      },
+      {
+        "point": 22,
+        "value": [
+          17,
+          0
+        ]
+      },
+      {
+        "point": 79,
+        "value": [
+          27,
+          0
+        ]
+      },
+      {
+        "point": 50,
+        "value": [
+          50,
+          0
+        ]
+      },
+      {
+        "point": 12,
+        "value": [
+          14,
+          0
+        ]
+      },
+      {
+        "point": 96,
+        "value": [
+          83,
+          0
+        ]
+      },
+      {
+        "point": 89,
+        "value": [
+          22,
+          0
+        ]
+      },
+      {
+        "point": 33,
+        "value": [
+          27,
+          0
+        ]
+      },
+      {
+        "point": 70,
+        "value": [
+          11,
+          0
+        ]
+      },
+      {
+        "point": 75,
+        "value": [
+          60,
+          0
+        ]
+      },
+      {
+        "point": 18,
+        "value": [
+          83,
+          0
+        ]
+      },
+      {
+        "point": 47,
+        "value": [
+          70,
+          0
+        ]
+      },
+      {
+        "point": 85,
+        "value": [
+          71,
+          0
+        ]
+      }
+    ],
+    "name": "O0",
+    "origin": "InitialOracle",
+    "publication_mode": "LogicalAccess"
+  },
+  "native_trace_id": {
+    "digest": "a19fd2070f91414e92954b74cf645e19ce34c7ecd099da5319185b4325b851b7",
+    "domain": "fri-ior.native-trace.v1",
+    "kind": "SemanticId",
+    "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+    "subject_kind": "native-fri-trace",
+    "version": 1
+  },
+  "profile": {
+    "domains": [
+      {
+        "generator": 8,
+        "name": "D0",
+        "order": 16,
+        "pairing": "first-half-index-with-index-plus-half-order",
+        "point_order": "successive-generator-powers"
+      },
+      {
+        "generator": 64,
+        "name": "D1",
+        "order": 8,
+        "pairing": "first-half-index-with-index-plus-half-order",
+        "point_order": "successive-generator-powers"
+      },
+      {
+        "generator": 22,
+        "name": "D2",
+        "order": 4,
+        "pairing": "first-half-index-with-index-plus-half-order",
+        "point_order": "successive-generator-powers"
+      }
+    ],
+    "field": {
+      "extension": {
+        "degree": 2,
+        "polynomial": [
+          -5,
+          0,
+          1
+        ]
+      },
+      "modulus": 97,
+      "primitive_generator": 5
+    },
+    "folding_arity": 2,
+    "initial_degree_bound_exclusive": 8,
+    "name": "zkc.fri-ior.f97-binary-two-round-algebra.v1",
+    "ordered_query_count": 4,
+    "query_occurrences_preserve_order_and_multiplicity": true,
+    "round_count": 2,
+    "semantic_law_ids": [
+      {
+        "digest": "6d20f8e6dc7832f9c79195b805163b67bd4831aeee1bdb580851d2091cf8d05f",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "6ff532985bf3474bb1267f3f7d655f1dffb19490f628dd290284007b329a2f86",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      },
+      {
+        "digest": "ff2cb9d83d37796c8ccfd2f33d7ad6f57826a9d58f87540381b581abfe9bfb6b",
+        "domain": "fri-ior.occurrence-map-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-occurrence-map-law",
+        "version": 1
+      },
+      {
+        "digest": "aee8a67406e77366a502f52452bb6f842ac74a37c78637fdf29e50c9e3e291a5",
+        "domain": "fri-ior.semantic-law.v1",
+        "kind": "SemanticId",
+        "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+        "subject_kind": "fri-ior-semantic-law",
+        "version": 1
+      }
+    ],
+    "terminal_degree_bound_exclusive": 2,
+    "terminal_representation": {
+      "max_coefficient_count": 5,
+      "nonzero_polynomial": "final-coefficient-must-be-nonzero",
+      "zero_polynomial": "one-zero-coefficient"
+    }
+  },
+  "prover_oracle": {
+    "declared_strategy_dependency": {
+      "authored_at": 2,
+      "declared_read_set": [
+        "O0",
+        "beta0"
+      ],
+      "subject": "O1"
+    },
+    "domain": "D1",
+    "entries": [
+      {
+        "point": 1,
+        "value": [
+          1,
+          6
+        ]
+      },
+      {
+        "point": 64,
+        "value": [
+          40,
+          21
+        ]
+      },
+      {
+        "point": 22,
+        "value": [
+          32,
+          12
+        ]
+      },
+      {
+        "point": 50,
+        "value": [
+          26,
+          42
+        ]
+      },
+      {
+        "point": 96,
+        "value": [
+          75,
+          68
+        ]
+      },
+      {
+        "point": 33,
+        "value": [
+          35,
+          81
+        ]
+      },
+      {
+        "point": 75,
+        "value": [
+          21,
+          27
+        ]
+      },
+      {
+        "point": 47,
+        "value": [
+          28,
+          66
+        ]
+      }
+    ],
+    "name": "O1",
+    "origin": "ProverOracle",
+    "publication_mode": "LogicalAccess"
+  },
+  "query_draws": [
+    {
+      "initial_domain_index": 3,
+      "ordinal": 0
+    },
+    {
+      "initial_domain_index": 15,
+      "ordinal": 1
+    },
+    {
+      "initial_domain_index": 11,
+      "ordinal": 2
+    },
+    {
+      "initial_domain_index": 10,
+      "ordinal": 3
+    }
+  ],
+  "schema": "zkc.native-fri-ior.public-native-vector.v1",
+  "second_challenge": {
+    "name": "beta1",
+    "value": [
+      0,
+      54
+    ]
+  },
+  "structural_chain": {
+    "authority": "structural-role-and-order-only",
+    "claim": {
+      "degree_bound_exclusive": 8,
+      "domain": "D0",
+      "establishes_proximity": false,
+      "implies_outer_relation": false,
+      "kind": "RSProximityClaim",
+      "oracle": "O0"
+    },
+    "reductions": [
+      {
+        "challenge": "beta0",
+        "establishes_proximity_preservation": false,
+        "kind": "FoldReduction",
+        "source": "O0",
+        "target": "O1"
+      },
+      {
+        "challenge": "beta1",
+        "establishes_proximity_preservation": false,
+        "kind": "FoldReduction",
+        "source": "O1",
+        "target": "terminal"
+      }
+    ]
+  },
+  "terminal": {
+    "coefficients": [
+      [
+        56,
+        6
+      ],
+      [
+        51,
+        70
+      ]
+    ],
+    "declared_strategy_dependency": {
+      "authored_at": 4,
+      "declared_read_set": [
+        "O1",
+        "beta1"
+      ],
+      "subject": "terminal"
+    }
+  }
+}

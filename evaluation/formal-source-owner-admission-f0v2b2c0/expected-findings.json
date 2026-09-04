@@ -1,0 +1,134 @@
+[
+  {
+    "name": "legacy-handle-mutability-gap",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-LEGACY-MUTABILITY-GAP",
+    "detail": "ordinary assignment mutates the retained F1-R1B admitted Core handle"
+  },
+  {
+    "name": "canonical-core-snapshot-admission",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-CORE-SNAPSHOT",
+    "detail": "strict canonical intake precedes all applicable target admission stages"
+  },
+  {
+    "name": "strict-core-roundtrip",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-STRICT-ROUNDTRIP",
+    "detail": "the complete profiled Core consumes all bytes and re-encodes identically"
+  },
+  {
+    "name": "cold-core-structural-decoder",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-COLD-CORE-DECODE",
+    "detail": "an iterative cold parser reproduces the profile, fourteen fields, and effects"
+  },
+  {
+    "name": "immutable-noncopyable-core-authority",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-IMMUTABLE-HANDLE",
+    "detail": "ordinary assignment, copy, deepcopy, and serialization all refuse"
+  },
+  {
+    "name": "alias-free-closure-snapshot",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-ALIAS-FREE-CLOSURE",
+    "detail": "post-admission mutation of intake maps cannot change retained closure bytes"
+  },
+  {
+    "name": "fresh-protocol-snapshot-admission",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-FRESH-SNAPSHOT",
+    "detail": "Fresh formation binds the exact Core, profile, body, closure, and evaluator"
+  },
+  {
+    "name": "cold-fresh-protocol-decoder",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-COLD-PROTOCOL-DECODE",
+    "detail": "the cold parser reproduces the Fresh profile and exact Core bearer"
+  },
+  {
+    "name": "content-equivalent-environment-pairing",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-FRESH-SNAPSHOT",
+    "detail": "fresh map objects with identical authenticated closure bytes preserve pairing"
+  },
+  {
+    "name": "immutable-noncopyable-protocol-authority",
+    "outcome": "Affirmative",
+    "code": "F0V2B2C0-A-IMMUTABLE-PROTOCOL",
+    "detail": "the paired Protocol authority refuses assignment, copying, and serialization"
+  },
+  {
+    "name": "truncated-core-body",
+    "outcome": "Malformed",
+    "code": "F0V2B2C0-M-DECODE",
+    "detail": "strict canonical decoding refuses a truncated body before owner admission"
+  },
+  {
+    "name": "trailing-core-body",
+    "outcome": "Malformed",
+    "code": "F0V2B2C0-M-DECODE",
+    "detail": "strict canonical decoding refuses trailing bytes before owner admission"
+  },
+  {
+    "name": "asserted-core-id-substitution",
+    "outcome": "Malformed",
+    "code": "F0V2B2C0-M-CORE-ID",
+    "detail": "an ID for another canonical Core cannot authenticate the retained bytes"
+  },
+  {
+    "name": "request-profile-substitution",
+    "outcome": "KindMismatch",
+    "code": "F0V2B2C0-K-REQUEST-PROFILE",
+    "detail": "the request profile cannot differ from the authenticated environment"
+  },
+  {
+    "name": "body-profile-substitution",
+    "outcome": "KindMismatch",
+    "code": "F0V2B2C0-K-BODY-PROFILE",
+    "detail": "a separately identified body cannot hide another selected profile"
+  },
+  {
+    "name": "unknown-core-field",
+    "outcome": "Malformed",
+    "code": "F0V2B2C0-M-RECORD",
+    "detail": "a body-authenticated fifteenth Core field still fails target formation"
+  },
+  {
+    "name": "legacy-handle-authority-substitution",
+    "outcome": "Refused",
+    "code": "F0V2B2C0-R-CORE-AUTHORITY",
+    "detail": "a mutable predecessor handle cannot substitute for snapshot authority"
+  },
+  {
+    "name": "protocol-core-substitution",
+    "outcome": "Refused",
+    "code": "F0V2B2C0-R-PROTOCOL-CORE",
+    "detail": "Fresh formation refuses a well-formed Protocol over another Core ID"
+  },
+  {
+    "name": "protocol-request-profile-substitution",
+    "outcome": "KindMismatch",
+    "code": "F0V2B2C0-K-PROTOCOL-PROFILE",
+    "detail": "Fresh Protocol request and environment profiles must be identical"
+  },
+  {
+    "name": "fresh-interpretation-substitution",
+    "outcome": "Malformed",
+    "code": "F0V2B2C0-M-VARIANT",
+    "detail": "Interaction-owned Fresh formation refuses an FS interpretation branch"
+  },
+  {
+    "name": "protocol-closure-substitution",
+    "outcome": "Refused",
+    "code": "F0V2B2C0-R-CLOSURE-PAIR",
+    "detail": "equal profile and subject bytes do not hide a changed dependency closure"
+  },
+  {
+    "name": "constructor-isolation-and-owner-projection",
+    "outcome": "CannotAnswer",
+    "code": "F0V2B2C0-C-CONSTRUCTOR-ISOLATION",
+    "detail": "B2C0 fixes intake authority; extended constructors and six-view projection remain B2C1"
+  }
+]

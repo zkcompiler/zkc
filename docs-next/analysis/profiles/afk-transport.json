@@ -1,0 +1,146 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "analysis-afk-transport",
+  "catalog_namespace": "analysis",
+  "profile_family": "analysis.afk-transport",
+  "revision": 0,
+  "expected_imports": [
+    "analysis-cryptographic-property"
+  ],
+  "supported_subject_kinds": [
+    "analysis.adequacy-evaluator",
+    "analysis.asymptotic-protocol-family",
+    "analysis.capability-requirement-payload",
+    "analysis.checked-result-coordinate",
+    "analysis.consumer",
+    "analysis.distribution-profile",
+    "analysis.experiment-profile",
+    "analysis.extractor-profile",
+    "analysis.family-instance-role-map",
+    "analysis.family-read-manifest-schema",
+    "analysis.goal",
+    "analysis.hypothesis-context",
+    "analysis.judgment-record",
+    "analysis.logical-nat-literal",
+    "analysis.loss-semantic-import",
+    "analysis.operation-policy",
+    "analysis.owner-policy-closure",
+    "analysis.pointwise-quantitative-normalization",
+    "analysis.portable-source-authority-binding",
+    "analysis.proposition",
+    "analysis.quantitative-formula",
+    "analysis.question",
+    "analysis.semantic-basis",
+    "analysis.source-authority-contract",
+    "analysis.source-profile",
+    "analysis.strategy-class",
+    "analysis.support-instantiation",
+    "analysis.theorem-schema",
+    "analysis.use-purpose",
+    "analysis.validation-basis"
+  ],
+  "fragments": [
+    {
+      "name": "transport-family-semantics",
+      "owner_page": "docs-next/analysis/cryptographic-properties.md",
+      "start": "zkc-profile-source:analysis-transport-family-semantics:start",
+      "end": "zkc-profile-source:analysis-transport-family-semantics:end"
+    },
+    {
+      "name": "transport-application-semantics",
+      "owner_page": "docs-next/analysis/cryptographic-properties.md",
+      "start": "zkc-profile-source:analysis-transport-application-semantics:start",
+      "end": "zkc-profile-source:analysis-transport-application-semantics:end"
+    },
+    {
+      "name": "transport-publication",
+      "owner_page": "docs-next/analysis/profile-publication.md",
+      "start": "zkc-profile-source:analysis-transport-publication:start",
+      "end": "zkc-profile-source:analysis-transport-publication:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "analysis.body-compiler",
+      "name": "afk-transport-body-v0",
+      "revision": 0,
+      "fragment": "transport-publication",
+      "selector": "AnalysisAFKTransportBodyCompilerV0(kind,body) =",
+      "dependencies": [
+        {"profile": "analysis-cryptographic-property", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}
+      ]
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "afk-application-v0",
+      "revision": 0,
+      "fragment": "transport-application-semantics",
+      "selector": "## 7. Exact AFK applicability and family transport",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "afk-family-v0",
+      "revision": 0,
+      "fragment": "transport-family-semantics",
+      "selector": "### 4.4 Asymptotic family profile and concrete-member split",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "afk-profile-boundary-v0",
+      "revision": 0,
+      "fragment": "transport-publication",
+      "selector": "AnalysisAFKTransportProfileSourceV0 = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.evaluator-signature",
+      "name": "afk-transport-admission-v0",
+      "revision": 0,
+      "fragment": "transport-publication",
+      "selector": "AdmitAnalysisAFKTransportSubjectV0(",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.failure-schema",
+      "name": "afk-transport-admission-outcome-v0",
+      "revision": 0,
+      "fragment": "transport-publication",
+      "selector": "AnalysisAFKTransportAdmissionOutcomeV0 =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {"kind": "analysis.adequacy-evaluator", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.asymptotic-protocol-family", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.capability-requirement-payload", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.checked-result-coordinate", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.consumer", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.distribution-profile", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.experiment-profile", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.extractor-profile", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.family-instance-role-map", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.family-read-manifest-schema", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.goal", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.hypothesis-context", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.judgment-record", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.logical-nat-literal", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.loss-semantic-import", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.operation-policy", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.owner-policy-closure", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.pointwise-quantitative-normalization", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.portable-source-authority-binding", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.proposition", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.quantitative-formula", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.question", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.semantic-basis", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.source-authority-contract", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.source-profile", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.strategy-class", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.support-instantiation", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.theorem-schema", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.use-purpose", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"},
+    {"kind": "analysis.validation-basis", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}, "laws": ["afk-application-v0", "afk-family-v0", "afk-profile-boundary-v0"], "evaluator": "afk-transport-admission-v0", "failure_schema": "afk-transport-admission-outcome-v0"}
+  ]
+}

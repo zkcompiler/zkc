@@ -1,0 +1,10 @@
+{
+  "schema": "zkc.r2.frigrind-external-fresh.v1",
+  "source_fixture_sha256": "cf2e4effc006cae253a77a9f8e0a0d0a3fe024bf3d6af99a75801d4b4765426a",
+  "fixed_nonce": 424242,
+  "coin_vectors": {
+    "challenge:fold1": [123456789012345678901234567890],
+    "challenge:pow": [0],
+    "challenge:query": [17, 991]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fresh-positive": {
+    "contract_id": "sha256:008da473e9269f2881bbcd1cc7ae8ae38fa7b758d4e2d88f512686671dedccfe",
+    "manifest_id": "sha256:83b591a623c27bab62573a223e6768633df832ae6ab0f48a19ebc7c74b2c8b0e",
+    "package_id": "sha256:47df9f9a435f46894d4f2293768def9be2b3f414746f95cdfa7d6f1195d68b2e",
+    "proposition_id": "sha256:5a0cedb2ac9572c1bd63fe4663a3b9e9081490dfd99f78ddcfc582d5629b17da",
+    "result_id": "sha256:5f488dc4c64940c6bd52812e8a65b4b290f24e403821d83cf4c9e7e0ab6bab91"
+  },
+  "fs-positive": {
+    "contract_id": "sha256:ca79b0de091a5b03a20caf9d3671c509c40534cf9d2a2a82bcd4f09f2aa40f89",
+    "manifest_id": "sha256:9ea28cff39fe8a1a35276626f4eba82424b56f9dba07e2e7465e5d2313b6edee",
+    "package_id": "sha256:f8dcd05962d574190c4e41e456be63a7ce80eb0c356f0115789da413f8fb43a8",
+    "proposition_id": "sha256:7bf0090f6848aec5798d14d12e156e3cae1eaf3d56d47f1f527ba2036c9ea91f",
+    "result_id": "sha256:6074aa2d509eaa97256148553fe4194459692c2036138ef4b498bc42c1ccdf2c"
+  },
+  "shared-positive": {
+    "contract_id": "sha256:20a3b7cf1dba217fe7d1345727ed9658f7077e730c672579a65b9fb039d761c5",
+    "manifest_id": "sha256:967de7e2daa46539362666155202477f99d52d2091803ae75d5dfd7e703660ee",
+    "package_id": "sha256:aaba21d99edcc42b1e936b76778bd72371049d59c05c7b529f35266134183d41",
+    "proposition_id": "sha256:1806a163bb73a6bd1d5ea0122ed2a309084b125739d5890fcd6c51ee5fbcc35d",
+    "result_id": "sha256:cc29b7385181a5a5fe52337f1f7a9d93a160250f2b4caca622b8d7343720944d"
+  }
+}

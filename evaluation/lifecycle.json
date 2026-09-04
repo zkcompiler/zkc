@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "id": "retained-bounded-instruments",
+      "disposition": "retain",
+      "purpose": "Distinct bounded falsifiers, protocol witnesses, and design-pressure instruments that still answer live questions not owned by a smaller durable suite.",
+      "exit_rule": "Retire an instrument only after a named durable successor preserves its exact exercised law, fixtures, refusals, and non-claims, and all live consumers have moved.",
+      "checks": [
+        "research.semantic-closure",
+        "research.profile-publication",
+        "research.recursive-composition-boundary",
+        "research.expressibility-axes",
+        "research.fs-assurance-pre-freeze",
+        "research.indexed-core-elaboration",
+        "research.family-instance-probe",
+        "research.plan-continuation",
+        "research.duplex-transcript",
+        "research.native-fri-ior",
+        "research.schnorr-portfolio-witness",
+        "research.fri-grinding-residual",
+        "research.finite-cover",
+        "research.verifier-derived-query-plans",
+        "research.analysis-premise-intake"
+      ]
+    },
+    {
+      "id": "semantic-twin-promotion",
+      "disposition": "promote-then-retire",
+      "purpose": "Large target-model prototypes whose stable owner-local laws and minimal counterexamples belong in the durable reference twin or native regression suites.",
+      "exit_rule": "Extract one semantic owner at a time, retain byte-stable or judgment-stable parity where applicable, pass the predecessor corpus against the successor, repoint durable consumers, and then remove the aggregate prototype.",
+      "checks": [
+        "research.executable-foundations",
+        "research.interactive-fiat-shamir",
+        "research.dependent-surfaces",
+        "research.property-analysis",
+        "research.endpoint-projection",
+        "research.joined-semantic-boundary"
+      ]
+    },
+    {
+      "id": "active-source-definition-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Successive falsifiers for defining, deriving, publishing, and checking exact owner-view source without promoting an intermediate bounded grammar as authority.",
+      "exit_rule": "Complete constructor coverage and the publication or migration decision, absorb predecessor conclusions into the selected owner and a minimal retained falsifier, verify downstream source correspondence, and then remove superseded predecessor executables.",
+      "checks": [
+        "research.formal-source-package",
+        "research.formal-source-target-basis",
+        "research.formal-source-target-core",
+        "research.formal-source-owner-views",
+        "research.owner-view-publication-topology",
+        "research.owner-view-schema-algebra",
+        "research.owner-view-body-determinacy",
+        "research.owner-view-bounded-derivation",
+        "research.owner-view-constructor-census",
+        "research.owner-view-constructor-schema",
+        "research.owner-view-admission-substrate",
+        "research.owner-view-exact-codec",
+        "research.owner-view-foundation-projections",
+        "research.owner-view-oracle-projections",
+        "research.owner-view-claim-reduction-projections",
+        "research.owner-view-module-projections",
+        "research.owner-view-terminal-path-algebra",
+        "research.owner-view-terminal-owner-contracts",
+        "research.owner-view-terminal-projections",
+        "research.owner-view-integrated-pcgraph",
+        "research.owner-view-fs-family-determinacy",
+        "research.owner-view-fresh-run-schema",
+        "research.owner-view-integrated-projections",
+        "research.semantic-migration-candidate"
+      ]
+    },
+    {
+      "id": "formal-provider-correspondence-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Successive falsifiers that test whether an exact admitted source object, as exposed by its owner views, admits a provider-side interpretation whose correspondence can be checked, without promoting a generated provider term, an elaboration receipt, or a proof assistant into semantic authority.",
+      "exit_rule": "Close the enumerated missing-observable list against the published owner views and their durable owners, record each remaining absence as an owner decision rather than an adapter default, replay the predecessor ledger against the successor generator and checker, and then remove superseded predecessor executables.",
+      "checks": [
+        "research.provider-observable-audit",
+        "research.provider-observable-audit-integrated",
+        "research.schnorr-relations-plan-coupling",
+        "research.schnorr-relations-plan-candidates"
+      ]
+    },
+    {
+      "id": "kernel-mechanization-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Bounded measurement of whether core-only Lean can transcribe the K1 portable-term and evaluation boundary, exactly decode and elaborate the R1B finite-Schnorr check and guard, reproduce all available finite results, and prove determinism, completion monotonicity, and the closed finite equation while retaining M0 and M1.",
+      "exit_rule": "Either the Foundation owner adopts selected mechanized definitions and proofs as a durable owner-checked leg after independent K1 term-evaluation vectors exist and the Section 8 result-carrier boundary is respected, or the measurement is recorded as sufficient and the package is removed; until then the Python R1B rows remain bounded single-implementation comparison targets, no Lean text is authority, and no general evaluator, implementation-correspondence, theorem-applicability, or security claim follows.",
+      "checks": [
+        "research.kernel-mechanization-feasibility"
+      ]
+    },
+    {
+      "id": "formal-environment-assurance-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Bounded falsifiers for deciding whether pinned theorem-environment observations are sufficient provenance or should become typed, independently authenticated Q3 results, without confusing environment identity with source correspondence, applicability, or property truth.",
+      "exit_rule": "Either retain the receipt path with a deliberately narrow drift-observation claim, or move the package's identity fields, qualified outcomes, mutation refusals, and non-claims into the selected Analysis-owned theorem-environment validation path; then remove this audit after its exact counterexamples are preserved.",
+      "checks": [
+        "research.formalization-receipt-assurance"
+      ]
+    },
+    {
+      "id": "cross-cutting-probe-promotion",
+      "disposition": "promote-then-retire",
+      "purpose": "Small cross-cutting pressure probes whose useful laws must acquire a durable semantic or implementation owner rather than becoming a parallel architecture.",
+      "exit_rule": "For each probe, either land the selected law and its negative or generated cases under the owning reference or implementation suite, or record that the proposed law was rejected; then remove the probe.",
+      "checks": [
+        "research.probe-commitment",
+        "research.probe-logup",
+        "research.probe-value-bridges",
+        "research.probe-guard-cost"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "path": "fri-bench",
+      "role": "benchmark-evidence",
+      "disposition": "retain",
+      "exit_rule": "Replace only with a reproducible benchmark over the same or explicitly superseding instance, wire-equality control, toolchain, and provenance record."
+    },
+    {
+      "path": "upstream",
+      "role": "pinned-upstream-correspondence",
+      "disposition": "retain",
+      "exit_rule": "Replace only when every consuming replay and integration check moves to an exact successor pin with an explicit adapter-boundary review."
+    }
+  ]
+}

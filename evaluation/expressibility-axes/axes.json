@@ -1,0 +1,559 @@
+{
+  "schema_version": 1,
+  "question": "Does one closed structural-feature vocabulary, with every value routed to one current constructor or profile, one listed Core reopening condition, or one explicit boundary, deterministically classify every frozen case without using protocol-family names as rules?",
+  "verdicts": ["fits", "bends", "breaks"],
+  "derivation": {
+    "breaks": "At least one selected value routes to an explicit_boundary destination.",
+    "bends": "No selected value routes to an explicit_boundary destination and at least one selected value routes to a reopening_condition destination.",
+    "fits": "Every selected value routes to a constructor destination."
+  },
+  "destinations": [
+    {
+      "id": "C-TWO-ROLE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "4.1 Parties",
+      "summary": "Exactly one Prover and one Verifier, with PublicEnvironment as the non-party public source."
+    },
+    {
+      "id": "C-PUBLIC-ENVIRONMENT",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "4.1 Parties and 4.3 Initial bindings",
+      "summary": "Public parameters, statements, and initial public bindings supplied by PublicEnvironment."
+    },
+    {
+      "id": "C-VERIFIER-PRIVATE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "4.1 Parties and 4.2 Visibility",
+      "summary": "Verifier-private invocation inputs, values, queries, answers, and local randomness."
+    },
+    {
+      "id": "C-PROVER-VIEW",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "9 Prover view and stopping",
+      "summary": "Prover-private inputs, random tapes, observations, and local state remain in ProverView or Plan."
+    },
+    {
+      "id": "C-SCOPED-STATEMENT",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "4.4 Scope and statement timing",
+      "summary": "Statement material is fixed in scope before every challenge that may depend on it."
+    },
+    {
+      "id": "C-CHALLENGE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "5.2 Challenge",
+      "summary": "A typed verifier challenge is an occurrence with an explicit source and dependency boundary."
+    },
+    {
+      "id": "C-CHALLENGE-OCCURRENCE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "5.3 Occurrence identity and sharing",
+      "summary": "One challenge occurrence may be shared by explicit reference without duplicating its source."
+    },
+    {
+      "id": "C-MESSAGE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "5.4 Messages and values",
+      "summary": "Classical typed messages carry public, prover-private, or verifier-private dependencies under the Core visibility rules."
+    },
+    {
+      "id": "C-CHECK-AND-REDUCTION",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "6.1 Checks and 6.3 Reductions",
+      "summary": "Verification predicates and declared reductions are explicit Core nodes."
+    },
+    {
+      "id": "C-TERMINAL",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "6.4 Terminals",
+      "summary": "Accept, Reject, and Abort use first-active terminal semantics with a required fallback."
+    },
+    {
+      "id": "C-ORACLE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "7 Oracles",
+      "summary": "Initial or prover-published immutable Oracles support FullCanonical, PublicBinding, and Logical access with public or verifier-only queries."
+    },
+    {
+      "id": "C-NO-ORACLE",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "7 Oracles",
+      "summary": "Oracle declarations and effects are optional when the interaction has no oracle access."
+    },
+    {
+      "id": "C-MODULE-EFFECT",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "8 Semantic modules",
+      "summary": "A typed semantic module owns a finite acceptance-relevant transition that is not a plain Boolean check."
+    },
+    {
+      "id": "C-FINITE-COMPOSITION",
+      "kind": "constructor",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "14 Composition and family boundaries",
+      "summary": "Finite sequential, interleaved, and concretely elaborated composition flattens to one admitted Core."
+    },
+    {
+      "id": "C-PLAN",
+      "kind": "constructor",
+      "page": "docs-next/pir/interfaces-and-plans.md",
+      "section": "4 Plans",
+      "summary": "Plan owns private material, one-shot randomness, persistent local state, and decision recipes."
+    },
+    {
+      "id": "C-PLAN-CONTINUATION",
+      "kind": "constructor",
+      "page": "docs-next/pir/interfaces-and-plans.md",
+      "section": "4.4 Accepted-terminal recipes and 4.5 same-process handoff",
+      "summary": "A finite folding or accumulation step may hand an accepted result to a named continuation under Plan ownership."
+    },
+    {
+      "id": "C-IMPORTED-VERIFIER",
+      "kind": "constructor",
+      "page": "docs-next/pir/interfaces-and-plans.md",
+      "section": "5.3 Imported verifier placement",
+      "summary": "Imported Boolean verification is a Core Check; richer finite transitions use ModuleEffect; predicate proofs belong to Relations."
+    },
+    {
+      "id": "C-FRESH",
+      "kind": "constructor",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "9.1 Fresh remains a separate construction",
+      "summary": "Verifier-fresh challenges, including private-coin challenges, remain a Fresh construction rather than a hash execution."
+    },
+    {
+      "id": "C-FS-CANONICAL",
+      "kind": "constructor",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "3 Canonical transcript frames and 9 Challenge rules",
+      "summary": "A transcript-derived challenge uses the canonical framed transcript and declared sampling interpretation."
+    },
+    {
+      "id": "C-FS-DUPLEX",
+      "kind": "constructor",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "1 Scope and 12 Composition",
+      "summary": "A selected duplex sibling construction uses one continuous state and explicit squeeze occurrences."
+    },
+    {
+      "id": "C-FS-GRINDING",
+      "kind": "constructor",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "9.4 Grinding and rejection sampling",
+      "summary": "Grinding is a prior challenge plus private search, a public nonce, and an explicit check."
+    },
+    {
+      "id": "C-ORACLE-COMMITMENT",
+      "kind": "constructor",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "11 Logical Oracle access and commitment compilation",
+      "summary": "A logical Oracle is distinct from a commitment and may be related by a separately checked commitment construction."
+    },
+    {
+      "id": "C-QUERY-PLAN",
+      "kind": "constructor",
+      "page": "docs-next/pir/verifier-derived-query-plans.md",
+      "section": "3 Selected profile through 6 Checked elaboration",
+      "summary": "A finite closed verifier-derived word program elaborates completely to ordinary source queries and unchanged flat Core."
+    },
+    {
+      "id": "RC-LATE-STATEMENT",
+      "kind": "reopening_condition",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "15 Core reopening conditions",
+      "summary": "A required statement component is fixed only after the first challenge."
+    },
+    {
+      "id": "RC-SYMBOLIC-RECURRENCE",
+      "kind": "reopening_condition",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "15 Core reopening conditions",
+      "summary": "A symbolic recurrence cannot be lowered to a feasible and semantics-preserving finite Core."
+    },
+    {
+      "id": "RC-ORACLE-LIFECYCLE",
+      "kind": "reopening_condition",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "15 Core reopening conditions",
+      "summary": "A required oracle or preprocessing lifecycle cannot inhabit the immutable Section 7 Oracle model."
+    },
+    {
+      "id": "RC-PRIVATE-GROUNDING",
+      "kind": "reopening_condition",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "15 Core reopening conditions",
+      "summary": "Verifier-private information is necessary for relation grounding but cannot be disclosed under the current boundary."
+    },
+    {
+      "id": "RC-MODULE-SEMANTICS",
+      "kind": "reopening_condition",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "15 Core reopening conditions",
+      "summary": "An acceptance-relevant effect cannot state its exact transition, visibility, influence, replay, or bounds."
+    },
+    {
+      "id": "B-MULTIPARTY",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "14 Composition and family boundaries",
+      "summary": "Independent noncommunicating provers and physical multiparty transcript semantics are outside v0."
+    },
+    {
+      "id": "B-MULTIVERIFIER",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "14 Composition and family boundaries",
+      "summary": "Distributed verifier knowledge and multiple verifier-private views are outside v0."
+    },
+    {
+      "id": "B-MULTIROLE-LIFECYCLE",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "4.1 Parties and 14 Composition and family boundaries",
+      "summary": "A protocol lifecycle requiring more than the Prover and Verifier roles is not one current Core invocation."
+    },
+    {
+      "id": "B-DYNAMIC-SCHEDULE",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "14 Composition and family boundaries",
+      "summary": "Data-dependent, prover-chosen, verifier-chosen, or scheduler-nondeterministic topology is outside finite Core composition."
+    },
+    {
+      "id": "B-UNBOUNDED-LOOP",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "14 Composition and family boundaries",
+      "summary": "Unbounded interaction or a required nonterminating execution is outside v0."
+    },
+    {
+      "id": "B-IMPORTED-CHALLENGE",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "12 Composition",
+      "summary": "A challenge imported from another execution lacks a current same-session occurrence and transcript-owner construction."
+    },
+    {
+      "id": "B-PROVER-CHALLENGE",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "5.2 Challenge",
+      "summary": "A prover-selected value cannot be relabelled as a verifier Challenge occurrence."
+    },
+    {
+      "id": "B-ANSWER-ADAPTIVE-PLAN",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/verifier-derived-query-plans.md",
+      "section": "4.3 Unsupported constructors and 9 Closed outcomes",
+      "summary": "Answer-adaptive query-plan topology is Unsupported; only an explicit finite Core may express the corresponding dependence."
+    },
+    {
+      "id": "B-CROSS-EXECUTION",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "14 Composition and family boundaries",
+      "summary": "An open stream, PCD network, or cross-execution protocol state is not flattened as one finite Core."
+    },
+    {
+      "id": "B-CONCURRENT-SESSIONS",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/fiat-shamir.md",
+      "section": "12 Composition",
+      "summary": "Concurrency and inter-session transcript ownership are not supplied by finite same-session composition."
+    },
+    {
+      "id": "B-QUANTUM-CARRIER",
+      "kind": "explicit_boundary",
+      "page": "docs-next/pir/interactive-core.md",
+      "section": "5.4 Messages and values",
+      "summary": "The current typed classical value and message carrier has no quantum state, channel, measurement, or no-cloning semantics."
+    },
+    {
+      "id": "B-SOURCE-INCOMPLETE",
+      "kind": "explicit_boundary",
+      "page": "docs-next/notes/semantic-revalidation-and-redesign/semantic-closure-and-freeze/cold-protocol-holdouts/portfolio-adjudication-and-freeze-decision.md",
+      "section": "4.3 H05 Galois-ring holdout",
+      "summary": "The cited source omits the transform or acceptance semantics needed to classify the complete construction; the result remains CannotAnswer."
+    }
+  ],
+  "axes": [
+    {
+      "id": "party_structure",
+      "title": "Number and roles of parties",
+      "cardinality": "one",
+      "values": [
+        {"id": "two_role", "destination": "C-TWO-ROLE", "meaning": "One Prover and one Verifier."},
+        {"id": "virtual_two_role_distributed_prover", "destination": "C-TWO-ROLE", "meaning": "Many workers jointly realize one logical Prover view and transcript role."},
+        {"id": "independent_noncommunicating_provers", "destination": "B-MULTIPARTY", "meaning": "Two or more independent provers cannot communicate during the interaction."},
+        {"id": "multiple_verifiers_distributed_knowledge", "destination": "B-MULTIVERIFIER", "meaning": "Two or more verifiers hold distinct private knowledge or observations."},
+        {"id": "more_than_two_lifecycle_roles", "destination": "B-MULTIROLE-LIFECYCLE", "meaning": "The complete protocol requires issuer, holder, verifier, or other distinct lifecycle roles."}
+      ]
+    },
+    {
+      "id": "oracle_publishers",
+      "title": "Who publishes oracles",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "none", "destination": "C-NO-ORACLE", "meaning": "No Oracle is published."},
+        {"id": "prover", "destination": "C-ORACLE", "meaning": "The Prover publishes an immutable Oracle."},
+        {"id": "public_environment", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "An initial public Oracle is supplied by PublicEnvironment."},
+        {"id": "verifier", "destination": "RC-ORACLE-LIFECYCLE", "meaning": "The Verifier publishes an Oracle whose lifecycle is not an Initial or Prover origin."},
+        {"id": "multiple_provers", "destination": "B-MULTIPARTY", "meaning": "Independent provers publish separate Oracles."}
+      ]
+    },
+    {
+      "id": "verifier_input_privacy",
+      "title": "Verifier privacy of inputs",
+      "cardinality": "one",
+      "values": [
+        {"id": "public_only", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "Every verifier input is public."},
+        {"id": "verifier_private", "destination": "C-VERIFIER-PRIVATE", "meaning": "The invocation includes verifier-private inputs."},
+        {"id": "private_relation_grounding", "destination": "RC-PRIVATE-GROUNDING", "meaning": "A verifier-private input must ground a relation without an available disclosure-safe route."},
+        {"id": "partitioned_across_verifiers", "destination": "B-MULTIVERIFIER", "meaning": "Distinct verifiers hold nonidentical private input shares."}
+      ]
+    },
+    {
+      "id": "query_privacy",
+      "title": "Verifier privacy of queries",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "none", "destination": "C-NO-ORACLE", "meaning": "There are no Oracle queries."},
+        {"id": "public", "destination": "C-ORACLE", "meaning": "Query indices and answers are public."},
+        {"id": "verifier_private", "destination": "C-VERIFIER-PRIVATE", "meaning": "Query indices or answers are verifier-only."},
+        {"id": "mixed_public_and_private", "destination": "C-ORACLE", "meaning": "The same finite Core has both public and verifier-only Oracle effects."},
+        {"id": "partitioned_across_verifiers", "destination": "B-MULTIVERIFIER", "meaning": "Private query views are split across multiple verifiers."}
+      ]
+    },
+    {
+      "id": "verifier_randomness_privacy",
+      "title": "Verifier privacy of randomness",
+      "cardinality": "one",
+      "values": [
+        {"id": "none", "destination": "C-PLAN", "meaning": "The verifier uses no runtime randomness."},
+        {"id": "public_reconstructible", "destination": "C-CHALLENGE", "meaning": "Challenge randomness is public or reconstructible from the public transcript."},
+        {"id": "verifier_private", "destination": "C-VERIFIER-PRIVATE", "meaning": "Verifier random coins remain private."},
+        {"id": "mixed_private", "destination": "C-PLAN", "meaning": "Verifier and Prover each use private local randomness owned by their views or Plans."},
+        {"id": "partitioned_across_verifiers", "destination": "B-MULTIVERIFIER", "meaning": "Verifier randomness is split across distinct verifier roles."}
+      ]
+    },
+    {
+      "id": "challenge_source",
+      "title": "Challenge source",
+      "cardinality": "one",
+      "values": [
+        {"id": "none", "destination": "C-FRESH", "meaning": "The interaction has no challenge occurrence; it may still be a valid Fresh protocol."},
+        {"id": "verifier_fresh", "destination": "C-FRESH", "meaning": "The Verifier samples a fresh occurrence."},
+        {"id": "transcript_derived", "destination": "C-FS-CANONICAL", "meaning": "A canonical transcript construction derives the challenge."},
+        {"id": "duplex_squeeze", "destination": "C-FS-DUPLEX", "meaning": "A selected duplex state squeezes the challenge."},
+        {"id": "externally_imported", "destination": "B-IMPORTED-CHALLENGE", "meaning": "Another execution or external protocol supplies the challenge occurrence."},
+        {"id": "prover_selected", "destination": "B-PROVER-CHALLENGE", "meaning": "The Prover selects the value interpreted as a challenge."},
+        {"id": "source_omits_transform", "destination": "B-SOURCE-INCOMPLETE", "meaning": "The cited source does not state how the interactive challenge is transformed."}
+      ]
+    },
+    {
+      "id": "challenge_interpretation",
+      "title": "Challenge interpretation",
+      "cardinality": "one",
+      "values": [
+        {"id": "no_challenge", "destination": "C-FRESH", "meaning": "No challenge is interpreted."},
+        {"id": "public_coin", "destination": "C-CHALLENGE", "meaning": "The challenge is a public-coin occurrence."},
+        {"id": "private_coin", "destination": "C-VERIFIER-PRIVATE", "meaning": "The challenge remains a verifier-private coin."},
+        {"id": "shared_occurrence", "destination": "C-CHALLENGE-OCCURRENCE", "meaning": "Several checks consume one identified challenge occurrence."},
+        {"id": "rejection_sampled", "destination": "C-FS-CANONICAL", "meaning": "A bounded declared interpretation maps source bytes to the challenge domain."},
+        {"id": "grinding_search", "destination": "C-FS-GRINDING", "meaning": "A public nonce witnesses a private bounded search against a prior challenge."},
+        {"id": "imported_semantics", "destination": "B-IMPORTED-CHALLENGE", "meaning": "Challenge meaning is inherited from another execution."},
+        {"id": "source_omits_interpretation", "destination": "B-SOURCE-INCOMPLETE", "meaning": "The source does not determine the challenge interpretation."}
+      ]
+    },
+    {
+      "id": "round_structure",
+      "title": "Round structure",
+      "cardinality": "one",
+      "values": [
+        {"id": "fixed", "destination": "C-FINITE-COMPOSITION", "meaning": "The number and topology of rounds are fixed."},
+        {"id": "finite_elaborated_instance", "destination": "C-FINITE-COMPOSITION", "meaning": "An instance-indexed schedule has already been completely elaborated to one finite Core."},
+        {"id": "symbolic_instance_indexed", "destination": "RC-SYMBOLIC-RECURRENCE", "meaning": "A family retains an instance-indexed symbolic recurrence rather than one feasible finite lowering."},
+        {"id": "data_dependent", "destination": "B-DYNAMIC-SCHEDULE", "meaning": "Runtime data changes the interaction topology."},
+        {"id": "prover_chosen", "destination": "B-DYNAMIC-SCHEDULE", "meaning": "The Prover chooses whether or how many rounds execute."},
+        {"id": "verifier_or_scheduler_chosen", "destination": "B-DYNAMIC-SCHEDULE", "meaning": "The Verifier or an external scheduler chooses the runtime topology."},
+        {"id": "unbounded", "destination": "B-UNBOUNDED-LOOP", "meaning": "No finite interaction bound is part of the admitted object."}
+      ]
+    },
+    {
+      "id": "statement_timing",
+      "title": "Statement timing relative to the first challenge",
+      "cardinality": "one",
+      "values": [
+        {"id": "before_all_challenges", "destination": "C-SCOPED-STATEMENT", "meaning": "All required statement material is fixed before the first challenge."},
+        {"id": "statement_free", "destination": "C-SCOPED-STATEMENT", "meaning": "The protocol has no statement component beyond public parameters."},
+        {"id": "after_first_challenge", "destination": "RC-LATE-STATEMENT", "meaning": "Required statement material is fixed after a challenge that may depend on it."},
+        {"id": "adaptively_interleaved", "destination": "RC-LATE-STATEMENT", "meaning": "Statement growth and challenge generation alternate within one interaction."}
+      ]
+    },
+    {
+      "id": "oracle_kinds",
+      "title": "Oracle kinds",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "none", "destination": "C-NO-ORACLE", "meaning": "No Oracle kind is used."},
+        {"id": "explicit_table", "destination": "C-ORACLE", "meaning": "The Oracle is a finite explicit table."},
+        {"id": "algebraic_polynomial", "destination": "C-ORACLE", "meaning": "The Oracle is logically indexed by an algebraic domain."},
+        {"id": "codeword", "destination": "C-ORACLE", "meaning": "The Oracle denotes an encoded word with explicit query effects."},
+        {"id": "logical_virtual", "destination": "C-ORACLE", "meaning": "The Oracle is logical and is not equated with its commitment."},
+        {"id": "algorithmic_carrier_with_closed_plan", "destination": "C-QUERY-PLAN", "meaning": "A finite checked plan closes the algorithmic mapping to leaf queries."},
+        {"id": "algorithmic_carrier_without_closed_plan", "destination": "RC-ORACLE-LIFECYCLE", "meaning": "The source requires an algorithmic carrier whose finite Oracle lifecycle or query map is not closed."},
+        {"id": "encrypted_dataset", "destination": "RC-ORACLE-LIFECYCLE", "meaning": "Encrypted mutable or amortized data requires a lifecycle beyond one immutable Section 7 Oracle."},
+        {"id": "quantum_state", "destination": "B-QUANTUM-CARRIER", "meaning": "Queries or answers are quantum states."}
+      ]
+    },
+    {
+      "id": "oracle_access_modes",
+      "title": "Oracle access modes",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "none", "destination": "C-NO-ORACLE", "meaning": "No Oracle access occurs."},
+        {"id": "full_canonical", "destination": "C-ORACLE", "meaning": "The complete canonical Oracle value is available."},
+        {"id": "public_binding", "destination": "C-ORACLE", "meaning": "Only the public Oracle binding is directly available."},
+        {"id": "logical", "destination": "C-ORACLE", "meaning": "Logical indexed access is explicit."},
+        {"id": "verifier_derived", "destination": "C-QUERY-PLAN", "meaning": "A checked finite plan derives a logical value from leaf reads."},
+        {"id": "answer_adaptive_plan", "destination": "B-ANSWER-ADAPTIVE-PLAN", "meaning": "A plan dynamically creates later query occurrences from earlier answers."},
+        {"id": "mutable", "destination": "RC-ORACLE-LIFECYCLE", "meaning": "The Oracle changes during one invocation or across its required lifecycle."},
+        {"id": "quantum", "destination": "B-QUANTUM-CARRIER", "meaning": "Access applies a quantum operation or measurement."}
+      ]
+    },
+    {
+      "id": "commitment_relation",
+      "title": "Commitment versus logical oracle",
+      "cardinality": "one",
+      "values": [
+        {"id": "no_oracle_commitment", "destination": "C-NO-ORACLE", "meaning": "No Oracle commitment relation is required."},
+        {"id": "logical_only", "destination": "C-ORACLE", "meaning": "The protocol uses only a logical Oracle at this layer."},
+        {"id": "checked_commitment_compilation", "destination": "C-ORACLE-COMMITMENT", "meaning": "A separate checked construction relates logical occurrences to commitment openings."},
+        {"id": "commitment_native_statement", "destination": "C-CHECK-AND-REDUCTION", "meaning": "A commitment is ordinary statement material checked by the protocol."},
+        {"id": "opaque_external_commitment", "destination": "RC-MODULE-SEMANTICS", "meaning": "Acceptance depends on an external commitment effect whose exact transition or replay law is not stated."}
+      ]
+    },
+    {
+      "id": "setup_kind",
+      "title": "Setup and preprocessing kind",
+      "cardinality": "one",
+      "values": [
+        {"id": "none", "destination": "C-PLAN", "meaning": "No setup beyond ordinary invocation material."},
+        {"id": "transparent_public_parameter", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "Transparent public parameters are fixed before invocation."},
+        {"id": "circuit_specific_crs", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "A circuit-specific CRS is an explicit public parameter."},
+        {"id": "universal_updatable_crs", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "A universal or updatable CRS is an explicit public parameter."},
+        {"id": "verifier_secret_key", "destination": "C-VERIFIER-PRIVATE", "meaning": "A designated verifier key is a verifier-private invocation input."},
+        {"id": "checked_preprocessing", "destination": "RC-ORACLE-LIFECYCLE", "meaning": "A checked indexer or preprocessing stage must own material before the Core invocation."},
+        {"id": "correlated_multiparty_preprocessing", "destination": "B-MULTIPARTY", "meaning": "The required setup is generated by independent parties with distinct views."},
+        {"id": "encrypted_data_preprocessing", "destination": "RC-ORACLE-LIFECYCLE", "meaning": "Encrypted data is prepared for later amortized evaluations."}
+      ]
+    },
+    {
+      "id": "setup_trust",
+      "title": "Setup and preprocessing trust",
+      "cardinality": "one",
+      "values": [
+        {"id": "transparent", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "No trusted secret setup is assumed."},
+        {"id": "trusted_crs", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "A trusted CRS assumption is explicit in the public parameters."},
+        {"id": "updatable_crs", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "The public parameters record an updatable-setup assumption."},
+        {"id": "designated_verifier_secret", "destination": "C-VERIFIER-PRIVATE", "meaning": "Trust is placed in a designated verifier secret."},
+        {"id": "multiparty_assumption", "destination": "B-MULTIPARTY", "meaning": "Trust depends on distinct setup parties and their private views."},
+        {"id": "source_underdetermined", "destination": "B-SOURCE-INCOMPLETE", "meaning": "The cited source does not determine the required setup or transform assumption."}
+      ]
+    },
+    {
+      "id": "composition_modes",
+      "title": "Composition mode",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "none", "destination": "C-FINITE-COMPOSITION", "meaning": "No subprotocol composition is required."},
+        {"id": "sequential", "destination": "C-FINITE-COMPOSITION", "meaning": "Finite sequential fragments flatten into one Core."},
+        {"id": "interleaved", "destination": "C-FINITE-COMPOSITION", "meaning": "A finite fixed interleaving flattens into one Core."},
+        {"id": "shared_challenge", "destination": "C-CHALLENGE-OCCURRENCE", "meaning": "Composed fragments share one identified challenge occurrence."},
+        {"id": "folding_step", "destination": "C-PLAN-CONTINUATION", "meaning": "One finite fold or accumulation step uses an accepted-terminal continuation."},
+        {"id": "finite_recursion", "destination": "C-IMPORTED-VERIFIER", "meaning": "A finite proof-verifies-proof instance imports a verifier as a check or module."},
+        {"id": "reified_symbolic_recursion", "destination": "RC-SYMBOLIC-RECURRENCE", "meaning": "The recursive family remains a symbolic recurrence rather than a finite imported verifier."},
+        {"id": "imported_verifier", "destination": "C-IMPORTED-VERIFIER", "meaning": "A named verifier is imported into a finite check, effect, or relation."},
+        {"id": "cross_execution", "destination": "B-CROSS-EXECUTION", "meaning": "State or proofs flow across an open execution stream."},
+        {"id": "concurrent_sessions", "destination": "B-CONCURRENT-SESSIONS", "meaning": "Security-relevant behavior depends on concurrent session scheduling."}
+      ]
+    },
+    {
+      "id": "termination_modes",
+      "title": "Termination",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "first_active_terminal", "destination": "C-TERMINAL", "meaning": "The first active Accept, Reject, or Abort terminal stops the path."},
+        {"id": "abort", "destination": "C-TERMINAL", "meaning": "Abort is an explicit terminal verdict."},
+        {"id": "interpretation_failure", "destination": "C-TERMINAL", "meaning": "Canonical interpretation failure is a separate completed failure record and outcome lane, never a Core terminal."},
+        {"id": "accepted_continuation", "destination": "C-PLAN-CONTINUATION", "meaning": "Acceptance authorizes one named finite continuation recipe."},
+        {"id": "source_omits_terminal_semantics", "destination": "B-SOURCE-INCOMPLETE", "meaning": "The source omits the acceptance or interpretation-failure terminal needed for the construction."},
+        {"id": "nonterminating", "destination": "B-UNBOUNDED-LOOP", "meaning": "The required behavior has no finite terminal bound."}
+      ]
+    },
+    {
+      "id": "randomness_sources",
+      "title": "Randomness sources",
+      "cardinality": "one_or_more",
+      "values": [
+        {"id": "none", "destination": "C-PLAN", "meaning": "The invocation is deterministic."},
+        {"id": "public_environment", "destination": "C-CHALLENGE", "meaning": "Public environment or verifier-fresh randomness supplies a challenge."},
+        {"id": "verifier_local", "destination": "C-VERIFIER-PRIVATE", "meaning": "The Verifier owns a private local random tape."},
+        {"id": "prover_local", "destination": "C-PROVER-VIEW", "meaning": "The Prover owns a private local random tape."},
+        {"id": "transcript_oracle", "destination": "C-FS-CANONICAL", "meaning": "The canonical transcript construction supplies challenge bytes."},
+        {"id": "duplex_state", "destination": "C-FS-DUPLEX", "meaning": "A duplex state supplies challenge bytes."},
+        {"id": "setup_generator", "destination": "C-PUBLIC-ENVIRONMENT", "meaning": "Setup randomness is reflected only through explicit setup material and assumptions."},
+        {"id": "quantum_measurement", "destination": "B-QUANTUM-CARRIER", "meaning": "A quantum measurement supplies runtime randomness."}
+      ]
+    },
+    {
+      "id": "statement_adaptivity",
+      "title": "Adaptivity of the statement",
+      "cardinality": "one",
+      "values": [
+        {"id": "nonadaptive", "destination": "C-SCOPED-STATEMENT", "meaning": "The statement is fixed before the invocation."},
+        {"id": "chosen_before_first_challenge", "destination": "C-SCOPED-STATEMENT", "meaning": "The statement may depend on earlier public messages but is fixed before its first dependent challenge."},
+        {"id": "chosen_after_first_challenge", "destination": "RC-LATE-STATEMENT", "meaning": "The statement adapts to a challenge in the same invocation."},
+        {"id": "chosen_across_executions", "destination": "B-CROSS-EXECUTION", "meaning": "Later statements adapt to outcomes or secrets from prior protocol executions."},
+        {"id": "partitioned_across_verifiers", "destination": "B-MULTIVERIFIER", "meaning": "Statement selection depends on distinct verifier-private views."}
+      ]
+    },
+    {
+      "id": "query_adaptivity",
+      "title": "Adaptivity of queries",
+      "cardinality": "one",
+      "values": [
+        {"id": "none", "destination": "C-NO-ORACLE", "meaning": "No Oracle query occurs."},
+        {"id": "nonadaptive", "destination": "C-ORACLE", "meaning": "All query indices are fixed before answers."},
+        {"id": "transcript_adaptive", "destination": "C-ORACLE", "meaning": "A finite explicit Core derives later query indices from prior transcript values."},
+        {"id": "answer_adaptive_explicit_core", "destination": "C-ORACLE", "meaning": "A finite explicit Core derives later queries from earlier answers."},
+        {"id": "answer_adaptive_plan", "destination": "B-ANSWER-ADAPTIVE-PLAN", "meaning": "An abstract plan creates later query topology from earlier answers."},
+        {"id": "cross_execution", "destination": "B-CROSS-EXECUTION", "meaning": "Queries adapt to state accumulated across invocations."}
+      ]
+    },
+    {
+      "id": "communication_kind",
+      "title": "Communication carrier",
+      "cardinality": "one",
+      "values": [
+        {"id": "classical_typed_messages", "destination": "C-MESSAGE", "meaning": "Interaction uses the current typed classical values and messages."},
+        {"id": "no_messages", "destination": "C-CHECK-AND-REDUCTION", "meaning": "Verification uses only public inputs, proof material, and checks."},
+        {"id": "encrypted_classical_messages", "destination": "C-MESSAGE", "meaning": "Ciphertexts remain ordinary typed classical values at the Core layer."},
+        {"id": "quantum_messages", "destination": "B-QUANTUM-CARRIER", "meaning": "Interaction transmits quantum states or requires quantum channels."}
+      ]
+    }
+  ]
+}

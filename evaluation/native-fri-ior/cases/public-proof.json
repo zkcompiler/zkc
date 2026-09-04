@@ -1,0 +1,207 @@
+{
+  "cap0": {
+    "commitment_profile_id": {
+      "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+      "domain": "fri-ior.commitment-profile.v1",
+      "kind": "SemanticId",
+      "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+      "subject_kind": "fri-commitment-profile",
+      "version": 1
+    },
+    "nodes": [
+      "4b188bd2840df2dbf8fa9601111314275a259215e721f2682b1c2a09a0449fd3",
+      "87a7bddc4800498d8209d8d09439544308651461bd16747d188bf1b35e7d6f49"
+    ]
+  },
+  "cap1": {
+    "commitment_profile_id": {
+      "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+      "domain": "fri-ior.commitment-profile.v1",
+      "kind": "SemanticId",
+      "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+      "subject_kind": "fri-commitment-profile",
+      "version": 1
+    },
+    "nodes": [
+      "d8d99ac52b5c1428a1934803f3da03f550fcbb48d932061c616999ad068f871e",
+      "4b1f49f6fa4a60c324557e353bc13df117e78ebde8730005bb3d4bd1e6e443ba"
+    ]
+  },
+  "grinding_nonce": 0,
+  "occurrence_selectors": [
+    {
+      "layer0_opening_index": 1,
+      "layer1_opening_index": 4,
+      "ordinal": 0
+    },
+    {
+      "layer0_opening_index": 2,
+      "layer1_opening_index": 4,
+      "ordinal": 1
+    },
+    {
+      "layer0_opening_index": 1,
+      "layer1_opening_index": 4,
+      "ordinal": 2
+    },
+    {
+      "layer0_opening_index": 0,
+      "layer1_opening_index": 3,
+      "ordinal": 3
+    }
+  ],
+  "opening_table": [
+    {
+      "layer": 0,
+      "opening": {
+        "authentication_path": [
+          "1b1ace0aa18735311abff0cf31b3d1cac8b8adc65f5568ab8df5129c9c7ba9e4",
+          "820eff3b347529e0ae0b797f5e65d4c00ba044fdcc09e398ff02abcafec06782"
+        ],
+        "commitment_profile_id": {
+          "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+          "domain": "fri-ior.commitment-profile.v1",
+          "kind": "SemanticId",
+          "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+          "subject_kind": "fri-commitment-profile",
+          "version": 1
+        },
+        "domain": "D0",
+        "negative": [
+          27,
+          0
+        ],
+        "pair_index": 2,
+        "positive": [
+          7,
+          0
+        ],
+        "salt": "12121212121212121212121212121212"
+      }
+    },
+    {
+      "layer": 0,
+      "opening": {
+        "authentication_path": [
+          "91ab93c96504d56ae24263fc9e2a9fcc3bf92ad638af28024edf10133c4f2d27",
+          "820eff3b347529e0ae0b797f5e65d4c00ba044fdcc09e398ff02abcafec06782"
+        ],
+        "commitment_profile_id": {
+          "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+          "domain": "fri-ior.commitment-profile.v1",
+          "kind": "SemanticId",
+          "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+          "subject_kind": "fri-commitment-profile",
+          "version": 1
+        },
+        "domain": "D0",
+        "negative": [
+          11,
+          0
+        ],
+        "pair_index": 3,
+        "positive": [
+          33,
+          0
+        ],
+        "salt": "13131313131313131313131313131313"
+      }
+    },
+    {
+      "layer": 0,
+      "opening": {
+        "authentication_path": [
+          "efe1ad6612be4c053bbe1e207ef0c5ce2a5639a4016d9a107c6547ed28772581",
+          "e0842cc11839bc20c38f9b3208bd29fc39f62c0854398311762a79c5285002ee"
+        ],
+        "commitment_profile_id": {
+          "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+          "domain": "fri-ior.commitment-profile.v1",
+          "kind": "SemanticId",
+          "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+          "subject_kind": "fri-commitment-profile",
+          "version": 1
+        },
+        "domain": "D0",
+        "negative": [
+          71,
+          0
+        ],
+        "pair_index": 7,
+        "positive": [
+          14,
+          0
+        ],
+        "salt": "17171717171717171717171717171717"
+      }
+    },
+    {
+      "layer": 1,
+      "opening": {
+        "authentication_path": [
+          "cd5e4b398cf01896a43b3fec9039fcfffba34a33affdabd98a8c765f73ff7682"
+        ],
+        "commitment_profile_id": {
+          "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+          "domain": "fri-ior.commitment-profile.v1",
+          "kind": "SemanticId",
+          "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+          "subject_kind": "fri-commitment-profile",
+          "version": 1
+        },
+        "domain": "D1",
+        "negative": [
+          21,
+          27
+        ],
+        "pair_index": 2,
+        "positive": [
+          32,
+          12
+        ],
+        "salt": "42424242424242424242424242424242"
+      }
+    },
+    {
+      "layer": 1,
+      "opening": {
+        "authentication_path": [
+          "6a876014e70882254617bfa26012d6d1f5daf6435c8eda53580570eeba61510b"
+        ],
+        "commitment_profile_id": {
+          "digest": "3d5b4dcdc0a2352b15c03e8fc2152c82e4fe89699c16eab5b4e4c7439fd16491",
+          "domain": "fri-ior.commitment-profile.v1",
+          "kind": "SemanticId",
+          "semantic_regime": "zkc.fri-ior.closed-finite-term.v1.sha256.ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4",
+          "subject_kind": "fri-commitment-profile",
+          "version": 1
+        },
+        "domain": "D1",
+        "negative": [
+          28,
+          66
+        ],
+        "pair_index": 3,
+        "positive": [
+          26,
+          42
+        ],
+        "salt": "43434343434343434343434343434343"
+      }
+    }
+  ],
+  "schema": "zkc.fri-ior.public-proof.v1",
+  "terminal_polynomial": {
+    "coefficient_order": "ascending",
+    "coefficients": [
+      [
+        56,
+        6
+      ],
+      [
+        51,
+        70
+      ]
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "aggregate": "CannotAnswer/F2P1-C-SCHNORR-CANDIDATE-BINDING-INCOMPLETE",
+  "blockers": [
+    {
+      "code": "F2P1-C-INITIAL-CLAIM-ABSENT",
+      "name": "initial-claim-meaning",
+      "outcome": "CannotAnswer",
+      "owner_contract": "docs-next/relations/relation-model.md Section 7.3 lines 1856-1860",
+      "reason": "ClaimMeaningBinding requires a K2 ClaimRef; inventing InitialClaim(BindingRef(0)) would create claim flow not owned by the admitted Protocol and rotate its identity",
+      "subject_evidence": "evaluation/formal-source-target-core-f1r1b/reference_model.py line 794: claims=()"
+    }
+  ],
+  "candidate_identities": {
+    "candidate_bundle": "candidatev0:evaluation.f2p1-candidate-bundle:3592286d9dae424219189ed08bea2f9ce78fb48364d669183a2b37da3113b535",
+    "commit_algorithm": "candidatev0:foundation.portable-algorithm:8496b32069952e09b30b6a24eb3f4a1a25ef93f827e315f0c0654008952be8d7",
+    "definition_model_question": "candidatev0:relations.definition-model-question:16a937e5e2a11ab25985f3d9daf06ef82f6c9c84199816c44149a33c661bf071",
+    "instance_family": "candidatev0:relations.instance-family:720645f0c28be1bd1a9fe932e31c7ab080f66747ac708e0aeecb41c45ee6649e",
+    "plan_witness_binding": "candidatev0:relations.plan-witness-binding:fccc42de88bd46951e96d7b91078be0b6de527d635041a47397c930ed83e4e5f",
+    "plan_witness_surface": "candidatev0:pir.plan-witness-surface:59e7a666a154e3000575d9b01bfbeca3784da7440c12f327801d03579af37a6b",
+    "protocol_binding": "candidatev0:relations.protocol-binding:1dca55c4c8986142bf8dcb5d6c9412e5e94d362b876737289936061597b394a1",
+    "prover_plan": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+    "relation_definition": "candidatev0:relations.definition:e11c6e0038c396748b03ea6ffb11d9358c1dfdafd54d9db697805b4c4be36164",
+    "relation_evaluator_algorithm": "candidatev0:foundation.portable-algorithm:37b393a57d206baac3d3902172ed086e0f37538c363bdade5ee61ef506d469df",
+    "relation_interface": "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+    "representative_instance": "candidatev0:relations.instance:d94fefc7458b33fe3e72e33f4458dba38d3fe40b2974ad4455860a656a138ea2",
+    "respond_algorithm": "candidatev0:foundation.portable-algorithm:df1bf38e0eaf450189b62706535b8bb7f937032d51bdc786075cb58bfa52f541",
+    "semantic_model": "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+    "semantic_module": "candidatev0:foundation.semantic-module:f4d3ff763af07d7dd60d77fb43682cfbefd6baa87c8ffff4701c587fe9e902a8"
+  },
+  "finding_codes": [
+    ["exact-cutoff-and-source-pins", "Affirmative", "F2P1-A-SOURCE-PINS"],
+    ["f1r1b-fresh-protocol-subject", "Affirmative", "F2P1-A-SUBJECT"],
+    ["finite-additive-z3-algebra", "Affirmative", "F2P1-A-ADDITIVE-ALGEBRA"],
+    ["exact-relation-definition-candidate", "Affirmative", "F2P1-A-RELATION-DEFINITION"],
+    ["four-interface-role-candidates", "Affirmative", "F2P1-A-INTERFACE-ROLES"],
+    ["exact-semantic-model-candidate", "Affirmative", "F2P1-A-RELATION-MODEL"],
+    ["definition-model-finite-correspondence", "Affirmative", "F2P1-A-DEFINITION-MODEL"],
+    ["exact-relation-instance-family", "Affirmative", "F2P1-A-RELATION-INSTANCES"],
+    ["representative-public-instance", "Affirmative", "F2P1-A-PUBLIC-INSTANCE"],
+    ["protocol-statement-edge", "Affirmative", "F2P1-A-STATEMENT-EDGE"],
+    ["protocol-challenge-response-phase-edges", "Affirmative", "F2P1-A-PHASE-EDGES"],
+    ["protocol-relation-binding-candidate", "Affirmative", "F2P1-A-PROTOCOL-BINDING"],
+    ["initial-claim-meaning", "CannotAnswer", "F2P1-C-INITIAL-CLAIM-ABSENT"],
+    ["prover-plan-candidate", "Affirmative", "F2P1-A-PROVER-PLAN"],
+    ["plan-realizes-candidate", "Affirmative", "F2P1-A-PLAN-REALIZES"],
+    ["honest-commit-recipe", "Affirmative", "F2P1-A-HONEST-COMMIT"],
+    ["honest-respond-recipe", "Affirmative", "F2P1-A-HONEST-RESPOND"],
+    ["nonce-persistent-state", "Affirmative", "F2P1-A-NONCE-STATE"],
+    ["plan-witness-surface", "Affirmative", "F2P1-A-WITNESS-SURFACE"],
+    ["plan-witness-binding", "Affirmative", "F2P1-A-WITNESS-BINDING"],
+    ["relation-predicate-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-RELATION"],
+    ["witness-type-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-WITNESS"],
+    ["prover-state-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-STATE"],
+    ["honest-commit-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-COMMIT"],
+    ["honest-respond-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-RESPOND"],
+    ["all-valid-pairs-bound-plan-accept", "Affirmative", "F2P1-A-HONEST-RUNS"],
+    ["plus-one-response-controls", "Refused", "F2P1-R-PLUS-ONE"],
+    ["independent-path-separation", "Affirmative", "F2P1-A-PATH-SEPARATION"],
+    ["two-path-body-agreement", "Affirmative", "F2P1-A-BODY-AGREEMENT"],
+    ["two-path-identity-agreement", "Affirmative", "F2P1-A-IDENTITY-AGREEMENT"],
+    ["wrong-statement-edge-mutation", "Refused", "F2P1-R-STATEMENT-EDGE"],
+    ["swapped-phase-role-mutation", "Refused", "F2P1-R-PHASE-ROLE-SWAP"],
+    ["different-witness-type-mutation", "Refused", "F2P1-R-WITNESS-TYPE"],
+    ["unguaranteed-plan-read-mutation", "Negative", "F2P1-N-PLAN-READ"],
+    ["wrong-protocol-id-mutation", "Refused", "F2P1-R-WRONG-PROTOCOL"],
+    ["pinned-theorem-applicability", "CannotAnswer", "F2P1-C-THEOREM-APPLICABILITY"],
+    ["schnorr-property-claim", "CannotAnswer", "F2P1-C-PROPERTY"],
+    ["schnorr-security-claim", "CannotAnswer", "F2P1-C-SECURITY"],
+    ["complete-requested-candidate-binding", "CannotAnswer", "F2P1-C-SCHNORR-CANDIDATE-BINDING-INCOMPLETE"]
+  ],
+  "findings_sha256": "2f3d9226c4a56591e842cd2e15f95a9f2bee047e7938b0cc60ebf78de6ac6a3f",
+  "measurements": {
+    "accepted_honest_runs": 27,
+    "agreement_sha256": "e810a54ef817bfac87c7bd0236a999eaf4c281e122e0d57ca65f102ae3afa75b",
+    "anchors": 37,
+    "blockers": 1,
+    "candidate_identities": 15,
+    "claim_meanings": 0,
+    "definition_model_rows": 81,
+    "mutations": 5,
+    "outcomes": {
+      "Affirmative": 28,
+      "CannotAnswer": 5,
+      "Negative": 1,
+      "Refused": 5
+    },
+    "phase_edges": 2,
+    "premises": 5,
+    "ranges": 12,
+    "reconstruction_paths": 2,
+    "rejected_plus_one_controls": 27,
+    "relation_instances": 27,
+    "source_files": 8,
+    "statement_edges": 1,
+    "valid_statement_witness_pairs": 3
+  },
+  "mutation_outcomes": {
+    "different-witness-type": ["Refused", "F2P1-R-WITNESS-TYPE"],
+    "plan-read-outside-guaranteed": ["Negative", "F2P1-N-PLAN-READ"],
+    "swapped-phase-roles": ["Refused", "F2P1-R-PHASE-ROLE-SWAP"],
+    "wrong-protocol-id": ["Refused", "F2P1-R-WRONG-PROTOCOL"],
+    "wrong-statement-edge": ["Refused", "F2P1-R-STATEMENT-EDGE"]
+  },
+  "premise_table": {
+    "honest-commit": {
+      "coordinate": "ProverPlan.decision_recipes[0].nodes[0] -> PlanStrategyStep(decision 0)",
+      "meaning": "A := r",
+      "operand": "candidatev0:foundation.portable-algorithm:8496b32069952e09b30b6a24eb3f4a1a25ef93f827e315f0c0654008952be8d7"
+    },
+    "honest-respond": {
+      "coordinate": "ProverPlan.decision_recipes[2].nodes[0] -> PlanStrategyStep(decision 2)",
+      "meaning": "z := r + c*x mod 3",
+      "operand": "candidatev0:foundation.portable-algorithm:df1bf38e0eaf450189b62706535b8bb7f937032d51bdc786075cb58bfa52f541"
+    },
+    "prover-private-state": {
+      "coordinate": "ProverPlan(candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b).persistent_state[0] -> PlanExecutionState[0]",
+      "meaning": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
+      "operand": "k1-value-type-v0:059512f1b17e2d3fcefc2003b8b6be6cac57e4afbb2a84eb766594a6a00c781a"
+    },
+    "relation-predicate": {
+      "coordinate": "RelationSemanticModel(candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e).evaluator",
+      "meaning": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
+      "operand": "candidatev0:foundation.portable-algorithm:37b393a57d206baac3d3902172ed086e0f37538c363bdade5ee61ef506d469df"
+    },
+    "witness-type": {
+      "coordinate": "RelationInterface(candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22).private_witness[0].value_type + PlanWitnessBinding.witness_edges[0]",
+      "meaning": "x in Z/3Z supplied by Plan WitnessIngress key x",
+      "operand": "k1-value-type-v0:059512f1b17e2d3fcefc2003b8b6be6cac57e4afbb2a84eb766594a6a00c781a"
+    }
+  }
+}

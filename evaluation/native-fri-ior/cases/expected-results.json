@@ -1,0 +1,38 @@
+{
+  "authority": "regression-golden-not-semantic-or-provenance-authority",
+  "projection": {
+    "analysis_question_count": 23,
+    "fixture_ids": {
+      "exact_classical_public_inputs": "sha256:19e6664c930a4b8bc2e7208348af9f36eebd4ba4bd07d0bb99e7ca19949dee5e",
+      "exact_classical_public_proof": "sha256:f7d7402eae9bdbb608403be6f074fd0f9572c2c10099e1efc99c59418b1ea2df",
+      "exact_classical_replay_policy": "sha256:a4df99aaaadb3da369c547116eaf4dfdd9804774686cebdb363311ab512ff207",
+      "negative_proofs": "sha256:d5890278e94da06384e8e24d7a8bbd48f5234e159c60cb1f177976f80f549db7",
+      "public_inputs": "sha256:d73027ad252c90234e29ac8796826555d63e33003921bbc9ec3aa29b13249584",
+      "public_native_vector": "sha256:eb607d8682282fa0d92904f5a2b70d5ff8a29ac46d1f117a0bd14344bcdab8af",
+      "public_proof": "sha256:c3314ce12938d295050a1c904aa69aecd5038dcdfb754e917740a827055a5c1f",
+      "replay_policy": "sha256:f4e901564b08fcb08bd6842177f471ac38bf5b68a24f9060d3a3ddc4e8c1c461",
+      "source_ledger": "sha256:3273c81c294e6ddac201de8b9e692efd9496e03ceefd3e4cc0bbd60509b0e66b"
+    },
+    "negative_outcomes": {
+      "authenticated-fold-inconsistency": "FRI-IOR-COMMITTED-020",
+      "fold-consistent-terminal-degree-excess": "FRI-IOR-COMMITTED-022"
+    },
+    "positive_outcomes": {
+      "committed": "FRI-IOR-COMMITTED-100",
+      "exact_classical_independent_replay": "FRI-IOR-CLASSICAL-INDEPENDENT-100",
+      "independent_replay": "FRI-IOR-INDEPENDENT-100",
+      "native": "FRI-IOR-NATIVE-100",
+      "reconciliation_equal": true
+    },
+    "report_content_id": "canonical-sha256:08beaac6e42356a54e87562e1e3e8337ca98b8c4aff7d8b4ceac81a1b99136a3",
+    "validation_source_basis_ids": {
+      "analysis-formation": "validation-sha256:0d3faa80a7f6ceba39f48d223c1ae3316e5b8900c58ceea11093b8c9dc58968b",
+      "committed": "validation-sha256:0908f55a19268f0284a071a851783a32560534e3eabfbec262cd87e86f4b9801",
+      "exact-classical-independent-replay": "validation-sha256:33d6b3d6e20beddcc8e4224c0c104fd9d56b0a749fdaade4cd127bf0e26f37e0",
+      "independent-replay": "validation-sha256:ef7c610ea3fd2e7b39372bbdcce6b272c24eae3d641a7923849b335041ad07e6",
+      "native": "validation-sha256:193097674b744a92f80e120f4e01fc888a7182480ffdcd13cb64a8f94ea99cfe",
+      "report": "validation-sha256:7d2691bd1b804eee51e1954cbac2c6b72c7cd27e6540bd4c7113c1d2569664aa"
+    }
+  },
+  "schema": "zkc.native-fri-ior.expected-report-projection.v3"
+}

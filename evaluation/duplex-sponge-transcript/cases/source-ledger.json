@@ -1,0 +1,32 @@
+{
+  "schema": "zkc.duplex-sponge-transcript.source-ledger.v1",
+  "entries": [
+    {
+      "id": "chiesa-orru-duplex-fiat-shamir-2025-536",
+      "kind": "ResearchPaper",
+      "title": "A Fiat-Shamir Transformation From Duplex Sponges",
+      "revision": "2026-03-27",
+      "url": "https://eprint.iacr.org/2025/536",
+      "sha256": "fca7ba09ebe59141c3c041ac660b4e3e161fdab8a709aee67e236db8d8da3a35",
+      "reviewed_role": "Construction 3.3 transition semantics and Definitions 4.1-4.2 plus Construction 4.3 transform shape",
+      "status": "primary-source-correspondence-input-not-theorem-authority"
+    },
+    {
+      "id": "cfrg-fiat-shamir-draft-03",
+      "kind": "InternetDraft",
+      "title": "The Fiat-Shamir Transformation",
+      "revision": "draft-irtf-cfrg-fiat-shamir-03 2026-08-17",
+      "url": "https://www.ietf.org/archive/id/draft-irtf-cfrg-fiat-shamir-03.html",
+      "sha256": "4ed563b26f3e366545e280a979d46b6ce623e27a29b53b73fa7cb92c5287fc28",
+      "reviewed_role": "strict parsing and operational comparison only; not duplex-construction source authority",
+      "status": "work-in-progress-comparison-input"
+    }
+  ],
+  "fixture_boundary": {
+    "alphabet": "Sigma5 with no field semantics",
+    "provider": "deterministic finite transition provider",
+    "security_claim": false,
+    "source_authentication": false,
+    "claim": "finite state-transition, structural-admission, source-applicability, identity, and replay falsification only"
+  }
+}

@@ -1,0 +1,5602 @@
+{
+  "authority": "none; untrusted generator output",
+  "constructs": [
+    {
+      "consulted": [],
+      "id": "subject.core",
+      "kind": "subject-identity",
+      "layer": "metadata",
+      "lean": {
+        "line": 31,
+        "name": "audit_subject_core",
+        "text": "def audit_subject_core : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "core-id-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "subject.protocol",
+      "kind": "subject-identity",
+      "layer": "metadata",
+      "lean": {
+        "line": 32,
+        "name": "audit_subject_protocol",
+        "text": "def audit_subject_protocol : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "protocol-id-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "ExecutionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "module.0.decision-class",
+      "kind": "module-effect-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 33,
+        "name": "audit_module_0_decision_class",
+        "text": "def audit_module_0_decision_class : String := \"{\\\"decision_class\\\":\\\"Deterministic\\\",\\\"occurrence\\\":2}\""
+      },
+      "realizes": {
+        "decision_class": "Deterministic",
+        "occurrence": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "admitted-module-effect"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "module.0.denotation",
+      "kind": "module-effect-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 34,
+        "name": "audit_module_0_denotation",
+        "text": "def audit_module_0_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "module-effect-denotation",
+          "lives_in": [
+            "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py:2330-2381 projects no EffectView",
+            "docs-next/pir/interactive-core.md:2091-2105 assigns occurrences to EffectView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct module.0.denotation",
+          "reason": "The Core and authenticated semantic-module preimage classify this effect, but no issued owner-view leaf denotes its runtime transition."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "module.1.decision-class",
+      "kind": "module-effect-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 35,
+        "name": "audit_module_1_decision_class",
+        "text": "def audit_module_1_decision_class : String := \"{\\\"decision_class\\\":\\\"ProverPrivate\\\",\\\"occurrence\\\":3}\""
+      },
+      "realizes": {
+        "decision_class": "ProverPrivate",
+        "occurrence": 3
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "admitted-module-effect"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "StrategyDecisionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "module.1.denotation",
+      "kind": "module-effect-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 36,
+        "name": "audit_module_1_denotation",
+        "text": "def audit_module_1_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "module-effect-denotation",
+          "lives_in": [
+            "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py:2330-2381 projects no EffectView",
+            "docs-next/pir/interactive-core.md:2091-2105 assigns occurrences to EffectView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct module.1.denotation",
+          "reason": "The Core and authenticated semantic-module preimage classify this effect, but no issued owner-view leaf denotes its runtime transition."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "module.2.decision-class",
+      "kind": "module-effect-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 37,
+        "name": "audit_module_2_decision_class",
+        "text": "def audit_module_2_decision_class : String := \"{\\\"decision_class\\\":\\\"ProverPublication\\\",\\\"occurrence\\\":4}\""
+      },
+      "realizes": {
+        "decision_class": "ProverPublication",
+        "occurrence": 4
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "admitted-module-effect"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "StrategyDecisionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "module.2.denotation",
+      "kind": "module-effect-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 38,
+        "name": "audit_module_2_denotation",
+        "text": "def audit_module_2_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "module-effect-denotation",
+          "lives_in": [
+            "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py:2330-2381 projects no EffectView",
+            "docs-next/pir/interactive-core.md:2091-2105 assigns occurrences to EffectView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct module.2.denotation",
+          "reason": "The Core and authenticated semantic-module preimage classify this effect, but no issued owner-view leaf denotes its runtime transition."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "oracle.0.mode",
+      "kind": "oracle-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 39,
+        "name": "audit_oracle_0_mode",
+        "text": "def audit_oracle_0_mode : String := \"{\\\"mode\\\":\\\"FullCanonical\\\",\\\"oracle\\\":0}\""
+      },
+      "realizes": {
+        "mode": "FullCanonical",
+        "oracle": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "oracle.0.carrier",
+      "kind": "oracle-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 40,
+        "name": "audit_oracle_0_carrier",
+        "text": "def audit_oracle_0_carrier : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "oracle-carrier-representation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:929-1125 declares Oracle modes and effects",
+            "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py:2330-2381 projects no EffectView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct oracle.0.carrier",
+          "reason": "The Core names the Oracle publication mode, but no issued owner-view leaf supplies the provider-side carrier representation or lookup behavior."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "oracle.1.mode",
+      "kind": "oracle-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 41,
+        "name": "audit_oracle_1_mode",
+        "text": "def audit_oracle_1_mode : String := \"{\\\"mode\\\":\\\"PublicBinding\\\",\\\"oracle\\\":1}\""
+      },
+      "realizes": {
+        "mode": "PublicBinding",
+        "oracle": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "oracle.1.carrier",
+      "kind": "oracle-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 42,
+        "name": "audit_oracle_1_carrier",
+        "text": "def audit_oracle_1_carrier : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "oracle-carrier-representation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:929-1125 declares Oracle modes and effects",
+            "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py:2330-2381 projects no EffectView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct oracle.1.carrier",
+          "reason": "The Core names the Oracle publication mode, but no issued owner-view leaf supplies the provider-side carrier representation or lookup behavior."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "oracle.2.mode",
+      "kind": "oracle-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 43,
+        "name": "audit_oracle_2_mode",
+        "text": "def audit_oracle_2_mode : String := \"{\\\"mode\\\":\\\"LogicalAccess\\\",\\\"oracle\\\":2}\""
+      },
+      "realizes": {
+        "mode": "LogicalAccess",
+        "oracle": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "oracle.2.carrier",
+      "kind": "oracle-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 44,
+        "name": "audit_oracle_2_carrier",
+        "text": "def audit_oracle_2_carrier : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "oracle-carrier-representation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:929-1125 declares Oracle modes and effects",
+            "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py:2330-2381 projects no EffectView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct oracle.2.carrier",
+          "reason": "The Core names the Oracle publication mode, but no issued owner-view leaf supplies the provider-side carrier representation or lookup behavior."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "query.6.visibility",
+      "kind": "query-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 45,
+        "name": "audit_query_6_visibility",
+        "text": "def audit_query_6_visibility : String := \"{\\\"occurrence\\\":6,\\\"visibility\\\":\\\"Public\\\"}\""
+      },
+      "realizes": {
+        "occurrence": 6,
+        "visibility": "Public"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "query.9.visibility",
+      "kind": "query-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 46,
+        "name": "audit_query_9_visibility",
+        "text": "def audit_query_9_visibility : String := \"{\\\"occurrence\\\":9,\\\"visibility\\\":\\\"VerifierOnly\\\"}\""
+      },
+      "realizes": {
+        "occurrence": 9,
+        "visibility": "VerifierOnly"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 9,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 9,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "query.12.visibility",
+      "kind": "query-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 47,
+        "name": "audit_query_12_visibility",
+        "text": "def audit_query_12_visibility : String := \"{\\\"occurrence\\\":12,\\\"visibility\\\":\\\"Public\\\"}\""
+      },
+      "realizes": {
+        "occurrence": 12,
+        "visibility": "Public"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 12,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 12,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.scope",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 48,
+        "name": "audit_challenge_0_scope",
+        "text": "def audit_challenge_0_scope : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "scope-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.value-type",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 49,
+        "name": "audit_challenge_0_value_type",
+        "text": "def audit_challenge_0_value_type : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.domain",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 50,
+        "name": "audit_challenge_0_domain",
+        "text": "def audit_challenge_0_domain : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.fresh-ref",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 51,
+        "name": "audit_challenge_0_fresh_ref",
+        "text": "def audit_challenge_0_fresh_ref : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.law",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 52,
+        "name": "audit_challenge_0_law",
+        "text": "def audit_challenge_0_law : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-distribution",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2079-2088 names challenge references",
+            "docs-next/pir/interactive-core.md:2143-2154 keeps law leaves nominal"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "carrier": "integrated-baseline",
+              "owner_path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "owner_view": "PublicCoinView",
+              "path": [
+                {
+                  "ordinal": 0,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "view": "PublicCoinView"
+            }
+          ],
+          "needed_for": "generated construct challenge.0.law",
+          "reason": "PublicCoinView names the challenge domain and Fresh law but no leaf denotes its runtime distribution."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.condition",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 53,
+        "name": "audit_challenge_0_condition",
+        "text": "def audit_challenge_0_condition : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 8,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 8,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.scope",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 54,
+        "name": "audit_challenge_1_scope",
+        "text": "def audit_challenge_1_scope : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "scope-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.value-type",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 55,
+        "name": "audit_challenge_1_value_type",
+        "text": "def audit_challenge_1_value_type : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.domain",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 56,
+        "name": "audit_challenge_1_domain",
+        "text": "def audit_challenge_1_domain : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.fresh-ref",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 57,
+        "name": "audit_challenge_1_fresh_ref",
+        "text": "def audit_challenge_1_fresh_ref : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.law",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 58,
+        "name": "audit_challenge_1_law",
+        "text": "def audit_challenge_1_law : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-distribution",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2079-2088 names challenge references",
+            "docs-next/pir/interactive-core.md:2143-2154 keeps law leaves nominal"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "carrier": "integrated-baseline",
+              "owner_path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "owner_view": "PublicCoinView",
+              "path": [
+                {
+                  "ordinal": 0,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "view": "PublicCoinView"
+            }
+          ],
+          "needed_for": "generated construct challenge.1.law",
+          "reason": "PublicCoinView names the challenge domain and Fresh law but no leaf denotes its runtime distribution."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.condition",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 59,
+        "name": "audit_challenge_1_condition",
+        "text": "def audit_challenge_1_condition : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 8,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 8,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.scope",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 60,
+        "name": "audit_challenge_2_scope",
+        "text": "def audit_challenge_2_scope : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "scope-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.value-type",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 61,
+        "name": "audit_challenge_2_value_type",
+        "text": "def audit_challenge_2_value_type : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.domain",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 62,
+        "name": "audit_challenge_2_domain",
+        "text": "def audit_challenge_2_domain : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.fresh-ref",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 63,
+        "name": "audit_challenge_2_fresh_ref",
+        "text": "def audit_challenge_2_fresh_ref : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.law",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 64,
+        "name": "audit_challenge_2_law",
+        "text": "def audit_challenge_2_law : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-distribution",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2079-2088 names challenge references",
+            "docs-next/pir/interactive-core.md:2143-2154 keeps law leaves nominal"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "carrier": "integrated-baseline",
+              "owner_path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "owner_view": "PublicCoinView",
+              "path": [
+                {
+                  "ordinal": 0,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "view": "PublicCoinView"
+            }
+          ],
+          "needed_for": "generated construct challenge.2.law",
+          "reason": "PublicCoinView names the challenge domain and Fresh law but no leaf denotes its runtime distribution."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.condition",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 65,
+        "name": "audit_challenge_2_condition",
+        "text": "def audit_challenge_2_condition : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 8,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 8,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.correlation.kind",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 66,
+        "name": "audit_challenge_0_correlation_kind",
+        "text": "def audit_challenge_0_correlation_kind : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.reduction-use.contract",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 67,
+        "name": "audit_challenge_0_reduction_use_contract",
+        "text": "def audit_challenge_0_reduction_use_contract : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.correlation.group",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 68,
+        "name": "audit_challenge_1_correlation_group",
+        "text": "def audit_challenge_1_correlation_group : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.correlation.index",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 69,
+        "name": "audit_challenge_1_correlation_index",
+        "text": "def audit_challenge_1_correlation_index : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "natural",
+            "max": 18446744073709551615
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.1.reduction-use.kind",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 70,
+        "name": "audit_challenge_1_reduction_use_kind",
+        "text": "def audit_challenge_1_reduction_use_kind : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.correlation.group",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 71,
+        "name": "audit_challenge_2_correlation_group",
+        "text": "def audit_challenge_2_correlation_group : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.correlation.index",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 72,
+        "name": "audit_challenge_2_correlation_index",
+        "text": "def audit_challenge_2_correlation_index : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "natural",
+            "max": 18446744073709551615
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.correlation.prior.1",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 73,
+        "name": "audit_challenge_2_correlation_prior_1",
+        "text": "def audit_challenge_2_correlation_prior_1 : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "challenge-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.2.reduction-use.kind",
+      "kind": "challenge-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 74,
+        "name": "audit_challenge_2_reduction_use_kind",
+        "text": "def audit_challenge_2_reduction_use_kind : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.0.challenge.0",
+      "kind": "reduction-challenge-backlink",
+      "layer": "metadata",
+      "lean": {
+        "line": 75,
+        "name": "audit_reduction_0_challenge_0",
+        "text": "def audit_reduction_0_challenge_0 : String := \"{\\\"challenge\\\":0,\\\"reduction\\\":0}\""
+      },
+      "realizes": {
+        "challenge": 0,
+        "reduction": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "reduction-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.0.challenge.1",
+      "kind": "reduction-challenge-backlink",
+      "layer": "metadata",
+      "lean": {
+        "line": 76,
+        "name": "audit_reduction_0_challenge_1",
+        "text": "def audit_reduction_0_challenge_1 : String := \"{\\\"challenge\\\":1,\\\"reduction\\\":0}\""
+      },
+      "realizes": {
+        "challenge": 1,
+        "reduction": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "reduction-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.1.challenge.0",
+      "kind": "reduction-challenge-backlink",
+      "layer": "metadata",
+      "lean": {
+        "line": 77,
+        "name": "audit_reduction_1_challenge_0",
+        "text": "def audit_reduction_1_challenge_0 : String := \"{\\\"challenge\\\":0,\\\"reduction\\\":1}\""
+      },
+      "realizes": {
+        "challenge": 0,
+        "reduction": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "reduction-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.1.challenge.2",
+      "kind": "reduction-challenge-backlink",
+      "layer": "metadata",
+      "lean": {
+        "line": 78,
+        "name": "audit_reduction_1_challenge_2",
+        "text": "def audit_reduction_1_challenge_2 : String := \"{\\\"challenge\\\":2,\\\"reduction\\\":1}\""
+      },
+      "realizes": {
+        "challenge": 2,
+        "reduction": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "reduction-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 10,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "check.0.denotation",
+      "kind": "denotation",
+      "layer": "metadata",
+      "lean": {
+        "line": 79,
+        "name": "audit_check_0_denotation",
+        "text": "def audit_check_0_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2046-2174 separates exact view leaves from semantic propositions"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct check.0.denotation",
+          "reason": "The subject carries a nominal algorithm, contract, or declaration, not the operation's denotation in the provider monad."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "guard.0.denotation",
+      "kind": "denotation",
+      "layer": "metadata",
+      "lean": {
+        "line": 80,
+        "name": "audit_guard_0_denotation",
+        "text": "def audit_guard_0_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2046-2174 separates exact view leaves from semantic propositions"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct guard.0.denotation",
+          "reason": "The subject carries a nominal algorithm, contract, or declaration, not the operation's denotation in the provider monad."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "guard.20.denotation",
+      "kind": "denotation",
+      "layer": "metadata",
+      "lean": {
+        "line": 81,
+        "name": "audit_guard_20_denotation",
+        "text": "def audit_guard_20_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2046-2174 separates exact view leaves from semantic propositions"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct guard.20.denotation",
+          "reason": "The subject carries a nominal algorithm, contract, or declaration, not the operation's denotation in the provider monad."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "guard.21.denotation",
+      "kind": "denotation",
+      "layer": "metadata",
+      "lean": {
+        "line": 82,
+        "name": "audit_guard_21_denotation",
+        "text": "def audit_guard_21_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2046-2174 separates exact view leaves from semantic propositions"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct guard.21.denotation",
+          "reason": "The subject carries a nominal algorithm, contract, or declaration, not the operation's denotation in the provider monad."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "claim.0.declaration",
+      "kind": "claim-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 83,
+        "name": "audit_claim_0_declaration",
+        "text": "def audit_claim_0_declaration : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "ClaimReductionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "claim.0.premise",
+      "kind": "claim-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 84,
+        "name": "audit_claim_0_premise",
+        "text": "def audit_claim_0_premise : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2172-2174 assigns additional propositions to Relations, Analysis, and OIR"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct claim.0.premise",
+          "reason": "A structural owner-view leaf would not establish the claim or reduction property premise."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "claim.1.declaration",
+      "kind": "claim-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 85,
+        "name": "audit_claim_1_declaration",
+        "text": "def audit_claim_1_declaration : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "ClaimReductionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "claim.1.premise",
+      "kind": "claim-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 86,
+        "name": "audit_claim_1_premise",
+        "text": "def audit_claim_1_premise : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2172-2174 assigns additional propositions to Relations, Analysis, and OIR"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct claim.1.premise",
+          "reason": "A structural owner-view leaf would not establish the claim or reduction property premise."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "claim.2.declaration",
+      "kind": "claim-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 87,
+        "name": "audit_claim_2_declaration",
+        "text": "def audit_claim_2_declaration : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "ClaimReductionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "claim.2.premise",
+      "kind": "claim-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 88,
+        "name": "audit_claim_2_premise",
+        "text": "def audit_claim_2_premise : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2172-2174 assigns additional propositions to Relations, Analysis, and OIR"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct claim.2.premise",
+          "reason": "A structural owner-view leaf would not establish the claim or reduction property premise."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.0.declaration",
+      "kind": "reduction-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 89,
+        "name": "audit_reduction_0_declaration",
+        "text": "def audit_reduction_0_declaration : String := \"{\\\"reduction\\\":0,\\\"required_challenges\\\":[0,1]}\""
+      },
+      "realizes": {
+        "reduction": 0,
+        "required_challenges": [
+          0,
+          1
+        ]
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "ClaimReductionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.0.denotation",
+      "kind": "reduction-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 90,
+        "name": "audit_reduction_0_denotation",
+        "text": "def audit_reduction_0_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2046-2174 separates exact view leaves from semantic propositions"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct reduction.0.denotation",
+          "reason": "The subject carries a nominal algorithm, contract, or declaration, not the operation's denotation in the provider monad."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.0.premise",
+      "kind": "reduction-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 91,
+        "name": "audit_reduction_0_premise",
+        "text": "def audit_reduction_0_premise : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2172-2174 assigns additional propositions to Relations, Analysis, and OIR"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct reduction.0.premise",
+          "reason": "A structural owner-view leaf would not establish the claim or reduction property premise."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.1.declaration",
+      "kind": "reduction-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 92,
+        "name": "audit_reduction_1_declaration",
+        "text": "def audit_reduction_1_declaration : String := \"{\\\"reduction\\\":1,\\\"required_challenges\\\":[0,2]}\""
+      },
+      "realizes": {
+        "reduction": 1,
+        "required_challenges": [
+          0,
+          2
+        ]
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "ClaimReductionView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.1.denotation",
+      "kind": "reduction-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 93,
+        "name": "audit_reduction_1_denotation",
+        "text": "def audit_reduction_1_denotation : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2046-2174 separates exact view leaves from semantic propositions"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct reduction.1.denotation",
+          "reason": "The subject carries a nominal algorithm, contract, or declaration, not the operation's denotation in the provider monad."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "reduction.1.premise",
+      "kind": "reduction-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 94,
+        "name": "audit_reduction_1_premise",
+        "text": "def audit_reduction_1_premise : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2172-2174 assigns additional propositions to Relations, Analysis, and OIR"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct reduction.1.premise",
+          "reason": "A structural owner-view leaf would not establish the claim or reduction property premise."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "terminal.0.declaration",
+      "kind": "terminal-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 95,
+        "name": "audit_terminal_0_declaration",
+        "text": "def audit_terminal_0_declaration : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "terminal-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "terminal.1.declaration",
+      "kind": "terminal-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 96,
+        "name": "audit_terminal_1_declaration",
+        "text": "def audit_terminal_1_declaration : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "terminal-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "terminal.2.declaration",
+      "kind": "terminal-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 97,
+        "name": "audit_terminal_2_declaration",
+        "text": "def audit_terminal_2_declaration : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "terminal-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "terminal.22.preemption",
+      "kind": "terminal-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 98,
+        "name": "audit_terminal_22_preemption",
+        "text": "def audit_terminal_22_preemption : String := \"{\\\"occurrence\\\":22,\\\"preempted_by\\\":[20,21]}\""
+      },
+      "realizes": {
+        "occurrence": 22,
+        "preempted_by": [
+          20,
+          21
+        ]
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "control.logical-reject-preemption.terminal.22.preemption",
+      "kind": "control-observable",
+      "layer": "metadata",
+      "lean": {
+        "line": 99,
+        "name": "audit_control_logical_reject_preemption_terminal_22_preemption",
+        "text": "def audit_control_logical_reject_preemption_terminal_22_preemption : String := \"{\\\"occurrence\\\":22,\\\"preempted_by\\\":[20,21],\\\"scenario\\\":\\\"logical-reject-preemption\\\",\\\"verdict\\\":\\\"Accept\\\"}\""
+      },
+      "realizes": {
+        "occurrence": 22,
+        "preempted_by": [
+          20,
+          21
+        ],
+        "scenario": "logical-reject-preemption",
+        "verdict": "Accept"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "logical-reject-preemption",
+          "owner_path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 6,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.outcome-map",
+      "kind": "outcome-map",
+      "layer": "metadata",
+      "lean": {
+        "line": 100,
+        "name": "audit_provider_outcome_map",
+        "text": "def audit_provider_outcome_map : String := \"{}\""
+      },
+      "realizes": {},
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-outcome-map",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md:2121-2131 assigns execution and replay facts to ExecutionView"
+          ],
+          "named_by": [],
+          "needed_for": "generated construct provider.outcome-map",
+          "reason": "No issued owner view maps all completion, refusal, and noncompletion branches to the generated provider verdict."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.0",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 104,
+        "name": "occurrence0",
+        "text": "let _ \u2190 ops.verifierMessage 0"
+      },
+      "realizes": {
+        "effect": "VerifierMessage",
+        "occurrence": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.1",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 105,
+        "name": "occurrence1",
+        "text": "let _ \u2190 ops.proverMessage 1"
+      },
+      "realizes": {
+        "effect": "ProverMessage",
+        "occurrence": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.2",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 106,
+        "name": "occurrence2",
+        "text": "let _ \u2190 ops.moduleEffect 0"
+      },
+      "realizes": {
+        "effect": "ModuleEffect",
+        "occurrence": 2,
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.3",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 107,
+        "name": "occurrence3",
+        "text": "let _ \u2190 ops.moduleEffect 1"
+      },
+      "realizes": {
+        "effect": "ModuleEffect",
+        "occurrence": 3,
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.4",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 108,
+        "name": "occurrence4",
+        "text": "let _ \u2190 ops.moduleEffect 2"
+      },
+      "realizes": {
+        "effect": "ModuleEffect",
+        "occurrence": 4,
+        "target": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.5",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 109,
+        "name": "occurrence5",
+        "text": "let _ \u2190 ops.publishOracle 0"
+      },
+      "realizes": {
+        "effect": "PublishOracle",
+        "occurrence": 5,
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.6",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 110,
+        "name": "occurrence6",
+        "text": "let _ \u2190 ops.queryOracle 0 6 false"
+      },
+      "realizes": {
+        "effect": "QueryOracle",
+        "occurrence": 6,
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.7",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 111,
+        "name": "occurrence7",
+        "text": "let _ \u2190 ops.answerOracle 6"
+      },
+      "realizes": {
+        "effect": "AnswerOracle",
+        "occurrence": 7,
+        "target": 6
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 7,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 7,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.8",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 112,
+        "name": "occurrence8",
+        "text": "let _ \u2190 ops.publishOracle 1"
+      },
+      "realizes": {
+        "effect": "PublishOracle",
+        "occurrence": 8,
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 8,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 8,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.9",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 113,
+        "name": "occurrence9",
+        "text": "let _ \u2190 ops.queryOracle 1 9 true"
+      },
+      "realizes": {
+        "effect": "QueryOracle",
+        "occurrence": 9,
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 9,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 9,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.10",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 114,
+        "name": "occurrence10",
+        "text": "let _ \u2190 ops.answerOracle 9"
+      },
+      "realizes": {
+        "effect": "AnswerOracle",
+        "occurrence": 10,
+        "target": 9
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 10,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 10,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.11",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 115,
+        "name": "occurrence11",
+        "text": "let _ \u2190 ops.publishOracle 2"
+      },
+      "realizes": {
+        "effect": "PublishOracle",
+        "occurrence": 11,
+        "target": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 11,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 11,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.12",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 116,
+        "name": "occurrence12",
+        "text": "let _ \u2190 ops.queryOracle 2 12 false"
+      },
+      "realizes": {
+        "effect": "QueryOracle",
+        "occurrence": 12,
+        "target": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 12,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 12,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.13",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 117,
+        "name": "occurrence13",
+        "text": "let _ \u2190 ops.answerOracle 12"
+      },
+      "realizes": {
+        "effect": "AnswerOracle",
+        "occurrence": 13,
+        "target": 12
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 13,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 13,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.14",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 118,
+        "name": "occurrence14",
+        "text": "let challenge0 \u2190 ops.sampleChallenge 0 []"
+      },
+      "realizes": {
+        "effect": "Challenge",
+        "occurrence": 14,
+        "sample_count": 1,
+        "shared_value": "challenge0",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.15",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 119,
+        "name": "occurrence15",
+        "text": "let challenge1 \u2190 ops.sampleChallenge 1 []"
+      },
+      "realizes": {
+        "effect": "Challenge",
+        "occurrence": 15,
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.16",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 120,
+        "name": "occurrence16",
+        "text": "let challenge2 \u2190 ops.sampleChallenge 2 [challenge1]"
+      },
+      "realizes": {
+        "effect": "Challenge",
+        "occurrence": 16,
+        "target": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "owner_view": "PublicCoinView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.17",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 121,
+        "name": "occurrence17",
+        "text": "let _ \u2190 ops.invokeCheck 0"
+      },
+      "realizes": {
+        "effect": "InvokeCheck",
+        "occurrence": 17,
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 17,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 17,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.18",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 122,
+        "name": "occurrence18",
+        "text": "let _ \u2190 ops.applyReduction 0 [challenge0, challenge1]"
+      },
+      "realizes": {
+        "effect": "ApplyReduction",
+        "occurrence": 18,
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 18,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 18,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.19",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 123,
+        "name": "occurrence19",
+        "text": "let _ \u2190 ops.applyReduction 1 [challenge0, challenge2]"
+      },
+      "realizes": {
+        "effect": "ApplyReduction",
+        "occurrence": 19,
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 19,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 19,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.20",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 124,
+        "name": "occurrence20",
+        "text": "let acceptActive \u2190 ops.terminalGuard 0"
+      },
+      "realizes": {
+        "effect": "ReachTerminal",
+        "occurrence": 20,
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 20,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 20,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.21",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 128,
+        "name": "occurrence21",
+        "text": "let abortActive \u2190 ops.terminalGuard 1"
+      },
+      "realizes": {
+        "effect": "ReachTerminal",
+        "occurrence": 21,
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 21,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 21,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "occurrence.22",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 132,
+        "name": "occurrence22",
+        "text": "return Verdict.reject"
+      },
+      "realizes": {
+        "effect": "ReachTerminal",
+        "occurrence": 22,
+        "target": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "carrier": "integrated-baseline",
+          "owner_path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 22,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "owner_view": "EffectView",
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 22,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    }
+  ],
+  "format": "zkc.formal-provider-observables-f2o1.ledger.v0",
+  "gaps": [
+    {
+      "class": "operational-distribution",
+      "construct": "challenge.0.law",
+      "needed_for": "generated construct challenge.0.law"
+    },
+    {
+      "class": "operational-distribution",
+      "construct": "challenge.1.law",
+      "needed_for": "generated construct challenge.1.law"
+    },
+    {
+      "class": "operational-distribution",
+      "construct": "challenge.2.law",
+      "needed_for": "generated construct challenge.2.law"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "check.0.denotation",
+      "needed_for": "generated construct check.0.denotation"
+    },
+    {
+      "class": "property-premise",
+      "construct": "claim.0.premise",
+      "needed_for": "generated construct claim.0.premise"
+    },
+    {
+      "class": "property-premise",
+      "construct": "claim.1.premise",
+      "needed_for": "generated construct claim.1.premise"
+    },
+    {
+      "class": "property-premise",
+      "construct": "claim.2.premise",
+      "needed_for": "generated construct claim.2.premise"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "guard.0.denotation",
+      "needed_for": "generated construct guard.0.denotation"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "guard.20.denotation",
+      "needed_for": "generated construct guard.20.denotation"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "guard.21.denotation",
+      "needed_for": "generated construct guard.21.denotation"
+    },
+    {
+      "class": "module-effect-denotation",
+      "construct": "module.0.denotation",
+      "needed_for": "generated construct module.0.denotation"
+    },
+    {
+      "class": "module-effect-denotation",
+      "construct": "module.1.denotation",
+      "needed_for": "generated construct module.1.denotation"
+    },
+    {
+      "class": "module-effect-denotation",
+      "construct": "module.2.denotation",
+      "needed_for": "generated construct module.2.denotation"
+    },
+    {
+      "class": "oracle-carrier-representation",
+      "construct": "oracle.0.carrier",
+      "needed_for": "generated construct oracle.0.carrier"
+    },
+    {
+      "class": "oracle-carrier-representation",
+      "construct": "oracle.1.carrier",
+      "needed_for": "generated construct oracle.1.carrier"
+    },
+    {
+      "class": "oracle-carrier-representation",
+      "construct": "oracle.2.carrier",
+      "needed_for": "generated construct oracle.2.carrier"
+    },
+    {
+      "class": "operational-outcome-map",
+      "construct": "provider.outcome-map",
+      "needed_for": "generated construct provider.outcome-map"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "reduction.0.denotation",
+      "needed_for": "generated construct reduction.0.denotation"
+    },
+    {
+      "class": "property-premise",
+      "construct": "reduction.0.premise",
+      "needed_for": "generated construct reduction.0.premise"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "reduction.1.denotation",
+      "needed_for": "generated construct reduction.1.denotation"
+    },
+    {
+      "class": "property-premise",
+      "construct": "reduction.1.premise",
+      "needed_for": "generated construct reduction.1.premise"
+    }
+  ],
+  "marker": "-- [f2o1:<id>]",
+  "premises": [
+    {
+      "id": "d1-authentication",
+      "statement": "D1 admission authenticates exact Core, Protocol, profile, module, algorithm, and contract bytes before projection."
+    },
+    {
+      "id": "view-issuance-boundary",
+      "statement": "F0-V2B2D3 supplies research-gate bodies for all six normalized views; this adapted ledger does not publish target owner authority."
+    }
+  ],
+  "provider": {
+    "imported_module": "VCVio.OracleComp.ProbComp",
+    "interaction_monad": "ProbComp = OracleComp unifSpec",
+    "name": "VCVio",
+    "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",
+    "shape": "generic OracleComp/ProbComp do-block",
+    "toolchain": "leanprover/lean4:v4.33.1"
+  },
+  "rendering_rules": [
+    {
+      "id": "one-occurrence-one-bind",
+      "rule": "each Core occurrence renders as exactly one do-block construct in Core order"
+    },
+    {
+      "id": "one-construct-one-leaf-or-gap",
+      "rule": "each construct claims exactly one active view leaf, or one typed no_source_coordinate gap"
+    },
+    {
+      "id": "challenge-sharing",
+      "rule": "the shared Challenge is sampled once and the resulting value is passed to both consuming Reductions"
+    },
+    {
+      "id": "joint-challenges",
+      "rule": "joint member 2 receives exactly the prior joint member 1; the group and index remain separately ledgered"
+    },
+    {
+      "id": "oracle-modes",
+      "rule": "Oracle mode and query visibility are parameters unless an issued EffectView leaf determines them"
+    },
+    {
+      "id": "first-active-terminal",
+      "rule": "Accept, then Abort, then fallback Reject render as nested first-active branches"
+    }
+  ],
+  "six_view_adapter": {
+    "carrier_order": [
+      "integrated-baseline",
+      "private-verifier-output-sink",
+      "invalid-module-control-sink",
+      "history-challenge-condition",
+      "logical-reject-preemption"
+    ],
+    "checker_compatibility": "virtual paths prefix carrier and owner-view ordinals; the preserved PublicCoinView discriminator is required by the unchanged F2-O1 checker, while carrier, owner_view, and owner_path retain the actual source.",
+    "closed_gap_class": "operational-owner-view",
+    "format": "zkc.f0v2b2d3.f2o1-six-view-adapter.v0",
+    "leaf_count": 8402,
+    "view_order": [
+      "PublicBindingView",
+      "StrategyDecisionView",
+      "PublicCoinView",
+      "EffectView",
+      "ClaimReductionView",
+      "ExecutionView"
+    ]
+  },
+  "subject": {
+    "core_id": "zkcidv0:pir.interactive-core:02cb7cce9cc67a6495b078418147f6a7f50fcbc8ca643a4cd88f41660596b45f",
+    "occurrence_count": 23,
+    "protocol_id": "zkcidv0:pir.protocol:802dd782f76d9a761820fe6b45e824434eb4fe6fd9f3aab714ba9cd40f3b7328",
+    "scenario": "integrated-baseline",
+    "view_status": {
+      "ClaimReductionView": {
+        "implementation": "evaluation/formal-source-integrated-views-f0v2b2d3/model.py",
+        "leaf_count": 93,
+        "status": "realized-by-f0v2b2d3-research-gate"
+      },
+      "EffectView": {
+        "implementation": "evaluation/formal-source-integrated-views-f0v2b2d3/model.py",
+        "leaf_count": 280,
+        "status": "realized-by-f0v2b2d3-research-gate"
+      },
+      "ExecutionView": {
+        "implementation": "evaluation/formal-source-integrated-views-f0v2b2d3/model.py",
+        "leaf_count": 117,
+        "status": "realized-by-f0v2b2d3-research-gate"
+      },
+      "PublicBindingView": {
+        "implementation": "evaluation/formal-source-integrated-views-f0v2b2d3/model.py",
+        "leaf_count": 35,
+        "status": "realized-by-f0v2b2d3-research-gate"
+      },
+      "PublicCoinView": {
+        "implementation": "evaluation/formal-source-integrated-views-f0v2b2d3/model.py",
+        "leaf_count": 906,
+        "status": "realized-by-f0v2b2d3-research-gate"
+      },
+      "StrategyDecisionView": {
+        "implementation": "evaluation/formal-source-integrated-views-f0v2b2d3/model.py",
+        "leaf_count": 250,
+        "status": "realized-by-f0v2b2d3-research-gate"
+      }
+    }
+  }
+}

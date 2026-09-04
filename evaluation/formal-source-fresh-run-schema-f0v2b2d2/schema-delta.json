@@ -1,0 +1,122 @@
+{
+  "format": "zkc.formal-source-fresh-run-schema-f0v2b2d2.schema-delta.v0",
+  "predecessor": {
+    "format": "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-source.v0",
+    "sha256": "376cefb165ff92f0152856996a96ae02f7e04b9e6c679d01f85e10471c10ca41"
+  },
+  "candidate_format": "zkc.formal-source-fresh-run-schema-f0v2b2d2.schema-source.v0",
+  "candidate_scope": "fresh-completed-record-schema-over-five-d1-carriers",
+  "replace_definitions": {
+    "ChallengeReceiptSchemaEntry": {
+      "prior_sha256": "5f055953f9bc482a2c28e489a796192eca48e3d05ab909c381e3c778043b10e5",
+      "value": {
+        "record": [
+          [0, {"ref": "ChallengeRef"}],
+          [1, {"ref": "OccurrenceRef"}],
+          [2, {"ref": "ModuleDeclarationRef"}],
+          [3, {"ref": "ValueType"}]
+        ]
+      }
+    },
+    "OracleReceiptSchema": {
+      "prior_sha256": "4abada230d38eed7d55df91b11fb5ddb0f8be29c8519dd75a067a585c5b7cb7c",
+      "value": {
+        "variant": [
+          [0, {"record": [
+            [0, {"ref": "OccurrenceRef"}],
+            [1, {"ref": "OracleRef"}],
+            [2, {"ref": "OraclePublicationMode"}],
+            [3, {"ref": "OracleVisibility"}],
+            [4, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "ValueType"}}}],
+            [5, {"ref": "PublicationObservationSchema"}]
+          ]}],
+          [1, {"record": [
+            [0, {"ref": "OccurrenceRef"}],
+            [1, {"ref": "OracleRef"}],
+            [2, {"ref": "ValueType"}],
+            [3, {"ref": "OracleVisibility"}]
+          ]}],
+          [2, {"record": [
+            [0, {"ref": "OccurrenceRef"}],
+            [1, {"ref": "OracleRef"}],
+            [2, {"ref": "ValueType"}],
+            [3, {"ref": "OracleVisibility"}]
+          ]}]
+        ]
+      }
+    },
+    "RuntimeSchema": {
+      "prior_sha256": "2b90eb8dbcc4cef3c4d7c00dc42245f6b73b49195ba9cdf6c64637c93f2d941c",
+      "value": {
+        "record": [
+          [0, {"sequence": {"min": 1, "max": 16384, "discipline": "ordered", "element": {"ref": "OccurrenceOutputSchemaEntry"}}}],
+          [1, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "ChallengeReceiptSchemaEntry"}}}],
+          [2, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "OracleReceiptSchema"}}}],
+          [3, {"sequence": {"min": 1, "max": 16384, "discipline": "ordered", "element": {"ref": "TerminalRecordSchemaEntry"}}}],
+          [4, {"sequence": {"min": 3, "max": 3, "discipline": "ordered", "element": {"ref": "CompletedRecordLaneSchema"}}}],
+          [5, {"ref": "QualifiedOperationalNoncompletionSchema"}]
+        ]
+      }
+    },
+    "TerminalRecordSchemaEntry": {
+      "prior_sha256": "c98af16399f6a97a79375d761cb5dbfd4d165cd3027eaa1516045c00fddd9768",
+      "value": {
+        "record": [
+          [0, {"ref": "TerminalRef"}],
+          [1, {"ref": "OccurrenceRef"}],
+          [2, {"ref": "TerminalVerdict"}],
+          [3, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "ValueType"}}}],
+          [4, {"sequence": {"min": 1, "max": 16384, "discipline": "ordered", "element": {"ref": "OccurrenceRef"}}}]
+        ]
+      }
+    }
+  },
+  "add_definitions": {
+    "CompletedRecordLaneSchema": {
+      "variant": [
+        [0, {"sequence": {"min": 1, "max": 16384, "discipline": "ordered", "element": {"ref": "TerminalRecordSchemaEntry"}}}],
+        [1, {"ref": "Unit"}],
+        [2, {"sequence": {"min": 1, "max": 16384, "discipline": "ordered", "element": {"ref": "StrategyStopSchemaEntry"}}}]
+      ]
+    },
+        "OperationalNoncompletionClass": {
+          "variant": [
+            [0, {"ref": "OperationalUnsupportedSchema"}],
+            [1, {"ref": "OperationalMissingDependencySchema"}],
+            [2, {"ref": "OperationalCannotAnswerSchema"}],
+            [3, {"ref": "OperationalKindMismatchSchema"}],
+            [4, {"ref": "OperationalMalformedSchema"}],
+            [5, {"ref": "OperationalRefusedSchema"}],
+            [6, {"ref": "OperationalDeterministicLimitExceededSchema"}],
+            [7, {"ref": "OperationalCheckerFailureSchema"}]
+          ]
+        },
+        "OperationalUnsupportedSchema": {"ref": "Unit"},
+        "OperationalMissingDependencySchema": {"ref": "Unit"},
+        "OperationalCannotAnswerSchema": {"ref": "Unit"},
+        "OperationalKindMismatchSchema": {"ref": "Unit"},
+        "OperationalMalformedSchema": {"ref": "Unit"},
+        "OperationalRefusedSchema": {"ref": "Unit"},
+        "OperationalDeterministicLimitExceededSchema": {"ref": "Unit"},
+        "OperationalCheckerFailureSchema": {"ref": "Unit"},
+        "PublicationObservationSchema": {
+      "variant": [
+        [0, {"ref": "ValueType"}],
+        [1, {"record": [
+          [0, {"ref": "OracleOrigin"}],
+          [1, {"ref": "ModuleDeclarationRef"}]
+        ]}],
+        [2, {"ref": "Unit"}]
+      ]
+    },
+    "QualifiedOperationalNoncompletionSchema": {
+      "sequence": {"min": 8, "max": 8, "discipline": "ordered", "element": {"ref": "OperationalNoncompletionClass"}}
+    },
+    "StrategyStopSchemaEntry": {
+      "record": [
+        [0, {"ref": "OccurrenceRef"}],
+        [1, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "OccurrenceRef"}}}]
+      ]
+    }
+  }
+}

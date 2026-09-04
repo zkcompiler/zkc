@@ -1,0 +1,90 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "analysis-kernel",
+  "catalog_namespace": "analysis",
+  "profile_family": "analysis.kernel",
+  "revision": 0,
+  "expected_imports": [],
+  "supported_subject_kinds": [
+    "analysis.hypothesis-context"
+  ],
+  "fragments": [
+    {
+      "name": "kernel-foundation-semantics",
+      "owner_page": "docs-next/analysis/analysis-model.md",
+      "start": "zkc-profile-source:analysis-kernel-foundation-semantics:start",
+      "end": "zkc-profile-source:analysis-kernel-foundation-semantics:end"
+    },
+    {
+      "name": "kernel-domain-semantics",
+      "owner_page": "docs-next/analysis/analysis-model.md",
+      "start": "zkc-profile-source:analysis-kernel-domain-semantics:start",
+      "end": "zkc-profile-source:analysis-kernel-domain-semantics:end"
+    },
+    {
+      "name": "kernel-publication",
+      "owner_page": "docs-next/analysis/profile-publication.md",
+      "start": "zkc-profile-source:analysis-kernel-publication:start",
+      "end": "zkc-profile-source:analysis-kernel-publication:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "analysis.body-compiler",
+      "name": "kernel-body-v0",
+      "revision": 0,
+      "fragment": "kernel-publication",
+      "selector": "AnalysisKernelBodyCompilerV0(kind,body) =",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "analysis-profile-calculus-v0",
+      "revision": 0,
+      "fragment": "kernel-foundation-semantics",
+      "selector": "AnalysisLanguageProfileLawProgramV0 = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "common-analysis-domain-v0",
+      "revision": 0,
+      "fragment": "kernel-domain-semantics",
+      "selector": "### 2.1 Source read slots",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "kernel-boundary-v0",
+      "revision": 0,
+      "fragment": "kernel-publication",
+      "selector": "AnalysisKernelProfileSourceV0 = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.evaluator-signature",
+      "name": "kernel-admission-v0",
+      "revision": 0,
+      "fragment": "kernel-publication",
+      "selector": "AdmitAnalysisKernelSubjectV0(",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.failure-schema",
+      "name": "kernel-admission-outcome-v0",
+      "revision": 0,
+      "fragment": "kernel-publication",
+      "selector": "AnalysisKernelAdmissionOutcomeV0 =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "analysis.hypothesis-context",
+      "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "kernel-body-v0"},
+      "laws": ["analysis-profile-calculus-v0", "common-analysis-domain-v0", "kernel-boundary-v0"],
+      "evaluator": "kernel-admission-v0",
+      "failure_schema": "kernel-admission-outcome-v0"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "oir-projection-relation",
+  "catalog_namespace": "oir",
+  "profile_family": "oir.endpoint-projection-relation",
+  "revision": 0,
+  "expected_imports": [
+    "endpoint-source-view",
+    "oir-endpoint-graph"
+  ],
+  "supported_subject_kinds": [
+    "oir.projection-proposition"
+  ],
+  "fragments": [
+    {
+      "name": "projection-semantics",
+      "owner_page": "docs-next/oir/projection-contract.md",
+      "start": "zkc-profile-source:oir-projection-semantics:start",
+      "end": "zkc-profile-source:oir-projection-semantics:end"
+    },
+    {
+      "name": "projection-body",
+      "owner_page": "docs-next/oir/projection-contract.md",
+      "start": "zkc-profile-source:oir-projection-body:start",
+      "end": "zkc-profile-source:oir-projection-body:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "oir.body-compiler",
+      "name": "projection-proposition-body-v0",
+      "revision": 0,
+      "fragment": "projection-body",
+      "selector": "ProjectionPropositionDomainBody(x) = R",
+      "dependencies": [
+        {
+          "profile": "endpoint-source-view",
+          "kind": "pir.body-compiler",
+          "name": "endpoint-source-view-body-v0"
+        },
+        {
+          "profile": "oir-endpoint-graph",
+          "kind": "oir.body-compiler",
+          "name": "endpoint-graph-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "oir.semantic-law",
+      "name": "exact-endpoint-projection-v0",
+      "revision": 0,
+      "fragment": "projection-semantics",
+      "selector": "ProjectionCorrectV0((source_profile,S),(oir_profile,O)) :=",
+      "dependencies": []
+    },
+    {
+      "kind": "oir.evaluator-signature",
+      "name": "projection-validator-v0",
+      "revision": 0,
+      "fragment": "projection-semantics",
+      "selector": "ValidateProjection(request: ProjectionValidationRequest)",
+      "dependencies": []
+    },
+    {
+      "kind": "oir.failure-schema",
+      "name": "projection-validation-outcome-v0",
+      "revision": 0,
+      "fragment": "projection-semantics",
+      "selector": "ProjectionValidationOutcomeBody =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "oir.projection-proposition",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "oir.body-compiler",
+        "name": "projection-proposition-body-v0"
+      },
+      "laws": [
+        "exact-endpoint-projection-v0"
+      ],
+      "evaluator": "projection-validator-v0",
+      "failure_schema": "projection-validation-outcome-v0"
+    }
+  ]
+}

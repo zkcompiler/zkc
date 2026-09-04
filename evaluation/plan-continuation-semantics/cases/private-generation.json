@@ -1,0 +1,8 @@
+{
+  "nova": {"private": {"w1": 5, "w2": 8}, "randomness": {"blind": 4}},
+  "hypernova": {"private": {"witness": 9}},
+  "cyclefold": {"private": {"primary_in": 6, "companion_in": 10}},
+  "protostar": {"private": {"old_acc": 12, "nark_witness": 3}},
+  "latticefold_plus": {"private": {"f0": 4, "f1": 7, "f2": 11}},
+  "authority": "declassified toy generation inputs; excluded from semantic identities and source claims"
+}

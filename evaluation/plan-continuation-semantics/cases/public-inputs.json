@@ -1,0 +1,8 @@
+{
+  "nova": {"statement": 7, "session": "nova", "fresh": {"fold_coin": 3}},
+  "hypernova": {"statement": 7, "session": "hypernova", "fresh": {"gamma_beta": 2, "round_coin": 5, "rho": 7}},
+  "cyclefold": {"statement": 7, "session": "cyclefold", "fresh": {"rho": 11, "rho_star": 13}},
+  "protostar": {"statement": 7, "session": "protostar", "fresh": {"alpha": 17}},
+  "latticefold_plus": {"statement": 7, "session": "latticefold-plus", "fresh": {"batch_coin": 19}},
+  "authority": "declassified public invocation and scripted Fresh inputs; fixture data, not source authentication"
+}

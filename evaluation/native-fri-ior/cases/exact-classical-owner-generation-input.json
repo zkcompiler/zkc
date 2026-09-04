@@ -1,0 +1,23 @@
+{
+  "authority": "owner-generation-input-not-public-report-input",
+  "disclosure": {
+    "classification": "declassified-public-test-vector-populates-owner-only-roles",
+    "contains_real_secret": false
+  },
+  "nonclaims": [
+    "does-not-establish-confidentiality-or-secure-randomness",
+    "deterministic-salt-derivation-is-test-generation-only"
+  ],
+  "salt_seed": "7a6b632d636c6173736963616c2d6672692d6f776e65722d736565642d7631",
+  "schema": "zkc.classical-fri.owner-generation-input.v1",
+  "source_coefficients": [
+    3,
+    5,
+    7,
+    11,
+    13,
+    17,
+    19,
+    23
+  ]
+}
