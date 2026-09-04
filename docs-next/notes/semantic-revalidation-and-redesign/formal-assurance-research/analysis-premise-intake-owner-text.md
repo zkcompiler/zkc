@@ -2,12 +2,13 @@
 
 > **Kind:** owner-text record (formal-assurance research, Analysis pass)
 > **State:** Authored 2026-09-03 on a branch stacked on the migration branch;
-> repaired after its first independent review and again after its second,
-> which closed three of seven questions and left four open on exact grounds
-> that are now repaired in the text; the provider-carrier decision packet's
-> first two items are adopted in the same repair; the existing Analysis
-> packages are not yet migrated to the new fields; a third review round and
-> publication remain, the latter the user's gate.
+> repaired after each of five independent review rounds, the last of them
+> after the pre-freeze deep review's repairs; the fifth round closed every
+> question except the declared hold on the unpublished VCVio declaration;
+> the provider-carrier decision packet's first two items are adopted; the
+> existing Analysis packages are migrated to the new fields; the re-pins of
+> this branch's packages to the repaired owner text and publication remain,
+> the latter the user's gate.
 > **Inputs:** the migration decisions on the sampling law and the outcome
 > partition (`f0-v2c-decision-inputs.md`, Sections 4, 5, and 10) and the
 > intake design of `analysis-named-premise-intake.md`.
@@ -128,8 +129,9 @@ its five dependents rotate, on top of the migration's seventeen.
   the provider-map clause of Section 3.2 now states that transport preserves
   measure, that unmodelled and missing mass stays where it is, and that a
   conditional provider statement transports only through a lane union whose
-  mass the statement fixes or an `OperationalCompletion` premise. A fifth
-  review round checks these changes.
+  mass the statement fixes or an `OperationalCompletion` premise. The fifth
+  review round closed these changes: twelve of thirteen questions
+  affirmative, the thirteenth the VCVio hold.
 - An independent review of this text, as for the migration.
 
 ## 4. Non-claims

@@ -773,6 +773,11 @@ provider, extraction tool, or durable schema.
   closed and the frozen relation-bound Fresh, fixed-extractor, and family
   vectors reproduced independently, the one `CannotAnswer` being the VCVio
   provider and carrier declaration the profile does not yet publish.
+  Round five, after the pre-freeze deep review's repairs, closes twelve of
+  thirteen questions, including the four added for the family-source kind,
+  the fixed-setup domain, measure preservation, and the owner-read catalog
+  join; the thirteenth is the declared hold on the unpublished VCVio
+  declaration, reported separately.
 - [`f0v2d2-analysis-package-migration.md`](f0v2d2-analysis-package-migration.md)
   migrates the closure package, the finite cover, the joined boundary, and
   the intake probe to the named-premise fields the owner text now carries,
