@@ -1,0 +1,137 @@
+{
+  "adjudication_sha256": "65222397363d60ef8d59f9ddd0a65b48cf0d0b8a2728ebd6b38a0ca596d2c188",
+  "aggregate": "F0V2C2-A-HOLDOUTS-READJUDICATED",
+  "finding_codes": [
+    [
+      "holdout-source-bytes",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUT-SOURCE-BYTES"
+    ],
+    [
+      "holdout-file-inventory",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUT-FILE-INVENTORY"
+    ],
+    [
+      "migrated-owner-page-bytes",
+      "Affirmative",
+      "F0V2C2-A-MIGRATED-OWNER-BYTES"
+    ],
+    [
+      "migration-and-axis-source-bytes",
+      "Affirmative",
+      "F0V2C2-A-MIGRATION-AXIS-BYTES"
+    ],
+    [
+      "migrated-terminal-view-and-outcome-laws",
+      "Affirmative",
+      "F0V2C2-A-MIGRATED-OWNER-LAWS"
+    ],
+    [
+      "represented-holdout-closed-forward-state",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUT-CLAIM-STATUS"
+    ],
+    [
+      "nested-guard-must-facts",
+      "Affirmative",
+      "F0V2C2-A-NESTED-GUARD-MUST-FACTS"
+    ],
+    [
+      "legacy-whir-guard-schedule",
+      "Refused",
+      "F0V2C2-R-WHIR-GUARD-SCHEDULE"
+    ],
+    [
+      "corrected-whir-reduction-guards",
+      "Affirmative",
+      "F0V2C2-A-WHIR-IDENTICAL-REDUCTION-GUARDS"
+    ],
+    [
+      "structural-axis-interpretation-failure-meaning",
+      "Affirmative",
+      "F0V2C2-A-AXIS-INTERPRETATION-FAILURE-MEANING"
+    ],
+    [
+      "five-holdout-eight-row-table",
+      "Affirmative",
+      "F0V2C2-A-COMPLETE-VERDICT-TABLE"
+    ],
+    [
+      "WHIR Construction 5.1 with a closed finite query plan verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-WHIR-AGREES"
+    ],
+    [
+      "Circle STARK boundary analysis at one finite instance verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-CIRCLE-AGREES"
+    ],
+    [
+      "WARPfold finite fold verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-WARPFOLD-FOLD-AGREES"
+    ],
+    [
+      "WARPfold broad cross-system application verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-WARPFOLD-CROSS-SYSTEM-AGREES"
+    ],
+    [
+      "Physical multiparty Sumcheck verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-PHYSICAL-MULTIPARTY-AGREES"
+    ],
+    [
+      "Commitment-anchored virtual two-role Sumcheck proof verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-VIRTUAL-SUMCHECK-AGREES"
+    ],
+    [
+      "Complete noninteractive transparent SNARK over Galois rings with an omitted transform verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-GALOIS-NONINTERACTIVE-AGREES"
+    ],
+    [
+      "Explicit interactive Galois-ring components verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-GALOIS-INTERACTIVE-AGREES"
+    ],
+    [
+      "fitting-holdout-six-view-coverage",
+      "Affirmative",
+      "F0V2C2-A-FIT-VIEW-COVERAGE"
+    ],
+    [
+      "breaking-holdout-missing-coordinate-census",
+      "Affirmative",
+      "F0V2C2-A-BREAK-COORDINATE-CENSUS"
+    ],
+    [
+      "fitting-holdout-outcome-partition",
+      "Affirmative",
+      "F0V2C2-A-FIT-OUTCOME-PARTITION"
+    ],
+    [
+      "breaking-holdout-outcome-gaps",
+      "Affirmative",
+      "F0V2C2-A-BREAK-OUTCOME-GAPS"
+    ],
+    [
+      "boundary-analysis-terminal-carrier-exactness",
+      "CannotAnswer",
+      "F0V2C2-C-EXACT-TERMINAL-CARRIERS"
+    ],
+    [
+      "canonical-family-view-reference-boundary",
+      "Affirmative",
+      "F0V2C2-A-FAMILY-VIEW-REFERENCE-BOUNDARY"
+    ],
+    [
+      "holdout-readjudication",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUTS-READJUDICATED"
+    ]
+  ],
+  "findings_sha256": "7a0646a2e9298755cb3a4218e4ac67afa556d1261cd45ed7952343165e6b0cc3"
+}

@@ -3,7 +3,7 @@
   "key": "endpoint-source-view",
   "catalog_namespace": "pir",
   "profile_family": "pir.endpoint-source-view",
-  "revision": 0,
+  "revision": 2,
   "expected_imports": [
     "canonical-framed-fiat-shamir",
     "interaction",
@@ -34,7 +34,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "endpoint-source-view-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "endpoint-source-view-semantics",
       "selector": "EndpointSourceViewDomainBody(x) = R",
       "dependencies": [
@@ -79,7 +79,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "supplement-authority-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "endpoint-source-view-semantics",
       "selector": "FutureOwnerSupplementBodyV0(x) = R",
       "dependencies": []
@@ -107,6 +107,62 @@
       "fragment": "endpoint-source-view-semantics",
       "selector": "EndpointExtractionOutcomeBody =",
       "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-binding-payload-body-v0",
+      "revision": 1,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "EndpointSourceBindingPayloadBody(x) =",
+      "dependencies": [
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "endpoint-source-view-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-capability-requirement-body-v0",
+      "revision": 1,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "EndpointSourceCapabilityRequirementBody(x) =",
+      "dependencies": [
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "endpoint-source-view-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-no-policy-body-v0",
+      "revision": 1,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "EndpointSourceNoPolicyBody(x) =",
+      "dependencies": [
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "endpoint-source-view-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-policy-closure-body-v0",
+      "revision": 1,
+      "fragment": "endpoint-source-view-semantics",
+      "selector": "EndpointSourcePolicyClosureBody(x) =",
+      "dependencies": [
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "endpoint-source-view-body-v0"
+        }
+      ]
     }
   ],
   "subjects": [
@@ -173,7 +229,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "endpoint-source-view-body-v0"
+        "name": "source-binding-payload-body-v0"
       },
       "laws": [
         "supplement-authority-v0"
@@ -186,7 +242,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "endpoint-source-view-body-v0"
+        "name": "source-capability-requirement-body-v0"
       },
       "laws": [
         "supplement-authority-v0"
@@ -199,7 +255,7 @@
       "body_compiler": {
         "profile": "interaction",
         "kind": "pir.body-compiler",
-        "name": "source-authority-envelope-body-v0"
+        "name": "source-consumer-role-body-v0"
       },
       "laws": [
         "supplement-authority-v0"
@@ -212,7 +268,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "endpoint-source-view-body-v0"
+        "name": "source-no-policy-body-v0"
       },
       "laws": [
         "supplement-authority-v0"
@@ -225,7 +281,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "endpoint-source-view-body-v0"
+        "name": "source-policy-closure-body-v0"
       },
       "laws": [
         "supplement-authority-v0"
@@ -238,7 +294,7 @@
       "body_compiler": {
         "profile": "interaction",
         "kind": "pir.body-compiler",
-        "name": "source-authority-envelope-body-v0"
+        "name": "source-purpose-role-body-v0"
       },
       "laws": [
         "supplement-authority-v0"

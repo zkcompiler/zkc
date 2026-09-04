@@ -36,7 +36,7 @@ SCHEMA_DELTA = HERE / "schema-delta.json"
 CANDIDATE_SCHEMA_FORMAT = (
     "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-source.v0"
 )
-CANDIDATE_SCHEMA_SCOPE = "interaction-r2-expanded-terminal-normalized-six-view-grammar"
+CANDIDATE_SCHEMA_SCOPE = "interaction-r3-expanded-terminal-normalized-six-view-grammar"
 
 
 class ColdTerminalError(ValueError):
@@ -163,7 +163,7 @@ def configure(profile_digest: str, profile_body_sha256: str) -> dict[str, Any]:
     grammar = {key: value for key, value in candidate.items() if key != "owner_profile"}
     candidate["owner_profile"] = {
         "key": "interaction",
-        "revision": 2,
+        "revision": 3,
         "profile_digest": profile_digest,
         "profile_body_sha256": profile_body_sha256,
     }

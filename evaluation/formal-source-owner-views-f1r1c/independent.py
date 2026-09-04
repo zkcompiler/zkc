@@ -21,6 +21,13 @@ VIEW_BODIES = (
     "ClaimReductionViewBody",
     "ExecutionViewBody",
 )
+COORDINATE_BODY_GRAMMARS = (
+    "PIRStaticViewCoordinateBody",
+    "PIRViewPathStepBody",
+    "PIRViewAtomicBoundaryBody",
+    "PIRStaticViewFieldCoordinateBody",
+    "PIRStaticViewReadManifestBody",
+)
 COMMON_CATALOG_KINDS = frozenset(
     {
         "pir.body-compiler",
@@ -30,6 +37,10 @@ COMMON_CATALOG_KINDS = frozenset(
         "pir.source-fragment",
         "pir.subject-language",
     }
+)
+LAW_FIELD_SELECTION_PATTERN = re.compile(
+    rb"\((StrategyDecisionView|ExecutionView),\s*([a-z_]+)\)\s*"
+    rb"->\s*the profile's pir\.semantic-law declaration\s*([a-z0-9-]+),"
 )
 
 
@@ -70,7 +81,7 @@ def inventory() -> Mapping[str, Any]:
     static_source = fragments["interaction-static-views"]
     body_source = fragments["interaction-body-grammar"]
     static_fragment = _extract(page, static_source["start"], static_source["end"])
-    body_fragment = _extract(page, body_source["start"], body_source["end"])
+    _extract(page, body_source["start"], body_source["end"])
 
     explicit_kinds = {item["kind"] for item in manifest["definitions"]}
     all_kinds = explicit_kinds | {"pir.source-fragment", "pir.subject-language"}
@@ -83,6 +94,21 @@ def inventory() -> Mapping[str, Any]:
     source_kinds = tuple(
         sorted(kind for kind in subjects if kind.startswith("pir.source-"))
     )
+    definitions = {
+        (item["kind"], item["name"]): item for item in manifest["definitions"]
+    }
+    law_field_selection = {
+        f"{view.decode('ascii')}.{field.decode('ascii')}": declaration.decode("ascii")
+        for view, field, declaration in LAW_FIELD_SELECTION_PATTERN.findall(static_fragment)
+    }
+    schema_names = (
+        "public-binding-view-v0",
+        "strategy-decision-view-v0",
+        "public-coin-view-v0",
+        "effect-view-v0",
+        "claim-reduction-view-v0",
+        "execution-view-v0",
+    )
     return {
         "view_bodies": [
             body
@@ -91,15 +117,39 @@ def inventory() -> Mapping[str, Any]:
         ],
         "extension_catalogs": sorted(all_kinds - COMMON_CATALOG_KINDS),
         "selected_view_body_declarations": [
-            body for body in VIEW_BODIES if any(body in item for item in selectors)
+            body
+            for body in VIEW_BODIES
+            if f"StaticViewSchema({body.removesuffix('Body')}) = {{" in selectors
         ],
         "canonical_view_body_grammars": [
             body
             for body in VIEW_BODIES
-            if f"{body}(x) = R".encode("ascii") in body_fragment
+            if f"{body} = {{".encode("ascii") in static_fragment
+            and b"StaticViewBody(view) =" in static_fragment
+        ],
+        "coordinate_body_grammars": [
+            name
+            for name in COORDINATE_BODY_GRAMMARS
+            if f"{name}(".encode("ascii") in static_fragment
+            or f"{name} =".encode("ascii") in static_fragment
         ],
         "static_fragment_body_functions": list(body_functions_text),
+        "law_field_selection": law_field_selection,
+        "static_view_schema_dependencies": {
+            name: [
+                f"{item['kind']}::{item['name']}"
+                for item in definitions[("pir.static-view-schema", name)]["dependencies"]
+            ]
+            for name in schema_names
+        },
         "source_subject_compilers": {
             kind: subjects[kind]["body_compiler"]["name"] for kind in source_kinds
         },
+        "exact_read_manifest": (
+            b"PIRStaticViewReadManifestBody(x) =" in static_fragment
+            and b"RequiredPIRViewReadClosure(view_coordinate, selected_fields) ="
+            in static_fragment
+            and b"manifest = RequiredPIRViewReadClosure(coordinate, manifest)"
+            in static_fragment
+        ),
     }

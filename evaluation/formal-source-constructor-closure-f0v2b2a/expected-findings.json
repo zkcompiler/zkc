@@ -1,79 +1,255 @@
 {
   "aggregate": {
-    "outcome": "CannotAnswer",
-    "code": "F0V2B2A-C-EXECUTABLE-CONSTRUCTOR-CLOSURE"
-  },
-  "evidence_control": {
-    "profile": {
-      "profile_digest": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
-      "body_sha256": "46a4b92b28962ace15009ca2a05ee26e92b0729fb6d7231fd46f3aa6735d1365",
-      "revision": 0
-    },
-    "fragments": {
-      "interaction_kernel_sha256": "eb17c9c10e9e00aa49df0281d108e6ca8dca81f82919257e1e29ccffe273e514",
-      "interaction_static_views_sha256": "72abedde6dcb632eb5143a07ed042e8167d38b68c64ad631cad46a91f674691e",
-      "interaction_body_grammar_sha256": "bd49798bbfa4b4c03ec35f0980c74b8d4aee59b7cd8e51d9f8e31a21dc6a0b3a"
-    },
-    "core_field_count": 14,
-    "canonical_variant_table_count": 16,
-    "canonical_variant_case_count": 57,
-    "derived_semantic_algebra_count": 5,
-    "derived_semantic_case_count": 22,
-    "closed_case_count": 79,
-    "b1_missing_variant_case_count": 20,
-    "b1_empty_reference_count": 8,
-    "required_schema_repair_count": 14,
-    "pressure_family_count": 23,
-    "covered_view_count": 6,
-    "reuse_boundary_count": 4,
-    "stage_count": 4,
-    "prohibited_shortcut_count": 8,
-    "f1r1b_bounded_control_count": 5
+    "code": "F0V2B2A-C-EXECUTABLE-CONSTRUCTOR-CLOSURE",
+    "outcome": "CannotAnswer"
   },
   "cases": [
-    {"name": "dual-interaction-profile-reconstruction", "outcome": "Affirmative", "code": "F0V2B2A-A-PROFILE"},
-    {"name": "fourteen-field-core-root-census", "outcome": "Affirmative", "code": "F0V2B2A-A-CORE-ROOT"},
-    {"name": "canonical-appendix-variant-census", "outcome": "Affirmative", "code": "F0V2B2A-A-CANONICAL-VARIANTS"},
-    {"name": "derived-semantic-algebra-census", "outcome": "Affirmative", "code": "F0V2B2A-A-DERIVED-ALGEBRAS"},
-    {"name": "exact-b1-constructor-gap", "outcome": "Affirmative", "code": "F0V2B2A-A-B1-GAP"},
-    {"name": "six-view-pressure-topology", "outcome": "Affirmative", "code": "F0V2B2A-A-PRESSURE-TOPOLOGY"},
-    {"name": "bounded-reuse-boundaries", "outcome": "Affirmative", "code": "F0V2B2A-A-REUSE-BOUNDARIES"},
-    {"name": "staged-b2-exit-program", "outcome": "Affirmative", "code": "F0V2B2A-A-STAGED-PROGRAM"},
-    {"name": "constructor-complete-schema-source", "outcome": "CannotAnswer", "code": "F0V2B2A-C-SCHEMA-SOURCE"},
-    {"name": "constructor-inhabitance", "outcome": "CannotAnswer", "code": "F0V2B2A-C-INHABITANCE"},
-    {"name": "extended-offline-owner-admission", "outcome": "CannotAnswer", "code": "F0V2B2A-C-ADMISSION"},
-    {"name": "isolation-owner-view-derivation", "outcome": "CannotAnswer", "code": "F0V2B2A-C-ISOLATION-DERIVATION"},
-    {"name": "integrated-owner-view-derivation", "outcome": "CannotAnswer", "code": "F0V2B2A-C-INTEGRATED-DERIVATION"},
-    {"name": "general-pcgraph-transfer-and-sinks", "outcome": "CannotAnswer", "code": "F0V2B2A-C-PCGRAPH"},
-    {"name": "fresh-runtime-oracle-receipt-schema", "outcome": "CannotAnswer", "code": "F0V2B2A-C-RUNTIME-SCHEMA"},
-    {"name": "target-profile-publication-and-migration", "outcome": "CannotAnswer", "code": "F0V2B2A-C-TARGET-MIGRATION"},
-    {"name": "profile-key-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PROFILE-KEY"},
-    {"name": "profile-revision-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PROFILE-REVISION"},
-    {"name": "profile-digest-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PROFILE-DIGEST"},
-    {"name": "profile-body-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PROFILE-BODY"},
-    {"name": "core-field-omission", "outcome": "Refused", "code": "F0V2B2A-R-CORE-FIELD"},
-    {"name": "core-field-reordering", "outcome": "Refused", "code": "F0V2B2A-R-CORE-ORDER"},
-    {"name": "variant-table-omission", "outcome": "Refused", "code": "F0V2B2A-R-VARIANT-TABLE"},
-    {"name": "variant-tag-omission", "outcome": "Refused", "code": "F0V2B2A-R-VARIANT-TAG"},
-    {"name": "variant-case-substitution", "outcome": "Refused", "code": "F0V2B2A-R-VARIANT-CASE"},
-    {"name": "semantic-algebra-omission", "outcome": "Refused", "code": "F0V2B2A-R-SEMANTIC-ALGEBRA"},
-    {"name": "semantic-source-clause-substitution", "outcome": "Refused", "code": "F0V2B2A-R-SOURCE-CLAUSE"},
-    {"name": "b1-variant-gap-omission", "outcome": "Refused", "code": "F0V2B2A-R-B1-VARIANT-GAP"},
-    {"name": "b1-empty-gap-omission", "outcome": "Refused", "code": "F0V2B2A-R-B1-EMPTY-GAP"},
-    {"name": "schema-repair-omission", "outcome": "Refused", "code": "F0V2B2A-R-SCHEMA-REPAIR"},
-    {"name": "pressure-family-omission", "outcome": "Refused", "code": "F0V2B2A-R-PRESSURE-FAMILY"},
-    {"name": "pressure-family-duplication", "outcome": "Refused", "code": "F0V2B2A-R-PRESSURE-DUPLICATE"},
-    {"name": "pressure-owner-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PRESSURE-OWNER"},
-    {"name": "pressure-view-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PRESSURE-VIEW"},
-    {"name": "positive-carrier-omission", "outcome": "Refused", "code": "F0V2B2A-R-POSITIVE-CARRIER"},
-    {"name": "negative-discriminator-omission", "outcome": "Refused", "code": "F0V2B2A-R-NEGATIVE-DISCRIMINATOR"},
-    {"name": "pressure-stage-substitution", "outcome": "Refused", "code": "F0V2B2A-R-PRESSURE-STAGE"},
-    {"name": "reuse-path-substitution", "outcome": "Refused", "code": "F0V2B2A-R-REUSE-PATH"},
-    {"name": "reuse-nonclaim-omission", "outcome": "Refused", "code": "F0V2B2A-R-REUSE-NONCLAIM"},
-    {"name": "stage-omission", "outcome": "Refused", "code": "F0V2B2A-R-STAGE"},
-    {"name": "stage-reordering", "outcome": "Refused", "code": "F0V2B2A-R-STAGE-ORDER"},
-    {"name": "shortcut-refusal-omission", "outcome": "Refused", "code": "F0V2B2A-R-SHORTCUT-OMISSION"},
-    {"name": "shortcut-refusal-substitution", "outcome": "Refused", "code": "F0V2B2A-R-SHORTCUT-SUBSTITUTION"},
-    {"name": "inventory-format-substitution", "outcome": "Refused", "code": "F0V2B2A-R-FORMAT"}
-  ]
+    {
+      "code": "F0V2B2A-A-PROFILE",
+      "name": "dual-interaction-profile-reconstruction",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-CORE-ROOT",
+      "name": "fourteen-field-core-root-census",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-CANONICAL-VARIANTS",
+      "name": "canonical-appendix-variant-census",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-DERIVED-ALGEBRAS",
+      "name": "derived-semantic-algebra-census",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-B1-GAP",
+      "name": "exact-b1-constructor-gap",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-PRESSURE-TOPOLOGY",
+      "name": "six-view-pressure-topology",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-REUSE-BOUNDARIES",
+      "name": "bounded-reuse-boundaries",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-A-STAGED-PROGRAM",
+      "name": "staged-b2-exit-program",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V2B2A-C-SCHEMA-SOURCE",
+      "name": "constructor-complete-schema-source",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-INHABITANCE",
+      "name": "constructor-inhabitance",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-ADMISSION",
+      "name": "extended-offline-owner-admission",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-ISOLATION-DERIVATION",
+      "name": "isolation-owner-view-derivation",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-INTEGRATED-DERIVATION",
+      "name": "integrated-owner-view-derivation",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-PCGRAPH",
+      "name": "general-pcgraph-transfer-and-sinks",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-RUNTIME-SCHEMA",
+      "name": "fresh-runtime-oracle-receipt-schema",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-C-TARGET-MIGRATION",
+      "name": "target-profile-publication-and-migration",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V2B2A-R-PROFILE-KEY",
+      "name": "profile-key-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PROFILE-REVISION",
+      "name": "profile-revision-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PROFILE-DIGEST",
+      "name": "profile-digest-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PROFILE-BODY",
+      "name": "profile-body-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-CORE-FIELD",
+      "name": "core-field-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-CORE-ORDER",
+      "name": "core-field-reordering",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-VARIANT-TABLE",
+      "name": "variant-table-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-VARIANT-TAG",
+      "name": "variant-tag-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-VARIANT-CASE",
+      "name": "variant-case-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-SEMANTIC-ALGEBRA",
+      "name": "semantic-algebra-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-SOURCE-CLAUSE",
+      "name": "semantic-source-clause-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-B1-VARIANT-GAP",
+      "name": "b1-variant-gap-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-B1-EMPTY-GAP",
+      "name": "b1-empty-gap-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-SCHEMA-REPAIR",
+      "name": "schema-repair-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PRESSURE-FAMILY",
+      "name": "pressure-family-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PRESSURE-DUPLICATE",
+      "name": "pressure-family-duplication",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PRESSURE-OWNER",
+      "name": "pressure-owner-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PRESSURE-VIEW",
+      "name": "pressure-view-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-POSITIVE-CARRIER",
+      "name": "positive-carrier-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-NEGATIVE-DISCRIMINATOR",
+      "name": "negative-discriminator-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-PRESSURE-STAGE",
+      "name": "pressure-stage-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-REUSE-PATH",
+      "name": "reuse-path-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-REUSE-NONCLAIM",
+      "name": "reuse-nonclaim-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-STAGE",
+      "name": "stage-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-STAGE-ORDER",
+      "name": "stage-reordering",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-SHORTCUT-OMISSION",
+      "name": "shortcut-refusal-omission",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-SHORTCUT-SUBSTITUTION",
+      "name": "shortcut-refusal-substitution",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V2B2A-R-FORMAT",
+      "name": "inventory-format-substitution",
+      "outcome": "Refused"
+    }
+  ],
+  "evidence_control": {
+    "b1_empty_reference_count": 8,
+    "b1_missing_variant_case_count": 20,
+    "canonical_variant_case_count": 55,
+    "canonical_variant_table_count": 15,
+    "closed_case_count": 79,
+    "core_field_count": 14,
+    "covered_view_count": 6,
+    "derived_semantic_algebra_count": 6,
+    "derived_semantic_case_count": 24,
+    "f1r1b_bounded_control_count": 5,
+    "fragments": {
+      "interaction_body_grammar_sha256": "4b2988a8069ddc2b6316feb813955de5678ee5cc74fc31ba725b0233a9b7347c",
+      "interaction_kernel_sha256": "776b959942a0fa2d13c467e822a6ff270da062919b7b37c6931f0a000c716a86",
+      "interaction_static_views_sha256": "fea42019c4bf753fced85b7ffbda1ff447e806756b7d10fd043ddb5d00de337e"
+    },
+    "pressure_family_count": 23,
+    "profile": {
+      "body_sha256": "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a",
+      "profile_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474",
+      "revision": 3
+    },
+    "prohibited_shortcut_count": 8,
+    "required_schema_repair_count": 14,
+    "reuse_boundary_count": 4,
+    "stage_count": 4
+  }
 }

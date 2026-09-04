@@ -1,0 +1,806 @@
+{
+  "aggregate": {
+    "code": "F0V4-C-END-TO-END-COMPOSITION",
+    "outcome": "CannotAnswer"
+  },
+  "evidence_control": {
+    "admission": {
+      "checked_same_core": {
+        "checker_contract_id": "zkcidv0:pir.checker-contract:ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701",
+        "code": "F0V4-A-CHECKED-SAME-CORE",
+        "outcome": "Affirmative",
+        "shared_core_id": "zkcidv0:pir.interactive-core:8313d9a7aa16f6f33415eaf8b60e00aca1b1ffcce64f21278a0be6130ed6b6e5",
+        "verified_owner_requirements": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "construction": {
+        "code": "F0V4-A-CONSTRUCTION-ADMISSION",
+        "construction_id": "zkcidv0:pir.transcript-construction:71947820450e499d73d9a84e90c37b8fdde530b3c4c6b245f1037d89c51e69e0",
+        "derived_bounds": {
+          "challenge_rules": 2,
+          "maximum_cumulative_octets": 13562,
+          "maximum_frame_count": 16,
+          "maximum_frame_octets": 929,
+          "maximum_namespace_octets": 1861,
+          "maximum_transition_calls": 19
+        },
+        "outcome": "Affirmative",
+        "verified_owner_steps": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ]
+      },
+      "core": {
+        "code": "F0V4-A-CORE-ADMISSION",
+        "core_id": "zkcidv0:pir.interactive-core:8313d9a7aa16f6f33415eaf8b60e00aca1b1ffcce64f21278a0be6130ed6b6e5",
+        "outcome": "Affirmative",
+        "verified_owner_steps": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      },
+      "fiat_shamir_protocol": {
+        "code": "F0V4-A-FS-PROTOCOL-ADMISSION",
+        "outcome": "Affirmative",
+        "protocol_id": "zkcidv0:pir.protocol:73723d14d852dc76856aaa1e609132f8893b64ea992a9ab0b6a4f40dfe42b9ae",
+        "verified_requirements": [
+          "same-core",
+          "retained-public-coin-result",
+          "retained-module-support",
+          "nonempty-challenge-sequence",
+          "literal-evaluator-identity",
+          "protocol-identity-authentication"
+        ]
+      },
+      "fresh_protocol": {
+        "code": "F0V4-A-FRESH-PROTOCOL-ADMISSION",
+        "outcome": "Affirmative",
+        "protocol_id": "zkcidv0:pir.protocol:6f5754cc9cf4a3bc0d201517591e6ded40e15da29d72e8c312524813b504ae82",
+        "verified_requirements": [
+          "live-core-authority",
+          "profile-and-closure-equality",
+          "same-core-reference",
+          "closed-fresh-interpretation",
+          "protocol-identity-authentication"
+        ]
+      }
+    },
+    "analysis_boundary": {
+      "current_subject_core_id": "zkcidv0:pir.interactive-core:8313d9a7aa16f6f33415eaf8b60e00aca1b1ffcce64f21278a0be6130ed6b6e5",
+      "fixture_fresh_law_matches": [
+        1
+      ],
+      "fixture_fresh_law_unmatched": [
+        0
+      ],
+      "fixture_rebind_required": [
+        "relation-predicate",
+        "witness-type",
+        "prover-private-state",
+        "honest-commit",
+        "honest-respond"
+      ],
+      "fixture_subject_core_id": "zkcidv0:pir.interactive-core:33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5",
+      "fixture_subject_matches_current": false,
+      "fresh_law_leaf_count": 2,
+      "fresh_law_leaves": [
+        {
+          "challenge_ref": 0,
+          "fresh_law": {
+            "declaration_kind": "pir.public-coin-law",
+            "local_ordinal": 0,
+            "module": "zkcidv0:foundation.semantic-module:aa410e6eaa748282e8135539023474b8e5c0821a049223024454412e54135e39"
+          }
+        },
+        {
+          "challenge_ref": 1,
+          "fresh_law": {
+            "declaration_kind": "pir.public-coin-law",
+            "local_ordinal": 0,
+            "module": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7"
+          }
+        }
+      ],
+      "missing": [
+        "owner named-premise constructor",
+        "Boolean Fresh distribution premise",
+        "exact-subject relation and Plan rebind",
+        "provider declaration"
+      ],
+      "owner_boundary": {
+        "analysis_model_lines": "2246-2261",
+        "cryptographic_properties_distribution_lines": "968-973",
+        "cryptographic_properties_provider_search_lines": "1299-2167",
+        "cryptographic_properties_section_3_2_present": false,
+        "named_requirement_variant_present": false,
+        "proposal_fixture_rebind_lines": "154-259",
+        "proposal_fixture_subject_line": 5,
+        "provider_packet_authority_lines": "4-8"
+      },
+      "premise_requirement_sequence": [
+        {
+          "coordinate": {
+            "declaration_kind": "pir.public-coin-law",
+            "local_ordinal": 0,
+            "module": "zkcidv0:foundation.semantic-module:aa410e6eaa748282e8135539023474b8e5c0821a049223024454412e54135e39"
+          },
+          "kind": "FreshPublicCoinDistribution",
+          "slot": "challenge-law-0",
+          "source": "no matching exact-coordinate fixture premise"
+        },
+        {
+          "coordinate": {
+            "declaration_kind": "pir.public-coin-law",
+            "local_ordinal": 0,
+            "module": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7"
+          },
+          "kind": "FreshPublicCoinDistribution",
+          "slot": "challenge-law-1",
+          "source": "proposal fixture exact-coordinate match"
+        },
+        {
+          "coordinate": {
+            "path": "ProtocolOutcomeLane",
+            "protocol_id": "zkcidv0:pir.protocol:73723d14d852dc76856aaa1e609132f8893b64ea992a9ab0b6a4f40dfe42b9ae"
+          },
+          "kind": "ProviderOutcomeCarrierMap",
+          "slot": "outcome-carrier"
+        },
+        {
+          "coordinate": {
+            "owner": "relations",
+            "path": "evaluator",
+            "subject": "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e"
+          },
+          "kind": "RelationPredicate",
+          "slot": "relation-predicate",
+          "source": "proposal fixture; exact current-subject rebind required"
+        },
+        {
+          "coordinate": {
+            "owner": "relations",
+            "path": "private_witness[0].value_type + PlanWitnessBinding.witness_edges[0]",
+            "subject": "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22"
+          },
+          "kind": "WitnessType",
+          "slot": "witness-type",
+          "source": "proposal fixture; exact current-subject rebind required"
+        },
+        {
+          "coordinate": {
+            "owner": "pir",
+            "path": "persistent_state[0] -> PlanExecutionState[0]",
+            "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b"
+          },
+          "kind": "ProverPrivateState",
+          "slot": "prover-private-state",
+          "source": "proposal fixture; exact current-subject rebind required"
+        },
+        {
+          "coordinate": {
+            "owner": "pir",
+            "path": "decision_recipes[0].nodes[0] -> PlanStrategyStep(0)",
+            "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b"
+          },
+          "kind": "HonestCommit",
+          "slot": "honest-commit",
+          "source": "proposal fixture; exact current-subject rebind required"
+        },
+        {
+          "coordinate": {
+            "owner": "pir",
+            "path": "decision_recipes[2].nodes[0] -> PlanStrategyStep(2)",
+            "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b"
+          },
+          "kind": "HonestRespond",
+          "slot": "honest-respond",
+          "source": "proposal fixture; exact current-subject rebind required"
+        }
+      ],
+      "proposal_fixture_sha256": "d1a52e7350c446d3f6bc8e87af1794a4b08d61e7f6482f138d7ee94de63e1a4d",
+      "unique_fresh_law_coordinate_count": 2
+    },
+    "analysis_read_join": {
+      "fs_execution_fields": [
+        "protocol_id",
+        "core_id",
+        "challenge_interpretation",
+        "visible_history_law",
+        "resolver_coordinates",
+        "generated_execution_law",
+        "run_record_schema",
+        "replay_qualification_law",
+        "relation_run_view_issuance_law"
+      ],
+      "joined_sha256": "214673f146f82b501bf2ec6ec9fbb83feb00b7bf437f399036a27bae22546e38",
+      "selected_owner_fields": {
+        "CanonicalChallengeTransitionView": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "CanonicalFSConstructionView": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "CanonicalRequiredInfluenceView": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "CanonicalTranscriptDeclarationView": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "ClaimReductionView": [
+          1,
+          2,
+          3
+        ],
+        "EffectView": [
+          5,
+          6
+        ],
+        "ExecutionView": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          9
+        ],
+        "PublicBindingView": [
+          1,
+          2
+        ],
+        "PublicCoinView": [
+          2,
+          3,
+          4
+        ],
+        "StrategyDecisionView": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "slot_count": 13
+    },
+    "analysis_requirement_sequence_sha256": "dc9a7cee93d7d77f64e4c7638286855b7555c8b869b8ac6e5db46a0dc97a8f8e",
+    "canonical_view_sha256": {
+      "CanonicalChallengeTransitionView": "cef842e46df0f44998c5defb62347f8337e5942f0569a184bcf7ec223290c69b",
+      "CanonicalFSConstructionView": "c930b553b9cd67dc074e8b461517a94663cfe3815d41780811d96b6334f1488b",
+      "CanonicalRequiredInfluenceView": "301360f01f132b583fbd92d289795467e0fa7840dbe3a4dd3c2e66b134bcbbed",
+      "CanonicalTranscriptDeclarationView": "dbd16e6b036ddfe61b638d4075dbb50007f1199d0291333c7f119f2d0f97d064"
+    },
+    "fixed_setup": {
+      "baseline": {
+        "code": "F0V4-A-FIXED-SETUP-FORMATION",
+        "common_entries_sha256": "a200b0076478be2c4948a4ed3a5310b488d42c0c0446a0cd0e96127da9b19399",
+        "entry_binding_refs": [
+          1
+        ],
+        "expected_binding_refs": [
+          1
+        ],
+        "outcome": "Affirmative",
+        "run_established": []
+      },
+      "run_variant": {
+        "code": "F0V4-R-FIXED-SETUP-RUN-ESTABLISHED",
+        "entry_binding_refs": [],
+        "expected_binding_refs": [
+          1
+        ],
+        "outcome": "Refused",
+        "owner_coordinate": "docs-next/analysis/cryptographic-properties.md lines 561-572",
+        "run_established": [
+          1
+        ]
+      }
+    },
+    "interaction_view_sha256": {
+      "ClaimReductionView": "bfceae6c2c188a0f5765ec0a45f1a14c668925de5b32506ceb439f3bedd4476b",
+      "EffectView": "51cdfdce016044bd78eaad9e1c1b787cfda803950b408b7b521b6af3e79185b5",
+      "ExecutionView": "383bd88ae6085fce917fae9f0648e284006b69b9404225aef3deac0c85dd2e51",
+      "PublicBindingView": "f4925f2bae0dab85f2441ca00564ba2afa6cabd506d881829ce6e2dfef627601",
+      "PublicCoinView": "b8892f1dd8c1831295a4f293649d8e353e6f31342ca575d9255f12c6ed497440",
+      "StrategyDecisionView": "8fac929d88076b21ea2689bc257206c24633d24e2bff7cf52587a002ff29e4c8"
+    },
+    "interface": {
+      "body_sha256": "4f4cb69251286481359ffbfc171273eee29bf70848ae23c9313dae3af66bf34a",
+      "code": "F0V4-A-INTERFACE-ADMISSION",
+      "codec_count": 7,
+      "completion_targets": [
+        "CoreTerminal(0)",
+        "CoreTerminal(1)",
+        "FiatShamirInterpretationFailure"
+      ],
+      "interface_id": "zkcidv0:pir.protocol-interface:e587ab8983b70e951358cee645207a2adc2061ad76402aa0bfb216a5d5f11255",
+      "invocation_assignment": {
+        "Public(0)": 0
+      },
+      "outcome": "Affirmative",
+      "replay_input_occurrences": [
+        2
+      ],
+      "slot_count": 13,
+      "statement_members": [
+        {
+          "binding": 0,
+          "flow": "SuppliesInvocation(0)",
+          "slot": 0
+        }
+      ],
+      "transport_occurrences": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "interface_negative": {
+      "admission_item": 6,
+      "code": "F0V4-R-INTERFACE-REPLAY-INPUT",
+      "missing_occurrences": [
+        2
+      ],
+      "outcome": "Refused",
+      "transport_occurrences": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "provider_map": {
+      "accepted_mass": [
+        7,
+        27
+      ],
+      "carrier": "Boolean",
+      "declared_modelled_lanes": [
+        "Accepted",
+        "Rejected"
+      ],
+      "denominator": 81,
+      "finite_measure_clause_holds": true,
+      "measure": "uniform mass on the exhaustive 81-case input carrier",
+      "provider_declaration_published": false,
+      "rejected_mass": [
+        14,
+        27
+      ],
+      "renormalized": false,
+      "six_lane_map": {
+        "Aborted": "Unmodelled",
+        "Accepted": "Image(true)",
+        "InterpretationFailed": "Unmodelled",
+        "OperationalNoncompletion": "Unmodelled",
+        "Rejected": "Image(false)",
+        "StrategyStopped": "Unmodelled"
+      },
+      "status": "package-local finite candidate; no owner premise formed",
+      "transported_false_mass": [
+        14,
+        27
+      ],
+      "transported_true_mass": [
+        7,
+        27
+      ],
+      "unmodelled_mass": [
+        2,
+        9
+      ]
+    },
+    "public_setup": {
+      "baseline": {
+        "fiat_shamir": {
+          "body_sha256": "f7e9b08913bd1f923af499fddaa301478065ed5d5232d85f4f238c5bcdd18024",
+          "entry_binding_refs": [
+            1
+          ],
+          "entry_sequence_sha256": "a200b0076478be2c4948a4ed3a5310b488d42c0c0446a0cd0e96127da9b19399",
+          "run_established": [],
+          "view_id": "zkcidv0:pir.public-setup-invocation-view:c2ebe1c8ec57742ad6e63f3e384ea94161f2387504cb5e88f7d4f356263f24c3"
+        },
+        "fresh": {
+          "body_sha256": "6a8b9e9492d04b5ed7c103b22172d852e17dc3f53e6159b703522373acad9f44",
+          "entry_binding_refs": [
+            1
+          ],
+          "entry_sequence_sha256": "a200b0076478be2c4948a4ed3a5310b488d42c0c0446a0cd0e96127da9b19399",
+          "run_established": [],
+          "view_id": "zkcidv0:pir.public-setup-invocation-view:f614cd63af24442aec1d37db393f5e646e7320912ae2ccbaa29ff7a50b4becff"
+        }
+      },
+      "run_variant": {
+        "fiat_shamir": {
+          "body_sha256": "f220b2e1a6c35d7ddae9bffdbc3ce99e40df7fd32c02cdf66518fd3f682aa459",
+          "entry_binding_refs": [],
+          "entry_sequence_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "run_established": [
+            1
+          ],
+          "view_id": "zkcidv0:pir.public-setup-invocation-view:b32f9565e0c0ff3193b3e2bce341b9d7130d01b21a52a9dd1c41a3f571b184a8"
+        },
+        "fresh": {
+          "body_sha256": "791b0a4f886b2ee08163c6679cb869b656d37112ceea462862e8d4bdedde992b",
+          "entry_binding_refs": [],
+          "entry_sequence_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "run_established": [
+            1
+          ],
+          "view_id": "zkcidv0:pir.public-setup-invocation-view:12fa0d812995e588c3433aa1eddee1158cd80bebb30d2d327a891c05bdd4be3f"
+        }
+      }
+    },
+    "question": "does one admitted Core with heterogeneous challenges and several public bindings compose through every activated contract without an owner underdetermination?",
+    "runtime": {
+      "fiat_shamir": {
+        "lane_counts": {
+          "Aborted": 0,
+          "Accepted": 21,
+          "InterpretationFailed": 18,
+          "OperationalNoncompletion": 0,
+          "Rejected": 42,
+          "StrategyStopped": 0
+        },
+        "records_sha256": "7a7657e7a8cca09eb205e20422f264f0db1c1d54932905d0b796ea93b22e594c",
+        "replay_match_count": 81,
+        "run_count": 81,
+        "selected_sampling_failure_sha256": "83daec3f111b12f75d347313022b759eb487b89c5a572f5b7617bf1762a5c60c"
+      },
+      "fresh": {
+        "challenge_space": [
+          [
+            false,
+            0
+          ],
+          [
+            false,
+            1
+          ],
+          [
+            false,
+            2
+          ],
+          [
+            true,
+            0
+          ],
+          [
+            true,
+            1
+          ],
+          [
+            true,
+            2
+          ]
+        ],
+        "lane_counts": {
+          "Aborted": 0,
+          "Accepted": 81,
+          "InterpretationFailed": 0,
+          "OperationalNoncompletion": 0,
+          "Rejected": 405,
+          "StrategyStopped": 0
+        },
+        "records_sha256": "8555dabd410352391809e97a1dc2f27a3d72b2a528debc1e1a01884454de813e",
+        "replay_match_count": 486,
+        "run_count": 486
+      },
+      "sampling_failure_case": {
+        "commitment": 0,
+        "response": 0,
+        "seed": 1,
+        "statement": 0
+      },
+      "sampling_failure_completion_fields": [
+        "challenge",
+        "domain_payload",
+        "final_state",
+        "prefix_receipt_count",
+        "prefix_state"
+      ],
+      "sampling_failure_derived_draws_sha256": "a524e498da406c17ab6db1b79af4840ab3cfe7269e39b34b460fec402d44b0c1",
+      "sampling_failure_variant": "InterpretationFailure"
+    },
+    "source": {
+      "analysis_model_sha256": "8930524e8d7ca547fed728282030557f1bbfb6d546923e193caf919d04b81826",
+      "cryptographic_properties_sha256": "0b2783c39ecc57744721e862d28edb9301a45ab828051c32cc8016b510bab20b",
+      "fiat_shamir_sha256": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
+      "interactive_core_sha256": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
+      "interfaces_and_plans_sha256": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
+      "named_premise_owner_constructor_present": false,
+      "provider_carrier_packet_authority": "None",
+      "provider_carrier_packet_sha256": "a43a4907854545c6c0001e480a0b90b9433f2378e431336e3aff54900eb93e58",
+      "provider_map_section_present": false
+    },
+    "subjects": {
+      "baseline": {
+        "binding_classes": [
+          "STATEMENT",
+          "SESSION_CONTEXT"
+        ],
+        "binding_scopes": [
+          1,
+          1
+        ],
+        "binding_sources": [
+          "PublicInput(0)",
+          "PublicInput(0)"
+        ],
+        "challenge_condition_occurrences": [
+          2,
+          2
+        ],
+        "challenge_correlations": [
+          "IndependentCorrelation",
+          "IndependentCorrelation"
+        ],
+        "challenge_positions": [
+          3,
+          4
+        ],
+        "challenge_type_names": [
+          "Boolean",
+          "RootNat(2)"
+        ],
+        "challenge_types": [
+          "666fe8dc09fa296d6e1f9767704b0de6e047d0dbb147aa22fb984b97ede82148",
+          "059512f1b17e2d3fcefc2003b8b6be6cac57e4afbb2a84eb766594a6a00c781a"
+        ],
+        "checker_contract_id": "zkcidv0:pir.checker-contract:ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701",
+        "core_id": "zkcidv0:pir.interactive-core:8313d9a7aa16f6f33415eaf8b60e00aca1b1ffcce64f21278a0be6130ed6b6e5",
+        "decoder_result_types_distinct": true,
+        "draw_bounds": [
+          [
+            8,
+            1
+          ],
+          [
+            8,
+            2
+          ]
+        ],
+        "fiat_shamir_protocol_id": "zkcidv0:pir.protocol:73723d14d852dc76856aaa1e609132f8893b64ea992a9ab0b6a4f40dfe42b9ae",
+        "fresh_protocol_id": "zkcidv0:pir.protocol:6f5754cc9cf4a3bc0d201517591e6ded40e15da29d72e8c312524813b504ae82",
+        "guarded_verifier_occurrence": 1,
+        "occurrence_count": 10,
+        "occurrence_kinds": [
+          "ProverMessageEffect",
+          "VerifierMessageEffect",
+          "VerifierMessageEffect",
+          "ChallengeEffect",
+          "ChallengeEffect",
+          "ProverMessageEffect",
+          "ProverMessageEffect",
+          "CheckEffect",
+          "TerminalEffect",
+          "TerminalEffect"
+        ],
+        "public_coin_eligible": true,
+        "terminal_occurrences": [
+          8,
+          9
+        ],
+        "terminal_precedence": "first-active",
+        "transcript_construction_id": "zkcidv0:pir.transcript-construction:71947820450e499d73d9a84e90c37b8fdde530b3c4c6b245f1037d89c51e69e0"
+      },
+      "run_variant": {
+        "binding_sources": [
+          "PublicInput(0)",
+          "OccurrenceOutput(0,0)"
+        ],
+        "core_id": "zkcidv0:pir.interactive-core:eec7a2d2c9e65b12325e8f5c733dcee1a3e969a7826fab4bfe1d2620820e712e",
+        "fiat_shamir_protocol_id": "zkcidv0:pir.protocol:466542b7c501eba9ab44aa8cfee2d7fedb15b75b09be0144a0ac3b32379a4a01",
+        "fresh_protocol_id": "zkcidv0:pir.protocol:52eed818340247d2da28d0f7e75fa60bad0052d0069c16fdfdb9a273b7a27e0c",
+        "transcript_construction_id": "zkcidv0:pir.transcript-construction:024ef9b3592071ee0ba35555995277259a398b4794997a768bc319dcbe57b2c5"
+      }
+    }
+  },
+  "finding_codes": [
+    [
+      "exact-question",
+      "Affirmative",
+      "F0V4-A-EXACT-QUESTION"
+    ],
+    [
+      "core-admission",
+      "Affirmative",
+      "F0V4-A-CORE-ADMISSION"
+    ],
+    [
+      "fresh-protocol-admission",
+      "Affirmative",
+      "F0V4-A-FRESH-PROTOCOL-ADMISSION"
+    ],
+    [
+      "construction-admission",
+      "Affirmative",
+      "F0V4-A-CONSTRUCTION-ADMISSION"
+    ],
+    [
+      "fiat-shamir-protocol-admission",
+      "Affirmative",
+      "F0V4-A-FS-PROTOCOL-ADMISSION"
+    ],
+    [
+      "checked-same-core-construction",
+      "Affirmative",
+      "F0V4-A-CHECKED-SAME-CORE"
+    ],
+    [
+      "six-interaction-static-views",
+      "Affirmative",
+      "F0V4-A-SIX-INTERACTION-VIEWS"
+    ],
+    [
+      "four-canonical-framed-views",
+      "Affirmative",
+      "F0V4-A-FOUR-CANONICAL-VIEWS"
+    ],
+    [
+      "analysis-read-catalog-join",
+      "Affirmative",
+      "F0V4-A-ANALYSIS-READ-JOIN"
+    ],
+    [
+      "two-public-setup-variants",
+      "Affirmative",
+      "F0V4-A-PUBLIC-SETUP-VIEWS"
+    ],
+    [
+      "fixed-setup-baseline",
+      "Affirmative",
+      "F0V4-A-FIXED-SETUP-FORMATION"
+    ],
+    [
+      "fixed-setup-run-established-variant",
+      "Refused",
+      "F0V4-R-FIXED-SETUP-RUN-ESTABLISHED"
+    ],
+    [
+      "complete-interface-admission",
+      "Affirmative",
+      "F0V4-A-INTERFACE-ADMISSION"
+    ],
+    [
+      "missing-replay-operand-transport",
+      "Refused",
+      "F0V4-R-INTERFACE-REPLAY-INPUT"
+    ],
+    [
+      "fresh-exhaustive-execution",
+      "Affirmative",
+      "F0V4-A-FRESH-EXECUTION"
+    ],
+    [
+      "fresh-independent-replay",
+      "Affirmative",
+      "F0V4-A-FRESH-REPLAY"
+    ],
+    [
+      "fiat-shamir-finite-execution",
+      "Affirmative",
+      "F0V4-A-FS-EXECUTION"
+    ],
+    [
+      "fiat-shamir-independent-replay",
+      "Affirmative",
+      "F0V4-A-FS-REPLAY"
+    ],
+    [
+      "sampling-failure-completion-presentation",
+      "Affirmative",
+      "F0V4-A-SAMPLING-FAILURE-PRESENTATION"
+    ],
+    [
+      "fresh-law-leaf-coordinates",
+      "Affirmative",
+      "F0V4-A-FRESH-LAW-COORDINATES"
+    ],
+    [
+      "boolean-fresh-distribution-premise",
+      "CannotAnswer",
+      "F0V4-C-BOOLEAN-FRESH-PREMISE"
+    ],
+    [
+      "relation-and-plan-fixture-coordinates",
+      "Affirmative",
+      "F0V4-A-RELATION-PLAN-COORDINATES"
+    ],
+    [
+      "exact-subject-relation-and-plan-premises",
+      "CannotAnswer",
+      "F0V4-C-RELATION-PLAN-REBIND"
+    ],
+    [
+      "named-premise-owner-formation",
+      "CannotAnswer",
+      "F0V4-C-NAMED-PREMISE-OWNER-CONTRACT"
+    ],
+    [
+      "provider-declaration",
+      "CannotAnswer",
+      "F0V4-C-PROVIDER-DECLARATION"
+    ],
+    [
+      "finite-six-lane-provider-map",
+      "Affirmative",
+      "F0V4-A-SIX-LANE-PROVIDER-MAP"
+    ],
+    [
+      "finite-measure-preservation",
+      "Affirmative",
+      "F0V4-A-MEASURE-PRESERVATION"
+    ],
+    [
+      "end-to-end-composition",
+      "CannotAnswer",
+      "F0V4-C-END-TO-END-COMPOSITION"
+    ]
+  ],
+  "findings_sha256": "f3bc2f0164b295418f4d609405b9354dd4c45fda8831780c94e3ab31799d263b"
+}

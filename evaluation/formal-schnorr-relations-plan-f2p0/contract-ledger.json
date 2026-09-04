@@ -94,55 +94,55 @@
     },
     {
       "path": "docs-next/pir/interfaces-and-plans.md",
-      "sha256": "bb359aa65a9037c8202a08bd8b62947566ce762a9708cf3cf7f6022953fea5a0",
+      "sha256": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
       "ranges": [
         {
           "id": "PLAN-SUBJECT",
           "section": "4.1 Boundary and complete subject",
-          "start": 687,
-          "end": 753,
+          "start": 763,
+          "end": 837,
           "anchors": ["It contains no relation definition", "ProverPlan = {", "Relations may later attach one of these generic coordinates"]
         },
         {
           "id": "PLAN-RECIPES",
-          "section": "4.2 Recipe language",
-          "start": 853,
-          "end": 930,
+          "section": "4.2 Site-qualified recipes",
+          "start": 839,
+          "end": 1022,
           "anchors": ["DecisionRecipe = {", "PathwiseOneShotRandomness"]
         },
         {
           "id": "PLAN-EXPORT-AND-ADMISSION",
           "section": "4.2 derived witness export and 4.3 admission",
-          "start": 948,
-          "end": 994,
+          "start": 1024,
+          "end": 1070,
           "anchors": ["It does not classify its derivation as", "It does not establish decision coverage"]
         },
         {
           "id": "PLAN-REALIZES",
           "section": "4.3 PlanRealizes",
-          "start": 996,
-          "end": 1029,
+          "start": 1072,
+          "end": 1105,
           "anchors": ["PlanLifecycleReadBasis = {", "PlanRealizes(", "CheckedPlanRealizes"]
         },
         {
           "id": "PLAN-REALIZES-LIMIT",
           "section": "4.3 PlanRealizes result boundary",
-          "start": 1184,
-          "end": 1189,
+          "start": 1260,
+          "end": 1265,
           "anchors": ["proves structural decision coverage", "proves no algorithmic", "witness correspondence or", "satisfaction"]
         },
         {
           "id": "PLAN-ADAPTER",
           "section": "4.4 Exact Plan adapter",
           "start": 1267,
-          "end": 1378,
+          "end": 1448,
           "anchors": ["PlanStrategyStep(", "private state contains the exact Plan state vector", "select the unique admitted recipe", "There is no fallback to another strategy"]
         },
         {
           "id": "PLAN-WITNESS-SURFACE",
           "section": "5.1 Static surface and private extraction",
-          "start": 1623,
-          "end": 1688,
+          "start": 1699,
+          "end": 1764,
           "anchors": ["Relations needs a narrower acyclic attachment seam", "PlanWitnessSurfaceBody = {", "claims correspondence,", "satisfaction"]
         }
       ]
@@ -159,7 +159,7 @@
     },
     {
       "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
-      "sha256": "e5534e317ca67e54a3d40b43d79564a7f7ff4cd14ff3b1463ce26ec2509a81c3"
+      "sha256": "293dedaa4c831ce1238d722d72f4c3fa130d3cdbdbd4b047a699b214712366af"
     },
     {
       "path": "evaluation/formal-source-view-bodies-f0v2b1/independent.py",
@@ -171,7 +171,7 @@
     },
     {
       "path": "evaluation/formal-provider-observables-f2o0/generated/ledger.json",
-      "sha256": "5caa422405cb7b6fa542124e48d55348b569104b35afbdd386d39ad942f467e4"
+      "sha256": "46752f81f8de317d317565df89a545b1e6d6021d040217509b98371a1662dd40"
     },
     {
       "path": "evaluation/formal-provider-observables-f2o0/expected-findings.json",

@@ -1,10 +1,10 @@
 {
   "aggregate": "F0V2B2C1B5B1-A-TERMINAL-CONTRACT-SELECTION",
-  "findings_sha256": "74ed90a9e5be18752d8eeb86ea4554d205d0689a768e17b85301b33c69cd552a",
+  "findings_sha256": "1f89c704a2af3e01b86711858d3d11ae7a20bb394520eb6c7b21b6513a058ba5",
   "finding_codes": [
     ["predecessor-pin", "Affirmative", "F0V2B2C1B5B1-A-PREDECESSOR-PIN"],
     ["owner-source-boundary", "Affirmative", "F0V2B2C1B5B1-A-OWNER-SOURCE"],
-    ["target-gap-source-pin", "Affirmative", "F0V2B2C1B5B1-A-TARGET-GAP-PIN"],
+    ["migrated-terminal-contract-source", "Affirmative", "F0V2B2C1B5B1-A-MIGRATED-OWNER-CONTRACT"],
     ["candidate-oracle-separation", "Affirmative", "F0V2B2C1B5B1-A-ORACLE-SEPARATION"],
     ["must-fact-soundness", "Affirmative", "F0V2B2C1B5B1-A-MUST-FACT-SOUNDNESS"],
     ["structural-boolean-precision", "Affirmative", "F0V2B2C1B5B1-A-STRUCTURAL-PRECISION"],

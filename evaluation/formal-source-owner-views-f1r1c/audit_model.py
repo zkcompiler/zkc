@@ -42,7 +42,6 @@ VIEW_BODIES = (
     "ExecutionViewBody",
 )
 COORDINATE_BODY_GRAMMARS = (
-    "PIRStaticViewOwnerCoordinateBody",
     "PIRStaticViewCoordinateBody",
     "PIRViewPathStepBody",
     "PIRViewAtomicBoundaryBody",
@@ -56,6 +55,13 @@ LAW_FIELDS = (
     "replay_qualification_law",
     "relation_run_view_issuance_law",
 )
+LAW_FIELD_SELECTION = {
+    "StrategyDecisionView.prover_view_formation_law": "prover-view-formation-v0",
+    "ExecutionView.visible_history_law": "visible-history-v0",
+    "ExecutionView.generated_execution_law": "execution-and-replay-v0",
+    "ExecutionView.replay_qualification_law": "replay-qualification-v0",
+    "ExecutionView.relation_run_view_issuance_law": "run-view-issuance-v0",
+}
 SOURCE_SUBJECT_KINDS = (
     "pir.source-binding-payload",
     "pir.source-capability-requirement",
@@ -66,13 +72,36 @@ SOURCE_SUBJECT_KINDS = (
 )
 EXPECTED_STATIC_FRAGMENT_BODY_FUNCTIONS = (
     "PIRProfileLawReferenceBody",
+    "PIRReferenceBody",
+    "StaticViewBody",
     "PIRSourceConsumerRoleBody",
     "PIRSourcePurposeRoleBody",
+    "PIRStaticViewCoordinateBody",
+    "PIRStaticViewFieldCoordinateBody",
+    "PIRStaticViewReadManifestBody",
+    "PIRStaticViewBindingPayloadBody",
+    "PIRStaticViewCapabilityRequirementBody",
+    "PIRStaticViewNoPolicyBody",
+    "PIRStaticViewPolicyClosureBody",
+    "SourceSubjectBody",
+    "PIRSourceBindingPayloadBody",
+    "PIRSourceCapabilityRequirementBody",
+    "PIRSourceNoPolicyBody",
+    "PIRSourcePolicyClosureBody",
 )
+
+EXPECTED_SOURCE_COMPILERS = {
+    "pir.source-binding-payload": "source-binding-payload-body-v0",
+    "pir.source-capability-requirement": "source-capability-requirement-body-v0",
+    "pir.source-consumer": "source-consumer-role-body-v0",
+    "pir.source-no-policy": "source-no-policy-body-v0",
+    "pir.source-policy-closure": "source-policy-closure-body-v0",
+    "pir.source-purpose": "source-purpose-role-body-v0",
+}
 
 
 class AuditError(RuntimeError):
-    """The repository no longer exhibits the frozen F1-R1C boundary."""
+    """The migrated owner-view source no longer has the rehearsed shape."""
 
 
 @dataclass(frozen=True)
@@ -159,15 +188,15 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
         raise AuditError("cannot read the frozen profile identity table") from error
     _require(
         reference_table["profiles"]["interaction"]
-        == published["profiles"]["interaction"],
-        "the reconstructed Interaction profile differs from the frozen row",
+        != published["profiles"]["interaction"],
+        "the migrated Interaction profile unexpectedly equals the published row",
     )
     findings.append(
         Finding(
-            "published-profile-frozen-control",
+            "candidate-profile-rehearsal-control",
             "Affirmative",
-            "F1R1C-A-FROZEN-PROFILE",
-            "the independently reconstructed profile matches the frozen v0 row",
+            "F1R1C-A-CANDIDATE-PROFILE",
+            "the candidate is reconstructed directly from the migrated manifests and remains unpublished",
         )
     )
 
@@ -232,49 +261,53 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
     catalog_kinds = frozenset(kind for kind, _name in target.declaration_index)
     extension_catalogs = tuple(sorted(catalog_kinds - COMMON_CATALOG_KINDS))
     _require(
-        not extension_catalogs,
-        "the target now publishes an extension catalog; refresh the R1C audit",
+        extension_catalogs == ("pir.static-view-schema",),
+        "the candidate does not expose exactly the static-view schema catalog",
     )
     findings.append(
         Finding(
             "promised-view-schema-catalog",
-            "CannotAnswer",
-            "F1R1C-C-SCHEMA-CATALOG",
-            "the source promises a profile-owned view-schema catalog, but the published profile has no extension catalog",
+            "Affirmative",
+            "F1R1C-A-SCHEMA-CATALOG",
+            "the candidate manifest exposes the profile-owned static-view schema catalog",
         )
     )
 
     selectors = tuple(str(item["selector"]) for item in manifest["definitions"])
     selected_view_bodies = tuple(
-        body for body in VIEW_BODIES if any(body in selector for selector in selectors)
+        body
+        for body in VIEW_BODIES
+        if f"StaticViewSchema({body.removesuffix('Body')}) = {{" in selectors
     )
     _require(
-        not selected_view_bodies,
-        "one or more view schemas now have declaration selectors; refresh the audit",
+        selected_view_bodies == VIEW_BODIES,
+        "one or more owner-view schemas lacks an exact declaration selector",
     )
     findings.append(
         Finding(
             "view-schema-entry-routing",
-            "CannotAnswer",
-            "F1R1C-C-SCHEMA-ENTRY",
-            "none of the six view schemas has a published declaration entry or selector",
+            "Affirmative",
+            "F1R1C-A-SCHEMA-ENTRY",
+            "all six owner-view schemas have exact candidate declaration selectors",
         )
     )
 
-    body_grammar = target.source_fragments["interaction-body-grammar"]
     canonical_view_bodies = tuple(
-        body for body in VIEW_BODIES if f"{body}(x) = R".encode("ascii") in body_grammar
+        body
+        for body in VIEW_BODIES
+        if f"{body} = {{".encode("ascii") in static_fragment
+        and b"StaticViewBody(view) =" in static_fragment
     )
     _require(
-        not canonical_view_bodies,
-        "canonical view-body grammars now exist; refresh the audit",
+        canonical_view_bodies == VIEW_BODIES,
+        "the generic canonical view-body compiler does not cover all six schemas",
     )
     findings.append(
         Finding(
             "canonical-view-body-grammar",
-            "CannotAnswer",
-            "F1R1C-C-VIEW-BODY",
-            "the six displayed record shapes have no exact canonical body grammar",
+            "Affirmative",
+            "F1R1C-A-VIEW-BODY",
+            "the candidate authenticates all six complete bodies and their generic canonical compiler",
         )
     )
 
@@ -282,18 +315,18 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
         name
         for name in COORDINATE_BODY_GRAMMARS
         if f"{name}(".encode("ascii") in static_fragment
-        or f"{name}(".encode("ascii") in body_grammar
+        or f"{name} =".encode("ascii") in static_fragment
     )
     _require(
-        not coordinate_bodies,
-        "static-view coordinate body grammars now exist; refresh the audit",
+        coordinate_bodies == COORDINATE_BODY_GRAMMARS,
+        "one or more coordinate or read-manifest body grammars is absent",
     )
     findings.append(
         Finding(
             "atomic-coordinate-and-manifest-grammar",
-            "CannotAnswer",
-            "F1R1C-C-COORDINATE-BODY",
-            "paths and boundaries are described abstractly but lack exact body compilers for payload commitment",
+            "Affirmative",
+            "F1R1C-A-COORDINATE-BODY",
+            "the candidate fixes coordinate, path, boundary, field, and manifest bodies",
         )
     )
 
@@ -305,19 +338,53 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
     definitions = _definition_map(manifest)
     static_law = definitions[("pir.semantic-law", "static-view-issuance-v0")]
     _require(
-        static_law["dependencies"] == [],
-        "static-view issuance now declares dependencies; refresh the audit",
+        len(static_law["dependencies"]) == 6
+        and all(item["kind"] == "pir.static-view-schema" for item in static_law["dependencies"]),
+        "static-view issuance does not reach all six schema declarations",
     )
+    selected_laws: dict[str, str] = {}
+    for coordinate, declaration in LAW_FIELD_SELECTION.items():
+        view, field = coordinate.split(".", 1)
+        pattern = re.compile(
+            rb"\(" + re.escape(view.encode("ascii")) + rb",\s*"
+            + re.escape(field.encode("ascii")) + rb"\)\s*"
+            + rb"->\s*the profile's pir\.semantic-law declaration\s*"
+            + re.escape(declaration.encode("ascii")) + rb","
+        )
+        _require(
+            pattern.search(static_fragment) is not None,
+            f"the exact law-field selection is absent for {coordinate}",
+        )
+        selected = definitions.get(("pir.semantic-law", declaration))
+        _require(
+            selected is not None,
+            f"the law-field selection names an absent declaration {declaration}",
+        )
+        schema = (
+            "strategy-decision-view-v0"
+            if view == "StrategyDecisionView"
+            else "execution-view-v0"
+        )
+        _require(
+            {
+                "profile": "self",
+                "kind": "pir.semantic-law",
+                "name": declaration,
+            }
+            in definitions[("pir.static-view-schema", schema)]["dependencies"],
+            f"the selected declaration is not a dependency of {schema}",
+        )
+        selected_laws[coordinate] = declaration
     _require(
-        b"PIRStaticViewLawBindings" not in static_fragment,
-        "an explicit law-field mapping now exists; refresh the audit",
+        selected_laws == LAW_FIELD_SELECTION,
+        "the exact law-field selection table is incomplete",
     )
     findings.append(
         Finding(
             "view-law-reference-map",
-            "CannotAnswer",
-            "F1R1C-C-LAW-MAP",
-            "five law-valued fields have no explicit field-to-declaration map in the source or manifest",
+            "Affirmative",
+            "F1R1C-A-LAW-MAP",
+            "the five law-valued leaves select exact reachable semantic-law declarations",
         )
     )
 
@@ -331,15 +398,15 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
         kind: subjects[kind]["body_compiler"]["name"] for kind in SOURCE_SUBJECT_KINDS
     }
     _require(
-        set(source_compilers.values()) == {"source-authority-envelope-body-v0"},
-        "source-envelope compiler routing changed; refresh the audit",
+        source_compilers == EXPECTED_SOURCE_COMPILERS,
+        "the six source subjects do not use the migrated split compiler routes",
     )
     findings.append(
         Finding(
             "static-view-authority-envelope-bodies",
-            "CannotAnswer",
-            "F1R1C-C-AUTHORITY-BODIES",
-            "four static-view payload/requirement/no-policy/closure grammars are absent behind the shared compiler route",
+            "Affirmative",
+            "F1R1C-A-AUTHORITY-BODIES",
+            "the four authority-envelope bodies and two role bodies have distinct authenticated compiler routes",
         )
     )
 
@@ -364,20 +431,26 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
         )
     )
 
+    _require(
+        b"PIRStaticViewReadManifestBody(x) =" in static_fragment
+        and b"RequiredPIRViewReadClosure(view_coordinate, selected_fields) =" in static_fragment
+        and b"manifest = RequiredPIRViewReadClosure(coordinate, manifest)" in static_fragment,
+        "the exact read-manifest grammar or fixed-point closure law is absent",
+    )
     findings.append(
         Finding(
             "exact-required-read-manifest",
-            "CannotAnswer",
-            "F1R1C-C-READ-MANIFEST",
-            "without the exact field resolver and constructor closure table, no target manifest can be formed without guessing",
+            "Affirmative",
+            "F1R1C-A-READ-MANIFEST",
+            "the manifest body, atomic resolver, constructor closure, and exact fixed-point rule are authenticated",
         )
     )
 
     evidence = {
         "format": "zkc.formal-source-owner-views-f1r1c.audit.v0",
         "aggregate": {
-            "outcome": "CannotAnswer",
-            "code": "F1R1C-C-SOURCE-DETERMINACY",
+            "outcome": "Affirmative",
+            "code": "F1R1C-A-SOURCE-DETERMINACY",
         },
         "target_profile_digest": target.profile_id.digest.hex(),
         "view_bodies": list(VIEW_BODIES),
@@ -386,8 +459,23 @@ def evaluate() -> tuple[tuple[Finding, ...], Mapping[str, Any]]:
         "canonical_view_body_grammars": list(canonical_view_bodies),
         "coordinate_body_grammars": list(coordinate_bodies),
         "static_fragment_body_functions": list(body_functions),
-        "law_fields_without_explicit_map": list(LAW_FIELDS),
+        "law_field_selection": selected_laws,
+        "static_view_schema_dependencies": {
+            name: [
+                f"{item['kind']}::{item['name']}"
+                for item in definitions[("pir.static-view-schema", name)]["dependencies"]
+            ]
+            for name in (
+                "public-binding-view-v0",
+                "strategy-decision-view-v0",
+                "public-coin-view-v0",
+                "effect-view-v0",
+                "claim-reduction-view-v0",
+                "execution-view-v0",
+            )
+        },
         "source_subject_compilers": source_compilers,
+        "exact_read_manifest": True,
         "retained_core_id": fixture.core_candidate.asserted_id.carrier(),
         "retained_protocol_id": fixture.protocol_candidate.asserted_id.carrier(),
     }

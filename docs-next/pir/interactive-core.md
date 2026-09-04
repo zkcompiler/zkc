@@ -903,24 +903,46 @@ ClaimDisposition = Consume | Discharge
 TerminalDecl = {
   verdict: TerminalVerdict,
   public_outputs: CanonicalSeq<ValueRef>,
-  required_true_checks: CanonicalSeq<CheckRef>,
-  claim_dispositions:
-    CanonicalSeq<(ClaimRef, ClaimDisposition)>
+  required_true_checks: CanonicalSortedUniqueSeq<CheckRef>,
+  required_applied_reductions: CanonicalSortedUniqueSeq<ReductionRef>,
+  terminal_claims: CanonicalSortedUniqueSeq<ClaimRef>
 }
+
+DerivedClaimDisposition(Accept) = Consume
+DerivedClaimDisposition(Reject) = Discharge
+DerivedClaimDisposition(Abort)  = Discharge
 ```
 
-At an active terminal, every public output is available to Verifier, every
-required check has occurred and is true, and every named claim is live. Its
-dispositions apply in sequence, then every live linear claim must be consumed
-or discharged and every accepting-path required reduction must be saturated.
-An `Accept` terminal additionally rejects an unresolved initial claim or
-unapplied required reduction. `Reject` and `Abort` may discharge remaining
-claims only through explicit dispositions.
+A terminal is selected by its Guard alone. At an active terminal, every public
+output is available to Verifier, every Check in `required_true_checks` has
+occurred with output true, every Reduction in `required_applied_reductions`
+has applied, and `terminal_claims` is exactly the set of live claims, reusable
+claims included. The terminal then disposes every terminal claim by the
+disposition derived from its verdict: `Accept` consumes each one, `Reject` and
+`Abort` discharge each one. No disposition is authored per claim. Two Cores
+that differed only in a per-claim tag would carry distinct identities with no
+distinct meaning, so the disposition is a derived fact rather than a body
+field.
+
+The three sets are authored semantic obligations that admission decides from
+the Core's own structure (Section 10); execution derives whether each Check and
+Reduction occurred but never re-decides the obligation. A required Check's
+output must be a positive must-fact of the terminal's Guard term, so the
+terminal cannot be selected on any execution where that Check is false. A
+required Reduction must apply on every path on which the terminal is
+attempted. The terminal claim set must equal the live claim set at every
+possible activation. A false required Check therefore takes an authored
+non-accepting branch, typically a later fallback terminal; it is never a
+failure transition, and an unsupported Check evaluation remains `Unsupported`
+rather than false. An `Accept` terminal cannot be reached with an unresolved
+initial claim: every initial claim is either consumed by a Reduction on the
+path or a member of the accepting terminal's exact claim set.
 
 Each Terminal has exactly one occurrence. The final Core occurrence is an
 unconditional `ReachTerminal` in the root or an open descendant scope, ensuring
-a finite fallback. Execution stops at the first active terminal. Earlier
-guarded terminals are allowed.
+a finite fallback; its Guard is `Always`, so its `required_true_checks` is
+empty. Execution stops at the first active terminal. Earlier guarded terminals
+are allowed.
 
 ## 7. Standard immutable-oracle extension
 
@@ -1382,7 +1404,8 @@ logic.
 9. simulate structural claim liveness on every schedule path induced by the
    finite guards, using the Core's bounded explicit state, and check linearity,
    required-publication kind/uniqueness/least-next-challenge order,
-   Last-Challenge closure, reduction saturation, and terminal closure; and
+   Last-Challenge closure, reduction saturation, and the Terminal contract of
+   Section 6.4 under the closed laws below; and
 10. require the unconditional final fallback terminal and mint one immutable
     `AdmittedCore` only if every boundary succeeds.
 
@@ -1400,6 +1423,150 @@ implication is not guessed, delegated to a host solver, or accepted by an
 unidentified certificate; it is outside this K2 regime. A future checked
 implication satellite would require its own exact proposition, validator,
 bounds, and admission integration.
+
+The Terminal contract is decided by two further closed laws of the same kind.
+Scope openings are deterministic, unguarded boundaries, so `AttemptGuards(o)`
+contains only the structurally identified `EvaluateBoolean` body of occurrence
+`o`; `Always` contributes nothing. Two occurrences with structurally identical
+guard bodies read the same values and evaluate alike on every path. If a later
+occurrence is attempted, no earlier terminal stopped the run; if its attempt
+guards include an earlier occurrence's guard, that guard was true after the
+earlier occurrence's deterministic scope boundary had been processed, so the
+earlier occurrence was attempted.
+
+```text
+AttemptGuards(o) := { Guard(o) } minus { Always }
+
+AttemptedWhenever(o_later, o_earlier) :=
+  o_earlier < o_later
+  and AttemptGuards(o_earlier) subset AttemptGuards(o_later)
+
+GuardInputs(o) = [] and GuardTerm(o) = None
+  when Guard(o) is Always;
+GuardInputs(o) = inputs and GuardTerm(o) = the authenticated term of algorithm
+  when Guard(o) is EvaluateBoolean { algorithm, evaluation_contract, inputs }
+
+InputMust(i) = { when_true: {Positive(i)}, when_false: {Negative(i)} }
+  when input i is Boolean, and { when_true: {}, when_false: {} } otherwise
+
+Must(term with n inputs) :=
+  MustEnv(term, [InputMust(0), ..., InputMust(n - 1)])
+
+MustEnv(variable i, environment) = environment[i]
+MustEnv(constant true, environment) =
+  { when_true: {}, when_false: Impossible }
+MustEnv(constant false, environment) =
+  { when_true: Impossible, when_false: {} }
+MustEnv(let x = e1 in e2, environment) =
+  MustEnv(e2, [MustEnv(e1, environment)] ++ environment)
+MustEnv(if c then a else b, environment) =
+  let C = MustEnv(c, environment),
+      A = MustEnv(a, environment),
+      B = MustEnv(b, environment) in {
+    when_true:  Meet(C.when_true union A.when_true,
+                     C.when_false union B.when_true),
+    when_false: Meet(C.when_true union A.when_false,
+                     C.when_false union B.when_false) }
+MustEnv(primitive call, environment) =
+  { when_true: {}, when_false: {} }
+MustEnv(any other term constructor, environment) =
+  { when_true: {}, when_false: {} }
+a union with Impossible is Impossible, and a union that contains both
+  Positive(i) and Negative(i) for one input i is Impossible;
+Meet(X, Y) = X when Y is Impossible, Y when X is Impossible,
+             X intersect Y otherwise
+MustWhenTrue(term) := Must(term).when_true
+
+Region(o) := {
+  required_true: AttemptGuards(o),
+  required_false: { Guard(t') | t' a terminal occurrence earlier than o
+                                with Guard(t') not Always },
+  impossible: an earlier terminal occurrence has Guard Always, or one atom
+              occurs in both sets
+}
+
+Implies(A, B) :=
+  B.required_true subset A.required_true
+  and B.required_false subset A.required_false
+Disjoint(A, B) :=
+  A.required_true intersects B.required_false
+  or B.required_true intersects A.required_false
+
+BoundaryRegion(Initially) := {
+  required_true: {}, required_false: {}, impossible: false
+}
+BoundaryRegion(BeforeOccurrence(o)) := {
+  required_true: {},
+  required_false: { Guard(t') | t' a terminal occurrence earlier than o
+                                with Guard(t') not Always },
+  impossible: an earlier terminal occurrence has Guard Always
+}
+
+ClaimSourceRegion(c) :=
+    BoundaryRegion(ScopeDecl(PublicBindingDecl(binding).scope).opening)
+      when c.source is InitialClaim(binding)
+  | Region(o_r)
+      when c.source is ReductionOutput(r, output_ordinal), with o_r the
+      occurrence of ApplyReduction(r)
+
+ClaimStatus(c, o) :=
+    Live     when Implies(Region(o), ClaimSourceRegion(c))
+             and Disjoint(Region(o), Region(u)) for every earlier linear
+             consumer u of c
+  | Dead     when Disjoint(Region(o), ClaimSourceRegion(c))
+             or Implies(Region(o), Region(u)) for some earlier linear
+             consumer u of c
+  | Unknown  otherwise
+LiveClaims(o) := { c | ClaimStatus(c, o) = Live }
+
+TerminalContract(t), with o_t the occurrence of ReachTerminal(t) :=
+  Region(o_t) is not impossible, and GuardTerm(o_t) is None or
+    MustWhenTrue(GuardTerm(o_t)) is not Impossible;
+  for every c in t.required_true_checks,
+      with o_c the occurrence of InvokeCheck(c):
+    AttemptedWhenever(o_t, o_c)
+    and GuardTerm(o_t) is not None
+    and there is an input ordinal i of Guard(o_t) with
+          GuardInputs(o_t)[i] = OccurrenceOutput(o_c, 0)
+          and Positive(i) in MustWhenTrue(GuardTerm(o_t));
+  for every r in t.required_applied_reductions,
+      with o_r the occurrence of ApplyReduction(r):
+    AttemptedWhenever(o_t, o_r);
+  no claim has ClaimStatus Unknown at o_t, and
+    LiveClaims(o_t) = t.terminal_claims
+```
+
+The environment is the term's de Bruijn environment: the inputs occupy it in
+ordinal order and a `let` prepends the bound term's facts, so a variable that
+names a non-Boolean binding carries no literal, and every term constructor
+the calculus admits beyond the five named ones contributes no literal
+either. A literal in `when_true` holds on every evaluation on which the term
+returns true. The analysis drops information but never invents it, so it may
+refuse a valid implication and never admits an invalid one. An impossible
+region is refused rather than discharged vacuously, whether the terminal
+names a required Check or not: a terminal that no path reaches, or whose
+Guard can never return true, does not satisfy the contract, and this
+strictness is not a claim that any authored terminal is reachable.
+
+`Region`, `Implies`, `Disjoint`, and `ClaimStatus` are the forward abstract
+state of step 9 stated as closed set laws over structurally identified guard
+atoms, with no enumeration of valuations: an occurrence's region is its own
+guard together with the negations of every earlier terminal's guard, since
+scope openings are deterministic and a later occurrence is attempted only
+when no earlier terminal stopped the run. A claim is live at an occurrence
+when that occurrence's region implies its source's region and excludes every
+earlier linear consumer's region; it is dead when the region excludes its
+source or implies a consumer; `Unknown` is refused, because an authored
+terminal claim set cannot adapt to a path the algebra cannot decide. A
+reusable claim is never consumed, so it stays live for every later
+occurrence its source reaches and must appear in every terminal's claim set
+that its source reaches. The exact Check output must appear directly
+among the Guard inputs: no chain of derived values is followed, and a Guard
+that needs a Boolean combination expresses it in its own term. A primitive
+call contributes no literal, so an implication that holds only through a
+primitive's meaning is outside this regime exactly as a non-syntactic guard
+implication is. An `Always` Guard has no term and no inputs, so a terminal
+with an `Always` Guard cannot name a required Check.
 
 Admission is deterministic and bounded by the K1 body limits plus linear scans,
 sorted-set operations, algorithm checks, and the finite abstract-state
@@ -1480,18 +1647,60 @@ Publish(x) = PublicHistory  if x in {StaticPublic, PublicHistory}
            | x              otherwise
 ```
 
-Public inputs and constants are `StaticPublic`; Verifier-private inputs are
-`VerifierPrivate`. Total failure-free derived algorithms, guards, scope
-openings, checks, reductions, and terminals use `Join` of their exact incoming
-edges. A Prover message, Oracle publication output, or Public Oracle answer uses
-`Publish(activity)`; a Public Query uses `Join(activity,index)`, while a
-Verifier-only Query/Answer is `VerifierPrivate`. A deterministic Verifier
-message uses `Join(activity,inputs)` only after its exact K1 ABI check. A
-Challenge is `PublicHistory` only when its activity is public, every
-`public_condition` is `StaticPublic`, and every named joint member is an earlier
-valid Challenge; otherwise it is `Invalid` or `VerifierPrivate` by the first
-failed dependency. Any other nondeterministic Verifier-to-Prover output is
-`Invalid`.
+Each transfer is applied at a named node. An activity node classifies whether
+its occurrence is attempted, an effect node classifies the occurrence's action,
+an output node classifies one produced value, and a claim, reduction, or
+terminal state node classifies the named state fact. Public-input and constant
+nodes are `StaticPublic`; Verifier-private input nodes are `VerifierPrivate`.
+Every node not named below, including every activity node, every derived-value,
+scope-opening, and binding-observation node, every Check effect and output
+node, and every claim, reduction, and terminal state node, uses `Join` of its
+complete incoming edge set. The remaining coordinates are:
+
+```text
+ProverMessage:
+  effect = Join(incoming); output = Publish(activity)
+DeterministicVerifierMessage:
+  effect = Join(incoming);
+  output = Join(activity, producer of each input), after its exact K1 ABI check
+PublishOracle with FullCanonicalOracle or PublicBinding:
+  effect = Join(incoming); each output = Publish(activity)
+PublishOracle with LogicalAccess:
+  effect = Publish(activity); there is no output node
+QueryOracle, Public:
+  effect = Join(activity, producer of the index);
+  the publication-effect edge is not part of that join
+QueryOracle, VerifierOnly:
+  effect = VerifierPrivate
+AnswerOracle of a Public Query:
+  effect = Join(incoming); output = Publish(activity)
+AnswerOracle of a VerifierOnly Query:
+  effect = VerifierPrivate; output = VerifierPrivate
+Challenge:
+  output = ChallengeTransfer(challenge)
+Module output, deterministic reconstruction after its ABI check:
+  Join(incoming)
+Module output, Prover publication:
+  Publish(Join(incoming))
+Module output, otherwise:
+  Invalid
+
+ChallengeTransfer(challenge), with
+  deps = [class(activity)]
+      ++ [class(producer(c)) | c in public_conditions]
+      ++ [class(output of m) | m in the named joint members]:
+    Invalid          if Invalid in deps
+  | VerifierPrivate  else if VerifierPrivate in deps
+  | Invalid          else if some public_condition class is not StaticPublic
+                       or some joint member is not an earlier valid Challenge
+  | PublicHistory    otherwise; the Challenge is then valid
+```
+
+Failure precedence is lattice priority, `Invalid` above `VerifierPrivate`,
+over the complete dependency set; it does not depend on source order, edge
+order, or traversal order. A Challenge is valid exactly when its transfer
+yields `PublicHistory`. Any other nondeterministic Verifier-to-Prover output
+is `Invalid`.
 
 A module effect applies these same transfers to its exact dependency edges:
 Prover publications use `Publish`, and deterministic public outputs use the
@@ -1505,10 +1714,18 @@ implementation. Admission validates and applies that law. Realization and
 Evidence must show that an implementation has no undeclared dependency; a host
 that reads one is nonconforming and does not change `PublicCoinView`.
 
-`PCSinks(core)` is the derived set of every guard/activity controlling a public
-observation, deterministic Verifier output, public Query index, Challenge
-condition, invoked Check, Reduction transition, Terminal decision, terminal
-public output, and module control/output declared acceptance-relevant.
+`PCSinks(core)` is the derived set of exactly these nodes: every
+binding-observation node; every public observation, namely each
+Prover-message and deterministic-Verifier-message output node, each Challenge
+output node, each publication output node of a `FullCanonicalOracle` or
+`PublicBinding` Oracle, the publication effect node of a `LogicalAccess`
+Oracle, the effect node of every Public Query together with the producer node
+of its index, the output node of every Answer to a Public Query, and every
+module output declared public with its occurrence output node; the activity
+node of every occurrence that has a public observation; the producer node of
+every Challenge `public_condition`; every Check effect node; every Reduction
+and Terminal state node; the producer node of every terminal public output;
+and every module control or output node declared acceptance-relevant.
 `PublicCoinEligible(core)` is true exactly when every sink is
 `StaticPublic` or `PublicHistory`, every Challenge passed its special transfer,
 and every challenge is observed before a later Prover-decision dependency may
@@ -1518,8 +1735,9 @@ final classes are retained in `PublicCoinView`.
 
 Logical access has an additional representation obligation that is not a
 fourth `PCClass`. Let `AcceptanceSinks(core)` be the subset consisting of every
-invoked Check, reduction transition, accepting Terminal decision/public output,
-and module control/output declared acceptance-relevant. For each Oracle `o`
+Check effect node, every Reduction state node, every accepting Terminal state
+node with the producer nodes of its public outputs, and every module control or
+output node declared acceptance-relevant. For each Oracle `o`
 with mode `LogicalAccess`, let `LogicalAccessInfluenceCone(o)` be the exact
 descendants in `PCGraph(core)` of its unique publication-effect node. Direct
 same-Core Fiat--Shamir eligibility additionally requires
@@ -1757,8 +1975,15 @@ ChallengeResolverReceipt(P) =
 
 OracleReceipt =
     Published(occurrence, oracle,
-              CanonicalSeq<CanonicalValue>
-                exactly OraclePublicationOutputTypes(oracle))
+              outputs: CanonicalSeq<CanonicalValue>
+                exactly OraclePublicationOutputTypes(oracle),
+              fixation: None
+                      | Fixed(origin: OracleOrigin,
+                              domain_law:
+                                ProtocolDeclarationRef<"pir.oracle-domain-law">)
+                exactly Fixed, with the declaration's own origin and domain
+                law, when oracle.publication_mode = LogicalAccess, and None
+                otherwise)
   | Queried(occurrence, oracle,
             CanonicalValue<oracle.index_type>, visibility)
   | Answered(occurrence, oracle,
@@ -1767,14 +1992,26 @@ OracleReceipt =
 RunRecord(P) = {
   protocol_id: exactly P.id,
   invocation_id: CoreInvocationId,
-  occurrence_receipts: CanonicalSeq<OccurrenceReceipt>,
+  occurrence_receipts: CanonicalSeq<OccurrenceReceipt>
+    exactly one receipt per occurrence, in schedule order, from the first
+    occurrence through the active terminal's occurrence inclusive,
   challenge_receipts: CanonicalSeq<ChallengeResolverReceipt(P)>,
   oracle_receipts: CanonicalSeq<OracleReceipt>,
   terminal: TerminalRef,
   terminal_public_outputs: CanonicalSeq<CanonicalValue>
 }
 
-PartialRunRecord(P) = the exact prefix of RunRecord(P) before a terminal
+PartialRunRecord(P) = {
+  protocol_id: exactly P.id,
+  invocation_id: CoreInvocationId,
+  occurrence_receipts: CanonicalSeq<OccurrenceReceipt>
+    exactly one receipt per occurrence, in schedule order, for every
+    occurrence before stopped_before,
+  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt(P)>,
+  oracle_receipts: CanonicalSeq<OracleReceipt>,
+  stopped_before: OccurrenceRef
+    the prover-decision occurrence at which the strategy stopped
+}
 
 InterpretationFailureReceipt(P) =
   FiatShamir(ProfileFSInterpretationFailureReceipt(P))
@@ -1791,7 +2028,39 @@ ProtocolFailureRecord(P) = {
 CompletedProtocolRecord(P) =
     TerminalCompletion(RunRecord(P))
   | InterpretationFailure(ProtocolFailureRecord(P))
+
+ProtocolOutcomeLane(P) =
+    Accepted | Rejected | Aborted
+  | InterpretationFailed(ProfileFSInterpretationFailureReceipt(P))
+      present only when AuthenticatedProtocolProfile(P) declares an
+      interpretation-failure schema
+  | StrategyStopped
+  | OperationalNoncompletion
 ```
+
+A `Published` receipt for a `LogicalAccess` Oracle has an empty output
+sequence and carries the typed fixation marker of Section 7.2 in `fixation`;
+with the receipt's occurrence and oracle it is exactly that marker and no
+carrier-derived byte. The last occurrence receipt of a `RunRecord` is the
+active terminal's, and no occurrence after the first active terminal has a
+receipt. A `PartialRunRecord` records the stopped generation exactly up to the
+decision at which the strategy stopped; no terminal occurrence has a receipt
+in it.
+
+Every `GenerateRun` invocation ends in exactly one lane of
+`ProtocolOutcomeLane(P)`, the PIR-owned abstract outcome partition. `Accepted`,
+`Rejected`, and `Aborted` are the verdict of the active terminal of a
+`TerminalCompletion` record. `InterpretationFailed` is an
+`InterpretationFailure` record and exists only for a Protocol whose profile
+declares an interpretation-failure schema, so a Fresh or duplex-sponge Protocol
+has five lanes and a canonical-framed Protocol six. `StrategyStopped` is the
+operational stop of Section 12.3; its `PartialRunRecord` is diagnostic data
+and not a completed record. `OperationalNoncompletion` is any qualified K1
+noncompletion and produces no record. The `ExecutionView` states this
+partition as what a run of the Protocol can end as (Section 13.2). A consumer
+that needs a Boolean, an option layer, or any other carrier maps the partition
+in its own domain; it never reads a verdict as a Boolean, and no lane is
+relabeled as another.
 
 The two `ProfileFS*Receipt` type functions are profile-dispatched runtime
 payloads, not open callbacks. An FS language profile must commit to exactly one
@@ -1979,10 +2248,35 @@ PIRProfileLawReference =
 
 PIRProfileLawReferenceBody(x) = ProfileDeclarationRefBody(x)
 
+PIRReference =
+    ScopeRef | OccurrenceRef | ProverDecisionPointRef | ChallengeRef
+  | BindingRef | ClaimRef | ReductionRef | CheckRef | TerminalRef | OracleRef
+  | PublicInputRef | VerifierPrivateInputRef | ConstantRef | DerivedValueRef
+  | ValueRef
+  | ProtocolDeclarationRef<K> for a declaration kind K that the exact-used
+    owner-module closure of the selected profile recognizes: Section 2 lists
+    the Interaction kinds, and a family page lists the kinds its profile adds
+    (the canonical-framed profile adds "pir.fs-application-domain")
+
+PIRReferenceBody(x) = the already defined exact body of x's reference type:
+  N(ordinal) for a Core-local dense ordinal, ValueRefBody(x) for a ValueRef,
+  and ModuleDeclarationRefBody(x) for a ProtocolDeclarationRef; the union is
+  closed under the selected profile, a ModuleEffectRef takes the
+  AdmittedModuleEffect arm, and a leaf of any other reference type is not a
+  static-view leaf
+
 PIRViewAtomicBoundary =
     Unit | Natural | MetaBoolean | MetaSymbol | Bytes
   | ValueType | CanonicalValue(ValueType)
-  | PIRReference | PIRProfileLawReference
+  | PIRReference | PIRProfileLawReference | AdmittedModuleEffect
+
+AdmittedModuleEffectAtom(x) :=
+  x is the complete ModuleEffectRef admitted under Section 8;
+  x.module and x.declaration agree exactly;
+  x.declaration resolves in the authenticated module closure;
+  the evaluator supports that exact effect declaration;
+  x.payload validates strictly under the declaration's owner schema;
+  the atom's body is ModuleEffectRefBody(x), one opaque leaf
 
 PIRStaticViewFieldCoordinate = {
   view_coordinate: PIRStaticViewCoordinate,
@@ -2015,7 +2309,97 @@ derivation law, field-coordinate resolver, required-read-closure law, source
 binding schema, and capability contract. This is fixed evaluator dispatch
 under the selected regime. It is not a declaration-module root in an effective
 context, and the profile-import DAG remains the only generic closure mechanism;
-it is also not a consumer-authored catalog.
+it is also not a consumer-authored catalog. The Interaction catalog is:
+
+```text
+PIRViewSchemaCatalog = {
+  PublicBindingView:    StaticViewSchema(PublicBindingView),
+  StrategyDecisionView: StaticViewSchema(StrategyDecisionView),
+  PublicCoinView:       StaticViewSchema(PublicCoinView),
+  EffectView:           StaticViewSchema(EffectView),
+  ClaimReductionView:   StaticViewSchema(ClaimReductionView),
+  ExecutionView:        StaticViewSchema(ExecutionView)
+}
+
+StaticViewSchema(PublicBindingView) = {
+  owner: CoreView(CoreId, PublicBindingView),
+  body: PublicBindingViewBody,
+  derivation: Core admission (Section 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: PIRStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(StrategyDecisionView) = {
+  owner: CoreView(CoreId, StrategyDecisionView),
+  body: StrategyDecisionViewBody,
+  derivation: Core admission and the visible-history law (Sections 9 and 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: PIRStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(PublicCoinView) = {
+  owner: CoreView(CoreId, PublicCoinView),
+  body: PublicCoinViewBody,
+  derivation: Core admission and structural public-coin eligibility
+              (Sections 10 and 11),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: PIRStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(EffectView) = {
+  owner: CoreView(CoreId, EffectView),
+  body: EffectViewBody,
+  derivation: Core admission (Section 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: PIRStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(ClaimReductionView) = {
+  owner: CoreView(CoreId, ClaimReductionView),
+  body: ClaimReductionViewBody,
+  derivation: Core admission (Section 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: PIRStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(ExecutionView) = {
+  owner: ProtocolView(ProtocolId, ExecutionView),
+  body: ExecutionViewBody,
+  derivation: Core admission, challenge-parameterized execution, and
+              run-view issuance (Sections 10, 12, and 13.5),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: PIRStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewBody(view) =
+  the canonical body of the complete closed owner view: records by written
+  field order, variants by written arm order, sequences elementwise, and
+  atoms by their exact Appendix A bodies
+
+PIRStaticViewFieldResolution :=
+  a field coordinate resolves exactly when its path reaches one atomic leaf
+  of the body schema selected by its view coordinate, and a manifest resolves
+  exactly when every coordinate resolves and the manifest equals its own
+  RequiredPIRViewReadClosure
+```
+
+Each `StaticViewSchema` entry is one `pir.static-view-schema` declaration of
+the Interaction profile. The Fiat--Shamir family pages declare their
+construction and checked-result view schemas under their own profiles in the
+same form; a profile-local kind that is absent from its profile's catalog
+does not exist.
 
 ```text
 PIRStaticViewReadManifest =
@@ -2053,83 +2437,229 @@ authored.
 ```text
 PublicBindingViewBody = {
   core_id: CoreId,
-  scope_openings: CanonicalSeq<{
-    scope_ref, parent, opening, complete_scope_path
+  scopes: CanonicalSeq<{
+    scope_ref: ScopeRef,
+    parent: None | Some(ScopeRef),
+    opening: ScopeOpening,
+    scope_path: NonEmptyCanonicalSeq<ScopeRef>
   }>,
   bindings: CanonicalSeq<{
-    binding_ref, scope_ref, class, value_ref, value_type,
-    value_origin: InvocationPublicInput | Constant | DerivedValue |
-                  OccurrenceOutput,
-    complete_value_producer_coordinate
+    binding_ref: BindingRef,
+    scope_ref: ScopeRef,
+    class: PublicBindingClass,
+    value_ref: ValueRef,
+    value_type: ValueType
   }>
 }
+
+PIRProverMoveType =
+    MessageMove(ValueType)
+  | OracleMove(OracleRef, OracleCarrierType, OraclePublicationMode)
+  | ModuleMove(AdmittedModuleEffectBoundary, exact module move ValueType)
 
 StrategyDecisionViewBody = {
   core_id: CoreId,
   decision_points: CanonicalSeq<{
-    decision_ref, occurrence_ref, scope_ref, guard_ref,
-    legal_move_type, prior_decision_refs
+    decision_ref: ProverDecisionPointRef,
+    occurrence_ref: OccurrenceRef, exactly decision_ref,
+    scope_path: NonEmptyCanonicalSeq<ScopeRef>,
+    guard: exact Guard,
+    move_type: PIRProverMoveType,
+    prior_decision_refs: CanonicalSeq<ProverDecisionPointRef>
   }>,
-  prover_view_formation: exact prefix/scope/guard visibility law,
-  guaranteed_prover_reads:
-    CanonicalMap<(ProverDecisionPointRef,ProverViewCoordinate),ValueType>,
-  legal_move_types: CanonicalMap<ProverDecisionPointRef,ValueType>
+  prover_view_formation_law: PIRProfileLawReference,
+  guaranteed_prover_reads: CanonicalSeq<{
+    decision_ref: ProverDecisionPointRef,
+    read: InteractiveCoreProverReadCoordinate,
+    value_type: ValueType
+  }>,
+  legal_move_types: CanonicalSeq<{
+    decision_ref: ProverDecisionPointRef,
+    move_type: PIRProverMoveType
+  }>
+}
+
+PIRPCGraphResult = {
+  nodes: CanonicalSortedUniqueSeq<PCNode>,
+  edges: CanonicalSortedUniqueSeq<{ source: PCNode, target: PCNode }>,
+  topological_order: CanonicalSeq<PCNode>,
+  classes: CanonicalSeq<{ node: PCNode, class: PCClass }>,
+  sinks: CanonicalSortedUniqueSeq<PCNode>,
+  acceptance_sinks: CanonicalSortedUniqueSeq<PCNode>,
+  logical_access_influence: CanonicalSeq<{
+    oracle_ref: OracleRef,
+    cone: CanonicalSortedUniqueSeq<PCNode>,
+    acceptance_intersection: CanonicalSortedUniqueSeq<PCNode>
+  }>
 }
 
 PublicCoinViewBody = {
   core_id: CoreId,
+  graph: PIRPCGraphResult,
   structural_public_coin_eligibility: MetaBoolean,
-  verifier_private_dependency_closure:
-    CanonicalSortedUniqueSeq<ValueRef>,
+  verifier_private_predecessors: CanonicalSortedUniqueSeq<PCNode>,
   challenges: CanonicalSeq<{
-    challenge_ref, occurrence_ref, scope_ref, value_type, domain, fresh_law,
-    correlation, reduction_use, public_conditions,
-    complete_public_condition_producer_closure
+    challenge_ref: ChallengeRef,
+    occurrence_ref: OccurrenceRef,
+    scope_ref: ScopeRef,
+    value_type: ValueType,
+    domain: ProtocolDeclarationRef<"pir.challenge-domain">,
+    fresh_law: ProtocolDeclarationRef<"pir.public-coin-law">,
+    correlation: CoinCorrelation,
+    reduction_use: ReductionUsePolicy,
+    public_conditions: CanonicalSeq<ValueRef>,
+    public_condition_predecessors: CanonicalSortedUniqueSeq<PCNode>,
+    reduction_consumers: CanonicalSeq<{
+      reduction_ref: ReductionRef,
+      challenge_ref: ChallengeRef, exactly this challenge_ref
+    }>
   }>
+}
+
+PIREffectOccurrenceEntry = {
+  occurrence_ref: OccurrenceRef,
+  scope_path: NonEmptyCanonicalSeq<ScopeRef>,
+  guard: exact Guard,
+  effect: exact CoreEffect, with ModuleEffectRef one opaque admitted atom,
+  output_types: CanonicalSeq<ValueType>
+}
+
+PIRValueEntry = {
+  value_ref: ValueRef,
+  value_type: ValueType,
+  direct_predecessors: CanonicalSeq<ValueRef>
 }
 
 EffectViewBody = {
   core_id: CoreId,
-  occurrence_schedule: CanonicalSeq<{
-    occurrence_ref, scope_ref, guard, effect, output_types
+  occurrence_schedule: NonEmptyCanonicalSeq<PIREffectOccurrenceEntry>,
+  values: CanonicalSeq<PIRValueEntry>,
+  messages: CanonicalSeq<{
+    occurrence_ref: OccurrenceRef,
+    message_kind: Prover | DeterministicVerifier,
+    declaration: exact Message declaration
   }>,
-  value_producer_graph: {
-    public_inputs, verifier_private_inputs, constants, derived_values,
-    occurrence_outputs, exact producer edges and ValueType at every node
-  },
-  messages: CanonicalSeq<exact Message declaration and occurrence backlink>,
-  oracles: CanonicalSeq<exact Oracle lifecycle declaration/backlinks>,
-  checks: CanonicalSeq<exact Check declaration and occurrence backlink>,
-  terminals: CanonicalSeq<exact Terminal declaration and occurrence backlink>,
-  supported_extensions: CanonicalSeq<exact admitted extension declaration>
+  oracles: CanonicalSeq<{
+    oracle_ref: OracleRef,
+    declaration: exact Oracle declaration,
+    publication_occurrence: OccurrenceRef,
+    queries: CanonicalSeq<OccurrenceRef>,
+    answers: CanonicalSeq<OccurrenceRef>
+  }>,
+  checks: CanonicalSeq<{
+    check_ref: CheckRef,
+    algorithm: PortableAlgorithmRef,
+    evaluation_contract: EvaluationContractId,
+    inputs: CanonicalSeq<ValueRef>,
+    occurrence_ref: OccurrenceRef
+  }>,
+  terminals: CanonicalSeq<{
+    terminal_ref: TerminalRef,
+    verdict: TerminalVerdict,
+    public_outputs: CanonicalSeq<ValueRef>,
+    required_true_checks: CanonicalSortedUniqueSeq<CheckRef>,
+    required_applied_reductions: CanonicalSortedUniqueSeq<ReductionRef>,
+    terminal_claims: CanonicalSortedUniqueSeq<ClaimRef>,
+    occurrence_ref: OccurrenceRef
+  }>,
+  supported_extensions: CanonicalSeq<{
+    occurrence_ref: OccurrenceRef,
+    effect: AdmittedModuleEffectAtom
+  }>
 }
+
+PIRClaimCreationCoordinate =
+    InitialBinding(BindingRef, exact scope-opening boundary)
+  | ReductionOutput(OccurrenceRef, ReductionRef, output_ordinal)
+
+PIRClaimUseCoordinate =
+    ReductionInput(OccurrenceRef, ReductionRef, input_ordinal)
+  | TerminalClaim(OccurrenceRef, TerminalRef, claim_ordinal)
 
 ClaimReductionViewBody = {
   core_id: CoreId,
   claims: CanonicalSeq<{
-    claim_ref, contract, usage, source, creation coordinate,
-    complete consumer and terminal-disposition coordinates
+    claim_ref: ClaimRef,
+    contract: ProtocolDeclarationRef<"pir.claim-contract">,
+    scope_ref: ScopeRef,
+    usage: ClaimUsage,
+    source: ClaimSource,
+    creation: PIRClaimCreationCoordinate,
+    consumers: CanonicalSeq<PIRClaimUseCoordinate>
   }>,
   reductions: CanonicalSeq<{
-    reduction_ref, contract, scope, apply_occurrence, ordered inputs/outputs,
-    side_inputs, required_challenges, complete publication requirements
+    reduction_ref: ReductionRef,
+    contract: ProtocolDeclarationRef<"pir.reduction-contract">,
+    scope_ref: ScopeRef,
+    occurrence_ref: OccurrenceRef,
+    input_claims: NonEmptyCanonicalSeq<ClaimRef>,
+    side_inputs: CanonicalSeq<ValueRef>,
+    required_challenges: CanonicalSeq<ChallengeRef>,
+    required_publications: CanonicalSeq<ReductionPublicationRequirement>,
+    output_contracts:
+      CanonicalSeq<ProtocolDeclarationRef<"pir.claim-contract">>
   }>,
-  terminal_dispositions:
-    CanonicalSeq<(TerminalRef,ClaimRef,Consume | Discharge)>
+  terminal_dispositions: CanonicalSeq<{
+    occurrence_ref: OccurrenceRef,
+    terminal_ref: TerminalRef,
+    claim_ref: ClaimRef,
+    disposition: ClaimDisposition, exactly DerivedClaimDisposition(verdict)
+  }>
 }
+
+PIRFreshResolverCoordinate = {
+  challenge_ref: ChallengeRef,
+  occurrence_ref: OccurrenceRef,
+  value_type: ValueType,
+  domain: ProtocolDeclarationRef<"pir.challenge-domain">,
+  fresh_law: ProtocolDeclarationRef<"pir.public-coin-law">,
+  public_conditions: CanonicalSeq<ValueRef>,
+  prior_joint_members: CanonicalSeq<ChallengeRef>
+}
+
+PIRRuntimeSchema =
+  the finite Record | Variant | Sequence | Atom description of one runtime
+  type, in the same description universe as the view bodies
 
 ExecutionViewBody = {
   protocol_id: ProtocolId,
   core_id: CoreId,
   challenge_interpretation: ChallengeInterpretation,
-  visible_history_law,
-  resolver_coordinates,
-  generated_execution_law,
-  run_record_schema,
-  replay_qualification_law,
-  relation_run_view_issuance_law
+    exactly Fresh under the Interaction profile,
+  visible_history_law: PIRProfileLawReference,
+  resolver_coordinates: CanonicalSeq<PIRFreshResolverCoordinate>,
+  generated_execution_law: PIRProfileLawReference,
+  run_record_schema: PIRRuntimeSchema,
+    exactly the description of CompletedProtocolRecord(P),
+  interpretation_failure_schema: None | PIRRuntimeSchema,
+    exactly None under the Interaction profile,
+  outcome_partition: PIRRuntimeSchema,
+    exactly the description of ProtocolOutcomeLane(P),
+  replay_qualification_law: PIRProfileLawReference,
+  relation_run_view_issuance_law: PIRProfileLawReference
 }
 ```
+
+`scope_path` is the unique parent chain from the root scope to the entry's
+scope. `prior_decision_refs` names every earlier Prover decision in occurrence
+order; guaranteed visibility of a prior move remains a separate `PriorOwnMove`
+read result. `verifier_private_predecessors` is exactly every
+`VerifierPrivateInputNode` that reaches one sink, and a challenge's
+`public_condition_predecessors` is the graph predecessor closure of its
+condition producer nodes, those producers included; the graph fields make the
+Section 11 retention claim independently checkable and the eligibility
+Boolean cannot substitute for them. `direct_predecessors` is empty for
+invocation inputs and constants, equals the declared inputs of a derived value,
+and equals the declaration-owned ordered dependency list for an occurrence
+output; it is not the transitive read closure. A claim's `creation` and
+`consumers` are the exact coordinates admission derived; a terminal
+disposition is derived from the terminal's verdict and never authored. The
+`run_record_schema` describes the typed runtime value of Section 12.4; it
+creates no transport encoding, content ID, portable receipt, or authority. The
+canonical-framed and duplex-sponge profiles own their own `ExecutionView`
+entries, with their resolver coordinates, receipt and failure descriptions,
+and interpretation under their own profile identities; the Interaction entry
+cannot type a Fiat--Shamir run.
 
 For these view schemas, record field ordinals and variant tags are the written
 order. A phrase of the form `exact X declaration` means the complete existing
@@ -2149,7 +2679,38 @@ reference must resolve to. Substitution of another law reference is `Refused`,
 and a missing or wrong-kind declaration follows the ordinary
 `MissingDependency` or `KindMismatch` partition. The selected profile must
 list the declaration kind and ordinal in its exact catalog; a standalone
-profiled subject ID cannot substitute for the declaration reference. Closed
+profiled subject ID cannot substitute for the declaration reference. Which
+declaration each law-valued field names is fixed by the owner profile's
+selection table, never chosen by a compiler; for the Interaction profile it is:
+
+```text
+PIRStaticViewLawFieldSelection(Interaction) = CanonicalMap [
+  (StrategyDecisionView, prover_view_formation_law)
+      -> the profile's pir.semantic-law declaration prover-view-formation-v0,
+         whose selector is ProverView of Section 9.2,
+  (ExecutionView, visible_history_law)
+      -> the profile's pir.semantic-law declaration visible-history-v0,
+         whose selector is VisibleHistory of Section 9.1,
+  (ExecutionView, generated_execution_law)
+      -> the profile's pir.semantic-law declaration execution-and-replay-v0,
+         whose selector is Section 12,
+  (ExecutionView, replay_qualification_law)
+      -> the profile's pir.semantic-law declaration replay-qualification-v0,
+         whose selector is ReplayRun of Section 12.4,
+  (ExecutionView, relation_run_view_issuance_law)
+      -> the profile's pir.semantic-law declaration run-view-issuance-v0,
+         whose selector is Section 13.5
+]
+```
+
+The field resolver and `StaticViewBody` consume this table: the leaf of a
+law-valued field is exactly the `LocalProfileDeclarationRef` of the listed
+declaration at its catalog ordinal, a law-valued field absent from the table
+does not resolve, and a table entry naming an absent, duplicate, wrong-kind,
+or imported declaration without a declaration dependency is `Refused`. The
+two Fiat--Shamir profiles state the same table for the fields of their own
+views on their own pages, naming an Interaction declaration only through an
+imported declaration dependency. Closed
 names such as `IdentityOnEveryOccurrenceRef` are nullary variant tags unless the declaring
 page displays parameters or a record body explicitly.
 
@@ -2167,11 +2728,29 @@ page displays parameters or a record body explicitly.
 - a claim or reduction leaf closes to its exact creation/use/disposition and
   challenge/publication closure; and
 - an Execution leaf closes to the exact `ProtocolId`, interpretation, and
-  `CoreId`, so the Fresh and Fiat--Shamir Protocols over one Core cannot alias.
+  `CoreId`, so the Fresh and Fiat--Shamir Protocols over one Core cannot alias;
+  and
+- an algorithm, evaluation-contract, or module identity leaf closes to that
+  identity alone. Its authenticated preimage is part of the Core's admitted
+  dependency closure (Section 10, step 1), which a consumer of the view must
+  hold and reauthenticate; no view carries a preimage.
 
 PIR owns these facts and this adequacy. Relations, Analysis, and OIR own any
 additional proposition computed from them. A view is not a second Protocol
 schema and adds no fact absent from its exact admitted owner body.
+
+For a reader outside PIR, the formal source of an admitted Protocol is
+therefore: the exact Protocol and Core bodies with the authenticated dependency
+closure that Core admission authenticates (the exact-used semantic-module
+declarations, the portable-algorithm preimages named by Checks, guards, derived
+values, and module effects, and their evaluation contracts); the six views,
+which select and coordinate those facts; the coordinates of every nominal
+`pir.public-coin-law` and `pir.challenge-domain` declaration the Core uses; and
+the outcome partition of Section 12.4. A nominal law declaration is a hook,
+not a distribution: what a Fresh challenge is drawn from is bound to that
+coordinate by Analysis as a named premise of the judgment that uses it, and no
+PIR body asserts it. A Fiat--Shamir challenge has no such premise on the PIR
+side, because its value is fixed operationally by the selected construction.
 
 ### 13.3 Issuance, bindings, capabilities, and outcomes
 
@@ -2208,9 +2787,10 @@ capability family `"static-view"`, and the exact projection object as its local 
 coordinate. Its profiled owner-binding payload commits to the producer
 coordinate and complete field manifest. Its policy disposition is an explicit
 `OwnerDefinesNoPolicy(exact PIR no-policy declaration ID)`; its policy-closure
-ID commits to that
-declaration and an `OwnerCapabilityRequirement` naming the exact typed consumer
-and purpose. The binding is inert and contains no live token.
+ID commits to that declaration and an `OwnerCapabilityRequirement` naming the
+exact typed consumer and purpose. The four identities have the exact
+static-view bodies defined at the end of this section. The binding is inert
+and contains no live token.
 
 The fresh `PIRStaticViewCapability` retains that exact binding object, the
 admitted handle, manifest and projection objects, evaluator, typed consumer and
@@ -2254,6 +2834,139 @@ physical definition. A dependent PIR profile may support either subject kind
 and pass its own exact profile ID to the constructors; it does not redeclare
 the body or infer a profile from the downstream coordinate.
 
+The four remaining envelope identities of a static-view binding have these
+exact bodies. Their coordinates and manifests are serializable because a Core
+or Protocol view is named by exact identities; a profile whose view coordinate
+contains an owner-local reference defines its own family-local payload from
+the identities that reference commits to. `PIRDescriptionBody` is the
+canonical body of a `PIRRuntimeSchema` or of any other finite description in
+the view universe: a record is arm 0 over its named fields in written order, a
+variant is arm 1 over its named arms in written order, a sequence is arm 2
+over its element description, and an atom is arm 3 over its boundary.
+
+```text
+CoreStaticViewKindBody =
+  V(0,Unit) | V(1,Unit) | V(2,Unit) | V(3,Unit) | V(4,Unit)
+
+PIRStaticViewCoordinateBody(x) = R {
+  0: V(0, R{0:ContentRef(core_id), 1:CoreStaticViewKindBody(kind)})
+   | V(1, R{0:ContentRef(protocol_id)}),
+  1: ContentRef(x.semantic_language_profile_id)
+}
+
+PIRViewPathStepBody =
+  V(0,N(field_ordinal)) | V(1,N(case_ordinal)) | V(2,N(element_ordinal))
+
+PIRViewAtomicBoundaryBody =
+  V(0,Unit) | V(1,Unit) | V(2,Unit) | V(3,Unit) | V(4,Unit)
+| V(5,Unit) | V(6,ValueTypeBody(value_type)) | V(7,Unit) | V(8,Unit)
+| V(9,AdmittedModuleEffectAtom(effect))
+
+PIRStaticViewFieldCoordinateBody(x) = R {
+  0: PIRStaticViewCoordinateBody(x.view_coordinate),
+  1: S[ PIRViewPathStepBody(step) ... ],
+  2: PIRViewAtomicBoundaryBody(x.boundary)
+}
+
+PIRStaticViewReadManifestBody(x) =
+  S[ PIRStaticViewFieldCoordinateBody(c) ... ascending, no repeat ]
+
+PIRDescriptionBody =
+    V(0, S[ R{0:Q(field_name), 1:PIRDescriptionBody(field)} ... ])
+  | V(1, S[ R{0:Q(arm_name), 1:PIRDescriptionBody(arm)} ... ])
+  | V(2, PIRDescriptionBody(element))
+  | V(3, PIRViewAtomicBoundaryBody(atom))
+
+PIRStaticViewBindingPayloadBody(x) = R {
+  0: PIRStaticViewCoordinateBody(x.coordinate),
+  1: PIRStaticViewReadManifestBody(x.manifest)
+}
+PIRStaticViewCapabilityRequirementBody(x) = R {
+  0: ContentRef(x.consumer_role_id),
+  1: ContentRef(x.purpose_role_id)
+}
+PIRStaticViewNoPolicyBody(x) = R {
+  0: ContentRef(x.owner_profile_id)
+}
+PIRStaticViewPolicyClosureBody(x) = R {
+  0: ContentRef(x.binding_payload_id),
+  1: ContentRef(x.no_policy_id),
+  2: ContentRef(x.capability_requirement_id)
+}
+
+SourceSubjectBody(owner_profile, kind) =
+  the pir.body-compiler that owner_profile's catalog binds to the
+  pir.source-* subject kind `kind`: for the Interaction profile the four
+  compilers below, and for a dependent profile that profile's own compilers,
+  whose static-view arm carries that profile's static-view bodies
+
+PIRStaticViewBindingPayloadId(owner_profile, x) =
+  ProfiledSemanticId<"pir.source-binding-payload">(
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-binding-payload")(
+      StaticView(x)))
+PIRStaticViewCapabilityRequirementId(owner_profile, x) =
+  ProfiledSemanticId<"pir.source-capability-requirement">(
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-capability-requirement")(
+      StaticView(x)))
+PIRStaticViewNoPolicyId(owner_profile, x) =
+  ProfiledSemanticId<"pir.source-no-policy">(
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-no-policy")(
+      StaticView(x)))
+PIRStaticViewPolicyClosureId(owner_profile, x) =
+  ProfiledSemanticId<"pir.source-policy-closure">(
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-policy-closure")(
+      StaticView(x)))
+```
+
+A static view owned by a dependent profile is therefore compiled by that
+profile: the constructor selects the owner profile's own bound compiler and
+applies it to the same tagged family value, so the Interaction compilers below
+never form another profile's subject.
+
+Each `pir.source-*` subject kind of the Interaction profile is compiled by one
+closed variant over exactly the source families this profile issues: arm 0 is
+the static-view family above, whose values are tagged `StaticView(y)`, and
+arm 1 is the confidential initial-Oracle family of Section 13.6, tagged
+`ConfidentialInitialOracle(y)`, whose family-local bodies are in Appendix A.
+Each compiler is a function of the tagged family value, and every identity
+constructor of a `pir.source-*` subject applies `ProfiledSemanticId` to the
+compiler's output and never to a family-local body, so one subject kind has
+exactly one preimage equation and the family tag is part of every such
+subject's body. A family that a profile does not issue has no arm, so a
+payload of one family cannot be presented as another, and a dependent profile
+compiles its own subjects over its own families rather than importing these.
+
+```text
+PIRSourceBindingPayloadBody(x) =
+    V(0, PIRStaticViewBindingPayloadBody(y))
+      if x = StaticView(y)
+  | V(1, ConfidentialInitialOracleBindingPayloadBody(y))
+      if x = ConfidentialInitialOracle(y)
+PIRSourceCapabilityRequirementBody(x) =
+    V(0, PIRStaticViewCapabilityRequirementBody(y))
+      if x = StaticView(y)
+  | V(1, ConfidentialInitialOracleCapabilityRequirementBody(y))
+      if x = ConfidentialInitialOracle(y)
+PIRSourceNoPolicyBody(x) =
+    V(0, PIRStaticViewNoPolicyBody(y))
+      if x = StaticView(y)
+PIRSourcePolicyClosureBody(x) =
+    V(0, PIRStaticViewPolicyClosureBody(y))
+      if x = StaticView(y)
+  | V(1, ConfidentialInitialOraclePolicyClosureBody(y))
+      if x = ConfidentialInitialOracle(y)
+```
+
+`PIRStaticViewSourceBinding` is the `OwnerLocalSourceAuthorityBinding` formed
+from these identities: owner `"pir"`, family `"static-view"`, the exact
+projection object as local coordinate, the payload ID, the disposition
+`OwnerDefinesNoPolicy(no-policy ID)`, the policy-closure ID, and the capability
+requirement wrapping the requirement ID.
+
 There is no semantic Negative: a static projection of an admitted owner either
 is issued exactly or fails by one qualified noncompletion branch. An
 unsupported view kind returns no partial projection or binding. A wrong Core,
@@ -2283,7 +2996,8 @@ PublicSetupInvocationViewBody = {
   protocol_id: ProtocolId,
   core_id: CoreId,
   entries:
-    CanonicalSeq<PublicSetupInvocationEntry in BindingRef order>
+    CanonicalSeq<PublicSetupInvocationEntry in BindingRef order>,
+  run_established: CanonicalSeq<BindingRef in ascending order>
 }
 
 PublicSetupInvocationViewId =
@@ -2304,7 +3018,8 @@ PublicSetupInvocationEntryBody(x) = R{
 PublicSetupInvocationViewBody(x) = R{
   0:ContentRef(x.protocol_id),
   1:ContentRef(x.core_id),
-  2:S[PublicSetupInvocationEntryBody(e)... in BindingRef order]
+  2:S[PublicSetupInvocationEntryBody(e)... in BindingRef order],
+  3:S[N(b)... for b in x.run_established, ascending]
 }
 
 IssuePublicSetupInvocationView(
@@ -2323,12 +3038,47 @@ IssuePublicSetupInvocationView(
        | DeterministicLimitExceeded | CheckerFailure
 ```
 
-The entries are every and only `SessionContext` and `PublicParameter` binding
-occurrence. The view contains no Statement, verifier-private input, unbound
-public input, prover output, full `CoreInvocationId`, or completed record. Its
-portable ID changes with any visible entry, type, binding coordinate,
-`ProtocolId`, or `CoreId`; changing only a Statement or verifier-private value
-does not change this quotient ID. This is the deliberate portable exception:
+The entries are every `SessionContext` and `PublicParameter` binding
+occurrence whose value the invocation determines, and `run_established` names
+every other binding of those two classes. Issuance is a function of the
+admitted Protocol and the invocation alone: it runs no strategy and observes
+no occurrence. A public binding's value may name an occurrence output
+(Section 4.2), and such a value is fixed only by a run, so it is not setup:
+
+```text
+InvocationDetermined(P, PublicInput(_))         = true
+InvocationDetermined(P, Constant(_))            = true
+InvocationDetermined(P, Derived(d))             =
+  every input of P's DerivedValueDecl d is InvocationDetermined
+InvocationDetermined(P, OccurrenceOutput(_, _)) = false
+InvocationDetermined(P, VerifierPrivateInput(_)) = false
+
+entries         = every SessionContext or PublicParameter binding b of P
+                  with InvocationDetermined(P, b.value), with its value
+run_established = every SessionContext or PublicParameter binding b of P
+                  without it, by BindingRef
+```
+
+Membership in both sequences is decided by the Protocol alone, and the
+entries' values by the invocation, so every admitted Protocol has a setup
+view and has exactly one per invocation up to the covered-value equivalence
+the quotient below defines. The view states what it does not fix: a
+run-established public binding keeps its Section 4.3 meaning and is visible
+only through an execution-issued view under its own authority (Section 13.5).
+No entry is ever filled from a run, a strategy, a default, or an omitted
+binding. A consumer that needs a setup fixed entirely before the run requires
+`run_established` to be empty as its own premise; this operation does not
+decide that for it. The view contains no Statement, verifier-private input,
+unbound public input, prover output, full `CoreInvocationId`, or completed
+record. Its portable ID is a function of exactly the covered bindings'
+values, types, and coordinates, the run-established binding references,
+`ProtocolId`, and `CoreId`. A verifier-private value never enters it, and a
+public input enters it exactly when the value dependency closure of some
+covered binding reads that input: changing a public input that is bound
+only as a Statement and read by no covered binding leaves the quotient
+unchanged, whereas one public input bound as a Statement in one scope and as a
+`SessionContext` in another enters it through the latter occurrence. This is
+the deliberate portable exception:
 the K1 binding uses `PublicSetupInvocationViewId` as its portable source
 coordinate, owner `"pir"`, family `"public-setup-invocation-view"`, and a
 public-view-profiled payload, explicit no-policy declaration,
@@ -2338,6 +3088,49 @@ the exact full invocation; substituting an equal or copied portable binding
 does not move the live capability. Cold use must reauthenticate the Protocol
 and invocation and rerun issuance; the portable body or binding alone grants
 nothing.
+
+The public-setup profile compiles its own source-authority subjects. It issues
+exactly one family, tagged `PublicSetupInvocationView(y)`, so each
+`pir.source-*` subject kind is a one-arm variant over that family, and its
+identities are formed by applying `ProfiledSemanticId` with
+`PIRPublicSetupProfileId` to a compiler's output over the tagged value; the
+consumer and purpose roles are the common Interaction role bodies applied with
+`PIRPublicSetupProfileId`.
+
+```text
+PublicSetupInvocationBindingPayloadBody(x) = R{
+  0:ContentRef(x.view_id),
+  1:ContentRef(x.protocol_id)
+}
+PublicSetupInvocationCapabilityRequirementBody(x) = R{
+  0:ContentRef(x.consumer_role_id),1:ContentRef(x.purpose_role_id)
+}
+PublicSetupInvocationNoPolicyBody(x) = R{
+  0:ContentRef(x.owner_profile_id)
+}
+PublicSetupInvocationPolicyClosureBody(x) = R{
+  0:ContentRef(x.binding_payload_id),1:ContentRef(x.no_policy_id),
+  2:ContentRef(x.capability_requirement_id)
+}
+
+PublicSetupSourceBindingPayloadBody(x) =
+  V(0, PublicSetupInvocationBindingPayloadBody(y))
+    if x = PublicSetupInvocationView(y)
+PublicSetupSourceCapabilityRequirementBody(x) =
+  V(0, PublicSetupInvocationCapabilityRequirementBody(y))
+    if x = PublicSetupInvocationView(y)
+PublicSetupSourceNoPolicyBody(x) =
+  V(0, PublicSetupInvocationNoPolicyBody(y))
+    if x = PublicSetupInvocationView(y)
+PublicSetupSourcePolicyClosureBody(x) =
+  V(0, PublicSetupInvocationPolicyClosureBody(y))
+    if x = PublicSetupInvocationView(y)
+```
+
+The payload commits to the exact portable view ID and the Protocol it was
+issued for; the closure commits to the payload, the no-policy declaration, and
+the requirement, so the `PortableSourceAuthorityBinding` of this view can be
+reauthenticated from identities alone.
 
 <!-- zkc-profile-source:public-setup:end -->
 
@@ -2720,22 +3513,26 @@ ConfidentialInitialOraclePolicyClosure = {
 ConfidentialInitialOracleBindingPayloadId =
   ProfiledSemanticId<"pir.source-binding-payload">(
     B, PIRInteractionProfileId,
-    ConfidentialInitialOracleBindingPayloadBody(payload))
+    PIRSourceBindingPayloadBody(ConfidentialInitialOracle(payload)))
 ConfidentialInitialOracleCapabilityRequirementId =
   ProfiledSemanticId<"pir.source-capability-requirement">(
     B, PIRInteractionProfileId,
-    ConfidentialInitialOracleCapabilityRequirementBody(requirement))
+    PIRSourceCapabilityRequirementBody(
+      ConfidentialInitialOracle(requirement)))
 ConfidentialInitialOraclePolicyClosureId =
   ProfiledSemanticId<"pir.source-policy-closure">(
     B, PIRInteractionProfileId,
-    ConfidentialInitialOraclePolicyClosureBody(closure))
+    PIRSourcePolicyClosureBody(ConfidentialInitialOracle(closure)))
 ```
 
 The payload, requirement, and closure use the already selected
 `"pir.source-binding-payload"`,
 `"pir.source-capability-requirement"`, and
-`"pir.source-policy-closure"` profiled subject kinds. Their exact bodies are in
-Appendix A. Every repeated family, coordinate, consumer, purpose, policy, and
+`"pir.source-policy-closure"` profiled subject kinds through the Section 13.3
+compilers at arm 1, so each identity's preimage carries the family tag and
+the same subject kind never has a second, unwrapped preimage. Their
+family-local bodies are in Appendix A and are the arm payloads, never a
+preimage by themselves. Every repeated family, coordinate, consumer, purpose, policy, and
 payload reference must agree. The Foundation policy disposition is
 `BoundTo(ConfidentialInitialOracleDisclosurePolicyId)`, not
 `OwnerDefinesNoPolicy`.
@@ -3009,12 +3806,12 @@ ReductionBody(x) = R {
 }
 
 TerminalVerdictBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
-ClaimDispositionBody = V(0,Unit) | V(1,Unit)
 TerminalBody(x) = R {
   0: TerminalVerdictBody(x.verdict),
   1: S[ ValueRefBody(output) ... ],
-  2: S[ N(check_ref) ... ],
-  3: S[ R{0:N(claim_ref),1:ClaimDispositionBody(disposition)} ... ]
+  2: S[ N(check_ref) ... ascending, no repeat ],
+  3: S[ N(reduction_ref) ... ascending, no repeat ],
+  4: S[ N(claim_ref) ... ascending, no repeat ]
 }
 ```
 

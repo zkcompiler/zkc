@@ -16637,6 +16637,7 @@ def _require_pir_analysis_source_views(
         tuple(item.protocol_id for item in setup_views) != expected_protocols
         or any(item.core_id != source.protocol_source.core_id for item in setup_views)
         or setup_views[0].entries != setup_views[1].entries
+        or setup_views[0].run_established != setup_views[1].run_established
     ):
         raise SourceIngressError(
             "Fresh/FS public-setup views are detached or have unequal entries"
@@ -16654,6 +16655,10 @@ def _require_pir_analysis_source_views(
     if setup_views[0].entries != expected_entries:
         raise SourceIngressError(
             "public-setup view omits, reorders, or substitutes an owner binding"
+        )
+    if setup_views[0].run_established:
+        raise SourceIngressError(
+            "fixed setup requires every public setup binding before the run"
         )
 
     for issued, axis, protocol_id, interpretation in (
@@ -19405,7 +19410,7 @@ def _selected_statement_template_body(
 # from the body it authenticates: a statement edit must fail closed until a
 # reviewer deliberately rotates the literal and the accompanying source record.
 AFK_SELECTED_STATEMENT_CONTENT_SHA256 = (
-    "13d270f6f386241d7c1d62e1a007432fd8522b1ad00b26f9ede5a91312505a1c"
+    "0aa14752b5f6bae7fdde366a9eab073f69eacbb2bd3b572f9a5b113adf5521df"
 )
 
 
@@ -22734,14 +22739,14 @@ def family_instance_role_maps(
             for item in correspondence.occurrence_map
         )
     )
-    challenge_coordinates = tuple(
+    challenge_positions = tuple(
         (ordinal, occurrence)
         for ordinal, occurrence in enumerate(source.case.core.schedule)
         if occurrence.kind is k2.OccurrenceKind.CHALLENGE
     )
-    if len(challenge_coordinates) != 1:
+    if len(challenge_positions) != 1:
         raise TheoremError("selected member must expose one exact challenge domain")
-    challenge_ordinal, challenge_occurrence = challenge_coordinates[0]
+    challenge_ordinal, challenge_occurrence = challenge_positions[0]
     if challenge_occurrence.challenge_domain is None:
         raise TheoremError("selected member challenge lacks a finite domain")
     if challenge_occurrence.challenge_domain.modulus != family.challenge_cardinality:

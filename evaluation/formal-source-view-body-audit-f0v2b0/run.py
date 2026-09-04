@@ -43,22 +43,19 @@ VIEW_BODIES = (
     "ExecutionViewBody",
 )
 
-UNDEFINED_VOCABULARY = (
+INSPECTED_REFERENCE_VOCABULARY = (
     "PIRReference",
-    "ProverViewCoordinate",
 )
 
-PROSE_FIELDS = (
-    "complete_scope_path",
-    "complete_value_producer_coordinate",
-    "guard_ref",
-    "complete_public_condition_producer_closure",
-    "exact producer edges and ValueType at every node",
-    "exact admitted extension declaration",
-    "creation coordinate",
-    "complete consumer and terminal-disposition coordinates",
-    "resolver_coordinates",
-    "run_record_schema",
+EXACT_DERIVED_TYPES = (
+    "PIRStaticViewCoordinate",
+    "PIRStaticViewFieldCoordinate",
+    "PIRStaticViewReadManifest",
+    "PIRPCGraphResult",
+    "PIRClaimCreationCoordinate",
+    "PIRClaimUseCoordinate",
+    "PIRFreshResolverCoordinate",
+    "PIRRuntimeSchema",
 )
 
 EMPTY_F1R1B_FAMILIES = (
@@ -130,7 +127,7 @@ def _observations() -> dict[str, Any]:
             for token in (
                 "[challenges[S.challenge_ref].challenge_ref]",
                 "[challenges[S.challenge_ref].domain]",
-                "[scope_openings,bindings]",
+                "[scopes,bindings]",
                 "[decision_points,prover_view_formation,guaranteed_prover_reads,",
                 "[claims,reductions,terminal_dispositions]",
                 "[protocol_id,core_id,challenge_interpretation,visible_history_law,",
@@ -158,10 +155,12 @@ def _observations() -> dict[str, Any]:
     )
     undefined = tuple(
         symbol
-        for symbol in UNDEFINED_VOCABULARY
+        for symbol in INSPECTED_REFERENCE_VOCABULARY
         if symbol in static_fragment and not _has_definition(interaction, symbol)
     )
-    prose_inventory = tuple(item for item in PROSE_FIELDS if item in view_display)
+    exact_derived_inventory = tuple(
+        item for item in EXACT_DERIVED_TYPES if _has_definition(interaction, item)
+    )
 
     supported_kinds = manifest.get("supported_subject_kinds")
     declarations = manifest.get("declarations")
@@ -190,11 +189,14 @@ def _observations() -> dict[str, Any]:
             "authored observation set is accepted.",
         )
     )
-    public_coin_mismatch = (
-        "final classes are retained in `PublicCoinView`" in interaction
-        and "PCGraph" not in public_coin_display
-        and "topological_order" not in public_coin_display
-        and "classes" not in public_coin_display
+    public_coin_graph_complete = all(
+        item in public_coin_display
+        for item in (
+            "graph: PIRPCGraphResult",
+            "structural_public_coin_eligibility",
+            "verifier_private_predecessors",
+            "public_condition_predecessors",
+        )
     )
 
     return {
@@ -206,10 +208,32 @@ def _observations() -> dict[str, Any]:
         "display_inventory": display_inventory,
         "appendix_exact_owner_basis": exact_appendix_basis,
         "appendix_missing_view_bodies": appendix_missing,
+        "generic_static_view_body_compiler": _has_definition(
+            static_fragment, "StaticViewBody"
+        ),
         "undefined_vocabulary": undefined,
-        "prose_field_inventory": prose_inventory,
-        "public_coin_retention_mismatch": public_coin_mismatch,
-        "run_record_body_defined": _has_definition(interaction, "RunRecordBody"),
+        "pir_reference_definition_exact": all(
+            phrase in static_fragment
+            for phrase in (
+                "PIRReference =",
+                "ScopeRef | OccurrenceRef | ProverDecisionPointRef | ChallengeRef",
+                "| BindingRef | ClaimRef | ReductionRef | CheckRef | TerminalRef | OracleRef",
+                "| PublicInputRef | VerifierPrivateInputRef | ConstantRef | DerivedValueRef",
+                "| ValueRef",
+                "| ProtocolDeclarationRef<K>",
+                "PIRReferenceBody(x) =",
+            )
+        ),
+        "exact_derived_type_inventory": exact_derived_inventory,
+        "prover_view_coordinate_replaced": (
+            "ProverViewCoordinate" not in static_fragment
+            and _has_definition(interaction, "PIRStaticViewCoordinate")
+        ),
+        "guard_reference_replaced": (
+            "guard_ref" not in view_display and "guard: exact Guard" in view_display
+        ),
+        "public_coin_graph_complete": public_coin_graph_complete,
+        "runtime_schema_defined": _has_definition(interaction, "PIRRuntimeSchema"),
         "fresh_resolver_coordinate_defined": _has_definition(
             interaction, "PIRFreshResolverCoordinate"
         ),
@@ -248,14 +272,18 @@ def _findings(observed: dict[str, Any]) -> list[Finding]:
         "display_inventory": VIEW_BODIES,
         "appendix_exact_owner_basis": True,
         "appendix_missing_view_bodies": VIEW_BODIES,
-        "undefined_vocabulary": UNDEFINED_VOCABULARY,
-        "prose_field_inventory": PROSE_FIELDS,
-        "public_coin_retention_mismatch": True,
-        "run_record_body_defined": False,
-        "fresh_resolver_coordinate_defined": False,
+        "undefined_vocabulary": (),
+        "pir_reference_definition_exact": True,
+        "generic_static_view_body_compiler": True,
+        "exact_derived_type_inventory": EXACT_DERIVED_TYPES,
+        "prover_view_coordinate_replaced": True,
+        "guard_reference_replaced": True,
+        "public_coin_graph_complete": True,
+        "runtime_schema_defined": True,
+        "fresh_resolver_coordinate_defined": True,
         "module_effect_owner_boundary_exact": True,
         "nested_consumer_pressure_present": True,
-        "published_static_view_schema_present": False,
+        "published_static_view_schema_present": True,
         "empty_f1r1b_families": EMPTY_F1R1B_FAMILIES,
         "f1r1b_effect_alias_is_bounded": True,
     }
@@ -303,51 +331,51 @@ def _findings(observed: dict[str, Any]) -> list[Finding]:
         ),
         Finding(
             "pir-reference-boundary-definition",
-            "CannotAnswer",
-            "F0V2B0-C-PIR-REFERENCE",
-            "PIRReference is used as an atom but has no exact definition",
+            "Affirmative",
+            "F0V2B0-A-PIR-REFERENCE",
+            "PIRReference is a closed union with a delegated exact body",
         ),
         Finding(
             "prover-view-coordinate-definition",
-            "CannotAnswer",
-            "F0V2B0-C-PROVER-VIEW-COORDINATE",
-            "ProverViewCoordinate is used but the owner type is not defined",
+            "Affirmative",
+            "F0V2B0-A-PROVER-VIEW-COORDINATE",
+            "the migrated text replaces the undefined token with the exact static-view coordinate algebra",
         ),
         Finding(
             "strategy-guard-coordinate-definition",
-            "CannotAnswer",
-            "F0V2B0-C-GUARD-REFERENCE",
-            "guard_ref has no Core type or canonical body",
+            "Affirmative",
+            "F0V2B0-A-GUARD-REFERENCE",
+            "the migrated strategy view carries the exact admitted Guard rather than an undefined reference",
         ),
         Finding(
             "six-canonical-view-body-functions",
-            "CannotAnswer",
-            "F0V2B0-C-VIEW-BODIES",
-            "Appendix A defines no canonical body function for any of the six views",
+            "Affirmative",
+            "F0V2B0-A-VIEW-BODIES",
+            "the six complete displays are selected by the authenticated generic StaticViewBody compiler",
         ),
         Finding(
             "derived-coordinate-and-closure-bodies",
-            "CannotAnswer",
-            "F0V2B0-C-DERIVED-FIELDS",
-            "ten displayed producer, closure, creation, extension, resolver, and schema fields remain prose",
+            "Affirmative",
+            "F0V2B0-A-DERIVED-FIELDS",
+            "the migrated text defines the coordinate, graph, claim, resolver, and runtime-description types",
         ),
         Finding(
             "public-coin-retained-graph-body",
-            "CannotAnswer",
-            "F0V2B0-C-PCGRAPH-BODY",
-            "Section 11 retains graph tables/classes but the displayed view omits them",
+            "Affirmative",
+            "F0V2B0-A-PCGRAPH-BODY",
+            "the PublicCoin view carries the retained graph, classes, sinks, and predecessor evidence",
         ),
         Finding(
             "fresh-resolver-coordinate-body",
-            "CannotAnswer",
-            "F0V2B0-C-FRESH-RESOLVER",
-            "Fresh resolver_coordinates has no exact semantic type or body",
+            "Affirmative",
+            "F0V2B0-A-FRESH-RESOLVER",
+            "Fresh resolver coordinates have an exact closed record type",
         ),
         Finding(
             "completed-run-record-schema-body",
-            "CannotAnswer",
-            "F0V2B0-C-RUN-SCHEMA",
-            "RunRecord is typed runtime data but run_record_schema has no exact description body",
+            "Affirmative",
+            "F0V2B0-A-RUN-SCHEMA",
+            "the runtime schema is a finite recursive description with an authenticated body grammar",
         ),
         Finding(
             "constructor-complete-executable-basis",
@@ -357,9 +385,9 @@ def _findings(observed: dict[str, Any]) -> list[Finding]:
         ),
         Finding(
             "published-static-view-schema-catalog",
-            "CannotAnswer",
-            "F0V2B0-C-PUBLISHED-CATALOG",
-            "the live Interaction manifest still publishes no static-view schema entry",
+            "Affirmative",
+            "F0V2B0-A-PUBLISHED-CATALOG",
+            "the candidate Interaction manifest carries all six static-view schema entries",
         ),
         Finding(
             "verbatim-display-as-canonical-grammar",

@@ -11,14 +11,14 @@
     }
   ],
   "candidate_identities": {
-    "candidate_bundle": "candidatev0:evaluation.f2p1-candidate-bundle:3592286d9dae424219189ed08bea2f9ce78fb48364d669183a2b37da3113b535",
+    "candidate_bundle": "candidatev0:evaluation.f2p1-candidate-bundle:6ff6656524529bac2a30b8d81ec6a7fef53a1cc63de5ae8eba051e266b0105dc",
     "commit_algorithm": "candidatev0:foundation.portable-algorithm:8496b32069952e09b30b6a24eb3f4a1a25ef93f827e315f0c0654008952be8d7",
     "definition_model_question": "candidatev0:relations.definition-model-question:16a937e5e2a11ab25985f3d9daf06ef82f6c9c84199816c44149a33c661bf071",
     "instance_family": "candidatev0:relations.instance-family:720645f0c28be1bd1a9fe932e31c7ab080f66747ac708e0aeecb41c45ee6649e",
-    "plan_witness_binding": "candidatev0:relations.plan-witness-binding:fccc42de88bd46951e96d7b91078be0b6de527d635041a47397c930ed83e4e5f",
-    "plan_witness_surface": "candidatev0:pir.plan-witness-surface:59e7a666a154e3000575d9b01bfbeca3784da7440c12f327801d03579af37a6b",
-    "protocol_binding": "candidatev0:relations.protocol-binding:1dca55c4c8986142bf8dcb5d6c9412e5e94d362b876737289936061597b394a1",
-    "prover_plan": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+    "plan_witness_binding": "candidatev0:relations.plan-witness-binding:d3857764824758492f09bdeb6fef320f13567ed3dda9235728befc222dc47a8c",
+    "plan_witness_surface": "candidatev0:pir.plan-witness-surface:12c797f8cc7ae7ce3d66849544c815422013530733cd8a8fa8d33f0bf69669d1",
+    "protocol_binding": "candidatev0:relations.protocol-binding:7c8023a471f57c891cfbe6e72f66dd312f709de86a5dc7c12a7a51a9fcc75dd2",
+    "prover_plan": "candidatev0:pir.prover-plan:5fec953dd68943e2616f6c85058948ac39ba5ab234c315f94a8261ddc7fdee9c",
     "relation_definition": "candidatev0:relations.definition:e11c6e0038c396748b03ea6ffb11d9358c1dfdafd54d9db697805b4c4be36164",
     "relation_evaluator_algorithm": "candidatev0:foundation.portable-algorithm:37b393a57d206baac3d3902172ed086e0f37538c363bdade5ee61ef506d469df",
     "relation_interface": "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
@@ -28,50 +28,206 @@
     "semantic_module": "candidatev0:foundation.semantic-module:f4d3ff763af07d7dd60d77fb43682cfbefd6baa87c8ffff4701c587fe9e902a8"
   },
   "finding_codes": [
-    ["exact-cutoff-and-source-pins", "Affirmative", "F2P1-A-SOURCE-PINS"],
-    ["f1r1b-fresh-protocol-subject", "Affirmative", "F2P1-A-SUBJECT"],
-    ["finite-additive-z3-algebra", "Affirmative", "F2P1-A-ADDITIVE-ALGEBRA"],
-    ["exact-relation-definition-candidate", "Affirmative", "F2P1-A-RELATION-DEFINITION"],
-    ["four-interface-role-candidates", "Affirmative", "F2P1-A-INTERFACE-ROLES"],
-    ["exact-semantic-model-candidate", "Affirmative", "F2P1-A-RELATION-MODEL"],
-    ["definition-model-finite-correspondence", "Affirmative", "F2P1-A-DEFINITION-MODEL"],
-    ["exact-relation-instance-family", "Affirmative", "F2P1-A-RELATION-INSTANCES"],
-    ["representative-public-instance", "Affirmative", "F2P1-A-PUBLIC-INSTANCE"],
-    ["protocol-statement-edge", "Affirmative", "F2P1-A-STATEMENT-EDGE"],
-    ["protocol-challenge-response-phase-edges", "Affirmative", "F2P1-A-PHASE-EDGES"],
-    ["protocol-relation-binding-candidate", "Affirmative", "F2P1-A-PROTOCOL-BINDING"],
-    ["initial-claim-meaning", "CannotAnswer", "F2P1-C-INITIAL-CLAIM-ABSENT"],
-    ["prover-plan-candidate", "Affirmative", "F2P1-A-PROVER-PLAN"],
-    ["plan-realizes-candidate", "Affirmative", "F2P1-A-PLAN-REALIZES"],
-    ["honest-commit-recipe", "Affirmative", "F2P1-A-HONEST-COMMIT"],
-    ["honest-respond-recipe", "Affirmative", "F2P1-A-HONEST-RESPOND"],
-    ["nonce-persistent-state", "Affirmative", "F2P1-A-NONCE-STATE"],
-    ["plan-witness-surface", "Affirmative", "F2P1-A-WITNESS-SURFACE"],
-    ["plan-witness-binding", "Affirmative", "F2P1-A-WITNESS-BINDING"],
-    ["relation-predicate-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-RELATION"],
-    ["witness-type-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-WITNESS"],
-    ["prover-state-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-STATE"],
-    ["honest-commit-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-COMMIT"],
-    ["honest-respond-premise-coordinate", "Affirmative", "F2P1-A-PREMISE-RESPOND"],
-    ["all-valid-pairs-bound-plan-accept", "Affirmative", "F2P1-A-HONEST-RUNS"],
-    ["plus-one-response-controls", "Refused", "F2P1-R-PLUS-ONE"],
-    ["independent-path-separation", "Affirmative", "F2P1-A-PATH-SEPARATION"],
-    ["two-path-body-agreement", "Affirmative", "F2P1-A-BODY-AGREEMENT"],
-    ["two-path-identity-agreement", "Affirmative", "F2P1-A-IDENTITY-AGREEMENT"],
-    ["wrong-statement-edge-mutation", "Refused", "F2P1-R-STATEMENT-EDGE"],
-    ["swapped-phase-role-mutation", "Refused", "F2P1-R-PHASE-ROLE-SWAP"],
-    ["different-witness-type-mutation", "Refused", "F2P1-R-WITNESS-TYPE"],
-    ["unguaranteed-plan-read-mutation", "Negative", "F2P1-N-PLAN-READ"],
-    ["wrong-protocol-id-mutation", "Refused", "F2P1-R-WRONG-PROTOCOL"],
-    ["pinned-theorem-applicability", "CannotAnswer", "F2P1-C-THEOREM-APPLICABILITY"],
-    ["schnorr-property-claim", "CannotAnswer", "F2P1-C-PROPERTY"],
-    ["schnorr-security-claim", "CannotAnswer", "F2P1-C-SECURITY"],
-    ["complete-requested-candidate-binding", "CannotAnswer", "F2P1-C-SCHNORR-CANDIDATE-BINDING-INCOMPLETE"]
+    [
+      "exact-cutoff-and-source-pins",
+      "Affirmative",
+      "F2P1-A-SOURCE-PINS"
+    ],
+    [
+      "f1r1b-fresh-protocol-subject",
+      "Affirmative",
+      "F2P1-A-SUBJECT"
+    ],
+    [
+      "finite-additive-z3-algebra",
+      "Affirmative",
+      "F2P1-A-ADDITIVE-ALGEBRA"
+    ],
+    [
+      "exact-relation-definition-candidate",
+      "Affirmative",
+      "F2P1-A-RELATION-DEFINITION"
+    ],
+    [
+      "four-interface-role-candidates",
+      "Affirmative",
+      "F2P1-A-INTERFACE-ROLES"
+    ],
+    [
+      "exact-semantic-model-candidate",
+      "Affirmative",
+      "F2P1-A-RELATION-MODEL"
+    ],
+    [
+      "definition-model-finite-correspondence",
+      "Affirmative",
+      "F2P1-A-DEFINITION-MODEL"
+    ],
+    [
+      "exact-relation-instance-family",
+      "Affirmative",
+      "F2P1-A-RELATION-INSTANCES"
+    ],
+    [
+      "representative-public-instance",
+      "Affirmative",
+      "F2P1-A-PUBLIC-INSTANCE"
+    ],
+    [
+      "protocol-statement-edge",
+      "Affirmative",
+      "F2P1-A-STATEMENT-EDGE"
+    ],
+    [
+      "protocol-challenge-response-phase-edges",
+      "Affirmative",
+      "F2P1-A-PHASE-EDGES"
+    ],
+    [
+      "protocol-relation-binding-candidate",
+      "Affirmative",
+      "F2P1-A-PROTOCOL-BINDING"
+    ],
+    [
+      "initial-claim-meaning",
+      "CannotAnswer",
+      "F2P1-C-INITIAL-CLAIM-ABSENT"
+    ],
+    [
+      "prover-plan-candidate",
+      "Affirmative",
+      "F2P1-A-PROVER-PLAN"
+    ],
+    [
+      "plan-realizes-candidate",
+      "Affirmative",
+      "F2P1-A-PLAN-REALIZES"
+    ],
+    [
+      "honest-commit-recipe",
+      "Affirmative",
+      "F2P1-A-HONEST-COMMIT"
+    ],
+    [
+      "honest-respond-recipe",
+      "Affirmative",
+      "F2P1-A-HONEST-RESPOND"
+    ],
+    [
+      "nonce-persistent-state",
+      "Affirmative",
+      "F2P1-A-NONCE-STATE"
+    ],
+    [
+      "plan-witness-surface",
+      "Affirmative",
+      "F2P1-A-WITNESS-SURFACE"
+    ],
+    [
+      "plan-witness-binding",
+      "Affirmative",
+      "F2P1-A-WITNESS-BINDING"
+    ],
+    [
+      "relation-predicate-premise-coordinate",
+      "Affirmative",
+      "F2P1-A-PREMISE-RELATION"
+    ],
+    [
+      "witness-type-premise-coordinate",
+      "Affirmative",
+      "F2P1-A-PREMISE-WITNESS"
+    ],
+    [
+      "prover-state-premise-coordinate",
+      "Affirmative",
+      "F2P1-A-PREMISE-STATE"
+    ],
+    [
+      "honest-commit-premise-coordinate",
+      "Affirmative",
+      "F2P1-A-PREMISE-COMMIT"
+    ],
+    [
+      "honest-respond-premise-coordinate",
+      "Affirmative",
+      "F2P1-A-PREMISE-RESPOND"
+    ],
+    [
+      "all-valid-pairs-bound-plan-accept",
+      "Affirmative",
+      "F2P1-A-HONEST-RUNS"
+    ],
+    [
+      "plus-one-response-controls",
+      "Refused",
+      "F2P1-R-PLUS-ONE"
+    ],
+    [
+      "independent-path-separation",
+      "Affirmative",
+      "F2P1-A-PATH-SEPARATION"
+    ],
+    [
+      "two-path-body-agreement",
+      "Affirmative",
+      "F2P1-A-BODY-AGREEMENT"
+    ],
+    [
+      "two-path-identity-agreement",
+      "Affirmative",
+      "F2P1-A-IDENTITY-AGREEMENT"
+    ],
+    [
+      "wrong-statement-edge-mutation",
+      "Refused",
+      "F2P1-R-STATEMENT-EDGE"
+    ],
+    [
+      "swapped-phase-role-mutation",
+      "Refused",
+      "F2P1-R-PHASE-ROLE-SWAP"
+    ],
+    [
+      "different-witness-type-mutation",
+      "Refused",
+      "F2P1-R-WITNESS-TYPE"
+    ],
+    [
+      "unguaranteed-plan-read-mutation",
+      "Negative",
+      "F2P1-N-PLAN-READ"
+    ],
+    [
+      "wrong-protocol-id-mutation",
+      "Refused",
+      "F2P1-R-WRONG-PROTOCOL"
+    ],
+    [
+      "pinned-theorem-applicability",
+      "CannotAnswer",
+      "F2P1-C-THEOREM-APPLICABILITY"
+    ],
+    [
+      "schnorr-property-claim",
+      "CannotAnswer",
+      "F2P1-C-PROPERTY"
+    ],
+    [
+      "schnorr-security-claim",
+      "CannotAnswer",
+      "F2P1-C-SECURITY"
+    ],
+    [
+      "complete-requested-candidate-binding",
+      "CannotAnswer",
+      "F2P1-C-SCHNORR-CANDIDATE-BINDING-INCOMPLETE"
+    ]
   ],
   "findings_sha256": "2f3d9226c4a56591e842cd2e15f95a9f2bee047e7938b0cc60ebf78de6ac6a3f",
   "measurements": {
     "accepted_honest_runs": 27,
-    "agreement_sha256": "e810a54ef817bfac87c7bd0236a999eaf4c281e122e0d57ca65f102ae3afa75b",
+    "agreement_sha256": "20fa708df9a8ce73cd2c0c56c8dc6b3f018f4e84945459d51015da24fba9bfbb",
     "anchors": 37,
     "blockers": 1,
     "candidate_identities": 15,
@@ -95,11 +251,26 @@
     "valid_statement_witness_pairs": 3
   },
   "mutation_outcomes": {
-    "different-witness-type": ["Refused", "F2P1-R-WITNESS-TYPE"],
-    "plan-read-outside-guaranteed": ["Negative", "F2P1-N-PLAN-READ"],
-    "swapped-phase-roles": ["Refused", "F2P1-R-PHASE-ROLE-SWAP"],
-    "wrong-protocol-id": ["Refused", "F2P1-R-WRONG-PROTOCOL"],
-    "wrong-statement-edge": ["Refused", "F2P1-R-STATEMENT-EDGE"]
+    "different-witness-type": [
+      "Refused",
+      "F2P1-R-WITNESS-TYPE"
+    ],
+    "plan-read-outside-guaranteed": [
+      "Negative",
+      "F2P1-N-PLAN-READ"
+    ],
+    "swapped-phase-roles": [
+      "Refused",
+      "F2P1-R-PHASE-ROLE-SWAP"
+    ],
+    "wrong-protocol-id": [
+      "Refused",
+      "F2P1-R-WRONG-PROTOCOL"
+    ],
+    "wrong-statement-edge": [
+      "Refused",
+      "F2P1-R-STATEMENT-EDGE"
+    ]
   },
   "premise_table": {
     "honest-commit": {
@@ -113,7 +284,7 @@
       "operand": "candidatev0:foundation.portable-algorithm:df1bf38e0eaf450189b62706535b8bb7f937032d51bdc786075cb58bfa52f541"
     },
     "prover-private-state": {
-      "coordinate": "ProverPlan(candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b).persistent_state[0] -> PlanExecutionState[0]",
+      "coordinate": "ProverPlan(candidatev0:pir.prover-plan:5fec953dd68943e2616f6c85058948ac39ba5ab234c315f94a8261ddc7fdee9c).persistent_state[0] -> PlanExecutionState[0]",
       "meaning": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
       "operand": "k1-value-type-v0:059512f1b17e2d3fcefc2003b8b6be6cac57e4afbb2a84eb766594a6a00c781a"
     },

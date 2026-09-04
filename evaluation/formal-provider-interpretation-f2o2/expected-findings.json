@@ -1,0 +1,61 @@
+{
+  "aggregate": "CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4",
+  "finding_codes": [
+    [
+      "schedule-clause",
+      "Affirmative",
+      "F2O2-A-SCHEDULE"
+    ],
+    [
+      "values-clause",
+      "Affirmative",
+      "F2O2-A-VALUES"
+    ],
+    [
+      "checks-and-guards-clause",
+      "Affirmative",
+      "F2O2-A-CHECKS-GUARDS"
+    ],
+    [
+      "terminals-clause",
+      "CannotAnswer",
+      "F2O2-C-TERMINALS-CLAUSE-4"
+    ],
+    [
+      "traces-clause",
+      "Affirmative",
+      "F2O2-A-TRACES"
+    ],
+    [
+      "terminal-mechanized-reading",
+      "CannotAnswer",
+      "F2O2-C-TERMINAL-MECHANIZATION-PENDING"
+    ],
+    [
+      "residual-provider-trust-listed",
+      "Affirmative",
+      "F2O2-A-RESIDUAL-PROVIDER-TRUST"
+    ],
+    [
+      "residual-evaluator-differential-listed",
+      "Affirmative",
+      "F2O2-A-RESIDUAL-DIFFERENTIAL"
+    ],
+    [
+      "residual-premises-listed",
+      "Affirmative",
+      "F2O2-A-RESIDUAL-PREMISES"
+    ],
+    [
+      "residual-checker-adapter-listed",
+      "Affirmative",
+      "F2O2-A-RESIDUAL-ADAPTER"
+    ],
+    [
+      "complete-schnorr-correspondence",
+      "CannotAnswer",
+      "F2O2-C-TERMINALS-CLAUSE-4"
+    ]
+  ],
+  "findings_sha256": "2df90efc9bd07dd7e26cf062477d87922997c452c586b9e4e9f82bfb696eda9f"
+}

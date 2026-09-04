@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Run the M2 mechanized portable-term and Schnorr-denotation gate.
+"""Run the mechanized portable-term and claim-source Terminal-contract gate.
 
 The gate answers one bounded question: can the K1 portable-term calculus and
-the R1B finite Schnorr check denotation be mechanized in core Lean, while
-retaining M0/M1 and reproducing every available predecessor golden?  The K1
-independent oracle currently contains no term-evaluation operation, so that
-required evidence remains CannotAnswer even when the Lean/R1B comparisons
-pass.  Nothing under `lean/` is normative.
+the finite Schnorr check denotation and the repaired forward Terminal state be
+mechanized in core Lean while retaining the predecessor goldens?  The
+extension proves must-fact, occurrence-region, boundary-region, and
+claim-source-status soundness for arbitrary schedules and valuations, then
+executes the closed Terminal decision through Lean and independent Python
+paths.  Nothing under `lean/` is normative.
 
 When no Lean toolchain is available the Lean-dependent findings are classified
 `Unsupported/M0-U-LEAN-TOOLCHAIN` and the frozen comparison fails; the gate
@@ -40,25 +41,25 @@ EXPECTED = HERE / "expected-findings.json"
 EXPORT = HERE / "export_vectors.py"
 M2_EXPORT = HERE / "export_m2_vectors.py"
 M2_VECTORS = VECTORS / "m2-term-calculus.json"
-D1_EXPECTED = (
-    ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json"
-)
+TERMINAL_EXPORT = HERE / "export_terminal_vectors.py"
+TERMINAL_CHECKER = HERE / "terminal_checker.py"
+TERMINAL_VECTORS = VECTORS / "terminal-contract.json"
+SOURCE_PINS = HERE / "source-pins.json"
 ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 FOUNDATION = ROOT / "docs-next/foundation/executable-foundations.md"
 TARGET = ROOT / "docs-next/pir/interactive-core.md"
 
-AFFIRMATIVE_AGGREGATE = "M2-A-TERM-CALCULUS-REPRODUCES-GOLDENS"
-CANNOT_ANSWER_AGGREGATE = "M2-C-TERM-EVALUATION-ORACLE-ABSENT"
+AFFIRMATIVE_AGGREGATE = "M5-A-CLAIM-SOURCE-REGIONS-SOUND"
+CANNOT_ANSWER_AGGREGATE = "M5-C-CLAIM-SOURCE-REGIONS-INCOMPLETE"
 TOOLCHAIN = "leanprover/lean4:v4.33.1"
 LEAN_VERSION = "4.33.1"
-D1_AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
-D1_FINDINGS_SHA256 = "6df7aa212836ddd9f4eb4f740167b9183a8e155c853cd3ee7e801f832e75e48a"
 ORACLE_REQUESTS_SHA256 = "43302085a81540e6d7aca57c2ec15338fd2082ddf0b5960517cedac5e6600b8e"
 ORACLE_EXPECTED_SHA256 = "c7c6f87c5cd591f25e604ed157134e5d113449d1fea0c48eaeb9e76a9e7eab42"
 ORACLE_BOUNDARY_SHA256 = "318b98c12f6a5a358885cff8e0dcbc13e7c0f38796a0dc2c036fe6eb6f334d41"
 STANDARD_AXIOMS = frozenset(("propext", "Classical.choice", "Quot.sound"))
 KERNEL_MODULES = (
-    "Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems", "Term", "Eval"
+    "Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems", "Term", "Eval",
+    "Terminal",
 )
 TRANSPORT_MODULES = ("Transport",)
 PRIMARY_THEOREMS = (
@@ -71,6 +72,22 @@ M2_THEOREMS = (
     "M0.evaluation_deterministic",
     "M0.evaluation_completed_mono",
     "M0.schnorr_denotation_eq_closed_form",
+)
+TERMINAL_THEOREMS = (
+    "M0.attemptedWhenever_sound",
+    "M0.mustEnv_sound_evalCore",
+    "M0.must_when_true_sound",
+    "M0.must_when_false_sound",
+    "M0.impossible_when_true_cannot_evaluate_true",
+    "M0.impossible_when_false_cannot_evaluate_false",
+    "M0.attempted_iff_region_holds",
+    "M0.region_impossible_iff_unreachable",
+    "M0.boundary_reached_iff_boundary_region_holds",
+    "M0.claimSourceRegion_holds_iff_exists",
+    "M0.claimSourceRegion_holds_of_exists",
+    "M0.claimStatus_live_sound",
+    "M0.claimStatus_dead_sound",
+    "M0.terminalContractDecision_correct",
 )
 LATTICE_THEOREMS = (
     "M0.Join_cons",
@@ -325,13 +342,37 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     findings: list[Finding] = []
     export = _load("_zkc_m0_export", EXPORT)
     m2_export = _load("_zkc_m2_export", M2_EXPORT)
+    terminal_export = _load("_zkc_terminal_export", TERMINAL_EXPORT)
+    terminal_checker = _load("_zkc_terminal_checker", TERMINAL_CHECKER)
     k1 = export._load("_zkc_m0_k1", export.K1_MODEL)
 
     # Predecessor pins.
-    d1 = _read_json(D1_EXPECTED)
+    source_pins = _read_json(SOURCE_PINS)
     _require(
-        d1["aggregate"] == D1_AGGREGATE and d1["findings_sha256"] == D1_FINDINGS_SHA256,
-        "D1 predecessor result drifted",
+        source_pins["base_head"] == terminal_export.BASE_HEAD,
+        "source-pin cutoff and normalized-vector cutoff differ",
+    )
+    for group in ("owner_sources", "package_inputs"):
+        for relative, expected_digest in source_pins[group].items():
+            _require(_sha256(ROOT / relative) == expected_digest, f"source pin drifted: {relative}")
+    all_pins = {**source_pins["owner_sources"], **source_pins["package_inputs"]}
+    expected_owner_pins = {
+        FOUNDATION.relative_to(ROOT).as_posix(),
+        TARGET.relative_to(ROOT).as_posix(),
+    }
+    expected_package_inputs = (
+        set(terminal_export.SOURCES) - expected_owner_pins
+    ) | {
+        "evaluation/formal-kernel-mechanization-m0/vectors/body-digests.json",
+        "evaluation/formal-kernel-mechanization-m0/vectors/pcgraph-construction.json",
+    }
+    _require(
+        set(source_pins["owner_sources"]) == expected_owner_pins
+        and set(source_pins["package_inputs"]) == expected_package_inputs
+        and set(terminal_export.SOURCES) <= set(all_pins)
+        and not any("expected-findings.json" in path for path in all_pins)
+        and not any("/notes/" in path for path in all_pins),
+        "source pins must contain only owner pages and package inputs",
     )
     _require(
         _sha256(ORACLE_CASES / "requests.jsonl") == ORACLE_REQUESTS_SHA256
@@ -342,7 +383,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         _sha256(ORACLE_CASES / "natural-byte-bound.json") == ORACLE_BOUNDARY_SHA256,
         "K1 natural byte-bound vectors drifted",
     )
-    findings.append(_finding("predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"))
+    findings.extend(
+        (
+            _finding("predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"),
+            _finding("source-pins-owner-and-inputs-only", "Affirmative",
+                     "M5-A-SOURCE-PIN-BOUNDARY"),
+        )
+    )
 
     # Target law pins and nonpublication.
     foundation = FOUNDATION.read_text(encoding="utf-8")
@@ -356,8 +403,21 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         and "PCClass = StaticPublic | PublicHistory | VerifierPrivate | Invalid" in target
         and "least `M(PCNodeBody(node))`" in target
         and "Publish(x) = PublicHistory" in target
-        and "V(13,R{0:N(occurrence_ref),1:N(output_ordinal)})" in target,
-        "Foundation or Section 11 law text drifted",
+        and "V(13,R{0:N(occurrence_ref),1:N(output_ordinal)})" in target
+        and "AttemptedWhenever(o_later, o_earlier)" in target
+        and "MustEnv(if c then a else b, environment)" in target
+        and "MustEnv(any other term constructor, environment)" in target
+        and "names a non-Boolean binding carries no literal" in target
+        and "Region(o) := {" in target
+        and "BoundaryRegion(Initially) := {" in target
+        and "BoundaryRegion(BeforeOccurrence(o)) := {" in target
+        and "ClaimSourceRegion(c) :=" in target
+        and "ClaimStatus(c, o) :=" in target
+        and "Implies(Region(o), ClaimSourceRegion(c))" in target
+        and "Disjoint(Region(o), ClaimSourceRegion(c))" in target
+        and "Region(Source(c))" not in target
+        and "TerminalContract(t), with o_t the occurrence of ReachTerminal(t)" in target,
+        "Foundation, graph, or Terminal law text drifted",
     )
     _require(
         "formal-kernel-mechanization" not in foundation
@@ -373,11 +433,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         )
     )
 
-    # The committed vectors are exactly what the predecessors export today.
+    # Live vectors regenerate; incompatible historical D1 vectors remain an
+    # explicit hash-pinned predecessor transport.
     t0 = time.perf_counter()
     regenerated = export.export()
     t1 = time.perf_counter()
     regenerated_m2 = m2_export.export()
+    regenerated_terminal = terminal_export.export()
     timings["m2_vector_export_seconds"] = round(time.perf_counter() - t1, 3)
     timings["vector_export_seconds"] = round(time.perf_counter() - t0, 3)
     committed = {name: (VECTORS / name).read_text(encoding="utf-8") for name in regenerated}
@@ -389,7 +451,21 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         M2_VECTORS.read_text(encoding="utf-8") == m2_export._dump(regenerated_m2),
         "committed M2 vectors differ from the regenerated export",
     )
+    _require(
+        TERMINAL_VECTORS.read_text(encoding="utf-8")
+        == terminal_export._dump(regenerated_terminal),
+        "committed Terminal vectors differ from the normalized reconstruction",
+    )
+    frozen_pcgraph = _read_json(VECTORS / "pcgraph-construction.json")
     findings.append(_finding("vector-export-stable", "Affirmative", "M0-A-VECTOR-EXPORT-STABLE"))
+    findings.extend(
+        (
+            _finding("terminal-vector-reconstruction-stable", "Affirmative",
+                     "TERMINAL-A-VECTOR-RECONSTRUCTION-STABLE"),
+            _finding("live-integrated-vector-regeneration", "CannotAnswer",
+                     "TERMINAL-C-SYNTHETIC-PROFILE-OVERLAY-COLLISION"),
+        )
+    )
 
     # The Lean text depends on the core library only.
     boundary = _lean_boundary()
@@ -430,28 +506,19 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         (artifacts / "lake-build.log").write_text(build.stdout + build.stderr, encoding="utf-8")
         _require(build_ok, f"lake build failed:\n{build.stdout}\n{build.stderr}")
 
-        # Assemble the Lean input: committed vectors plus digest-checked regenerated bodies.
+        # Assemble the Lean input from live K1/M2/Terminal vectors and the
+        # explicitly pinned frozen graph-construction transport.
         t0 = time.perf_counter()
-        d1_model = export._load("_zkc_m0_d1_model", export.D1_MODEL)
-        bodies = export.regenerate_bodies(d1_model, k1)
-        digests = {row["name"]: row for row in regenerated["body-digests.json"]["bodies"]}
-        _require(set(bodies) == set(digests), "regenerated body names differ from the pinned digests")
-        _require(
-            all(bodies[name]["sha256"] == digests[name]["sha256"] for name in bodies),
-            "regenerated D1 bodies differ from the pinned digests",
-        )
-        encode_rows = list(regenerated["k1-encoding-vectors.json"]["encode"]) + [
-            {"name": row["name"], "source": row["source"], "value": row["value"], "hex": row["hex"]}
-            for row in bodies.values()
-        ]
+        encode_rows = list(regenerated["k1-encoding-vectors.json"]["encode"])
         reject_rows = list(regenerated["k1-encoding-vectors.json"]["reject"]) + list(
             regenerated["structural-negatives.json"]["reject"]
         )
         lean_input = {
             "encode": encode_rows,
             "reject": reject_rows,
-            "pcgraph_construction": regenerated["pcgraph-construction.json"]["carriers"],
+            "pcgraph_construction": frozen_pcgraph["carriers"],
             "m2": regenerated_m2,
+            "terminal": regenerated_terminal["carriers"],
         }
         input_path = artifacts / "m0-input.json"
         input_path.write_text(json.dumps(lean_input, separators=(",", ":")), encoding="utf-8")
@@ -482,9 +549,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             for row in rows
         )
 
-    encoding_ok = all(all_encode(source) for source in (
-        "k1-oracle", "d1-core-body", "d1-public-coin-body"
-    ))
+    encoding_ok = all_encode("k1-oracle")
     rows = report.get("encode", [])
     roundtrip_ok = bool(rows) and all(row["decode_roundtrips"] and row["decoded_equals_value"] for row in rows)
     rejects = {row["name"]: row["rejected"] for row in report.get("reject", [])}
@@ -492,7 +557,6 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     crafted_rejects = [name for name in rejects if name.startswith("crafted/")]
     oracle_reject_ok = bool(oracle_rejects) and all(rejects[name] for name in oracle_rejects)
     crafted_reject_ok = bool(crafted_rejects) and all(rejects[name] for name in crafted_rejects)
-    retained_ok = encoding_ok and roundtrip_ok and oracle_reject_ok and crafted_reject_ok
     findings.extend(
         (
             lean_finding("retained-m0-encoding-goldens", encoding_ok, "M1-A-RETAINED-ENCODING-GOLDENS"),
@@ -734,7 +798,273 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     )
     m2_stage4_ok = all((m2_determinism_ok, m2_monotonicity_ok, m2_axioms_ok))
 
-    # M2 Stage 6: bounded cost and exact owner-text underdetermination.
+    # Universal closed-state proofs and the two executable reconstruction paths.
+    terminal_proofs_ok = proved(TERMINAL_THEOREMS)
+    first_active_ok = proved(("M0.attemptedWhenever_sound",))
+    must_sound_ok = proved((
+        "M0.mustEnv_sound_evalCore",
+        "M0.must_when_true_sound",
+        "M0.must_when_false_sound",
+        "M0.impossible_when_true_cannot_evaluate_true",
+        "M0.impossible_when_false_cannot_evaluate_false",
+    ))
+    region_proofs_ok = proved((
+        "M0.attempted_iff_region_holds",
+        "M0.region_impossible_iff_unreachable",
+    ))
+    boundary_region_proofs_ok = proved((
+        "M0.boundary_reached_iff_boundary_region_holds",
+        "M0.claimSourceRegion_holds_iff_exists",
+        "M0.claimSourceRegion_holds_of_exists",
+    ))
+    claim_status_proofs_ok = proved((
+        "M0.claimStatus_live_sound",
+        "M0.claimStatus_dead_sound",
+    ))
+    decision_proof_ok = proved(("M0.terminalContractDecision_correct",))
+    terminal_laws = report.get("terminal_laws", {})
+    closed_must_rules_ok = all(terminal_laws.get(name) is True for name in (
+        "non_boolean_input_has_no_literal",
+        "contradictory_union_is_impossible",
+        "contradictory_guard_is_impossible",
+        "unnamed_constructors_have_no_literals",
+    ))
+    lean_terminal_rows = report.get("terminal", [])
+    python_terminal_rows = terminal_checker.evaluate(regenerated_terminal)
+    lean_terminal_by_name = {row["name"]: row for row in lean_terminal_rows}
+    python_terminal_by_name = {row["name"]: row for row in python_terminal_rows}
+
+    def terminal_signature(row: dict[str, Any], python: bool) -> tuple[Any, ...]:
+        terminal_rows = row.get("terminals", [])
+        return (
+            row.get("representable", row.get("admitted") is not None),
+            row.get("admitted"),
+            tuple(
+                (
+                    terminal["reference"],
+                    terminal["passed"] if python else terminal["decision"],
+                    terminal.get("region_impossible"),
+                    terminal.get("claim_bindings_well_formed"),
+                    tuple(terminal.get("live_claims", [])),
+                    tuple(
+                        (
+                            status["reference"],
+                            status["status"],
+                            status.get("occurrence_coercion_status"),
+                        )
+                        for status in terminal.get("claim_statuses", [])
+                    ),
+                )
+                for terminal in terminal_rows
+            ),
+        )
+
+    terminal_two_path_ok = (
+        set(lean_terminal_by_name) == set(python_terminal_by_name)
+        and len(lean_terminal_by_name) == len(regenerated_terminal["carriers"])
+        and all(
+            terminal_signature(lean_terminal_by_name[name], False)
+            == terminal_signature(python_terminal_by_name[name], True)
+            for name in lean_terminal_by_name
+        )
+    )
+    projection_rows = [
+        row for row in lean_terminal_rows
+        if row["family"] == "terminal-projection" and row["representable"]
+    ]
+    projection_comparison_ok = len(projection_rows) == 16 and all(
+        row["admitted"] is (row["predecessor_outcome"] == "Affirmative")
+        for row in projection_rows
+    )
+    projection_outside_surface = [
+        row for row in lean_terminal_rows
+        if row["family"] == "terminal-projection" and not row["representable"]
+    ]
+    integrated_rows = [row for row in lean_terminal_rows if row["family"] == "integrated-graph"]
+    integrated_claim_gap = (
+        len(integrated_rows) == 5
+        and all(row["admitted"] is False and row["predecessor_outcome"] == "Affirmative"
+                for row in integrated_rows)
+        and all(
+            terminal["live_claims"] == [0, 1, 2]
+            for row in integrated_rows for terminal in row["terminals"]
+        )
+    )
+    holdout_rows = [row for row in lean_terminal_rows if row["family"] == "holdout-shape"]
+    holdout_shape_ok = (
+        len(holdout_rows) == 2
+        and all(row["admitted"] is True and row["predecessor_outcome"] == "fits"
+                for row in holdout_rows)
+    )
+    control_rows = {
+        row["name"]: row for row in lean_terminal_rows
+        if row["family"] == "closed-contract-control"
+    }
+    unknown_control = control_rows.get("closed-contract/unknown-claim-status", {})
+    contradiction_control = control_rows.get(
+        "closed-contract/contradictory-zero-check-guard", {}
+    )
+    non_boolean_control = control_rows.get("closed-contract/non-boolean-guard-input", {})
+    impossible_region_control = control_rows.get(
+        "closed-contract/impossible-terminal-region", {}
+    )
+    unknown_refused = (
+        unknown_control.get("admitted") is False
+        and any(
+            status["status"] == "Unknown"
+            for terminal in unknown_control.get("terminals", [])
+            for status in terminal["claim_statuses"]
+        )
+    )
+    contradiction_refused = (
+        contradiction_control.get("admitted") is False
+        and contradiction_control.get("terminals", [{}])[0].get("decision") is False
+    )
+    non_boolean_refused = (
+        non_boolean_control.get("admitted") is False
+        and non_boolean_control.get("terminals", [{}])[0].get("decision") is False
+    )
+    impossible_region_refused = (
+        impossible_region_control.get("admitted") is False
+        and any(
+            terminal["region_impossible"] and not terminal["decision"]
+            for terminal in impossible_region_control.get("terminals", [])
+        )
+    )
+    controls_ok = (
+        len(control_rows) == 4 and unknown_refused and contradiction_refused
+        and non_boolean_refused and impossible_region_refused
+    )
+    claim_source_rows = {
+        row["name"]: row for row in lean_terminal_rows
+        if row["family"] == "claim-source-region-control"
+    }
+    initially_case = claim_source_rows.get("claim-source-region/initially", {})
+    before_unguarded_case = claim_source_rows.get(
+        "claim-source-region/before-unguarded-occurrence", {}
+    )
+    before_guarded_case = claim_source_rows.get(
+        "claim-source-region/before-guarded-occurrence", {}
+    )
+    reduction_output_case = claim_source_rows.get(
+        "claim-source-region/reduction-output-consumed", {}
+    )
+    guarded_statuses = before_guarded_case.get("terminals", [{}])[0].get(
+        "claim_statuses", []
+    )
+    reduction_statuses = reduction_output_case.get("terminals", [])
+    claim_source_discriminators_ok = (
+        len(claim_source_rows) == 4
+        and all(row.get("admitted") is True for row in claim_source_rows.values())
+        and all(
+            status["status"] == "Live"
+            for row in (initially_case, before_unguarded_case)
+            for terminal in row.get("terminals", [])
+            for status in terminal.get("claim_statuses", [])
+        )
+        and guarded_statuses == [
+            {
+                "reference": 0,
+                "status": "Live",
+                "occurrence_coercion_status": "Unknown",
+            }
+        ]
+        and len(reduction_statuses) == 2
+        and [(status["reference"], status["status"])
+             for status in reduction_statuses[0]["claim_statuses"]]
+            == [(0, "Dead"), (1, "Live")]
+        and [(status["reference"], status["status"])
+             for status in reduction_statuses[1]["claim_statuses"]]
+            == [(0, "Dead"), (1, "Dead")]
+    )
+    finite_state_oracle_ok = all(
+        all(row.get("soundness", {}).values())
+        for row in python_terminal_rows if row.get("admitted") is not None
+    )
+    closed_decisions_ok = all((
+        decision_proof_ok, terminal_two_path_ok, projection_comparison_ok,
+        integrated_claim_gap, holdout_shape_ok, controls_ok,
+        claim_source_discriminators_ok,
+    ))
+    forward_stage2_ok = must_sound_ok and closed_must_rules_ok
+    forward_stage3_ok = (
+        region_proofs_ok and boundary_region_proofs_ok and claim_status_proofs_ok
+        and finite_state_oracle_ok
+    )
+    forward_stage4_ok = closed_decisions_ok
+    forward_incomplete_stages = [
+        name for name, passed in (
+            ("must-fact closure", forward_stage2_ok),
+            ("region and claim-status soundness", forward_stage3_ok),
+            ("closed carrier decisions", forward_stage4_ok),
+        ) if not passed
+    ]
+    findings.extend(
+        (
+            lean_finding("first-active-sound-for-every-valuation", first_active_ok,
+                         "TERMINAL-A-FIRST-ACTIVE-UNIVERSAL"),
+            lean_finding("must-facts-sound-against-m2-evaluator", must_sound_ok,
+                         "TERMINAL-A-MUST-FACT-SOUND"),
+            lean_finding("region-exact-for-attemptedness", region_proofs_ok,
+                         "M5-A-REGION-EXACT"),
+            lean_finding("boundary-and-source-regions-exact",
+                         boundary_region_proofs_ok,
+                         "M5-A-BOUNDARY-AND-SOURCE-REGIONS-EXACT"),
+            lean_finding("claim-status-live-dead-sound", claim_status_proofs_ok,
+                         "M5-A-CLAIM-STATUS-SOUND"),
+            lean_finding("finite-forward-state-oracle", finite_state_oracle_ok,
+                         "M5-A-FINITE-STATE-ORACLE"),
+            lean_finding("terminal-decision-procedure-correct", decision_proof_ok,
+                         "TERMINAL-A-DECISION-CORRECT"),
+            lean_finding("terminal-theorems-standard-axioms-only", terminal_proofs_ok,
+                         "TERMINAL-A-STANDARD-AXIOMS-ONLY"),
+            lean_finding("lean-python-terminal-decision-agreement", terminal_two_path_ok,
+                         "M5-A-TWO-PATH-AGREEMENT"),
+            lean_finding("terminal-projection-comparison", projection_comparison_ok,
+                         "TERMINAL-A-PROJECTION-COMPARISON"),
+            _finding("terminal-projection-adjacent-boundaries", "CannotAnswer",
+                     "TERMINAL-C-CHECK-ABI-AND-CLAIM-SSA-OUTSIDE-SURFACE")
+                if len(projection_outside_surface) == 2 else
+                _finding("terminal-projection-adjacent-boundaries", "Refused",
+                         "TERMINAL-R-OUTSIDE-SURFACE-INVENTORY"),
+            _finding("integrated-carriers-terminal-closure", "Refused",
+                     "TERMINAL-R-INTEGRATED-REUSABLE-CLAIM-LIVE")
+                if integrated_claim_gap else
+                _finding("integrated-carriers-terminal-closure", "CannotAnswer",
+                         "TERMINAL-C-INTEGRATED-COMPARISON-DIVERGED"),
+            lean_finding("representable-holdout-terminal-shapes", holdout_shape_ok,
+                         "M5-A-HOLDOUT-SHAPES"),
+            lean_finding("claim-source-region-discriminators",
+                         claim_source_discriminators_ok,
+                         "M5-A-CLAIM-SOURCE-REGION-DISCRIMINATORS"),
+            lean_finding("closed-contract-controls", controls_ok,
+                         "M4-A-CLOSED-CONTRACT-CONTROLS"),
+            _finding("exact-holdout-terminal-carriers", "CannotAnswer",
+                     "TERMINAL-C-HOLDOUT-COORDINATES-ABSENT"),
+        )
+    )
+
+    # Each previously open owner-text choice now has one exact transcribed law.
+    findings.extend(
+        (
+            lean_finding("must-env-clauses-for-remaining-term-constructors",
+                         closed_must_rules_ok, "M4-A-MUST-ENV-OTHER-CONSTRUCTORS"),
+            lean_finding("non-boolean-input-must-initialization",
+                         closed_must_rules_ok and non_boolean_refused,
+                         "M4-A-NONBOOLEAN-INPUT-MUST"),
+            lean_finding("contradictory-fact-normalization",
+                         closed_must_rules_ok and contradiction_refused,
+                         "M4-A-CONTRADICTION-NORMALIZATION"),
+            lean_finding("standalone-impossible-region-clause",
+                         impossible_region_refused,
+                         "M4-A-STANDALONE-IMPOSSIBLE-REGION"),
+            lean_finding("closed-forward-claim-state",
+                         forward_stage3_ok and unknown_refused,
+                         "M5-A-CLOSED-FORWARD-CLAIM-STATE"),
+        )
+    )
+
+    # Retained evaluator cost boundary.
     findings.append(
         _finding("m2-section-8-no-universal-result-bytes", "CannotAnswer",
                  "M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES")
@@ -760,10 +1090,8 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     )
     if not lean_available:
         findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer", "M0-C-LEAN-TOOLCHAIN-UNAVAILABLE"))
-    elif all((retained_ok, stage1_ok, decoder_canonicity_ok, order_independence_ok,
-              magnitude_equivalence_ok, lean_boundary_ok, k1_boundary_ok,
-              primary_ok, lattice_ok, axioms_ok, m2_stage1_ok, m2_stage2_ok,
-              m2_stage3_ok, m2_stage4_ok, m2_equation_ok)):
+    elif all((build_ok, not boundary["sorry_files"], terminal_proofs_ok,
+              forward_stage2_ok, forward_stage3_ok, forward_stage4_ok)):
         findings.append(_finding("mechanized-kernel-definitions", "Affirmative",
                                  AFFIRMATIVE_AGGREGATE))
     else:
@@ -813,6 +1141,26 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 "stage_4_passed": m2_stage4_ok,
                 "k1_term_evaluation_oracle_vectors": oracle_term_rows,
                 "lean_report": m2_report,
+            },
+            "terminal": {
+                "proofs_standard_axioms_only": terminal_proofs_ok,
+                "must_stage_passed": forward_stage2_ok,
+                "region_and_claim_stage_passed": forward_stage3_ok,
+                "closed_decision_stage_passed": forward_stage4_ok,
+                "aggregate_incomplete_stages": forward_incomplete_stages,
+                "lean_python_agreement": terminal_two_path_ok,
+                "projection_representable": len(projection_rows),
+                "projection_outside_surface": len(projection_outside_surface),
+                "integrated_refused_by_claim_closure": len(integrated_rows)
+                    if integrated_claim_gap else 0,
+                "holdout_shapes_decided": len(holdout_rows),
+                "claim_source_region_discriminators": len(claim_source_rows),
+                "claim_source_region_discriminators_passed":
+                    claim_source_discriminators_ok,
+                "controls_decided": len(control_rows),
+                "unrepresented_holdouts": regenerated_terminal["unrepresented_holdouts"],
+                "lean": lean_terminal_rows,
+                "python": python_terminal_rows,
             },
         }
     )

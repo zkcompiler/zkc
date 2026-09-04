@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "question": "Do the migrated PIR terminal, owner-view, and outcome contracts represent every cold protocol holdout at its recorded boundary, with the same verdict as both the adjudication record and the structural-axes matrix?",
+  "owner_citations": {
+    "terminal_shape": "docs-next/pir/interactive-core.md Sections 6.4 and 10, lines 896-946 and 1375-1574",
+    "outcome_partition": "docs-next/pir/interactive-core.md Sections 12.3 and 12.4, lines 1895-2165",
+    "normalized_views": "docs-next/pir/interactive-core.md Sections 13.1 and 13.2, lines 2175-2754",
+    "view_read_closure": "docs-next/pir/interactive-core.md Section 13.2, lines 2706-2736",
+    "canonical_family_views": "docs-next/pir/fiat-shamir.md Section 13, lines 1270-1717",
+    "duplex_family_views": "docs-next/pir/duplex-sponge-fiat-shamir.md Section 11, lines 869-1325",
+    "endpoint_terminal_projection": "docs-next/pir/endpoint-projection-views.md Sections 7.2 and 7.3, lines 892-1144",
+    "oir_terminal_projection": "docs-next/oir/projection-contract.md Sections 5 and 11, lines 256-398 and 671-700"
+  },
+  "rows": [
+    {
+      "name": "WHIR Construction 5.1 with a closed finite query plan",
+      "holdout": "WHIR",
+      "recorded": "ProfileOrModule",
+      "verdict": "fits",
+      "boundaries": [],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "authored-identical-guard-reductions",
+        "checks": [
+          "initial Sumcheck",
+          "main-loop Sumcheck",
+          "final consistency at the first sample",
+          "final consistency at the second sample",
+          "final weighted sum"
+        ],
+        "reductions": ["fold", "final"],
+        "reduction_schedule": [
+          {
+            "reduction": "fold",
+            "guard": "G_accept: the nested conjunction of all five direct Check outputs",
+            "consumer_guard": "G_accept"
+          },
+          {
+            "reduction": "final",
+            "guard": "G_accept: the nested conjunction of all five direct Check outputs",
+            "consumer_guard": "G_accept"
+          }
+        ],
+        "terminals": [
+          {
+            "verdict": "Accept",
+            "guard": "G_accept: the nested conjunction of all five direct Check outputs",
+            "required_true_checks": "all five checks",
+            "required_applied_reductions": ["fold", "final"],
+            "terminal_claims": []
+          },
+          {
+            "verdict": "Reject",
+            "guard": "Always after the identically guarded reductions and accepting terminal",
+            "required_true_checks": [],
+            "required_applied_reductions": [],
+            "terminal_claims": ["initial claim"]
+          }
+        ],
+        "must_when_true": "The accepting guard proves all five Positive literals; the fallback terminal names no required Check.",
+        "guard_implication": "Each reduction and its accepting consumer use exactly G_accept; no semantic guard implication is assumed."
+      },
+      "views": {
+        "PublicBindingView": ["member descriptor", "initial claim input binding", "scope and value types"],
+        "StrategyDecisionView": ["logical Oracle publication", "Sumcheck messages", "out-of-domain reply", "final polynomial", "allowed prior reads"],
+        "PublicCoinView": ["all challenge occurrences", "domains and laws", "joint shift and final-sample correlations", "reduction consumers", "public-coin graph"],
+        "EffectView": ["ordered messages", "logical Oracle lifecycle", "grouped queries and answers", "five checks", "two reductions under G_accept", "two terminal frontiers"],
+        "ClaimReductionView": ["initial and folded claims", "fold and final reductions under G_accept", "accepting consumption and fallback initial-claim disposition"],
+        "ExecutionView": ["selected challenge interpretation", "receipts", "record schema", "outcome partition"],
+        "family_views": ["canonical transcript declaration", "required influence", "challenge transition", "checked construction result when a separately checked transform is selected"]
+      },
+      "missing_coordinates": [],
+      "outcomes": [
+        {"mode": "all verifier checks true", "lane": "Accepted"},
+        {"mode": "one or more ordinary verifier checks false, with neither reduction active", "lane": "Rejected"},
+        {"mode": "authored malformed-value or unavailable-access event", "lane": "Aborted"},
+        {"mode": "canonical transcript sampling exhaustion", "lane": "InterpretationFailed"},
+        {"mode": "prover strategy stop", "lane": "StrategyStopped"},
+        {"mode": "unsupported evaluation or resource exhaustion", "lane": "OperationalNoncompletion"}
+      ]
+    },
+    {
+      "name": "Circle STARK boundary analysis at one finite instance",
+      "holdout": "Circle STARKs",
+      "recorded": "ProfileOrModule",
+      "verdict": "fits",
+      "boundaries": [],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "source-specialization-required",
+        "checks": ["the exact source-selected AIR, batch, DEEP, fold, opening, and final checks"],
+        "reductions": ["the exact source-selected AIR, quotient, DEEP, and Circle FRI claim transforms"],
+        "terminals": [
+          {"verdict": "Accept", "guard": "nested conjunction of every required direct Check output", "required_true_checks": "all selected checks", "required_applied_reductions": "all selected reductions", "terminal_claims": "the exact accepting live-claim set"},
+          {"verdict": "Reject", "guard": "Always after reductions and an accepting terminal that share the exact nested-conjunction guard", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial live-claim set"},
+          {"verdict": "Abort", "guard": "an authored typed-failure branch, if the selected construction makes field-membership failure a protocol event", "required_true_checks": [], "required_applied_reductions": "the reductions common to that frontier", "terminal_claims": "the exact live-claim set at that frontier"}
+        ],
+        "must_when_true": "The nested accepting conjunction proves every required Positive literal; a primitive conjunction would prove none."
+      },
+      "views": {
+        "PublicBindingView": ["AIR statement", "domain and parameter bindings", "scope and value types"],
+        "StrategyDecisionView": ["dimension-gap scalar", "trace, quotient, and folded Oracles", "claimed evaluations", "final object", "allowed prior reads"],
+        "PublicCoinView": ["batch, fold, out-of-domain, and query challenges", "domains", "correlations", "reduction use", "public-coin graph"],
+        "EffectView": ["message and Oracle schedule", "queries and answers", "derived verifier values", "checks and terminals"],
+        "ClaimReductionView": ["AIR, quotient, DEEP, and Circle FRI claims and transforms"],
+        "ExecutionView": ["challenge interpretation", "receipts", "record schema", "outcome partition"],
+        "family_views": ["the exact canonical or duplex construction views only after a separately sourced construction is selected"]
+      },
+      "missing_coordinates": [],
+      "outcomes": [
+        {"mode": "all selected verifier checks true", "lane": "Accepted"},
+        {"mode": "ordinary verifier check false", "lane": "Rejected"},
+        {"mode": "source-selected explicit field-membership failure event", "lane": "Aborted"},
+        {"mode": "canonical out-of-domain sampling exhaustion", "lane": "InterpretationFailed"},
+        {"mode": "prover strategy stop", "lane": "StrategyStopped"},
+        {"mode": "typed refusal not authored as a protocol event or resource exhaustion", "lane": "OperationalNoncompletion"}
+      ]
+    },
+    {
+      "name": "WARPfold finite fold",
+      "holdout": "WARPfold",
+      "recorded": "ProfileOrModule",
+      "verdict": "fits",
+      "boundaries": [],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "source-specialization-required",
+        "checks": ["constant-coefficient equality"],
+        "reductions": [],
+        "terminals": [
+          {"verdict": "Accept", "guard": "the direct constant-coefficient Check output", "required_true_checks": ["constant-coefficient equality"], "required_applied_reductions": [], "terminal_claims": []},
+          {"verdict": "Reject", "guard": "Always", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": []},
+          {"verdict": "Abort", "guard": "an authored typed-failure event when selected", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": []}
+        ],
+        "must_when_true": "The one-input guard proves the one required Positive literal."
+      },
+      "views": {
+        "PublicBindingView": ["strict and relaxed public instances", "commitments", "degradation counter", "scope and value types"],
+        "StrategyDecisionView": ["cross-term polynomial publication", "allowed prior reads"],
+        "PublicCoinView": ["one bounded challenge", "domain and law", "correlation", "public-coin graph"],
+        "EffectView": ["message", "challenge", "deterministic field-interpretation Apply nodes", "constant-coefficient check", "public folded output", "terminals"],
+        "ClaimReductionView": ["empty for the minimal fold Core, or exact fold claims if a selected profile authors them"],
+        "ExecutionView": ["challenge interpretation", "receipts", "record schema", "outcome partition"],
+        "family_views": ["canonical construction views for the separately checked hash-derived variant"]
+      },
+      "missing_coordinates": [],
+      "outcomes": [
+        {"mode": "constant-coefficient check true", "lane": "Accepted"},
+        {"mode": "constant-coefficient check false", "lane": "Rejected"},
+        {"mode": "authored typed failure", "lane": "Aborted"},
+        {"mode": "canonical challenge interpretation failure", "lane": "InterpretationFailed"},
+        {"mode": "prover strategy stop", "lane": "StrategyStopped"},
+        {"mode": "next-step relation or precondition check false in a separately invoked continuation", "lane": "Rejected"},
+        {"mode": "continuation issuance failure, unsupported evaluation, or resource exhaustion", "lane": "OperationalNoncompletion"}
+      ]
+    },
+    {
+      "name": "WARPfold broad cross-system application",
+      "holdout": "WARPfold",
+      "recorded": "Undetermined",
+      "verdict": "breaks",
+      "boundaries": ["B-CROSS-EXECUTION", "B-IMPORTED-CHALLENGE"],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "no-source-complete-cross-system-verifier",
+        "checks": [],
+        "reductions": [],
+        "terminals": [],
+        "must_when_true": "No terminal guard exists to analyze until both executions and the imported challenge authority are specified."
+      },
+      "views": {
+        "available": ["the six views cover either admitted execution separately"],
+        "family_views": ["the selected construction views cover only a challenge derived within that construction"]
+      },
+      "missing_coordinates": ["cross-execution causal state", "imported challenge authority and semantics"],
+      "outcomes": [
+        {"mode": "either admitted fold execution completes", "lane": "Accepted, Rejected, or Aborted for that execution"},
+        {"mode": "cross-system handoff or imported-challenge completion", "lane": null}
+      ]
+    },
+    {
+      "name": "Physical multiparty Sumcheck",
+      "holdout": "Multiparty Sumcheck",
+      "recorded": "IntentionalBoundary",
+      "verdict": "breaks",
+      "boundaries": ["B-MULTIPARTY"],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "no-faithful-single-verifier-terminal-contract",
+        "checks": [],
+        "reductions": [],
+        "terminals": [],
+        "must_when_true": "A global Boolean guard cannot prove participant-local decisions or an agreement condition that has no Core coordinate."
+      },
+      "views": {
+        "available": ["the six views cover only a deliberately collapsed virtual two-role transcript"],
+        "family_views": ["a checked transform can cover the virtual transcript only"]
+      },
+      "missing_coordinates": ["participant identities", "participant-local views and state", "shares and correlated randomness", "broadcast and delivery", "coalition corruption", "local terminal decisions", "agreement and common-abort semantics"],
+      "outcomes": [
+        {"mode": "globally agreed accept, reject, or abort after a faithful multiparty execution", "lane": "Accepted, Rejected, or Aborted only after a future global projection law"},
+        {"mode": "participant-local disagreement, selective delivery, coalition-controlled abort, or common-abort failure", "lane": null}
+      ]
+    },
+    {
+      "name": "Commitment-anchored virtual two-role Sumcheck proof",
+      "holdout": "Multiparty Sumcheck",
+      "recorded": "ProfileOrModule",
+      "verdict": "fits",
+      "boundaries": [],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "source-specialization-required",
+        "checks": ["commitment and opening checks", "Sumcheck recurrence checks", "final evaluation check"],
+        "reductions": ["the selected Sumcheck claim chain"],
+        "terminals": [
+          {"verdict": "Accept", "guard": "nested conjunction of every direct required Check output", "required_true_checks": "all selected checks", "required_applied_reductions": "all selected reductions", "terminal_claims": "the exact accepting live-claim set"},
+          {"verdict": "Reject", "guard": "Always after reductions and an accepting terminal that share the exact nested-conjunction guard", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial committed-polynomial claim set"}
+        ],
+        "must_when_true": "The nested accepting conjunction proves every required Positive literal."
+      },
+      "views": {
+        "PublicBindingView": ["commitment and sharing anchors", "statement", "scope and value types"],
+        "StrategyDecisionView": ["masked claimed sum", "round polynomials", "final opening", "allowed prior reads"],
+        "PublicCoinView": ["common challenges", "domains and laws", "correlations", "reduction consumers", "public-coin graph"],
+        "EffectView": ["virtual messages", "checks", "openings", "terminals"],
+        "ClaimReductionView": ["committed-polynomial claim and Sumcheck reduction chain"],
+        "ExecutionView": ["Fresh challenge interpretation", "receipts", "record schema", "outcome partition"],
+        "family_views": ["construction views only if the virtual proof is separately transformed"]
+      },
+      "missing_coordinates": [],
+      "outcomes": [
+        {"mode": "all virtual verifier checks true", "lane": "Accepted"},
+        {"mode": "ordinary virtual verifier check false", "lane": "Rejected"},
+        {"mode": "authored malformed-opening event", "lane": "Aborted"},
+        {"mode": "prover strategy stop", "lane": "StrategyStopped"},
+        {"mode": "unsupported commitment operation or resource exhaustion", "lane": "OperationalNoncompletion"}
+      ]
+    },
+    {
+      "name": "Complete noninteractive transparent SNARK over Galois rings with an omitted transform",
+      "holdout": "Transparent SNARKs over Galois rings",
+      "recorded": "Undetermined",
+      "verdict": "breaks",
+      "boundaries": ["B-SOURCE-INCOMPLETE"],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "source-omits-transform-interpretation-and-terminal-semantics",
+        "checks": [],
+        "reductions": [],
+        "terminals": [],
+        "must_when_true": "No complete noninteractive verifier guard is source-authored, so no literal may be inferred."
+      },
+      "views": {
+        "available": ["the six views cover the explicit interactive components"],
+        "family_views": ["the target has canonical and duplex coordinates, but the source selects neither construction"]
+      },
+      "missing_coordinates": ["source-authored transcript declaration", "required influence", "challenge transition and retry or failure law", "checked noninteractive construction result", "complete noninteractive terminal semantics"],
+      "outcomes": [
+        {"mode": "source-named noninteractive verification", "lane": null}
+      ]
+    },
+    {
+      "name": "Explicit interactive Galois-ring components",
+      "holdout": "Transparent SNARKs over Galois rings",
+      "recorded": "ProfileOrModule",
+      "verdict": "fits",
+      "boundaries": [],
+      "reopening_conditions": [],
+      "terminal_contract": {
+        "status": "source-specialization-required",
+        "checks": ["the selected Merkle, encoding, linear-combination, Sumcheck, ZeroCheck, and final checks"],
+        "reductions": ["the selected commitment, Sumcheck, ZeroCheck, Libra, or HyperPlonk claim transforms"],
+        "terminals": [
+          {"verdict": "Accept", "guard": "nested conjunction of every direct required Check output", "required_true_checks": "all selected checks", "required_applied_reductions": "all selected reductions", "terminal_claims": "the exact accepting live-claim set"},
+          {"verdict": "Reject", "guard": "Always after reductions and an accepting terminal that share the exact nested-conjunction guard", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial live-claim set"},
+          {"verdict": "Abort", "guard": "an authored typed-failure branch when selected", "required_true_checks": [], "required_applied_reductions": "the reductions common to that frontier", "terminal_claims": "the exact live-claim set at that frontier"}
+        ],
+        "must_when_true": "The nested accepting conjunction proves every required Positive literal."
+      },
+      "views": {
+        "PublicBindingView": ["setup and ring parameters", "statement", "scope and value types"],
+        "StrategyDecisionView": ["matrices", "ring polynomials", "claimed combinations", "openings", "allowed prior reads"],
+        "PublicCoinView": ["matrix, ring, and query challenges", "domains and correlations", "reduction consumers", "public-coin graph"],
+        "EffectView": ["messages", "logical Oracle accesses", "Merkle and ring checks", "terminals"],
+        "ClaimReductionView": ["commitment, Sumcheck, ZeroCheck, and polynomial-interactive-oracle claim transforms"],
+        "ExecutionView": ["Fresh challenge interpretation", "receipts", "record schema", "outcome partition"],
+        "family_views": ["a separately sourced checked construction would add its own family views"]
+      },
+      "missing_coordinates": [],
+      "outcomes": [
+        {"mode": "all selected interactive checks true", "lane": "Accepted"},
+        {"mode": "ordinary interactive verifier check false", "lane": "Rejected"},
+        {"mode": "authored partial-operation or malformed-proof event", "lane": "Aborted"},
+        {"mode": "prover strategy stop", "lane": "StrategyStopped"},
+        {"mode": "unsupported algorithm or resource exhaustion", "lane": "OperationalNoncompletion"}
+      ]
+    }
+  ]
+}

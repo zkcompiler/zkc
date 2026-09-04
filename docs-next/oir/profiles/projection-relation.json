@@ -3,7 +3,7 @@
   "key": "oir-projection-relation",
   "catalog_namespace": "oir",
   "profile_family": "oir.endpoint-projection-relation",
-  "revision": 0,
+  "revision": 1,
   "expected_imports": [
     "endpoint-source-view",
     "oir-endpoint-graph"
@@ -29,7 +29,7 @@
     {
       "kind": "oir.body-compiler",
       "name": "projection-proposition-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "projection-body",
       "selector": "ProjectionPropositionDomainBody(x) = R",
       "dependencies": [
@@ -48,7 +48,7 @@
     {
       "kind": "oir.semantic-law",
       "name": "exact-endpoint-projection-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "projection-semantics",
       "selector": "ProjectionCorrectV0((source_profile,S),(oir_profile,O)) :=",
       "dependencies": []

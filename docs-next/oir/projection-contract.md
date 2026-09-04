@@ -305,8 +305,9 @@ manifest, source map, or projection claim. It checks:
 7. claim sources and usage; full reduction contract/scope/apply occurrence,
    ordered claims, side inputs, challenges, publication/next-challenge pairs,
    every output ordinal/contract and its complete matching claim-ref list;
-   full terminal verdict, public outputs, required checks, and
-   claim dispositions; then the finite K2 liveness, Last-Challenge,
+   full terminal verdict, public outputs, required checks, required
+   reductions, and terminal claims, with claim disposition derived from the
+   verdict; then the finite K2 liveness, Last-Challenge,
    saturation, stopping, and linear-closure laws;
 8. role shape and optional seven-table Plan closure: FS is present for both
    supported roles; Verifier requires Plan absent; Prover requires Plan
@@ -765,7 +766,6 @@ EndpointCoinCorrelationBody =
 EndpointReductionUsePolicyBody = V(0,U) | V(1,DR(sharing_contract))
 EndpointClaimUsageBody = V(0,U) | V(1,U)
 EndpointTerminalVerdictBody = V(0,U) | V(1,U) | V(2,U)
-EndpointClaimDispositionBody = V(0,U) | V(1,U)
 EndpointTransportActorBody = V(0,U) | V(1,U) | V(2,U)
 EndpointTransportDestinationBody = V(0,U) | V(1,U) | V(2,U)
 EndpointPrivateMaterialKindBody = V(0,U) | V(1,U) | V(2,U)
@@ -906,9 +906,6 @@ EndpointReductionOutputClaimBody(x) = R{
   0:N(output_ordinal),1:DR(contract),
   2:S[N(output_claim_ref)... in claim-ref order]
 }
-EndpointTerminalClaimDispositionBody(x) = R{
-  0:N(claim_ref),1:EndpointClaimDispositionBody(disposition)
-}
 EndpointAnchoredObligationBody =
     V(0,R{
       0:DR(contract),1:N(scope_event_ref),2:N(apply_spine_ref),
@@ -920,8 +917,9 @@ EndpointAnchoredObligationBody =
   | V(1,R{
       0:N(terminal_spine_ref),1:EndpointTerminalVerdictBody(verdict),
       2:S[EndpointValueRefBody(public_output)...],
-      3:S[N(required_check_spine_ref)...],
-      4:S[EndpointTerminalClaimDispositionBody(disposition)...]
+      3:S[N(required_check_spine_ref)... ascending, no repeat],
+      4:S[N(required_reduction_spine_ref)... ascending, no repeat],
+      5:S[N(terminal_claim_ref)... ascending, no repeat]
     })
 
 PlanValueRefBody =

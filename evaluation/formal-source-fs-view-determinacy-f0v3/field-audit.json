@@ -1,184 +1,61 @@
 {
-  "format": "zkc.formal-source-fs-view-determinacy-f0v3.field-audit.v0",
-  "obligation_order": [
-    "F0V3-O-PUBLISHED-SCHEMAS",
-    "F0V3-O-CANONICAL-FRAME-SCHEDULE",
-    "F0V3-O-CANONICAL-INFLUENCE",
-    "F0V3-O-CANONICAL-TRANSITION-ABI",
-    "F0V3-O-CANONICAL-RESULT-BODY",
-    "F0V3-O-DUPLEX-STATE-INSTANCE",
-    "F0V3-O-DUPLEX-MATERIAL-SALT",
-    "F0V3-O-DUPLEX-CODEC-ARGUMENTS",
-    "F0V3-O-DUPLEX-SCHEDULE-COVERAGE",
-    "F0V3-O-DUPLEX-TRANSITION-ABI",
-    "F0V3-O-DUPLEX-RESULT-BODY"
-  ],
-  "obligations": {
-    "F0V3-O-PUBLISHED-SCHEMAS": "The canonical and duplex manifests publish no pir.static-view-schema subject or body compiler: docs-next/pir/profiles/canonical-framed-fiat-shamir.json lines 8-16 and 117-172; docs-next/pir/profiles/duplex-sponge-fiat-shamir.json lines 8-16 and 122-177.",
-    "F0V3-O-CANONICAL-FRAME-SCHEDULE": "PIR must publish canonical bodies for the initialization and exact frame-schedule coordinates displayed in docs-next/pir/fiat-shamir.md Section 13 lines 1261 and 1268.",
-    "F0V3-O-CANONICAL-INFLUENCE": "PIR must publish canonical bodies for scope requirements, per-challenge ordered influence sets, reduction/module additions, and the exact prefix-law reference displayed in docs-next/pir/fiat-shamir.md Section 13 lines 1275-1278.",
-    "F0V3-O-CANONICAL-TRANSITION-ABI": "PIR must publish canonical bodies for namespace derivation, accept/decode ABIs, draw bounds, transition laws, and challenge decoding coordinates displayed in docs-next/pir/fiat-shamir.md Section 13 lines 1284-1292.",
-    "F0V3-O-CANONICAL-RESULT-BODY": "PIR must replace or body the owner-local result_ref, publish the checked-result description body, and body the identity maps and structural conclusion displayed in docs-next/pir/fiat-shamir.md Section 13 lines 1296-1305.",
-    "F0V3-O-DUPLEX-STATE-INSTANCE": "PIR must publish the DuplexSponge tag and canonical state-carrier, binary-instance-carrier, bit-convention, and binding-projection bodies displayed in docs-next/pir/duplex-sponge-fiat-shamir.md Section 11 lines 870 and 875-877.",
-    "F0V3-O-DUPLEX-MATERIAL-SALT": "PIR must publish canonical construction-material schema, salt-coordinate, and unique target-only material-map bodies displayed in docs-next/pir/duplex-sponge-fiat-shamir.md Section 11 lines 882, 898, and 948-949.",
-    "F0V3-O-DUPLEX-CODEC-ARGUMENTS": "PIR must publish canonical message-encoder, semantic-argument-shape, and encoded message/challenge coverage bodies displayed in docs-next/pir/duplex-sponge-fiat-shamir.md Section 11 lines 883-884 and 899-901.",
-    "F0V3-O-DUPLEX-SCHEDULE-COVERAGE": "PIR must publish canonical prover/verifier schedules, resource projection, binding sequence, coverage-law references, and prohibited-addition body displayed in docs-next/pir/duplex-sponge-fiat-shamir.md Section 11 lines 885-887, 897, and 902-904.",
-    "F0V3-O-DUPLEX-TRANSITION-ABI": "PIR must publish canonical squeeze/decoder maps, decoder-totality contracts, closed accept/retry/failure tags, execution domains, and squeeze-event projection displayed in docs-next/pir/duplex-sponge-fiat-shamir.md Section 11 lines 921-929.",
-    "F0V3-O-DUPLEX-RESULT-BODY": "PIR must replace or body the owner-local result_ref and publish the checked-result schema, identity maps, projections, schedule correspondences, and structural conclusion displayed in docs-next/pir/duplex-sponge-fiat-shamir.md Section 11 lines 937-952."
-  },
+  "format": "zkc.formal-source-fs-view-determinacy-f0v3.field-audit.v1",
   "views": {
     "CanonicalTranscriptDeclarationView": {
       "file": "docs-next/pir/fiat-shamir.md",
-      "section": "13",
-      "body_line": 1255,
-      "fields": [
-        [1256, "transcript_construction_id", "exact-body", "atomic", null],
-        [1257, "core_id", "exact-body", "atomic", null],
-        [1258, "state_type", "exact-body", "atomic", null],
-        [1259, "absorbed_bytes_type", "exact-body", "atomic", null],
-        [1260, "initial_state", "exact-body", "atomic", null],
-        [1261, "fixed_initial_state_and_derived_initialization_schedule", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-FRAME-SCHEDULE"],
-        [1262, "absorb_algorithm_and_contract", "exact-body", "structural", null],
-        [1263, "squeeze_bytes_algorithm_and_contract", "exact-body", "structural", null],
-        [1264, "advance_state_algorithm_and_contract", "exact-body", "structural", null],
-        [1265, "application_domain", "exact-body", "atomic", null],
-        [1266, "sampling_failure_coordinate", "exact-body", "atomic", null],
-        [1267, "frame_body_law", "exact-body", "atomic", null],
-        [1268, "exact_frame_schedule_coordinates", "prose-placeholder", "structural", "F0V3-O-CANONICAL-FRAME-SCHEDULE"]
-      ]
+      "section": "13.1",
+      "body_selector": "TranscriptDeclarationViewBody = {",
+      "body_line": 1301,
+      "fields": ["transcript_construction_id", "core_id", "state_type", "absorbed_bytes_type", "initial_state", "initialization_schedule_law", "absorb", "squeeze_bytes", "advance_state", "application_domain", "sampling_failure_coordinate", "frame_body_law", "frame_schedule"]
     },
     "CanonicalRequiredInfluenceView": {
       "file": "docs-next/pir/fiat-shamir.md",
-      "section": "13",
-      "body_line": 1271,
-      "fields": [
-        [1272, "transcript_construction_id", "exact-body", "atomic", null],
-        [1273, "core_id", "exact-body", "atomic", null],
-        [1274, "influence_atom_algebra", "exact-body", "structural", null],
-        [1275, "scope_binding_requirements", "prose-placeholder", "structural", "F0V3-O-CANONICAL-INFLUENCE"],
-        [1276, "per_challenge_ordered_required_influence_sets", "prose-placeholder", "structural", "F0V3-O-CANONICAL-INFLUENCE"],
-        [1277, "reduction_and_module_additions", "prose-placeholder", "structural", "F0V3-O-CANONICAL-INFLUENCE"],
-        [1278, "exact_prefix_law", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-INFLUENCE"]
-      ]
+      "section": "13.2",
+      "body_selector": "RequiredInfluenceViewBody = {",
+      "body_line": 1332,
+      "fields": ["transcript_construction_id", "core_id", "scope_bindings", "required_influence", "additions", "exact_prefix_law"]
     },
     "CanonicalChallengeTransitionView": {
       "file": "docs-next/pir/fiat-shamir.md",
-      "section": "13",
-      "body_line": 1281,
-      "fields": [
-        [1282, "transcript_construction_id", "exact-body", "atomic", null],
-        [1283, "core_id", "exact-body", "atomic", null],
-        [1284, "challenge_namespace_derivation", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1285, "acceptance_abi", "prose-placeholder", "structural", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1286, "decoder_abi", "prose-placeholder", "structural", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1287, "draw_bounds", "prose-placeholder", "structural", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1288, "exact_length_law", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1289, "state_update_before_decode_law", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1290, "retry_law", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1291, "sampling_failure_law", "prose-placeholder", "atomic", "F0V3-O-CANONICAL-TRANSITION-ABI"],
-        [1292, "challenge_decoding_coordinates", "prose-placeholder", "structural", "F0V3-O-CANONICAL-TRANSITION-ABI"]
-      ]
+      "section": "13.3",
+      "body_selector": "ChallengeTransitionViewBody = {",
+      "body_line": 1361,
+      "fields": ["transcript_construction_id", "core_id", "namespace_derivation_law", "exact_length_law", "state_update_before_decode_law", "retry_law", "sampling_failure_law", "challenge_rules"]
     },
     "CanonicalFSConstructionView": {
       "file": "docs-next/pir/fiat-shamir.md",
-      "section": "13",
-      "body_line": 1295,
-      "fields": [
-        [1296, "result_ref", "undefined-symbol", "atomic", "F0V3-O-CANONICAL-RESULT-BODY"],
-        [1297, "result_schema", "prose-placeholder", "structural", "F0V3-O-CANONICAL-RESULT-BODY"],
-        [1298, "fresh_protocol_id", "exact-body", "atomic", null],
-        [1299, "fiat_shamir_protocol_id", "exact-body", "atomic", null],
-        [1300, "shared_core_id", "exact-body", "atomic", null],
-        [1301, "transcript_construction_id", "exact-body", "atomic", null],
-        [1302, "occurrence_map", "undefined-symbol", "structural", "F0V3-O-CANONICAL-RESULT-BODY"],
-        [1303, "value_map", "undefined-symbol", "structural", "F0V3-O-CANONICAL-RESULT-BODY"],
-        [1304, "challenge_map", "undefined-symbol", "structural", "F0V3-O-CANONICAL-RESULT-BODY"],
-        [1305, "structural_conclusion", "undefined-symbol", "structural", "F0V3-O-CANONICAL-RESULT-BODY"]
-      ]
+      "section": "13.4",
+      "body_selector": "FSConstructionViewBody = {",
+      "body_line": 1372,
+      "fields": ["result_schema", "fresh_protocol_id", "fiat_shamir_protocol_id", "shared_core_id", "transcript_construction_id", "occurrence_map", "value_map", "challenge_map", "structural_conclusion"]
     },
     "DuplexTranscriptDeclarationView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.1",
-      "body_line": 867,
-      "fields": [
-        [868, "transcript_construction_id", "exact-body", "atomic", null],
-        [869, "core_id", "exact-body", "atomic", null],
-        [870, "construction_family", "undefined-symbol", "structural", "F0V3-O-DUPLEX-STATE-INSTANCE"],
-        [871, "alphabet_type", "exact-body", "atomic", null],
-        [872, "zero_symbol", "exact-body", "atomic", null],
-        [873, "rate", "exact-body", "atomic", null],
-        [874, "capacity", "exact-body", "atomic", null],
-        [875, "state_carrier_and_invariant", "prose-placeholder", "structural", "F0V3-O-DUPLEX-STATE-INSTANCE"],
-        [876, "binary_instance_carrier_and_bit_convention", "prose-placeholder", "structural", "F0V3-O-DUPLEX-STATE-INSTANCE"],
-        [877, "exact_instance_binding_projection", "prose-placeholder", "structural", "F0V3-O-DUPLEX-STATE-INSTANCE"],
-        [878, "hash_to_capacity_algorithm_and_contract", "exact-body", "structural", null],
-        [879, "permutation_forward_algorithm_and_contract", "exact-body", "structural", null],
-        [880, "fixed_start_absorb_squeeze_laws", "prose-placeholder", "atomic", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [881, "exact_edge_case_laws", "prose-placeholder", "atomic", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [882, "exact_construction_material_schema", "prose-placeholder", "structural", "F0V3-O-DUPLEX-MATERIAL-SALT"],
-        [883, "message_encoder_map", "exact-body", "structural", null],
-        [884, "semantic_argument_shape", "undefined-symbol", "structural", "F0V3-O-DUPLEX-CODEC-ARGUMENTS"],
-        [885, "prover_required_schedule", "prose-placeholder", "structural", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"],
-        [886, "verifier_complete_schedule", "prose-placeholder", "structural", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"],
-        [887, "exact_operational_resource_projection", "undefined-symbol", "structural", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"]
-      ]
+      "body_selector": "DuplexTranscriptDeclarationViewBody = {",
+      "body_line": 1019,
+      "fields": ["transcript_construction_id", "core_id", "construction_family", "alphabet_type", "zero_symbol", "rate", "capacity", "state_carrier", "instance_carrier", "instance_binding_projection", "hash_to_capacity", "permutation_forward", "fixed_start_absorb_squeeze_law", "edge_case_law", "construction_material_schema", "message_encoders", "semantic_argument_shape", "prover_required_schedule", "verifier_complete_schedule", "operational_resource_projection"]
     },
     "DuplexEncodedInputCoverageView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.2",
-      "body_line": 894,
-      "fields": [
-        [895, "transcript_construction_id", "exact-body", "atomic", null],
-        [896, "core_id", "exact-body", "atomic", null],
-        [897, "exact_instance_binding_sequence", "prose-placeholder", "structural", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"],
-        [898, "salt_coordinate", "prose-placeholder", "structural", "F0V3-O-DUPLEX-MATERIAL-SALT"],
-        [899, "per_challenge_ordered_encoded_input_coverage", "prose-placeholder", "structural", "F0V3-O-DUPLEX-CODEC-ARGUMENTS"],
-        [900, "exact_message_coverage", "prose-placeholder", "structural", "F0V3-O-DUPLEX-CODEC-ARGUMENTS"],
-        [901, "exact_challenge_coverage", "prose-placeholder", "structural", "F0V3-O-DUPLEX-CODEC-ARGUMENTS"],
-        [902, "prover_required_prefix_law", "prose-placeholder", "atomic", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"],
-        [903, "verifier_complete_schedule_law", "prose-placeholder", "atomic", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"],
-        [904, "prohibited_additions", "undefined-symbol", "structural", "F0V3-O-DUPLEX-SCHEDULE-COVERAGE"]
-      ]
+      "body_selector": "DuplexEncodedInputCoverageViewBody = {",
+      "body_line": 1079,
+      "fields": ["transcript_construction_id", "core_id", "instance_binding_sequence", "salt_coordinate", "encoded_input_coverage", "message_coverage", "challenge_coverage", "prover_required_prefix_law", "verifier_complete_schedule_law", "prohibited_additions"]
     },
     "DuplexChallengeTransitionView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.3",
-      "body_line": 918,
-      "fields": [
-        [919, "transcript_construction_id", "exact-body", "atomic", null],
-        [920, "core_id", "exact-body", "atomic", null],
-        [921, "per_challenge_squeeze_and_decoder_map", "prose-placeholder", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [922, "decoder_totality_contracts", "undefined-symbol", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [923, "decode_after_state_transition_law", "prose-placeholder", "atomic", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [924, "acceptance_rule", "undefined-symbol", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [925, "retry_rule", "undefined-symbol", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [926, "semantic_sampling_failure", "undefined-symbol", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [927, "prover_execution_domain", "prose-placeholder", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [928, "verifier_execution_domain", "prose-placeholder", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"],
-        [929, "exact_squeeze_event_projection", "undefined-symbol", "structural", "F0V3-O-DUPLEX-TRANSITION-ABI"]
-      ]
+      "body_selector": "DuplexChallengeTransitionViewBody = {",
+      "body_line": 1106,
+      "fields": ["transcript_construction_id", "core_id", "squeeze_and_decoder_map", "decoder_totality_law", "decode_after_state_transition_law", "acceptance_rule", "retry_rule", "semantic_sampling_failure", "prover_execution_domain", "verifier_execution_domain", "squeeze_event_projection"]
     },
     "DuplexFSConstructionView": {
       "file": "docs-next/pir/duplex-sponge-fiat-shamir.md",
       "section": "11.4",
-      "body_line": 936,
-      "fields": [
-        [937, "result_ref", "undefined-symbol", "atomic", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [938, "result_schema", "prose-placeholder", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [939, "fresh_protocol_id", "exact-body", "atomic", null],
-        [940, "fiat_shamir_protocol_id", "exact-body", "atomic", null],
-        [941, "shared_core_id", "exact-body", "atomic", null],
-        [942, "transcript_construction_id", "exact-body", "atomic", null],
-        [943, "construction_family", "undefined-symbol", "structural", "F0V3-O-DUPLEX-STATE-INSTANCE"],
-        [944, "occurrence_map", "undefined-symbol", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [945, "value_map", "undefined-symbol", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [946, "challenge_map", "undefined-symbol", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [947, "instance_projection", "prose-placeholder", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [948, "construction_material_map", "prose-placeholder", "structural", "F0V3-O-DUPLEX-MATERIAL-SALT"],
-        [950, "prover_schedule_correspondence", "prose-placeholder", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [951, "verifier_schedule_correspondence", "prose-placeholder", "structural", "F0V3-O-DUPLEX-RESULT-BODY"],
-        [952, "structural_conclusion", "undefined-symbol", "structural", "F0V3-O-DUPLEX-RESULT-BODY"]
-      ]
+      "body_selector": "DuplexFSConstructionViewBody = {",
+      "body_line": 1144,
+      "fields": ["result_schema", "fresh_protocol_id", "fiat_shamir_protocol_id", "shared_core_id", "transcript_construction_id", "construction_family", "occurrence_map", "value_map", "challenge_map", "instance_projection", "construction_material_map", "prover_schedule_correspondence", "verifier_schedule_correspondence", "structural_conclusion"]
     }
   }
 }

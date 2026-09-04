@@ -1,15 +1,14 @@
-# F0-V3B Fiat--Shamir family view bodies and rotation cone
+# Fiat--Shamir family view-body determinacy
 
 This package asks one exact question:
 
-> Do the two explicit proposed owner fragments close the eleven F0-V3
-> description obligations as eight finite FS-family view schemas such that both
-> schema compilers agree, every view value inhabitable by the K2 and duplex
-> witnesses is byte-identical on typed and cold derivation paths, and both
-> publication compilers reproduce the same migration rotation cone?
+> Do the repaired canonical-framed and duplex-sponge owner pages and manifests
+> determine eight finite construction-view schemas whose currently available
+> values agree on typed and cold derivation paths, while preserving the
+> independently reproduced migration rotation cone?
 
 The frozen answer is
-`Affirmative/F0V3B-A-FS-VIEW-BODIES-AND-CONE`.
+`Affirmative/F0V3-A-MIGRATED-FS-VIEW-DETERMINACY`.
 
 Run from the repository root:
 
@@ -17,125 +16,74 @@ Run from the repository root:
 python3 -B evaluation/formal-source-fs-view-determinacy-f0v3/run.py --check
 ```
 
-## Proposed owner text
+## Current owner source
 
-The package does not edit either owner page or profile manifest. Instead,
-[the canonical-framed packet](proposed/fiat-shamir-section-13.md) and
-[the duplex packet](proposed/duplex-section-11.md) contain:
+The package reads the two family pages and their current manifests directly.
+It does not apply the historical proposal packets or edit owner text. Recursive
+and iterative compilers agree on all eight current schemas and on the exact
+family law-field selections.
 
-- the exact semantic and body-grammar insertion markers;
-- one candidate body for every field covered by the eleven F0-V3 obligations;
-- all assumptions introduced where the current owner text is silent;
-- the exact closed finite-description JSON used by the check; and
-- a frozen unified diff against the current owner page.
+The census contains 91 fields:
 
-The paired
-[canonical manifest overlay](proposed/canonical-framed-manifest-overlay.json)
-and [duplex manifest overlay](proposed/duplex-sponge-manifest-overlay.json)
-give the exact generated-definition and dependency additions. They are applied
-only in memory on top of the common F0-V2C migration candidate. The
-`pir.static-view-schema` rows are generated definitions, not runtime subject
-kinds, so the supported-subject lists do not change.
+| View | Fields |
+|---|---:|
+| canonical transcript declaration | 13 |
+| canonical required influence | 6 |
+| canonical challenge transition | 8 |
+| canonical checked construction | 9 |
+| duplex transcript declaration | 20 |
+| duplex encoded-input coverage | 10 |
+| duplex challenge transition | 11 |
+| duplex checked construction | 14 |
 
-The original field census remains important: of 97 displayed fields, 37 have
-an exact current owner-body basis, 40 are prose placeholders, and 20 use
-undefined symbols. Each original obligation therefore remains
-`CannotAnswer` until an owner selects or rejects the proposal. The F0-V3B
-affirmative is about the exact candidate and its measured consequences, not
-about current-page determinacy.
+The current profile identities are:
 
-## Schema and inhabitance checks
-
-`proposal.py` parses and authenticates both packets, reconstructs
-`schema-source.json` from their family-local bodies, and checks each frozen
-page diff. The recursive compiler in `model.py` and the separately organized
-iterative compiler in `independent.py` compile all four canonical-framed and
-all four duplex schemas to byte-identical expanded descriptions.
-
-The typed and cold paths separately derive and validate every value the pinned
-witnesses can inhabit:
-
-- four canonical-framed values for each of the K2 Schnorr and Oracle checked
-  constructions; and
-- three construction-owned values for the duplex witness.
-
-The duplex witness has no checked-result issuer, so the fourth duplex schema is
-compiled and mutation-tested but no result value is invented. For all eleven
-inhabitable values, the check compares the exact diagnostic body bytes and
-freezes byte lengths and SHA-256 digests.
-
-Both validators reject a duplicated schema ordinal, substituted owner, exact
-law, or canonical-body compiler. They also reject a canonical view kind under
-the duplex family discriminator and reject a canonical checked-result value
-with an extra `result_ref` whose payload is bytes.
-
-## Rotation cone
-
-`migration.py` overlays the two page fragments and manifest additions on the
-common migration candidate, then invokes both publication compilers. It never
-writes `published-identities.json`.
-
-Relative to the published baseline, the combined migration rotates exactly 16
-profiles:
-
-```text
-interaction
-canonical-framed-fiat-shamir
-duplex-sponge-fiat-shamir
-public-setup
-commitment-opening
-oracle-commitment
-verifier-derived-query-plan
-interface-plan
-endpoint-source-view
-oir-projection-relation
-relations
-analysis-cryptographic-property
-analysis-afk-transport
-analysis-afk-theorem-source-validation
-analysis-incremental-composition
-analysis-incremental-composition-source-validation
-```
-
-Relative to the common candidate, the FS overlay contributes exactly this
-11-profile cone:
-
-```text
-canonical-framed-fiat-shamir
-duplex-sponge-fiat-shamir
-interface-plan
-endpoint-source-view
-oir-projection-relation
-relations
-analysis-cryptographic-property
-analysis-afk-transport
-analysis-afk-theorem-source-validation
-analysis-incremental-composition
-analysis-incremental-composition-source-validation
-```
-
-The candidate family identities are:
-
-| Profile | Revision | Profile digest | Body SHA-256 |
+| Family | Revision | Profile digest | Body SHA-256 |
 |---|---:|---|---|
-| `canonical-framed-fiat-shamir` | 1 | `299c33c95c5a9cffdd3cac9dc4636575e6cdbd92f0903523241d28cbc9d2ecf8` | `f7b47f840afee87298ed4c26af9bb4e4b3d359aeb9b978fcf941739e2796c6c5` |
-| `duplex-sponge-fiat-shamir` | 1 | `85856b74b316436629122871d3c70e430a7775b4b1361180688f84b90696690e` | `ef7a6466ccee5a0618069c7931816253319d1c416d790af536122b60c2ac7e6f` |
+| canonical-framed | 5 | `180a1a793a899f6a16aa17e3e02dcbcef0bf0baa54f88ec2d9f5610a02cd4809` | `816cd615a950f45b7bfb80632fc12a0f8a335cef0da9d19f4c82a52f5ab2f190` |
+| duplex-sponge | 4 | `0116b0df403b01b34fd0858745da83a4efb5d38d4b54c8946ecbf5bc4095d1a6` | `4569ad2459f9d4a824eb1969e1f102df1e9713380231c735d78000c8a964fb1c` |
 
-The frozen findings record the candidate revision, profile digest, and body
-digest for every profile in the 16-profile cone, plus exact before/after
-manifest and owner-page hashes.
+These revisions add the profile-owned checked-construction checker contract,
+its declaration references, body compiler, and subject kind. The eight view
+field bodies remain textually unchanged but move by 30 source lines, while
+profile-bound finite values rotate with their owning profile identities. The
+duplex fixture still exposes no checked result, so this package does not
+manufacture one.
+
+## Projection checks
+
+The typed and independently structured cold paths byte-agree on eleven
+available values: four canonical-framed Schnorr values, four
+canonical-framed Oracle values, and three duplex values. The duplex witness
+has no checked-result issuer, so no result value is invented.
+
+The Oracle fixture now forms its canonical challenge-transition value. Its
+challenge occurrence is unframed, so Section 4 derives no frame-schedule
+entry. Section 13 independently assigns it the occurrence's position in the
+exact total Core schedule. Both projection paths derive that position without
+inventing a frame coordinate, closing the former gap as
+`Affirmative/F0V3-A-TOTAL-SCHEDULE-CHALLENGE-POSITION`.
+
+Both validators reject schema-ordinal, owner, law, compiler, wrong-family, and
+checked-result-byte substitutions. They also refuse treating a witness value
+or a same-label Interaction body as an owner definition.
+
+## Rotation control
+
+Both publication compilers reproduce the same repaired migration state without
+writing published identities. Seventeen profiles rotate and
+`analysis-kernel` remains stable. This is a rehearsal control over the current
+source closure, not publication authority.
 
 ## What a pass establishes
 
-A pass establishes only that the two exact proposal packets still reconstruct
-all eight schemas; both schema compilers agree; all eleven available typed and
-cold witness values validate and byte-compare; the six mutation classes fail
-closed on both paths; both publication compilers reproduce the frozen total
-and incremental cones and candidate digests; and the published identity table
-is unchanged.
+A pass establishes the current source pins, the 91-field census, agreement of
+the two schema compilers, byte agreement for the eleven formable finite
+values, the stated mutation refusals, and agreement of the two publication
+compilers on the measured rotation cone. It also establishes that the Oracle
+transition uses its total-schedule position while remaining unframed.
 
-It does not adopt or publish the proposed text, resolve the eleven current
-owner obligations, create a durable owner evaluator, establish implementation
-or backend correspondence, authenticate or apply a theorem, prove
+It does not publish an identity, establish a durable owner evaluator, prove
+implementation or backend correspondence, authenticate or apply a theorem, prove
 Fiat--Shamir soundness, knowledge soundness, zero knowledge, ROM/QROM or
 concrete-instantiation security, or establish production support.

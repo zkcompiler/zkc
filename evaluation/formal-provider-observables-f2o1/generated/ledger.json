@@ -3244,9 +3244,9 @@
     }
   ],
   "subject": {
-    "core_id": "zkcidv0:pir.interactive-core:02cb7cce9cc67a6495b078418147f6a7f50fcbc8ca643a4cd88f41660596b45f",
+    "core_id": "zkcidv0:pir.interactive-core:6350504add9008db3c542c77223613707f7b6bebb2df7e7fcab2a37caa26a29b",
     "occurrence_count": 23,
-    "protocol_id": "zkcidv0:pir.protocol:802dd782f76d9a761820fe6b45e824434eb4fe6fd9f3aab714ba9cd40f3b7328",
+    "protocol_id": "zkcidv0:pir.protocol:7392f5f1a281a7963dc460426423361b696174fe9dd1a455c31f448b801fa10e",
     "scenario": "integrated-baseline",
     "view_status": {
       "ClaimReductionView": {

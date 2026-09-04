@@ -1746,7 +1746,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "13d270f6f386241d7c1d62e1a007432fd8522b1ad00b26f9ede5a91312505a1c",
+            "0aa14752b5f6bae7fdde366a9eab073f69eacbb2bd3b572f9a5b113adf5521df",
         )
         self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)
@@ -2845,6 +2845,10 @@ class PointwiseSpecializationTest(unittest.TestCase):
         self.assertEqual(
             setup._source_views.fresh_public_setup.view.entries,
             setup._source_views.fiat_shamir_public_setup.view.entries,
+        )
+        self.assertEqual(
+            setup._source_views.fresh_public_setup.view.run_established,
+            (),
         )
         self.assertEqual(setup.core_id, source.protocol_source.core_id)
         self.assertEqual(

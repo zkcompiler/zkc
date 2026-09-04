@@ -1,0 +1,5913 @@
+{
+  "base_head": "5105247d1b7aeebd67bb26a6dce2191cd4b9e034",
+  "carriers": [
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection-positive",
+      "predecessor_outcome": "Affirmative",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/required-check-reference",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            9
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/required-check-duplicate",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0,
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/required-reduction-reference",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            9
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/required-reduction-duplicate",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0,
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/required-reduction-unsorted",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            1,
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/terminal-claim-omitted",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/terminal-claim-wrong",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/terminal-claim-duplicate",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1,
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/final-fallback-guarded",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": 50,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 0,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/accept-guard-omits-check",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 50,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 50,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/check-not-guaranteed",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": 50,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            2,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 2,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/required-reduction-after-terminal",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            2
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 2,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/linear-consumer-overlap",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/missing-terminal-backlink",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "family": "terminal-projection",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "terminal-projection/duplicate-terminal-backlink",
+      "predecessor_outcome": "Refused",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "cannot_answer": "Check function typing is decided by Core admission step 4, outside the Terminal contract.",
+      "family": "terminal-projection",
+      "name": "terminal-projection/check-abi",
+      "predecessor_outcome": "KindMismatch",
+      "representable": false,
+      "source_precision": "outside the normalized Terminal surface"
+    },
+    {
+      "cannot_answer": "Claim-source and Reduction-output bijection is decided before claim-liveness transfer.",
+      "family": "terminal-projection",
+      "name": "terminal-projection/claim-output-ssa",
+      "predecessor_outcome": "Refused",
+      "representable": false,
+      "source_precision": "outside the normalized Terminal surface"
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
+      "expected_terminal_outcome": "Refused",
+      "family": "integrated-graph",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "integrated-baseline",
+      "predecessor_outcome": "Affirmative",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 5
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 6
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 7
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 8
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 9
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 10
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 11
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 12
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 13
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 14
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 15
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 16
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 200,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 201,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 17,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1,
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
+      "expected_terminal_outcome": "Refused",
+      "family": "integrated-graph",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "private-verifier-output-sink",
+      "predecessor_outcome": "Affirmative",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 5
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 6
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 7
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 8
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 9
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 10
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 11
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 12
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 13
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 14
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 15
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 16
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 200,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 201,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 17,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1,
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
+      "expected_terminal_outcome": "Refused",
+      "family": "integrated-graph",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "invalid-module-control-sink",
+      "predecessor_outcome": "Affirmative",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 5
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 6
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 7
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 8
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 9
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 10
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 11
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 12
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 13
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 14
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 15
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 16
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 200,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 201,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 17,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1,
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
+      "expected_terminal_outcome": "Refused",
+      "family": "integrated-graph",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "history-challenge-condition",
+      "predecessor_outcome": "Affirmative",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 5
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 6
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 7
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 8
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 9
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 10
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 11
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 12
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 13
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 14
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 15
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 16
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 200,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 201,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 17,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1,
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "expected_difference": "The integrated graph package admitted graph construction without running the repaired Terminal claim-closure law; reusable initial claim 0 remains live.",
+      "expected_terminal_outcome": "Refused",
+      "family": "integrated-graph",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "logical-reject-preemption",
+      "predecessor_outcome": "Affirmative",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 5
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 6
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 7
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 8
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 9
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 10
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 11
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 12
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 13
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 14
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 15
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 16
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 300,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 201,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 13,
+              "output": 0
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "holdout-shape",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "holdout/warpfold-finite-terminal-shape",
+      "predecessor_outcome": "fits",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 900,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "shape only; no selected source-profile coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            5
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [
+            6
+          ],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 5,
+            "output": 0,
+            "reduction": 0
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "holdout-shape",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0,
+        1
+      ],
+      "name": "holdout/whir-finite-terminal-shape",
+      "predecessor_outcome": "fits",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            1
+          ],
+          "outputs": []
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 3
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 4
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 901,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": 901,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 901,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized terminal coordinates from the frozen adjudication",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 1,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 2,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 3,
+              "output": 0
+            },
+            {
+              "kind": "occurrence-output",
+              "occurrence": 4,
+              "output": 0
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "claim-source-region/initially",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 720,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "before-occurrence",
+              "occurrence": 0
+            },
+            "scope": 1
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "before-occurrence",
+            "occurrence": 0
+          },
+          "reference": 0,
+          "scope": 1
+        }
+      ],
+      "linear_claims": [],
+      "name": "claim-source-region/before-unguarded-occurrence",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 721,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "before-occurrence",
+              "occurrence": 0
+            },
+            "scope": 1
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "before-occurrence",
+            "occurrence": 0
+          },
+          "reference": 0,
+          "scope": 1
+        }
+      ],
+      "linear_claims": [],
+      "name": "claim-source-region/before-guarded-occurrence",
+      "predecessor_outcome": "occurrence-coercion Unknown",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": 722,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1
+          ],
+          "reference": 0,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 0,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 0,
+            "output": 1,
+            "reduction": 0
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [],
+      "linear_claims": [
+        0
+      ],
+      "name": "claim-source-region/reduction-output-consumed",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [
+        {
+          "inputs": [],
+          "outputs": [
+            0,
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": []
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 723,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": 723,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 723,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 2,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [
+        0
+      ],
+      "name": "closed-contract/unknown-claim-status",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": [
+            2
+          ]
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 10,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 12,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 11,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "exact normalized coordinates",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true,
+            true
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            },
+            {
+              "coordinate": 1,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "inputs": [
+              0,
+              1
+            ],
+            "kind": "conjunction"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [
+            0
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 2,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [
+            1
+          ],
+          "terminal_claims": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "closed-contract/contradictory-zero-check-guard",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 700,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored law control",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            true
+          ],
+          "guard_inputs": [
+            {
+              "coordinate": 0,
+              "kind": "other"
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "contradiction"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "closed-contract/non-boolean-guard-input",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "check",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 701,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored law control",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [
+            false
+          ],
+          "guard_inputs": [
+            {
+              "kind": "occurrence-output",
+              "occurrence": 0,
+              "output": 0
+            }
+          ],
+          "guard_term": {
+            "input": 0,
+            "kind": "identity"
+          },
+          "reference": 0,
+          "required_checks": [
+            0
+          ],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [],
+      "expected_terminal_outcome": "Refused",
+      "family": "closed-contract-control",
+      "initial_claims": [],
+      "linear_claims": [],
+      "name": "closed-contract/impossible-terminal-region",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 710,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": 710,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 2
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored law control",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 2,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    }
+  ],
+  "owner_lines": {
+    "attempt_guards": [
+      1427,
+      1442
+    ],
+    "claim_source_region": [
+      1495,
+      1520
+    ],
+    "must_env": [
+      1444,
+      1478
+    ],
+    "occurrence_region": [
+      1480,
+      1493
+    ],
+    "terminal_contract": [
+      1522,
+      1536
+    ]
+  },
+  "source_pins": {
+    "docs-next/foundation/executable-foundations.md": "d89443b5cefe4959c7fd4f1f46d38058ce0470e983968870dc8511027f3b9b65",
+    "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "65222397363d60ef8d59f9ddd0a65b48cf0d0b8a2728ebd6b38a0ca596d2c188",
+    "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "54be002105aede4b2948f7b8712478f165ed3c743f1b202c5ce4f418cbd7258b",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9ecac4e8f2efb6c0f232a4b49fdd1f1cd8f57be0057ae0cf18dd4c9c2f08c93f",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "73220cbf2778b9616fddba4bd9a26d8b80c2d54b98b4c1c7ac9c7f02028f9d2b",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/schema-delta.json": "8924eae233761c9141edc917a92421de593050404b2e0be29cefb8d0b2117e62"
+  },
+  "unrepresented_holdouts": [
+    {
+      "name": "Circle STARKs",
+      "reason": "The holdout record gives a terminal shape but no exact Check, Reduction, Claim, guard-input, or occurrence coordinates."
+    },
+    {
+      "name": "virtual multiparty Sumcheck",
+      "reason": "The holdout record gives a terminal shape but no exact finite carrier coordinates."
+    },
+    {
+      "name": "interactive Galois-ring protocol",
+      "reason": "The holdout record gives a terminal shape but no exact finite carrier coordinates."
+    },
+    {
+      "name": "WARPfold broad cross-system application",
+      "reason": "The holdout already breaks at cross-execution state and imported challenge authority before a Terminal carrier exists."
+    }
+  ]
+}

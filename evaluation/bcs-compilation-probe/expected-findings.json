@@ -1,0 +1,43 @@
+{
+  "aggregate": {
+    "blocking_items": [
+      "canonical-framed-checker-exact-target-carrier",
+      "source-round-restoration-soundness",
+      "commitment-binding",
+      "fiat-shamir-quantitative-loss",
+      "fiat-shamir-sampler-adequacy",
+      "fiat-shamir-oracle-process"
+    ],
+    "code": "BCS-C-COMPOSITION-INCOMPLETE",
+    "outcome": "CannotAnswer",
+    "verdict": "bends"
+  },
+  "findings": [
+    {
+      "code": "BCS-A-SOURCE-CORE-AND-VIEWS",
+      "name": "source-core-and-six-views",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "BCS-A-COMMITMENT-OPENING-TRANSITION",
+      "name": "commitment-opening-transition",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "BCS-C-CANONICAL-FRAMED-EXACT-TARGET",
+      "name": "canonical-framed-on-exact-target",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "BCS-A-IDENTITY-AND-INFLUENCE-CONE",
+      "name": "identity-and-influence-cone",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "BCS-C-SOUNDNESS-PREMISE-COORDINATES",
+      "name": "soundness-premise-coordinates",
+      "outcome": "CannotAnswer"
+    }
+  ],
+  "findings_sha256": "158d90615807b2a9ee4dc46e306e9d9f8a34f3c01fb2026bcc3393c0682b0341"
+}

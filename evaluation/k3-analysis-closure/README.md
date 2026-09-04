@@ -208,6 +208,24 @@ External assumed results reconstruct their complete opaque result preimage.
 Concrete and experiment source profiles likewise admit only their exact active
 slot payloads, including the failure partition and strategy/execution join.
 
+The concrete source-view intake rederives its PIR authority subjects through
+the producing owner profiles. The Fresh execution view uses the Interaction
+static-view arm, the Fiat--Shamir execution view uses the canonical-framed
+static-view arm, the checked construction view uses the canonical-framed
+checked-construction arm, and the public-setup view uses the public-setup arm.
+These authority identities changed because the imported protocol model now
+implements the owner equations instead of hashing a generic six-field record.
+The gate consumes the newly derived identities rather than preserving fixture
+aliases for their predecessors.
+
+For checked construction, the imported protocol model now forms the
+profile-owned `pir.checker-contract` identity from the catalog references for
+the check operation, same-Core law, and defect schema plus the exact result
+description. The checked payload therefore follows the owner equation instead
+of the former local coordinate. This remains conditional finite evidence: it
+does not prove the checker, the Analysis laws, or any target-wide security
+claim.
+
 ## Quantitative boundary
 
 For `k=2`, the four theorem-local operators are:

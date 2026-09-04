@@ -1,0 +1,95 @@
+{
+  "aggregate": {
+    "blocking_findings": [],
+    "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
+    "outcome": "Affirmative"
+  },
+  "finding_codes": [
+    [
+      "decision-fidelity",
+      "Affirmative",
+      "F0V2C1-A-DECISION-FIDELITY"
+    ],
+    [
+      "terminal-contract",
+      "Affirmative",
+      "F0V2C1-A-TERMINAL-CONTRACT"
+    ],
+    [
+      "public-coin-graph",
+      "Affirmative",
+      "F0V2C1-A-PCGRAPH-TRANSFER"
+    ],
+    [
+      "owner-name-closure",
+      "Affirmative",
+      "F0V2C1-A-OWNER-CLOSURE"
+    ],
+    [
+      "manifest-closure",
+      "Affirmative",
+      "F0V2C1-A-MANIFEST-CLOSURE"
+    ],
+    [
+      "publication-compilers",
+      "Affirmative",
+      "F0V2C1-A-PUBLICATION-COMPILERS"
+    ],
+    [
+      "family-body-closure",
+      "Affirmative",
+      "F0V2C1-A-FS-BODY-CLOSURE"
+    ],
+    [
+      "pir-reference-closure",
+      "Affirmative",
+      "F0V2C1-A-PIR-REFERENCE-CLOSURE"
+    ],
+    [
+      "static-view-law-selection",
+      "Affirmative",
+      "F0V2C1-A-STATIC-VIEW-LAW-SELECTION"
+    ],
+    [
+      "declaration-body-closure",
+      "Affirmative",
+      "F0V2C1-A-DECLARATION-BODY-CLOSURE"
+    ],
+    [
+      "interface-completion-derivability",
+      "Affirmative",
+      "F0V2C1-A-INTERFACE-COMPLETION-DERIVABILITY"
+    ],
+    [
+      "source-authority-preimage-equations",
+      "Affirmative",
+      "F0V2C1-A-SOURCE-AUTHORITY-PREIMAGES"
+    ],
+    [
+      "checked-construction-checker-contract",
+      "Affirmative",
+      "F0V2C1-A-CHECKER-CONTRACT-IDENTITY-DERIVED"
+    ],
+    [
+      "challenge-transition-representability",
+      "Affirmative",
+      "F0V2C1-A-CHALLENGE-TRANSITION-REPRESENTABLE"
+    ],
+    [
+      "influence-view-exactness",
+      "Affirmative",
+      "F0V2C1-A-INFLUENCE-VIEW-EXACT"
+    ],
+    [
+      "analysis-read-catalog-join",
+      "Affirmative",
+      "F0V2C1-A-ANALYSIS-READ-CATALOG-JOIN"
+    ],
+    [
+      "public-setup-view-totality",
+      "Affirmative",
+      "F0V2C1-A-PUBLIC-SETUP-VIEW-TOTAL"
+    ]
+  ],
+  "metrics_sha256": "90ee4311f65e04e2d2776c62a49fc15e6fca842209c4ce151915c0b7893386b4"
+}

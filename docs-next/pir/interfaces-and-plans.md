@@ -500,7 +500,6 @@ CompletionPayloadCoordinate =
   | FSFailureChallenge
   | FSFailurePrefixReceiptCount
   | FSFailurePrefixState
-  | FSFailureDraws
   | FSFailureFinalState
 
 CompletionEntry = {
@@ -518,7 +517,7 @@ record family admitted by the Protocol:
   map domain is every and only
   `TerminalPublicOutput(t, output_ordinal)` from that terminal declaration; and
 - a canonical-framed FS Protocol has exactly one interpretation-failure entry
-  whose map domain is exactly the six `FSFailure*` coordinates above; a Fresh
+  whose map domain is exactly the five `FSFailure*` coordinates above; a Fresh
   Protocol has none. A duplex Protocol is not formable under this profile.
 
 `TerminalPublicOutput(t,o)` selects the exact canonical value and K2
@@ -532,20 +531,43 @@ Protocol the failure coordinates select, without omission or reordering:
 2. the receipt challenge injected at `FSChallengeRefType`;
 3. `prefix_receipt_count` injected at the exact K1 root natural type
    `Nat(2^20)`;
-4. `prefix_state` at `TranscriptStateType`;
-5. `draws` at
-   `RootSeq<FSDrawReceiptPresentationType, 2^20>`; and
-6. `final_state` at `TranscriptStateType`.
+4. `prefix_state` at `TranscriptStateType`; and
+5. `final_state` at `TranscriptStateType`.
 
-`FSDrawReceiptPresentationType` is the exact K1 root record, in receipt-field
-order, of `FSChallengeRefType`, `Nat(2^20)`, `Nat(2^20)`,
-`TranscriptBytesType`, `TranscriptStateType`, `TranscriptStateType`,
-`TranscriptBytesType`, and `RootBool`. Its canonical value is the fieldwise K1
-injection of `challenge`, `draw_ordinal`, `requested_bytes`, `namespace`,
-`pre_state`, `post_state`, `output`, and `accepted`; the admitted FS bounds
-make every injection total. The draws sequence is nonempty and has exactly the
-receipt's admitted order and length. Each payload slot codec's semantic type
-must equal its coordinate's type exactly. A slot binds one coordinate only.
+The receipt's `draws` sequence is not a completion coordinate, because it is
+a derivation of values this interface presents and not a fact of its own.
+Each draw's squeeze output and the state after it follow from the
+construction that `ProtocolId` fixes, the challenge, and the state before it;
+its acceptance result and decoded value consume that output together with
+the values of the challenge's `public_conditions` and the accepted values of
+its `correlation.prior_members`, the operands of the owner's
+`SamplingInputTypes(c)` (its Section 3.2, evaluated by its Section 7
+transition). Each such operand is a constant that `ProtocolId` fixes, a public
+input that Section 3.2 binds to a slot, a derived value of those, or an
+occurrence value with a transport entry of Section 3.4. Admission of an
+Interface for a canonical-framed Protocol therefore requires, for every
+challenge, a transport entry whose destination is `ExternalApplication` for
+every occurrence whose value is an operand of that challenge's
+`SamplingInputTypes`, including the occurrence of every prior joint member;
+an Interface that presents an interpretation failure without the values that
+determine it is refused. With that, the draws, their acceptance results, and
+`final_state` are functions of presented values and `prefix_state`, and a
+consumer replays them under the owner's execution and replay laws (its
+Sections 8 and 9) instead of trusting a restatement. The transcript states
+do not determine those operands, since the owner does not require its absorb
+and advance algorithms to be injective, which is why they are presented in
+their own right and never recovered from a state. No K1 root type could
+carry the sequence in any case: its admitted length is the
+rule's `maximum_draws`, up to `2^20`, each draw receipt holds two transcript
+byte strings and two transcript states, and the constitutional bounds of the
+Foundation's Appendix A.2 cap a sequence schema at `2^14` elements and one
+root datum at `2^20` octets. The five presented coordinates are total for
+every admitted construction: the domain payload is the construction's exact
+two-field natural record, the challenge and the count are root naturals, and
+each transcript state is one admitted `TranscriptStateType` value, which
+construction admission already bounds to fit one root datum. Each payload slot
+codec's semantic type must equal its coordinate's type exactly. A slot binds
+one coordinate only.
 The Core-terminal and FS-failure variants remain disjoint completed records;
 this presentation cannot turn one into the other.
 
@@ -586,7 +608,8 @@ After generic K1 authentication, admission checks in order:
 4. `StatementCoverage` and flow laws;
 5. transport target, type, role, visibility, uniform semantic-presence, and
    FS/Fresh laws;
-6. total completion variants, tags, and payloads;
+6. total completion variants, tags, and payloads, and for a canonical-framed
+   Protocol the replay-input transport of Section 3.5;
 7. exact slot-use closure; and
 8. noninterference with all K2-owned meaning.
 
@@ -681,6 +704,59 @@ wraps them separately as Interface/Plan-profiled `pir.source-consumer` and
 requirement identities use those nominal roles, while the live capability
 retains and exactly compares the original coordinates. No downstream kind
 union is imported into PIR, and swapping the two roles changes authority.
+
+The Interface/Plan profile compiles its own source-authority subjects over
+exactly the two families it issues: the interface-correspondence view above
+(arm 0, tagged `InterfaceView(y)`, under an explicit no-policy declaration)
+and the confidential Plan witness view of Section 4 (arm 1, tagged
+`ConfidentialPlanWitness(y)`, under a bound disclosure policy, so it has no
+no-policy arm). Each compiler is a function of the tagged family value, and
+every identity constructor of a `pir.source-*` subject on this page applies
+`ProfiledSemanticId` to a compiler's output, never to a family-local body.
+The path-step and atomic-boundary bodies are those of the Interaction page.
+
+```text
+ProtocolInterfaceViewBindingPayloadBody(x) = R {
+  0: ContentRef(x.protocol_interface_id),
+  1: S[ R{0:S[PIRViewPathStepBody(step)...],
+          1:PIRViewAtomicBoundaryBody(boundary)} ... ascending, no repeat ]
+}
+ProtocolInterfaceViewCapabilityRequirementBody(x) = R {
+  0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)
+}
+ProtocolInterfaceViewNoPolicyBody(x) = R {
+  0: ContentRef(x.owner_profile_id)
+}
+ProtocolInterfaceViewPolicyClosureBody(x) = R {
+  0: ContentRef(x.binding_payload_id), 1: ContentRef(x.no_policy_id),
+  2: ContentRef(x.capability_requirement_id)
+}
+
+InterfacePlanSourceBindingPayloadBody(x) =
+    V(0, ProtocolInterfaceViewBindingPayloadBody(y))
+      if x = InterfaceView(y)
+  | V(1, ConfidentialPlanWitnessBindingPayloadBody(y))
+      if x = ConfidentialPlanWitness(y)
+InterfacePlanSourceCapabilityRequirementBody(x) =
+    V(0, ProtocolInterfaceViewCapabilityRequirementBody(y))
+      if x = InterfaceView(y)
+  | V(1, ConfidentialPlanWitnessCapabilityRequirementBody(y))
+      if x = ConfidentialPlanWitness(y)
+InterfacePlanSourceNoPolicyBody(x) =
+    V(0, ProtocolInterfaceViewNoPolicyBody(y))
+      if x = InterfaceView(y)
+InterfacePlanSourcePolicyClosureBody(x) =
+    V(0, ProtocolInterfaceViewPolicyClosureBody(y))
+      if x = InterfaceView(y)
+  | V(1, ConfidentialPlanWitnessPolicyClosureBody(y))
+      if x = ConfidentialPlanWitness(y)
+```
+
+The interface-view payload commits to the exact `ProtocolInterfaceId` and the
+complete read manifest; its closure commits to the payload, the no-policy
+declaration, and the requirement. The `ExactProtocolInterfaceViewAuthorityBinding`
+above is formed from these four identities with family
+`"interface-correspondence-view"`.
 
 ## 4. `ProverPlan`
 
@@ -1788,17 +1864,20 @@ ConfidentialPlanWitnessDisclosurePolicyId =
 ConfidentialPlanWitnessBindingPayloadId =
   ProfiledSemanticId<"pir.source-binding-payload">(
     B, PIRInterfacePlanProfileId,
-    ConfidentialPlanWitnessBindingPayloadBody(payload))
+    InterfacePlanSourceBindingPayloadBody(
+      ConfidentialPlanWitness(payload)))
 
 ConfidentialPlanWitnessCapabilityRequirementId =
   ProfiledSemanticId<"pir.source-capability-requirement">(
     B, PIRInterfacePlanProfileId,
-    ConfidentialPlanWitnessCapabilityRequirementBody(requirement))
+    InterfacePlanSourceCapabilityRequirementBody(
+      ConfidentialPlanWitness(requirement)))
 
 ConfidentialPlanWitnessPolicyClosureId =
   ProfiledSemanticId<"pir.source-policy-closure">(
     B, PIRInterfacePlanProfileId,
-    ConfidentialPlanWitnessPolicyClosureBody(closure))
+    InterfacePlanSourcePolicyClosureBody(
+      ConfidentialPlanWitness(closure)))
 ```
 
 Policy admission resolves every manifest key against the exact admitted
@@ -1942,7 +2021,7 @@ CompletionTargetBody = V(0,N(terminal_ref)) | V(1,Unit)
 CompletionPayloadCoordinateBody(x) =
     V(0,R{0:N(x.terminal_ref),1:N(x.output_ordinal)})
   | V(1,Unit) | V(2,Unit) | V(3,Unit) | V(4,Unit)
-  | V(5,Unit) | V(6,Unit)
+  | V(5,Unit)
 CompletionEntryBody(x) = R {0:CompletionTargetBody(x.target),
   1:Q(x.external_tag),
   2:S[R{0:CompletionPayloadCoordinateBody(coordinate),1:N(slot_ref)}...

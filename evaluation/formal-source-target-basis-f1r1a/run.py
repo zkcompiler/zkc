@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the F1-R1A target-profile basis and fixture-substitution boundary."""
+"""Check the migrated target-profile basis and substitution boundary."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ K2_MODEL = ROOT / "evaluation" / "k2-protocol-fiat-shamir" / "reference_model.py
 PUBLISHED_IDENTITIES = (
     ROOT / "docs-next" / "pir" / "profiles" / "published-identities.json"
 )
+CANDIDATE_INTERACTION = Path(__file__).resolve().parent / "candidate-interaction.json"
 
 
 class GateError(ValueError):
@@ -82,17 +83,17 @@ def _subject_compiler(manifest: Mapping[str, Any], subject: str) -> str:
     return str(compiler["name"])
 
 
-def _published_interaction_row() -> Mapping[str, Any]:
+def _identity_row(path: Path, key: str) -> Mapping[str, Any]:
     try:
-        value = json.loads(PUBLISHED_IDENTITIES.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise GateError("cannot read the frozen PIR identity table") from error
     try:
-        row = value["profiles"]["interaction"]
+        row = value[key]
     except (KeyError, TypeError) as error:
-        raise GateError("frozen PIR identity table omits Interaction") from error
+        raise GateError(f"identity pin omits {key}") from error
     if type(row) is not dict:
-        raise GateError("frozen Interaction identity row has the wrong shape")
+        raise GateError("Interaction identity row has the wrong shape")
     return row
 
 
@@ -128,10 +129,25 @@ def evaluate() -> tuple[tuple[BoundaryResult, ...], Mapping[str, Any]]:
     )
 
     target_row = reference_table["profiles"]["interaction"]
-    frozen_row = _published_interaction_row()
+    candidate_row = _identity_row(CANDIDATE_INTERACTION, "profile")
+    published_row = _identity_row(PUBLISHED_IDENTITIES, "profiles")["interaction"]
+    selected = {
+        key: target_row[key]
+        for key in (
+            "profile_family",
+            "revision",
+            "body_length",
+            "body_sha256",
+            "profile_digest",
+        )
+    }
     _require(
-        target_row == frozen_row,
-        "reconstructed Interaction identity differs from the frozen v0 row",
+        selected == candidate_row,
+        "reconstructed Interaction identity differs from the migration candidate pin",
+    )
+    _require(
+        target_row != published_row,
+        "migration candidate unexpectedly aliases the pre-migration published row",
     )
     results: list[BoundaryResult] = [
         BoundaryResult(
@@ -141,16 +157,16 @@ def evaluate() -> tuple[tuple[BoundaryResult, ...], Mapping[str, Any]]:
             "two independent compilers reproduce the complete Interaction profile",
         ),
         BoundaryResult(
-            "target-profile-frozen-control",
+            "target-profile-candidate-control",
             "Affirmative",
-            "F1R1A-A-FROZEN-ID",
-            "the reconstruction equals the checked-in frozen v0 identity row",
+            "F1R1A-A-CANDIDATE-ID",
+            "the reconstruction equals the checked-in migration candidate pin and differs from the old published row",
         ),
     ]
 
     manifest = target.manifest
     _require(
-        manifest["profile_family"] == "pir.interaction" and manifest["revision"] == 0,
+        manifest["profile_family"] == "pir.interaction" and manifest["revision"] == 3,
         "target Interaction family or revision changed",
     )
     _require(
@@ -199,7 +215,7 @@ def evaluate() -> tuple[tuple[BoundaryResult, ...], Mapping[str, Any]]:
             "target-canonical-source-shape",
             "Affirmative",
             "F1R1A-A-SOURCE-SHAPE",
-            "published source names fourteen Core fields and two Protocol fields",
+            "migrated source names fourteen Core fields and two Protocol fields",
         )
     )
 

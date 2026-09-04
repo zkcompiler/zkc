@@ -1,4 +1,4 @@
-"""Recursive compiler for the F0-V3 candidate FS-family view grammar."""
+"""Recursive compiler for the current FS-family view grammar."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "schema-source.json"
-FORMAT = "zkc.formal-source-fs-view-determinacy-f0v3.source.v0"
-SCOPE = "fs-family-normalized-eight-view-candidate-grammar"
+FORMAT = "zkc.formal-source-fs-view-determinacy-f0v3.source.v1"
+SCOPE = "fs-family-current-eight-view-grammar"
 OUTER_KEYS = {
     "format",
     "scope",
@@ -101,6 +101,7 @@ def _preamble(source: dict[str, Any]) -> tuple[dict[str, Any], set[str], set[str
         or set(profiles) != {"canonical-framed", "duplex-sponge"}
     ):
         raise SchemaError("owner profile catalog is malformed")
+    expected_revisions = {"canonical-framed": 5, "duplex-sponge": 4}
     for key, profile in profiles.items():
         if (
             type(profile) is not dict
@@ -111,7 +112,7 @@ def _preamble(source: dict[str, Any]) -> tuple[dict[str, Any], set[str], set[str
                 "profile_body_sha256",
             }
             or profile["key"] != key
-            or profile["revision"] != 0
+            or profile["revision"] != expected_revisions[key]
             or any(
                 type(profile[name]) is not str or len(profile[name]) != 64
                 for name in ("profile_digest", "profile_body_sha256")

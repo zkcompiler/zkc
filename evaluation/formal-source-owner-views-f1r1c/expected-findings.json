@@ -1,9 +1,9 @@
 {
   "aggregate": {
-    "code": "F1R1C-C-SOURCE-DETERMINACY",
-    "outcome": "CannotAnswer"
+    "code": "F1R1C-A-SOURCE-DETERMINACY",
+    "outcome": "Affirmative"
   },
-  "target_profile_digest": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
+  "target_profile_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474",
   "cases": [
     {
       "name": "published-profile-independent-agreement",
@@ -11,9 +11,9 @@
       "code": "F1R1C-A-PROFILE"
     },
     {
-      "name": "published-profile-frozen-control",
+      "name": "candidate-profile-rehearsal-control",
       "outcome": "Affirmative",
-      "code": "F1R1C-A-FROZEN-PROFILE"
+      "code": "F1R1C-A-CANDIDATE-PROFILE"
     },
     {
       "name": "static-view-source-authenticated",
@@ -32,33 +32,33 @@
     },
     {
       "name": "promised-view-schema-catalog",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-SCHEMA-CATALOG"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-SCHEMA-CATALOG"
     },
     {
       "name": "view-schema-entry-routing",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-SCHEMA-ENTRY"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-SCHEMA-ENTRY"
     },
     {
       "name": "canonical-view-body-grammar",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-VIEW-BODY"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-VIEW-BODY"
     },
     {
       "name": "atomic-coordinate-and-manifest-grammar",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-COORDINATE-BODY"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-COORDINATE-BODY"
     },
     {
       "name": "view-law-reference-map",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-LAW-MAP"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-LAW-MAP"
     },
     {
       "name": "static-view-authority-envelope-bodies",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-AUTHORITY-BODIES"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-AUTHORITY-BODIES"
     },
     {
       "name": "fixture-view-substitution",
@@ -67,8 +67,8 @@
     },
     {
       "name": "exact-required-read-manifest",
-      "outcome": "CannotAnswer",
-      "code": "F1R1C-C-READ-MANIFEST"
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-READ-MANIFEST"
     }
   ]
 }

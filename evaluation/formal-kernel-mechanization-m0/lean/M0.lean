@@ -7,3 +7,4 @@ import M0.Theorems
 import M0.Transport
 import M0.Term
 import M0.Eval
+import M0.Terminal

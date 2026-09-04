@@ -7,6 +7,22 @@
 > Section 8.1) by naming the inputs that now exist.
 > **Authority:** None. A contract fixes what a lane must deliver and what a
 > result may claim; it changes no owner page.
+> **First attempt:** run 2026-09-03 as
+> [`f2o2-provider-interpretation.md`](f2o2-provider-interpretation.md);
+> aggregate `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`, with the schedule,
+> value, check-and-guard, and trace clauses affirmative on their complete
+> finite domains. The attempt found that this contract's carrier sentence
+> contradicted its own terminal clause. Sections 3, 4, and 7 are restated on
+> the decision packet
+> [`f2o2-provider-carrier-decision-2026-09-03.md`](f2o2-provider-carrier-decision-2026-09-03.md):
+> the declared carrier is the provider's exact carrier, the map is total with
+> an explicit `Unmodelled` marker, and the terminal clause is agreement with
+> the image of the source lane on every run.
+> **Second round:** run 2026-09-03 against the Analysis owner text that
+> carries the marker; aggregate `Affirmative/F2O2-A-FINITE-CORRESPONDENCE`,
+> all five clauses on the complete finite domain, the terminal clause read
+> through the mechanized first-active definition. The provider-map premise
+> forms once the owner publishes the declaration of the packet's Section 4a.
 
 ## 1. The question
 
@@ -48,8 +64,16 @@ that defines the Schnorr Fresh Protocol as a VCVio interactive protocol:
 - the verifier from the Check's term, whose denotation M2 has proved equal to
   `z = a + c . y` in the field of three elements;
 - the terminal verdict mapped into the provider carrier by the provider
-  outcome-carrier premise, which for VCVio's sigma protocol is the Boolean
-  the verifier returns.
+  outcome-carrier premise. The declared carrier is the exact outer carrier of
+  the generated interaction, which for VCVio at the pinned revision is
+  `Bool`: its oracle computations are a free monad with no failure of their
+  own, and the verifier returns a Boolean. The premise's map is total over
+  the outcome partition of the owner page (`docs-next/pir/interactive-core.md`,
+  Section 12.4), and a lane the provider's model cannot produce carries the
+  explicit marker `Unmodelled` rather than the image of another lane. The
+  first attempt showed the alternative: reading the Boolean as if it covered
+  noncompletion relabels `OperationalNoncompletion` as `Rejected`, which the
+  owner page forbids.
 
 The generator may be any program. Nothing it emits is trusted.
 
@@ -68,11 +92,17 @@ artifact and checks it independently of the generator:
 3. **Checks and guards.** The verifier's computation is the M2 denotation of
    the Check term applied to the provider's values; equality is checked on
    every input of the finite domain, not asserted.
-4. **Terminals.** The first-active terminal of the formal source and the
-   provider's accept or reject agree on every run of the finite domain, and
-   every lane of the outcome partition that the Schnorr Protocol can reach
-   (`Accepted`, `Rejected`, and `OperationalNoncompletion`) has an image
-   under the carrier premise; a lane with no image is `CannotAnswer`.
+4. **Terminals.** For every run of the finite domain, the provider's
+   outcome equals the image, under the carrier premise's map, of the lane in
+   which the formal source's run ends; a lane that occurs on the domain
+   therefore has an image. A lane that occurs on no run of the domain carries
+   either the explicit marker `Unmodelled` or an image that the provider
+   declaration justifies by naming the provider construct producing it (an
+   option layer's failure, for a provider that has one). The marker is a fact
+   about the provider's model, consumed by applicability as a premise; it is
+   not a correspondence failure. A lane that occurs on the domain without an
+   image, or an image for a lane the provider cannot produce, is
+   `CannotAnswer`.
 5. **Traces.** For every run of the finite domain, the `ExecutionView`'s
    completed record and the provider's transcript agree step by step under
    the maps above.
@@ -106,8 +136,9 @@ small and inspected but not proved.
 ## 7. Acceptance
 
 `Affirmative` only when every clause of Section 4 holds on the whole finite
-domain and every reachable outcome lane has an image; `CannotAnswer` with the
-exact clause otherwise. The claim-binding reopening
+domain and the carrier premise's map is total, every lane that occurs on the
+domain having an image and every other lane an image or the explicit
+`Unmodelled` marker; `CannotAnswer` with the exact clause otherwise. The claim-binding reopening
 (`../schnorr-claim-binding-reopening-2026-09-03.md`) does not block this
 contract: correspondence needs no claim, and the relation premises are
 consumed later by applicability. A passing result establishes operational

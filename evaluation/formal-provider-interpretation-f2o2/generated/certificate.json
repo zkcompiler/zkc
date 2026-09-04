@@ -1,0 +1,187 @@
+{
+  "authority": "none; untrusted generator output",
+  "format": "zkc.formal-provider-interpretation.certificate.v0",
+  "inputs": {
+    "algorithms": {
+      "check": {
+        "identity": "zkcidv0:foundation.portable-algorithm:86a47a88f56ed94a258b1e8215ec9b4f4537265f435bf32f7569d05f725722df",
+        "preimage_length": 179147,
+        "preimage_sha256": "4a89ff48f38c213b93cacd4f31819804de7f898b7b836b9cf12b3776e219abbd"
+      },
+      "guard": {
+        "identity": "zkcidv0:foundation.portable-algorithm:aa07d7da5eae94db0a943c1c653d2450d18b6d5b9b501bdfeb9cbfe836548be6",
+        "preimage_length": 766,
+        "preimage_sha256": "0ea838ec2c6a5e58d9237c57622ebd7de59ca1c6d4d9386ab8c1044567744521"
+      }
+    },
+    "candidates": {
+      "algebra": {
+        "carrier_identification": "the fixture uses the same Z3 carrier for scalars and additive-group elements",
+        "generator": 1,
+        "group_carrier": "Z/3Z",
+        "group_operation": "(u + v) mod 3",
+        "group_order": 3,
+        "relation": "Y = x . G",
+        "scalar_action": "s . g = (s*g) mod 3 by repeated addition",
+        "scalar_carrier": "Z/3Z",
+        "scalar_modulus": 3
+      },
+      "plan": {
+        "commit": {
+          "formula": "A := r",
+          "input_kinds": [
+            "PrivateRandomness"
+          ],
+          "state_binding": "ReplaceState"
+        },
+        "decision_order": [
+          0,
+          2
+        ],
+        "respond": {
+          "challenge_occurrence": 1,
+          "formula": "z := r + c*x mod 3",
+          "input_kinds": [
+            "StateBefore",
+            "PlanRead",
+            "PrivateMaterial"
+          ],
+          "state_binding": "KeepState"
+        }
+      },
+      "private_state": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
+      "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+      "published_candidate_bodies_sha256": "cd9935dfa7d97266a3ffb0bf24765064fb449e8ef51e12b53a404127d9620a63",
+      "relation": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
+      "witness": "x in Z/3Z supplied by Plan WitnessIngress key x"
+    },
+    "integrated_six_view_findings_sha256": "7da20a8dbeb2c200731f7fa8f3e4a74746d3669ee8fceefc26cca146df12fa77"
+  },
+  "lane_map": [
+    {
+      "image": "true",
+      "lane": "Accepted",
+      "provider_carrier": "Bool",
+      "reachable": true
+    },
+    {
+      "image": "false",
+      "lane": "Rejected",
+      "provider_carrier": "Bool",
+      "reachable": true
+    },
+    {
+      "image": null,
+      "lane": "OperationalNoncompletion",
+      "outcome": "CannotAnswer",
+      "provider_carrier": "Bool",
+      "reachable": true,
+      "reason": "the verifier Boolean has no non-collapsing image for operational noncompletion"
+    }
+  ],
+  "lean_sha256": "210fd0ae846ad96d6535dc629bff1a9d11bc2a6e808d5e1689609407e5857726",
+  "occurrence_to_step": [
+    {
+      "actor": "Prover",
+      "effect": "ProverMessage",
+      "occurrence": 0,
+      "step": "commit"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Challenge",
+      "occurrence": 1,
+      "step": "challenge"
+    },
+    {
+      "actor": "Prover",
+      "effect": "ProverMessage",
+      "occurrence": 2,
+      "step": "respond"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Check",
+      "occurrence": 3,
+      "step": "verify"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Terminal",
+      "occurrence": 4,
+      "step": "accept"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Terminal",
+      "occurrence": 5,
+      "step": "reject"
+    }
+  ],
+  "provider": {
+    "definition": "Schnorr.sigma",
+    "module": "Examples.Schnorr.SigmaProtocol",
+    "name": "VCVio",
+    "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",
+    "toolchain": "leanprover/lean4:v4.33.1"
+  },
+  "question": "Does this generated VCVio artifact operationally correspond to the admitted finite Schnorr Fresh Protocol under all five contract clauses?",
+  "subject": {
+    "active_leaf_counts": {
+      "ClaimReductionView": 1,
+      "EffectView": 68,
+      "ExecutionView": 32,
+      "PublicBindingView": 10,
+      "PublicCoinView": 180,
+      "StrategyDecisionView": 38
+    },
+    "body_sha256": {
+      "ClaimReductionView": "edc9e9d0ef0c4c9b80cfd5149124420c631728345d60e1e34f031dbe236797ee",
+      "EffectView": "239e6fbd9d4304eb5eef4c17327bb024bbe39cc842e00a076332db75231e5c49",
+      "ExecutionView": "3ff579a58ea436941981f9ea94ba925a48e0ecbe2b573c10fd32eec15f03e8ff",
+      "PublicBindingView": "08c8bd418857c23dfa51f1d9087ab0a2a386e38a73c6251f1f39906112501b7f",
+      "PublicCoinView": "8185f8906053dc9c18d03a5415440169bdb5ca958fae685da2856d6edd8c4f91",
+      "StrategyDecisionView": "4e5e7615aae3c31aea434bce89d125d26ed22b983bbb8c1e8e8482492a4e4cef"
+    },
+    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
+    "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+    "source_digest": "c03b6e9b53871a95605310a3c89288dff95ff1d99c725faf4995ccbdd1e3d84a"
+  },
+  "type_map": [
+    {
+      "carrier": "ZMod 3",
+      "provider": "Stmt",
+      "source": "PublicBindingView.public_inputs[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "Wit",
+      "source": "RelationInterface.private_witness[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "Commit",
+      "source": "EffectView.occurrences[0].outputs[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "PrvState",
+      "source": "ProverPlan.persistent_state[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "Chal",
+      "source": "PublicCoinView.challenges[0].value_type"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "Resp",
+      "source": "EffectView.occurrences[2].outputs[0]"
+    },
+    {
+      "carrier": "Bool",
+      "provider": "verify result",
+      "source": "EffectView.occurrences[3].outputs[0]"
+    }
+  ]
+}

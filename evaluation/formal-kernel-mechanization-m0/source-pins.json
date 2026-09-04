@@ -1,0 +1,17 @@
+{
+  "base_branch": "docs/pir-migration-v2c",
+  "base_head": "5105247d1b7aeebd67bb26a6dce2191cd4b9e034",
+  "owner_sources": {
+    "docs-next/foundation/executable-foundations.md": "d89443b5cefe4959c7fd4f1f46d38058ce0470e983968870dc8511027f3b9b65",
+    "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"
+  },
+  "package_inputs": {
+    "evaluation/formal-kernel-mechanization-m0/vectors/body-digests.json": "dc96ea4cb4791acc6cbb911b56cd1d90d31caa83ace0e4070b8969b6076181f5",
+    "evaluation/formal-kernel-mechanization-m0/vectors/pcgraph-construction.json": "4b120c65df1e5592ee5bfa6d65f324874214dc2ed3501990ba6ef0fa909eaf4e",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "65222397363d60ef8d59f9ddd0a65b48cf0d0b8a2728ebd6b38a0ca596d2c188",
+    "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "54be002105aede4b2948f7b8712478f165ed3c743f1b202c5ce4f418cbd7258b",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9ecac4e8f2efb6c0f232a4b49fdd1f1cd8f57be0057ae0cf18dd4c9c2f08c93f",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "73220cbf2778b9616fddba4bd9a26d8b80c2d54b98b4c1c7ac9c7f02028f9d2b",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/schema-delta.json": "8924eae233761c9141edc917a92421de593050404b2e0be29cefb8d0b2117e62"
+  }
+}

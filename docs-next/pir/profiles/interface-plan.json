@@ -3,7 +3,7 @@
   "key": "interface-plan",
   "catalog_namespace": "pir",
   "profile_family": "pir.interface-plan",
-  "revision": 0,
+  "revision": 2,
   "expected_imports": [
     "canonical-framed-fiat-shamir",
     "interaction"
@@ -32,7 +32,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "interface-plan-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interface-plan-semantics",
       "selector": "## 6. Exact canonical bodies",
       "dependencies": [
@@ -51,7 +51,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "interface-admission-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interface-plan-semantics",
       "selector": "### 3.6 Identity and admission",
       "dependencies": []
@@ -67,7 +67,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "plan-witness-authority-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interface-plan-semantics",
       "selector": "## 5. `PlanWitnessSurface`",
       "dependencies": []
@@ -95,6 +95,61 @@
       "fragment": "interface-plan-semantics",
       "selector": "-> QualifiedAdmission<AdmittedProtocolInterface>",
       "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-binding-payload-body-v0",
+      "revision": 1,
+      "fragment": "interface-plan-semantics",
+      "selector": "InterfacePlanSourceBindingPayloadBody(x) =",
+      "dependencies": [
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "source-binding-payload-body-v0"
+        },
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "interface-plan-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-capability-requirement-body-v0",
+      "revision": 1,
+      "fragment": "interface-plan-semantics",
+      "selector": "InterfacePlanSourceCapabilityRequirementBody(x) =",
+      "dependencies": [
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "interface-plan-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-no-policy-body-v0",
+      "revision": 1,
+      "fragment": "interface-plan-semantics",
+      "selector": "InterfacePlanSourceNoPolicyBody(x) =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-policy-closure-body-v0",
+      "revision": 1,
+      "fragment": "interface-plan-semantics",
+      "selector": "InterfacePlanSourcePolicyClosureBody(x) =",
+      "dependencies": [
+        {
+          "profile": "self",
+          "kind": "pir.body-compiler",
+          "name": "interface-plan-body-v0"
+        }
+      ]
     }
   ],
   "subjects": [
@@ -160,7 +215,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "interface-plan-body-v0"
+        "name": "source-binding-payload-body-v0"
       },
       "laws": [
         "plan-witness-authority-v0",
@@ -174,7 +229,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "interface-plan-body-v0"
+        "name": "source-capability-requirement-body-v0"
       },
       "laws": [
         "plan-witness-authority-v0",
@@ -188,7 +243,7 @@
       "body_compiler": {
         "profile": "interaction",
         "kind": "pir.body-compiler",
-        "name": "source-authority-envelope-body-v0"
+        "name": "source-consumer-role-body-v0"
       },
       "laws": [
         "plan-witness-authority-v0",
@@ -200,9 +255,9 @@
     {
       "kind": "pir.source-no-policy",
       "body_compiler": {
-        "profile": "interaction",
+        "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "source-authority-envelope-body-v0"
+        "name": "source-no-policy-body-v0"
       },
       "laws": [
         "plan-witness-authority-v0",
@@ -216,7 +271,7 @@
       "body_compiler": {
         "profile": "self",
         "kind": "pir.body-compiler",
-        "name": "interface-plan-body-v0"
+        "name": "source-policy-closure-body-v0"
       },
       "laws": [
         "plan-witness-authority-v0",
@@ -230,7 +285,7 @@
       "body_compiler": {
         "profile": "interaction",
         "kind": "pir.body-compiler",
-        "name": "source-authority-envelope-body-v0"
+        "name": "source-purpose-role-body-v0"
       },
       "laws": [
         "plan-witness-authority-v0",

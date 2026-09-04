@@ -731,8 +731,12 @@ AnalysisExecutionViewFields(subject,axis,subtree_paths) =
 ExactPIRAtomicLeavesUnder(coordinate,subtree_paths) =
   the canonical sorted-unique sequence of every atomic
   `PIRStaticViewFieldCoordinate` below the exact ordinal subtree paths selected
-  from the closed owner schema for coordinate; the displayed field names below
-  are expository aliases for those fixed ordinal paths and do not enter a body
+  from the closed owner schema for coordinate; each displayed field name below
+  is the owner body's own field name at the selected depth and denotes the
+  ordinal path of that field in the closed owner schema, so a name the owner
+  body does not declare selects nothing and the read is malformed under the
+  field-projection law of `analysis-model.md` Section 2.1; the names do not
+  enter a body
 
 AnalysisPublicBindingAdequacy,
 AnalysisFreshPublicSetupInvocationAdequacy,
@@ -769,7 +773,7 @@ AnalysisPIRFreshSourceSlotFragment = CanonicalSeq [
   AnalysisPIRSourceSlot(PublicBindingView,
     AnalysisOwnerViewCoordinate(subject,PublicBindingView),
     AnalysisStaticViewFields(subject,PublicBindingView,
-      [scope_openings,bindings]),SemanticMeaning,
+      [scopes,bindings]),SemanticMeaning,
     AnalysisPublicBindingAdequacy,
     ExactPIRStaticViewAuthorityBinding<PublicBindingView>,FreshSourceCapability),
   ConcreteOwnerReadSlotSchema(
@@ -783,7 +787,7 @@ AnalysisPIRFreshSourceSlotFragment = CanonicalSeq [
   AnalysisPIRSourceSlot(StrategyDecisionView,
     AnalysisOwnerViewCoordinate(subject,StrategyDecisionView),
     AnalysisStaticViewFields(subject,StrategyDecisionView,
-      [decision_points,prover_view_formation,guaranteed_prover_reads,
+      [decision_points,prover_view_formation_law,guaranteed_prover_reads,
        legal_move_types]),SemanticMeaning,
     AnalysisStrategyDecisionAdequacy,
     ExactPIRStaticViewAuthorityBinding<StrategyDecisionView>,FreshSourceCapability),
@@ -791,7 +795,7 @@ AnalysisPIRFreshSourceSlotFragment = CanonicalSeq [
     AnalysisOwnerViewCoordinate(subject,PublicCoinView),
     AnalysisStaticViewFields(subject,PublicCoinView,
       [structural_public_coin_eligibility,
-       verifier_private_dependency_closure,challenges]),SemanticMeaning,
+       verifier_private_predecessors,challenges]),SemanticMeaning,
     AnalysisPublicCoinAdequacy,
     ExactPIRStaticViewAuthorityBinding<PublicCoinView>,FreshSourceCapability),
   AnalysisPIRSourceSlot(EffectView,
@@ -842,34 +846,30 @@ AFKCanonicalFramedAdditionalSourceSlotCatalog = CanonicalConcat(CanonicalSeq [
     AnalysisOwnerViewCoordinate(subject,TranscriptDeclarationView),
     AnalysisStaticViewFields(subject,TranscriptDeclarationView,
       [transcript_construction_id,core_id,state_type,absorbed_bytes_type,
-       initial_state,initialize_algorithm_and_contract,
-       absorb_algorithm_and_contract,squeeze_bytes_algorithm_and_contract,
-       advance_state_algorithm_and_contract,application_domain,
-       sampling_failure_coordinate,frame_body_law,
-       exact_frame_schedule_coordinates]),SemanticMeaning,
+       initial_state,initialization_schedule_law,absorb,squeeze_bytes,
+       advance_state,application_domain,sampling_failure_coordinate,
+       frame_body_law,frame_schedule]),SemanticMeaning,
     AnalysisTranscriptDeclarationAdequacy,
     ExactPIRStaticViewAuthorityBinding<TranscriptDeclarationView>,FreshSourceCapability),
   AnalysisPIRSourceSlot(RequiredInfluenceView,
     AnalysisOwnerViewCoordinate(subject,RequiredInfluenceView),
     AnalysisStaticViewFields(subject,RequiredInfluenceView,
-      [transcript_construction_id,core_id,influence_atom_algebra,
-       scope_binding_requirements,per_challenge_ordered_required_influence_sets,
-       reduction_and_module_additions,exact_prefix_law]),SemanticMeaning,
+      [transcript_construction_id,core_id,scope_bindings,
+       required_influence,additions,exact_prefix_law]),SemanticMeaning,
     AnalysisRequiredInfluenceAdequacy,
     ExactPIRStaticViewAuthorityBinding<RequiredInfluenceView>,FreshSourceCapability),
   AnalysisPIRSourceSlot(ChallengeTransitionView,
     AnalysisOwnerViewCoordinate(subject,ChallengeTransitionView),
     AnalysisStaticViewFields(subject,ChallengeTransitionView,
-      [transcript_construction_id,core_id,challenge_namespace_derivation,
-       acceptance_abi,decoder_abi,draw_bounds,exact_length_law,
-       state_update_before_decode_law,retry_law,sampling_failure_law,
-       challenge_decoding_coordinates]),SemanticMeaning,
+      [transcript_construction_id,core_id,namespace_derivation_law,
+       exact_length_law,state_update_before_decode_law,retry_law,
+       sampling_failure_law,challenge_rules]),SemanticMeaning,
     AnalysisChallengeTransitionAdequacy,
     ExactPIRStaticViewAuthorityBinding<ChallengeTransitionView>,FreshSourceCapability),
   AnalysisPIRSourceSlot(FSConstructionView,
     AnalysisOwnerViewCoordinate(subject,FSConstructionView),
     AnalysisStaticViewFields(subject,FSConstructionView,
-      [result_ref,result_schema,fresh_protocol_id,fiat_shamir_protocol_id,
+      [result_schema,fresh_protocol_id,fiat_shamir_protocol_id,
        shared_core_id,transcript_construction_id,occurrence_map,value_map,
        challenge_map,structural_conclusion]),
     PremiseSupport,AnalysisFSConstructionAdequacy,

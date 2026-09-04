@@ -50,11 +50,13 @@ nor retained merely because it once took substantial effort to produce.
 
 The current catalog deliberately makes no bulk deletion. The target-model
 prototypes are promotion candidates, but extracting them safely is semantic
-work, especially for the expensive property-analysis surface. The active
-source-definition sequence still has constructor and publication obligations.
-Cross-cutting probes are temporary by design. Distinct protocol witnesses,
-bounded falsifiers, pinned upstream adapters, and benchmark records remain
-retained until their exact exit rules are met.
+work, especially for the expensive property-analysis surface. The migrated
+owner text has been re-pinned and its exact owner-source law selection has
+reclosed through the active source-definition sequence. Identity publication
+and downstream correspondence remain separately gated. Cross-cutting probes
+are temporary by design.
+Distinct protocol witnesses, bounded falsifiers, pinned upstream adapters, and
+benchmark records remain retained until their exact exit rules are met.
 
 Run the inventory audit from the repository root:
 

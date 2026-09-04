@@ -37,8 +37,8 @@ VIEW_ORDER = (
     "ClaimReductionView",
     "ExecutionView",
 )
-PROFILE_DIGEST = "76cf68774060fbe667ce5f1a7d0b67de525449d8fad92b262c7fd4adfd9b6b79"
-PROFILE_BODY_SHA256 = "4272f9bb8285a84481da961c29cdc058aa7e4ce2411c7f73582a0149933d554d"
+PROFILE_DIGEST = "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474"
+PROFILE_BODY_SHA256 = "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a"
 TARGET = "docs-next/pir/interactive-core.md"
 D1_SOURCE = "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py"
 

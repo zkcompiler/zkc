@@ -34,13 +34,25 @@ The synthetic candidate makes six coordinated profile-local changes:
    no-policy, and policy closure.
 5. The six locally changed synthetic profiles advance to revision 1.
 6. Both publication compilers reconstruct all eighteen profiles and derive
-   the same sixteen-profile rotation cone; `analysis-kernel` and
-   `oir-endpoint-graph` remain exactly stable.
+   the same seventeen-profile rotation cone; only `analysis-kernel` remains
+   exactly stable.
 
 The five directly repaired dependents are canonical-framed Fiat--Shamir,
 duplex-sponge Fiat--Shamir, public setup, Interface/Plan, and endpoint source
 view. Canonical-framed and duplex view-schema catalogs are still future
 profile-local work; F0-V1 repairs only their authority-envelope routing.
+
+## Current migration re-pin
+
+The regression now reads canonical-framed revision 5 and duplex revision 4.
+Those revisions add the profile-owned checked-construction checker contract,
+its declaration references, body compiler, and subject kind after the earlier
+total-schedule repair. Both publication paths agree on the resulting current
+source and on this package's synthetic topology result. The executable
+source-authority identities exercised in the protocol and Analysis models
+rotate separately because those models hash the selected owner's tagged
+compiler output; this package checks the owner compiler topology and does not
+freeze those fixture identities.
 
 ## Independent evidence and mutations
 

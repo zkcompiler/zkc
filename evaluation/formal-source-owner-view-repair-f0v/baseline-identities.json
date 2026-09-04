@@ -1,0 +1,24 @@
+{
+  "format": "zkc.owner-view-publication-topology.baseline-identities.v0",
+  "source_commit": "9c05fd5b89f1c84a4ce7530d924a2ff0e4a786d5",
+  "profiles": {
+    "analysis-afk-theorem-source-validation": "a7cdda7fb58036e844b8f8dc65a9810d661aa976fc3d51bace259732832e8bf5",
+    "analysis-afk-transport": "57ba1bd4e2346e5ae82c25a06197f7e42c4266bf51fb0cc593563d68d036927b",
+    "analysis-cryptographic-property": "b7199afb9d051079591f983843c10f05264eea7ce47fadc33a71ba733115a446",
+    "analysis-incremental-composition": "721292118155bbfafd23455a98a5ff972b66da55481126459473f45d7ebdb497",
+    "analysis-incremental-composition-source-validation": "ffa44eeb1e67194c8126509d438117bde990c72d37fb84359753acbfbf828265",
+    "analysis-kernel": "aa5c64e33adf55fa3b7ae770a05e7f32d60240c12f0010394a469f6fa1076166",
+    "canonical-framed-fiat-shamir": "38dd578579b115e7d4b17ca4e31f255d6def4027166c831f4dba259fb597607a",
+    "commitment-opening": "ec40258301ae35e9229c9ea2534dc4a219f58abb74b66085f4737711e334e177",
+    "duplex-sponge-fiat-shamir": "15203c4745d3f4aafd1d6bb45a0e94e0e21461dbe8cc6c5d9d4949df980e761b",
+    "endpoint-source-view": "5ca8230e2ee1558d65dd9990ee46b91bd31576175830c98e0d718a86282f369c",
+    "interaction": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
+    "interface-plan": "685d6ac5ed899c7944ae36aea2b9accfb1ccdbfb38efd7add4a404f9a5ed73e9",
+    "oir-endpoint-graph": "d8a5c8835c7f9f532027fabcf4581a38d0310e5fdc6047cd6bd9d02a5482d714",
+    "oir-projection-relation": "c203f9480242edaf7a5d0d1a0700de87bce1908876bae0d9e3899fab30486c30",
+    "oracle-commitment": "57b0753d4ad5a81a7ba11d7cdc084005d0b19b52cce34200d648ec8b987e4377",
+    "public-setup": "0cd7d314652d35ba372b00615d40eb747fd3fcb960ff77e2ba245d3cd1ab7dd7",
+    "relations": "6441692146229cd2601cb49c963d8b676fe8ba76fd539bb98a816f924f9de889",
+    "verifier-derived-query-plan": "2d982877660309502af02387a4b525298d3a772e5bfbbf3b1706f68b8fa61adf"
+  }
+}

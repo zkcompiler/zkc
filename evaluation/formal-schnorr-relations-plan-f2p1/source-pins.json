@@ -1,6 +1,6 @@
 {
   "format": "zkc.formal-schnorr-relations-plan-f2p1.source-pins.v0",
-  "cutoff": "1464c8be0fac7d3dd63909f41e7d5051ddd91f98",
+  "cutoff": "975d1e98a61880b800f92efe9c115dd728260113",
   "question": "Do exact finite-additive Schnorr relation, model, instance, Protocol binding, ProverPlan, PlanRealizes, witness-surface, and witness-binding candidates form for the admitted F1-R1B Fresh Protocol, and can the requested initial-claim meaning also form without changing that Protocol?",
   "sources": [
     {
@@ -62,12 +62,12 @@
     },
     {
       "path": "docs-next/pir/interfaces-and-plans.md",
-      "sha256": "bb359aa65a9037c8202a08bd8b62947566ce762a9708cf3cf7f6022953fea5a0",
+      "sha256": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
       "ranges": [
         {
           "id": "PROVER-PLAN",
-          "start": 687,
-          "end": 965,
+          "start": 761,
+          "end": 1022,
           "anchors": [
             "ProverPlan = {",
             "DecisionRecipe = {",
@@ -76,8 +76,8 @@
         },
         {
           "id": "PLAN-REALIZES",
-          "start": 966,
-          "end": 1189,
+          "start": 1042,
+          "end": 1265,
           "anchors": [
             "PlanLifecycleReadBasis = {",
             "PlanRealizes(",
@@ -87,7 +87,7 @@
         {
           "id": "PLAN-STRATEGY-STEP",
           "start": 1267,
-          "end": 1378,
+          "end": 1535,
           "anchors": [
             "PlanStrategyStep(",
             "private state contains the exact Plan state vector",
@@ -96,8 +96,8 @@
         },
         {
           "id": "PLAN-WITNESS-SURFACE",
-          "start": 1623,
-          "end": 1688,
+          "start": 1699,
+          "end": 1764,
           "anchors": [
             "PlanWitnessSurfaceBody = {",
             "SuppliedForGeneration",
@@ -128,11 +128,11 @@
     },
     {
       "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
-      "sha256": "e5534e317ca67e54a3d40b43d79564a7f7ff4cd14ff3b1463ce26ec2509a81c3"
+      "sha256": "293dedaa4c831ce1238d722d72f4c3fa130d3cdbdbd4b047a699b214712366af"
     },
     {
       "path": "evaluation/formal-schnorr-relations-plan-f2p0/expected-findings.json",
-      "sha256": "e8f2d3b03b8c688605b1b2ddd24ba0f85e8dfe469b99177db96297b73cd4c743"
+      "sha256": "16791274dcecfccc5501cda94ea0a1f4cfe05842d7d37813fba818336353ba6b"
     },
     {
       "path": "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o0-provider-observable-audit.md",

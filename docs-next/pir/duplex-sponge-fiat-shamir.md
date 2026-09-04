@@ -829,6 +829,36 @@ checker/evaluator, and checking occurrence. None has a canonical body, digest
 surrogate, serialization, cache form, or FFI representation. Cold use
 reauthenticates and readmits all three subjects and reruns this checker.
 
+The checker contract that the binding records is a profile-owned identity.
+It names the exact operation, law, defect schema, and result schema under
+which the affirmative result was reached, so a consumer holding the binding
+knows which check it holds and a different check can never present an equal
+payload:
+
+```text
+CheckedDuplexFSConstructionCheckerContract = {
+  operation: ProfileDeclarationRef<"pir.evaluator-signature">,
+    exactly this profile's duplex-sponge-construction-check-v0,
+  law: PIRProfileLawReference,
+    exactly this profile's duplex-sponge-same-core-construction-v0,
+  defects: ProfileDeclarationRef<"pir.failure-schema">,
+    exactly this profile's duplex-sponge-construction-defects-v0,
+  result_schema: PIRRuntimeSchema,
+    exactly the description of the checked duplex construction result
+}
+
+CheckedDuplexFSConstructionCheckerContractId =
+  ProfiledSemanticId<"pir.checker-contract">(
+    B, PIRDuplexSpongeFSProfileId,
+    CheckedDuplexFSConstructionCheckerContractBody(contract))
+```
+
+The binding's `checker_contract` is exactly `CheckedDuplexFSConstructionCheckerContractId`. It is
+a constant of this profile: it changes when the check operation's signature,
+the checked same-Core construction law, the defect schema, the result schema,
+or the profile identity changes, and never with a run, a result, or a
+consumer.
+
 For every affirmative result formed by this operation:
 
 ```text
@@ -859,49 +889,207 @@ DuplexFSResultViewKindRef =
 
 Each local kind maps to exactly the like-named closed body below. View issuance
 uses the common owner-coordinate and capability mechanics with these exact
-profile-local references; no canonical-framed kind is accepted here.
+profile-local references; no canonical-framed kind is accepted here. The
+profile's view catalog has the same form as the Interaction catalog:
+
+```text
+DuplexViewSchemaCatalog = {
+  DuplexTranscriptDeclarationView:
+    StaticViewSchema(DuplexTranscriptDeclarationView),
+  DuplexEncodedInputCoverageView:
+    StaticViewSchema(DuplexEncodedInputCoverageView),
+  DuplexChallengeTransitionView:
+    StaticViewSchema(DuplexChallengeTransitionView),
+  DuplexFSConstructionView: StaticViewSchema(DuplexFSConstructionView),
+  ExecutionView:            StaticViewSchema(ExecutionView)
+}
+
+StaticViewSchema(DuplexTranscriptDeclarationView) = {
+  owner: ConstructionView(TranscriptConstructionId,
+                          DuplexTranscriptDeclarationView),
+  body: DuplexTranscriptDeclarationViewBody,
+  derivation: lifecycle and admission (Section 7),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(DuplexEncodedInputCoverageView) = {
+  owner: ConstructionView(TranscriptConstructionId,
+                          DuplexEncodedInputCoverageView),
+  body: DuplexEncodedInputCoverageViewBody,
+  derivation: lifecycle and admission (Section 7),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(DuplexChallengeTransitionView) = {
+  owner: ConstructionView(TranscriptConstructionId,
+                          DuplexChallengeTransitionView),
+  body: DuplexChallengeTransitionViewBody,
+  derivation: the fixed state-transition law and admission (Sections 5 and 7),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(DuplexFSConstructionView) = {
+  owner: FSResultView(CheckedDuplexFSConstructionResultRef,
+                      DuplexFSConstructionView),
+  body: DuplexFSConstructionViewBody,
+  derivation: the checked duplex construction (Section 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(ExecutionView) = {
+  owner: ProtocolView(ProtocolId, ExecutionView) of a duplex-sponge Protocol,
+  body: DuplexExecutionViewBody,
+  derivation: lifecycle and admission (Section 7) over challenge-parameterized
+              execution of the Interaction page,
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+DuplexExecutionViewBody = {
+  protocol_id: ProtocolId,
+  core_id: CoreId,
+  transcript_construction_id: TranscriptConstructionId,
+  challenge_interpretation: ChallengeInterpretation,
+    exactly FiatShamir(transcript_construction_id),
+  visible_history_law: PIRProfileLawReference,
+  resolver_coordinates: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    occurrence_ref: OccurrenceRef,
+    value_type: ValueType,
+    squeeze_and_decoder_coordinate: the challenge's entry of
+      per_challenge_squeeze_and_decoder_map
+  }>,
+  generated_execution_law: PIRProfileLawReference,
+  run_record_schema: PIRRuntimeSchema,
+    exactly the description of CompletedProtocolRecord(P) with
+    DuplexInitializationReceipt and DuplexChallengeReceipt,
+  interpretation_failure_schema: None | PIRRuntimeSchema, exactly None,
+  outcome_partition: PIRRuntimeSchema,
+    exactly the description of ProtocolOutcomeLane(P), five lanes,
+  replay_qualification_law: PIRProfileLawReference,
+  relation_run_view_issuance_law: PIRProfileLawReference
+}
+```
+
+A duplex-sponge Protocol's `ExecutionView` is owned by this profile: its
+interpretation names the construction, its record schema carries the
+initialization and atomic-transition receipts, it declares no
+interpretation-failure schema, and its outcome partition has no
+`InterpretationFailed` lane.
 
 ### 11.1 Transcript declaration view
 
 ```text
+AlgorithmUse = {
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId
+}
+
+MaterialCoordinate = {
+  site: None | Occurrence(OccurrenceRef) | Challenge(ChallengeRef),
+  ordinal: Natural
+}
+
+MaterialSchema = {
+  coordinate: MaterialCoordinate,
+  value_type: ValueType,
+  length: Natural
+}
+
+CanonicalFrameCoordinate = {
+  position: Natural,
+  occurrence_ref: OccurrenceRef,
+  occurrence_kind: OccurrenceKind
+}
+
 DuplexTranscriptDeclarationViewBody = {
-  transcript_construction_id,
-  core_id,
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
   construction_family: DuplexSponge,
-  alphabet_type,
-  zero_symbol,
-  rate,
-  capacity,
-  state_carrier_and_invariant,
-  binary_instance_carrier_and_bit_convention,
-  exact_instance_binding_projection,
-  hash_to_capacity_algorithm_and_contract,
-  permutation_forward_algorithm_and_contract,
-  fixed_start_absorb_squeeze_laws,
-  exact_edge_case_laws,
-  exact_construction_material_schema,
-  message_encoder_map,
-  semantic_argument_shape,
-  prover_required_schedule,
-  verifier_complete_schedule,
-  exact_operational_resource_projection
+  alphabet_type: ValueType,
+  zero_symbol: CanonicalValue<alphabet_type>,
+  rate: Natural,
+  capacity: Natural,
+  state_carrier: { carrier_type: ValueType, invariant_law: PIRProfileLawReference },
+  instance_carrier: {
+    carrier_type: ValueType,
+    bit_convention_law: PIRProfileLawReference
+  },
+  instance_binding_projection: {
+    bindings: CanonicalSeq<BindingRef>,
+    law: PIRProfileLawReference
+  },
+  hash_to_capacity: AlgorithmUse,
+  permutation_forward: AlgorithmUse,
+  fixed_start_absorb_squeeze_law: PIRProfileLawReference,
+  edge_case_law: PIRProfileLawReference,
+  construction_material_schema: MaterialSchema,
+  message_encoders: CanonicalSeq<{
+    occurrence_ref: OccurrenceRef,
+    codec: AlgorithmUse,
+    encoded_length: Natural
+  }>,
+  semantic_argument_shape: {
+    messages: CanonicalSeq<{ occurrence_ref: OccurrenceRef, value_type: ValueType }>,
+    challenges: CanonicalSeq<{ challenge_ref: ChallengeRef, value_type: ValueType }>
+  },
+  prover_required_schedule: CanonicalSeq<CanonicalFrameCoordinate>,
+  verifier_complete_schedule: CanonicalSeq<CanonicalFrameCoordinate>,
+  operational_resource_projection: {
+    permutations: Natural,
+    absorbed_symbols: Natural,
+    squeezed_symbols: Natural
+  }
 }
 ```
+
+The state-carrier invariant law, the fixed start/absorb/squeeze law, and the
+edge-case law name the fixed state-transition law of Section 5; the
+bit-convention law names the body-grammar law; the binding-projection law
+names the source-views law of this section. `construction_material_schema`
+places the construction's own material (the salt) at an exact coordinate with
+its type and length; `message_encoders` fixes, per encoded Prover message, the
+codec and its encoded length; the two schedules list framed occurrences in
+prefix order; the resource projection counts permutations and absorbed and
+squeezed symbols of one complete run.
 
 ### 11.2 Encoded-input coverage view
 
 ```text
+CoverageAtom =
+    Binding(BindingRef)
+  | Material(MaterialCoordinate)
+  | Message(OccurrenceRef)
+  | Challenge(ChallengeRef)
+
 DuplexEncodedInputCoverageViewBody = {
-  transcript_construction_id,
-  core_id,
-  exact_instance_binding_sequence,
-  salt_coordinate,
-  per_challenge_ordered_encoded_input_coverage,
-  exact_message_coverage,
-  exact_challenge_coverage,
-  prover_required_prefix_law,
-  verifier_complete_schedule_law,
-  prohibited_additions
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  instance_binding_sequence: CanonicalSeq<BindingRef>,
+  salt_coordinate: MaterialCoordinate,
+  encoded_input_coverage: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    atoms: CanonicalSeq<CoverageAtom>
+  }>,
+  message_coverage: CanonicalSeq<OccurrenceRef>,
+  challenge_coverage: CanonicalSeq<ChallengeRef>,
+  prover_required_prefix_law: PIRProfileLawReference,
+  verifier_complete_schedule_law: PIRProfileLawReference,
+  prohibited_additions: CanonicalSeq<CoverageAtom>
 }
 ```
 
@@ -916,47 +1104,222 @@ encoder-injectivity judgments.
 
 ```text
 DuplexChallengeTransitionViewBody = {
-  transcript_construction_id,
-  core_id,
-  per_challenge_squeeze_and_decoder_map,
-  decoder_totality_contracts,
-  decode_after_state_transition_law,
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  squeeze_and_decoder_map: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    squeeze_length: Natural,
+    decoder: AlgorithmUse
+  }>,
+  decoder_totality_law: PIRProfileLawReference,
+  decode_after_state_transition_law: PIRProfileLawReference,
   acceptance_rule: AlwaysAccept,
   retry_rule: NoRetry,
   semantic_sampling_failure: None,
-  prover_execution_domain,
-  verifier_execution_domain,
-  exact_squeeze_event_projection
+  prover_execution_domain: CanonicalSeq<ChallengeRef>,
+  verifier_execution_domain: CanonicalSeq<ChallengeRef>,
+  squeeze_event_projection: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    occurrence_ref: OccurrenceRef,
+    squeeze_ordinal: Natural
+  }>
 }
 ```
+
+The decoder-totality law names the lifecycle-and-admission law of Section 7
+and the decode-after-transition law names the state-transition law of Section
+5. The three closed tags are the family's fixed choices and admit no other
+arm.
 
 ### 11.4 Checked result view
 
 ```text
+ScheduleCorrespondence = {
+  source: CanonicalSeq<ChallengeRef>,
+  target: CanonicalSeq<ChallengeRef>,
+  map: CanonicalSeq<{ source: ChallengeRef, target: ChallengeRef }>,
+  law: PIRProfileLawReference
+}
+
 DuplexFSConstructionViewBody = {
-  result_ref,
-  result_schema: exact CheckedDuplexFSConstruction schema,
-  fresh_protocol_id,
-  fiat_shamir_protocol_id,
-  shared_core_id,
-  transcript_construction_id,
+  result_schema: PIRRuntimeSchema,
+  fresh_protocol_id: ProtocolId,
+  fiat_shamir_protocol_id: ProtocolId,
+  shared_core_id: CoreId,
+  transcript_construction_id: TranscriptConstructionId,
   construction_family: DuplexSponge,
-  occurrence_map: IdentityOnEveryOccurrenceRef,
-  value_map: IdentityOnEveryNonChallengeValueRef,
-  challenge_map: IdentityOnEveryChallengeRef,
-  instance_projection,
-  construction_material_map:
-    UniqueTargetOnlySalt(exact target,exact construction),
-  prover_schedule_correspondence,
-  verifier_schedule_correspondence,
-  structural_conclusion: StructurallyConstructed
+  occurrence_map: CanonicalSeq<{ source: OccurrenceRef, target: OccurrenceRef }>,
+  value_map: CanonicalSeq<{ source: ValueRef, target: ValueRef }>,
+  challenge_map: CanonicalSeq<{ source: ChallengeRef, target: ChallengeRef }>,
+  instance_projection: {
+    bindings: CanonicalSeq<BindingRef>,
+    law: PIRProfileLawReference
+  },
+  construction_material_map: {
+    target: MaterialCoordinate,
+    schema: MaterialSchema
+  },
+  prover_schedule_correspondence: ScheduleCorrespondence,
+  verifier_schedule_correspondence: ScheduleCorrespondence,
+  structural_conclusion: {
+    tag: StructurallyConstructed,
+    law: PIRProfileLawReference
+  }
 }
 ```
+
+The three maps are identity maps written out entry by entry; the
+construction-material map records that the target alone carries the salt at
+its exact coordinate; the two schedule correspondences name the
+downstream-boundary law of Section 13; the conclusion's law names the
+lifecycle-and-admission law of Section 7; `result_schema` is the description
+of the `CheckedDuplexFSConstruction` result, and the owner-local result
+reference is not a body field. The instance projection's law names the
+checked same-Core construction law of Section 10. The coverage view's
+`prover_required_prefix_law` names the prover-required prefix law of Section
+9 and its `verifier_complete_schedule_law` the fixed state-transition law of
+Section 5, whose exact source schedule the verifier executes in full. The
+execution view's `visible_history_law` and `relation_run_view_issuance_law`
+name the Interaction profile's visible-history and run-view-issuance laws
+through imported declaration dependencies, `generated_execution_law` names
+the execution law of Section 8.3, and `replay_qualification_law` the replay
+law of Section 8.4. The complete selection, which the field resolver and
+`StaticViewBody` consume exactly as the Interaction page states for its own
+table, is:
+
+```text
+PIRStaticViewLawFieldSelection(DuplexSpongeFiatShamir) = CanonicalMap [
+  (DuplexTranscriptDeclarationView, state_carrier.invariant_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexTranscriptDeclarationView, instance_carrier.bit_convention_law)
+      -> duplex-sponge-body-grammar-v0,
+  (DuplexTranscriptDeclarationView, instance_binding_projection.law)
+      -> duplex-sponge-source-views-v0,
+  (DuplexTranscriptDeclarationView, fixed_start_absorb_squeeze_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexTranscriptDeclarationView, edge_case_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexEncodedInputCoverageView, prover_required_prefix_law)
+      -> duplex-sponge-prover-required-prefix-v0,
+  (DuplexEncodedInputCoverageView, verifier_complete_schedule_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexChallengeTransitionView, decoder_totality_law)
+      -> duplex-sponge-admission-and-execution-v0,
+  (DuplexChallengeTransitionView, decode_after_state_transition_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexFSConstructionView, prover_schedule_correspondence.law)
+      -> duplex-sponge-downstream-boundary-v0,
+  (DuplexFSConstructionView, verifier_schedule_correspondence.law)
+      -> duplex-sponge-downstream-boundary-v0,
+  (DuplexFSConstructionView, instance_projection.law)
+      -> duplex-sponge-same-core-construction-v0,
+  (DuplexFSConstructionView, structural_conclusion.law)
+      -> duplex-sponge-admission-and-execution-v0,
+  (ExecutionView, visible_history_law)
+      -> interaction visible-history-v0, imported,
+  (ExecutionView, generated_execution_law)
+      -> duplex-sponge-protocol-execution-v0,
+  (ExecutionView, replay_qualification_law)
+      -> duplex-sponge-replay-v0,
+  (ExecutionView, relation_run_view_issuance_law)
+      -> interaction run-view-issuance-v0, imported
+]
+```
+
+Every right-hand side is a `pir.semantic-law` declaration of this profile's
+catalog, or of the Interaction profile where marked imported, at its catalog
+ordinal.
 
 The profile-specific schema prevents Analysis from requesting canonical
 headers, namespaces, retries, or sampling failures from a duplex construction.
 It likewise prevents a canonical consumer from treating absent duplex fields
-as empty values.
+as empty values. The `CheckedDuplexFSConstructionResultRef` is live authority
+outside the body: it selects the result and is compared exactly at issuance,
+and the body-safe coordinate below carries the identities it commits to.
+
+This profile compiles its own source-authority subjects over exactly the two
+families it issues: the static views of this section (arm 0, family
+`"static-view"`, values tagged `StaticView(y)`) and the checked duplex
+construction result of Section 10 (arm 1, family
+`"checked-duplex-fs-construction"`, values tagged `CheckedConstruction(y)`),
+both under an explicit no-policy declaration. Each compiler is a function of
+the tagged family value; the identities of both families are formed by the
+Interaction page's `PIRStaticView*Id(PIRDuplexSpongeFSProfileId, x)`
+constructors, which select this profile's compilers and never apply
+`ProfiledSemanticId` to a family-local body. The consumer and purpose roles
+are the common Interaction role bodies applied with
+`PIRDuplexSpongeFSProfileId`; the path-step, atomic-boundary, and description
+bodies are those of the Interaction page.
+
+```text
+DuplexConstructionViewKindBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
+
+DuplexViewCoordinateBody(x) = R {
+  0: V(0, R{0:ContentRef(protocol_id)})
+   | V(1, R{0:ContentRef(transcript_construction_id),
+            1:DuplexConstructionViewKindBody(kind)})
+   | V(2, R{0:ContentRef(fresh_protocol_id),
+            1:ContentRef(fiat_shamir_protocol_id),
+            2:ContentRef(shared_core_id),
+            3:ContentRef(transcript_construction_id),
+            4:PIRDescriptionBody(result_schema)}),
+  1: ContentRef(x.semantic_language_profile_id)
+}
+
+DuplexFieldCoordinateBody(x) = R {
+  0: DuplexViewCoordinateBody(x.view_coordinate),
+  1: S[ PIRViewPathStepBody(step) ... ],
+  2: PIRViewAtomicBoundaryBody(x.boundary)
+}
+
+DuplexStaticViewBindingPayloadBody(x) = R {
+  0: DuplexViewCoordinateBody(x.coordinate),
+  1: S[ DuplexFieldCoordinateBody(c) ... ascending, no repeat ]
+}
+CheckedDuplexFSConstructionCheckerContractBody(x) = R {
+  0: ProfileDeclarationRefBody(x.operation),
+  1: ProfileDeclarationRefBody(x.law),
+  2: ProfileDeclarationRefBody(x.defects),
+  3: PIRDescriptionBody(x.result_schema)
+}
+CheckedDuplexFSConstructionBindingPayloadBody(x) = R {
+  0: ContentRef(x.fresh_protocol_id),
+  1: ContentRef(x.fiat_shamir_protocol_id),
+  2: ContentRef(x.shared_core_id),
+  3: ContentRef(x.transcript_construction_id),
+  4: PIRDescriptionBody(x.result_schema),
+  5: ContentRef(x.checker_contract) // = CheckedDuplexFSConstructionCheckerContractId
+}
+DuplexRequirementBody(x) = R {
+  0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)
+}
+DuplexNoPolicyBody(x) = R {
+  0: ContentRef(x.owner_profile_id)
+}
+DuplexClosureBody(x) = R {
+  0: ContentRef(x.binding_payload_id), 1: ContentRef(x.no_policy_id),
+  2: ContentRef(x.capability_requirement_id)
+}
+
+DuplexSourceBindingPayloadBody(x) =
+    V(0, DuplexStaticViewBindingPayloadBody(y))
+      if x = StaticView(y)
+  | V(1, CheckedDuplexFSConstructionBindingPayloadBody(y))
+      if x = CheckedConstruction(y)
+DuplexSourceCapabilityRequirementBody(x) =
+    V(0, DuplexRequirementBody(y)) if x = StaticView(y)
+  | V(1, DuplexRequirementBody(y)) if x = CheckedConstruction(y)
+DuplexSourceNoPolicyBody(x) =
+    V(0, DuplexNoPolicyBody(y)) if x = StaticView(y)
+  | V(1, DuplexNoPolicyBody(y)) if x = CheckedConstruction(y)
+DuplexSourcePolicyClosureBody(x) =
+    V(0, DuplexClosureBody(y)) if x = StaticView(y)
+  | V(1, DuplexClosureBody(y)) if x = CheckedConstruction(y)
+```
+
+`DuplexStaticViewSourceBinding` and the checked-construction binding of
+Section 10 are the `OwnerLocalSourceAuthorityBinding` values formed from
+these identities under their families.
 
 <!-- zkc-profile-source:duplex-sponge-fs-semantics:end -->
 

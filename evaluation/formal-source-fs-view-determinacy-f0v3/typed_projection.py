@@ -37,13 +37,6 @@ def _identifier(identifier: object, compiler: str) -> dict[str, str]:
     return raw_body(compiler, value)
 
 
-def _ordered_unique(values: list[dict[str, str]]) -> list[dict[str, str]]:
-    return sorted(
-        {json.dumps(value, sort_keys=True): value for value in values}.values(),
-        key=lambda value: json.dumps(value, sort_keys=True),
-    )
-
-
 def _scope(scope: object) -> dict[int, Any]:
     return record(
         ref("scope-ref-body-v0", scope.name),
@@ -56,6 +49,170 @@ def _scope(scope: object) -> dict[int, Any]:
     )
 
 
+def _value_type(k2: Any, core: object, value_ref: object) -> dict[str, str]:
+    if value_ref.kind is k2.RefKind.INPUT:
+        selected = tuple(item for item in core.inputs if item.name == value_ref.name)
+        if len(selected) != 1:
+            raise RuntimeError("typed fixture condition names another input")
+        sort = selected[0].value_sort
+    else:
+        selected = tuple(item for item in core.schedule if item.name == value_ref.name)
+        if len(selected) != 1:
+            raise RuntimeError("typed fixture condition names another occurrence")
+        occurrence = selected[0]
+        if occurrence.kind is k2.OccurrenceKind.CHALLENGE:
+            sort = k2.ValueSort.NAT
+        elif occurrence.kind is k2.OccurrenceKind.PROVER_MESSAGE:
+            sort = occurrence.prover_value_sort
+        else:
+            raise RuntimeError("typed fixture condition result type is not represented")
+    names = {
+        k2.ValueSort.BYTES: "Bytes",
+        k2.ValueSort.NAT: "Natural",
+        k2.ValueSort.BOOL: "Boolean",
+        k2.ValueSort.ORACLE: "Oracle",
+    }
+    return ref("value-type-body-v0", names[sort])
+
+
+def _scope_path(core: object, name: str) -> list[dict[str, str]]:
+    by_name = {item.name: item for item in core.scopes}
+    path: list[str] = []
+    current: str | None = name
+    while current is not None:
+        path.append(current)
+        current = by_name[current].parent
+    return [ref("scope-ref-body-v0", item) for item in reversed(path)]
+
+
+def _framed_occurrence(k2: Any, occurrence: object) -> bool:
+    return (
+        occurrence.guard.kind is not k2.PredicateKind.ALWAYS
+        or occurrence.kind
+        in {
+            k2.OccurrenceKind.PROVER_MESSAGE,
+            k2.OccurrenceKind.VERIFIER_MESSAGE,
+            k2.OccurrenceKind.ORACLE_PUBLISH,
+            k2.OccurrenceKind.ORACLE_QUERY,
+            k2.OccurrenceKind.ORACLE_ANSWER,
+        }
+        or (
+            occurrence.kind is k2.OccurrenceKind.CHALLENGE
+            and bool(occurrence.dependencies)
+        )
+    )
+
+
+def _static_atom(tag: int, payload: Any, required: bool) -> dict[int, Any]:
+    return record(variant(0, variant(tag, payload)), required)
+
+
+def _symbolic_draw(challenge: str) -> dict[int, Any]:
+    return record(
+        variant(1, ref("challenge-ref-body-v0", challenge)),
+        True,
+    )
+
+
+def _required_entries(k2: Any, core: object, construction: object, cid: Any, tid: Any) -> list[dict[int, Any]]:
+    challenges = [
+        (index, item)
+        for index, item in enumerate(core.schedule)
+        if item.kind is k2.OccurrenceKind.CHALLENGE
+    ]
+    action_tags = {
+        k2.OccurrenceKind.PROVER_MESSAGE: 6,
+        k2.OccurrenceKind.VERIFIER_MESSAGE: 7,
+        k2.OccurrenceKind.ORACLE_PUBLISH: 8,
+        k2.OccurrenceKind.ORACLE_QUERY: 9,
+        k2.OccurrenceKind.ORACLE_ANSWER: 10,
+    }
+    by_scope = {item.name: item for item in core.scopes}
+
+    def ancestry(scope: str) -> set[str]:
+        result: set[str] = set()
+        current: str | None = scope
+        while current is not None:
+            result.add(current)
+            current = by_scope[current].parent
+        return result
+
+    result: list[dict[int, Any]] = []
+    for challenge_index, challenge in challenges:
+        required_scopes = ancestry(challenge.scope)
+        entries = [
+            _static_atom(0, cid, True),
+            _static_atom(1, tid, True),
+            _static_atom(
+                2,
+                body(
+                    "protocol-declaration-ref-body-v0",
+                    construction.application_domain.hex(),
+                ),
+                True,
+            ),
+        ]
+
+        def add_scopes(open_before: str | None) -> None:
+            for scope in core.scopes:
+                if scope.open_before != open_before:
+                    continue
+                is_required = scope.name in required_scopes
+                entries.append(
+                    _static_atom(3, _scope_path(core, scope.name), is_required)
+                )
+                for binding in core.inputs:
+                    if (
+                        binding.scope == scope.name
+                        and binding.role is not k2.InputRole.VERIFIER_PRIVATE
+                    ):
+                        entries.append(
+                            _static_atom(
+                                4,
+                                ref("binding-ref-body-v0", binding.name),
+                                is_required,
+                            )
+                        )
+
+        add_scopes(None)
+        for index, occurrence in enumerate(core.schedule[: challenge_index + 1]):
+            add_scopes(occurrence.name)
+            if occurrence.guard.kind is not k2.PredicateKind.ALWAYS:
+                entries.append(
+                    _static_atom(
+                        5,
+                        ref("occurrence-ref-body-v0", occurrence.name),
+                        True,
+                    )
+                )
+            if occurrence.kind is k2.OccurrenceKind.CHALLENGE:
+                entries.extend(
+                    _static_atom(
+                        11,
+                        record(
+                            ref("challenge-ref-body-v0", occurrence.name),
+                            ordinal,
+                        ),
+                        index == challenge_index,
+                    )
+                    for ordinal, _dependency in enumerate(occurrence.dependencies)
+                )
+                if index < challenge_index:
+                    entries.append(_symbolic_draw(occurrence.name))
+            elif index < challenge_index and occurrence.kind in action_tags:
+                entries.append(
+                    _static_atom(
+                        action_tags[occurrence.kind],
+                        ref("occurrence-ref-body-v0", occurrence.name),
+                        True,
+                    )
+                )
+        result.append(
+            record(ref("challenge-ref-body-v0", challenge.name), entries)
+        )
+    return result
+
+
 def _canonical_values(k2: Any, core: object, construction: object, checked: object) -> dict[str, Any]:
     cid = _identifier(k2.core_id(core), "core-id-body-v0")
     tid = _identifier(k2.construction_id(core, construction), "transcript-construction-id-body-v0")
@@ -66,28 +223,14 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
             ref("occurrence-kind-body-v0", item.kind.value),
         )
         for index, item in enumerate(core.schedule)
+        if _framed_occurrence(k2, item)
     ]
     challenge_items = [
         (index, item)
         for index, item in enumerate(core.schedule)
         if item.kind is k2.OccurrenceKind.CHALLENGE
     ]
-    influence_entries: list[dict[int, Any]] = []
-    for index, challenge in challenge_items:
-        prior_atoms = []
-        for prior in core.schedule[:index]:
-            kinds = k2.required_influence_kinds(prior)
-            if kinds:
-                prior_atoms.append(
-                    record(
-                        ref("occurrence-ref-body-v0", prior.name),
-                        [ref("occurrence-kind-body-v0", kind) for kind in kinds],
-                        prior.guard.kind is not k2.PredicateKind.ALWAYS,
-                    )
-                )
-        influence_entries.append(
-            record(ref("challenge-ref-body-v0", challenge.name), prior_atoms)
-        )
+    influence_entries = _required_entries(k2, core, construction, cid, tid)
     additions = []
     for _index, challenge in challenge_items:
         names = [
@@ -102,15 +245,6 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
                 [ref("value-ref-body-v0", name) for name in names],
             )
         )
-    influence_kinds = _ordered_unique(
-        [
-            ref("occurrence-kind-body-v0", kind)
-            for item in core.schedule
-            for kind in k2.required_influence_kinds(item)
-        ]
-    )
-    if not influence_kinds:
-        raise RuntimeError("typed K2 fixture has no influence constructor")
     transcript = record(
         tid,
         cid,
@@ -121,7 +255,7 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
         algorithm_use(construction.version + ":absorb", "k2-absorb-contract-v1"),
         algorithm_use(construction.version + ":squeeze", "k2-squeeze-contract-v1"),
         algorithm_use(construction.version + ":advance", "k2-advance-contract-v1"),
-        body("canonical-value-body-v0", construction.application_domain.hex()),
+        body("protocol-declaration-ref-body-v0", construction.application_domain.hex()),
         ref("semantic-failure-type-body-v0", "SamplingExhausted"),
         law("canonical-framed", "canonical-framed-source-views-v0"),
         schedule,
@@ -129,38 +263,45 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
     influence = record(
         tid,
         cid,
-        influence_kinds,
         [_scope(scope) for scope in core.scopes],
         influence_entries,
         additions,
         law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
     )
+    rules = []
+    for position, item in challenge_items:
+        input_types = [ref("value-type-body-v0", "Bytes")]
+        input_types.extend(_value_type(k2, core, dependency) for dependency in item.dependencies)
+        rules.append(
+            record(
+                ref("challenge-ref-body-v0", item.name),
+                position,
+                record(
+                    algorithm_use("big-endian-rejection-accept-v1", "k2-accept-contract-v1"),
+                    input_types,
+                    ref("value-type-body-v0", "Boolean"),
+                ),
+                record(
+                    algorithm_use("big-endian-rejection-decode-v1", "k2-decode-contract-v1"),
+                    input_types,
+                    ref("value-type-body-v0", "Natural"),
+                ),
+                record(construction.sample_bytes, construction.max_attempts),
+            )
+        )
     transition = record(
         tid,
         cid,
         law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
-        record(
-            algorithm_use("big-endian-rejection-accept-v1", "k2-accept-contract-v1"),
-            [ref("value-type-body-v0", "Bytes"), ref("value-type-body-v0", "Natural")],
-            ref("value-type-body-v0", "Boolean"),
-        ),
-        record(
-            algorithm_use("big-endian-rejection-decode-v1", "k2-decode-contract-v1"),
-            [ref("value-type-body-v0", "Bytes"), ref("value-type-body-v0", "Natural")],
-            ref("value-type-body-v0", "Natural"),
-        ),
-        record(construction.sample_bytes, construction.max_attempts),
         law("canonical-framed", "canonical-framed-body-grammar-v0"),
         law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
         law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
         law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-        [
-            record(ref("challenge-ref-body-v0", item.name), index)
-            for index, item in challenge_items
-        ],
+        rules,
     )
     result = checked.result
     result_value = record(
+        body("runtime-schema-body-v0", "CheckedFSConstruction"),
         _identifier(result.source_protocol_id, "protocol-id-body-v0"),
         _identifier(result.target_protocol_id, "protocol-id-body-v0"),
         _identifier(result.shared_core_id, "core-id-body-v0"),
@@ -182,12 +323,13 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
             law("canonical-framed", "canonical-framed-same-core-construction-v0"),
         ),
     )
-    return {
+    values = {
         "CanonicalTranscriptDeclarationView": transcript,
         "CanonicalRequiredInfluenceView": influence,
-        "CanonicalChallengeTransitionView": transition,
         "CanonicalFSConstructionView": result_value,
     }
+    values["CanonicalChallengeTransitionView"] = transition
+    return values
 
 
 def _k2_raw(k2: Any, name: str, core: object, construction: object, checked: object) -> dict[str, Any]:
@@ -208,7 +350,15 @@ def _k2_raw(k2: Any, name: str, core: object, construction: object, checked: obj
             "version": construction.version,
             "initial_state": k2.INITIAL_TRANSCRIPT_STATE.hex(),
         },
-        "inputs": [item.name for item in core.inputs],
+        "inputs": [
+            {
+                "name": item.name,
+                "role": item.role.value,
+                "scope": item.scope,
+                "value_sort": item.value_sort.value,
+            }
+            for item in core.inputs
+        ],
         "scopes": [
             {"name": item.name, "parent": item.parent, "open_before": item.open_before}
             for item in core.scopes
@@ -217,8 +367,13 @@ def _k2_raw(k2: Any, name: str, core: object, construction: object, checked: obj
             {
                 "name": item.name,
                 "kind": item.kind.value,
+                "scope": item.scope,
+                "dependencies": [
+                    {"kind": ref_value.kind.value, "name": ref_value.name}
+                    for ref_value in item.dependencies
+                ],
                 "guard_nontrivial": item.guard.kind is not k2.PredicateKind.ALWAYS,
-                "influence_kinds": list(k2.required_influence_kinds(item)),
+                "prover_value_sort": item.prover_value_sort.value,
             }
             for item in core.schedule
         ],
@@ -349,8 +504,8 @@ def _duplex_values(construction: Any, construction_module: Any) -> dict[str, Any
         coverage_entries,
         [ref("occurrence-ref-body-v0", item.name) for item in messages],
         [ref("challenge-ref-body-v0", item.name) for item in challenges],
-        law("duplex-sponge", "duplex-sponge-source-views-v0"),
-        law("duplex-sponge", "duplex-sponge-source-views-v0"),
+        law("duplex-sponge", "duplex-sponge-prover-required-prefix-v0"),
+        law("duplex-sponge", "duplex-sponge-state-transition-v0"),
         [],
     )
     decoder_entries = [

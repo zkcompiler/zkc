@@ -35,10 +35,10 @@ F2O0_NOTE = (
 )
 
 AGGREGATE = "F0V2B2D2-A-FRESH-RUN-SCHEMA"
-PROFILE_DIGEST = "76cf68774060fbe667ce5f1a7d0b67de525449d8fad92b262c7fd4adfd9b6b79"
-PROFILE_BODY_SHA256 = "4272f9bb8285a84481da961c29cdc058aa7e4ce2411c7f73582a0149933d554d"
-SCHEMA_GRAMMAR_SHA256 = "af8c25ffcaf7967e2b9985699f8374bf5f16f55a91c18ce4253702598de582a3"
-SCHEMA_SOURCE_SHA256 = "f35c4517d6aa0482cb93e320ff54ad11cdb69c36b65e7fc52ae540e11adb419f"
+PROFILE_DIGEST = "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474"
+PROFILE_BODY_SHA256 = "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a"
+SCHEMA_GRAMMAR_SHA256 = "7a6d222d77a64b6a40fa6a0c52bc34548766a42d460321c90de004cb705eca9f"
+SCHEMA_SOURCE_SHA256 = "b795202b36554fb838efbbc253a7ccf32ab496bded4631b4f1e94153760d7843"
 
 
 class GateFailure(RuntimeError):
@@ -175,7 +175,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     _require(
         predecessor["aggregate"] == "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
         and predecessor["findings_sha256"]
-        == "6df7aa212836ddd9f4eb4f740167b9183a8e155c853cd3ee7e801f832e75e48a",
+        == "d17ec6ebcd6739ca69227237042447550b73b0096ced2d673987edeeca03b8bb",
         "D1 predecessor result drifted",
     )
     findings.append(
@@ -206,21 +206,35 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         _finding("b2d-family-pin", "Affirmative", "F0V2B2D2-A-FAMILY-PIN")
     )
 
-    target_lines = TARGET.read_text(encoding="utf-8").splitlines()
+    target_text = TARGET.read_text(encoding="utf-8")
+    target_lines = target_text.splitlines()
     required_lines = {
-        1091: "typed fixation marker",
-        1092: "domain_law",
-        1704: "first active terminal",
-        1758: "OracleReceipt =",
-        1767: "RunRecord(P) = {",
-        1777: "PartialRunRecord(P) = the exact prefix",
-        1791: "CompletedProtocolRecord(P) =",
-        1814: "PartialRunRecord(P)` is diagnostic execution data",
-        2128: "run_record_schema",
+        1113: "typed fixation marker",
+        1114: "domain_law",
+        1922: "first active terminal",
+        1976: "OracleReceipt =",
+        1992: "RunRecord(P) = {",
+        2004: "PartialRunRecord(P) = {",
+        2028: "CompletedProtocolRecord(P) =",
+        2083: "PartialRunRecord(P)` is diagnostic execution data",
+        2632: "run_record_schema",
     }
     _require(
         all(text in target_lines[line - 1] for line, text in required_lines.items()),
         "target receipt/outcome source lines drifted",
+    )
+    required_migrated_contracts = (
+        "A `Published` receipt for a `LogicalAccess` Oracle has an empty output",
+        "through the active terminal's occurrence inclusive",
+        "stopped_before: OccurrenceRef",
+        "`StrategyStopped` is not\na Core outcome",
+        "and not a completed record",
+        "run_record_schema: PIRRuntimeSchema",
+        "outcome_partition: PIRRuntimeSchema",
+    )
+    _require(
+        all(fragment in target_text for fragment in required_migrated_contracts),
+        "migrated Fresh receipt, partial-record, or outcome contracts drifted",
     )
     foundation_lines = FOUNDATION_TARGET.read_text(encoding="utf-8").splitlines()
     _require(
@@ -496,29 +510,29 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     findings.extend(
         (
             _finding(
-                "logical-fixation-receipt-placement-lines-1091-1092-and-1758-1765",
-                "CannotAnswer",
-                "F0V2B2D2-C-FIXATION-RECEIPT-PLACEMENT",
+                "logical-fixation-receipt-placement",
+                "Affirmative",
+                "F0V2B2D2-A-FIXATION-RECEIPT-PLACEMENT",
             ),
             _finding(
-                "terminal-receipt-prefix-lines-1704-and-1767-1775",
-                "CannotAnswer",
-                "F0V2B2D2-C-TERMINAL-RECEIPT-PREFIX",
+                "terminal-receipt-prefix",
+                "Affirmative",
+                "F0V2B2D2-A-TERMINAL-RECEIPT-PREFIX",
             ),
             _finding(
-                "partial-run-body-line-1777",
-                "CannotAnswer",
-                "F0V2B2D2-C-PARTIAL-RUN-BODY",
+                "partial-run-body",
+                "Affirmative",
+                "F0V2B2D2-A-PARTIAL-RUN-BODY",
             ),
             _finding(
-                "strategy-stopped-membership-lines-1791-1794-and-1814-1817",
-                "CannotAnswer",
-                "F0V2B2D2-C-OUTCOME-OWNER",
+                "strategy-stopped-membership",
+                "Affirmative",
+                "F0V2B2D2-A-OUTCOME-OWNER",
             ),
             _finding(
-                "execution-view-field-name-line-2128",
-                "CannotAnswer",
-                "F0V2B2D2-C-EXECUTION-FIELD-NAME",
+                "execution-view-field-name",
+                "Affirmative",
+                "F0V2B2D2-A-EXECUTION-FIELD-NAME",
             ),
             _finding("target-authority-untouched", "Affirmative", "F0V2B2D2-A-NONPUBLICATION"),
             _finding("general-core-derivation", "CannotAnswer", "F0V2B2D2-C-GENERAL-CORE"),

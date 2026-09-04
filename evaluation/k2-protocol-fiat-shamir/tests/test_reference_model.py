@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import FrozenInstanceError, replace
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import pickle
@@ -16,6 +17,31 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
 
 import reference_model as model  # noqa: E402
+
+
+def live_owner_compiled_profile(key: str) -> object:
+    """Compile one current owner profile without consulting the publication table."""
+
+    name = "_zkc_semantic_profile_publication_reference"
+    path = (
+        PACKAGE_ROOT.parent
+        / "semantic-profile-publication"
+        / "reference_model.py"
+    )
+    if name in sys.modules:
+        publication_model = sys.modules[name]
+    else:
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load semantic-profile compiler from {path}")
+        publication_model = importlib.util.module_from_spec(spec)
+        sys.modules[name] = publication_model
+        spec.loader.exec_module(publication_model)
+    return publication_model.compile_repository().profiles[key]
+
+
+def live_owner_profile(key: str) -> object:
+    return live_owner_compiled_profile(key).profile
 
 
 def completed(result: model.GenerationResult) -> model.RunRecord:
@@ -2358,6 +2384,7 @@ class OwnerIssuedViewContractTest(unittest.TestCase):
             tuple(item.binding_ref.input_name for item in baseline.view.entries),
             ("g", "q", "p", "session"),
         )
+        self.assertEqual(baseline.view.run_established, ())
         self.assertFalse(hasattr(baseline.source_binding, "invocation"))
         self.assertFalse(hasattr(baseline.view, "invocation"))
 
@@ -2490,9 +2517,874 @@ class OwnerIssuedViewContractTest(unittest.TestCase):
             )
         )
         self.assertNotEqual(
+            issued.source_binding.owner_policy_closure,
+            swapped.source_binding.owner_policy_closure,
+        )
+        self.assertEqual(
             issued.source_binding.owner_binding_payload,
             swapped.source_binding.owner_binding_payload,
         )
+        self.assertNotEqual(
+            issued.source_binding.capability_requirement.owner_requirement,
+            swapped.source_binding.capability_requirement.owner_requirement,
+        )
+
+    def test_canonical_static_payload_uses_owner_compiler_and_rejects_old_shapes(self) -> None:
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.EXECUTION,
+            (model.StaticViewField.EX_REPLAY,),
+        )
+        issued = self.assert_affirmative(
+            model.issue_execution_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                manifest,
+            )
+        )
+        assert type(issued) is model.IssuedPIRStaticView
+        profile = model.K2_SEMANTIC_PROFILES.transcript_fs
+        coordinate = issued.projection.coordinate
+        coordinate_body = model._canonical_static_view_coordinate_body(
+            coordinate,
+            issued.capability._source,
+        )
+        local_body = model.k1.DatumRecord(
+            (
+                (0, coordinate_body),
+                (
+                    1,
+                    model.k1.DatumSeq(
+                        tuple(
+                            model._static_view_field_coordinate_body(
+                                coordinate_body,
+                                coordinate.view_kind,
+                                field,
+                            )
+                            for field in issued.projection.manifest
+                        )
+                    ),
+                ),
+            )
+        )
+        expected_body = model.k1.DatumVariant(0, local_body)
+        expected_payload_id = model._authority_id(
+            profile,
+            "pir.source-binding-payload",
+            expected_body,
+        )
+        self.assertEqual(
+            issued.source_binding.owner_binding_payload,
+            expected_payload_id,
+        )
+
+        family = model.k1.Symbol("static-view")
+        consumer_role, _ = model._authority_role_id(
+            profile,
+            "pir.source-consumer",
+            family,
+            issued.capability.consumer_id,
+            "test consumer",
+        )
+        purpose_role, _ = model._authority_role_id(
+            profile,
+            "pir.source-purpose",
+            family,
+            issued.capability.purpose_id,
+            "test purpose",
+        )
+        consumer_ref = model._any_content_ref(consumer_role, "test consumer role")
+        purpose_ref = model._any_content_ref(purpose_role, "test purpose role")
+        expected_no_policy_id = model._authority_id(
+            profile,
+            "pir.source-no-policy",
+            model.k1.DatumVariant(
+                0,
+                model.k1.DatumRecord(
+                    (
+                        (
+                            0,
+                            model._any_content_ref(
+                                profile.identity,
+                                "test owner profile",
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+        expected_requirement_id = model._authority_id(
+            profile,
+            "pir.source-capability-requirement",
+            model.k1.DatumVariant(
+                0,
+                model.k1.DatumRecord(((0, consumer_ref), (1, purpose_ref))),
+            ),
+        )
+        expected_closure_id = model._authority_id(
+            profile,
+            "pir.source-policy-closure",
+            model.k1.DatumVariant(
+                0,
+                model.k1.DatumRecord(
+                    (
+                        (
+                            0,
+                            model._any_content_ref(
+                                expected_payload_id,
+                                "test payload",
+                            ),
+                        ),
+                        (
+                            1,
+                            model._any_content_ref(
+                                expected_no_policy_id,
+                                "test no-policy declaration",
+                            ),
+                        ),
+                        (
+                            2,
+                            model._any_content_ref(
+                                expected_requirement_id,
+                                "test capability requirement",
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+        binding = issued.source_binding
+        self.assertEqual(
+            binding.operation_policy.owner_no_policy_declaration,
+            expected_no_policy_id,
+        )
+        self.assertEqual(
+            binding.capability_requirement.owner_requirement,
+            expected_requirement_id,
+        )
+        self.assertEqual(binding.owner_policy_closure, expected_closure_id)
+
+        old_source_body = model.k1.DatumRecord(
+            (
+                (0, model.k1.Symbol(coordinate.owner_kind.value)),
+                (
+                    1,
+                    model.k1.DatumVariant(
+                        0,
+                        model._any_content_ref(coordinate.owner_id, "test owner"),
+                    ),
+                ),
+                (2, model.k1.Symbol(coordinate.view_kind.value)),
+                (
+                    3,
+                    model._any_content_ref(
+                        coordinate.semantic_profile_id,
+                        "test profile",
+                    ),
+                ),
+            )
+        )
+        old_untagged_body = model.k1.DatumRecord(
+            (
+                (0, model.k1.Symbol("pir")),
+                (1, family),
+                (2, old_source_body),
+                (
+                    3,
+                    model.k1.DatumSeq(
+                        tuple(
+                            model.k1.Symbol(field.value)
+                            for field in issued.projection.manifest
+                        )
+                    ),
+                ),
+                (4, consumer_ref),
+                (5, purpose_ref),
+            )
+        )
+        old_untagged_id = model._authority_id(
+            profile,
+            "pir.source-binding-payload",
+            old_untagged_body,
+        )
+        interaction_local = model._static_binding_payload_local_body(
+            issued.projection,
+            issued.capability._source,
+            model.PIRSourceOwnerCompiler.INTERACTION,
+        )
+        interaction_wrapped_id = model._authority_id(
+            profile,
+            "pir.source-binding-payload",
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.INTERACTION,
+                model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+                model.PIRSourceFamily.STATIC_VIEW,
+                interaction_local,
+            ),
+        )
+        self.assertNotEqual(
+            issued.source_binding.owner_binding_payload,
+            old_untagged_id,
+        )
+        self.assertNotEqual(
+            issued.source_binding.owner_binding_payload,
+            interaction_wrapped_id,
+        )
+
+    def test_checked_payload_uses_owner_checker_equation_and_rejects_local_coordinate(
+        self,
+    ) -> None:
+        checked = self.assert_affirmative(
+            model.check_fs_construction(
+                self.core,
+                self.core,
+                self.construction,
+            )
+        )
+        assert type(checked) is model.CheckedFSConstructionIssue
+        profile = model.K2_SEMANTIC_PROFILES.transcript_fs
+        catalogs = model.k1.profile_declaration_catalogs(profile)
+        expected_coordinates = (
+            (
+                "pir.evaluator-signature",
+                "canonical-framed-construction-check-v0",
+                1,
+            ),
+            (
+                "pir.semantic-law",
+                "canonical-framed-same-core-construction-v0",
+                3,
+            ),
+            (
+                "pir.failure-schema",
+                "canonical-framed-construction-defects-v0",
+                1,
+            ),
+        )
+        for kind, name, ordinal in expected_coordinates:
+            declaration = catalogs[kind].values[ordinal]
+            self.assertIs(type(declaration), model.k1.DatumRecord)
+            self.assertEqual(dict(declaration.fields)[0], model.k1.Symbol(name))
+
+        content_ref = model.k1.DatumVariant(
+            3, model.k1.DatumVariant(4, model.k1.UNIT)
+        )
+        reference = model.k1.DatumVariant(
+            3, model.k1.DatumVariant(7, model.k1.UNIT)
+        )
+        reference_pair = model.k1.DatumVariant(
+            0,
+            model.k1.DatumSeq(
+                (
+                    model.k1.DatumRecord(
+                        ((0, model.k1.Symbol("source")), (1, reference))
+                    ),
+                    model.k1.DatumRecord(
+                        ((0, model.k1.Symbol("target")), (1, reference))
+                    ),
+                )
+            ),
+        )
+        reference_map = model.k1.DatumVariant(2, reference_pair)
+        result_schema = model.k1.DatumVariant(
+            0,
+            model.k1.DatumSeq(
+                tuple(
+                    model.k1.DatumRecord(
+                        ((0, model.k1.Symbol(name)), (1, description))
+                    )
+                    for name, description in (
+                        ("source_protocol_id", content_ref),
+                        ("target_protocol_id", content_ref),
+                        ("shared_core_id", content_ref),
+                        ("transcript_construction_id", content_ref),
+                        ("occurrence_map", reference_map),
+                        ("value_map", reference_map),
+                        ("challenge_map", reference_map),
+                        (
+                            "conclusion",
+                            model.k1.DatumVariant(
+                                3, model.k1.DatumVariant(3, model.k1.UNIT)
+                            ),
+                        ),
+                    )
+                )
+            ),
+        )
+        self.assertEqual(result_schema, model._checked_fs_result_schema_body())
+        expected_contract_body = model.k1.DatumRecord(
+            (
+                (
+                    0,
+                    model.k1.profile_declaration_ref_datum(
+                        model.k1.ProfileLocalDeclarationRef(
+                            "pir.evaluator-signature", 1
+                        )
+                    ),
+                ),
+                (
+                    1,
+                    model.k1.profile_declaration_ref_datum(
+                        model.k1.ProfileLocalDeclarationRef("pir.semantic-law", 3)
+                    ),
+                ),
+                (
+                    2,
+                    model.k1.profile_declaration_ref_datum(
+                        model.k1.ProfileLocalDeclarationRef("pir.failure-schema", 1)
+                    ),
+                ),
+                (3, result_schema),
+            )
+        )
+        expected_contract_id = model._authority_id(
+            profile,
+            "pir.checker-contract",
+            expected_contract_body,
+        )
+        self.assertEqual(
+            profile.identity.carrier(),
+            "zkcidv0:foundation.semantic-language-profile:"
+            "4f3fe82bebe7fd1dc54edbfb220ba73067f8c0d68eb5ff7f61c5b6056af40852",
+        )
+        self.assertEqual(
+            expected_contract_id.carrier(),
+            "zkcidv0:pir.checker-contract:"
+            "448babeabf337b1daf7a0a276547cab5475221375a89a37f189ce58f5d5e9c3b",
+        )
+        self.assertEqual(
+            model.k1.encode_datum(
+                model._checked_construction_checker_contract_body(
+                    profile,
+                    model.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+                    result_schema,
+                )
+            ),
+            model.k1.encode_datum(expected_contract_body),
+        )
+        canonical_compiled = live_owner_compiled_profile(
+            "canonical-framed-fiat-shamir"
+        )
+        canonical_live_ordinals = tuple(
+            canonical_compiled.declaration_index[(kind, name)]
+            for kind, name, _ordinal in expected_coordinates
+        )
+        self.assertEqual(canonical_live_ordinals, (1, 3, 1))
+        self.assertEqual(
+            canonical_compiled.declaration_index[
+                ("pir.body-compiler", "checker-contract-body-v0")
+            ],
+            5,
+        )
+        self.assertIn(
+            model.k1.Symbol("pir.checker-contract"),
+            canonical_compiled.profile.supported_subject_kinds,
+        )
+        canonical_live_expected = model.k1.DatumRecord(
+            tuple(
+                (
+                    field,
+                    model.k1.profile_declaration_ref_datum(
+                        model.k1.ProfileLocalDeclarationRef(kind, ordinal)
+                    ),
+                )
+                for field, ((kind, _name, _), ordinal) in enumerate(
+                    zip(expected_coordinates, canonical_live_ordinals)
+                )
+            )
+            + ((3, result_schema),)
+        )
+        self.assertEqual(
+            model.k1.encode_datum(
+                model._checked_construction_checker_contract_body(
+                    canonical_compiled.profile,
+                    model.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+                    result_schema,
+                )
+            ),
+            model.k1.encode_datum(canonical_live_expected),
+        )
+        canonical_live_body_bytes = model.k1.encode_datum(
+            canonical_live_expected
+        )
+        self.assertEqual(len(canonical_live_body_bytes), 1871)
+        self.assertEqual(
+            hashlib.sha256(canonical_live_body_bytes).hexdigest(),
+            "f8f79c99a8e74702367b7bfa6fc0a7ccc16427282aae23f24666c0c2ceff97fb",
+        )
+        self.assertEqual(
+            model._checked_construction_checker_contract_id(
+                canonical_compiled.profile,
+                model.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+                result_schema,
+            ).carrier(),
+            "zkcidv0:pir.checker-contract:"
+            "ebe686d6fb48030f03b79f1cfe72994705c40ea2414afc59a44ff149b8dfd701",
+        )
+        result = checked.result
+        expected_local = model.k1.DatumRecord(
+            (
+                (0, model._any_content_ref(result.source_protocol_id, "source")),
+                (1, model._any_content_ref(result.target_protocol_id, "target")),
+                (2, model._any_content_ref(result.shared_core_id, "Core")),
+                (
+                    3,
+                    model._any_content_ref(
+                        result.transcript_construction_id,
+                        "construction",
+                    ),
+                ),
+                (4, result_schema),
+                (5, model._any_content_ref(expected_contract_id, "checker contract")),
+            )
+        )
+        expected_payload = model.k1.DatumVariant(1, expected_local)
+        observed_payload = model.compile_pir_source_subject_body(
+            model.PIRSourceOwnerCompiler.CANONICAL_FRAMED,
+            model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+            model.PIRSourceFamily.CHECKED_CONSTRUCTION,
+            model._checked_fs_binding_payload_local_body(result, profile),
+        )
+        self.assertEqual(
+            model.k1.encode_datum(observed_payload),
+            model.k1.encode_datum(expected_payload),
+        )
+        self.assertEqual(
+            checked.source_binding.owner_binding_payload,
+            model._authority_id(
+                profile,
+                "pir.source-binding-payload",
+                expected_payload,
+            ),
+        )
+
+        former_contract_id = model._authority_id(
+            profile,
+            "pir.fs-construction-checker-contract",
+            model.k1.DatumRecord(
+                ((0, model.k1.Symbol("bounded-check-fs-construction-v0")),)
+            ),
+        )
+        former_local = model.k1.DatumRecord(
+            expected_local.fields[:-1]
+            + ((5, model._any_content_ref(former_contract_id, "former checker")),)
+        )
+        former_payload = model.k1.DatumVariant(1, former_local)
+        self.assertNotEqual(
+            model.k1.encode_datum(observed_payload),
+            model.k1.encode_datum(former_payload),
+        )
+        self.assertNotEqual(
+            checked.source_binding.owner_binding_payload,
+            model._authority_id(
+                profile,
+                "pir.source-binding-payload",
+                former_payload,
+            ),
+        )
+        baseline = model.K2_SEMANTIC_PROFILES
+        without_checker_kind = replace(
+            baseline.transcript_fs,
+            supported_subject_kinds=tuple(
+                item
+                for item in baseline.transcript_fs.supported_subject_kinds
+                if item.value != "pir.checker-contract"
+            ),
+        )
+        changed = model.K2SemanticProfiles(
+            baseline.interaction,
+            without_checker_kind,
+            baseline.public_view,
+        )
+        self.assertIs(
+            model.check_fs_construction(
+                self.core,
+                self.core,
+                self.construction,
+                profiles=changed,
+                profile_support=model.make_k2_profile_support(changed),
+            ).kind,
+            model.QualifiedViewOutcomeKind.REFUSED,
+        )
+
+    def test_duplex_source_compilers_keep_static_and_checked_arms_distinct(self) -> None:
+        duplex_compiled = live_owner_compiled_profile(
+            "duplex-sponge-fiat-shamir"
+        )
+        duplex_profile = duplex_compiled.profile
+        protocol_id = model.protocol_id(
+            self.core,
+            self.construction,
+            model.ChallengeInterpretation.FIAT_SHAMIR,
+        )
+        coordinate_body = model.k1.DatumRecord(
+            (
+                (
+                    0,
+                    model.k1.DatumVariant(
+                        0,
+                        model.k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    model._any_content_ref(
+                                        protocol_id,
+                                        "duplex test Protocol",
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                ),
+                (
+                    1,
+                    model._any_content_ref(
+                        duplex_profile.identity,
+                        "duplex test profile",
+                    ),
+                ),
+            )
+        )
+        field_coordinate = model.k1.DatumRecord(
+            (
+                (0, coordinate_body),
+                (
+                    1,
+                    model.k1.DatumSeq(
+                        (model.k1.DatumVariant(0, model.k1.Nat(0)),)
+                    ),
+                ),
+                (2, model.k1.DatumVariant(4, model.k1.UNIT)),
+            )
+        )
+        local = model.k1.DatumRecord(
+            ((0, coordinate_body), (1, model.k1.DatumSeq((field_coordinate,))))
+        )
+        expected_payload_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.k1.DatumVariant(0, local),
+        )
+        compiled_payload_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+                model.PIRSourceFamily.STATIC_VIEW,
+                local,
+            ),
+        )
+        self.assertEqual(compiled_payload_id, expected_payload_id)
+
+        family = model.k1.Symbol("static-view")
+        role_coordinate = model.core_id(self.core)
+        consumer_role, _ = model._authority_role_id(
+            duplex_profile,
+            "pir.source-consumer",
+            family,
+            role_coordinate,
+            "duplex test consumer",
+        )
+        purpose_role, _ = model._authority_role_id(
+            duplex_profile,
+            "pir.source-purpose",
+            family,
+            role_coordinate,
+            "duplex test purpose",
+        )
+        old_untagged_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.k1.DatumRecord(
+                (
+                    (0, model.k1.Symbol("pir")),
+                    (1, family),
+                    (2, coordinate_body),
+                    (3, model.k1.DatumSeq((field_coordinate,))),
+                    (
+                        4,
+                        model._any_content_ref(
+                            consumer_role,
+                            "duplex test consumer role",
+                        ),
+                    ),
+                    (
+                        5,
+                        model._any_content_ref(
+                            purpose_role,
+                            "duplex test purpose role",
+                        ),
+                    ),
+                )
+            ),
+        )
+        interaction_coordinate = model.k1.DatumRecord(
+            (
+                (
+                    0,
+                    model.k1.DatumVariant(
+                        1,
+                        model.k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    model._any_content_ref(
+                                        protocol_id,
+                                        "Interaction test Protocol",
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                ),
+                (
+                    1,
+                    model._any_content_ref(
+                        duplex_profile.identity,
+                        "Interaction test profile",
+                    ),
+                ),
+            )
+        )
+        interaction_local = model.k1.DatumRecord(
+            (
+                (0, interaction_coordinate),
+                (
+                    1,
+                    model.k1.DatumSeq(
+                        (
+                            model.k1.DatumRecord(
+                                (
+                                    (0, interaction_coordinate),
+                                    (
+                                        1,
+                                        model.k1.DatumSeq(
+                                            (
+                                                model.k1.DatumVariant(
+                                                    0,
+                                                    model.k1.Nat(0),
+                                                ),
+                                            )
+                                        ),
+                                    ),
+                                    (
+                                        2,
+                                        model.k1.DatumVariant(
+                                            4,
+                                            model.k1.UNIT,
+                                        ),
+                                    ),
+                                )
+                            ),
+                        )
+                    ),
+                ),
+            )
+        )
+        interaction_wrapped_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.INTERACTION,
+                model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+                model.PIRSourceFamily.STATIC_VIEW,
+                interaction_local,
+            ),
+        )
+        self.assertNotEqual(compiled_payload_id, old_untagged_id)
+        self.assertNotEqual(compiled_payload_id, interaction_wrapped_id)
+
+        checker_coordinates = (
+            (
+                "pir.evaluator-signature",
+                "duplex-sponge-construction-check-v0",
+            ),
+            (
+                "pir.semantic-law",
+                "duplex-sponge-same-core-construction-v0",
+            ),
+            (
+                "pir.failure-schema",
+                "duplex-sponge-construction-defects-v0",
+            ),
+        )
+        checker_ordinals = tuple(
+            duplex_compiled.declaration_index[coordinate]
+            for coordinate in checker_coordinates
+        )
+        self.assertEqual(checker_ordinals, (1, 6, 1))
+        self.assertEqual(
+            duplex_compiled.declaration_index[
+                ("pir.body-compiler", "checker-contract-body-v0")
+            ],
+            5,
+        )
+        self.assertIn(
+            model.k1.Symbol("pir.checker-contract"),
+            duplex_profile.supported_subject_kinds,
+        )
+        result_schema = model._checked_duplex_fs_result_schema_body()
+        self.assertEqual(
+            tuple(
+                dict(field.fields)[0].value
+                for field in result_schema.payload.values
+            ),
+            (
+                "source_protocol_id",
+                "target_protocol_id",
+                "shared_core_id",
+                "transcript_construction_id",
+                "occurrence_map",
+                "value_map",
+                "challenge_map",
+                "instance_projection",
+                "construction_material_map",
+                "prover_schedule_correspondence",
+                "verifier_schedule_correspondence",
+                "conclusion",
+            ),
+        )
+        expected_checker_body = model.k1.DatumRecord(
+            tuple(
+                (
+                    field,
+                    model.k1.profile_declaration_ref_datum(
+                        model.k1.ProfileLocalDeclarationRef(
+                            coordinate[0],
+                            ordinal,
+                        )
+                    ),
+                )
+                for field, (coordinate, ordinal) in enumerate(
+                    zip(checker_coordinates, checker_ordinals)
+                )
+            )
+            + ((3, result_schema),)
+        )
+        observed_checker_body = model._checked_construction_checker_contract_body(
+            duplex_profile,
+            model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+            result_schema,
+        )
+        self.assertEqual(
+            model.k1.encode_datum(observed_checker_body),
+            model.k1.encode_datum(expected_checker_body),
+        )
+        duplex_checker_body_bytes = model.k1.encode_datum(
+            expected_checker_body
+        )
+        self.assertEqual(len(duplex_checker_body_bytes), 5243)
+        self.assertEqual(
+            hashlib.sha256(duplex_checker_body_bytes).hexdigest(),
+            "75eb2fe3aa516c17e0ae365df9bd8d4c7c218c7a8852ae39e1dc927ee5b64765",
+        )
+        checker_id = model._authority_id(
+            duplex_profile,
+            "pir.checker-contract",
+            expected_checker_body,
+        )
+        self.assertEqual(
+            checker_id.carrier(),
+            "zkcidv0:pir.checker-contract:"
+            "393ff59dfef32f77fee523fc0708dbe591c964369fb2b9461947ff93d9c83210",
+        )
+        core_id = model.core_id(self.core)
+        construction_id = model.construction_id(self.core, self.construction)
+        expected_checked_local = model.k1.DatumRecord(
+            (
+                (0, model._any_content_ref(protocol_id, "duplex source Protocol")),
+                (1, model._any_content_ref(protocol_id, "duplex target Protocol")),
+                (2, model._any_content_ref(core_id, "duplex shared Core")),
+                (
+                    3,
+                    model._any_content_ref(
+                        construction_id,
+                        "duplex transcript construction",
+                    ),
+                ),
+                (4, result_schema),
+                (5, model._any_content_ref(checker_id, "duplex checker contract")),
+            )
+        )
+        observed_checked_local = (
+            model._checked_construction_binding_payload_local_body(
+                protocol_id,
+                protocol_id,
+                core_id,
+                construction_id,
+                duplex_profile,
+                model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                result_schema,
+            )
+        )
+        self.assertEqual(
+            model.k1.encode_datum(observed_checked_local),
+            model.k1.encode_datum(expected_checked_local),
+        )
+        observed_checked_payload = model.compile_pir_source_subject_body(
+            model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+            model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+            model.PIRSourceFamily.CHECKED_CONSTRUCTION,
+            observed_checked_local,
+        )
+        expected_checked_payload = model.k1.DatumVariant(
+            1, expected_checked_local
+        )
+        self.assertEqual(
+            model.k1.encode_datum(observed_checked_payload),
+            model.k1.encode_datum(expected_checked_payload),
+        )
+        former_checker_id = model._authority_id(
+            duplex_profile,
+            "pir.fs-construction-checker-contract",
+            model.k1.DatumRecord(
+                ((0, model.k1.Symbol("bounded-check-fs-construction-v0")),)
+            ),
+        )
+        former_checked_local = model.k1.DatumRecord(
+            expected_checked_local.fields[:-1]
+            + (
+                (
+                    5,
+                    model._any_content_ref(
+                        former_checker_id,
+                        "former duplex checker",
+                    ),
+                ),
+            )
+        )
+        self.assertNotEqual(
+            model.k1.encode_datum(observed_checked_payload),
+            model.k1.encode_datum(model.k1.DatumVariant(1, former_checked_local)),
+        )
+
+        for subject_kind in model.PIRSourceSubjectKind:
+            self.assertEqual(
+                model.compile_pir_source_subject_body(
+                    model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                    subject_kind,
+                    model.PIRSourceFamily.STATIC_VIEW,
+                    local,
+                ),
+                model.k1.DatumVariant(0, local),
+            )
+            self.assertEqual(
+                model.compile_pir_source_subject_body(
+                    model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                    subject_kind,
+                    model.PIRSourceFamily.CHECKED_CONSTRUCTION,
+                    local,
+                ),
+                model.k1.DatumVariant(1, local),
+            )
+        with self.assertRaisesRegex(model.ModelError, "does not issue"):
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.INTERACTION,
+                model.PIRSourceSubjectKind.NO_POLICY,
+                model.PIRSourceFamily.CONFIDENTIAL_INITIAL_ORACLE,
+                local,
+            )
 
     def test_checked_fs_authority_refuses_reconstruction_and_wrong_purpose(self) -> None:
         checked = self.assert_affirmative(

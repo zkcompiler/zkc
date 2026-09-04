@@ -16,13 +16,13 @@ FORMAT = "zkc.formal-source-view-schema-f0v2b2b.source.v0"
 SCOPE = "interaction-r0-normalized-six-view-constructor-grammar"
 PROFILE = {
     "key": "interaction",
-    "revision": 0,
-    "profile_digest": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
-    "profile_body_sha256": "46a4b92b28962ace15009ca2a05ee26e92b0729fb6d7231fd46f3aa6735d1365",
+    "revision": 3,
+    "profile_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474",
+    "profile_body_sha256": "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a",
 }
 PREDECESSOR = {
     "census_format": "zkc.formal-source-constructor-closure-f0v2b2a.inventory.v0",
-    "census_sha256": "f258ac5527211f0fc2995fc0a6c2b179646b85d098c6498476e9b7e41ca114d8",
+    "census_sha256": "ed1a25db9b5b923b8e8f6ce0e0f2eab65e2ce3ca4c7b5fcd99a6307ed7c02392",
     "bounded_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686",
 }
 OUTER_KEYS = {

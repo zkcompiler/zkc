@@ -130,6 +130,11 @@ below are reader cross-references rather than inventory edges.
   committed ones as a checked Compiler transition, apply the canonical-framed
   construction, measure what rotates, and assign a coordinate to every premise
   of a BCS-style soundness statement under the named-premise intake.
+  The lane that ran it returns `CannotAnswer`, verdict bends: the finite
+  composition witness exists and its identity accounting holds, the existing
+  same-Core checker cannot yet run on the migrated carrier, and five
+  soundness premises lack coordinates; commitment opening is more than a
+  Query and Answer renaming.
 - [Compiler Transitions after the Migration](compiler-transitions/README.md)
   fixes what a checked transition must carry, source and target identities,
   an exact change record, a named transition relation, the property-relevant
@@ -178,6 +183,11 @@ below are reader cross-references rather than inventory edges.
   an identity split without a discriminator; it records the candidate
   repair, its sixteen-profile identity effect, the four gates behind it,
   and the F0-V2C decision gate at which alone the target may change.
+- [Schnorr Claim Binding Reopening Record](schnorr-claim-binding-reopening-2026-09-03.md)
+  records that the admitted Schnorr subject declares no claim while the
+  Relations attachment contract gives the initial claim its meaning, names
+  the fixture-side and contract-side repairs, recommends the first, and
+  routes the decision to the fixture refreeze after publication.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

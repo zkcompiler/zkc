@@ -1,42 +1,19 @@
 # Formal Assurance Architecture Research
 
 > **Kind:** Temporary cross-cutting research-program index
-> **State:** Active; first F0 architecture pass, bounded F1-R0 package/checker
-> pass, bounded F1-R1A target profile/source-basis pass, and one-slice F1-R1B
-> target carrier/admission pass complete at research resolution. F1-R1C0
-> returns `CannotAnswer` on exact owner-view source determinacy. Reopened F0-V1
-> confirms the selected repair topology through both publication compilers;
-> F0-V2A now selects and validates a bounded generic view-schema algebra.
-> F0-V2B0 then finds that the current six displays cannot be compiled
-> verbatim and selects normalized replacement bodies. F0-V2B1 now validates
-> the bounded normalized grammar and owner derivation. F0-V2B2A freezes the
-> 79-case constructor census, exact B1 delta, and four-stage B2 execution
-> topology. F0-V2B2B now supplies a constructor-complete candidate schema and
-> branch-inhabitance result. F0-V2B2C0 now supplies the canonical-byte,
-> immutable owner-admission substrate and exposes the predecessor handle's
-> ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
-> exposes a target-byte versus diagnostic-JSON ordering inversion.
-> F0-V2B2C1B1 through B2C1B4 validate owner-derived exact projections for
-> twenty of the twenty-one B2C isolation families across Foundation, Oracle,
-> Claim, Reduction, publication-order, joint-Challenge, shared-Challenge, and
-> semantic-module surfaces. F0-V2B2C1B5A selects a compact first-active guard-
-> region method for path-sensitive Claim flow, then B2C1B5B1 selects bounded
-> Terminal owner contracts for required-Check truth, required-Reduction
-> application, and Claim disposition. B2C1B5B2 now realizes that selection as
-> exact synthetic candidate bytes and all six owner views, closing 21 of 21
-> B2C isolation families at bounded research resolution. F0-V2B2D1 now
-> integrates all fourteen PCNode cases and all four PCClass cases across five
-> exact carriers, closing the static graph family at bounded resolution. The
-> B2D2 Fresh runtime/Oracle-receipt family and F0-V2C target migration remain
-> open. A 2026-09-03 program reassessment finds the provider side of the
-> bridge untested, classifies the Terminal repair as a main-design reopening,
-> and proposes an F2-O0 provider-observable audit before F0-V2C; that
-> proposal awaits the design lane's decision. F2-P0 now audits the five
-> missing property premises against the current Relations and Plan contracts:
-> the acyclic attachment grammar exists, but no exact relation, Plan, or
-> provider premise is selected for F1-R1B.
-> Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
-> feasibility programs, not selected product implementation
+> **State:** Active. The migrated PIR owner pages and manifests now carry the
+> selected Terminal and graph contracts, normalized owner-view bodies,
+> `PIRReference`, completed-record rules, and exact canonical-framed and duplex
+> law-field selections. The current non-publishing rehearsal re-pins the
+> bounded target, projection, graph, Fresh, Fiat--Shamir, provider-observable,
+> and migration regressions against that text. Two publication compilers agree
+> on the candidate identity cone: seventeen of eighteen profiles rotate and
+> `analysis-kernel` remains stable. Exact owner-view source determinacy is now
+> affirmative at bounded research resolution. Identity publication,
+> downstream source and implementation correspondence, general runtime
+> coverage, theorem applicability, and cryptographic claims remain open. A
+> separate review round and the current mechanization increment proceed in
+> their own lanes and are not adjudicated here.
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
 > or product-roadmap priority.
@@ -98,18 +75,31 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
-  -> F2-O2  provider interpretation, first attempt      [contract; after M3]
+  -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
+  -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
+  -> F0-V3C finite canonical-framed subject and executor [round two, Affirmative; one-shot subject added]
+  -> F2-O4  Fiat--Shamir provider interpretation         [complete, Affirmative; premise unpublished]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
   -> M2     term calculus and Schnorr denotation         [complete, CannotAnswer]
+  -> Terminal contract and must-fact mechanization       [complete, CannotAnswer]
+  -> Closed forward state mechanization (M4)             [complete, Affirmative; pins pre-repair text]
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
+  -> F0-V2C  migrated owner text                       [authored; publication gated]
+  -> F0-V2C1 freeze review of the migrated text         [round seven complete, Affirmative]
+  -> B2D2   Fresh completed-record schema               [revalidated against migrated text]
+  -> F0-V3  FS-family view determinacy                  [revalidated, Affirmative]
+  -> F0-V3B FS-family view bodies and cone              [absorbed into owner text]
+  -> F0-V2C  migrated owner text                       [source-closed; publication gated]
+  -> F0-V2C1 freeze review of the migrated text         [round seven complete, Affirmative]
+  -> F0-V2C2 holdout re-adjudication                    [complete, Affirmative; carrier corrected]
   -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
-  -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
-  -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
+  -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
+  -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
@@ -495,6 +485,87 @@ provider, extraction tool, or durable schema.
   partition; three sub-decisions compared at equal resolution with
   recommendations; the identity-pin question and the freeze scope stated
   as separate decisions; slots for the five outstanding lanes.
+- [`f0-v2c-migration-owner-text.md`](f0-v2c-migration-owner-text.md)
+  records the owner-text pass that applies the eight decisions on six pages
+  and eight manifests: both publication compilers agree on the migrated tree,
+  seventeen of eighteen profiles rotate, and identity publication remains the
+  user's gate. Subsequent repairs close the forward-state owner vocabulary and
+  `PIRReference`; the current family pages and revision-two manifests also
+  select the exact canonical-framed and duplex law declarations.
+- [`f0-v2c-refreeze-rehearsal.md`](f0-v2c-refreeze-rehearsal.md) records the
+  non-publishing package refreeze rehearsal, its semantic rebase onto the
+  closed owner text, the candidate identity delta, per-package outcomes, and
+  the exact publication-time work that must be repeated.
+- [`f0v2c1-migration-text-review.md`](f0v2c1-migration-text-review.md)
+  is the independent freeze review of the migrated text at its first head:
+  three of seven questions affirmative (public-coin graph wording, manifest
+  closure, publication-compiler agreement) and four negative, with exact
+  proposed replacements. The Terminal-contract and owner-closure repairs
+  (unguarded scope openings, defined guard accessors, the de Bruijn `Must`
+  environment, the admitted module-effect atom) were applied to the page, and
+  the second round closes all seven questions: every family-body field is
+  exact, the five deviations from the candidate packets are upheld, and the
+  aggregate is `Affirmative`. Round eight judges the cross-contract repairs
+  by the deep review's own reversal conditions: thirteen of sixteen
+  questions close, and three blockers remain at that head, completion
+  derivability, the executable model's source-authority preimage, and
+  setup-view uniqueness. Round nine, after those three repairs and the
+  checker-contract definition, closes all seventeen questions; the holdouts
+  keep their verdicts.
+- [`repaired-source-repin-and-framed-view-projection.md`](repaired-source-repin-and-framed-view-projection.md)
+  re-pins twenty-five source-pinning packages to the text repaired after the
+  deep review, projects the repaired setup, transition, and influence bodies
+  on their finite carriers, replays 108 runtime records independently, and
+  records the one underdetermination the projection found: an unframed
+  `Always` challenge had no schedule coordinate, repaired on the owner page
+  as a total-schedule position and an optional frame coordinate.
+- [`total-schedule-and-owner-compiled-source-authority.md`](total-schedule-and-owner-compiled-source-authority.md)
+  projects the total-schedule challenge position and the optional frame
+  coordinate in the finite executor and the family view packages, replaces
+  the executable model's untagged source-authority helper with the owner
+  profiles' compilers and tagged family values (with canonical and duplex
+  discriminators), re-pins the packages that rotate with it, and records
+  the one owner underdetermination the alignment found: the checked
+  construction's `checker_contract` content identity has no owner
+  definition.
+- [`checked-construction-checker-contract-and-family-cone.md`](checked-construction-checker-contract-and-family-cone.md)
+  forms the checked construction's checker contract in the executable model
+  through the owner equation now defined on both family pages, derives the
+  canonical and duplex identities with discriminators that reject the former
+  package-local coordinate, and re-pins the family cone: every in-scope
+  checkpoint check passes, and the two former `CannotAnswer` findings on the
+  checker identity and the source-authority alignment are affirmative.
+- [`mixed-challenge-multi-binding-end-to-end-pressure.md`](mixed-challenge-multi-binding-end-to-end-pressure.md)
+  carries the deep review's discriminating case, one admitted Core with a
+  Boolean and a three-valued challenge, two public bindings at one opening,
+  a guarded occurrence, and a two-rule construction, through admission, the
+  checker equation, ten owner views, both public-setup variants, Interface
+  admission with its replay-input refusal, exhaustive execution and
+  independent replay, and a finite six-lane outcome map: twenty-one findings
+  affirmative, two expected refusals, and, on the migration branch, four
+  Analysis-side holds that the stacked Analysis text is to absorb.
+- [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
+  is the independent cross-contract review of the stacked tree before its
+  first freeze, written on the closed heads: eight findings, seven of them
+  producer/consumer composition defects or underdeterminations that the
+  page-local rounds never asked (an unformable Interface failure type, two
+  preimage equations for one source subject kind, singleton Fiat--Shamir
+  view fields over heterogeneous challenge rules, two meanings of
+  `InfluenceAtom`, Analysis reads naming fields no owner body declares, a
+  setup quotient asked to contain run values, and a family-premise source at
+  the wrong kind), plus a design disagreement on the prose-pin reversal
+  test; its verdict is not to publish before the repairs.
+- [`f0v2c2-holdout-readjudication.md`](f0v2c2-holdout-readjudication.md)
+  re-adjudicates the five cold holdouts against the migrated Terminal
+  contract, views, and outcome partition: five fits, three breaks at the
+  recorded boundaries, no verdict disagreement with the record or the axes
+  matrix; two narrower findings are frozen, the earlier WHIR two-terminal
+  schedule is refused by the exact terminal-claim rule and the axes matrix's
+  interpretation-failure meaning is stale. The second round re-authors its
+  WHIR carrier under the page's deterministic scope openings, with both
+  Reductions guarded identically to the accepting terminal and one
+  unconditional fallback, covering all 32 check valuations with no verdict
+  change, and corrects the axis wording.
 - [`m1-mechanized-kernel-edges-and-canonicity.md`](m1-mechanized-kernel-edges-and-canonicity.md)
   records the second mechanization increment: PCGraph edge construction
   from an admitted Core in Lean reproduces all five D1 graph tables, decoder
@@ -508,6 +579,14 @@ provider, extraction tool, or durable schema.
   denotation is proved equal to its closed form; aggregate `CannotAnswer` only
   because the K1 oracle publishes no term-evaluation vectors (41 Affirmative,
   13 CannotAnswer findings).
+- [`m3-mechanized-terminal-contract.md`](m3-mechanized-terminal-contract.md)
+  proves universal first-active and portable-term must-fact soundness in core
+  Lean, proves the executable Terminal decision correct, and agrees with an
+  independent Python path on 24 normalized records. The exact projection
+  matches its predecessor, the WARPfold shape is admitted, and all five
+  integrated carriers expose a reusable-claim closure refusal; five exact
+  owner-text choices remain `CannotAnswer` (49 Affirmative, 21 CannotAnswer,
+  one Refused finding).
 - [`f2o1-integrated-provider-observable-audit.md`](f2o1-integrated-provider-observable-audit.md)
   repeats the provider-observable audit on the D1 integrated baseline:
   93 constructs, 32 sourced, 56 operational gaps and five premise gaps,
@@ -515,23 +594,26 @@ provider, extraction tool, or durable schema.
   `CannotAnswer`.
 - [`f0v2b2d2-fresh-run-schema.md`](f0v2b2d2-fresh-run-schema.md) closes
   the second B2D family at schema resolution: the Fresh completed-record
-  schema derives through typed and cold paths for all five D1 carriers, with
-  the fixation-marker placement, the partial-record body, and the
-  `StrategyStopped` lane recorded as target underdeterminations; no run is
-  executed.
+  schema derives through typed and cold paths for all five integrated
+  carriers. The later migrated owner text resolves the recorded fixation,
+  partial-record, strategy-stop, and outcome-shape source questions; the
+  retained package still executes no run or replay.
 - [`f0v3-fs-family-view-determinacy.md`](f0v3-fs-family-view-determinacy.md)
   audits the eight Fiat--Shamir family view bodies field by field: 37
   exact, 40 prose, 20 undefined; a bounded normalized grammar compiles
   through two paths and eleven owner obligations are named; aggregate
-  `CannotAnswer` for determinacy.
+  `CannotAnswer` for determinacy at that historical checkpoint. The migrated
+  family pages and manifests now absorb those obligations, and the retained
+  executable revalidates the current 95-field source plus exact law selection.
 - [`f0v3b-fs-family-view-bodies-and-cone.md`](f0v3b-fs-family-view-bodies-and-cone.md)
   supplies the eleven obligations' candidate bodies as migration input: eight
   family-local schemas compile identically through both schema compilers, the
   K2 and duplex inhabitable values agree byte for byte on typed and cold paths,
   twelve mutations refuse, and both publication compilers reproduce the cone
   (eleven profiles incremental to the common candidate, sixteen combined).
-  The candidate packets are exact proposals, not owner text; the original
-  obligations stay `CannotAnswer` until an owner adopts or rejects them.
+  Those packets remain historical proposal evidence; their selected contents
+  are now carried by the current owner pages and manifests rather than by
+  runtime overlays.
 - [`f0v2b2d3-integrated-six-view-projections.md`](f0v2b2d3-integrated-six-view-projections.md)
   derives all six normalized owner views for the five integrated carriers on
   typed and cold paths: thirty bodies agree and round-trip over a complete
@@ -556,12 +638,110 @@ provider, extraction tool, or durable schema.
   traces, the untrusted generator and independent checker, the residual trust
   list, and the acceptance rule; it follows the Terminal-contract
   mechanization and precedes applicability.
+- [`f2o2-provider-interpretation.md`](f2o2-provider-interpretation.md)
+  runs that contract once against the migrated Schnorr source: an untrusted
+  generator emits a VCVio sigma-protocol module whose commit and respond
+  fields are tied to the Plan's recipes by kernel-checked equations, and an
+  independent checker evaluates the five clauses on the complete finite
+  domain of 81 runs. Schedule, values, checks and guards, and traces are
+  affirmative; the terminal clause is `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`
+  because the contract asked for an image of every reachable lane and a
+  Boolean has none for `OperationalNoncompletion` except one it already
+  uses. A second round under the restated clause, run against the Analysis
+  owner text that adopts the packet, is affirmative on all five clauses
+  (`Affirmative/F2O2-A-FINITE-CORRESPONDENCE`), consumes the mechanized
+  first-active reading, and re-derives the certificate without sibling pins;
+  it is carried on the Analysis branch with the text it pins, and the
+  premise's formation waits on the declaration's publication.
+- [`f2o2-provider-carrier-decision-2026-09-03.md`](f2o2-provider-carrier-decision-2026-09-03.md)
+  decides what the attempt exposed: VCVio's carrier is a bare Boolean, the
+  owner page forbids relabeling a lane, and the Analysis premise cannot say
+  that a provider lacks a lane. It restates the contract's terminal clause as
+  agreement with the image of the source lane, proposes an explicit
+  `Unmodelled` lane image and a completion premise kind for the Analysis
+  owner text, and drafts the VCVio provider declaration; three items await
+  the owner's decision.
+- [`decision-review-packet-2026-09-03.md`](decision-review-packet-2026-09-03.md)
+  lists every decision now in owner text on the migration and Analysis
+  branches with the evidence it rests on and the counterexample that would
+  reverse it, grouped for an adversarial human pass, and restates the five
+  open decisions with their recommended answers.
+- [`f2o3-arklib-interpretation-entry-contract.md`](f2o3-arklib-interpretation-entry-contract.md)
+  fixes the second provider interpretation, in ArkLib at the revision the
+  receipt audit pins: the same five clauses against ArkLib's reduction
+  types, and the question the VCVio round never faced, which lanes a
+  provider models when its verdict is an option whose empty case two
+  producers reach; the lane derives the declaration from the execution
+  model and proposes it in the carrier packet's shape.
+- [`f2o3-arklib-interpretation.md`](f2o3-arklib-interpretation.md)
+  runs that contract once: an untrusted generator emits an ArkLib reduction
+  for the three-step specification with prover rounds tied to the Plan's
+  recipes by kernel-checked equations, and an independent checker decides
+  the five clauses on the complete finite domain, all affirmative
+  (`Affirmative/F2O3-A-FINITE-CORRESPONDENCE`, 81 verifier inputs, 81 honest
+  runs, 45 accepted and 36 rejected); the derived declaration is the closed
+  carrier `Option Unit` with modelled lanes `Accepted` and `Rejected`, the
+  challenge oracle carries a uniform draw over the challenge type, the
+  contract's two-producer premise is refused as a source correction, and the
+  provider-map premise stays `CannotAnswer` until the owner publishes a
+  declaration.
+- [`f0v3c-fs-runtime-entry-contract.md`](f0v3c-fs-runtime-entry-contract.md)
+  fixes the prerequisite of the first Fiat--Shamir provider interpretation:
+  one admitted transcript construction over the finite Schnorr Core with a
+  toy portable transition suite, the FS Protocol and its checked same-Core
+  construction, an executor and an independent replay of Sections 4, 6, 7,
+  and 9 over the whole finite domain with the six-lane partition and the
+  receipts, the execution view reproduced, and the challenge derivation
+  function exported as a table for the provider round that follows.
+- [`f2o4-fs-provider-interpretation-entry-contract.md`](f2o4-fs-provider-interpretation-entry-contract.md)
+  fixes the first Fiat--Shamir provider interpretation: ArkLib's transform of
+  the generated reduction with its abstract challenge oracle instantiated by
+  the migrated construction's derivation table, so that the claim is the
+  equality of oracle points, verdicts, and traces rather than of hash
+  outputs; it waits on the executor contract's table.
+- [`f0v3c-fs-runtime.md`](f0v3c-fs-runtime.md)
+  runs the executor contract once: five portable-term transition algorithms
+  and a same-Core candidate construction over the finite Schnorr Core, all
+  27 honest runs and 27 verifier inputs executed, independent replay agreeing
+  on all 54 with three exact-field mutations refused, the six-lane partition
+  measured (24 accepted, 24 rejected, six interpretation failures by
+  exhaustion after two draws), four construction views and the execution view
+  reproduced, nine derivation vectors frozen; aggregate
+  `CannotAnswer/F0V3C-C-FS-RUNTIME` because the canonical-framed page
+  recognizes the `pir.fs-application-domain` declaration kind while no page
+  defined its body; after the owner defined it as the companion page's
+  nominal declaration body, the package's second round re-admits the
+  construction as owner-determined and adds a one-shot construction (a
+  single always-accepted draw, 22 accepted and 32 rejected runs) beside the
+  retrying one, whose six exhaustion runs stay measured.
+- [`f2o4-fs-provider-interpretation.md`](f2o4-fs-provider-interpretation.md)
+  runs the Fiat--Shamir provider contract once: ArkLib's transform of the
+  generated Schnorr reduction with its abstract challenge oracle backed by the
+  executor's derivation table, all five clauses affirmative on the 54 runs of
+  the one-shot subject (`Affirmative/F2O4-A-FS-FINITE-CORRESPONDENCE`),
+  including the oracle-point clause, with superfluous, missing, and
+  differently framed queries refused as negatives and any point outside the
+  finite table refused; the retrying construction's six exhaustion runs are
+  reported as the unmodelled lane's occurrences; the provider-map premise
+  waits on the owner's declaration.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
   are authored unconditionally), and a sound linear extension through
   must-fact exactness, to be adopted only when a selected protocol needs a
   conditional required Reduction.
+- [`m4-mechanized-forward-state.md`](m4-mechanized-forward-state.md)
+  extends the mechanization to the closed Section 10: the amended must-fact
+  rules for the unnamed constructors and non-Boolean inputs, contradiction
+  normalization, the standalone impossible-region clause, and the closed
+  `Region`, `Implies`, `Disjoint`, `ClaimStatus`, and `LiveClaims` laws are
+  transcribed and proved (Region exactness for attemptedness and
+  Live/Dead soundness against the path-enumerating reference), all five of
+  the earlier underdeterminations close, the five integrated carriers keep
+  the reusable-claim refusal, and the aggregate is
+  `Affirmative/M4-A-FORWARD-STATE-SOUND`; it pins the text before the
+  claim-source region repair, so the two boundary helpers await its next
+  round.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,

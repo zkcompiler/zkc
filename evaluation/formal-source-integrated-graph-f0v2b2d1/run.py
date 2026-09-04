@@ -31,11 +31,11 @@ INVENTORY = ROOT / "evaluation/formal-source-constructor-closure-f0v2b2a/invento
 TARGET_SOURCE = ROOT / "docs-next/pir/interactive-core.md"
 
 AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
-PROFILE_DIGEST = "76cf68774060fbe667ce5f1a7d0b67de525449d8fad92b262c7fd4adfd9b6b79"
-PROFILE_BODY_SHA256 = "4272f9bb8285a84481da961c29cdc058aa7e4ce2411c7f73582a0149933d554d"
-GRAMMAR_SHA256 = "725ecb1fa099aa7490bc9c1012d4370c0a6a1b183aff6c11d8129f11e464be9a"
+PROFILE_DIGEST = "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474"
+PROFILE_BODY_SHA256 = "c2dee0bc0bef91610a16acf8587444c57663ec83a87a948a51f320b194381d4a"
+GRAMMAR_SHA256 = "f88b5a5e48046cf4e9079410dbb6ea572316aa51de175d2ed009f18ec6e48292"
 SCHEMA_SOURCE_SHA256 = (
-    "376cefb165ff92f0152856996a96ae02f7e04b9e6c679d01f85e10471c10ca41"
+    "c87b09d89ddbe92f8a6cdad8eae6bb0dbcfea6ed69e65e335e551efba0f6e03d"
 )
 EXPECTED_SCENARIOS = {
     "integrated-baseline": (91, 151, (55, 28, 5, 3), 49, 9, 0, 0, True),
@@ -284,7 +284,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     _require(
         predecessor["aggregate"] == "F0V2B2C1B5B2-A-EXACT-TERMINAL-OWNER-PROJECTIONS"
         and predecessor["findings_sha256"]
-        == "29efd6c48d7b0888710d52895ce232698a00db050812013dbb3ace771b44d2f9",
+        == "49e2260d0106fc65bf0f00d919045afc06cb32043cc27f13174de8101dda871c",
         "B5B2 predecessor result drifted",
     )
     findings.append(
@@ -317,6 +317,14 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     )
 
     target = TARGET_SOURCE.read_text(encoding="utf-8")
+    _require(
+        "PublishOracle with LogicalAccess:" in target
+        and "effect = Publish(activity); there is no output node" in target
+        and "the effect node of every Public Query together with the producer node"
+        in target
+        and "of its index" in target,
+        "migrated logical-publication or public-Query coordinates drifted",
+    )
     node_names = (
         "PublicInputNode",
         "VerifierPrivateInputNode",
@@ -724,13 +732,13 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
             ),
             _finding(
                 "logical-publication-transfer-wording",
-                "CannotAnswer",
-                "F0V2B2D1-C-LOGICAL-TRANSFER-WORDING",
+                "Affirmative",
+                "F0V2B2D1-A-LOGICAL-TRANSFER-WORDING",
             ),
             _finding(
                 "public-query-sink-coordinate-wording",
-                "CannotAnswer",
-                "F0V2B2D1-C-QUERY-SINK-WORDING",
+                "Affirmative",
+                "F0V2B2D1-A-QUERY-SINK-WORDING",
             ),
             _finding(
                 "target-profile-publication",

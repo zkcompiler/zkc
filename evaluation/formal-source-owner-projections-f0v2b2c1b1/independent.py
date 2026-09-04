@@ -20,7 +20,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 CODEC = ROOT / "evaluation/formal-source-view-codec-f0v2b2c1a/independent.py"
-PROFILE_DIGEST = "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87"
+PROFILE_DIGEST = "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474"
 
 
 class ColdProjectionError(ValueError):

@@ -1245,6 +1245,9 @@ def _source_authority_components(
     manifest_body: object,
     consumer_coordinate: object,
     purpose_coordinate: object,
+    *,
+    pir_owner_compiler: object | None = None,
+    pir_source_family: object | None = None,
 ) -> tuple[object, object, object, object, object, object]:
     family = k1.Symbol(_ascii(capability_family, "capability family"))
     owner_consumer_id = _source_authority_role_id(
@@ -1269,10 +1272,48 @@ def _source_authority_components(
         owner_purpose_id,
         "authority purpose role",
     )
-    payload_id = _source_authority_id(
-        profile,
-        f"{subject_namespace}.source-binding-payload",
-        k1.DatumRecord(
+    if subject_namespace == "pir":
+        if (
+            owner_domain != "pir"
+            or type(pir_owner_compiler) is not k2.PIRSourceOwnerCompiler
+            or type(pir_source_family) is not k2.PIRSourceFamily
+        ):
+            raise K3Error("PIR source authority selected no exact owner compiler")
+
+        def compile_body(subject_kind: object, local_body: object) -> object:
+            return k2.compile_pir_source_subject_body(
+                pir_owner_compiler,
+                subject_kind,
+                pir_source_family,
+                local_body,
+            )
+
+        payload_body = compile_body(
+            k2.PIRSourceSubjectKind.BINDING_PAYLOAD,
+            k1.DatumRecord(((0, source_body), (1, manifest_body))),
+        )
+        no_policy_body = compile_body(
+            k2.PIRSourceSubjectKind.NO_POLICY,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _source_authority_ref(
+                            profile.identity,
+                            "authority owner profile",
+                        ),
+                    ),
+                )
+            ),
+        )
+        requirement_body = compile_body(
+            k2.PIRSourceSubjectKind.CAPABILITY_REQUIREMENT,
+            k1.DatumRecord(((0, consumer_ref), (1, purpose_ref))),
+        )
+    else:
+        if pir_owner_compiler is not None or pir_source_family is not None:
+            raise K3Error("non-PIR authority cannot select a PIR source compiler")
+        payload_body = k1.DatumRecord(
             (
                 (0, k1.Symbol(owner_domain)),
                 (1, family),
@@ -1281,43 +1322,76 @@ def _source_authority_components(
                 (4, consumer_ref),
                 (5, purpose_ref),
             )
-        ),
-    )
-    no_policy_id = _source_authority_id(
-        profile,
-        f"{subject_namespace}.source-no-policy",
-        k1.DatumRecord(
+        )
+        no_policy_body = k1.DatumRecord(
             (
                 (0, family),
-                (1, _source_authority_ref(payload_id, "authority payload")),
+                (1, _source_authority_ref(
+                    _source_authority_id(
+                        profile,
+                        f"{subject_namespace}.source-binding-payload",
+                        payload_body,
+                    ),
+                    "authority payload",
+                )),
                 (2, k1.Symbol("owner-defines-no-additional-operation-policy")),
             )
-        ),
-    )
-    requirement_id = _source_authority_id(
-        profile,
-        f"{subject_namespace}.source-capability-requirement",
-        k1.DatumRecord(
+        )
+        requirement_body = k1.DatumRecord(
             (
                 (0, family),
-                (1, _source_authority_ref(payload_id, "authority payload")),
+                (1, _source_authority_ref(
+                    _source_authority_id(
+                        profile,
+                        f"{subject_namespace}.source-binding-payload",
+                        payload_body,
+                    ),
+                    "authority payload",
+                )),
                 (2, consumer_ref),
                 (3, purpose_ref),
                 (4, k1.Symbol("fresh-identical-bearer-capability")),
             )
-        ),
-    )
-    closure_id = _source_authority_id(
+        )
+    payload_id = _source_authority_id(
         profile,
-        f"{subject_namespace}.source-policy-closure",
-        k1.DatumRecord(
+        f"{subject_namespace}.source-binding-payload",
+        payload_body,
+    )
+    no_policy_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-no-policy",
+        no_policy_body,
+    )
+    requirement_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-capability-requirement",
+        requirement_body,
+    )
+    if subject_namespace == "pir":
+        closure_body = compile_body(
+            k2.PIRSourceSubjectKind.POLICY_CLOSURE,
+            k1.DatumRecord(
+                (
+                    (0, _source_authority_ref(payload_id, "authority payload")),
+                    (1, _source_authority_ref(no_policy_id, "no-policy declaration")),
+                    (2, _source_authority_ref(requirement_id, "capability requirement")),
+                )
+            ),
+        )
+    else:
+        closure_body = k1.DatumRecord(
             (
                 (0, family),
                 (1, _source_authority_ref(payload_id, "authority payload")),
                 (2, _source_authority_ref(no_policy_id, "no-policy declaration")),
                 (3, _source_authority_ref(requirement_id, "capability requirement")),
             )
-        ),
+        )
+    closure_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-policy-closure",
+        closure_body,
     )
     requirement = k1.OwnerCapabilityRequirement(
         k1.Symbol(owner_domain),
@@ -1353,6 +1427,55 @@ def _correspondence_read_datum(read: object) -> object:
 
 def _correspondence_manifest_body(reads: tuple[object, ...]) -> object:
     return k1.DatumSeq(tuple(_correspondence_read_datum(read) for read in reads))
+
+
+_INTERFACE_OWNER_FIELD_ORDINAL = MappingProxyType(
+    {
+        ProtocolInterfaceReadKind.INTERFACE_CODEC: 1,
+        ProtocolInterfaceReadKind.EXTERNAL_SLOT: 2,
+        ProtocolInterfaceReadKind.INVOCATION_ASSIGNMENT: 3,
+        ProtocolInterfaceReadKind.STATEMENT_MEMBER: 4,
+        ProtocolInterfaceReadKind.TRANSPORT_ENTRY: 5,
+    }
+)
+
+
+def _protocol_interface_owner_manifest_body(
+    reads: tuple[ProtocolInterfaceRead, ...],
+) -> object:
+    """Form the Interface owner payload's path-and-boundary manifest body."""
+
+    seen: dict[ProtocolInterfaceReadKind, int] = {}
+    coordinates: list[object] = []
+    for read in reads:
+        _interface_read_key(read)
+        ordinal = seen.get(read.kind, 0)
+        seen[read.kind] = ordinal + 1
+        boundary_arm = (
+            4
+            if read.kind is ProtocolInterfaceReadKind.INTERFACE_CODEC
+            else 3
+        )
+        coordinates.append(
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        k1.DatumSeq(
+                            (
+                                k1.DatumVariant(
+                                    0,
+                                    k1.Nat(_INTERFACE_OWNER_FIELD_ORDINAL[read.kind]),
+                                ),
+                                k1.DatumVariant(2, k1.Nat(ordinal)),
+                            )
+                        ),
+                    ),
+                    (1, k1.DatumVariant(boundary_arm, k1.UNIT)),
+                )
+            )
+        )
+    return k1.DatumSeq(tuple(coordinates))
 
 
 def _canonical_interface_reads(
@@ -1551,12 +1674,12 @@ def _interface_view_authority_components(
         "pir",
         "pir",
         "interface-correspondence-view",
-        k1.DatumRecord(
-            ((0, _id_datum(view.protocol_interface_id, "pir.protocol-interface")),)
-        ),
-        _correspondence_manifest_body(view.requested_reads),
+        _id_datum(view.protocol_interface_id, "pir.protocol-interface"),
+        _protocol_interface_owner_manifest_body(view.requested_reads),
         consumer_coordinate,
         purpose_coordinate,
+        pir_owner_compiler=k2.PIRSourceOwnerCompiler.INTERFACE_PLAN,
+        pir_source_family=k2.PIRSourceFamily.INTERFACE_VIEW,
     )
 
 

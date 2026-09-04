@@ -108,6 +108,29 @@ Run the gate from the repository root:
 python3 -B evaluation/k3-dependent-surfaces/run.py --check
 ```
 
+## PIR source-authority alignment
+
+The Interface correspondence-view route now forms all four `pir.source-*`
+subjects through arm 0 of the Interface/Plan profile's bound compilers. Its
+binding payload is the owner record containing the exact Interface ID and the
+closed sequence of path-and-boundary coordinates. Its requirement,
+no-policy, and closure bodies use the same owner profile and the common PIR
+consumer and purpose roles. The resulting authority identities changed
+because the model now applies the owner equation instead of the former generic
+six-field helper.
+
+The shared helper keeps the existing Relations-owned equations for
+`relations.source-*` subjects; those are a different namespace and were not
+rewritten as PIR subjects. The finite Interface manifest maps the represented
+top-level read kinds and their selected elements to owner path steps. It is a
+bounded carrier check, not the durable recursive Interface field resolver.
+
+The imported protocol profile also carries the canonical checked-construction
+declaration catalog and owner-derived checker-contract equation. This package
+rederives identities from that profile but forms no checked-construction
+binding of its own; the executable byte-level checked-payload discriminators
+remain in the protocol package.
+
 ## Evidence boundary
 
 Passing the 50-test gate demonstrates only the finite positive and mutation
