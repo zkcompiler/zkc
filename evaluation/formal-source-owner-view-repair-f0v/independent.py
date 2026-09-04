@@ -61,6 +61,7 @@ ROTATED_PROFILES = (
     "analysis-cryptographic-property",
     "analysis-incremental-composition",
     "analysis-incremental-composition-source-validation",
+    "analysis-kernel",
     "canonical-framed-fiat-shamir",
     "commitment-opening",
     "duplex-sponge-fiat-shamir",
@@ -74,7 +75,7 @@ ROTATED_PROFILES = (
     "relations",
     "verifier-derived-query-plan",
 )
-STABLE_PROFILES = ("analysis-kernel",)
+STABLE_PROFILES: tuple[str, ...] = ()
 BASELINE_IDENTITIES = ROOT / "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json"
 SCHEMA_ORDER = (
     "public-binding-view-v0",

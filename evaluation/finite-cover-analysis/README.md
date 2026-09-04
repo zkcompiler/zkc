@@ -26,6 +26,18 @@ The package contains three intentionally separate components:
    exact operation binding, Nat64 boundary falsifiers, and stream/candidate
    mutations.
 
+The fixed-extractor Analysis goal now carries exactly the relation-predicate
+and witness-type named-premise bindings. Its hypothesis context remains empty:
+named premises are goal inputs, not hypothesis nodes. The support and judgment
+derive and retain exactly the same two premise IDs. Missing or extra bindings,
+a same-kind coordinate swap, and an exact-subject scope mismatch all stop at
+premise intake before the finite arithmetic executes.
+
+The pair's executable `ExactSubjectsOnly` scope includes the fixed extractor
+named by the question. Both premise bodies are freshly formed over that exact
+subject sequence, matching the migrated owner scope rather than reusing the
+relation question's shorter-scope premise identities.
+
 The finite stream exhausts the 308 accepted quotient representatives. The raw
 `Nat64` universal is not inferred from a few lifted examples: a separate
 quotient-factorization certificate authenticates the exact raw predicate,
@@ -44,7 +56,7 @@ The exact checked conclusion is only that the selected response-difference
 portable extractor succeeds on every member of this one exact bounded pair
 domain. The result does not establish generic special soundness, extractor
 efficiency, asymptotic behavior, knowledge soundness, Fiat--Shamir security,
-ROM security, or QROM security.
+ROM security, QROM security, premise truth, or owner adoption.
 
 Run the bounded gate with:
 

@@ -68,15 +68,18 @@
   ],
   "metrics": {
     "aggregate": "MIGRATION-H-NO-PUBLICATION",
+    "analysis_branch_rotated_profiles": 6,
     "findings": 13,
     "interaction_digest": "0af785eb8159ca2182843c62f72898e3c17266c5a7d9b317cfe2ae463d840474",
     "legacy_profile_controls": 6,
+    "migration_rotated_profiles": 17,
+    "migration_stable_profiles": 1,
     "owner_pages": 6,
     "owner_view_cases": 13,
     "profile_manifests": 8,
     "profiles": 18,
-    "rotated_profiles": 17,
-    "stable_profiles": 1,
+    "rotated_profiles": 18,
+    "stable_profiles": 0,
     "target_core_cases": 27
   }
 }

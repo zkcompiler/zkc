@@ -88,16 +88,34 @@ def verify(report: Mapping[str, Any]) -> dict[str, Any]:
         raise IndependentError("identity table differs from the indexed manifest graph")
     if not publication["compiler_agreement"]:
         raise IndependentError("report does not retain dual-compiler agreement")
-    if len(publication["rotated_profiles"]) != 17:
-        raise IndependentError("reported rotation is not seventeen profiles")
-    if publication["stable_profiles"] != ["analysis-kernel"]:
-        raise IndependentError("analysis-kernel is not the sole stable profile")
+    if len(publication["rotated_profiles"]) != 18:
+        raise IndependentError("Analysis-head rotation is not eighteen profiles")
+    if publication["stable_profiles"]:
+        raise IndependentError("Analysis head unexpectedly leaves a stable profile")
+    migration_table = publication["migration_identity_table"]["profiles"]
+    if set(migration_table) != set(manifests):
+        raise IndependentError("migration-head identity table differs from the index")
+    if len(publication["migration_rotated_profiles"]) != 17:
+        raise IndependentError("migration-head rotation is not seventeen profiles")
+    if publication["migration_stable_profiles"] != ["analysis-kernel"]:
+        raise IndependentError(
+            "analysis-kernel is not the migration head's sole stable profile"
+        )
+    if publication["analysis_branch_rotated_profiles"] != [
+        "analysis-kernel",
+        "analysis-cryptographic-property",
+        "analysis-afk-transport",
+        "analysis-afk-theorem-source-validation",
+        "analysis-incremental-composition",
+        "analysis-incremental-composition-source-validation",
+    ]:
+        raise IndependentError("Analysis branch rotation cone differs")
     interaction_cone = _interaction_cone(manifests)
     if len(interaction_cone) != 16:
         raise IndependentError("raw import graph does not have a sixteen-profile Interaction cone")
-    if not interaction_cone <= set(publication["rotated_profiles"]):
+    if not interaction_cone <= set(publication["migration_rotated_profiles"]):
         raise IndependentError("one Interaction-dependent profile failed to rotate")
-    if "oir-endpoint-graph" not in publication["rotated_profiles"]:
+    if "oir-endpoint-graph" not in publication["migration_rotated_profiles"]:
         raise IndependentError("the independent endpoint graph did not rotate")
     if not all(publication["legacy_profile_refusals"].values()):
         raise IndependentError("one legacy profile refusal control failed")
@@ -136,6 +154,15 @@ def verify(report: Mapping[str, Any]) -> dict[str, Any]:
         "interaction_cone": len(interaction_cone),
         "rotated_profiles": len(publication["rotated_profiles"]),
         "stable_profiles": len(publication["stable_profiles"]),
+        "migration_rotated_profiles": len(
+            publication["migration_rotated_profiles"]
+        ),
+        "migration_stable_profiles": len(
+            publication["migration_stable_profiles"]
+        ),
+        "analysis_branch_rotated_profiles": len(
+            publication["analysis_branch_rotated_profiles"]
+        ),
         "owner_pages": len(source_inventory["owner_pages"]),
         "profile_manifests": len(source_inventory["profile_manifests"]),
         "legacy_profile_controls": len(publication["legacy_profile_refusals"]),

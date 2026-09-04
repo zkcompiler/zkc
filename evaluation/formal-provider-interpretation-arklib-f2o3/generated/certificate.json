@@ -1,0 +1,256 @@
+{
+  "authority": "none; untrusted generator output",
+  "format": "zkc.formal-provider-interpretation.arklib.certificate.v0",
+  "inputs": {
+    "algorithms": {
+      "check": {
+        "identity": "zkcidv0:foundation.portable-algorithm:86a47a88f56ed94a258b1e8215ec9b4f4537265f435bf32f7569d05f725722df",
+        "preimage_length": 179147,
+        "preimage_sha256": "4a89ff48f38c213b93cacd4f31819804de7f898b7b836b9cf12b3776e219abbd"
+      },
+      "guard": {
+        "identity": "zkcidv0:foundation.portable-algorithm:aa07d7da5eae94db0a943c1c653d2450d18b6d5b9b501bdfeb9cbfe836548be6",
+        "preimage_length": 766,
+        "preimage_sha256": "0ea838ec2c6a5e58d9237c57622ebd7de59ca1c6d4d9386ab8c1044567744521"
+      }
+    },
+    "candidates": {
+      "algebra": {
+        "carrier_identification": "the fixture uses the same Z3 carrier for scalars and additive-group elements",
+        "generator": 1,
+        "group_carrier": "Z/3Z",
+        "group_operation": "(u + v) mod 3",
+        "group_order": 3,
+        "relation": "Y = x . G",
+        "scalar_action": "s . g = (s*g) mod 3 by repeated addition",
+        "scalar_carrier": "Z/3Z",
+        "scalar_modulus": 3
+      },
+      "plan": {
+        "commit": {
+          "formula": "A := r",
+          "input_kinds": [
+            "PrivateRandomness"
+          ],
+          "state_binding": "ReplaceState"
+        },
+        "decision_order": [
+          0,
+          2
+        ],
+        "respond": {
+          "challenge_occurrence": 1,
+          "formula": "z := r + c*x mod 3",
+          "input_kinds": [
+            "StateBefore",
+            "PlanRead",
+            "PrivateMaterial"
+          ],
+          "state_binding": "KeepState"
+        }
+      },
+      "private_state": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
+      "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+      "published_candidate_bodies_sha256": "cd9935dfa7d97266a3ffb0bf24765064fb449e8ef51e12b53a404127d9620a63",
+      "relation": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
+      "witness": "x in Z/3Z supplied by Plan WitnessIngress key x"
+    },
+    "carriers": {
+      "active_view_manifest_sha256": {
+        "ClaimReductionView": "26fbaf90268be4c85122c25ea127260a1ccd5dcc69a3618207ef96eea5aab3ea",
+        "EffectView": "30a625ebc9386a57739273a9fbf6104c7416c8fbc308b4ac1197b13e71f56e17",
+        "ExecutionView": "4efcb4e5ab900e77e91b73e99861b40e56d2393de3d9314c058ac4078b8451da",
+        "PublicBindingView": "571b5571550576ad112ac2b96abdf5901c6bd6be90392f3e16d4cc5bdcc01a08",
+        "PublicCoinView": "337744a4db26cfb36cdb354b38df312bba8deb73bc090a53a4ba7030bc7cd5ba",
+        "StrategyDecisionView": "69923cb847884fb7589501f07b04fc1ab251a261ee6316963b441008ed2d1785"
+      },
+      "core_profiled_body_sha256": "cd95af28879446ec0c896a16a248e27d5505b25128ee0501f8d946d334b2caa7",
+      "protocol_profiled_body_sha256": "b10aa4026ffb95be06b4acd2be4a4cd8c2d7f61cbaa0607b5a7948f87a12396f",
+      "view_schema_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    "owner_pages": {
+      "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
+      "docs-next/analysis/cryptographic-properties.md": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
+      "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"
+    },
+    "package_inputs": {
+      "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "b6046e72fc3bb766c1af690cf7b39d9765dca3681c87d47e75f3109611123b69",
+      "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json": "bafdabbf36df10d09df478cbaa524ce88e0f6e6f0ffd0843c169a3eab4154b62",
+      "evaluation/formal-provider-interpretation-arklib-f2o3/TermEvaluatorProbe.lean": "b726117edae432b86ddde9b3270416791d4e253f85424a4f99c6615d5c3feb80",
+      "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    "profile_manifests": {
+      "docs-next/analysis/profiles/cryptographic-property.json": "60adb5568522e374872ff2df1d5001d07819519f60a1c654e54f7b93e1d74a1d",
+      "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
+      "docs-next/foundation/semantic-profile-manifests.json": "48e487f34c24317690dd221c066db1a0a09316dfb45f1d06934c5dfe74b058d0",
+      "docs-next/pir/profiles/interaction.json": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4"
+    }
+  },
+  "lane_map": [
+    {
+      "lane": "Accepted",
+      "provider_lane_image": {
+        "case": "Image",
+        "value": "some ()"
+      }
+    },
+    {
+      "lane": "Rejected",
+      "provider_lane_image": {
+        "case": "Image",
+        "value": "none"
+      }
+    },
+    {
+      "lane": "Aborted",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "StrategyStopped",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "OperationalNoncompletion",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    }
+  ],
+  "lean_sha256": "c2cdfa46a46fc5f87c8d71acc7786d161d97fb296878e4d094cdbbc7f9973f09",
+  "occurrence_to_step": [
+    {
+      "actor": "Prover",
+      "effect": "ProverMessage",
+      "occurrence": 0,
+      "step": "commit"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Challenge",
+      "occurrence": 1,
+      "step": "challenge"
+    },
+    {
+      "actor": "Prover",
+      "effect": "ProverMessage",
+      "occurrence": 2,
+      "step": "respond"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Check",
+      "occurrence": 3,
+      "step": "verify"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Terminal",
+      "occurrence": 4,
+      "step": "accept"
+    },
+    {
+      "actor": "Verifier",
+      "effect": "Terminal",
+      "occurrence": 5,
+      "step": "reject"
+    }
+  ],
+  "provider": {
+    "closed_carrier": {
+      "canonical_values": [
+        "none",
+        "some ()"
+      ],
+      "schema": "Option Unit"
+    },
+    "definition": "Reduction.verdict",
+    "dependency_revision": "cbd4144b51d92da00dd50f05e068b2348fa6e529",
+    "dependency_tree": "28c268057ed58427973e5bbf4854d472a7088954",
+    "git_tree": "e38383088598a1305c15447c53db309ccd6b35ee",
+    "modelled_lanes": [
+      "Accepted",
+      "Rejected"
+    ],
+    "module": "ArkLib.OracleReduction.Execution",
+    "name": "ArkLib",
+    "prover_run_carrier": "OracleComp (FullTranscript x Unit x Unit)",
+    "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+    "source_sha256": {
+      "ArkLib/OracleReduction/Basic.lean": "b36288c073ad52ccfa8597a8caf4f1b414b4710534da397d0b4b81aef1d892b6",
+      "ArkLib/OracleReduction/Execution.lean": "1c505e3d217ab21f3d9a88b0e8172f1fc9baf12f0bd16cadd97299e17964e297",
+      "ArkLib/OracleReduction/ProtocolSpec/Basic.lean": "d48bfee16c67ef12ac92b307f8f814abeaa8bc5e2fa0711678252bac1d89fb4c",
+      "lake-manifest.json": "25e545bb447c1f4e0bc1d55ffb17813ae58f9abd0c7cb48273186e0e5fd367a5",
+      "lean-toolchain": "efac0b94923b2d8b6840cd35be9177ad0fc5ab2332f4f4311c98712cee92fdee"
+    },
+    "toolchain": "leanprover/lean4:v4.31.0",
+    "verifier_run_carrier": "OptionT (OracleComp) Unit"
+  },
+  "question": "Does this generated ArkLib Reduction operationally correspond to the admitted finite Schnorr Fresh Protocol under all five contract clauses?",
+  "subject": {
+    "active_leaf_counts": {
+      "ClaimReductionView": 1,
+      "EffectView": 68,
+      "ExecutionView": 32,
+      "PublicBindingView": 10,
+      "PublicCoinView": 180,
+      "StrategyDecisionView": 38
+    },
+    "body_sha256": {
+      "ClaimReductionView": "edc9e9d0ef0c4c9b80cfd5149124420c631728345d60e1e34f031dbe236797ee",
+      "EffectView": "239e6fbd9d4304eb5eef4c17327bb024bbe39cc842e00a076332db75231e5c49",
+      "ExecutionView": "3ff579a58ea436941981f9ea94ba925a48e0ecbe2b573c10fd32eec15f03e8ff",
+      "PublicBindingView": "08c8bd418857c23dfa51f1d9087ab0a2a386e38a73c6251f1f39906112501b7f",
+      "PublicCoinView": "8185f8906053dc9c18d03a5415440169bdb5ca958fae685da2856d6edd8c4f91",
+      "StrategyDecisionView": "4e5e7615aae3c31aea434bce89d125d26ed22b983bbb8c1e8e8482492a4e4cef"
+    },
+    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
+    "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+    "source_digest": "c03b6e9b53871a95605310a3c89288dff95ff1d99c725faf4995ccbdd1e3d84a"
+  },
+  "type_map": [
+    {
+      "carrier": "ZMod 3",
+      "provider": "StmtIn",
+      "source": "PublicBindingView.public_inputs[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "WitIn",
+      "source": "RelationInterface.private_witness[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "round 0",
+      "source": "EffectView.occurrences[0].outputs[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "Memory.nonce",
+      "source": "ProverPlan.persistent_state[0]"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "round 1",
+      "source": "PublicCoinView.challenges[0].value_type"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "round 2",
+      "source": "EffectView.occurrences[2].outputs[0]"
+    },
+    {
+      "carrier": "Bool",
+      "provider": "verifier predicate",
+      "source": "EffectView.occurrences[3].outputs[0]"
+    },
+    {
+      "carrier": "Option Unit",
+      "provider": "Reduction.verdict",
+      "source": "ExecutionView.terminals"
+    }
+  ]
+}

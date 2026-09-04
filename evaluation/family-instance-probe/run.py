@@ -46,7 +46,11 @@ FINDINGS = (
     Finding("parameter-rotates-core-identity", "Affirmative", "FAMILYINSTANCE-A-CORE-ROTATION"),
     Finding("fri-instance-measurements", "Affirmative", "FAMILYINSTANCE-A-FRI-MEASUREMENTS"),
     Finding("sumcheck-instance-measurements", "Affirmative", "FAMILYINSTANCE-A-SUMCHECK-MEASUREMENTS"),
-    Finding("regular-finite-variation", "Affirmative", "FAMILYINSTANCE-A-REGULAR-VARIATION"),
+    Finding(
+        "regular-finite-variation",
+        "Negative",
+        "FAMILYINSTANCE-N-FRI-BODY-BYTES-NON-AFFINE",
+    ),
     Finding("bounded-admission-time", "Affirmative", "FAMILYINSTANCE-A-ADMISSION-TIME"),
     Finding("adjacent-identity-substitution", "Refused", "FAMILYINSTANCE-R-ADJACENT-IDENTITY"),
     Finding("fixture-graph-measurements", "Affirmative", "FAMILYINSTANCE-A-FIXTURE-GRAPH"),
@@ -104,8 +108,13 @@ def evaluate() -> dict[str, object]:
         model.adjacent_identity_substitutions_refused(measurements),
         "an adjacent parameter substitution preserved Core identity",
     )
-    regularity = model.affine_laws(measurements)
-    _require(len(regularity) == 8, "expected four regular metrics for two families")
+    regularity, non_affine = model.finite_variation(measurements)
+    _require(len(regularity) == 7, "expected seven affine finite measurements")
+    _require(
+        tuple((row.family, row.metric) for row in non_affine)
+        == (("fri-like-folding", "body_bytes"),),
+        "the finite non-affine measurement set drifted",
+    )
     _require(
         all(row.pcgraph_nodes > 0 and row.pcgraph_edges > 0 for row in flat),
         "fixture graph measurements must be nonempty",
@@ -135,6 +144,7 @@ def evaluate() -> dict[str, object]:
         "admission_wall_time_limit_ns": model.ADMISSION_TIME_LIMIT_NS,
         "admission_repetitions_per_instance": model.ADMISSION_REPETITIONS,
         "regularity": [item.value() for item in regularity],
+        "non_affine": [item.value() for item in non_affine],
         "theorem_binding": model.SUMCHECK_THEOREM_BINDINGS,
     }
 

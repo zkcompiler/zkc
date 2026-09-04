@@ -1,6 +1,6 @@
 {
   "format": "zkc.analysis-premise-intake-probe.v0",
-  "question": "Can a closed Analysis-owned named-premise catalog and intake operation make every required assumption explicit and identity-bearing for the finite Schnorr subject while failing closed on omission or coordinate substitution?",
+  "question": "Can a closed Analysis-owned named-premise catalog and intake operation make every required assumption explicit and identity-bearing for the finite Schnorr subject while failing closed on omission, extra keys, coordinate substitution, or any model-scope mismatch?",
   "subject": {
     "core_id": "zkcidv0:pir.interactive-core:33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5",
     "fresh_protocol_id": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
@@ -32,16 +32,19 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Hypothesis",
-        "value": "the selected challenge is a fresh uniform draw on the finite additive three-element challenge model and is independent of the prover's prior view"
+        "value": {
+          "law_ref": "FreshSamplingHypothesis",
+          "canonical_arguments": ["coordinate", "proposal:analysis.distribution:fresh-uniform"],
+          "statement": "the selected challenge is a fresh uniform draw on the finite additive three-element challenge model and is independent of the prover's prior view"
+        }
       },
       "source": {
         "kind": "ProviderHypothesis",
         "reference": "Schnorr completeness provider uniform challenge hypothesis"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactRegimeOnly",
-        "regimes": ["Fresh"]
+      "model_scope": {
+        "kind": "FreshChallengeOnly"
       }
     },
     {
@@ -54,16 +57,20 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Hypothesis",
-        "value": "the family challenge sampler has its named adequacy form, with exhaustion probability or exact totality explicit"
+        "value": {
+          "law_ref": "FamilySamplerAdequacyHypothesis",
+          "canonical_arguments": ["coordinate", "proposal:analysis.distribution:classical-random-oracle", "ExactTotal"],
+          "statement": "the family challenge sampler has its named adequacy form, with exhaustion probability or exact totality explicit"
+        }
       },
       "source": {
         "kind": "FamilyHypothesis",
         "reference": "TotalUniformChallengeSamplerAdequacy"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactRegimeOnly",
-        "regimes": ["FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "OracleModelOnly",
+        "distribution_profile_id": "proposal:analysis.distribution:classical-random-oracle"
       }
     },
     {
@@ -76,16 +83,20 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Hypothesis",
-        "value": "the complete adaptive query and answer process is the selected exact classical random-oracle process"
+        "value": {
+          "law_ref": "FamilyOracleProcessHypothesis",
+          "canonical_arguments": ["coordinate", "proposal:analysis.distribution:classical-random-oracle"],
+          "statement": "the complete adaptive query and answer process is the selected exact classical random-oracle process"
+        }
       },
       "source": {
         "kind": "FamilyHypothesis",
         "reference": "ExactClassicalRandomOracleProcess"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactRegimeOnly",
-        "regimes": ["FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "OracleModelOnly",
+        "distribution_profile_id": "proposal:analysis.distribution:classical-random-oracle"
       }
     },
     {
@@ -99,24 +110,99 @@
       "bound_model_or_hypothesis": {
         "form": "ProviderMap",
         "value": {
+          "provider": {
+            "system": "finite-option-bool-provider",
+            "source_pin": "ab928afe69f4d18f071658eec4c617ff46379db7dfb85ccfae7cbbe6f33a9e44",
+            "toolchain": "probe-python-stdlib",
+            "modelled_lanes": [
+              "Aborted",
+              "Accepted",
+              "OperationalNoncompletion",
+              "Rejected",
+              "StrategyStopped"
+            ]
+          },
           "carrier": "Option[Bool]",
           "map": {
-            "Accepted": "Some(true)",
-            "Rejected": "Some(false)",
-            "Aborted": "None",
-            "StrategyStopped": "None",
-            "OperationalNoncompletion": "None"
+            "Accepted": {"form": "Image", "value": "Some(true)"},
+            "Rejected": {"form": "Image", "value": "Some(false)"},
+            "Aborted": {"form": "Image", "value": "None"},
+            "StrategyStopped": {"form": "Image", "value": "None"},
+            "OperationalNoncompletion": {"form": "Image", "value": "None"}
           }
         }
       },
       "source": {
-        "kind": "ProviderDeclaration",
-        "reference": "challenge-verification Boolean with explicit outer failure"
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-option-bool-provider",
+          "source_pin": "ab928afe69f4d18f071658eec4c617ff46379db7dfb85ccfae7cbbe6f33a9e44",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Aborted",
+            "Accepted",
+            "OperationalNoncompletion",
+            "Rejected",
+            "StrategyStopped"
+          ]
+        }
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactCoordinateOnly",
-        "regimes": ["Fresh"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
+      }
+    },
+    {
+      "name": "provider-outcome-bool",
+      "kind": "ProviderOutcomeCarrierMap",
+      "coordinate": {
+        "owner": "pir",
+        "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+        "path": "ProtocolOutcomeLane"
+      },
+      "bound_model_or_hypothesis": {
+        "form": "ProviderMap",
+        "value": {
+          "provider": {
+            "system": "finite-bool-provider",
+            "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+            "toolchain": "probe-python-stdlib",
+            "modelled_lanes": [
+              "Accepted",
+              "Rejected"
+            ]
+          },
+          "carrier": "Bool",
+          "map": {
+            "Accepted": {"form": "Image", "value": true},
+            "Rejected": {"form": "Image", "value": false},
+            "Aborted": {"form": "Unmodelled"},
+            "StrategyStopped": {"form": "Unmodelled"},
+            "OperationalNoncompletion": {"form": "Unmodelled"}
+          }
+        }
+      },
+      "source": {
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-bool-provider",
+          "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Accepted",
+            "Rejected"
+          ]
+        }
+      },
+      "evidence_depth": "T1",
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -130,24 +216,93 @@
       "bound_model_or_hypothesis": {
         "form": "ProviderMap",
         "value": {
+          "provider": {
+            "system": "finite-tagged-provider",
+            "source_pin": "9352f672b338519b402802295ee2a85da04fd3d5e4995dd3a732674c6a251332",
+            "toolchain": "probe-python-stdlib",
+            "modelled_lanes": [
+              "Aborted",
+              "Accepted",
+              "OperationalNoncompletion",
+              "Rejected",
+              "StrategyStopped"
+            ]
+          },
           "carrier": "TaggedProviderOutcome",
           "map": {
-            "Accepted": "Accepted",
-            "Rejected": "Rejected",
-            "Aborted": "Aborted",
-            "StrategyStopped": "StrategyStopped",
-            "OperationalNoncompletion": "OperationalNoncompletion"
+            "Accepted": {"form": "Image", "value": "Accepted"},
+            "Rejected": {"form": "Image", "value": "Rejected"},
+            "Aborted": {"form": "Image", "value": "Aborted"},
+            "StrategyStopped": {"form": "Image", "value": "StrategyStopped"},
+            "OperationalNoncompletion": {"form": "Image", "value": "OperationalNoncompletion"}
           }
         }
       },
       "source": {
-        "kind": "ProviderDeclaration",
-        "reference": "fully tagged provider outcome carrier"
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-tagged-provider",
+          "source_pin": "9352f672b338519b402802295ee2a85da04fd3d5e4995dd3a732674c6a251332",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Aborted",
+            "Accepted",
+            "OperationalNoncompletion",
+            "Rejected",
+            "StrategyStopped"
+          ]
+        }
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactCoordinateOnly",
-        "regimes": ["Fresh"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
+      }
+    },
+    {
+      "name": "provider-operational-completion",
+      "kind": "OperationalCompletion",
+      "coordinate": {
+        "owner": "pir",
+        "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+        "path": "ProtocolOutcomeLane"
+      },
+      "bound_model_or_hypothesis": {
+        "form": "Hypothesis",
+        "value": {
+          "law_ref": "OperationalCompletionHypothesis",
+          "canonical_arguments": [
+            "coordinate",
+            {
+              "system": "finite-bool-provider",
+              "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+              "toolchain": "probe-python-stdlib",
+              "modelled_lanes": ["Accepted", "Rejected"]
+            }
+          ],
+          "statement": "every run in the property environment ends in Accepted or Rejected"
+        }
+      },
+      "source": {
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-bool-provider",
+          "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Accepted",
+            "Rejected"
+          ]
+        }
+      },
+      "evidence_depth": "T1",
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -160,16 +315,25 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Model",
-        "value": "Y = x . G in the additive group Z/3Z with G = 1"
+        "value": {
+          "law_ref": "RelationPredicateBindingLaw",
+          "canonical_arguments": ["coordinate", "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e"],
+          "statement": "Y = x . G in the additive group Z/3Z with G = 1"
+        }
       },
       "source": {
         "kind": "CandidateCoordinate",
         "reference": "finite Schnorr relation semantic model"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -182,16 +346,25 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Model",
-        "value": "x in Z/3Z at Plan witness-ingress key x"
+        "value": {
+          "law_ref": "WitnessTypeBindingLaw",
+          "canonical_arguments": ["coordinate", "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22"],
+          "statement": "x in Z/3Z at Plan witness-ingress key x"
+        }
       },
       "source": {
         "kind": "CandidateCoordinate",
         "reference": "finite Schnorr relation interface and Plan witness binding"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -204,16 +377,25 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Model",
-        "value": "nonce r in Z/3Z, initialized to zero and replaced by decision-zero randomness"
+        "value": {
+          "law_ref": "ProverPrivateStateBindingLaw",
+          "canonical_arguments": ["coordinate", "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b"],
+          "statement": "nonce r in Z/3Z, initialized to zero and replaced by decision-zero randomness"
+        }
       },
       "source": {
         "kind": "CandidateCoordinate",
         "reference": "finite Schnorr ProverPlan state"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -226,16 +408,25 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Hypothesis",
-        "value": "the provider's honest commitment operation corresponds to A := r"
+        "value": {
+          "law_ref": "HonestCommitHypothesis",
+          "canonical_arguments": ["coordinate"],
+          "statement": "the provider's honest commitment operation corresponds to A := r"
+        }
       },
       "source": {
         "kind": "CandidateCoordinate",
         "reference": "finite Schnorr decision-zero recipe"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -248,25 +439,40 @@
       },
       "bound_model_or_hypothesis": {
         "form": "Hypothesis",
-        "value": "the provider's honest response operation corresponds to z := r + c*x mod 3"
+        "value": {
+          "law_ref": "HonestRespondHypothesis",
+          "canonical_arguments": ["coordinate"],
+          "statement": "the provider's honest response operation corresponds to z := r + c*x mod 3"
+        }
       },
       "source": {
         "kind": "CandidateCoordinate",
         "reference": "finite Schnorr decision-two recipe"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     }
   ],
   "cases": {
     "schnorr-fresh-property": {
       "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+        "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+        "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
       "requirements": [
         {"slot": "challenge-law", "kind": "FreshPublicCoinDistribution", "coordinate": {"owner": "pir", "subject": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7", "path": "declarations[pir.public-coin-law][0]"}},
-        {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}},
         {"slot": "relation-predicate", "kind": "RelationPredicate", "coordinate": {"owner": "relations", "subject": "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e", "path": "evaluator"}},
         {"slot": "witness-type", "kind": "WitnessType", "coordinate": {"owner": "relations", "subject": "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22", "path": "private_witness[0].value_type + PlanWitnessBinding.witness_edges[0]"}},
         {"slot": "prover-private-state", "kind": "ProverPrivateState", "coordinate": {"owner": "pir", "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b", "path": "persistent_state[0] -> PlanExecutionState[0]"}},
@@ -275,7 +481,6 @@
       ],
       "bindings": {
         "challenge-law": "fresh-public-coin-distribution",
-        "outcome-carrier": "provider-outcome-option-bool",
         "relation-predicate": "relation-predicate",
         "witness-type": "witness-type",
         "prover-private-state": "prover-private-state",
@@ -283,8 +488,40 @@
         "honest-respond": "honest-respond"
       }
     },
+    "provider-outcome-map": {
+      "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
+      "requirements": [
+        {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}}
+      ],
+      "bindings": {
+        "outcome-carrier": "provider-outcome-option-bool"
+      }
+    },
+    "provider-completeness": {
+      "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
+      "requirements": [
+        {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}},
+        {"slot": "operational-completion", "kind": "OperationalCompletion", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}}
+      ],
+      "bindings": {
+        "outcome-carrier": "provider-outcome-bool",
+        "operational-completion": "provider-operational-completion"
+      }
+    },
     "fresh-challenge": {
       "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
       "requirements": [
         {"slot": "challenge-law", "kind": "FreshPublicCoinDistribution", "coordinate": {"owner": "pir", "subject": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7", "path": "declarations[pir.public-coin-law][0]"}}
       ],
@@ -292,6 +529,10 @@
     },
     "fiat-shamir-challenge": {
       "regime": "FiatShamirClassicalRandomOracle",
+      "oracle_model_id": "proposal:analysis.distribution:classical-random-oracle",
+      "exact_subjects": [
+        "proposal:analysis.family:prime-order-schnorr"
+      ],
       "requirements": [
         {"slot": "sampler-adequacy", "kind": "FiatShamirSamplerAdequacy", "coordinate": {"owner": "analysis", "subject": "proposal:analysis.family:prime-order-schnorr", "path": "premise-catalog.sampler-adequacy"}},
         {"slot": "oracle-process", "kind": "FiatShamirOracleProcess", "coordinate": {"owner": "analysis", "subject": "proposal:analysis.family:prime-order-schnorr", "path": "premise-catalog.oracle-process"}}

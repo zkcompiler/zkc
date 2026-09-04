@@ -328,6 +328,62 @@ def _analysis_context() -> tuple[object, object]:
 
 
 class AnalysisActivationTest(unittest.TestCase):
+    def test_owner_scoped_extractor_identity_vector_is_frozen(self) -> None:
+        model, checked = _analysis_context()
+        proposition = model._formed_analysis_body(
+            checked.proposition_id, "analysis.proposition"
+        )
+        self.assertEqual(
+            {
+                "property_profile": model.ANALYSIS_PROPERTY_PROFILE_ID.digest.hex(),
+                "proposition": checked.proposition_id.digest.hex(),
+                "goal": proposition.goal_id.digest.hex(),
+                "premises": tuple(
+                    item.digest.hex()
+                    for item in model.premise_ids_of_goal(proposition.goal_id)
+                ),
+                "semantic_basis": checked.semantic_basis_id.digest.hex(),
+                "support": checked.support_id.digest.hex(),
+                "validation": checked.validation_basis_id.digest.hex(),
+                "judgment": checked.judgment_id.digest.hex(),
+                "certificates": tuple(
+                    item.digest.hex() for item in checked.certificate_judgment_ids
+                ),
+            },
+            {
+                "property_profile": (
+                    "8ac5e7b9ba6d9684efc86c219ad8c3fa8560a90c4d653cc2e05ed4a13d58b807"
+                ),
+                "proposition": (
+                    "0af228628658457d88864f3ee421b02f81b62fef179a6785cfd81eb28e9442da"
+                ),
+                "goal": (
+                    "d4b6dd9724364d559f6ea5edbf1d112874cd914a07e6569b5e85a071d9040526"
+                ),
+                "premises": (
+                    "7f6835254422ed8bc613d8c30f6f93b1057125b014dc0e202fb6997eacf96967",
+                    "806f46edc3794fdbdf364c03f0b08171a6bb17a39e8c252107a042657aa223c5",
+                ),
+                "semantic_basis": (
+                    "fb6945079c3225c43ec5f6430bd0910775972c1b762bb88062ef17722201dc06"
+                ),
+                "support": (
+                    "52538c6aebc76cc6adfea5c18faf2b323a485e9565a481ad891b14dd2a1e02e0"
+                ),
+                "validation": (
+                    "0bc35366435bea8fff622650ed8127db04b8c156c88182c09e125fabbd379c09"
+                ),
+                "judgment": (
+                    "17730f089c6cd1545deb4728ab509e32c396768f6a26fac0e6aff3c81a45b5ad"
+                ),
+                "certificates": (
+                    "b367d2157e868c31b9a61f6e1eb3c97256560bd62695147466aa42d2ac329d43",
+                    "77f41bf185dfbb664c972d5202c5e478d7aac2ad23a8bb544531afb5e163bf8e",
+                    "5c76ee29851f81828c6e28785a8dc5bcac5cbaad62cbc6ef88feb4163496bb53",
+                ),
+            },
+        )
+
     def test_exact_hypothesis_free_judgment_and_certificate_boundary(self) -> None:
         model, checked = _analysis_context()
         proposition = model._formed_analysis_body(
@@ -338,6 +394,20 @@ class AnalysisActivationTest(unittest.TestCase):
             "analysis.hypothesis-context",
         )
         self.assertEqual(hypothesis_context.nodes, ())
+        self.assertEqual(hypothesis_context.exact_named_premise_ids, ())
+        goal = model._formed_analysis_body(
+            proposition.goal_id, "analysis.goal"
+        )
+        premise_ids = model.premise_ids_of_goal(proposition.goal_id)
+        self.assertEqual(len(goal.named_premise_bindings), 2)
+        self.assertEqual(len(premise_ids), 2)
+        self.assertEqual(
+            {binding.requirement.kind for binding in goal.named_premise_bindings},
+            {
+                model.AnalysisNamedPremiseKind.RELATION_PREDICATE,
+                model.AnalysisNamedPremiseKind.WITNESS_TYPE,
+            },
+        )
         self.assertEqual(len(checked.certificate_judgment_ids), 3)
         self.assertEqual(len(set(checked.certificate_judgment_ids)), 3)
         self.assertEqual(
@@ -353,6 +423,7 @@ class AnalysisActivationTest(unittest.TestCase):
         support = model._formed_analysis_body(
             checked.support_id, "analysis.support-instantiation"
         )
+        self.assertEqual(support.exact_named_premise_ids, premise_ids)
         entries = support.non_hypothesis_premise_bindings.values
         missing = replace(
             support,
@@ -372,6 +443,7 @@ class AnalysisActivationTest(unittest.TestCase):
         judgment = model._formed_analysis_body(
             checked.judgment_id, "analysis.judgment-record"
         )
+        self.assertEqual(judgment.exact_named_premise_ids, premise_ids)
         validation = model._formed_analysis_body(
             checked.validation_basis_id, "analysis.validation-basis"
         )
@@ -448,6 +520,126 @@ class AnalysisActivationTest(unittest.TestCase):
             b"qrom",
         ):
             self.assertNotIn(forbidden, encoded)
+
+    def test_named_premise_intake_fails_closed_before_finite_arithmetic(self) -> None:
+        model, checked = _analysis_context()
+        proposition = model._formed_analysis_body(
+            checked.proposition_id, "analysis.proposition"
+        )
+        goal = model._formed_analysis_body(proposition.goal_id, "analysis.goal")
+        bindings = goal.named_premise_bindings
+        question_id = goal.question_id
+
+        missing = model.intake_analysis_named_premises(question_id, bindings[:-1])
+        self.assertEqual(
+            (missing.outcome, missing.code),
+            (
+                model.NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+                "F0V2D2-C-MISSING-BINDING-KEY",
+            ),
+        )
+
+        extra_requirement = model.AnalysisNamedPremiseRequirementV0(
+            "unrequested-relation",
+            bindings[0].requirement.kind,
+            bindings[0].requirement.coordinate,
+        )
+        extra_bindings = tuple(
+            sorted(
+                (*bindings, model.AnalysisNamedPremiseBindingV0(
+                    extra_requirement, bindings[0].premise_id
+                )),
+                key=lambda item: model._named_premise_requirement_key(
+                    item.requirement
+                ),
+            )
+        )
+        extra = model.intake_analysis_named_premises(question_id, extra_bindings)
+        self.assertEqual(
+            (extra.outcome, extra.code),
+            (
+                model.NamedPremiseIntakeOutcome.MALFORMED,
+                "F0V2D2-M-EXTRA-BINDING-KEY",
+            ),
+        )
+
+        relation_binding = next(
+            binding
+            for binding in bindings
+            if binding.requirement.kind
+            is model.AnalysisNamedPremiseKind.RELATION_PREDICATE
+        )
+        relation_body = model._formed_analysis_body(
+            relation_binding.premise_id, "analysis.named-premise"
+        )
+        alternate_model = model.fixture_ref(
+            "relations.semantic-model", "finite-cover-alternate-relation-model"
+        )
+        alternate_coordinate = model.RelationsModelEvaluatorCoordinate(
+            alternate_model
+        )
+        alternate_bound = replace(
+            relation_body.bound_model_or_hypothesis,
+            semantic_subject_ref=alternate_model,
+            law_term=replace(
+                relation_body.bound_model_or_hypothesis.law_term,
+                canonical_arguments=(
+                    model._named_premise_coordinate_body(alternate_coordinate),
+                    model._id_datum(alternate_model, "relations.semantic-model"),
+                ),
+            ),
+        )
+        alternate_premise_id = model.analysis_named_premise_id(
+            replace(
+                relation_body,
+                coordinate=alternate_coordinate,
+                bound_model_or_hypothesis=alternate_bound,
+                source=model.CandidateOwnerCoordinate(alternate_model),
+            ),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        swapped = tuple(
+            replace(binding, premise_id=alternate_premise_id)
+            if binding is relation_binding
+            else binding
+            for binding in bindings
+        )
+        wrong_coordinate = model.intake_analysis_named_premises(
+            question_id, swapped
+        )
+        self.assertEqual(
+            (wrong_coordinate.outcome, wrong_coordinate.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-PREMISE-COORDINATE",
+            ),
+        )
+
+        scoped_premise_id = model.analysis_named_premise_id(
+            replace(
+                relation_body,
+                model_scope=model.ExactSubjectsOnly(
+                    (model._SCHNORR_PINNED_SOURCE.protocol_source.fresh_protocol_id,)
+                ),
+            ),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        scope_changed = tuple(
+            replace(binding, premise_id=scoped_premise_id)
+            if binding is relation_binding
+            else binding
+            for binding in bindings
+        )
+        scope_mismatch = model.intake_analysis_named_premises(
+            question_id, scope_changed
+        )
+        self.assertEqual(
+            (scope_mismatch.outcome, scope_mismatch.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-EXACT-SUBJECTS-SCOPE",
+            ),
+        )
 
     def test_stream_and_candidate_mutations_fail_closed(self) -> None:
         model, _ = _analysis_context()

@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 from typing import Any
@@ -17,6 +18,7 @@ CONTRACT = HERE / "candidate-contract.json"
 PUBLISHED = ROOT / "docs-next/pir/profiles/published-identities.json"
 REFERENCE_COMPILER = ROOT / "evaluation/semantic-profile-publication/reference_model.py"
 COLD_COMPILER = ROOT / "evaluation/semantic-profile-publication/independent.py"
+MIGRATION_HEAD_COMMIT = "5295ef0965309e8851b6c095858265fe3157ac2d"
 
 
 class CandidateError(RuntimeError):
@@ -55,6 +57,63 @@ def _sha256(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError as error:
         raise CandidateError(f"cannot hash {path}") from error
+
+
+def _git_bytes(revision: str, relative: str) -> bytes:
+    try:
+        return subprocess.run(
+            ["git", "show", f"{revision}:{relative}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise CandidateError(f"cannot reconstruct {relative} at {revision}") from error
+
+
+def _source_pages(value: object) -> set[str]:
+    if isinstance(value, str):
+        return {value} if value.endswith(".md") else set()
+    result: set[str] = set()
+    if isinstance(value, list):
+        for item in value:
+            result.update(_source_pages(item))
+    elif isinstance(value, dict):
+        for item in value.values():
+            result.update(_source_pages(item))
+    return result
+
+
+def _compile_at(
+    revision: str, reference: ModuleType, cold: ModuleType
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    manifests: dict[str, dict[str, Any]] = {}
+    pages: dict[str, bytes] = {}
+    for key, path in reference.MANIFEST_FILES.items():
+        relative = path.relative_to(ROOT).as_posix()
+        try:
+            manifest = json.loads(_git_bytes(revision, relative))
+        except json.JSONDecodeError as error:
+            raise CandidateError(
+                f"cannot decode {relative} at {revision}"
+            ) from error
+        manifests[key] = manifest
+        for page in _source_pages(manifest):
+            pages[page] = _git_bytes(revision, page)
+    return (
+        reference.identity_table(
+            reference.compile_repository(
+                manifest_overrides=manifests,
+                page_overrides=pages,
+            )
+        ),
+        cold.identity_table(
+            cold.compile_repository(
+                manifest_overrides=manifests,
+                page_overrides=pages,
+            )
+        ),
+    )
 
 
 def contract() -> dict[str, Any]:
@@ -121,8 +180,39 @@ def _publication_report(value: dict[str, Any]) -> dict[str, Any]:
         if row["profile_digest"] != baseline["profiles"][key]
     ]
     stable = [key for key in reference_table["profiles"] if key not in rotated]
-    if len(rotated) != 17 or stable != ["analysis-kernel"]:
-        raise CandidateError("migrated tree does not reproduce the expected 17/1 rotation")
+    if len(rotated) != 18 or stable:
+        raise CandidateError("Analysis head does not reproduce the expected 18/0 rotation")
+
+    migration_table, cold_migration_table = _compile_at(
+        MIGRATION_HEAD_COMMIT, reference, cold
+    )
+    if migration_table != cold_migration_table:
+        raise CandidateError("publication compilers disagree at the migration head")
+    migration_rotated = [
+        key
+        for key, row in migration_table["profiles"].items()
+        if row["profile_digest"] != baseline["profiles"][key]
+    ]
+    migration_stable = [
+        key for key in migration_table["profiles"] if key not in migration_rotated
+    ]
+    if len(migration_rotated) != 17 or migration_stable != ["analysis-kernel"]:
+        raise CandidateError("migration head does not reproduce the expected 17/1 rotation")
+    analysis_rotated = [
+        key
+        for key in reference.PROFILE_KEYS
+        if reference_table["profiles"][key] != migration_table["profiles"][key]
+    ]
+    expected_analysis_rotated = [
+        "analysis-kernel",
+        "analysis-cryptographic-property",
+        "analysis-afk-transport",
+        "analysis-afk-theorem-source-validation",
+        "analysis-incremental-composition",
+        "analysis-incremental-composition-source-validation",
+    ]
+    if analysis_rotated != expected_analysis_rotated:
+        raise CandidateError("Analysis branch rotation cone differs")
 
     published = _strict_json(PUBLISHED)
     if not set(published["profiles"]) < set(reference_table["profiles"]):
@@ -141,6 +231,11 @@ def _publication_report(value: dict[str, Any]) -> dict[str, Any]:
         "baseline_identity_pin_sha256": _sha256(baseline_path),
         "rotated_profiles": rotated,
         "stable_profiles": stable,
+        "migration_head": MIGRATION_HEAD_COMMIT,
+        "migration_identity_table": migration_table,
+        "migration_rotated_profiles": migration_rotated,
+        "migration_stable_profiles": migration_stable,
+        "analysis_branch_rotated_profiles": analysis_rotated,
         "legacy_profile_refusals": legacy_controls,
     }
 

@@ -13,11 +13,11 @@ python3 -B evaluation/formal-source-end-to-end-pressure-f0v4/run.py --check
 ```
 
 The frozen aggregate is
-`CannotAnswer/F0V4-C-END-TO-END-COMPOSITION`: 28 findings comprise 21 bounded
-affirmatives, two deliberate refusals, and five `CannotAnswer` findings
-including the aggregate. The executable PIR path composes. Analysis premise
-formation does not, because the current owner text and exact-subject evidence
-do not determine four required inputs.
+`Affirmative/F0V4-A-END-TO-END-COMPOSITION`: 29 findings comprise 24 bounded
+affirmatives, two deliberate refusals, and three separately declared
+`CannotAnswer` holds. The aggregate says that every determined stage composes
+modulo exactly those holds. It does not say that a complete Analysis goal,
+support, or judgment formed.
 
 ## Exact subject
 
@@ -106,20 +106,49 @@ of later, unpresented commitment/response values leave that replay unchanged.
 
 ## Analysis boundary
 
-The exact ordered requirement sequence has eight entries: two Fresh
-distribution coordinates, one provider outcome-carrier coordinate, and five
-relation/Plan coordinates. Formation stops for four independent reasons:
+The Analysis owner text now defines the ten premise kinds, typed
+coordinates, body and scope laws, exact requirement keys, fail-closed intake,
+and downstream premise-ID propagation. The package therefore replaces the
+named-premise owner hold it carried before that text existed with
+`Affirmative/F0V4-A-NAMED-PREMISE-OWNER-CONTRACT`.
+
+The pressure question candidate carries eight canonically sorted
+requirements: one Fresh distribution requirement for each of the two exact
+`pir.public-coin-law` leaves, one provider outcome-carrier requirement, and
+five relation/Plan requirements. The current executable Analysis model forms
+the existing uniform three-element distribution profile and binds it to the
+`RootNat(2)` law leaf. The resulting profile and premise IDs are frozen.
+
+Three holds remain:
 
 | Missing input | Frozen result | Exact boundary |
 |---|---|---|
-| first-class named-premise formation | `CannotAnswer/F0V4-C-NAMED-PREMISE-OWNER-CONTRACT` | `analysis-model.md` lines 2246--2261 has only three non-named requirement variants |
-| Boolean Fresh distribution evidence | `CannotAnswer/F0V4-C-BOOLEAN-FRESH-PREMISE` | `cryptographic-properties.md` lines 968--973 requires the law as an explicit premise; the available fixture matches only the `RootNat(2)` law coordinate |
-| relation and Plan evidence for this exact Core | `CannotAnswer/F0V4-C-RELATION-PLAN-REBIND` | `analysis-premise-intake-probe/fixture.json` line 5 names another Core; lines 154--259 mark all five relevant coordinates `RebindRequired` |
-| published provider declaration | `CannotAnswer/F0V4-C-PROVIDER-DECLARATION` | the carrier decision record has `Authority: None` at line 7; `cryptographic-properties.md` goes from Section 3.1 at line 1299 to Section 4 at line 2167 without the requested provider section |
+| exact uniform Boolean distribution profile | `CannotAnswer/F0V4-C-BOOLEAN-DISTRIBUTION-PROFILE` | `cryptographic-properties.md` Section 3, lines 321--369 defines a singular challenge model and lines 2543--2551 refer to that model's uniform law, but the section declares no `AnalysisDistributionProfileId` body for this Boolean leaf |
+| relation and Plan evidence for this exact Core | `CannotAnswer/F0V4-C-RELATION-PLAN-REBIND` | `analysis-premise-intake-probe/fixture.json` line 5 names another Core; its five typed coordinates remain rebind-only controls |
+| published provider declaration | `CannotAnswer/F0V4-C-PROVIDER-DECLARATION` | `cryptographic-properties.md` lines 2619--2622 forbid provider-premise formation until the profile publishes the declaration; the supporting carrier record still has `Authority: None` |
+
+Only the three-element premise is supplied to the full intake. The other seven
+bindings are absent, so intake returns
+`CannotAnswer/F0V2D2-C-MISSING-BINDING-KEY`. Each of the five stale
+relation/Plan controls separately returns
+`Refused/F0V2D2-R-REBIND-REQUIRED-SCOPE`. The first unformed downstream stage
+is `analysis.goal`; consequently no hypothesis context, proposition, support
+instantiation, or judgment record is assigned an ID. This exact fail-closed
+boundary is the positive finding
+`Affirmative/F0V4-A-NAMED-PREMISE-INTAKE-BOUNDARY`.
+
+Relative to the package's earlier freeze, before the Analysis named-premise
+text, the named-premise owner finding changes
+from `CannotAnswer` to `Affirmative`, the Boolean hold is narrowed from an
+unspecified missing premise to the exact missing distribution-profile
+declaration, the relation/Plan and provider holds remain, and the aggregate
+changes to `Affirmative` under the rule that those holds are reported
+separately. One intake-boundary finding is added, increasing the finding count
+from 28 to 29.
 
 The successful Fresh-law and relation/Plan coordinate findings say only that
-the leaves and candidate fixture coordinates were reconstructed exactly. They
-do not turn proposal data for another subject into owner premise authority.
+the owner leaves and stale candidate coordinates were reconstructed exactly.
+They do not turn evidence for another subject into owner premise authority.
 
 At the finite arithmetic level, the package evaluates the six-lane map
 
@@ -142,9 +171,11 @@ provider correspondence result.
 
 A pass means that the exact frozen subject still composes through the listed
 PIR admissions, owner projections, setup partition, Interface checks,
-execution, replay, and finite map arithmetic, and that the four Analysis holds
-remain classified at their exact source/evidence boundaries. It does not turn
-the `CannotAnswer` aggregate affirmative.
+execution, replay, finite map arithmetic, and the now-active named-premise
+grammar. It also establishes the exact three-element premise identity and the
+fail-closed intake stop. The aggregate is affirmative only modulo the three
+separately reported holds; the check does not form or establish the missing
+premises or any downstream Analysis judgment.
 
 This package does not establish owner publication, a general Core or Interface
 implementation, arbitrary-protocol execution, provider correspondence,

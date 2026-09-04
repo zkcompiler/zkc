@@ -164,8 +164,17 @@ The carrier is a tagged Python mapping used to test field disposition and
 fail-closed round trip. It serializes `CarrierGraph`, never the external
 `CarrierDependencyEnvironment`; reading authenticates carrier identity, while
 the separate admission step authenticates the referenced construction
-preimage. It does not select final MLIR syntax. Imported
-verification is explicitly unsupported because the bounded K2 executable has
+preimage. It does not select final MLIR syntax.
+
+The carrier transcription now includes the owner-authored challenge-domain and
+fresh-law declaration references, coin-correlation record, and reduction-use
+policy on each challenge occurrence. Those fields remain graph-carried; adding
+their exact record alternatives does not create a second declaration authority
+or change the carrier's external-dependency boundary. The construction's
+heterogeneous `challenge_rules` sequence remains in its external authenticated
+body alongside the other construction fields.
+
+Imported verification is explicitly unsupported because the bounded K2 executable has
 no exact `ModuleEffectRef` payload; this package no longer invents a parallel
 satellite representation. The `RelationRunView` constructor guard models
 owner issuance but is not a Python security boundary; only the replay path is

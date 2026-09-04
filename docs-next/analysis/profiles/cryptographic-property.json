@@ -3,7 +3,7 @@
   "key": "analysis-cryptographic-property",
   "catalog_namespace": "analysis",
   "profile_family": "analysis.cryptographic-property",
-  "revision": 1,
+  "revision": 2,
   "expected_imports": [
     "analysis-kernel",
     "canonical-framed-fiat-shamir",
@@ -27,6 +27,7 @@
     "analysis.hypothesis-context",
     "analysis.judgment-record",
     "analysis.loss-semantic-import",
+    "analysis.named-premise",
     "analysis.operation-policy",
     "analysis.owner-policy-closure",
     "analysis.portable-source-authority-binding",
@@ -75,7 +76,7 @@
     {
       "kind": "analysis.body-compiler",
       "name": "cryptographic-property-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "property-publication",
       "selector": "AnalysisCryptographicPropertyBodyCompilerV0(kind,body) =",
       "dependencies": [
@@ -89,7 +90,7 @@
     {
       "kind": "analysis.semantic-law",
       "name": "property-core-v0",
-      "revision": 1,
+      "revision": 2,
       "fragment": "property-semantics",
       "selector": "## 1. Selection and research basis",
       "dependencies": []
@@ -151,6 +152,7 @@
     {"kind": "analysis.hypothesis-context", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},
     {"kind": "analysis.judgment-record", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},
     {"kind": "analysis.loss-semantic-import", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},
+    {"kind": "analysis.named-premise", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},
     {"kind": "analysis.operation-policy", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},
     {"kind": "analysis.owner-policy-closure", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},
     {"kind": "analysis.portable-source-authority-binding", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "cryptographic-property-body-v0"}, "laws": ["property-core-v0", "property-publication-v0", "property-quantitative-v0", "relation-source-boundary-v0"], "evaluator": "cryptographic-property-admission-v0", "failure_schema": "cryptographic-property-admission-outcome-v0"},

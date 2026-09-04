@@ -470,7 +470,7 @@ class FrozenContractTests(unittest.TestCase):
 
 class SupportAndManifestTests(unittest.TestCase):
     def test_owner_schema_is_exact_and_reflected(self):
-        self.assertEqual(len(m.OWNER_SCHEMA_PATHS), 190)
+        self.assertEqual(len(m.OWNER_SCHEMA_PATHS), 195)
         self.assertEqual(m.OWNER_SCHEMA_PATHS, m.reflected_owner_schema_paths())
         self.assertIs(m.audit_owner_schema().kind, m.OutcomeKind.AFFIRMATIVE)
 

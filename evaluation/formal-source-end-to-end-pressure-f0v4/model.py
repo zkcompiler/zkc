@@ -2,8 +2,9 @@
 """End-to-end finite pressure carrier over the migrated PIR contracts.
 
 The package composes existing owner compilers and finite runtime libraries.  It
-adds no normative semantic owner.  Four Analysis boundaries are represented
-as data and are intentionally not repaired here.
+adds no normative semantic owner.  The Analysis named-premise executable
+is used to form every pressure input that current owner text determines and to
+freeze the exact fail-closed boundary for the inputs it does not determine.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ INTEGRATED_MODEL = (
 FS_PACKAGE = ROOT / "evaluation/formal-source-fs-runtime-f0v3c"
 FINITE_FIXTURE_MODEL = ROOT / "evaluation/k2-protocol-fiat-shamir/reference_model.py"
 ANALYSIS_PREMISE_FIXTURE = ROOT / "evaluation/analysis-premise-intake-probe/fixture.json"
+ANALYSIS_CLOSURE_MODEL = ROOT / "evaluation/k3-analysis-closure/reference_model.py"
 
 
 def _load(name: str, path: Path) -> ModuleType:
@@ -63,6 +65,7 @@ fs_executor = _load_fs_consumer(
 )
 fs_replay = _load_fs_consumer("_zkc_pressure_fs_replay", FS_PACKAGE / "replay.py")
 finite_fixture = _load("_zkc_pressure_finite_fixture", FINITE_FIXTURE_MODEL)
+analysis = _load("_zkc_pressure_analysis_closure", ANALYSIS_CLOSURE_MODEL)
 
 d1 = integrated.d1
 base = integrated.base
@@ -70,7 +73,7 @@ foundation = integrated.foundation
 b5 = integrated.b5
 k1 = integrated.k1
 
-if not (k1 is fs_model.k1 and k1 is finite_fixture.k1):
+if not (k1 is fs_model.k1 and k1 is finite_fixture.k1 and k1 is analysis.k1):
     raise ImportError("pressure package did not retain one executable-kernel implementation")
 
 LANES = (
@@ -2755,7 +2758,73 @@ def read_catalog_join(
     }
 
 
-def analysis_boundary(subject: PressureSubject) -> dict[str, Any]:
+def _pressure_provider_premise(
+    subject: PressureSubject,
+    coordinate: Any,
+    provider_evidence: dict[str, Any],
+) -> tuple[Any, str]:
+    """Build the exact map body, then retain the owner publication refusal."""
+
+    modelled_lanes = tuple(
+        sorted(
+            (
+                analysis.AnalysisOutcomeLaneName.ACCEPTED,
+                analysis.AnalysisOutcomeLaneName.REJECTED,
+            ),
+            key=lambda lane: k1.encode_datum(k1.Symbol(lane.value)),
+        )
+    )
+    provider = analysis.AnalysisProviderDeclarationV0(
+        "pressure-finite-boolean-provider",
+        bytes.fromhex(digest(provider_evidence)),
+        "python-stdlib-exhaustive-runner",
+        modelled_lanes,
+    )
+    lanes = tuple(
+        sorted(
+            tuple(analysis.AnalysisOutcomeLaneName),
+            key=lambda lane: k1.encode_datum(k1.Symbol(lane.value)),
+        )
+    )
+    lane_map = tuple(
+        (
+            lane,
+            analysis.Image(lane is analysis.AnalysisOutcomeLaneName.ACCEPTED)
+            if lane in modelled_lanes
+            else analysis.Unmodelled(),
+        )
+        for lane in lanes
+    )
+    body = analysis.AnalysisNamedPremiseBodyV0(
+        analysis.AnalysisNamedPremiseKind.PROVIDER_OUTCOME_CARRIER_MAP,
+        coordinate,
+        analysis.BoundProviderOutcomeCarrierMap(
+            analysis.AnalysisProviderOutcomeCarrierMapBodyV0(
+                provider,
+                coordinate,
+                k1.Symbol("Boolean"),
+                lane_map,
+            )
+        ),
+        analysis.ProviderDeclarationSource(provider),
+        analysis.AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+        analysis.ExactSubjectsOnly((subject.fs_protocol.identifier,)),
+    )
+    analysis._provider_outcome_carrier_map_body(
+        body.bound_model_or_hypothesis.value
+    )
+    try:
+        analysis.analysis_named_premise_id(
+            body, profile=analysis.ANALYSIS_PROPERTY_PROFILE
+        )
+    except analysis.PropertyError as error:
+        return body, str(error)
+    raise PressureError("unpublished pressure provider unexpectedly formed a premise")
+
+
+def analysis_boundary(
+    subject: PressureSubject, provider_evidence: dict[str, Any]
+) -> dict[str, Any]:
     proposal = json.loads(ANALYSIS_PREMISE_FIXTURE.read_text(encoding="utf-8"))
     fixture_fresh = next(
         item
@@ -2806,30 +2875,199 @@ def analysis_boundary(subject: PressureSubject) -> dict[str, Any]:
     ]
     if fixture_law_matches != [1]:
         raise PressureError("Fresh-law fixture match partition drifted")
-    requirements = [
-        *[
-            {
+
+    fresh_coordinates = tuple(
+        analysis.PIRPublicCoinLawCoordinate(
+            base.module_declaration_ref_datum(challenge.fresh_law)
+        )
+        for challenge in subject.admission.core.challenges
+    )
+    fresh_requirements = tuple(
+        analysis.AnalysisNamedPremiseRequirementV0(
+            f"challenge-law-{index}",
+            analysis.AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION,
+            coordinate,
+        )
+        for index, coordinate in enumerate(fresh_coordinates)
+    )
+
+    z3_distribution = analysis.fresh_randomness_law_id(3)
+    z3_distribution_body = analysis._formed_analysis_body(
+        z3_distribution, "analysis.distribution-profile"
+    )
+    z3_requirement = fresh_requirements[1]
+    z3_premise_body = analysis.AnalysisNamedPremiseBodyV0(
+        analysis.AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION,
+        z3_requirement.coordinate,
+        analysis.BoundHypothesis(
+            analysis._premise_law_term(
+                analysis.ANALYSIS_PROPERTY_PROFILE,
+                "fresh-sampling-hypothesis-v0",
+                z3_requirement.coordinate,
+                analysis._id_datum(
+                    z3_distribution, "analysis.distribution-profile"
+                ),
+            )
+        ),
+        analysis.CandidateOwnerCoordinate(subject.admission.fresh_protocol_id),
+        analysis.AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+        analysis.FreshChallengeOnly(),
+    )
+    z3_premise_id = analysis.analysis_named_premise_id(
+        z3_premise_body, profile=analysis.ANALYSIS_PROPERTY_PROFILE
+    )
+
+    stock_requirements = {
+        item.slot: item
+        for item in analysis.schnorr_named_premise_requirements(
+            analysis._SCHNORR_PINNED_SOURCE,
+            analysis._SCHNORR_PINNED_PROFILE,
+        )
+    }
+    stock_bindings = {
+        item.requirement.slot: item
+        for item in analysis.schnorr_named_premise_bindings(
+            analysis._SCHNORR_PINNED_SOURCE,
+            analysis._SCHNORR_PINNED_PROFILE,
+            (
+                analysis._SCHNORR_PINNED_SOURCE.protocol_source.fresh_protocol_id,
+                analysis._SCHNORR_PINNED_SOURCE.fresh_binding.binding_id,
+            ),
+        )
+    }
+    slot_map = {
+        "relation": "relation-predicate",
+        "witness": "witness-type",
+        "prover-state": "prover-private-state",
+        "commit": "honest-commit",
+        "respond": "honest-respond",
+    }
+    rebind_requirements: dict[str, Any] = {}
+    rebind_bindings: dict[str, Any] = {}
+    for stock_slot, pressure_slot in slot_map.items():
+        requirement = replace(stock_requirements[stock_slot], slot=pressure_slot)
+        stock_body = analysis._formed_analysis_body(
+            stock_bindings[stock_slot].premise_id, "analysis.named-premise"
+        )
+        rebind_id = analysis.analysis_named_premise_id(
+            replace(stock_body, model_scope=analysis.RebindRequired()),
+            profile=analysis.ANALYSIS_PROPERTY_PROFILE,
+        )
+        rebind_requirements[pressure_slot] = requirement
+        rebind_bindings[pressure_slot] = analysis.AnalysisNamedPremiseBindingV0(
+            requirement, rebind_id
+        )
+
+    provider_coordinate = analysis.PIRProtocolOutcomePartitionCoordinate(
+        subject.fs_protocol.identifier
+    )
+    provider_requirement = analysis.AnalysisNamedPremiseRequirementV0(
+        "outcome-carrier",
+        analysis.AnalysisNamedPremiseKind.PROVIDER_OUTCOME_CARRIER_MAP,
+        provider_coordinate,
+    )
+    provider_body, provider_formation_error = _pressure_provider_premise(
+        subject, provider_coordinate, provider_evidence
+    )
+
+    typed_requirements = analysis._canonical_requirement_sequence(
+        (
+            *fresh_requirements,
+            provider_requirement,
+            *rebind_requirements.values(),
+        )
+    )
+    family = analysis.analysis_profile_declaration_ref(
+        analysis.ANALYSIS_PROPERTY_PROFILE,
+        analysis.ANALYSIS_PROPERTY_PROFILE,
+        "analysis.property-family",
+        "k-out-of-n-special-soundness",
+    )
+    question_body = analysis.AnalysisQuestionBodyV0(
+        family,
+        (
+            subject.admission.fresh_protocol_id,
+            subject.fs_protocol.identifier,
+        ),
+        _r(k1.Symbol("pressure-named-premise-intake")),
+        _r(
+            k1.Symbol("mixed-challenge-multi-binding"),
+            k1.BytesValue(subject.admission.candidate.asserted_id.internal_reference()),
+        ),
+        typed_requirements,
+    )
+    question_id = analysis._analysis_id("analysis.question", question_body)
+    supplied_by_slot = {
+        z3_requirement.slot: analysis.AnalysisNamedPremiseBindingV0(
+            z3_requirement, z3_premise_id
+        ),
+    }
+    supplied = tuple(
+        supplied_by_slot[item.slot]
+        for item in typed_requirements
+        if item.slot in supplied_by_slot
+    )
+    intake = analysis.intake_analysis_named_premises(question_id, supplied)
+    if (
+        intake.outcome is not analysis.NamedPremiseIntakeOutcome.CANNOT_ANSWER
+        or intake.code != "F0V2D2-C-MISSING-BINDING-KEY"
+        or intake.bindings
+    ):
+        raise PressureError("pressure premise intake did not stop at missing bindings")
+
+    rebind_probes: dict[str, dict[str, str]] = {}
+    for requirement in typed_requirements:
+        if requirement.slot not in rebind_bindings:
+            continue
+        probe_question = analysis._analysis_id(
+            "analysis.question",
+            replace(
+                question_body,
+                family_payload=_r(
+                    k1.Symbol("pressure-rebind-probe"),
+                    k1.Symbol(requirement.slot),
+                ),
+                named_premise_requirements=(requirement,),
+            ),
+        )
+        probe = analysis.intake_analysis_named_premises(
+            probe_question, (rebind_bindings[requirement.slot],)
+        )
+        if (
+            probe.outcome is not analysis.NamedPremiseIntakeOutcome.REFUSED
+            or probe.code != "F0V2D2-R-REBIND-REQUIRED-SCOPE"
+        ):
+            raise PressureError("one stale relation or Plan premise did not refuse")
+        rebind_probes[requirement.slot] = {
+            "outcome": probe.outcome.value,
+            "code": probe.code,
+        }
+
+    requirement_evidence = {
+        **{
+            f"challenge-law-{item['challenge_ref']}": {
                 "slot": f"challenge-law-{item['challenge_ref']}",
                 "kind": "FreshPublicCoinDistribution",
                 "coordinate": item["fresh_law"],
                 "source": (
-                    "proposal fixture exact-coordinate match"
-                    if item["challenge_ref"] in fixture_law_matches
-                    else "no matching exact-coordinate fixture premise"
+                    "existing exact uniform Z/3 profile"
+                    if item["challenge_ref"] == 1
+                    else "no exact uniform Boolean distribution profile declared"
                 ),
             }
             for item in fresh_laws
-        ],
-        {
+        },
+        "outcome-carrier": {
             "slot": "outcome-carrier",
             "kind": "ProviderOutcomeCarrierMap",
             "coordinate": {
                 "protocol_id": _id(subject.fs_protocol.identifier),
                 "path": "ProtocolOutcomeLane",
             },
+            "source": "exact six-lane candidate map; provider declaration unpublished",
         },
-        *[
-            {
+        **{
+            name: {
                 "slot": name,
                 "kind": kind,
                 "coordinate": fixture_by_kind[kind]["coordinate"],
@@ -2842,8 +3080,12 @@ def analysis_boundary(subject: PressureSubject) -> dict[str, Any]:
                 ("honest-commit", "HonestCommit"),
                 ("honest-respond", "HonestRespond"),
             )
-        ],
-    ]
+        },
+    }
+    requirements = [requirement_evidence[item.slot] for item in typed_requirements]
+    premise_ids = analysis._canonical_named_premise_ids(
+        binding.premise_id for binding in supplied
+    )
     return {
         "fresh_law_leaf_count": len(fresh_laws),
         "unique_fresh_law_coordinate_count": len(
@@ -2863,21 +3105,73 @@ def analysis_boundary(subject: PressureSubject) -> dict[str, Any]:
             == _id(subject.admission.candidate.asserted_id)
         ),
         "premise_requirement_sequence": requirements,
+        "canonical_requirement_slots": [item.slot for item in typed_requirements],
+        "z3_distribution_profile": {
+            "profile_id": _id(z3_distribution),
+            "premise_id": _id(z3_premise_id),
+            "support": [0, 1, 2],
+            "point_mass": [1, 3],
+            "body_sha256": hashlib.sha256(
+                k1.encode_datum(
+                    analysis.analysis_domain_body_v0(
+                        "analysis.distribution-profile", z3_distribution_body
+                    )
+                )
+            ).hexdigest(),
+        },
+        "boolean_distribution_profile": {
+            "declared": False,
+            "profile_id": None,
+            "declaration_site": (
+                "docs-next/analysis/cryptographic-properties.md Section 3, "
+                "AnalysisSubjectTuple and SchnorrNamedPremiseBindings"
+            ),
+            "owner_lines": "321-369, 2543-2551",
+        },
+        "provider_requirement": {
+            "formed": True,
+            "coordinate_protocol_id": _id(provider_body.coordinate.protocol_id),
+            "premise_formed": False,
+            "formation_error": provider_formation_error,
+        },
+        "named_premise_chain": {
+            "question_candidate_id": _id(question_id),
+            "question_requirement_count": len(typed_requirements),
+            "supplied_binding_count": len(supplied),
+            "supplied_premise_ids": [_id(item) for item in premise_ids],
+            "missing_slots": [
+                item.slot
+                for item in typed_requirements
+                if item.slot not in supplied_by_slot
+            ],
+            "intake_outcome": intake.outcome.value,
+            "intake_code": intake.code,
+            "first_unformed_stage": "analysis.goal",
+            "goal_id": None,
+            "hypothesis_context_id": None,
+            "proposition_id": None,
+            "support_instantiation_id": None,
+            "judgment_record_id": None,
+            "rebind_probes": rebind_probes,
+            "question_nonclaim": (
+                "candidate uses the executable Schnorr fixture's five typed "
+                "coordinates pending an exact pressure-subject rebind"
+            ),
+        },
         "proposal_fixture_sha256": hashlib.sha256(
             ANALYSIS_PREMISE_FIXTURE.read_bytes()
         ).hexdigest(),
         "missing": [
-            "owner named-premise constructor",
-            "Boolean Fresh distribution premise",
+            "exact uniform Boolean distribution profile",
             "exact-subject relation and Plan rebind",
             "provider declaration",
         ],
         "owner_boundary": {
-            "named_requirement_variant_present": False,
-            "cryptographic_properties_section_3_2_present": False,
-            "analysis_model_lines": "2246-2261",
-            "cryptographic_properties_distribution_lines": "968-973",
-            "cryptographic_properties_provider_search_lines": "1299-2167",
+            "named_requirement_variant_present": True,
+            "cryptographic_properties_section_3_2_present": True,
+            "analysis_model_lines": "2095-2341, 3140-3190",
+            "cryptographic_properties_distribution_lines": "2230-2256, 2543-2551",
+            "cryptographic_properties_provider_lines": "2258-2306, 2609-2635",
             "provider_packet_authority_lines": "4-8",
             "proposal_fixture_subject_line": 5,
             "proposal_fixture_rebind_lines": "154-259",
@@ -2963,8 +3257,8 @@ def evidence() -> dict[str, Any]:
     reads = read_catalog_join(
         interaction, canonical, fs_execution, setup
     )
-    analysis = analysis_boundary(baseline)
     provider = provider_map(runtime)
+    analysis_evidence = analysis_boundary(baseline, provider)
     return {
         "question": QUESTION,
         "admission": {
@@ -3075,6 +3369,6 @@ def evidence() -> dict[str, Any]:
         "interface": interface,
         "interface_negative": interface_negative,
         "runtime": runtime,
-        "analysis_boundary": analysis,
+        "analysis_boundary": analysis_evidence,
         "provider_map": provider,
     }

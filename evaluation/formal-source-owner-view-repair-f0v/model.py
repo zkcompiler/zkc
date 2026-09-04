@@ -74,6 +74,7 @@ EXPECTED_ROTATION = (
     "analysis-cryptographic-property",
     "analysis-incremental-composition",
     "analysis-incremental-composition-source-validation",
+    "analysis-kernel",
     "canonical-framed-fiat-shamir",
     "commitment-opening",
     "duplex-sponge-fiat-shamir",
@@ -87,7 +88,7 @@ EXPECTED_ROTATION = (
     "relations",
     "verifier-derived-query-plan",
 )
-EXPECTED_STABLE = ("analysis-kernel",)
+EXPECTED_STABLE: tuple[str, ...] = ()
 BASELINE_IDENTITIES = HERE / "baseline-identities.json"
 
 SOURCE_KIND_TO_LOCAL_COMPILER = {

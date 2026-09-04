@@ -6,6 +6,36 @@ Protocol IR and Foundation only through the authenticated import chain. It does
 not copy their Protocol, Plan, Relations, execution, or identity semantics into
 an Analysis-owned shadow model.
 
+## Named-premise migration question
+
+This migration asks one exact question: does the bounded Analysis model carry
+the owner text's closed ten-kind, eight-coordinate named-premise algebra from
+question requirements through goal intake and into every reachable hypothesis
+node, context, proposition, support, and judgment identity, while failing
+closed on malformed, missing, mismatched, or cross-profile inputs?
+
+A pass establishes that exact behavior for the finite constructors and
+mutations exercised here. The relation-bound Schnorr question consumes six
+premises; the construction and family Fiat--Shamir questions each consume two;
+the fixed-extractor question consumes the relation/witness pair; and every
+owner-licensed empty family carries explicit empty tuples. Missing premise
+sources or binding keys are `CannotAnswer`, malformed key sets are
+`Malformed`, and kind, coordinate, profile, or model-scope substitutions are
+`Refused` before a goal identity forms.
+
+The executable fixed-extractor pair is freshly formed over that question's
+complete subject sequence, as the migrated owner scope requires. The imported
+bounded PublicCoinView now carries the exact eleven-field challenge row,
+including the authenticated `fresh_law` declaration leaf; the Fresh premise
+uses the value of that leaf rather than an occurrence-coordinate proxy. The
+selected construction carries its ordered total challenge rule, and sampler
+adequacy is derived from the identity-bearing per-rule `maximum_draws` value.
+The property profile also publishes the exact operational-completion
+hypothesis declaration and validates every owner-named law reference and
+argument schema before premise formation. A missing Fresh leaf or an unknown
+hypothesis declaration fails closed. None of this establishes premise truth,
+relation satisfaction, Plan honesty, theorem truth, or cryptographic security.
+
 The instrument has three deliberately separate layers.
 
 ## 1. Global theorem schema
@@ -213,6 +243,15 @@ the producing owner profiles. The Fresh execution view uses the Interaction
 static-view arm, the Fiat--Shamir execution view uses the canonical-framed
 static-view arm, the checked construction view uses the canonical-framed
 checked-construction arm, and the public-setup view uses the public-setup arm.
+The intake now follows the complete authored Analysis read catalog: the Fresh
+side additionally consumes PublicBinding, StrategyDecision, PublicCoin, the
+acceptance closure of Effect, and ClaimReduction views; the Fiat--Shamir side
+additionally consumes TranscriptDeclaration, RequiredInfluence,
+ChallengeTransition, and FSConstruction views. Each requested field set is
+closed by the PIR owner before issuance and is reauthenticated with its exact
+consumer and purpose. Both public-setup bodies carry `entries` and
+`run_established`; this fixed-setup formation requires the latter sequence to
+be empty on both axes and refuses run-established setup values.
 These authority identities changed because the imported protocol model now
 implements the owner equations instead of hashing a generic six-field record.
 The gate consumes the newly derived identities rather than preserving fixture

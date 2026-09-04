@@ -1,7 +1,7 @@
 {
   "aggregate": {
-    "code": "F0V4-C-END-TO-END-COMPOSITION",
-    "outcome": "CannotAnswer"
+    "code": "F0V4-A-END-TO-END-COMPOSITION",
+    "outcome": "Affirmative"
   },
   "evidence_control": {
     "admission": {
@@ -90,6 +90,22 @@
       }
     },
     "analysis_boundary": {
+      "boolean_distribution_profile": {
+        "declaration_site": "docs-next/analysis/cryptographic-properties.md Section 3, AnalysisSubjectTuple and SchnorrNamedPremiseBindings",
+        "declared": false,
+        "owner_lines": "321-369, 2543-2551",
+        "profile_id": null
+      },
+      "canonical_requirement_slots": [
+        "witness-type",
+        "honest-commit",
+        "honest-respond",
+        "challenge-law-0",
+        "challenge-law-1",
+        "outcome-carrier",
+        "relation-predicate",
+        "prover-private-state"
+      ],
       "current_subject_core_id": "zkcidv0:pir.interactive-core:8313d9a7aa16f6f33415eaf8b60e00aca1b1ffcce64f21278a0be6130ed6b6e5",
       "fixture_fresh_law_matches": [
         1
@@ -126,60 +142,69 @@
         }
       ],
       "missing": [
-        "owner named-premise constructor",
-        "Boolean Fresh distribution premise",
+        "exact uniform Boolean distribution profile",
         "exact-subject relation and Plan rebind",
         "provider declaration"
       ],
+      "named_premise_chain": {
+        "first_unformed_stage": "analysis.goal",
+        "goal_id": null,
+        "hypothesis_context_id": null,
+        "intake_code": "F0V2D2-C-MISSING-BINDING-KEY",
+        "intake_outcome": "CannotAnswer",
+        "judgment_record_id": null,
+        "missing_slots": [
+          "witness-type",
+          "honest-commit",
+          "honest-respond",
+          "challenge-law-0",
+          "outcome-carrier",
+          "relation-predicate",
+          "prover-private-state"
+        ],
+        "proposition_id": null,
+        "question_candidate_id": "zkcidv0:analysis.question:26738ba54319a6a95cd9d890abe8a80ea665c382732832c3de56684851c4ce4a",
+        "question_nonclaim": "candidate uses the executable Schnorr fixture's five typed coordinates pending an exact pressure-subject rebind",
+        "question_requirement_count": 8,
+        "rebind_probes": {
+          "honest-commit": {
+            "code": "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            "outcome": "Refused"
+          },
+          "honest-respond": {
+            "code": "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            "outcome": "Refused"
+          },
+          "prover-private-state": {
+            "code": "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            "outcome": "Refused"
+          },
+          "relation-predicate": {
+            "code": "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            "outcome": "Refused"
+          },
+          "witness-type": {
+            "code": "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            "outcome": "Refused"
+          }
+        },
+        "supplied_binding_count": 1,
+        "supplied_premise_ids": [
+          "zkcidv0:analysis.named-premise:3c2c2513cefd4c9377d797456526cc146b741690e67f06300c98d5dce23c19df"
+        ],
+        "support_instantiation_id": null
+      },
       "owner_boundary": {
-        "analysis_model_lines": "2246-2261",
-        "cryptographic_properties_distribution_lines": "968-973",
-        "cryptographic_properties_provider_search_lines": "1299-2167",
-        "cryptographic_properties_section_3_2_present": false,
-        "named_requirement_variant_present": false,
+        "analysis_model_lines": "2095-2341, 3140-3190",
+        "cryptographic_properties_distribution_lines": "2230-2256, 2543-2551",
+        "cryptographic_properties_provider_lines": "2258-2306, 2609-2635",
+        "cryptographic_properties_section_3_2_present": true,
+        "named_requirement_variant_present": true,
         "proposal_fixture_rebind_lines": "154-259",
         "proposal_fixture_subject_line": 5,
         "provider_packet_authority_lines": "4-8"
       },
       "premise_requirement_sequence": [
-        {
-          "coordinate": {
-            "declaration_kind": "pir.public-coin-law",
-            "local_ordinal": 0,
-            "module": "zkcidv0:foundation.semantic-module:aa410e6eaa748282e8135539023474b8e5c0821a049223024454412e54135e39"
-          },
-          "kind": "FreshPublicCoinDistribution",
-          "slot": "challenge-law-0",
-          "source": "no matching exact-coordinate fixture premise"
-        },
-        {
-          "coordinate": {
-            "declaration_kind": "pir.public-coin-law",
-            "local_ordinal": 0,
-            "module": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7"
-          },
-          "kind": "FreshPublicCoinDistribution",
-          "slot": "challenge-law-1",
-          "source": "proposal fixture exact-coordinate match"
-        },
-        {
-          "coordinate": {
-            "path": "ProtocolOutcomeLane",
-            "protocol_id": "zkcidv0:pir.protocol:73723d14d852dc76856aaa1e609132f8893b64ea992a9ab0b6a4f40dfe42b9ae"
-          },
-          "kind": "ProviderOutcomeCarrierMap",
-          "slot": "outcome-carrier"
-        },
-        {
-          "coordinate": {
-            "owner": "relations",
-            "path": "evaluator",
-            "subject": "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e"
-          },
-          "kind": "RelationPredicate",
-          "slot": "relation-predicate",
-          "source": "proposal fixture; exact current-subject rebind required"
-        },
         {
           "coordinate": {
             "owner": "relations",
@@ -188,16 +213,6 @@
           },
           "kind": "WitnessType",
           "slot": "witness-type",
-          "source": "proposal fixture; exact current-subject rebind required"
-        },
-        {
-          "coordinate": {
-            "owner": "pir",
-            "path": "persistent_state[0] -> PlanExecutionState[0]",
-            "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b"
-          },
-          "kind": "ProverPrivateState",
-          "slot": "prover-private-state",
           "source": "proposal fixture; exact current-subject rebind required"
         },
         {
@@ -219,10 +234,79 @@
           "kind": "HonestRespond",
           "slot": "honest-respond",
           "source": "proposal fixture; exact current-subject rebind required"
+        },
+        {
+          "coordinate": {
+            "declaration_kind": "pir.public-coin-law",
+            "local_ordinal": 0,
+            "module": "zkcidv0:foundation.semantic-module:aa410e6eaa748282e8135539023474b8e5c0821a049223024454412e54135e39"
+          },
+          "kind": "FreshPublicCoinDistribution",
+          "slot": "challenge-law-0",
+          "source": "no exact uniform Boolean distribution profile declared"
+        },
+        {
+          "coordinate": {
+            "declaration_kind": "pir.public-coin-law",
+            "local_ordinal": 0,
+            "module": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7"
+          },
+          "kind": "FreshPublicCoinDistribution",
+          "slot": "challenge-law-1",
+          "source": "existing exact uniform Z/3 profile"
+        },
+        {
+          "coordinate": {
+            "path": "ProtocolOutcomeLane",
+            "protocol_id": "zkcidv0:pir.protocol:73723d14d852dc76856aaa1e609132f8893b64ea992a9ab0b6a4f40dfe42b9ae"
+          },
+          "kind": "ProviderOutcomeCarrierMap",
+          "slot": "outcome-carrier",
+          "source": "exact six-lane candidate map; provider declaration unpublished"
+        },
+        {
+          "coordinate": {
+            "owner": "relations",
+            "path": "evaluator",
+            "subject": "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e"
+          },
+          "kind": "RelationPredicate",
+          "slot": "relation-predicate",
+          "source": "proposal fixture; exact current-subject rebind required"
+        },
+        {
+          "coordinate": {
+            "owner": "pir",
+            "path": "persistent_state[0] -> PlanExecutionState[0]",
+            "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b"
+          },
+          "kind": "ProverPrivateState",
+          "slot": "prover-private-state",
+          "source": "proposal fixture; exact current-subject rebind required"
         }
       ],
-      "proposal_fixture_sha256": "d1a52e7350c446d3f6bc8e87af1794a4b08d61e7f6482f138d7ee94de63e1a4d",
-      "unique_fresh_law_coordinate_count": 2
+      "proposal_fixture_sha256": "151124be6c318f032df6ef92254ab1930f02aa27a7f3df7b9da9d120e7dfce42",
+      "provider_requirement": {
+        "coordinate_protocol_id": "zkcidv0:pir.protocol:73723d14d852dc76856aaa1e609132f8893b64ea992a9ab0b6a4f40dfe42b9ae",
+        "formation_error": "provider premise cannot form without an authenticated published provider declaration",
+        "formed": true,
+        "premise_formed": false
+      },
+      "unique_fresh_law_coordinate_count": 2,
+      "z3_distribution_profile": {
+        "body_sha256": "22346120c95453c20aed308817ab44fc70cb7c3c587c1befd044241e59032d74",
+        "point_mass": [
+          1,
+          3
+        ],
+        "premise_id": "zkcidv0:analysis.named-premise:3c2c2513cefd4c9377d797456526cc146b741690e67f06300c98d5dce23c19df",
+        "profile_id": "zkcidv0:analysis.distribution-profile:b51bdcd25a30373d706e12c376bb455645744780c4412795a71e97cc906f8114",
+        "support": [
+          0,
+          1,
+          2
+        ]
+      }
     },
     "analysis_read_join": {
       "fs_execution_fields": [
@@ -320,7 +404,7 @@
       },
       "slot_count": 13
     },
-    "analysis_requirement_sequence_sha256": "dc9a7cee93d7d77f64e4c7638286855b7555c8b869b8ac6e5db46a0dc97a8f8e",
+    "analysis_requirement_sequence_sha256": "1bf63a7c240e929749d7ea468d230f5b234b723a1748301b750e4b459bdb3c4f",
     "canonical_view_sha256": {
       "CanonicalChallengeTransitionView": "cef842e46df0f44998c5defb62347f8337e5942f0569a184bcf7ec223290c69b",
       "CanonicalFSConstructionView": "c930b553b9cd67dc074e8b461517a94663cfe3815d41780811d96b6334f1488b",
@@ -567,15 +651,17 @@
       "sampling_failure_variant": "InterpretationFailure"
     },
     "source": {
-      "analysis_model_sha256": "8930524e8d7ca547fed728282030557f1bbfb6d546923e193caf919d04b81826",
-      "cryptographic_properties_sha256": "0b2783c39ecc57744721e862d28edb9301a45ab828051c32cc8016b510bab20b",
+      "analysis_model_sha256": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
+      "analysis_property_profile_sha256": "60adb5568522e374872ff2df1d5001d07819519f60a1c654e54f7b93e1d74a1d",
+      "cryptographic_properties_sha256": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
       "fiat_shamir_sha256": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
       "interactive_core_sha256": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
       "interfaces_and_plans_sha256": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
-      "named_premise_owner_constructor_present": false,
+      "named_premise_owner_constructor_present": true,
       "provider_carrier_packet_authority": "None",
-      "provider_carrier_packet_sha256": "a43a4907854545c6c0001e480a0b90b9433f2378e431336e3aff54900eb93e58",
-      "provider_map_section_present": false
+      "provider_carrier_packet_sha256": "73dd3a2f7817817a78fbc5fa18c3fc87b1c42e054c5f52fa9f62ed279774e33b",
+      "provider_map_section_present": true,
+      "uniform_boolean_fresh_profile_declared": false
     },
     "subjects": {
       "baseline": {
@@ -762,9 +848,9 @@
       "F0V4-A-FRESH-LAW-COORDINATES"
     ],
     [
-      "boolean-fresh-distribution-premise",
+      "boolean-distribution-profile",
       "CannotAnswer",
-      "F0V4-C-BOOLEAN-FRESH-PREMISE"
+      "F0V4-C-BOOLEAN-DISTRIBUTION-PROFILE"
     ],
     [
       "relation-and-plan-fixture-coordinates",
@@ -778,8 +864,13 @@
     ],
     [
       "named-premise-owner-formation",
-      "CannotAnswer",
-      "F0V4-C-NAMED-PREMISE-OWNER-CONTRACT"
+      "Affirmative",
+      "F0V4-A-NAMED-PREMISE-OWNER-CONTRACT"
+    ],
+    [
+      "named-premise-intake-boundary",
+      "Affirmative",
+      "F0V4-A-NAMED-PREMISE-INTAKE-BOUNDARY"
     ],
     [
       "provider-declaration",
@@ -798,9 +889,9 @@
     ],
     [
       "end-to-end-composition",
-      "CannotAnswer",
-      "F0V4-C-END-TO-END-COMPOSITION"
+      "Affirmative",
+      "F0V4-A-END-TO-END-COMPOSITION"
     ]
   ],
-  "findings_sha256": "f3bc2f0164b295418f4d609405b9354dd4c45fda8831780c94e3ab31799d263b"
+  "findings_sha256": "2d2cf4a966b1f52bd4d6ba26fa508f302d916a7449fd533dee36680f10147050"
 }

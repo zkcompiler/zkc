@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXPECTED = HERE / "expected-findings.json"
 MIGRATION_BASE_COMMIT = "b82ce5e"
+MIGRATION_HEAD_COMMIT = "d7676037"
 ROUND_SEVEN_COMMIT = "0590fc5f"
 ROUND_EIGHT_COMMIT = "16eed00f"
 
@@ -4336,6 +4337,34 @@ def _publication_review() -> dict[str, Any]:
             ),
         )
 
+    # The stacked Analysis branch carries this package unchanged while its own
+    # pages rotate the Analysis profiles. Every cone below is therefore asserted
+    # relative to the pinned migration head: the current tree may rotate, in
+    # addition to the recorded cone, exactly the profiles that differ from that
+    # head, and those must all be Analysis-owned. On the migration branch the
+    # current tree equals the head and the recorded cones apply unchanged.
+    reference_migration_head, cold_migration_head = compile_at(MIGRATION_HEAD_COMMIT)
+    _require(
+        reference_migration_head == cold_migration_head,
+        "publication compilers disagree at the migration head",
+    )
+    stacked_rotated = [
+        key
+        for key in reference.PROFILE_KEYS
+        if reference_table["profiles"][key] != reference_migration_head["profiles"][key]
+    ]
+    _require(
+        all(key.startswith("analysis-") for key in stacked_rotated),
+        "the stacked branch rotates a profile outside the Analysis namespace",
+    )
+
+    def _stacked(expected_rotated: list[str], expected_stable: list[str]) -> tuple[list[str], list[str]]:
+        rotated_keys = set(expected_rotated) | set(stacked_rotated)
+        return (
+            [key for key in reference.PROFILE_KEYS if key in rotated_keys],
+            [key for key in expected_stable if key not in stacked_rotated],
+        )
+
     reference_baseline, cold_baseline = compile_at(ROUND_SEVEN_COMMIT)
     _require(
         reference_baseline == cold_baseline,
@@ -4348,8 +4377,7 @@ def _publication_review() -> dict[str, Any]:
     ]
     stable = [key for key in reference.PROFILE_KEYS if key not in rotated]
     _require(
-        rotated
-        == [
+        (rotated, stable) == _stacked([
             "interaction",
             "canonical-framed-fiat-shamir",
             "duplex-sponge-fiat-shamir",
@@ -4366,8 +4394,7 @@ def _publication_review() -> dict[str, Any]:
             "analysis-afk-theorem-source-validation",
             "analysis-incremental-composition",
             "analysis-incremental-composition-source-validation",
-        ]
-        and stable == ["oir-endpoint-graph", "analysis-kernel"],
+        ], ["oir-endpoint-graph", "analysis-kernel"]),
         "the repair rotation cone drifted",
     )
     reference_round_eight, cold_round_eight = compile_at(ROUND_EIGHT_COMMIT)
@@ -4385,8 +4412,7 @@ def _publication_review() -> dict[str, Any]:
         key for key in reference.PROFILE_KEYS if key not in round_eight_rotated
     ]
     _require(
-        round_eight_rotated
-        == [
+        (round_eight_rotated, round_eight_stable) == _stacked([
             "canonical-framed-fiat-shamir",
             "duplex-sponge-fiat-shamir",
             "public-setup",
@@ -4401,14 +4427,12 @@ def _publication_review() -> dict[str, Any]:
             "analysis-afk-theorem-source-validation",
             "analysis-incremental-composition",
             "analysis-incremental-composition-source-validation",
-        ]
-        and round_eight_stable
-        == [
+        ], [
             "interaction",
             "verifier-derived-query-plan",
             "oir-endpoint-graph",
             "analysis-kernel",
-        ],
+        ]),
         "the round-eight-to-current rotation cone drifted",
     )
     reference_migration_base, cold_migration_base = compile_at(MIGRATION_BASE_COMMIT)
@@ -4426,8 +4450,7 @@ def _publication_review() -> dict[str, Any]:
         key for key in reference.PROFILE_KEYS if key not in migration_rotated
     ]
     _require(
-        migration_rotated
-        == [
+        (migration_rotated, migration_stable) == _stacked([
             "interaction",
             "canonical-framed-fiat-shamir",
             "duplex-sponge-fiat-shamir",
@@ -4445,8 +4468,7 @@ def _publication_review() -> dict[str, Any]:
             "analysis-afk-theorem-source-validation",
             "analysis-incremental-composition",
             "analysis-incremental-composition-source-validation",
-        ]
-        and migration_stable == ["analysis-kernel"],
+        ], ["analysis-kernel"]),
         "the migration-base rotation cone drifted",
     )
     return {
@@ -4467,6 +4489,9 @@ def _publication_review() -> dict[str, Any]:
         "migration_base_rotated_profiles": migration_rotated,
         "migration_base_rotation_count": len(migration_rotated),
         "migration_base_stable_profiles": migration_stable,
+        "migration_head": MIGRATION_HEAD_COMMIT,
+        "migration_head_compiler_agreement": True,
+        "stacked_branch_rotated_profiles": stacked_rotated,
         "foundation_changed": reference_table["foundation"] != reference_baseline["foundation"],
         "published_legacy_mismatches": mismatches,
         "publication_table_written": False,

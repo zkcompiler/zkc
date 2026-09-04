@@ -26,9 +26,13 @@ def build_report() -> dict[str, Any]:
         raise RuntimeError("API-R-INDEPENDENT-DISAGREEMENT")
 
     complete = typed["complete"]
+    provider_map = typed["provider_map"]
+    provider_completion = typed["provider_completion"]
     alternate = typed["alternate_provider"]
     fresh = typed["fresh"]
     fiat_shamir = typed["fiat_shamir"]
+    extra_key = typed["extra_key"]
+    scope_mismatches = typed["scope_mismatches"]
     if complete["outcome"] != "Affirmative" or complete["named_premise_ids"] != complete["hypothesis_set"]:
         raise RuntimeError("API-R-HYPOTHESIS-SET")
     if any(value != "CannotAnswer/API-C-MISSING-PREMISE" for value in typed["omissions"].values()):
@@ -37,12 +41,48 @@ def build_report() -> dict[str, Any]:
         "outcome": "Refused", "code": "API-R-PREMISE-COORDINATE", "slot": "challenge-law"
     }:
         raise RuntimeError("API-R-WRONG-COORDINATE-ACCEPTED")
+    if extra_key != {
+        "outcome": "Malformed", "code": "API-M-EXTRA-PREMISE", "extra": ["unexpected"]
+    }:
+        raise RuntimeError("API-R-EXTRA-PREMISE-NOT-MALFORMED")
+    if set(scope_mismatches) != {
+        "FreshChallengeOnly", "OracleModelOnly", "ExactSubjectsOnly", "RebindRequired"
+    } or any(
+        result["outcome"] != "Refused" or result["code"] != "API-R-MODEL-SCOPE"
+        for result in scope_mismatches.values()
+    ):
+        raise RuntimeError("API-R-MODEL-SCOPE-DID-NOT-REFUSE")
     if fresh["outcome"] != "Affirmative" or fiat_shamir["outcome"] != "Affirmative":
         raise RuntimeError("API-R-CHALLENGE-INTAKE")
     if set(fresh["named_premise_ids"]) & set(fiat_shamir["named_premise_ids"]):
         raise RuntimeError("API-R-FRESH-FS-PREMISE-ALIAS")
-    if complete["judgment_id"] == alternate["judgment_id"]:
+    if (
+        provider_map["outcome"] != "Affirmative"
+        or provider_completion["outcome"] != "Affirmative"
+    ):
+        raise RuntimeError("API-R-PROVIDER-INTAKE")
+    if provider_map["judgment_id"] == alternate["judgment_id"]:
         raise RuntimeError("API-R-PROVIDER-MAP-IDENTITY-ALIAS")
+    provider_premise_ids = {
+        typed["premise_ids"][name]
+        for name in (
+            "provider-outcome-option-bool",
+            "provider-outcome-bool",
+            "provider-outcome-tagged",
+        )
+    }
+    if len(provider_premise_ids) != 3:
+        raise RuntimeError("API-R-PROVIDER-MAP-IDENTITY-ALIAS")
+    if typed["bool_noncompletion_collapse"] != {
+        "outcome": "Malformed",
+        "code": "API-M-PROVIDER-LANE-IMAGE",
+    }:
+        raise RuntimeError("API-R-PROVIDER-LANE-COLLAPSE-ACCEPTED")
+    if typed["missing_owner_declaration"] != {
+        "outcome": "CannotAnswer",
+        "code": "API-C-HYPOTHESIS-DECLARATION-ABSENT",
+    }:
+        raise RuntimeError("API-R-UNDECLARED-HYPOTHESIS-ACCEPTED")
 
     finding_codes = [
         ["closed-named-premise-schema", "Affirmative", "API-A-CLOSED-SCHEMA"],
@@ -51,10 +91,15 @@ def build_report() -> dict[str, Any]:
         ["premises-retained-in-hypothesis-set", "Affirmative", "API-A-HYPOTHESIS-SET"],
         ["every-single-premise-omission", "CannotAnswer", "API-C-MISSING-PREMISE"],
         ["different-coordinate-substitution", "Refused", "API-R-PREMISE-COORDINATE"],
+        ["extra-premise-key", "Malformed", "API-M-EXTRA-PREMISE"],
+        ["all-model-scope-mismatches", "Refused", "API-R-MODEL-SCOPE"],
         ["fresh-and-fiat-shamir-premise-separation", "Affirmative", "API-A-REGIME-SEPARATION"],
         ["provider-map-identity-separation", "Affirmative", "API-A-PROVIDER-MAP-IDENTITY"],
+        ["provider-lane-image-discipline", "Malformed", "API-M-PROVIDER-LANE-IMAGE"],
+        ["operational-completion-kind", "Affirmative", "API-A-OPERATIONAL-COMPLETION"],
+        ["missing-owner-hypothesis-declaration", "CannotAnswer", "API-C-HYPOTHESIS-DECLARATION-ABSENT"],
         ["independent-reconstruction", "Affirmative", "API-A-INDEPENDENT-RECONSTRUCTION"],
-        ["current-pir-outcome-partition-coordinate", "CannotAnswer", "API-C-OUTCOME-PARTITION-UNPUBLISHED"],
+        ["profile-qualified-outcome-partition", "Affirmative", "API-A-OUTCOME-PARTITION-TYPED"],
         ["theorem-result", "CannotAnswer", "API-C-NO-THEOREM"],
         ["property-result", "CannotAnswer", "API-C-NO-PROPERTY"],
         ["owner-adoption", "CannotAnswer", "API-C-NO-OWNER-ADOPTION"],
@@ -69,32 +114,43 @@ def build_report() -> dict[str, Any]:
             "premise_ids": typed["premise_ids"],
             "catalog_digest": typed["catalog_digest"],
             "evidence_depths": typed["depth_counts"],
-            "kinds": 9,
+            "kinds": 10,
             "outcome_lanes": 6,
             "subject_outcome_lanes": 5,
         },
         "intake": {
             "complete_judgment_id": complete["judgment_id"],
             "alternate_provider_judgment_id": alternate["judgment_id"],
+            "provider_map_judgment_id": provider_map["judgment_id"],
+            "provider_completion_judgment_id": provider_completion["judgment_id"],
+            "bool_noncompletion_collapse": typed["bool_noncompletion_collapse"],
+            "missing_owner_declaration": typed["missing_owner_declaration"],
             "complete_premises": len(complete["named_premise_ids"]),
             "omission_outcomes": typed["omissions"],
             "wrong_coordinate": typed["wrong_coordinate"],
+            "extra_key": extra_key,
+            "scope_mismatches": scope_mismatches,
             "fresh_premise_ids": fresh["named_premise_ids"],
             "fiat_shamir_premise_ids": fiat_shamir["named_premise_ids"],
             "same_core": True,
         },
-        "current_owner_gap": {
-            "outcome": "CannotAnswer",
-            "code": "API-C-OUTCOME-PARTITION-UNPUBLISHED",
-            "coordinate": "docs-next/pir/interactive-core.md Section 12.3 lines 1688-1710",
-            "reason": "the current page lists generated-run lanes but does not publish the named ProtocolOutcomeLane partition used by this proposal-local fixture"
+        "outcome_partition_coordinate": {
+            "outcome": "Affirmative",
+            "code": "API-A-OUTCOME-PARTITION-TYPED",
+            "coordinate": "ProtocolOutcomeLane(subject.fresh_protocol_id)",
+            "reason": "the fixture keys each total provider map by the exact five-lane partition and requires Image exactly for the declaration's modelled lanes"
         },
         "measurements": {
             "reconstruction_paths": 2,
-            "complete_intakes": 4,
+            "complete_intakes": 6,
             "single_premise_omissions": len(typed["omissions"]),
             "coordinate_substitutions": 1,
-            "distinct_provider_maps": 2,
+            "extra_key_mutations": 1,
+            "model_scope_variants_refused": len(scope_mismatches),
+            "distinct_provider_maps": 3,
+            "operational_completion_premises": 1,
+            "provider_lane_collapse_mutations": 1,
+            "missing_owner_declaration_mutations": 1,
         },
         "nonclaims": [
             "No theorem is proved.",

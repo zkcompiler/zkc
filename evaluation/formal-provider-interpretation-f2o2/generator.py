@@ -29,9 +29,40 @@ CERTIFICATE_OUT = GENERATED / "certificate.json"
 SCHNORR_VIEW_MODEL = ROOT / "evaluation/formal-source-view-bodies-f0v2b1/model.py"
 SCHNORR_CORE_MODEL = ROOT / "evaluation/formal-source-target-core-f1r1b/reference_model.py"
 RELATION_PLAN_MODEL = ROOT / "evaluation/formal-schnorr-relations-plan-f2p1/model.py"
-INTEGRATED_EXPECTED = (
+SCHNORR_VIEW_SCHEMA = (
+    ROOT / "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json"
+)
+TERM_VECTORS = ROOT / "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json"
+TERMINAL_MECHANIZATION = (
+    ROOT / "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean"
+)
+TERM_PROBE = HERE / "TermEvaluatorProbe.lean"
+ENTRY_CONTRACT = (
     ROOT
-    / "evaluation/formal-source-integrated-views-f0v2b2d3/expected-findings.json"
+    / "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research"
+    / "f2o2-provider-interpretation-entry-contract.md"
+)
+DECISION_PACKET = (
+    ROOT
+    / "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research"
+    / "f2o2-provider-carrier-decision-2026-09-03.md"
+)
+OWNER_PAGES = (
+    ROOT / "docs-next/pir/interactive-core.md",
+    ROOT / "docs-next/analysis/analysis-model.md",
+    ROOT / "docs-next/analysis/cryptographic-properties.md",
+)
+PROFILE_MANIFESTS = (
+    ROOT / "docs-next/foundation/semantic-profile-manifests.json",
+    ROOT / "docs-next/pir/profiles/interaction.json",
+    ROOT / "docs-next/analysis/profiles/kernel.json",
+    ROOT / "docs-next/analysis/profiles/cryptographic-property.json",
+)
+PACKAGE_INPUTS = (
+    SCHNORR_VIEW_SCHEMA,
+    TERM_VECTORS,
+    TERMINAL_MECHANIZATION,
+    TERM_PROBE,
 )
 
 FORMAT = "zkc.formal-provider-interpretation.certificate.v0"
@@ -59,6 +90,13 @@ def _canonical(value: Any) -> bytes:
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical(value)).hexdigest()
+
+
+def _file_pins(paths: tuple[Path, ...]) -> dict[str, str]:
+    return {
+        path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in paths
+    }
 
 
 def _require(condition: bool, detail: str) -> None:
@@ -232,7 +270,7 @@ def _candidate_inputs() -> dict[str, Any]:
     }
 
 
-def _view_inputs() -> tuple[dict[str, Any], dict[str, Any]]:
+def _view_inputs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     source_views = _load("_provider_generator_source_views", SCHNORR_VIEW_MODEL)
     core_handle, protocol_handle = source_views.admitted_handles()
     candidate = source_views.build_candidate(core_handle, protocol_handle)
@@ -259,17 +297,31 @@ def _view_inputs() -> tuple[dict[str, Any], dict[str, Any]]:
         "core_id": core_handle.core_id.carrier(),
         "protocol_id": protocol_handle.protocol_id.carrier(),
     }
-    return summary, _algorithm_inputs(source_views)
+    fixture = source_views.owner.make_fixture()
+    carrier_inputs = {
+        "core_profiled_body_sha256": hashlib.sha256(
+            source_views.owner.core_profiled_body(
+                fixture.core_candidate.core, fixture.environment.profile_id
+            )
+        ).hexdigest(),
+        "protocol_profiled_body_sha256": hashlib.sha256(
+            source_views.owner.protocol_profiled_body(
+                fixture.protocol_candidate.core_id, fixture.environment.profile_id
+            )
+        ).hexdigest(),
+        "view_schema_source_sha256": hashlib.sha256(
+            SCHNORR_VIEW_SCHEMA.read_bytes()
+        ).hexdigest(),
+        "active_view_manifest_sha256": {
+            name: _digest(candidate["requested_manifests"][name]) for name in views
+        },
+    }
+    return summary, _algorithm_inputs(source_views), carrier_inputs
 
 
 def build_certificate() -> dict[str, Any]:
-    views, algorithms = _view_inputs()
+    views, algorithms, carriers = _view_inputs()
     candidate = _candidate_inputs()
-    integrated = json.loads(INTEGRATED_EXPECTED.read_text(encoding="utf-8"))
-    _require(
-        integrated["aggregate"] == "F0V2B2D3-A-INTEGRATED-SIX-VIEWS",
-        "integrated six-view package no longer has its frozen affirmative result",
-    )
     occurrence_to_step = [
         {"occurrence": 0, "effect": "ProverMessage", "step": "commit", "actor": "Prover"},
         {"occurrence": 1, "effect": "Challenge", "step": "challenge", "actor": "Verifier"},
@@ -288,15 +340,13 @@ def build_certificate() -> dict[str, Any]:
         {"source": "EffectView.occurrences[3].outputs[0]", "provider": "verify result", "carrier": "Bool"},
     ]
     lane_map = [
-        {"lane": "Accepted", "reachable": True, "provider_carrier": "Bool", "image": "true"},
-        {"lane": "Rejected", "reachable": True, "provider_carrier": "Bool", "image": "false"},
+        {"lane": "Accepted", "provider_lane_image": {"case": "Image", "value": True}},
+        {"lane": "Rejected", "provider_lane_image": {"case": "Image", "value": False}},
+        {"lane": "Aborted", "provider_lane_image": {"case": "Unmodelled"}},
+        {"lane": "StrategyStopped", "provider_lane_image": {"case": "Unmodelled"}},
         {
             "lane": "OperationalNoncompletion",
-            "reachable": True,
-            "provider_carrier": "Bool",
-            "image": None,
-            "outcome": "CannotAnswer",
-            "reason": "the verifier Boolean has no non-collapsing image for operational noncompletion",
+            "provider_lane_image": {"case": "Unmodelled"},
         },
     ]
     return {
@@ -310,13 +360,16 @@ def build_certificate() -> dict[str, Any]:
             "toolchain": TOOLCHAIN,
             "module": "Examples.Schnorr.SigmaProtocol",
             "definition": "Schnorr.sigma",
+            "closed_carrier": "Bool",
+            "modelled_lanes": ["Accepted", "Rejected"],
         },
         "inputs": {
+            "owner_pages": _file_pins(OWNER_PAGES),
+            "profile_manifests": _file_pins(PROFILE_MANIFESTS),
+            "package_inputs": _file_pins(PACKAGE_INPUTS),
+            "carriers": carriers,
             "algorithms": algorithms,
             "candidates": candidate,
-            "integrated_six_view_findings_sha256": hashlib.sha256(
-                INTEGRATED_EXPECTED.read_bytes()
-            ).hexdigest(),
         },
         "occurrence_to_step": occurrence_to_step,
         "type_map": type_map,
@@ -337,17 +390,27 @@ def check_generated() -> None:
     )
 
 
+def write_generated() -> None:
+    GENERATED.mkdir(parents=True, exist_ok=True)
+    LEAN_OUT.write_text(LEAN_TEXT, encoding="utf-8")
+    CERTIFICATE_OUT.write_text(certificate_text(), encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lean", action="store_true", help="print generated Lean")
     parser.add_argument("--certificate", action="store_true", help="print certificate JSON")
     parser.add_argument("--check", action="store_true", help="compare committed artifacts")
+    parser.add_argument("--write", action="store_true", help="write generated artifacts")
     args = parser.parse_args()
-    if sum((args.lean, args.certificate, args.check)) != 1:
+    if sum((args.lean, args.certificate, args.check, args.write)) != 1:
         parser.error("select exactly one output mode")
     if args.check:
         check_generated()
         print("generated provider module and certificate match their inputs")
+    elif args.write:
+        write_generated()
+        print("generated provider module and certificate written")
     elif args.lean:
         print(LEAN_TEXT, end="")
     else:

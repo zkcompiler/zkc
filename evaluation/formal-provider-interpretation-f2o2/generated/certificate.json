@@ -55,28 +55,69 @@
       "relation": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
       "witness": "x in Z/3Z supplied by Plan WitnessIngress key x"
     },
-    "integrated_six_view_findings_sha256": "7da20a8dbeb2c200731f7fa8f3e4a74746d3669ee8fceefc26cca146df12fa77"
+    "carriers": {
+      "active_view_manifest_sha256": {
+        "ClaimReductionView": "26fbaf90268be4c85122c25ea127260a1ccd5dcc69a3618207ef96eea5aab3ea",
+        "EffectView": "30a625ebc9386a57739273a9fbf6104c7416c8fbc308b4ac1197b13e71f56e17",
+        "ExecutionView": "4efcb4e5ab900e77e91b73e99861b40e56d2393de3d9314c058ac4078b8451da",
+        "PublicBindingView": "571b5571550576ad112ac2b96abdf5901c6bd6be90392f3e16d4cc5bdcc01a08",
+        "PublicCoinView": "337744a4db26cfb36cdb354b38df312bba8deb73bc090a53a4ba7030bc7cd5ba",
+        "StrategyDecisionView": "69923cb847884fb7589501f07b04fc1ab251a261ee6316963b441008ed2d1785"
+      },
+      "core_profiled_body_sha256": "cd95af28879446ec0c896a16a248e27d5505b25128ee0501f8d946d334b2caa7",
+      "protocol_profiled_body_sha256": "b10aa4026ffb95be06b4acd2be4a4cd8c2d7f61cbaa0607b5a7948f87a12396f",
+      "view_schema_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    "owner_pages": {
+      "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
+      "docs-next/analysis/cryptographic-properties.md": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
+      "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"
+    },
+    "package_inputs": {
+      "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "b6046e72fc3bb766c1af690cf7b39d9765dca3681c87d47e75f3109611123b69",
+      "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json": "bafdabbf36df10d09df478cbaa524ce88e0f6e6f0ffd0843c169a3eab4154b62",
+      "evaluation/formal-provider-interpretation-f2o2/TermEvaluatorProbe.lean": "b726117edae432b86ddde9b3270416791d4e253f85424a4f99c6615d5c3feb80",
+      "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    "profile_manifests": {
+      "docs-next/analysis/profiles/cryptographic-property.json": "60adb5568522e374872ff2df1d5001d07819519f60a1c654e54f7b93e1d74a1d",
+      "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
+      "docs-next/foundation/semantic-profile-manifests.json": "48e487f34c24317690dd221c066db1a0a09316dfb45f1d06934c5dfe74b058d0",
+      "docs-next/pir/profiles/interaction.json": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4"
+    }
   },
   "lane_map": [
     {
-      "image": "true",
       "lane": "Accepted",
-      "provider_carrier": "Bool",
-      "reachable": true
+      "provider_lane_image": {
+        "case": "Image",
+        "value": true
+      }
     },
     {
-      "image": "false",
       "lane": "Rejected",
-      "provider_carrier": "Bool",
-      "reachable": true
+      "provider_lane_image": {
+        "case": "Image",
+        "value": false
+      }
     },
     {
-      "image": null,
+      "lane": "Aborted",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "StrategyStopped",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
       "lane": "OperationalNoncompletion",
-      "outcome": "CannotAnswer",
-      "provider_carrier": "Bool",
-      "reachable": true,
-      "reason": "the verifier Boolean has no non-collapsing image for operational noncompletion"
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
     }
   ],
   "lean_sha256": "210fd0ae846ad96d6535dc629bff1a9d11bc2a6e808d5e1689609407e5857726",
@@ -119,7 +160,12 @@
     }
   ],
   "provider": {
+    "closed_carrier": "Bool",
     "definition": "Schnorr.sigma",
+    "modelled_lanes": [
+      "Accepted",
+      "Rejected"
+    ],
     "module": "Examples.Schnorr.SigmaProtocol",
     "name": "VCVio",
     "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",

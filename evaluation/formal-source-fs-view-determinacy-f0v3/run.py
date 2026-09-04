@@ -403,8 +403,8 @@ def _profile_inventory(source: dict[str, Any]) -> dict[str, Any]:
         if row["profile_digest"] != baseline["profiles"][key]
     ]
     stable = [key for key in reference_table["profiles"] if key not in rotated]
-    if len(rotated) != 17 or stable != ["analysis-kernel"]:
-        raise AuditFailure("the rehearsal identity rotation is not the expected 17/1 split")
+    if len(rotated) != 18 or stable:
+        raise AuditFailure("the Analysis-head identity rotation is not the expected 18/0 split")
     if not set(published["profiles"]) < set(reference_table["profiles"]):
         raise AuditFailure("the legacy published table is not a strict profile subset")
     if any(

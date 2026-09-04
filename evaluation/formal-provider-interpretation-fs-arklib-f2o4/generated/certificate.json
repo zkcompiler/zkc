@@ -1,0 +1,227 @@
+{
+  "authority": "none; untrusted generator output",
+  "format": "zkc.formal-provider-interpretation.fs-arklib.certificate.v0",
+  "inputs": {
+    "owner_pages": {
+      "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
+      "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
+      "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"
+    },
+    "package_inputs": {
+      "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "b6046e72fc3bb766c1af690cf7b39d9765dca3681c87d47e75f3109611123b69",
+      "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json": "bafdabbf36df10d09df478cbaa524ce88e0f6e6f0ffd0843c169a3eab4154b62",
+      "evaluation/formal-provider-interpretation-arklib-f2o3/generated/SchnorrArkLib.lean": "c2cdfa46a46fc5f87c8d71acc7786d161d97fb296878e4d094cdbbc7f9973f09",
+      "evaluation/formal-provider-interpretation-fs-arklib-f2o4/TermEvaluatorProbe.lean": "a8104f417f72d67969b45c661b19963701cc186929e1e4b442ad680af1bda334",
+      "evaluation/formal-provider-interpretation-fs-arklib-f2o4/template.lean": "dd29aaf64f713fb5f993ba44fba8a4b5d751cef0a1694ce9caed876d06b3484c",
+      "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors-one-shot.json": "06927908c7395cd8db0108d9bb000675fdc10d7c14b62de204319173b7986f58",
+      "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors.json": "3a6c554eb76040944cce39a1523849dd453650db39ae7931c67ca50d3e7a20f6",
+      "evaluation/formal-source-fs-runtime-f0v3c/executor.py": "a992a45111cb41180583e799b4ec69332cd54c9b40ad14342dec9cb993093c70",
+      "evaluation/formal-source-fs-runtime-f0v3c/expected-runs-one-shot.json": "f39550b83c75b120a59db42b67e7c45819f0833da45c712e787c06267be758f3",
+      "evaluation/formal-source-fs-runtime-f0v3c/expected-runs.json": "38403c58f7305f456235f44f1345f55f7cc8ca282c398a6c3375dd0fc7a02f0c",
+      "evaluation/formal-source-fs-runtime-f0v3c/model.py": "8aaa2405c30b637e041b9a3633af97c87071b3e4a296f202c62471dcbadbd8f2",
+      "evaluation/formal-source-fs-runtime-f0v3c/replay.py": "81c515ce9967f676710481513848a6086c3f193ac87b5eb17c7809519b6277da",
+      "evaluation/formal-source-fs-runtime-f0v3c/views.py": "f615d5540c69c951f4eec65df52a4ac32e0b99c82175cd8f0c330be7be53f143"
+    },
+    "profile_manifests": {
+      "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
+      "docs-next/foundation/semantic-profile-manifests.json": "48e487f34c24317690dd221c066db1a0a09316dfb45f1d06934c5dfe74b058d0",
+      "docs-next/pir/profiles/interaction.json": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4"
+    }
+  },
+  "lane_map": [
+    {
+      "lane": "Accepted",
+      "provider_lane_image": {
+        "case": "Image",
+        "value": "some ()"
+      }
+    },
+    {
+      "lane": "Rejected",
+      "provider_lane_image": {
+        "case": "Image",
+        "value": "none"
+      }
+    },
+    {
+      "lane": "Aborted",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "InterpretationFailed",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "StrategyStopped",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "OperationalNoncompletion",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    }
+  ],
+  "lean_sha256": "aeb8c9e0bbbba60f3f2e053273fe46378f445c142dc2a01e64a7d1030dc1c17f",
+  "occurrence_to_step": [
+    {
+      "kind": "ProverMessage",
+      "occurrence": 0,
+      "step": "proof.commitment"
+    },
+    {
+      "kind": "Challenge",
+      "occurrence": 1,
+      "step": "oracle.query.round-one"
+    },
+    {
+      "kind": "ProverMessage",
+      "occurrence": 2,
+      "step": "proof.response"
+    },
+    {
+      "kind": "Check",
+      "occurrence": 3,
+      "step": "verifier.check"
+    },
+    {
+      "kind": "Terminal",
+      "occurrence": 4,
+      "step": "verifier.accept"
+    },
+    {
+      "kind": "Terminal",
+      "occurrence": 5,
+      "step": "verifier.reject"
+    }
+  ],
+  "provider": {
+    "closed_carrier": {
+      "canonical_values": [
+        "none",
+        "some ()"
+      ],
+      "schema": "Option Unit"
+    },
+    "definition": "Reduction.fiatShamir",
+    "dependency_revision": "cbd4144b51d92da00dd50f05e068b2348fa6e529",
+    "dependency_tree": "28c268057ed58427973e5bbf4854d472a7088954",
+    "git_tree": "e38383088598a1305c15447c53db309ccd6b35ee",
+    "modelled_lanes": [
+      "Accepted",
+      "Rejected"
+    ],
+    "module": "ArkLib.OracleReduction.FiatShamir.Basic",
+    "name": "ArkLib",
+    "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+    "source_sha256": {
+      "ArkLib/OracleReduction/Basic.lean": "b36288c073ad52ccfa8597a8caf4f1b414b4710534da397d0b4b81aef1d892b6",
+      "ArkLib/OracleReduction/Execution.lean": "1c505e3d217ab21f3d9a88b0e8172f1fc9baf12f0bd16cadd97299e17964e297",
+      "ArkLib/OracleReduction/FiatShamir/Basic.lean": "ada402b9bb1d88b1703f847cdd46c8a3615d15bfdf307bad7388f1a520f511e1",
+      "ArkLib/OracleReduction/ProtocolSpec/Basic.lean": "d48bfee16c67ef12ac92b307f8f814abeaa8bc5e2fa0711678252bac1d89fb4c",
+      "lake-manifest.json": "25e545bb447c1f4e0bc1d55ffb17813ae58f9abd0c7cb48273186e0e5fd367a5",
+      "lean-toolchain": "efac0b94923b2d8b6840cd35be9177ad0fc5ab2332f4f4311c98712cee92fdee"
+    },
+    "toolchain": "leanprover/lean4:v4.31.0"
+  },
+  "question": "Does ArkLib's Fiat-Shamir transform of the generated finite Schnorr reduction correspond run for run to the admitted one-shot canonical-framed protocol under the exact table-backed oracle?",
+  "source_runs_sha256": "f39550b83c75b120a59db42b67e7c45819f0833da45c712e787c06267be758f3",
+  "source_table_sha256": "06927908c7395cd8db0108d9bb000675fdc10d7c14b62de204319173b7986f58",
+  "subject": {
+    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
+    "finite_table": [
+      {
+        "answer": 0,
+        "commitment": 0,
+        "statement": 0
+      },
+      {
+        "answer": 1,
+        "commitment": 1,
+        "statement": 0
+      },
+      {
+        "answer": 1,
+        "commitment": 2,
+        "statement": 0
+      },
+      {
+        "answer": 1,
+        "commitment": 0,
+        "statement": 1
+      },
+      {
+        "answer": 2,
+        "commitment": 1,
+        "statement": 1
+      },
+      {
+        "answer": 2,
+        "commitment": 2,
+        "statement": 1
+      },
+      {
+        "answer": 1,
+        "commitment": 0,
+        "statement": 2
+      },
+      {
+        "answer": 1,
+        "commitment": 1,
+        "statement": 2
+      },
+      {
+        "answer": 1,
+        "commitment": 2,
+        "statement": 2
+      }
+    ],
+    "fs_protocol_id": "zkcidv0:pir.protocol:025d56bc115790dd71e0390eb36cf3b7dcb9c0f5cc2eb310d10214e6ffe58730",
+    "maximum_draws": 1,
+    "run_count": 54,
+    "transcript_construction_id": "zkcidv0:pir.transcript-construction:5a5c06c1cfbbed72fcc033d3851776e6f5d6c4a5cdb62d06c2467a4e90ee946b"
+  },
+  "type_map": [
+    {
+      "carrier": "ZMod 3",
+      "provider": "StmtIn",
+      "source": "public statement"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "WitIn",
+      "source": "private witness"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "proof round zero",
+      "source": "commitment"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "oracle answer",
+      "source": "challenge"
+    },
+    {
+      "carrier": "ZMod 3",
+      "provider": "proof round two",
+      "source": "response"
+    },
+    {
+      "carrier": "Bool",
+      "provider": "verifier predicate",
+      "source": "check"
+    },
+    {
+      "carrier": "Option Unit",
+      "provider": "verifier result",
+      "source": "terminal"
+    }
+  ]
+}

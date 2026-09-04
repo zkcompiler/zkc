@@ -2325,6 +2325,10 @@ _OWNER_SCHEMA_FIELDS: tuple[tuple[str, object | None, tuple[str, ...]], ...] = (
             "oracle_name",
             "check_predicate",
             "prover_value_sort",
+            "challenge_domain_ref",
+            "fresh_law",
+            "correlation",
+            "reduction_use",
         ),
     ),
     ("Predicate", k2.Predicate, ("kind", "refs", "parameters")),
@@ -2356,6 +2360,7 @@ _OWNER_SCHEMA_FIELDS: tuple[tuple[str, object | None, tuple[str, ...]], ...] = (
             "max_attempts",
             "state_bytes",
             "version",
+            "challenge_rules",
         ),
     ),
     (

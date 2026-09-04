@@ -25,6 +25,19 @@ the two K3-D lanes independently against those IDs. The tuple is a union of
 owner coordinates, not a claim that every field is consumed by both branches,
 and the shared IDs convey no authority.
 
+The joined gate now traverses both endpoint object graphs and requires them to
+contain no Analysis named-premise body, Analysis-local source handle, judgment,
+or capability, and no premise identity from the independently formed Analysis
+goal. A separate mutation swaps one Analysis premise ID, observes refusal on
+the Analysis side, and confirms that both already formed OIR endpoint and
+projection-proposition identities remain unchanged.
+
+The Analysis branch is rebuilt from the refreshed owner-shaped PublicCoinView
+and identity-bearing construction challenge rule. Its Fresh premise names the
+authenticated `fresh_law` declaration value, and its named-premise bodies must
+resolve to the exact declarations in the selected Analysis profile. These
+rotations remain confined to the Analysis side of the joined boundary.
+
 K3-D's rich endpoint facts that are not yet present in the current K2/K3-B
 reference carriers remain an explicit future-owner supplement. K3-D checks the
 supplement against live owner-issued K2 static views, one affirmative
@@ -85,6 +98,6 @@ Run the focused gate from the repository root:
 python3 -B evaluation/k3-integrated-closure/run.py --check
 ```
 
-The post-repair bounded gate passes 27/27 tests. This count belongs only to
-the joined K3-E witness described above; it does not include or imply a full
-K3-C regression run.
+The named-premise migration gate passes 29/29 tests. This count belongs only to
+the joined witness described above; it does not include or imply a full shared
+Analysis regression run.

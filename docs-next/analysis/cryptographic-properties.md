@@ -328,6 +328,7 @@ AnalysisSubjectTuple S = {
   relation_semantic_model_id,
   relation_interface_id,
   relation_instance_id,
+  fresh_prover_plan_id: ProverPlanId,
   relation_axis_ingress: {
     fresh: {
       protocol_relation_binding_id,
@@ -383,8 +384,11 @@ AnalysisRelationAxisIngressWellFormed(S,axis) iff
     Protocol,
   every Statement, claim, Witness, and EquationGrounding question names the
     exact selected binding, Plan binding, equation, and owner ref for axis,
-  every selected affirmative owner binding answers that exact question, and
-  the grounding equation's Protocol run slots name that same Protocol
+  every selected affirmative owner binding answers that exact question,
+  the grounding equation's Protocol run slots name that same Protocol, and,
+  for the fresh axis, S.fresh_prover_plan_id names the Plan whose checked
+  realization and checked witness-surface extraction produced the surface
+  the selected PlanWitnessBinding names
 
 AnalysisFreshFsRelationShapeAgrees(S) iff
   AnalysisFreshFsRelationShapeAdequacyEvaluatorId returns Success(true) and
@@ -470,11 +474,22 @@ AnalysisChallengeNominalDomainCoordinate(S) =
     AnalysisOwnerViewCoordinate(S,PublicCoinView),
     [challenges[S.challenge_ref].domain])
 
+AnalysisChallengeFreshLawCoordinate(S) =
+  the unique element of ExactPIRAtomicLeavesUnder(
+    AnalysisOwnerViewCoordinate(S,PublicCoinView),
+    [challenges[S.challenge_ref].fresh_law])
+
+SchnorrFreshLawRef(S) =
+  the value of the leaf AnalysisChallengeFreshLawCoordinate(S) selects in
+  the authenticated PublicCoinView, an exact
+  ProtocolDeclarationRef<"pir.public-coin-law"> that the PIR owner placed on
+  the challenge entry; no other projection or inference supplies it
+
 The displayed paths above are aliases for the profile-fixed ordinal paths.
-Both results are exact `PIRStaticViewFieldCoordinate` values and therefore
-carry the owning `CoreId` through the `PublicCoinView` coordinate. Formation
-also requires both leaves to belong to the same challenge entry selected by
-`S.challenge_ref`.
+All three results are exact `PIRStaticViewFieldCoordinate` values and
+therefore carry the owning `CoreId` through the `PublicCoinView` coordinate.
+Formation also requires the three leaves to belong to the same challenge
+entry selected by `S.challenge_ref`.
 
 AnalysisChallengeDomainBody(S) = {
   source_challenge_coordinate: AnalysisChallengeRefCoordinate(S),
@@ -520,9 +535,10 @@ AFKFixedPublicSetupBody(S) = {
                          S.fixed_setup_static_sources],
   exact_public_invocation_sources: S.public_setup_invocation_views,
   derived_projection:
-    AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires the
-    Fresh and Fiat--Shamir `PublicSetupInvocationViewBody.entries` to be
-    byte-identical and then combines that common entry sequence with the
+    AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires both
+    views' `run_established` sequences to be empty, then the Fresh and
+    Fiat--Shamir `PublicSetupInvocationViewBody.entries` to be byte-identical,
+    and then combines that common entry sequence with the
     CoreHeader, ConstructionHeader,
     ApplicationDomainHeader, scope/opening frames, public-parameter frames,
     challenge-condition framing schema, prefix-construction function, and
@@ -559,7 +575,12 @@ static owner coordinates and the two PIR-issued
 assignments, derived headers, or owner facts. Ordinary
 applicability hypotheses establish its visibility, fixedness, and independence.
 Formation authenticates both entries of `S.public_setup_invocation_views`
-against their exact `PublicSetupInvocationViewBody` values. Their Protocol IDs
+against their exact `PublicSetupInvocationViewBody` values. Both views'
+`run_established` sequences must be empty: a fixed setup is one the
+invocation determines entirely, so a view naming a run-established
+`SessionContext` or `PublicParameter` binding (the Interaction page's Section
+13.4) cannot form this fixed-setup ID, and no assignment is copied in its
+place; that emptiness is this formation's own premise, not an owner fact. Their Protocol IDs
 must equal `S.fresh_protocol_id` and `S.fiat_shamir_protocol_id` respectively;
 both Core IDs must equal `S.shared_core_id`; and both entry sequences must be
 byte-identical and contain exactly every `PublicParameter` and `SessionContext`
@@ -1214,11 +1235,13 @@ SchnorrSpecialSoundnessQuestion(S: AnalysisSubjectTuple) = AnalysisQuestionBody 
     exact accepted typed pair-domain schema,
     exact deterministic extractor ABI,
     exact relation-witness conclusion schema
-  }
+  },
+  named_premise_requirements: SchnorrNamedPremiseRequirements(S)
 }
 
 SchnorrSpecialSoundnessGoal(S: AnalysisSubjectTuple) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B, SchnorrSpecialSoundnessQuestion(S))
+  question_id: AnalysisQuestionId(B, SchnorrSpecialSoundnessQuestion(S)),
+  named_premise_bindings: SchnorrNamedPremiseBindings(S)
 }
 
 SchnorrFixedExtractorUniversalExperimentProfile(S: AnalysisSubjectTuple) = {
@@ -1272,18 +1295,21 @@ AnalysisQuestionBody {
     exact deterministic extractor ABI,
     exact accepted typed pair-domain schema,
     exact relation-witness conclusion schema
-  }
+  },
+  named_premise_requirements: SchnorrExtractorPremiseRequirements(S)
 }
 
 SchnorrFixedExtractorWorksGoal(
   S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
-    B, SchnorrFixedExtractorWorksQuestion(S, Ext))
+    B, SchnorrFixedExtractorWorksQuestion(S, Ext)),
+  named_premise_bindings: SchnorrExtractorPremiseBindings(S, Ext)
 }
 
 EmptyAnalysisHypothesisContextBody = AnalysisHypothesisContextBody {
   nodes: [],
-  roots: []
+  roots: [],
+  exact_named_premise_ids: ContextPremiseIds(nodes, roots)
 }
 
 EmptyAnalysisHypothesisContextId =
@@ -1418,13 +1444,17 @@ SchnorrSourcePremiseQuestion(S, family, payload, extra_subjects) =
         [SchnorrSpecialSoundnessExperimentProfileId(S)]
     },
     family_payload: payload
-  }
+  ,
+    named_premise_requirements: NamedPremiseRequirementsOf(family, exact_subjects)
+}
 
 SchnorrSourcePremiseGoal(S, family, payload, extra_subjects) =
   AnalysisGoalBody {
     question_id: AnalysisQuestionId(
       B, SchnorrSourcePremiseQuestion(S,family,payload,extra_subjects))
-  }
+  ,
+    named_premise_bindings: {}
+}
 
 SchnorrChallengeModelGoal(S) = SchnorrSourcePremiseGoal(
   S, ChallengeDomainCorrespondence, {
@@ -1490,15 +1520,16 @@ SchnorrExtractorEfficiencyGoal(S,Ext) = SchnorrSourcePremiseGoal(
 
 GammaSpecialBody(S,Ext) = AnalysisHypothesisContextBody {
   nodes: [
-    {0, AnalysisGoalId(B,SchnorrChallengeModelGoal(S)), []},
-    {1, AnalysisGoalId(B,SchnorrAcceptanceRelationGoal(S)), []},
-    {2, AnalysisGoalId(B,SchnorrAlgebraEncodingGoal(S)), []},
-    {3, AnalysisGoalId(B,SchnorrRelationMembershipEfficiencyGoal(S)), []},
-    {4, AnalysisGoalId(B,SchnorrVerifierEfficiencyGoal(S)), []},
-    {5, AnalysisGoalId(B,SchnorrExtractorEfficiencyGoal(S,Ext)), []},
-    {6, AnalysisGoalId(B,SchnorrFixedExtractorWorksGoal(S,Ext)), []}
+    {0, AnalysisGoalId(B,SchnorrChallengeModelGoal(S)), [], premises(goal)},
+    {1, AnalysisGoalId(B,SchnorrAcceptanceRelationGoal(S)), [], premises(goal)},
+    {2, AnalysisGoalId(B,SchnorrAlgebraEncodingGoal(S)), [], premises(goal)},
+    {3, AnalysisGoalId(B,SchnorrRelationMembershipEfficiencyGoal(S)), [], premises(goal)},
+    {4, AnalysisGoalId(B,SchnorrVerifierEfficiencyGoal(S)), [], premises(goal)},
+    {5, AnalysisGoalId(B,SchnorrExtractorEfficiencyGoal(S,Ext)), [], premises(goal)},
+    {6, AnalysisGoalId(B,SchnorrFixedExtractorWorksGoal(S,Ext)), [], premises(goal)}
   ],
-  roots: [0,1,2,3,4,5,6]
+  roots: [0,1,2,3,4,5,6],
+  exact_named_premise_ids: ContextPremiseIds(nodes, roots)
 }
 
 GammaSpecialId(S,Ext) =
@@ -1746,7 +1777,7 @@ AssumedTheoremTruthQualificationAcceptanceLawRef =
   exact_subjects = [AFKV2TheoremSchemaId],
   question_context = SourceFree(TheoremTruthSourceFreeReasonRef),
   inherited_hypothesis_context_id =
-    AnalysisHypothesisContextId(B,{nodes: [], roots: []}), and
+    AnalysisHypothesisContextId(B,{nodes: [], roots: [], exact_named_premise_ids: []}), and
   exact_quantified_witness_coordinates = []
 
 AFKFamilyApplicabilityQualificationAcceptanceLawRef =
@@ -2076,6 +2107,7 @@ SchnorrSpecialSoundnessSupportBody(
     semantic_basis_id: SchnorrSpecialSoundnessSemanticBasisId(S,Ext),
     proposition_id: AnalysisPropositionId(
       B, SchnorrSpecialSoundnessProposition(S,Ext)),
+    exact_named_premise_ids: PremiseIdsOfProposition(proposition_id),
     non_hypothesis_premise_bindings:
       ExactNonHypothesisPremiseBindingMap(
         SchnorrSpecialSoundnessSemanticBasisId(S,Ext),
@@ -2163,6 +2195,467 @@ conditional source judgment even when fixed-extractor correctness remains an
 explicit assumption; it never mints an affirmative universal-correctness
 judgment from finite evaluation. Failure of one candidate still refutes only
 that candidate, never the existential family.
+
+### 3.2 Named premises of the relation-bound Fresh question
+
+The [Analysis model](analysis-model.md#41-one-identity-algebra) gives every
+assumption a question consumes a named, identity-bearing body. This profile
+owns the concrete bodies below: what a Fresh challenge is drawn from, how a
+provider's outcome carrier maps the PIR outcome partition and which of its
+lanes the provider does not model, the completion premise a statement over
+the whole partition then needs, and the relation and Plan premises of the
+finite Schnorr question.
+
+```text
+NamedHypothesisArgumentSchema<AnalysisCryptographicPropertyLanguageProfileId, K> =
+    [ coordinate: PIRPublicCoinLawCoordinate,
+      distribution_model: AnalysisDistributionProfileId ]
+        when K = FreshPublicCoinDistribution
+  | [ coordinate: PIRConstructionPremiseCoordinate(_, SamplerAdequacy),
+      oracle_model: AnalysisDistributionProfileId,
+      form: SamplerAdequacyForm ]
+        when K = FiatShamirSamplerAdequacy
+  | [ coordinate: PIRConstructionPremiseCoordinate(_, OracleProcess),
+      oracle_model: AnalysisDistributionProfileId ]
+        when K = FiatShamirOracleProcess
+  | [ coordinate: PIRProtocolOutcomePartitionCoordinate,
+      provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId> ]
+        when K = OperationalCompletion
+  | [ coordinate: PIRPlanRecipeCoordinate ]
+        when K = HonestCommit or K = HonestRespond
+
+PremiseIdOf(body: AnalysisNamedPremiseBody<P,K>) =
+  AnalysisNamedPremiseId<P,K>(B, body)
+
+FreshSamplingHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       FreshPublicCoinDistribution> whose canonical
+  arguments are [ coordinate: PIRPublicCoinLawCoordinate(
+  ProtocolDeclarationRef<"pir.public-coin-law">),
+  distribution_model: AnalysisDistributionProfileId ]: the challenge at that
+  coordinate is drawn from that model, fresh at each occurrence and
+  independent of the prior prover view
+
+FreshPublicCoinDistributionPremise(
+    law_coordinate: ProtocolDeclarationRef<"pir.public-coin-law">,
+    distribution_model: AnalysisDistributionProfileId,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
+                           FreshPublicCoinDistribution> {
+    kind: exactly FreshPublicCoinDistribution,
+    coordinate: PIRPublicCoinLawCoordinate(law_coordinate),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's FreshSamplingHypothesis declaration,
+      canonical_arguments: [PIRPublicCoinLawCoordinate(law_coordinate),
+                            distribution_model]
+    }),
+    source,
+    evidence_depth,
+    model_scope: FreshChallengeOnly
+  }
+
+ProviderOutcomeCarrierPremise(
+    P: ProtocolId,
+    provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId>,
+    carrier: AnalysisProfileLawRef<AnalysisCryptographicPropertyLanguageProfileId,
+                                   ClosedProviderCarrier>,
+    total_map: CanonicalMap<ProtocolOutcomeLane(P),
+                            AnalysisProviderLaneImage<carrier>>,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
+                           ProviderOutcomeCarrierMap> {
+    kind: exactly ProviderOutcomeCarrierMap,
+    coordinate: PIRProtocolOutcomePartitionCoordinate(P),
+    bound_model_or_hypothesis: BoundProviderOutcomeCarrierMap {
+      provider,
+      protocol_outcome_partition: PIRProtocolOutcomePartitionCoordinate(P),
+      provider_carrier: carrier,
+      total_lane_map: total_map
+    },
+    source,
+    evidence_depth,
+    model_scope: ExactSubjectsOnly([P])
+  }
+
+OperationalCompletionHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       OperationalCompletion> whose canonical arguments are
+  [ coordinate: PIRProtocolOutcomePartitionCoordinate(P),
+    provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId> ]:
+  every run of P in the environment of the question ends in a lane of
+  provider.modelled_lanes
+
+OperationalCompletionPremise(
+    P: ProtocolId,
+    provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId>,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
+                           OperationalCompletion> {
+    kind: exactly OperationalCompletion,
+    coordinate: PIRProtocolOutcomePartitionCoordinate(P),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's OperationalCompletionHypothesis declaration,
+      canonical_arguments: [PIRProtocolOutcomePartitionCoordinate(P), provider]
+    }),
+    source,
+    evidence_depth,
+    model_scope: ExactSubjectsOnly([P])
+  }
+
+PlanOf(S: AnalysisSubjectTuple) = S.fresh_prover_plan_id
+
+SchnorrNamedPremiseRequirements(S: AnalysisSubjectTuple) =
+  CanonicalSortedUniqueSeq [
+    { slot: "fresh-coin", kind: FreshPublicCoinDistribution,
+      coordinate: PIRPublicCoinLawCoordinate(SchnorrFreshLawRef(S)) },
+    { slot: "relation", kind: RelationPredicate,
+      coordinate:
+        RelationsModelEvaluatorCoordinate(S.relation_semantic_model_id) },
+    { slot: "witness", kind: WitnessType,
+      coordinate: RelationsWitnessPlanJoinCoordinate(
+        S.relation_interface_id, 0,
+        S.relation_axis_ingress.fresh.plan_witness_binding_id, 0) },
+    { slot: "prover-state", kind: ProverPrivateState,
+      coordinate: PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0) },
+    { slot: "commit", kind: HonestCommit,
+      coordinate: PIRPlanRecipeCoordinate(
+        PlanOf(S), ProverDecisionPointRef 0, RecipeNodeRef 0) },
+    { slot: "respond", kind: HonestRespond,
+      coordinate: PIRPlanRecipeCoordinate(
+        PlanOf(S), ProverDecisionPointRef 2, RecipeNodeRef 0) }
+  ]
+
+ProviderJudgmentRequirements(P: ProtocolId) =
+  CanonicalSortedUniqueSeq [
+    { slot: "provider-outcome", kind: ProviderOutcomeCarrierMap,
+      coordinate: PIRProtocolOutcomePartitionCoordinate(P) }
+  ]
+
+SchnorrExtractorPremiseRequirements(S: AnalysisSubjectTuple) =
+  the "relation" and "witness" entries of SchnorrNamedPremiseRequirements(S)
+
+RelationPredicateBindingLaw =
+  ExactModelBindingLaw<AnalysisCryptographicPropertyLanguageProfileId, RelationPredicate>:
+  the relation semantic model at the coordinate is the predicate the named
+  subject evaluates
+
+WitnessTypeBindingLaw =
+  ExactModelBindingLaw<AnalysisCryptographicPropertyLanguageProfileId, WitnessType>:
+  the witness type at the join coordinate is the named subject's private
+  witness type
+
+ProverPrivateStateBindingLaw =
+  ExactModelBindingLaw<AnalysisCryptographicPropertyLanguageProfileId, ProverPrivateState>:
+  the Plan's persistent state slot at the coordinate is the named subject's
+  private state
+
+HonestCommitHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId, HonestCommit> whose
+  canonical arguments are [ coordinate: PIRPlanRecipeCoordinate ]: the honest
+  prover's commitment is computed by the recipe node at that coordinate
+
+HonestRespondHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId, HonestRespond> whose
+  canonical arguments are [ coordinate: PIRPlanRecipeCoordinate ]: the honest
+  prover's response is computed by the recipe node at that coordinate
+
+SchnorrPremiseScope(S: AnalysisSubjectTuple) =
+  ExactSubjectsOnly(SchnorrSpecialSoundnessQuestion(S).exact_subjects)
+
+SchnorrExtractorPremiseScope(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) =
+  ExactSubjectsOnly(SchnorrFixedExtractorWorksQuestion(S, Ext).exact_subjects)
+
+RelationPredicatePremise(
+    S: AnalysisSubjectTuple,
+    scope: AnalysisPremiseModelScope,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, RelationPredicate> {
+    kind: exactly RelationPredicate,
+    coordinate: RelationsModelEvaluatorCoordinate(S.relation_semantic_model_id),
+    bound_model_or_hypothesis: BoundModel(S.relation_semantic_model_id,
+      AnalysisLawTerm {
+        law_ref: the profile's RelationPredicateBindingLaw declaration,
+        canonical_arguments:
+          [RelationsModelEvaluatorCoordinate(S.relation_semantic_model_id),
+           S.relation_semantic_model_id]
+      }),
+    source,
+    evidence_depth,
+    model_scope: scope
+  }
+
+WitnessJoinCoordinate(S: AnalysisSubjectTuple) =
+  RelationsWitnessPlanJoinCoordinate(
+    S.relation_interface_id, 0,
+    S.relation_axis_ingress.fresh.plan_witness_binding_id, 0)
+
+WitnessTypePremise(
+    S: AnalysisSubjectTuple,
+    scope: AnalysisPremiseModelScope,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, WitnessType> {
+    kind: exactly WitnessType,
+    coordinate: WitnessJoinCoordinate(S),
+    bound_model_or_hypothesis: BoundModel(S.relation_interface_id,
+      AnalysisLawTerm {
+        law_ref: the profile's WitnessTypeBindingLaw declaration,
+        canonical_arguments: [WitnessJoinCoordinate(S), S.relation_interface_id]
+      }),
+    source,
+    evidence_depth,
+    model_scope: scope
+  }
+
+ProverPrivateStatePremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, ProverPrivateState> {
+    kind: exactly ProverPrivateState,
+    coordinate: PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0),
+    bound_model_or_hypothesis: BoundModel(PlanOf(S),
+      AnalysisLawTerm {
+        law_ref: the profile's ProverPrivateStateBindingLaw declaration,
+        canonical_arguments:
+          [PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0), PlanOf(S)]
+      }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+HonestCommitPremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, HonestCommit> {
+    kind: exactly HonestCommit,
+    coordinate: PIRPlanRecipeCoordinate(
+      PlanOf(S), ProverDecisionPointRef 0, RecipeNodeRef 0),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's HonestCommitHypothesis declaration,
+      canonical_arguments: [PIRPlanRecipeCoordinate(
+        PlanOf(S), ProverDecisionPointRef 0, RecipeNodeRef 0)]
+    }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+HonestRespondPremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, HonestRespond> {
+    kind: exactly HonestRespond,
+    coordinate: PIRPlanRecipeCoordinate(
+      PlanOf(S), ProverDecisionPointRef 2, RecipeNodeRef 0),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's HonestRespondHypothesis declaration,
+      canonical_arguments: [PIRPlanRecipeCoordinate(
+        PlanOf(S), ProverDecisionPointRef 2, RecipeNodeRef 0)]
+    }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+ConstructionSamplerAdequacyHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       FiatShamirSamplerAdequacy> whose canonical arguments
+  are [ coordinate: PIRConstructionPremiseCoordinate(T, SamplerAdequacy),
+  oracle_model: AnalysisDistributionProfileId, form: SamplerAdequacyForm ]:
+  the construction's challenge sampler over that oracle model is adequate in
+  the named form
+
+ConstructionOracleProcessHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       FiatShamirOracleProcess> whose canonical arguments are
+  [ coordinate: PIRConstructionPremiseCoordinate(T, OracleProcess),
+  oracle_model: AnalysisDistributionProfileId ]: the oracle process the
+  experiment assumes over that model is the one the construction realizes
+
+SamplerAdequacyFormOf(T: TranscriptConstructionId) =
+    ExactTotal
+      when every rule in T's challenge_rules has maximum_draws = 1
+  | RetryWithExhaustion(the maximum of maximum_draws over T's challenge_rules)
+      otherwise;
+  the form is read from the construction's identity-bearing challenge rules
+  (docs-next/pir/fiat-shamir.md), and under ExactTotal the hypothesis asserts
+  that every one-shot rule's acceptance holds on its single draw
+
+SamplerAdequacyForm =
+    ExactTotal
+  | RetryWithExhaustion(maximum_draws: Natural)
+
+FiatShamirConstructionSamplerPremise(
+    T: TranscriptConstructionId,
+    oracle_model: AnalysisDistributionProfileId,
+    form: SamplerAdequacyForm,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
+                           FiatShamirSamplerAdequacy> {
+    kind: exactly FiatShamirSamplerAdequacy,
+    coordinate: PIRConstructionPremiseCoordinate(T, SamplerAdequacy),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's ConstructionSamplerAdequacyHypothesis declaration,
+      canonical_arguments: [PIRConstructionPremiseCoordinate(T, SamplerAdequacy),
+                            oracle_model, form]
+    }),
+    source,
+    evidence_depth,
+    model_scope: OracleModelOnly(oracle_model)
+  }
+
+FiatShamirConstructionOracleProcessPremise(
+    T: TranscriptConstructionId,
+    oracle_model: AnalysisDistributionProfileId,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
+                           FiatShamirOracleProcess> {
+    kind: exactly FiatShamirOracleProcess,
+    coordinate: PIRConstructionPremiseCoordinate(T, OracleProcess),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's ConstructionOracleProcessHypothesis declaration,
+      canonical_arguments: [PIRConstructionPremiseCoordinate(T, OracleProcess),
+                            oracle_model]
+    }),
+    source,
+    evidence_depth,
+    model_scope: OracleModelOnly(oracle_model)
+  }
+
+FiatShamirConstructionPremiseRequirements(T, oracle_model) =
+  CanonicalSortedUniqueSeq [
+    { slot: "sampler", kind: FiatShamirSamplerAdequacy,
+      coordinate: PIRConstructionPremiseCoordinate(T, SamplerAdequacy) },
+    { slot: "oracle-process", kind: FiatShamirOracleProcess,
+      coordinate: PIRConstructionPremiseCoordinate(T, OracleProcess) }
+  ]
+
+SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =
+  the binding map IntakeAnalysisNamedPremises(
+    SchnorrSpecialSoundnessQuestion(S), supplied) forms, where supplied
+  binds each slot to PremiseIdOf of the exact body below:
+    "fresh-coin"   -> FreshPublicCoinDistributionPremise(
+                        SchnorrFreshLawRef(S), AnalysisChallengeDomainId(S)'s
+                        exact finite uniform model,
+                        CandidateOwnerCoordinate(S.fresh_protocol_id),
+                        SourceGroundedMapping),
+    "relation"     -> RelationPredicatePremise(S, SchnorrPremiseScope(S),
+                        CandidateOwnerCoordinate(S.relation_semantic_model_id),
+                        FrozenExecutableFalsification),
+    "witness"      -> WitnessTypePremise(S, SchnorrPremiseScope(S),
+                        CandidateOwnerCoordinate(S.relation_interface_id),
+                        FrozenExecutableFalsification),
+    "prover-state" -> ProverPrivateStatePremise(S,
+                        CandidateOwnerCoordinate(PlanOf(S)),
+                        FrozenExecutableFalsification),
+    "commit"       -> HonestCommitPremise(S,
+                        CandidateOwnerCoordinate(PlanOf(S)),
+                        FrozenExecutableFalsification),
+    "respond"      -> HonestRespondPremise(S,
+                        CandidateOwnerCoordinate(PlanOf(S)),
+                        FrozenExecutableFalsification)
+
+SchnorrExtractorPremiseBindings(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) =
+  the binding map IntakeAnalysisNamedPremises(
+    SchnorrFixedExtractorWorksQuestion(S, Ext), supplied) forms, where
+  supplied binds each slot to PremiseIdOf of the exact body below; the
+  bodies differ from the relation question's only in their scope, because an
+  ExactSubjectsOnly premise admits exactly the question whose subjects it
+  names and the extractor question adds Ext to its subjects:
+    "relation"     -> RelationPredicatePremise(S,
+                        SchnorrExtractorPremiseScope(S, Ext),
+                        CandidateOwnerCoordinate(S.relation_semantic_model_id),
+                        FrozenExecutableFalsification),
+    "witness"      -> WitnessTypePremise(S,
+                        SchnorrExtractorPremiseScope(S, Ext),
+                        CandidateOwnerCoordinate(S.relation_interface_id),
+                        FrozenExecutableFalsification)
+
+FiatShamirConstructionPremiseBindings(
+    S: AnalysisSubjectTuple,
+    ell0: StatementLength(AnalysisStatementType(S))) =
+  the binding map IntakeAnalysisNamedPremises(
+    AFKMemberKnowledgeQuestion(S, ell0), supplied) forms, where supplied binds
+    each slot to PremiseIdOf of the exact body below:
+    "sampler"        -> FiatShamirConstructionSamplerPremise(
+                          S.transcript_construction_id,
+                          AFKClassicalRandomOracleProfileId(S),
+                          SamplerAdequacyFormOf(S.transcript_construction_id),
+                          CandidateOwnerCoordinate(S.transcript_construction_id),
+                          SourceGroundedMapping),
+    "oracle-process" -> FiatShamirConstructionOracleProcessPremise(
+                          S.transcript_construction_id,
+                          AFKClassicalRandomOracleProfileId(S),
+                          CandidateOwnerCoordinate(S.transcript_construction_id),
+                          SourceGroundedMapping)
+```
+
+A question over a Fresh Protocol requires exactly one
+`FreshPublicCoinDistribution` premise for every `pir.public-coin-law`
+coordinate it selects; the nominal declaration is the hook, and the premise
+is what binds a distribution to it. A question over a Fiat--Shamir Protocol
+selects no such premise: its challenge value is fixed operationally by the
+construction, and what it consumes are the family premises of
+[Section 7.3](#73-family-premises). A `ProviderOutcomeCarrierMap` premise
+requires `total_map` to have exactly the profile-qualified partition of `P` as
+its domain: five lanes for a Fresh or duplex-sponge Protocol, six for a
+canonical-framed one. Its value at a lane is `Image(v)` exactly when the
+provider declaration lists the lane in `modelled_lanes` and `Unmodelled`
+otherwise; a lane absent from the map, an `Image` at a lane the provider
+does not model, or `Unmodelled` at one it does is `Malformed`. A lane is
+never collapsed onto the image of another: a provider whose verifier returns
+a Boolean and whose execution cannot fail to complete models `Accepted` and
+`Rejected` and no other lane, and its map says so rather than sending
+noncompletion to `false`. The provider is an exact profile law declaration
+naming one external formal system at one pinned source, published by this
+profile's declaration catalog; until one is published no provider-map
+premise can be formed. A provider statement transports to the PIR event that
+is the union of the lanes whose images lie in the statement's event, and to
+nothing outside `modelled_lanes`; a question whose stated PIR event is not
+such a union, one that says every run is accepted, for instance, carries an
+`OperationalCompletion` requirement in its family's requirement sequence,
+and forms without it only as `CannotAnswer`. Transport preserves measure as
+well as events: the transported statement's probability is the mass that the
+run's subdistribution of Section 3.3 of the Analysis model gives the PIR
+event, with the mass of `Unmodelled` lanes and of missing runs left where it
+is; a provider statement stated as a probability conditional on completion,
+or on the modelled lanes, transports only when the conditioning event is
+itself a lane union whose mass the statement also fixes or when an
+`OperationalCompletion` premise makes that mass one, and never by
+renormalizing over the lanes the provider models.
+
+`SchnorrNamedPremiseRequirements(S)` is the exact premise requirement
+sequence of the relation-bound Fresh question over `S`, fixed by
+`NamedPremiseRequirementsOf` for that family; the fixed-extractor question
+carries its relation and witness entries, the concrete adaptive
+Fiat--Shamir question carries the construction premises of Section 3.2, and
+every other family of this profile and of the transport profile, the source
+premise families, asymptotic special soundness, theorem truth, theorem
+applicability, and family-instance correspondence, fixes the empty
+requirement sequence, because their assumptions are hypothesis nodes. The relation predicate, the
+witness type, and the Prover's private state bind by `BoundModel` to the
+exact owner coordinate each names: the semantic model's evaluator, the join
+of the relation interface's first private witness with the Plan witness
+binding's first edge, and the Plan's first persistent state slot. The honest
+commit and respond bind by `BoundHypothesis` to the recipe nodes of the
+Plan's first and third decisions: that the provider's operations correspond
+to those recipes is an assumption, not a model coordinate. Their evidence
+depth records the reproducible selection and mutation evidence that
+accompanies the binding and establishes no relation truth, algorithm honesty,
+or provider correspondence. A provider judgment over a Protocol adds
+`ProviderJudgmentRequirements(P)` to its family's requirement sequence; the
+relation-bound Fresh question does not carry it, so it forms before any
+provider is declared.
 
 ## 4. Classical adaptive Fiat--Shamir experiment
 
@@ -2617,13 +3110,16 @@ AFKMemberKnowledgeQuestion(
     inequality left side bound to the exact extractor witness-success
       EventProbability,
     exact IdenticalMarginalLaw and relation-witness conclusion schema
-  }
+  },
+  named_premise_requirements: FiatShamirConstructionPremiseRequirements(
+    S.transcript_construction_id, AFKClassicalRandomOracleProfileId(S))
 }
 
 AFKMemberKnowledgeGoal(
     S: AnalysisSubjectTuple,
     ell0: StatementLength(AnalysisStatementType(S))) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B, AFKMemberKnowledgeQuestion(S,ell0))
+  question_id: AnalysisQuestionId(B, AFKMemberKnowledgeQuestion(S,ell0)),
+  named_premise_bindings: FiatShamirConstructionPremiseBindings(S, ell0)
 }
 ```
 
@@ -3409,11 +3905,13 @@ AFKFamilySpecialSoundnessQuestion(F) = AnalysisQuestionBody {
       [AFKFamilySpecialSoundnessExperimentProfileId(F)]
   },
   family_payload:
-    exact `exists uniform Ext_F; forall n; forall pair` relation conclusion
+    exact `exists uniform Ext_F; forall n; forall pair` relation conclusion,
+  named_premise_requirements: []
 }
 
 AFKFamilySpecialSoundnessGoal(F) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B,AFKFamilySpecialSoundnessQuestion(F))
+  question_id: AnalysisQuestionId(B,AFKFamilySpecialSoundnessQuestion(F)),
+  named_premise_bindings: {}
 }
 
 AFKFamilyAdaptiveKnowledgeQuestion(F) = AnalysisQuestionBody {
@@ -3431,11 +3929,13 @@ AFKFamilyAdaptiveKnowledgeQuestion(F) = AnalysisQuestionBody {
     AFKFamilyKnowledgeSuccessFormulaId(F),
     AFKFamilyExpectedCallsFormulaId(F),
     exact q_KS = AFKLogicalNatConstantOnePolynomialId
-  }
+  },
+  named_premise_requirements: FiatShamirNamedPremiseRequirements(F, AFKFamilyRandomOracleProfileId(F))
 }
 
 AFKFamilyAdaptiveKnowledgeGoal(F) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B,AFKFamilyAdaptiveKnowledgeQuestion(F))
+  question_id: AnalysisQuestionId(B,AFKFamilyAdaptiveKnowledgeQuestion(F)),
+  named_premise_bindings: FiatShamirFamilyPremiseBindings(F)
 }
 ```
 
@@ -3455,13 +3955,17 @@ AFKFamilyPremiseQuestion(F,family,payload,extra_subjects) =
         [AFKFamilySpecialSoundnessExperimentProfileId(F)]
     },
     family_payload: payload
-  }
+  ,
+    named_premise_requirements: NamedPremiseRequirementsOf(family, exact_subjects)
+}
 
 AFKFamilyPremiseGoal(F,family,payload,extra_subjects) =
   AnalysisGoalBody {
     question_id: AnalysisQuestionId(
       B,AFKFamilyPremiseQuestion(F,family,payload,extra_subjects))
-  }
+  ,
+    named_premise_bindings: {}
+}
 
 AFKFamilyDenotationGoal(F) = AFKFamilyPremiseGoal(
   F,TotalSingleValuedFamilyDenotation,{
@@ -3499,13 +4003,14 @@ AFKFamilyVerifierEfficiencyGoal(F) = AFKFamilyPremiseGoal(
 
 GammaAFKFamilySpecialBody(F) = AnalysisHypothesisContextBody {
   nodes: [
-    {0,AnalysisGoalId(B,AFKFamilyDenotationGoal(F)),[]},
-    {1,AnalysisGoalId(B,AFKFamilyProjectionCoherenceGoal(F)),[0]},
-    {2,AnalysisGoalId(B,AFKFamilyChallengeAndAlgebraGoal(F)),[0,1]},
-    {3,AnalysisGoalId(B,AFKFamilyRelationEfficiencyGoal(F)),[0,1]},
-    {4,AnalysisGoalId(B,AFKFamilyVerifierEfficiencyGoal(F)),[0,1]}
+    {0,AnalysisGoalId(B,AFKFamilyDenotationGoal(F)),[], premises(goal)},
+    {1,AnalysisGoalId(B,AFKFamilyProjectionCoherenceGoal(F)),[0], premises(goal)},
+    {2,AnalysisGoalId(B,AFKFamilyChallengeAndAlgebraGoal(F)),[0,1], premises(goal)},
+    {3,AnalysisGoalId(B,AFKFamilyRelationEfficiencyGoal(F)),[0,1], premises(goal)},
+    {4,AnalysisGoalId(B,AFKFamilyVerifierEfficiencyGoal(F)),[0,1], premises(goal)}
   ],
-  roots: [2,3,4]
+  roots: [2,3,4],
+  exact_named_premise_ids: ContextPremiseIds(nodes, roots)
 }
 
 GammaAFKFamilySpecialId(F) =
@@ -4852,12 +5357,14 @@ AFKApplicabilityPremiseQuestion(F,family,payload) = AnalysisQuestionBody {
       AFKFamilyAdaptiveKnowledgeExperimentProfileId(F)
     ]
   },
-  family_payload: payload
+  family_payload: payload,
+  named_premise_requirements: NamedPremiseRequirementsOf(family, exact_subjects)
 }
 
 AFKApplicabilityPremiseGoal(F,family,payload) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
-    B,AFKApplicabilityPremiseQuestion(F,family,payload))
+    B,AFKApplicabilityPremiseQuestion(F,family,payload)),
+  named_premise_bindings: {}
 }
 
 AFKFamilyFreshDistributionGoal(F) = AFKApplicabilityPremiseGoal(
@@ -4922,19 +5429,20 @@ AFKApplicabilityPremiseGoal(
 
 GammaAFKApplicabilityBody(F) = AnalysisHypothesisContextBody {
   nodes: [
-    {0,AnalysisGoalId(B,AFKFamilyDenotationGoal(F)),[]},
-    {1,AnalysisGoalId(B,AFKFamilyProjectionCoherenceGoal(F)),[0]},
-    {2,AnalysisGoalId(B,AFKFamilyFixedChallengeCardinalityGoal(F)),[0,1]},
-    {3,AnalysisGoalId(B,AFKFamilyFreshDistributionGoal(F)),[0,1,2]},
-    {4,AnalysisGoalId(B,AFKFamilyRandomOracleCorrespondenceGoal(F)),[0,1]},
-    {5,AnalysisGoalId(B,AFKFamilyFiniteIndexAndOperationsGoal(F)),[0,1,4]},
-    {6,AnalysisGoalId(B,AFKFamilyFixedSetupGoal(F)),[0,1]},
-    {7,AnalysisGoalId(B,AFKFamilySamplerAdequacyGoal(F)),[0,1,2,4,5]},
+    {0,AnalysisGoalId(B,AFKFamilyDenotationGoal(F)),[], premises(goal)},
+    {1,AnalysisGoalId(B,AFKFamilyProjectionCoherenceGoal(F)),[0], premises(goal)},
+    {2,AnalysisGoalId(B,AFKFamilyFixedChallengeCardinalityGoal(F)),[0,1], premises(goal)},
+    {3,AnalysisGoalId(B,AFKFamilyFreshDistributionGoal(F)),[0,1,2], premises(goal)},
+    {4,AnalysisGoalId(B,AFKFamilyRandomOracleCorrespondenceGoal(F)),[0,1], premises(goal)},
+    {5,AnalysisGoalId(B,AFKFamilyFiniteIndexAndOperationsGoal(F)),[0,1,4], premises(goal)},
+    {6,AnalysisGoalId(B,AFKFamilyFixedSetupGoal(F)),[0,1], premises(goal)},
+    {7,AnalysisGoalId(B,AFKFamilySamplerAdequacyGoal(F)),[0,1,2,4,5], premises(goal)},
     {8,AnalysisGoalId(
          B,AFKFamilyExperimentObservationCorrespondenceGoal(F)),
-       [0,1,2,3,4,5,6,7]}
+       [0,1,2,3,4,5,6,7], premises(goal)}
   ],
-  roots: [8]
+  roots: [8],
+  exact_named_premise_ids: ContextPremiseIds(nodes, roots)
 }
 
 GammaAFKApplicabilityId(F) =
@@ -4995,6 +5503,7 @@ AFKFamilyApplicabilitySupportSchemaBody(
     semantic_basis_id: AFKFamilyApplicabilitySemanticBasisId(F),
     proposition_id: AnalysisPropositionId(
       B,AFKFamilyApplicabilityPropositionBody(F)),
+    exact_named_premise_ids: PremiseIdsOfProposition(proposition_id),
     non_hypothesis_premise_bindings:
       ExactNonHypothesisPremiseBindingMap(
         AFKFamilyApplicabilitySemanticBasisId(F),
@@ -5097,8 +5606,9 @@ premises:
 ```text
 GammaAFKTheoremTruthBody = AnalysisHypothesisContextBody {
   nodes: [{0,AnalysisGoalId(
-    B,TheoremTruthGoal(AFKV2TheoremSchemaId)),[]}],
-  roots: [0]
+    B,TheoremTruthGoal(AFKV2TheoremSchemaId)),[], premises(goal)}],
+  roots: [0],
+  exact_named_premise_ids: ContextPremiseIds(nodes, roots)
 }
 
 GammaAFKFamilyTargetBody(F) = CanonicalGoalDagUnion([
@@ -5213,6 +5723,7 @@ AFKFamilyTransportSupportBody(
     semantic_basis_id: AFKFamilyTransportSemanticBasisId(F),
     proposition_id: AnalysisPropositionId(
       B,AFKFamilyAdaptiveKnowledgePropositionBody(F)),
+    exact_named_premise_ids: PremiseIdsOfProposition(proposition_id),
     non_hypothesis_premise_bindings:
       ExactNonHypothesisPremiseBindingMap(
         AFKFamilyTransportSemanticBasisId(F),
@@ -5341,6 +5852,136 @@ Fresh capabilities are required to form and use the result but have no
 operation-policy bundle for this result. It permits only the displayed
 member-specialization consumer/purpose pair and applies the exact common
 freshness, disclosure, unknown-question, persistence, and cold-replay laws.
+
+### 7.3 Family premises
+
+A question about a Fiat--Shamir Protocol consumes two named premises for its
+family, owned by this profile: that the family's sampler is adequate, and that
+the oracle process the experiment assumes is the one the construction
+realizes. Both are stated for one exact oracle model, the distribution profile
+the experiment uses.
+
+```text
+NamedHypothesisArgumentSchema<AnalysisAFKTransportLanguageProfileId, K> =
+    [ coordinate: AnalysisFamilyPremiseCoordinate(_, SamplerAdequacy),
+      oracle_model: AnalysisDistributionProfileId,
+      form: SamplerAdequacyForm ]
+        when K = FiatShamirSamplerAdequacy
+  | [ coordinate: AnalysisFamilyPremiseCoordinate(_, OracleProcess),
+      oracle_model: AnalysisDistributionProfileId ]
+        when K = FiatShamirOracleProcess
+
+SamplerAdequacyHypothesis =
+  ExactNamedHypothesis<AnalysisAFKTransportLanguageProfileId,
+                       FiatShamirSamplerAdequacy> whose canonical arguments
+  are [ coordinate: AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy),
+  oracle_model: AnalysisDistributionProfileId, form: SamplerAdequacyForm ]:
+  the family's challenge sampler over that oracle model is adequate in the
+  named form, with the exhaustion term explicit when the form retries
+
+OracleProcessHypothesis =
+  ExactNamedHypothesis<AnalysisAFKTransportLanguageProfileId,
+                       FiatShamirOracleProcess> whose canonical arguments are
+  [ coordinate: AnalysisFamilyPremiseCoordinate(F, OracleProcess),
+  oracle_model: AnalysisDistributionProfileId ]: the oracle process the
+  experiment assumes over that model is the one the family's construction
+  realizes, including adaptive queries and answers
+
+SamplerAdequacyFormOf(F: AnalysisAsymptoticProtocolFamilyDefinitionId) =
+  ExactTotal, the form named by the family's sampler-adequacy applicability
+  premise TotalUniformChallengeSamplerAdequacy
+  (AFKFamilySamplerAdequacyGoal(F)); this profile declares no retrying
+  family sampler
+
+FiatShamirFamilySamplerPremise(
+    F: AnalysisAsymptoticProtocolFamilyDefinitionId,
+    oracle_model: AnalysisDistributionProfileId,
+    form: SamplerAdequacyForm,
+    source: AnalysisNamedPremiseSource<AnalysisAFKTransportLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisAFKTransportLanguageProfileId,
+                           FiatShamirSamplerAdequacy> {
+    kind: exactly FiatShamirSamplerAdequacy,
+    coordinate: AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's SamplerAdequacyHypothesis declaration,
+      canonical_arguments: [AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy),
+                            oracle_model, form]
+    }),
+    source,
+    evidence_depth,
+    model_scope: OracleModelOnly(oracle_model)
+  }
+
+FiatShamirFamilyOracleProcessPremise(
+    F: AnalysisAsymptoticProtocolFamilyDefinitionId,
+    oracle_model: AnalysisDistributionProfileId,
+    source: AnalysisNamedPremiseSource<AnalysisAFKTransportLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisAFKTransportLanguageProfileId,
+                           FiatShamirOracleProcess> {
+    kind: exactly FiatShamirOracleProcess,
+    coordinate: AnalysisFamilyPremiseCoordinate(F, OracleProcess),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's OracleProcessHypothesis declaration,
+      canonical_arguments: [AnalysisFamilyPremiseCoordinate(F, OracleProcess),
+                            oracle_model]
+    }),
+    source,
+    evidence_depth,
+    model_scope: OracleModelOnly(oracle_model)
+  }
+
+AFKTransportPropertyFamilyRef(family) =
+  AnalysisProfileDeclarationRef<AnalysisAFKTransportLanguageProfileId,
+                                "analysis.property-family">
+  naming the transport profile's own declaration of family, a member of
+  AnalysisAFKTransportFamilyCoordinates (Section 2.1)
+
+FiatShamirNamedPremiseRequirements(F, oracle_model) =
+  CanonicalSortedUniqueSeq [
+    { slot: "sampler", kind: FiatShamirSamplerAdequacy,
+      coordinate: AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy) },
+    { slot: "oracle-process", kind: FiatShamirOracleProcess,
+      coordinate: AnalysisFamilyPremiseCoordinate(F, OracleProcess) }
+  ]
+
+FiatShamirFamilyPremiseBindings(F) =
+  the binding map IntakeAnalysisNamedPremises(
+    AFKFamilyAdaptiveKnowledgeQuestion(F), supplied) forms, where supplied
+  binds
+    "sampler"        -> PremiseIdOf(FiatShamirFamilySamplerPremise(F,
+                          AFKFamilyRandomOracleProfileId(F),
+                          SamplerAdequacyFormOf(F),
+                          FamilyHypothesisSource(
+                            AFKTransportPropertyFamilyRef(
+                              TotalUniformChallengeSamplerAdequacy)),
+                          SourceGroundedMapping)),
+    "oracle-process" -> PremiseIdOf(FiatShamirFamilyOracleProcessPremise(F,
+                          AFKFamilyRandomOracleProfileId(F),
+                          FamilyHypothesisSource(
+                            AFKTransportPropertyFamilyRef(
+                              ExactClassicalRandomOracleProcess)),
+                          SourceGroundedMapping))
+```
+
+The source of a family hypothesis is the property family that declares the
+hypothesis, an `AnalysisFamilyCoordinate` of the transport profile; the
+asymptotic family `F` is already the subject of the premise coordinate and is
+a semantic subject identity, not a declaration reference, so it is never
+passed where the source constructor requires one.
+
+For the classical adaptive experiment of Section 4 the oracle model is
+`AFKClassicalRandomOracleProfileId(S)`, and a question about a Fiat--Shamir
+Protocol of family `F` carries `FiatShamirNamedPremiseRequirements(F,
+AFKClassicalRandomOracleProfileId(S))` as its requirement sequence. A
+quantum-random-oracle or concrete-process model needs distinct premise bodies
+with their own scope; no family or spelling match transports a premise from
+one model to another, and a premise whose scope is another model is refused
+by the intake. The three hypothesis law families and the provider declaration
+and carrier families are `analysis.semantic-law` declarations of their
+profiles; none is published yet, and until one is, no premise of its kind can
+be formed.
 
 ## 8. Concrete member correspondence and specialization
 
@@ -5670,12 +6311,14 @@ FamilyInstanceCorrespondenceQuestion(
     pointwise_quantitative_normalization_contract_id:
       AFKPointwiseQuantitativeNormalizationContractId(
         F,n0_literal,S,ell0)
-  }
+  },
+  named_premise_requirements: []
 }
 
 FamilyInstanceCorrespondenceGoal(F,n0_literal,S,ell0) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
-    B,FamilyInstanceCorrespondenceQuestion(F,n0_literal,S,ell0))
+    B,FamilyInstanceCorrespondenceQuestion(F,n0_literal,S,ell0)),
+  named_premise_bindings: {}
 }
 
 FamilyInstancePremiseQuestion(
@@ -5688,7 +6331,8 @@ FamilyInstancePremiseQuestion(
 FamilyInstancePremiseGoal(
     F,n0_literal,S,ell0,family,payload) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(B,FamilyInstancePremiseQuestion(
-    F,n0_literal,S,ell0,family,payload))
+    F,n0_literal,S,ell0,family,payload)),
+  named_premise_bindings: {}
 }
 
 FamilyInstanceDenotationAtIndexGoal(F,n0_literal,S,ell0) =
@@ -5738,26 +6382,29 @@ GammaFamilyInstanceBody(F,n0_literal,S,ell0) =
   AnalysisHypothesisContextBody {
     nodes: [
       {0,AnalysisGoalId(
-          B,FamilyInstanceDenotationAtIndexGoal(F,n0_literal,S,ell0)),[]},
+          B,FamilyInstanceDenotationAtIndexGoal(F,n0_literal,S,ell0)),[],
+          premises(goal)},
       {1,AnalysisGoalId(
           B,FamilyInstanceProjectionAtIndexGoal(
-            F,n0_literal,S,ell0)),[0]},
-      {2,AnalysisGoalId(B,SchnorrChallengeModelGoal(S)),[]},
-      {3,AnalysisGoalId(B,SchnorrAcceptanceRelationGoal(S)),[]},
-      {4,AnalysisGoalId(B,AFKFamilyFixedChallengeCardinalityGoal(F)),[0,1]},
-      {5,AnalysisGoalId(B,AFKFamilyFiniteIndexAndOperationsGoal(F)),[0,1]},
+            F,n0_literal,S,ell0)),[0], premises(goal)},
+      {2,AnalysisGoalId(B,SchnorrChallengeModelGoal(S)),[], premises(goal)},
+      {3,AnalysisGoalId(B,SchnorrAcceptanceRelationGoal(S)),[], premises(goal)},
+      {4,AnalysisGoalId(B,AFKFamilyFixedChallengeCardinalityGoal(F)),[0,1], premises(goal)},
+      {5,AnalysisGoalId(B,AFKFamilyFiniteIndexAndOperationsGoal(F)),[0,1], premises(goal)},
       {6,AnalysisGoalId(
           B,FamilyInstanceRoleMapAdequacyGoal(F,n0_literal,S,ell0)),
-          [0,1,2,3,4,5]},
+          [0,1,2,3,4,5], premises(goal)},
       {7,AnalysisGoalId(
           B,FamilyInstanceQuantitativeNormalizationGoal(
-            F,n0_literal,S,ell0)),[0,1,2,4,6]},
+            F,n0_literal,S,ell0)),[0,1,2,4,6], premises(goal)},
       {8,AnalysisGoalId(
           B,FamilyInstanceProcessCorrespondenceGoal(F,n0_literal,S,ell0)),
-          [0,1,5,6]}
+          [0,1,5,6], premises(goal)}
     ],
     roots: [7,8]
-  }
+  ,
+    exact_named_premise_ids: ContextPremiseIds(nodes, roots)
+}
 
 GammaFamilyInstanceId(F,n0_literal,S,ell0) =
   AnalysisHypothesisContextId(
@@ -5815,6 +6462,7 @@ FamilyInstanceCorrespondenceSupportBody(
       FamilyInstanceCorrespondenceSemanticBasisId(F,n0_literal,S,ell0),
     proposition_id: AnalysisPropositionId(B,
       FamilyInstanceCorrespondencePropositionBody(F,n0_literal,S,ell0)),
+    exact_named_premise_ids: PremiseIdsOfProposition(proposition_id),
     non_hypothesis_premise_bindings:
       ExactNonHypothesisPremiseBindingMap(
         FamilyInstanceCorrespondenceSemanticBasisId(
@@ -6032,6 +6680,7 @@ AnalysisSupportInstantiationBody {
   proposition_id: AnalysisPropositionId(
     B,AFKMemberSpecializationPropositionBody(
       F,n0_literal,S,ell0)),
+  exact_named_premise_ids: PremiseIdsOfProposition(proposition_id),
   non_hypothesis_premise_bindings:
     ExactNonHypothesisPremiseBindingMap(
       AFKMemberSpecializationSemanticBasisId(F,n0_literal,S,ell0),

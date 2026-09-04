@@ -1,0 +1,62 @@
+{
+  "aggregate": {
+    "outcome": "Affirmative",
+    "code": "F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED",
+    "blocking_findings": [],
+    "cannot_answer_findings": [],
+    "declared_hold_findings": [
+      "F0V2D1-C-VCVIO-PROVIDER-DECLARATION"
+    ]
+  },
+  "finding_codes": [
+    ["name-closure", "Affirmative", "F0V2D1-A-NAME-CLOSURE"],
+    ["constructor-consistency", "Affirmative", "F0V2D1-A-CONSTRUCTOR-CONSISTENCY"],
+    ["intake-soundness", "Affirmative", "F0V2D1-A-INTAKE-SOUNDNESS"],
+    ["decision-fidelity", "Affirmative", "F0V2D1-A-DECISION-FIDELITY"],
+    ["schnorr-coordinate-formation", "Affirmative", "F0V2D1-A-SCHNORR-BINDINGS"],
+    ["profile-manifest-closure", "Affirmative", "F0V2D1-A-PROFILE-MANIFESTS"],
+    ["owner-determined-refreeze-inputs", "Affirmative", "F0V2D1-A-MIGRATED-IDENTITY-INPUTS"],
+    ["hypothesis-argument-schema-closure", "Affirmative", "F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS"],
+    ["provider-lane-and-completion-consistency", "CannotAnswer", "F0V2D1-C-VCVIO-PROVIDER-DECLARATION"],
+    ["family-source-kind", "Affirmative", "F0V2D1-A-FAMILY-SOURCE-KIND"],
+    ["fixed-setup-domain", "Affirmative", "F0V2D1-A-FIXED-SETUP-DOMAIN"],
+    ["provider-measure-preservation", "Affirmative", "F0V2D1-A-MEASURE-PRESERVATION"],
+    ["owner-read-catalog-join", "Affirmative", "F0V2D1-A-OWNER-READ-CATALOG-JOIN"],
+    ["publication-compiler-agreement", "Affirmative", "F0V2D1-A-PUBLICATION-COMPILERS"],
+    ["identity-rotation-cone", "Affirmative", "F0V2D1-A-ROTATION-CONE"],
+    ["predecessor-probe-coverage", "Affirmative", "F0V2D1-A-PROBE-COVERAGE"]
+  ],
+  "source_sha256": {
+    "docs-next/analysis/README.md": "04e0250aec7118f6e2083db2d0001957a2dce05eace55371593dfdabfa5f3419",
+    "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
+    "docs-next/analysis/cryptographic-properties.md": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
+    "docs-next/analysis/incremental-composition.md": "7d52b8a7c30435e0dec2f7304f08a662f0772b8d8aae22a0dce64384735c4581",
+    "docs-next/analysis/profile-publication.md": "90820fe7cf2e5e8db33161542639befa0fc4891cde9499b98e23161e59f0da72",
+    "docs-next/analysis/profiles/afk-transport.json": "091333efd23c4fa8d28e757052d8ebc130c343571d1cc75da74cead9750e9446",
+    "docs-next/analysis/profiles/cryptographic-property.json": "60adb5568522e374872ff2df1d5001d07819519f60a1c654e54f7b93e1d74a1d",
+    "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
+    "docs-next/analysis/semantic-relations.md": "e073e1f5a1fbf836361c6dcdf3a16908f262fbee4b2197d2f8474b102eeff495",
+    "docs-next/analysis/transport-composition-and-replay.md": "b775d0c775482f2f70786d58927328a3c1018c4142d1ad139ecef5c4b2a37df6",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md": "73dd3a2f7817817a78fbc5fa18c3fc87b1c42e054c5f52fa9f62ed279774e33b",
+    "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
+    "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
+    "docs-next/pir/interfaces-and-plans.md": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
+    "docs-next/relations/relation-model.md": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
+    "evaluation/analysis-premise-intake-probe/expected-findings.json": "e39edf7cb1cb49955479e5ac50df79cbe57c0baf2d4d8b36a5cd6736d537be62",
+    "evaluation/analysis-premise-intake-probe/fixture.json": "151124be6c318f032df6ef92254ab1930f02aa27a7f3df7b9da9d120e7dfce42",
+    "evaluation/analysis-premise-intake-probe/independent.py": "9fc3e2d97c6e337cdb9fc0863efba0387b872e3bd0a6b73182f8b3f921759789",
+    "evaluation/analysis-premise-intake-probe/model.py": "c0195d4d46219f44412159c0f0b93c6a8e8f6a1e2059f10b977f63f732edd97a",
+    "evaluation/analysis-premise-intake-probe/run.py": "ed68e45c2cfcc32043f2bf19004855b1ec4b100111537ed117d784a02679314b",
+    "evaluation/finite-cover-analysis/tests/test_finite_cover.py": "40db3e9f702a29fb5b90a412ef7153bdaed3acf893ffcd033c3539afe5dc8f1e",
+    "evaluation/formal-provider-interpretation-f2o2/expected-findings.json": "fe69e50a275a7ab73689b8a71fb18f3392cd7038b41f1a4466e631bdbbe34d65",
+    "evaluation/k1-executable-foundations/reference_model.py": "657e4beb56e5481260cc66a0d3d1d1abf7662246d3235b038163771705bd4e00",
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "152d10d1d0a1349a93fda733c1e0ffbf8eb035994e544a28613ea8d643ee56c7",
+    "evaluation/k3-analysis-closure/README.md": "d5f3691d83fafef399d8058b7f700ba3ad407e78c4eed1da0b78d0768ef07317",
+    "evaluation/k3-analysis-closure/reference_model.py": "b25586d966443e371a1bfc03a354838e40e48dac3d9ff2d4f717eb050d4354d2",
+    "evaluation/k3-analysis-closure/tests/test_reference_model.py": "b47ce6756b8ea42fa595223ab86c1ebeea8e19f63dc3f703b84a6eeaeffb7a71",
+    "evaluation/k3-integrated-closure/tests/test_reference_model.py": "b67a2820e1bc95d653b11ae3de2ba177a4c37439d1f140a103d233309a887724",
+    "evaluation/semantic-profile-publication/reference_model.py": "79b7f82dd859a8501697fa0b69f19447dd8d951c07731e2e049a700fb8359e2a",
+    "evaluation/semantic-profile-publication/independent.py": "cc0f5faf02282fd0a8d64c612fdf61ccfbfeb196ae9a736524df4a0374468896",
+    "checks/tests/test_analysis_owner_read_catalog.py": "636a9ddf6ed05616035d2c3dd0b5d0c5558ceba454a4697e33d34ce8dfed82a9"
+  }
+}

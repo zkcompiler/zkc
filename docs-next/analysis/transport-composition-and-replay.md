@@ -223,17 +223,19 @@ TheoremTruthQuestion(T:AnalysisTheoremSchemaId) = AnalysisQuestionBody {
     theorem_schema_id: T,
     conclusion_schema: DenotationOf(T) holds for every admitted parameter
       instance satisfying T's exact premise and side-condition schemas
-  }
+  },
+  named_premise_requirements: []
 }
 
 TheoremTruthGoal(T) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B,TheoremTruthQuestion(T))
+  question_id: AnalysisQuestionId(B,TheoremTruthQuestion(T)),
+  named_premise_bindings: {}
 }
 
 TheoremTruthPropositionBody(T) = AnalysisPropositionBody {
   goal_id: AnalysisGoalId(B,TheoremTruthGoal(T)),
   hypothesis_context_id:
-    AnalysisHypothesisContextId(B,{nodes: [], roots: []})
+    AnalysisHypothesisContextId(B,{nodes: [], roots: [], exact_named_premise_ids: []})
 }
 
 TheoremTruthPropositionId(T:AnalysisTheoremSchemaId) =
@@ -381,7 +383,8 @@ TheoremApplicabilityQuestion(selection,payload) = AnalysisQuestionBody {
   family: TheoremApplicability,
   exact_subjects: ExactApplicabilitySubjects(selection),
   context: ExactApplicabilityContext(selection),
-  family_payload: payload : TheoremApplicabilityPayload
+  family_payload: payload : TheoremApplicabilityPayload,
+  named_premise_requirements: []
 }
 ```
 
@@ -432,7 +435,8 @@ hypothesis context, never in the goal. This prevents a goal -> theorem instance
 ```text
 TheoremApplicabilityGoal(selection,payload) = AnalysisGoalBody {
   question_id:
-    AnalysisQuestionId(B,TheoremApplicabilityQuestion(selection,payload))
+    AnalysisQuestionId(B,TheoremApplicabilityQuestion(selection,payload)),
+  named_premise_bindings: {}
 }
 
 TheoremApplicabilityProposition(selection,payload,retained_premises) =

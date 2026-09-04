@@ -100,6 +100,11 @@ F0  ideal assurance architecture and current-design falsification
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
   -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
+  -> Analysis premise owner text                        [authored; publication gated]
+  -> F0-V2D1 review of the Analysis premise text        [round four: owner text closed; declaration pending]
+  -> F0-V2D2 Analysis package migration                 [round two, Affirmative; provider declaration pending]
+  -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
+  -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
@@ -541,9 +546,21 @@ provider, extraction tool, or durable schema.
   a guarded occurrence, and a two-rule construction, through admission, the
   checker equation, ten owner views, both public-setup variants, Interface
   admission with its replay-input refusal, exhaustive execution and
-  independent replay, and a finite six-lane outcome map: twenty-one findings
-  affirmative, two expected refusals, and, on the migration branch, four
-  Analysis-side holds that the stacked Analysis text is to absorb.
+  independent replay, a finite six-lane outcome map, and the named-premise
+  intake: twenty-four findings affirmative, two expected refusals, and three
+  holds reported separately (no uniform Boolean distribution profile is
+  declared for the subject's first law leaf, the relation and Plan premises
+  name another Core, no provider declaration is published); the
+  three-element Fresh premise forms and the intake stops fail-closed before
+  a goal forms.
+- [`analysis-source-package-repins-2026-09-05.md`](analysis-source-package-repins-2026-09-05.md)
+  re-pins the Analysis branch's packages to the repaired owner text: the
+  thirteen research checks that the deep-review repairs and the migration
+  package repairs had turned red on this branch are classified as pin,
+  transcribed model, or semantic consequence and repaired in place, with the
+  provider interpretations re-derived at the rotated subject identities and
+  the migration review's cones asserted relative to the migration head so
+  the stacked branch's Analysis rotation is exact rather than tolerated.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them
@@ -742,6 +759,53 @@ provider, extraction tool, or durable schema.
   `Affirmative/M4-A-FORWARD-STATE-SOUND`; it pins the text before the
   claim-source region repair, so the two boundary helpers await its next
   round.
+- [`analysis-premise-intake-owner-text.md`](analysis-premise-intake-owner-text.md)
+  records the Analysis owner-text pass that adopts the intake design: the
+  named-premise grammar and intake in the kernel, the Fresh distribution,
+  provider outcome-carrier, and Schnorr premise catalog in the property
+  profile, and the family premises in the transport profile; both compilers
+  agree, the six Analysis profiles rotate, and publication stays gated.
+- [`f0v2d1-analysis-premise-text-review.md`](f0v2d1-analysis-premise-text-review.md)
+  is the independent review of the Analysis named-premise text: round one,
+  negative on six of seven questions (unparameterized law references,
+  undefined law families, prose arguments in hypothesis bindings, a Plan
+  identity the subject tuple could not derive, displays without the new
+  fields, catalog order and revisions); round two on the repaired text, zero
+  negatives, three questions affirmative and four `CannotAnswer` (free
+  parameters in the law signatures, seven node displays without their premise
+  set, prose Schnorr bindings, refreeze inputs), each with exact locations
+  and replacements, plus the migration plan for the closure package; round
+  three on the repaired text and the migrated packages, seven owner-text
+  questions affirmative including the argument-schema and lane-image
+  questions added for it, and two negatives against the migrated closure
+  package, which still encodes the relation-bound Fresh identity and the
+  construction sampler form through legacy proxies and the completion
+  hypothesis through an arbitrary symbol; round four, after the second
+  closure round, eight questions affirmative with the two package negatives
+  closed and the frozen relation-bound Fresh, fixed-extractor, and family
+  vectors reproduced independently, the one `CannotAnswer` being the VCVio
+  provider and carrier declaration the profile does not yet publish.
+  Round five, after the pre-freeze deep review's repairs, closes twelve of
+  thirteen questions, including the four added for the family-source kind,
+  the fixed-setup domain, measure preservation, and the owner-read catalog
+  join; the thirteenth is the declared hold on the unpublished VCVio
+  declaration, reported separately.
+- [`f0v2d2-analysis-package-migration.md`](f0v2d2-analysis-package-migration.md)
+  migrates the closure package, the finite cover, the joined boundary, and
+  the intake probe to the named-premise fields the owner text now carries,
+  with the tenth kind and the lane image; all four checks are affirmative on
+  their own terms (the closure package at 213 of 213), while the exact
+  question stays `CannotAnswer/F0V2D2-C-OWNER-IDENTITIES-UNDERDETERMINED`
+  because two required identities were encodable only as documented
+  candidates: the fixed-extractor question's premise scope and the Fresh
+  premise's protocol-declaration coordinate, both since repaired in the owner
+  text; round two, on the repaired text, refreshes the imported view snapshot
+  so the challenge entries carry `fresh_law`, encodes the owner's hypothesis
+  declarations and the extractor pair, adds the two negative controls, and
+  reproduces every owner-determined premise-bearing identity
+  (`Affirmative/F0V2D2-A-OWNER-DETERMINED-PREMISE-IDENTITIES`); the closure
+  package passes 215 of 215 and the only remaining `CannotAnswer` is the
+  VCVio provider declaration the profile does not yet publish.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,

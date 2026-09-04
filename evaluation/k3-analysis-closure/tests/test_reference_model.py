@@ -164,6 +164,7 @@ def rechain_result_support(
     return replace(result, result_id=judgment_id, support_id=support_id)
 
 
+@lru_cache(maxsize=1)
 def fixed_source_judgment() -> model.EstablishedJudgment:
     source, profile, source_model, *_ = fixed_context()
     proposition = model.form_special_soundness_proposition(
@@ -179,6 +180,875 @@ def fixed_source_judgment() -> model.EstablishedJudgment:
     return model.establish_conditionally(
         proposition, model.schnorr_special_soundness_rule(proposition)
     )
+
+
+class NamedPremiseMigrationTest(unittest.TestCase):
+    @staticmethod
+    def formed_chain() -> tuple[object, ...]:
+        established = fixed_source_judgment()
+        proposition = model._formed_analysis_body(
+            established.proposition_id, "analysis.proposition"
+        )
+        goal = model._formed_analysis_body(proposition.goal_id, "analysis.goal")
+        question = model._formed_analysis_body(
+            goal.question_id, "analysis.question"
+        )
+        context = model._formed_analysis_body(
+            proposition.hypothesis_context_id, "analysis.hypothesis-context"
+        )
+        support = model._formed_analysis_body(
+            established.derivation_support, "analysis.support-instantiation"
+        )
+        judgment = model._formed_analysis_body(
+            established.judgment_id, "analysis.judgment-record"
+        )
+        return established, proposition, goal, question, context, support, judgment
+
+    def test_closed_algebra_and_schnorr_vector_are_exact(self) -> None:
+        self.assertEqual(
+            tuple(model.AnalysisNamedPremiseKind),
+            (
+                model.AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION,
+                model.AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY,
+                model.AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS,
+                model.AnalysisNamedPremiseKind.PROVIDER_OUTCOME_CARRIER_MAP,
+                model.AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION,
+                model.AnalysisNamedPremiseKind.RELATION_PREDICATE,
+                model.AnalysisNamedPremiseKind.WITNESS_TYPE,
+                model.AnalysisNamedPremiseKind.PROVER_PRIVATE_STATE,
+                model.AnalysisNamedPremiseKind.HONEST_COMMIT,
+                model.AnalysisNamedPremiseKind.HONEST_RESPOND,
+            ),
+        )
+        self.assertEqual(
+            len(
+                (
+                    model.PIRPublicCoinLawCoordinate,
+                    model.AnalysisFamilyPremiseCoordinate,
+                    model.PIRConstructionPremiseCoordinate,
+                    model.PIRProtocolOutcomePartitionCoordinate,
+                    model.RelationsModelEvaluatorCoordinate,
+                    model.RelationsWitnessPlanJoinCoordinate,
+                    model.PIRPlanStateCoordinate,
+                    model.PIRPlanRecipeCoordinate,
+                )
+            ),
+            8,
+        )
+        self.assertEqual(len(tuple(model.AnalysisPremiseEvidenceDepth)), 3)
+        self.assertEqual(
+            len(
+                (
+                    model.FreshChallengeOnly,
+                    model.OracleModelOnly,
+                    model.ExactSubjectsOnly,
+                    model.RebindRequired,
+                )
+            ),
+            4,
+        )
+        (
+            established,
+            proposition,
+            goal,
+            question,
+            context,
+            support,
+            judgment,
+        ) = self.formed_chain()
+        self.assertEqual(
+            tuple(binding.requirement for binding in goal.named_premise_bindings),
+            question.named_premise_requirements,
+        )
+        self.assertEqual(len(goal.named_premise_bindings), 6)
+        premise_ids = model.premise_ids_of_proposition(established.proposition_id)
+        self.assertEqual(support.exact_named_premise_ids, premise_ids)
+        self.assertEqual(judgment.exact_named_premise_ids, premise_ids)
+        self.assertEqual(
+            context.exact_named_premise_ids,
+            model._named_premise_id_union(
+                premise_id
+                for node in context.nodes
+                for premise_id in node.exact_named_premise_ids
+            ),
+        )
+
+    def test_public_coin_snapshot_carries_owner_fresh_law_and_all_fields(self) -> None:
+        source = model._SCHNORR_PINNED_SOURCE
+        projection = model._source_schnorr_challenge_projection(source)
+        self.assertEqual(
+            tuple(item.name for item in fields(model.k2.PublicCoinChallengeEntry)),
+            (
+                "challenge_ref",
+                "occurrence_ref",
+                "scope_ref",
+                "value_type",
+                "domain",
+                "fresh_law",
+                "correlation",
+                "reduction_use",
+                "public_conditions",
+                "public_condition_predecessors",
+                "reduction_consumers",
+            ),
+        )
+        self.assertEqual(
+            model._schnorr_public_coin_law_coordinate(source),
+            model.PIRPublicCoinLawCoordinate(projection.fresh_law),
+        )
+        self.assertEqual(
+            tuple(
+                rule.maximum_draws
+                for rule in model.k2.admitted_challenge_rules(
+                    source.case.core, source.case.construction
+                )
+            ),
+            (1,),
+        )
+        core_body = model.k2.core_body(source.case.core)
+        construction_body = model.k2.construction_body(
+            source.case.core, source.case.construction
+        )
+        self.assertEqual(
+            model.k1.encode_datum(model.k1.decode_datum(core_body)), core_body
+        )
+        self.assertEqual(
+            model.k1.encode_datum(model.k1.decode_datum(construction_body)),
+            construction_body,
+        )
+        goal_id = model.analysis_goal_id(model._SCHNORR_PINNED_PROPOSITION.goal)
+        goal = model._formed_analysis_body(goal_id, "analysis.goal")
+        self.assertEqual(
+            {
+                "core": source.protocol_source.core_id.carrier(),
+                "construction": source.protocol_source.construction_id.carrier(),
+                "fresh": source.protocol_source.fresh_protocol_id.carrier(),
+                "fiat-shamir": source.protocol_source.fiat_shamir_protocol_id.carrier(),
+                "property-profile": model.ANALYSIS_PROPERTY_PROFILE_ID.carrier(),
+                "question": goal.question_id.carrier(),
+                "goal": goal_id.carrier(),
+                **{
+                    binding.requirement.slot: binding.premise_id.carrier()
+                    for binding in goal.named_premise_bindings
+                },
+            },
+            {
+                "core": "zkcidv0:pir.interactive-core:d74dc7178424914564445da48051ffd48f8b7c0574b8d81d04cecb33b9c69534",
+                "construction": "zkcidv0:pir.transcript-construction:ce9e327322f82a9532c48eb1a922b10652142f80a21120da9ee1886e5fb0b63c",
+                "fresh": "zkcidv0:pir.protocol:9a1e7e5de6f11ed64911d498cfc415d39a51c4f9e807a3fdf2b72c3414e31af9",
+                "fiat-shamir": "zkcidv0:pir.protocol:2e24d76e032b6df1da410ebda437858d339c3810162c7bd63101286158792679",
+                "property-profile": "zkcidv0:foundation.semantic-language-profile:8ac5e7b9ba6d9684efc86c219ad8c3fa8560a90c4d653cc2e05ed4a13d58b807",
+                "question": "zkcidv0:analysis.question:a30fbe7a8751b6a116b46b6055968a37c67795aeaff6d8921b2f196ffc928aa4",
+                "goal": "zkcidv0:analysis.goal:5d7c631352cf496b2c539ff7a8aa4ad90ed527e2d0e75fb4645da070e8751094",
+                "commit": "zkcidv0:analysis.named-premise:aed4d3a7477d0a24995b6042633ff5aa47ed9e02e94659f7ef5c85c621e818c3",
+                "respond": "zkcidv0:analysis.named-premise:a2b1d1fbbe862030a6f3e3f506207fcbe9e6524f29da7b381d380316e7cfc229",
+                "witness": "zkcidv0:analysis.named-premise:98b5df02c8ec7a13db9e5a2a85427a0122c44bccbaa3ee91e07986e5b9767cc5",
+                "relation": "zkcidv0:analysis.named-premise:99461a972621d5d34f7031f934b5912e548fac65a6f26c3aaf870709e15164cf",
+                "fresh-coin": "zkcidv0:analysis.named-premise:bfba3ba3a94e38313f5052be057e58a21a818be7db85431e9a205883443c73d7",
+                "prover-state": "zkcidv0:analysis.named-premise:d67c7fba56cce556669c51699a0e18f15d1bafe7d73fa153b5fb71423c252999",
+            },
+        )
+        challenge_index = next(
+            index
+            for index, occurrence in enumerate(source.case.core.schedule)
+            if occurrence.name == "challenge"
+        )
+        schedule = list(source.case.core.schedule)
+        schedule[challenge_index] = replace(schedule[challenge_index], fresh_law=None)
+        missing_leaf = model.k2.issue_core_static_view(
+            replace(source.case.core, schedule=tuple(schedule)),
+            model.k2.StaticViewKind.PUBLIC_COIN,
+            model._Analysis_PUBLIC_COIN_VIEW_MANIFEST,
+        )
+        self.assertIs(
+            missing_leaf.kind, model.k2.QualifiedViewOutcomeKind.MALFORMED
+        )
+
+    def test_transport_and_construction_identity_vectors_are_frozen(self) -> None:
+        family = model.SELECTED_AFK_FAMILY
+        role = "target-adaptive-knowledge-q-lt-N"
+        construction_bindings = model.fiat_shamir_construction_premise_bindings(
+            model._SCHNORR_PINNED_SOURCE,
+            model.afk_randomness_law_id(
+                model._SCHNORR_PINNED_PROFILE.challenge_count
+            ),
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
+        )
+        self.assertEqual(
+            {
+                "transport_profile": model.ANALYSIS_TRANSPORT_PROFILE_ID.carrier(),
+                "family_question": model.family_question_id(
+                    family, role
+                ).carrier(),
+                "family_goal": model.family_goal_id(family, role).carrier(),
+                "family_premises": tuple(
+                    binding.premise_id.carrier()
+                    for binding in model.family_named_premise_bindings(family, role)
+                ),
+                "construction_premises": tuple(
+                    binding.premise_id.carrier()
+                    for binding in construction_bindings
+                ),
+            },
+            {
+                "transport_profile": "zkcidv0:foundation.semantic-language-profile:e88837e96d9cb1f57c0de82940715ea30bae3ccbaba8f1a1ab992428275db489",
+                "family_question": "zkcidv0:analysis.question:f08cb79dec9d986f3eefb3131f5a5b4f0a309ecbebdb1952bf88a95f1815ca1d",
+                "family_goal": "zkcidv0:analysis.goal:43b74ed7a50b312c09d36fba0d8421537e6546fccf1e5c35cd13f691a94c8839",
+                "family_premises": (
+                    "zkcidv0:analysis.named-premise:d1b1ddb9fdeb4303c49fae6f57bedf9951aa22dbe9cd67502e1be11d59f7d9f2",
+                    "zkcidv0:analysis.named-premise:2708fdab850d04b36713d6777fbe903cf91fca3d5eea4e34c3ce35a3cb9563ab",
+                ),
+                "construction_premises": (
+                    "zkcidv0:analysis.named-premise:cd3e0ef954b0e33dadade7c8415d845d0e386b172b11b3c79045847afb0887d6",
+                    "zkcidv0:analysis.named-premise:6948e63fb598ce1348a5a0c9b142ef148e9a3324b115d4055245089c5b99a797",
+                ),
+            },
+        )
+
+    def test_requirement_and_binding_key_failures_are_partitioned(self) -> None:
+        _, _, goal, question, *_ = self.formed_chain()
+        bindings = goal.named_premise_bindings
+        for ordinal in range(len(bindings)):
+            with self.subTest(omitted=ordinal):
+                reduced = bindings[:ordinal] + bindings[ordinal + 1 :]
+                result = model.intake_analysis_named_premises(
+                    goal.question_id, reduced
+                )
+                self.assertEqual(
+                    (result.outcome, result.code),
+                    (
+                        model.NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+                        "F0V2D2-C-MISSING-BINDING-KEY",
+                    ),
+                )
+        duplicate = model.intake_analysis_named_premises(
+            goal.question_id, bindings + (bindings[-1],)
+        )
+        self.assertEqual(
+            (duplicate.outcome, duplicate.code),
+            (
+                model.NamedPremiseIntakeOutcome.MALFORMED,
+                "F0V2D2-M-DUPLICATE-BINDING-KEY",
+            ),
+        )
+        reordered = model.intake_analysis_named_premises(
+            goal.question_id, tuple(reversed(bindings))
+        )
+        self.assertEqual(
+            (reordered.outcome, reordered.code),
+            (
+                model.NamedPremiseIntakeOutcome.MALFORMED,
+                "F0V2D2-M-CALLER-ORDERED-BINDING-KEY",
+            ),
+        )
+        extra_requirement = model.AnalysisNamedPremiseRequirementV0(
+            "unrequested",
+            bindings[0].requirement.kind,
+            bindings[0].requirement.coordinate,
+        )
+        extra = tuple(
+            sorted(
+                (
+                    *bindings,
+                    model.AnalysisNamedPremiseBindingV0(
+                        extra_requirement, bindings[0].premise_id
+                    ),
+                ),
+                key=lambda item: model._named_premise_requirement_key(
+                    item.requirement
+                ),
+            )
+        )
+        extra_result = model.intake_analysis_named_premises(
+            goal.question_id, extra
+        )
+        self.assertEqual(
+            (extra_result.outcome, extra_result.code),
+            (
+                model.NamedPremiseIntakeOutcome.MALFORMED,
+                "F0V2D2-M-EXTRA-BINDING-KEY",
+            ),
+        )
+        absent = replace(
+            bindings[0],
+            premise_id=model.fixture_ref(
+                "analysis.named-premise", "absent-premise-source"
+            ),
+        )
+        absent_result = model.intake_analysis_named_premises(
+            goal.question_id, (absent, *bindings[1:])
+        )
+        self.assertEqual(
+            (absent_result.outcome, absent_result.code),
+            (
+                model.NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+                "F0V2D2-C-PREMISE-SOURCE-ABSENT",
+            ),
+        )
+        with self.assertRaisesRegex(model.PropertyError, "caller-ordered"):
+            model._analysis_id(
+                "analysis.question",
+                replace(
+                    question,
+                    named_premise_requirements=tuple(
+                        reversed(question.named_premise_requirements)
+                    ),
+                ),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "repeats"):
+            model._analysis_id(
+                "analysis.question",
+                replace(
+                    question,
+                    named_premise_requirements=(
+                        *question.named_premise_requirements,
+                        question.named_premise_requirements[-1],
+                    ),
+                ),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "wrong coordinate arm"):
+            model._named_premise_requirement_body(
+                replace(
+                    bindings[0].requirement,
+                    coordinate=bindings[-1].requirement.coordinate,
+                )
+            )
+
+    def test_requirement_omission_and_surplus_rotate_then_fail_intake(self) -> None:
+        _, _, goal, question, *_ = self.formed_chain()
+        bindings = goal.named_premise_bindings
+        omitted_question_id = model._analysis_id(
+            "analysis.question",
+            replace(
+                question,
+                named_premise_requirements=question.named_premise_requirements[1:],
+            ),
+        )
+        self.assertNotEqual(omitted_question_id, goal.question_id)
+        omitted = model.intake_analysis_named_premises(
+            omitted_question_id, bindings
+        )
+        self.assertEqual(
+            (omitted.outcome, omitted.code),
+            (
+                model.NamedPremiseIntakeOutcome.MALFORMED,
+                "F0V2D2-M-EXTRA-BINDING-KEY",
+            ),
+        )
+
+        extra_requirement = model.AnalysisNamedPremiseRequirementV0(
+            "surplus-requirement",
+            bindings[0].requirement.kind,
+            bindings[0].requirement.coordinate,
+        )
+        extra_requirements = tuple(
+            sorted(
+                (*question.named_premise_requirements, extra_requirement),
+                key=model._named_premise_requirement_key,
+            )
+        )
+        extra_question_id = model._analysis_id(
+            "analysis.question",
+            replace(
+                question,
+                named_premise_requirements=extra_requirements,
+            ),
+        )
+        self.assertNotEqual(extra_question_id, goal.question_id)
+        extra = model.intake_analysis_named_premises(extra_question_id, bindings)
+        self.assertEqual(
+            (extra.outcome, extra.code),
+            (
+                model.NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+                "F0V2D2-C-MISSING-BINDING-KEY",
+            ),
+        )
+
+    def test_kind_profile_and_all_scope_mismatches_are_refused(self) -> None:
+        _, _, goal, question, *_ = self.formed_chain()
+        bindings = goal.named_premise_bindings
+        fresh_index = next(
+            index
+            for index, binding in enumerate(bindings)
+            if binding.requirement.kind
+            is model.AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION
+        )
+        relation_index = next(
+            index
+            for index, binding in enumerate(bindings)
+            if binding.requirement.kind
+            is model.AnalysisNamedPremiseKind.RELATION_PREDICATE
+        )
+        wrong_kind_bindings = list(bindings)
+        wrong_kind_bindings[fresh_index] = replace(
+            wrong_kind_bindings[fresh_index],
+            premise_id=bindings[relation_index].premise_id,
+        )
+        wrong_kind = model.intake_analysis_named_premises(
+            goal.question_id, tuple(wrong_kind_bindings)
+        )
+        self.assertEqual(
+            (wrong_kind.outcome, wrong_kind.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-PREMISE-KIND",
+            ),
+        )
+
+        fresh_body = model._formed_analysis_body(
+            bindings[fresh_index].premise_id, "analysis.named-premise"
+        )
+        rebind_id = model.analysis_named_premise_id(
+            replace(fresh_body, model_scope=model.RebindRequired()),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        rebind_bindings = list(bindings)
+        rebind_bindings[fresh_index] = replace(
+            rebind_bindings[fresh_index], premise_id=rebind_id
+        )
+        rebind = model.intake_analysis_named_premises(
+            goal.question_id, tuple(rebind_bindings)
+        )
+        self.assertEqual(
+            (rebind.outcome, rebind.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+            ),
+        )
+
+        relation_body = model._formed_analysis_body(
+            bindings[relation_index].premise_id, "analysis.named-premise"
+        )
+        exact_scope_id = model.analysis_named_premise_id(
+            replace(
+                relation_body,
+                model_scope=model.ExactSubjectsOnly(
+                    (model._SCHNORR_PINNED_SOURCE.protocol_source.fresh_protocol_id,)
+                ),
+            ),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        exact_scope_bindings = list(bindings)
+        exact_scope_bindings[relation_index] = replace(
+            exact_scope_bindings[relation_index], premise_id=exact_scope_id
+        )
+        exact_scope = model.intake_analysis_named_premises(
+            goal.question_id, tuple(exact_scope_bindings)
+        )
+        self.assertEqual(
+            (exact_scope.outcome, exact_scope.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-EXACT-SUBJECTS-SCOPE",
+            ),
+        )
+
+        other_protocol = model.fixture_ref("pir.protocol", "not-fresh-authenticated")
+        changed_question_id = model._analysis_id(
+            "analysis.question",
+            replace(
+                question,
+                exact_subjects=(other_protocol,),
+                named_premise_requirements=(bindings[fresh_index].requirement,),
+            ),
+        )
+        fresh_scope = model.intake_analysis_named_premises(
+            changed_question_id, (bindings[fresh_index],)
+        )
+        self.assertEqual(
+            (fresh_scope.outcome, fresh_scope.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-FRESH-CHALLENGE-SCOPE",
+            ),
+        )
+
+        family = model.SELECTED_AFK_FAMILY
+        family_question_id = model.family_question_id(
+            family, "target-adaptive-knowledge-q-lt-N"
+        )
+        family_bindings = model.family_named_premise_bindings(
+            family, "target-adaptive-knowledge-q-lt-N"
+        )
+        family_body = model._formed_analysis_body(
+            family_bindings[0].premise_id, "analysis.named-premise"
+        )
+        changed_family = model.form_afk_asymptotic_family(
+            "oracle-scope-mismatch-family", challenge_cardinality=8
+        )
+        wrong_oracle_id = model.family_random_oracle_distribution_profile_id(
+            changed_family
+        )
+        wrong_oracle_premise_id = model.analysis_named_premise_id(
+            replace(
+                family_body,
+                model_scope=model.OracleModelOnly(wrong_oracle_id),
+            ),
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
+        )
+        wrong_oracle_bindings = (
+            replace(family_bindings[0], premise_id=wrong_oracle_premise_id),
+            *family_bindings[1:],
+        )
+        wrong_oracle = model.intake_analysis_named_premises(
+            family_question_id, wrong_oracle_bindings
+        )
+        self.assertEqual(
+            (wrong_oracle.outcome, wrong_oracle.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-ORACLE-MODEL-SCOPE",
+            ),
+        )
+        cross_profile_bindings = list(bindings)
+        cross_profile_bindings[fresh_index] = replace(
+            cross_profile_bindings[fresh_index],
+            premise_id=family_bindings[0].premise_id,
+        )
+        cross_profile = model.intake_analysis_named_premises(
+            goal.question_id, tuple(cross_profile_bindings)
+        )
+        self.assertEqual(
+            (cross_profile.outcome, cross_profile.code),
+            (
+                model.NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-CROSS-PROFILE-PREMISE",
+            ),
+        )
+
+    def test_premise_ids_are_derived_at_every_carrier(self) -> None:
+        established, proposition, goal, _, context, support, judgment = (
+            self.formed_chain()
+        )
+        goal_premises = model.premise_ids_of_goal(proposition.goal_id)
+        node = model._derived_hypothesis_node(0, proposition.goal_id)
+        self.assertEqual(node.exact_named_premise_ids, goal_premises)
+        derived_context = model._derived_hypothesis_context_body((node,), (0,))
+        derived_context_id = model._analysis_id(
+            "analysis.hypothesis-context", derived_context
+        )
+        self.assertNotEqual(derived_context_id, proposition.hypothesis_context_id)
+        with self.assertRaisesRegex(model.PropertyError, "node premise IDs"):
+            model._analysis_id(
+                "analysis.hypothesis-context",
+                replace(
+                    derived_context,
+                    nodes=(replace(node, exact_named_premise_ids=()),),
+                    exact_named_premise_ids=(),
+                ),
+            )
+        relation_binding = next(
+            binding
+            for binding in goal.named_premise_bindings
+            if binding.requirement.kind
+            is model.AnalysisNamedPremiseKind.RELATION_PREDICATE
+        )
+        relation_body = model._formed_analysis_body(
+            relation_binding.premise_id, "analysis.named-premise"
+        )
+        foreign_premise_id = model.analysis_named_premise_id(
+            replace(
+                relation_body,
+                source=model.OwnerSemanticCoordinate(
+                    relation_body.source.semantic_subject_ref
+                ),
+            ),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        surplus_ids = model._named_premise_id_union(
+            (*node.exact_named_premise_ids, foreign_premise_id)
+        )
+        with self.assertRaisesRegex(model.PropertyError, "node premise IDs"):
+            model._analysis_id(
+                "analysis.hypothesis-context",
+                replace(
+                    derived_context,
+                    nodes=(replace(node, exact_named_premise_ids=surplus_ids),),
+                    exact_named_premise_ids=surplus_ids,
+                ),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "context premise IDs"):
+            model._analysis_id(
+                "analysis.hypothesis-context",
+                replace(derived_context, exact_named_premise_ids=()),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "context premise IDs"):
+            model._analysis_id(
+                "analysis.hypothesis-context",
+                replace(derived_context, exact_named_premise_ids=surplus_ids),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "support premise IDs"):
+            model._analysis_id(
+                "analysis.support-instantiation",
+                replace(support, exact_named_premise_ids=()),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "support premise IDs"):
+            model._analysis_id(
+                "analysis.support-instantiation",
+                replace(support, exact_named_premise_ids=surplus_ids),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "judgment premise IDs"):
+            model._analysis_id(
+                "analysis.judgment-record",
+                replace(judgment, exact_named_premise_ids=()),
+            )
+        with self.assertRaisesRegex(model.PropertyError, "judgment premise IDs"):
+            model._analysis_id(
+                "analysis.judgment-record",
+                replace(judgment, exact_named_premise_ids=surplus_ids),
+            )
+        self.assertEqual(
+            support.exact_named_premise_ids,
+            model.premise_ids_of_proposition(established.proposition_id),
+        )
+        self.assertEqual(
+            judgment.exact_named_premise_ids,
+            support.exact_named_premise_ids,
+        )
+        self.assertEqual(
+            context.exact_named_premise_ids,
+            model._named_premise_id_union(
+                premise_id
+                for context_node in context.nodes
+                for premise_id in context_node.exact_named_premise_ids
+            ),
+        )
+        self.assertEqual(
+            goal.question_id,
+            model.analysis_question_id(established.proposition.goal.question),
+        )
+
+    def test_premise_body_mutations_and_downstream_identity_rotation(self) -> None:
+        established, proposition, goal, _, _, support, judgment = self.formed_chain()
+        relation_index = next(
+            index
+            for index, binding in enumerate(goal.named_premise_bindings)
+            if binding.requirement.kind
+            is model.AnalysisNamedPremiseKind.RELATION_PREDICATE
+        )
+        relation_binding = goal.named_premise_bindings[relation_index]
+        relation_body = model._formed_analysis_body(
+            relation_binding.premise_id, "analysis.named-premise"
+        )
+        law_term = relation_body.bound_model_or_hypothesis.law_term
+        with self.assertRaisesRegex(model.PropertyError, "another coordinate"):
+            model.analysis_named_premise_id(
+                replace(
+                    relation_body,
+                    bound_model_or_hypothesis=replace(
+                        relation_body.bound_model_or_hypothesis,
+                        law_term=replace(
+                            law_term,
+                            canonical_arguments=(
+                                model.k1.Symbol("noncanonical-coordinate"),
+                                *law_term.canonical_arguments[1:],
+                            ),
+                        ),
+                    ),
+                ),
+                profile=model.ANALYSIS_PROPERTY_PROFILE,
+            )
+
+        source_rotated_id = model.analysis_named_premise_id(
+            replace(
+                relation_body,
+                source=model.OwnerSemanticCoordinate(
+                    relation_body.source.semantic_subject_ref
+                ),
+            ),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        evidence_rotated_id = model.analysis_named_premise_id(
+            replace(
+                relation_body,
+                evidence_depth=(
+                    model.AnalysisPremiseEvidenceDepth.TYPED_CONSTRUCTIVE_BINDING
+                ),
+            ),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        scope_rotated_id = model.analysis_named_premise_id(
+            replace(relation_body, model_scope=model.RebindRequired()),
+            profile=model.ANALYSIS_PROPERTY_PROFILE,
+        )
+        self.assertEqual(
+            len(
+                {
+                    relation_binding.premise_id,
+                    source_rotated_id,
+                    evidence_rotated_id,
+                    scope_rotated_id,
+                }
+            ),
+            4,
+        )
+
+        changed_bindings = list(goal.named_premise_bindings)
+        changed_bindings[relation_index] = replace(
+            relation_binding, premise_id=source_rotated_id
+        )
+        changed_bindings_tuple = tuple(changed_bindings)
+        intake = model.intake_analysis_named_premises(
+            goal.question_id, changed_bindings_tuple
+        )
+        self.assertIs(
+            intake.outcome, model.NamedPremiseIntakeOutcome.AFFIRMATIVE
+        )
+        changed_goal_id = model._analysis_id(
+            "analysis.goal",
+            replace(goal, named_premise_bindings=changed_bindings_tuple),
+        )
+        changed_proposition_id = model._analysis_id(
+            "analysis.proposition",
+            replace(proposition, goal_id=changed_goal_id),
+        )
+        changed_premise_ids = model.premise_ids_of_proposition(
+            changed_proposition_id
+        )
+        changed_support_id = model._analysis_id(
+            "analysis.support-instantiation",
+            replace(
+                support,
+                proposition_id=changed_proposition_id,
+                exact_named_premise_ids=changed_premise_ids,
+            ),
+        )
+        changed_judgment_id = model._analysis_id(
+            "analysis.judgment-record",
+            replace(
+                judgment,
+                proposition_id=model._id_datum(
+                    changed_proposition_id, "analysis.proposition"
+                ),
+                exact_named_premise_ids=changed_premise_ids,
+                support_coordinate=model._id_datum(
+                    changed_support_id, "analysis.support-instantiation"
+                ),
+            ),
+        )
+        self.assertEqual(
+            goal.question_id,
+            model._formed_analysis_body(
+                changed_goal_id, "analysis.goal"
+            ).question_id,
+        )
+        self.assertNotEqual(changed_goal_id, proposition.goal_id)
+        self.assertNotEqual(changed_proposition_id, support.proposition_id)
+        self.assertNotEqual(changed_support_id, established.derivation_support)
+        self.assertNotEqual(changed_judgment_id, established.judgment_id)
+
+    def test_unpublished_provider_declaration_cannot_form_a_premise(self) -> None:
+        protocol_id = model._SCHNORR_PINNED_SOURCE.protocol_source.fresh_protocol_id
+        coordinate = model.PIRProtocolOutcomePartitionCoordinate(protocol_id)
+        lanes = tuple(
+            sorted(
+                (
+                    model.AnalysisOutcomeLaneName.ACCEPTED,
+                    model.AnalysisOutcomeLaneName.REJECTED,
+                ),
+                key=lambda lane: model.k1.encode_datum(model.k1.Symbol(lane.value)),
+            )
+        )
+        provider = model.AnalysisProviderDeclarationV0(
+            "unpublished-provider",
+            b"unpublished-source-pin",
+            "unpublished-toolchain",
+            lanes,
+        )
+        partition = tuple(
+            sorted(
+                (
+                    model.AnalysisOutcomeLaneName.ACCEPTED,
+                    model.AnalysisOutcomeLaneName.REJECTED,
+                    model.AnalysisOutcomeLaneName.ABORTED,
+                    model.AnalysisOutcomeLaneName.STRATEGY_STOPPED,
+                    model.AnalysisOutcomeLaneName.OPERATIONAL_NONCOMPLETION,
+                ),
+                key=lambda lane: model.k1.encode_datum(model.k1.Symbol(lane.value)),
+            )
+        )
+        lane_map = tuple(
+            (
+                lane,
+                model.Image(lane is model.AnalysisOutcomeLaneName.ACCEPTED)
+                if lane in lanes
+                else model.Unmodelled(),
+            )
+            for lane in partition
+        )
+        premise = model.AnalysisNamedPremiseBodyV0(
+            model.AnalysisNamedPremiseKind.PROVIDER_OUTCOME_CARRIER_MAP,
+            coordinate,
+            model.BoundProviderOutcomeCarrierMap(
+                model.AnalysisProviderOutcomeCarrierMapBodyV0(
+                    provider,
+                    coordinate,
+                    model.k1.Symbol("Bool"),
+                    lane_map,
+                )
+            ),
+            model.ProviderDeclarationSource(provider),
+            model.AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            model.ExactSubjectsOnly((protocol_id,)),
+        )
+        map_body = premise.bound_model_or_hypothesis.value
+        image_outside = tuple(
+            (lane, model.Image("outside-declaration"))
+            if lane is model.AnalysisOutcomeLaneName.ABORTED
+            else (lane, image)
+            for lane, image in map_body.total_lane_map
+        )
+        with self.assertRaisesRegex(model.PropertyError, "modelled_lanes"):
+            model._provider_outcome_carrier_map_body(
+                replace(map_body, total_lane_map=image_outside)
+            )
+        unmodelled_inside = tuple(
+            (lane, model.Unmodelled())
+            if lane is model.AnalysisOutcomeLaneName.ACCEPTED
+            else (lane, image)
+            for lane, image in map_body.total_lane_map
+        )
+        with self.assertRaisesRegex(model.PropertyError, "modelled_lanes"):
+            model._provider_outcome_carrier_map_body(
+                replace(map_body, total_lane_map=unmodelled_inside)
+            )
+        with self.assertRaisesRegex(model.PropertyError, "published"):
+            model.analysis_named_premise_id(
+                premise, profile=model.ANALYSIS_PROPERTY_PROFILE
+            )
+        completion = model.AnalysisNamedPremiseBodyV0(
+            model.AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION,
+            coordinate,
+            model.BoundHypothesis(
+                model._premise_law_term(
+                    model.ANALYSIS_PROPERTY_PROFILE,
+                    "operational-completion-hypothesis-v0",
+                    coordinate,
+                    model._provider_declaration_body(provider),
+                )
+            ),
+            model.ProviderDeclarationSource(provider),
+            model.AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            model.ExactSubjectsOnly((protocol_id,)),
+        )
+        undeclared = replace(
+            completion,
+            bound_model_or_hypothesis=model.BoundHypothesis(
+                model.AnalysisLawTermV0(
+                    model.k1.Symbol("not-an-owner-declaration"),
+                    completion.bound_model_or_hypothesis.law_term.canonical_arguments,
+                )
+            ),
+        )
+        with self.assertRaisesRegex(model.PropertyError, "no owner declaration"):
+            model.analysis_named_premise_id(
+                undeclared, profile=model.ANALYSIS_PROPERTY_PROFILE
+            )
+        with self.assertRaisesRegex(model.PropertyError, "published"):
+            model.analysis_named_premise_id(
+                completion, profile=model.ANALYSIS_PROPERTY_PROFILE
+            )
 
 
 class SemanticProfileIntegrationTest(unittest.TestCase):
@@ -1486,7 +2356,9 @@ class QualificationLawRegistryTest(unittest.TestCase):
         )
         changed_goal_id = model._analysis_transport_id(
             "analysis.goal",
-            model.AnalysisGoalBodyV0(changed_question_id),
+            model.AnalysisGoalBodyV0(
+                changed_question_id, goal.named_premise_bindings
+            ),
         )
         changed_proposition_id = model._analysis_transport_id(
             "analysis.proposition",
@@ -1553,7 +2425,9 @@ class QualificationLawRegistryTest(unittest.TestCase):
         )
         changed_goal_id = model._analysis_transport_id(
             "analysis.goal",
-            model.AnalysisGoalBodyV0(changed_question_id),
+            model.AnalysisGoalBodyV0(
+                changed_question_id, goal.named_premise_bindings
+            ),
         )
         changed_proposition_id = model._analysis_transport_id(
             "analysis.proposition",
@@ -1746,7 +2620,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "0aa14752b5f6bae7fdde366a9eab073f69eacbb2bd3b572f9a5b113adf5521df",
+            "4332d633a4e1ba6555f7210b957574bcdd2343a24e2c2ab6f333c54249c9adb7",
         )
         self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)
@@ -1954,7 +2828,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
             ),
         )
 
-    def test_theorem_truth_goal_identity_is_question_only(self) -> None:
+    def test_theorem_truth_goal_identity_includes_empty_binding_map(self) -> None:
         schema = model.afk_v2_theorem_schema()
         question_id = model._analysis_transport_id(
             "analysis.question",
@@ -1964,7 +2838,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
             model.theorem_truth_goal_id(schema),
             model._analysis_transport_id(
                 "analysis.goal",
-                model.AnalysisGoalBodyV0(question_id),
+                model.AnalysisGoalBodyV0(question_id, ()),
             ),
         )
 
@@ -2066,7 +2940,9 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
 
 
 class FamilyApplicabilityTest(unittest.TestCase):
-    def test_family_and_applicability_goal_identities_are_question_only(self) -> None:
+    def test_family_and_applicability_goal_identities_include_binding_maps(
+        self,
+    ) -> None:
         family = model.SELECTED_AFK_FAMILY
         schema = model.afk_v2_theorem_schema()
         candidate = model.derive_family_applicability_input(schema, family)
@@ -2080,7 +2956,10 @@ class FamilyApplicabilityTest(unittest.TestCase):
                     model.family_goal_id(family, role),
                     model._analysis_transport_id(
                         "analysis.goal",
-                        model.AnalysisGoalBodyV0(question_id),
+                        model.AnalysisGoalBodyV0(
+                            question_id,
+                            model.family_named_premise_bindings(family, role),
+                        ),
                     ),
                 )
         applicability_question_id = model.family_applicability_question_id(
@@ -2091,7 +2970,7 @@ class FamilyApplicabilityTest(unittest.TestCase):
             model.family_applicability_goal_id(family, candidate),
             model._analysis_transport_id(
                 "analysis.goal",
-                model.AnalysisGoalBodyV0(applicability_question_id),
+                model.AnalysisGoalBodyV0(applicability_question_id, ()),
             ),
         )
 
@@ -2740,14 +3619,19 @@ class FamilyTransportTest(unittest.TestCase):
             model.analysis_hypothesis_context_id(changed.hypotheses),
         )
 
-    def test_goal_identity_is_exactly_its_authenticated_question(self) -> None:
+    def test_goal_identity_is_question_plus_named_premise_bindings(self) -> None:
         goal = fixed_source_judgment().proposition.goal
         question_id = model.analysis_question_id(goal.question)
+        formed_goal = model._formed_analysis_body(
+            model.analysis_goal_id(goal), "analysis.goal"
+        )
         self.assertEqual(
             model.analysis_goal_id(goal),
             model._analysis_id(
                 "analysis.goal",
-                model.AnalysisGoalBodyV0(question_id),
+                model.AnalysisGoalBodyV0(
+                    question_id, formed_goal.named_premise_bindings
+                ),
             ),
         )
 
@@ -2819,6 +3703,49 @@ class PointwiseSpecializationTest(unittest.TestCase):
     def test_fixed_setup_is_paired_owner_view_coordinates_only(self) -> None:
         source, _, _, _, correspondence, *_ = fixed_context()
         setup = correspondence.fixed_public_setup
+        self.assertEqual(
+            tuple(item.name for item in fields(model._PIRAnalysisSourceViews)),
+            (
+                "fresh_public_setup",
+                "fiat_shamir_public_setup",
+                "public_binding",
+                "strategy_decision",
+                "public_coin",
+                "acceptance_effect",
+                "claim_reduction",
+                "fresh_execution",
+                "fiat_shamir_execution",
+                "transcript_declaration",
+                "required_influence",
+                "challenge_transition",
+                "fs_construction",
+                "relation_definition",
+            ),
+        )
+        self.assertEqual(
+            setup._source_views.public_binding.projection.manifest,
+            model._Analysis_PUBLIC_BINDING_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.strategy_decision.projection.manifest,
+            model._Analysis_STRATEGY_DECISION_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.acceptance_effect.projection.manifest,
+            model._Analysis_ACCEPTANCE_EFFECT_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.claim_reduction.projection.manifest,
+            model._Analysis_CLAIM_REDUCTION_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.required_influence.projection.manifest,
+            model._Analysis_REQUIRED_INFLUENCE_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.challenge_transition.projection.manifest,
+            model._Analysis_CHALLENGE_TRANSITION_VIEW_MANIFEST,
+        )
         names = {item.name for item in fields(model.FixedPublicSetup)}
         self.assertEqual(
             names,
@@ -3476,6 +4403,9 @@ class PointwiseSpecializationTest(unittest.TestCase):
             case.construction,
             application_domain=b"zkc/test/schnorr-n8-bounded-rejection/v0",
             max_attempts=2,
+            challenge_rules=(
+                replace(case.construction.challenge_rules[0], maximum_draws=2),
+            ),
         )
         protocol_id = model.k3.protocol_id(
             case.core,

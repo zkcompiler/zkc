@@ -34,8 +34,8 @@ The synthetic candidate makes six coordinated profile-local changes:
    no-policy, and policy closure.
 5. The six locally changed synthetic profiles advance to revision 1.
 6. Both publication compilers reconstruct all eighteen profiles and derive
-   the same seventeen-profile rotation cone; only `analysis-kernel` remains
-   exactly stable.
+   the same eighteen-profile rotation cone at the Analysis head; no profile
+   remains stable relative to the pre-migration identity pin.
 
 The five directly repaired dependents are canonical-framed Fiat--Shamir,
 duplex-sponge Fiat--Shamir, public setup, Interface/Plan, and endpoint source
@@ -53,6 +53,11 @@ source-authority identities exercised in the protocol and Analysis models
 rotate separately because those models hash the selected owner's tagged
 compiler output; this package checks the owner compiler topology and does not
 freeze those fixture identities.
+
+The migration branch originally left `analysis-kernel` stable. The Analysis
+branch re-authored Analysis owner pages, so that profile and its five Analysis
+dependents now rotate too. This is an Analysis-head source re-pin; it does not
+change the migration branch's original seventeen-rotated, one-stable result.
 
 ## Independent evidence and mutations
 

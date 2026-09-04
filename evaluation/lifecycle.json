@@ -72,7 +72,8 @@
         "research.holdout-readjudication",
         "research.migration-text-review",
         "research.fs-runtime",
-        "research.formal-source-end-to-end-pressure"
+        "research.formal-source-end-to-end-pressure",
+        "research.analysis-premise-text-review"
       ]
     },
     {
@@ -85,7 +86,9 @@
         "research.provider-observable-audit-integrated",
         "research.schnorr-relations-plan-coupling",
         "research.schnorr-relations-plan-candidates",
-        "research.provider-interpretation"
+        "research.provider-interpretation",
+        "research.provider-interpretation-arklib",
+        "research.provider-interpretation-fs-arklib"
       ]
     },
     {

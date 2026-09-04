@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import fields, replace
+from dataclasses import fields, is_dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 import sys
@@ -40,6 +40,51 @@ def exported_plan() -> model.IntegratedWitness:
     return model.build_integrated_witness(
         model.with_unused_plan_export(baseline().case)
     )
+
+
+@lru_cache(maxsize=1)
+def analysis_judgment() -> object:
+    lanes = baseline().analysis_lanes
+    source = lanes.fresh_fs
+    profile = lanes.finite_profile
+    source_model = model.analysis.fresh_special_soundness_model(
+        k=2, challenge_count=8
+    )
+    proposition = model.analysis.form_special_soundness_proposition(
+        source,
+        source_model,
+        profile,
+        (
+            model.analysis.schnorr_relation_correspondence_hypothesis_id(profile),
+            model.analysis.k2_static_view_support_hypothesis_id(source),
+            model.analysis.ASSUMED_SCHNORR_TWO_SPECIAL_SOUNDNESS,
+        ),
+    )
+    return model.analysis.establish_conditionally(
+        proposition, model.analysis.schnorr_special_soundness_rule(proposition)
+    )
+
+
+def _object_graph(root: object) -> tuple[object, ...]:
+    """Traverse one bounded inert record graph without following modules."""
+
+    pending = [root]
+    seen: set[int] = set()
+    result: list[object] = []
+    while pending:
+        value = pending.pop()
+        if id(value) in seen:
+            continue
+        seen.add(id(value))
+        result.append(value)
+        if is_dataclass(value) and not isinstance(value, type):
+            pending.extend(getattr(value, field.name) for field in fields(value))
+        elif type(value) in (tuple, list):
+            pending.extend(value)
+        elif type(value) is dict:
+            pending.extend(value.keys())
+            pending.extend(value.values())
+    return tuple(result)
 
 
 class CanonicalImportTest(unittest.TestCase):
@@ -427,6 +472,82 @@ class IndependentBranchLocalityTest(unittest.TestCase):
             model.analysis.analysis_proposition_id(original),
             model.analysis.analysis_proposition_id(changed),
         )
+
+    def test_oir_branch_contains_no_analysis_premise_or_authority_carrier(self) -> None:
+        witness = baseline()
+        established = analysis_judgment()
+        proposition_id = model.analysis.analysis_proposition_id(
+            established.proposition
+        )
+        proposition = model.analysis._formed_analysis_body(
+            proposition_id, "analysis.proposition"
+        )
+        premise_ids = set(
+            model.analysis.premise_ids_of_goal(proposition.goal_id)
+        )
+        forbidden_types = (
+            model.analysis.AnalysisNamedPremiseBodyV0,
+            model.analysis.RelationPropertySource,
+            model.analysis.FreshFsRelationSource,
+            model.analysis.SchnorrSpecialSoundnessProfile,
+            model.analysis.EstablishedJudgment,
+            model.analysis.AnalysisSourceAuthorityContract,
+            model.analysis.InvocationCapability,
+        )
+        for lane in (witness.verifier, witness.prover):
+            values = _object_graph(lane)
+            self.assertFalse(any(isinstance(value, forbidden_types) for value in values))
+            self.assertTrue(
+                premise_ids.isdisjoint(
+                    value
+                    for value in values
+                    if type(value) is model.k1.TypedContentId
+                )
+            )
+
+    def test_analysis_premise_swap_refuses_without_rotating_oir_projection(
+        self,
+    ) -> None:
+        witness = baseline()
+        before = (
+            witness.verifier.admitted.oir_id,
+            witness.verifier.validation.proposition.proposition_id,
+            witness.prover.admitted.oir_id,
+            witness.prover.validation.proposition.proposition_id,
+        )
+        established = analysis_judgment()
+        proposition_id = model.analysis.analysis_proposition_id(
+            established.proposition
+        )
+        proposition = model.analysis._formed_analysis_body(
+            proposition_id, "analysis.proposition"
+        )
+        goal = model.analysis._formed_analysis_body(
+            proposition.goal_id, "analysis.goal"
+        )
+        bindings = goal.named_premise_bindings
+        swapped = (
+            replace(bindings[0], premise_id=bindings[1].premise_id),
+            *bindings[1:],
+        )
+        intake = model.analysis.intake_analysis_named_premises(
+            goal.question_id, swapped
+        )
+        self.assertIs(
+            intake.outcome, model.analysis.NamedPremiseIntakeOutcome.REFUSED
+        )
+        with self.assertRaises(model.analysis.PropertyError):
+            model.analysis._analysis_id(
+                "analysis.goal",
+                replace(goal, named_premise_bindings=swapped),
+            )
+        after = (
+            witness.verifier.admitted.oir_id,
+            witness.verifier.validation.proposition.proposition_id,
+            witness.prover.admitted.oir_id,
+            witness.prover.validation.proposition.proposition_id,
+        )
+        self.assertEqual(before, after)
 
 
 class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
