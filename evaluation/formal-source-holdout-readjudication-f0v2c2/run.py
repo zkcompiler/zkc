@@ -42,7 +42,7 @@ OWNER_PINS = {
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "b42ca0516fe6da8b59b0e042780e91dacc0f186a67b27a43e5de7fad7e3a8bc7",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7ea05f5959248a67b3d9dc8f2e9fc3a985486d1f022e717bb8e3020e23a2ef37",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",

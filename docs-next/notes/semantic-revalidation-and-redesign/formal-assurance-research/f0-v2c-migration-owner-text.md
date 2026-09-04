@@ -309,7 +309,7 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   (`f0-v2c-refreeze-rehearsal.md`), the checkpoint tier stands at 59 of 62
   with three red: the publication hold, the provider interpretation, whose
   current round lives on the Analysis branch with the text it pins, and the
-  terminal mechanization, re-pinned by Main whenever its inputs move.
+  terminal mechanization, re-pinned whenever its inputs move.
 - The cold protocol holdouts were re-adjudicated at every review round
   against the migrated Terminal contract and views: five fit, three break at
   named boundaries, no verdict changed from the first re-adjudication to the
@@ -353,6 +353,16 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   forms source-authority payloads as an untagged record instead of through
   the owner compilers. The first two are repaired in the text after the
   round; the third is a package repair with its own lane.
+- The deep review's discriminating end-to-end case
+  (`mixed-challenge-multi-binding-end-to-end-pressure.md`), one admitted
+  Core with a Boolean and a three-valued challenge, two public bindings at
+  one opening, a guarded occurrence, and a two-rule construction, composes
+  through every activated contract of this text: twenty-one findings
+  affirmative, two expected refusals, and four Analysis-side holds that
+  exist only because this text has no named-premise intake; the stacked
+  Analysis text absorbs them. The case generalized the integrated-graph
+  model and the canonical-framed runtime it composes, which re-unpinned the
+  terminal mechanization; that package is re-pinned in place.
 - Publish the identities. Only the user authorizes the identity-rotating
   publication.
 
