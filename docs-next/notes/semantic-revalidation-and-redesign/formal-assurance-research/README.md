@@ -535,6 +535,15 @@ provider, extraction tool, or durable schema.
   package-local coordinate, and re-pins the family cone: every in-scope
   checkpoint check passes, and the two former `CannotAnswer` findings on the
   checker identity and the source-authority alignment are affirmative.
+- [`mixed-challenge-multi-binding-end-to-end-pressure.md`](mixed-challenge-multi-binding-end-to-end-pressure.md)
+  carries the deep review's discriminating case, one admitted Core with a
+  Boolean and a three-valued challenge, two public bindings at one opening,
+  a guarded occurrence, and a two-rule construction, through admission, the
+  checker equation, ten owner views, both public-setup variants, Interface
+  admission with its replay-input refusal, exhaustive execution and
+  independent replay, and a finite six-lane outcome map: twenty-one findings
+  affirmative, two expected refusals, and, on the migration branch, four
+  Analysis-side holds that the stacked Analysis text is to absorb.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them
