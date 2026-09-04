@@ -11,85 +11,63 @@
     [
       "honest-s0-w0-n0",
       "Accepted",
-      "1372293a9ae542cb604f6142ea5a89a3925aca75098cf001d66d1b4dd347a021",
-      "b4bf2ee23192d179aac9c29cb912bdc68f7a68349a2e23f2a2a021a9a06ee372",
+      "9a9436b15ca0d9ef85721f2f94076eff8459776b0f6bbd50e5b15fc1aa2a4dc0",
+      "a7bc71112bbdf7e61573f53c40d0de7a62cb364ef3fcc829c0b559ab13b7e478",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s0-w0-n1",
       "Accepted",
-      "9eaccbe23ca6fd5b87561f4e3dd44b77caac8e82397c769aecc950fbe71dd5e5",
-      "817b8301a5bb192a697cd6c1f67cdc69f6c99f30f3d413a0e98b00a15a7f7028",
+      "d6c8aba2aa16af876f4675d763db366a29c746b8f4a0c26ed617cfe6f1d3104a",
+      "ba197a58c66339b830f48372cdca97a29a800bdf91c411ede0897a14b78e5b3d",
       {
         "draws": 1,
         "kind": "value",
-        "value": 1
+        "value": 2
       }
     ],
     [
       "honest-s0-w0-n2",
       "Accepted",
-      "7c82bffbe54e73a2763096aba171c2bb17f71a9ef88419daa9ffac16368c883d",
-      "a16e452a3c7e0488d1fdb4eebc73308fc527fd83f0bcdf413ecb8bc696ab8699",
+      "f86b77ba09d15e626dd2eff1ec0e96dfa17c5de04e9b9a835f59b8ce2c69afd4",
+      "3d48d9b9767df155b744de710fe29edaf9249e5b5659c8f1b40eb13ea519cd09",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s0-w1-n0",
       "Rejected",
-      "c31c3ada6b8e38bcaa6e23e77829a2312e265082f30ee4c95dbb4d7791017639",
-      "b4bf2ee23192d179aac9c29cb912bdc68f7a68349a2e23f2a2a021a9a06ee372",
+      "ec9a0820678e52d318e1ca20625cf69dd60bbdd79d90a97e0f584f9546b1755d",
+      "a7bc71112bbdf7e61573f53c40d0de7a62cb364ef3fcc829c0b559ab13b7e478",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s0-w1-n1",
       "Rejected",
-      "852dc0d46d88b61592df829826c2414e74fc1b8b57c15d5486689602807cf5d1",
-      "817b8301a5bb192a697cd6c1f67cdc69f6c99f30f3d413a0e98b00a15a7f7028",
+      "1813fdae30daf4cb826e11eb4b62818a0ee134fb382856ce77d7a1efeaf09fb4",
+      "ba197a58c66339b830f48372cdca97a29a800bdf91c411ede0897a14b78e5b3d",
       {
         "draws": 1,
         "kind": "value",
-        "value": 1
+        "value": 2
       }
     ],
     [
       "honest-s0-w1-n2",
       "Rejected",
-      "7b50ceecb2a8b7820d4b74b66f2fac310951e9a21f8a21b5fdc20885d26a14e0",
-      "a16e452a3c7e0488d1fdb4eebc73308fc527fd83f0bcdf413ecb8bc696ab8699",
-      {
-        "draws": 1,
-        "kind": "value",
-        "value": 2
-      }
-    ],
-    [
-      "honest-s0-w2-n0",
-      "Rejected",
-      "da9a39db00a6336ccd133f95fa9320f91dbc07e69cef7f5469f65f6aa0b76a35",
-      "b4bf2ee23192d179aac9c29cb912bdc68f7a68349a2e23f2a2a021a9a06ee372",
-      {
-        "draws": 1,
-        "kind": "value",
-        "value": 2
-      }
-    ],
-    [
-      "honest-s0-w2-n1",
-      "Rejected",
-      "17d7a858c7a043d3061f7bbbfa00afa92008e95cbf1d8e79ff5bf91764bf8c92",
-      "817b8301a5bb192a697cd6c1f67cdc69f6c99f30f3d413a0e98b00a15a7f7028",
+      "0e590759f5a139c4b7f6549b18b9719a22cd3294c2b8a8752a128c758ec5c5ee",
+      "3d48d9b9767df155b744de710fe29edaf9249e5b5659c8f1b40eb13ea519cd09",
       {
         "draws": 1,
         "kind": "value",
@@ -97,10 +75,21 @@
       }
     ],
     [
-      "honest-s0-w2-n2",
+      "honest-s0-w2-n0",
       "Rejected",
-      "a719d0702e78cefe9c2be6eda6952c68c668a03a7871daac0887dec68b535380",
-      "a16e452a3c7e0488d1fdb4eebc73308fc527fd83f0bcdf413ecb8bc696ab8699",
+      "1214902ba3b8671bc591a642075a76b97013039f92b5d90f9c85b848c929256c",
+      "a7bc71112bbdf7e61573f53c40d0de7a62cb364ef3fcc829c0b559ab13b7e478",
+      {
+        "draws": 1,
+        "kind": "value",
+        "value": 1
+      }
+    ],
+    [
+      "honest-s0-w2-n1",
+      "Rejected",
+      "7e6087ac11bced6f343dc1b63b8da1bbe717b26a77d9f73c9fbc9f9b0042ee31",
+      "ba197a58c66339b830f48372cdca97a29a800bdf91c411ede0897a14b78e5b3d",
       {
         "draws": 1,
         "kind": "value",
@@ -108,32 +97,43 @@
       }
     ],
     [
-      "honest-s1-w0-n0",
-      "Accepted",
-      "1b3ca4ba152e19c4faf8308eec36729bf8998a727410adb75488206a51f52589",
-      "c562fe184fd823f5865a69d0bdc64adfb81260880f852d4f06079d82831f046c",
+      "honest-s0-w2-n2",
+      "Rejected",
+      "e01eeffe18f71e71934c59cb0e2762e31b9f443715cff1016417e9f73d253464",
+      "3d48d9b9767df155b744de710fe29edaf9249e5b5659c8f1b40eb13ea519cd09",
       {
         "draws": 1,
         "kind": "value",
-        "value": 0
+        "value": 1
+      }
+    ],
+    [
+      "honest-s1-w0-n0",
+      "Rejected",
+      "965be5d044425a5b90664de183e309a2e8c1f05a8bcd4b393efa1f8a273455a6",
+      "7260807b82c2984ae9eb5b0f856bc10415c555fdbf4cc5cf21876690514b1f30",
+      {
+        "draws": 1,
+        "kind": "value",
+        "value": 1
       }
     ],
     [
       "honest-s1-w0-n1",
       "Rejected",
-      "6d5ff25fd6c0c71744ad132757ea27df15c8261ca955728c22da50d064e739bb",
-      "f377d72080749e66e987a86db6463723e7106876b707e7bb96069cc0b08ff5c2",
+      "383cd725e4670dc6e7f60b666c2b1cb2907727e5b453df251a191f8ef199b86b",
+      "c0a725cbe43a2b48162326cf9782091bdaf7ad4ea297485d7df933eaf7f324d3",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s1-w0-n2",
       "Rejected",
-      "891708069328f20633ac8fc777734e202cbe4c274ef5c3c4f7492bbf7deeeb7e",
-      "d21481d05db8e392b5e8ef7d276d1444f060a077b47b20535b28ea72a8c78b47",
+      "a2191d0923effcdc92d1e400e14456aba8e2b9a18d58819a543e0b67b0de72b5",
+      "906bbcf7ee7ec8f11d5ed7c8482e7752ab87ff977630a24315285d7f1d5c1825",
       {
         "draws": 1,
         "kind": "value",
@@ -143,30 +143,30 @@
     [
       "honest-s1-w1-n0",
       "Accepted",
-      "1b3ca4ba152e19c4faf8308eec36729bf8998a727410adb75488206a51f52589",
-      "c562fe184fd823f5865a69d0bdc64adfb81260880f852d4f06079d82831f046c",
+      "1c3b99ddee5a8122c09008d4ee0d7601f19d8f1aea02d57e192ea932e46e0dd5",
+      "7260807b82c2984ae9eb5b0f856bc10415c555fdbf4cc5cf21876690514b1f30",
       {
         "draws": 1,
         "kind": "value",
-        "value": 0
+        "value": 1
       }
     ],
     [
       "honest-s1-w1-n1",
       "Accepted",
-      "538a46b393d832fc2e3f11ce55acbfd376c27604c22c1e83fc2ad5843eeae79a",
-      "f377d72080749e66e987a86db6463723e7106876b707e7bb96069cc0b08ff5c2",
+      "3e5d90c008eb42dacb8aadf4d8f0d728f6e89a83aa70915cebc021a4c675f46c",
+      "c0a725cbe43a2b48162326cf9782091bdaf7ad4ea297485d7df933eaf7f324d3",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s1-w1-n2",
       "Accepted",
-      "f96be742b31b72fbf48f5cd60bfe66aded11aa2795dec46fcbf68ef9d2a11504",
-      "d21481d05db8e392b5e8ef7d276d1444f060a077b47b20535b28ea72a8c78b47",
+      "684c6a7622839db995d470b53f2cfbe81d0c97f4cfe215cb5e154538f081730c",
+      "906bbcf7ee7ec8f11d5ed7c8482e7752ab87ff977630a24315285d7f1d5c1825",
       {
         "draws": 1,
         "kind": "value",
@@ -175,31 +175,31 @@
     ],
     [
       "honest-s1-w2-n0",
-      "Accepted",
-      "1b3ca4ba152e19c4faf8308eec36729bf8998a727410adb75488206a51f52589",
-      "c562fe184fd823f5865a69d0bdc64adfb81260880f852d4f06079d82831f046c",
+      "Rejected",
+      "33df2229b08fb7788d016dc3438fa34086f5a40579debed04bd7bfcc971038e5",
+      "7260807b82c2984ae9eb5b0f856bc10415c555fdbf4cc5cf21876690514b1f30",
       {
         "draws": 1,
         "kind": "value",
-        "value": 0
+        "value": 1
       }
     ],
     [
       "honest-s1-w2-n1",
       "Rejected",
-      "7eaa76d10d742d02887d1b48d8496b49551a03690508520b2df9875e6758be13",
-      "f377d72080749e66e987a86db6463723e7106876b707e7bb96069cc0b08ff5c2",
+      "571360181ed5ecf1995bccc07ad219e4c0b36a843afd4f5a74963e97fc43c592",
+      "c0a725cbe43a2b48162326cf9782091bdaf7ad4ea297485d7df933eaf7f324d3",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s1-w2-n2",
       "Rejected",
-      "8eb1c49340a49caeb2531762a021efb85204aba46e1fdde53d5ef7648f1c91fd",
-      "d21481d05db8e392b5e8ef7d276d1444f060a077b47b20535b28ea72a8c78b47",
+      "fa6313adab69847102327710ebeb07ba5510ce5c8319c8f34be7db7a6a48bc3a",
+      "906bbcf7ee7ec8f11d5ed7c8482e7752ab87ff977630a24315285d7f1d5c1825",
       {
         "draws": 1,
         "kind": "value",
@@ -209,8 +209,8 @@
     [
       "honest-s2-w0-n0",
       "Rejected",
-      "bbdd8d6023b749d62d35aa1eee10f7a501b3a81fdec91b204b9e7da6c4e5abb0",
-      "d3f6129e641cc16ca85aeb4471ff3b382a368d2f7ed1a6e585754bff91e6fe61",
+      "4b521d8285dff8e43aa4847fedf97d9e6f81cfaddb5ab146b37e4224bc8b1c2c",
+      "509a043529b92619f5b96902a1b9fba8334b9009d6be46be58fc30cca6758aaf",
       {
         "draws": 1,
         "kind": "value",
@@ -220,8 +220,8 @@
     [
       "honest-s2-w0-n1",
       "Rejected",
-      "efec37616d3127eb850a9c9b37d6a183bcdc990edd3d86d93857475c3e7b77e2",
-      "b971666baf67d7e49fbad6ce0eaf04b1fcb63d4a5b3e609731d74f09b3ee2c5c",
+      "eca24233fb6d74d36b1fc577c929007792718e5d76e19a354c9439157f204c76",
+      "4d5d5392fff392138f12462026bf53dde470e9068342fc97d95ed95b07312763",
       {
         "draws": 1,
         "kind": "value",
@@ -231,19 +231,19 @@
     [
       "honest-s2-w0-n2",
       "Rejected",
-      "a398098c0fa72a6d7d61d641c7f909c98f1deeb8adaa39d961c6504fd2c2fec1",
-      "28884b75f0e6a714b8433720e621f8a6d574791d2b8f238531079209acd18475",
+      "36a49e16d541ce7b62451cb0d7a5424fb4fb4a0d435d1e09f80095d0e0c1a359",
+      "5d634a1b6c692ce66fad9ae37e2d43100415742c98cf5c3685141e7aafcde84b",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s2-w1-n0",
       "Rejected",
-      "d10fa59eb0274e1233fb42683ebe265152feae9da6f1e44a2bcce1a1433f1b40",
-      "d3f6129e641cc16ca85aeb4471ff3b382a368d2f7ed1a6e585754bff91e6fe61",
+      "c6ca50d055f2d214fb3bc436722e6c758537edcb436facbcae32ff24eb9d0030",
+      "509a043529b92619f5b96902a1b9fba8334b9009d6be46be58fc30cca6758aaf",
       {
         "draws": 1,
         "kind": "value",
@@ -253,8 +253,8 @@
     [
       "honest-s2-w1-n1",
       "Rejected",
-      "64fece6df51f4e061bfc2158d814887ae8c5bd9a22a43ccfa863b7558f16f8e9",
-      "b971666baf67d7e49fbad6ce0eaf04b1fcb63d4a5b3e609731d74f09b3ee2c5c",
+      "93f317ca46ca7bd82c38acd48f537fb2425cdaf7ff4d20a5b261be0d801e7572",
+      "4d5d5392fff392138f12462026bf53dde470e9068342fc97d95ed95b07312763",
       {
         "draws": 1,
         "kind": "value",
@@ -264,19 +264,19 @@
     [
       "honest-s2-w1-n2",
       "Rejected",
-      "5f62925fc0581dc9dd65b23107654d4b056d5ea75beea26c0f0c104a22e6743a",
-      "28884b75f0e6a714b8433720e621f8a6d574791d2b8f238531079209acd18475",
+      "20fd4ff54f07acf19ae5949167076fa0fa6cca1f35188648608631a722f51059",
+      "5d634a1b6c692ce66fad9ae37e2d43100415742c98cf5c3685141e7aafcde84b",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "honest-s2-w2-n0",
       "Accepted",
-      "ae02556f24eae7babeb5563d083c755ae17ceabe1745865fa05d1e41663cd4ba",
-      "d3f6129e641cc16ca85aeb4471ff3b382a368d2f7ed1a6e585754bff91e6fe61",
+      "d2686a45afcc23e065437c37d8b7fcfd3be510a7179397681df7a86bf10ba2e6",
+      "509a043529b92619f5b96902a1b9fba8334b9009d6be46be58fc30cca6758aaf",
       {
         "draws": 1,
         "kind": "value",
@@ -286,8 +286,8 @@
     [
       "honest-s2-w2-n1",
       "Accepted",
-      "5d12c6fbea8dbfc70444c6e2f80be135af27b882d4839d6a259fc797d74a04cd",
-      "b971666baf67d7e49fbad6ce0eaf04b1fcb63d4a5b3e609731d74f09b3ee2c5c",
+      "9fc9d94948881e0140ccb862358cfbdeb065f0479731a325f28ff5c175d13980",
+      "4d5d5392fff392138f12462026bf53dde470e9068342fc97d95ed95b07312763",
       {
         "draws": 1,
         "kind": "value",
@@ -297,74 +297,85 @@
     [
       "honest-s2-w2-n2",
       "Accepted",
-      "62effe5302039e4257fddfcb611b094cc09cbcb64edadb03d1e6327651387bfa",
-      "28884b75f0e6a714b8433720e621f8a6d574791d2b8f238531079209acd18475",
+      "485118d083d28f05be05898a6767230a15221cc7626a641fd62ba29062cf2d2b",
+      "5d634a1b6c692ce66fad9ae37e2d43100415742c98cf5c3685141e7aafcde84b",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s0-a0-z0",
       "Accepted",
-      "1372293a9ae542cb604f6142ea5a89a3925aca75098cf001d66d1b4dd347a021",
-      "b4bf2ee23192d179aac9c29cb912bdc68f7a68349a2e23f2a2a021a9a06ee372",
+      "9a9436b15ca0d9ef85721f2f94076eff8459776b0f6bbd50e5b15fc1aa2a4dc0",
+      "a7bc71112bbdf7e61573f53c40d0de7a62cb364ef3fcc829c0b559ab13b7e478",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s0-a0-z1",
       "Rejected",
-      "da9a39db00a6336ccd133f95fa9320f91dbc07e69cef7f5469f65f6aa0b76a35",
-      "b4bf2ee23192d179aac9c29cb912bdc68f7a68349a2e23f2a2a021a9a06ee372",
+      "ec9a0820678e52d318e1ca20625cf69dd60bbdd79d90a97e0f584f9546b1755d",
+      "a7bc71112bbdf7e61573f53c40d0de7a62cb364ef3fcc829c0b559ab13b7e478",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s0-a0-z2",
       "Rejected",
-      "c31c3ada6b8e38bcaa6e23e77829a2312e265082f30ee4c95dbb4d7791017639",
-      "b4bf2ee23192d179aac9c29cb912bdc68f7a68349a2e23f2a2a021a9a06ee372",
+      "1214902ba3b8671bc591a642075a76b97013039f92b5d90f9c85b848c929256c",
+      "a7bc71112bbdf7e61573f53c40d0de7a62cb364ef3fcc829c0b559ab13b7e478",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s0-a1-z0",
       "Rejected",
-      "17d7a858c7a043d3061f7bbbfa00afa92008e95cbf1d8e79ff5bf91764bf8c92",
-      "817b8301a5bb192a697cd6c1f67cdc69f6c99f30f3d413a0e98b00a15a7f7028",
+      "1813fdae30daf4cb826e11eb4b62818a0ee134fb382856ce77d7a1efeaf09fb4",
+      "ba197a58c66339b830f48372cdca97a29a800bdf91c411ede0897a14b78e5b3d",
       {
         "draws": 1,
         "kind": "value",
-        "value": 1
+        "value": 2
       }
     ],
     [
       "verifier-s0-a1-z1",
       "Accepted",
-      "9eaccbe23ca6fd5b87561f4e3dd44b77caac8e82397c769aecc950fbe71dd5e5",
-      "817b8301a5bb192a697cd6c1f67cdc69f6c99f30f3d413a0e98b00a15a7f7028",
+      "d6c8aba2aa16af876f4675d763db366a29c746b8f4a0c26ed617cfe6f1d3104a",
+      "ba197a58c66339b830f48372cdca97a29a800bdf91c411ede0897a14b78e5b3d",
       {
         "draws": 1,
         "kind": "value",
-        "value": 1
+        "value": 2
       }
     ],
     [
       "verifier-s0-a1-z2",
       "Rejected",
-      "852dc0d46d88b61592df829826c2414e74fc1b8b57c15d5486689602807cf5d1",
-      "817b8301a5bb192a697cd6c1f67cdc69f6c99f30f3d413a0e98b00a15a7f7028",
+      "7e6087ac11bced6f343dc1b63b8da1bbe717b26a77d9f73c9fbc9f9b0042ee31",
+      "ba197a58c66339b830f48372cdca97a29a800bdf91c411ede0897a14b78e5b3d",
+      {
+        "draws": 1,
+        "kind": "value",
+        "value": 2
+      }
+    ],
+    [
+      "verifier-s0-a2-z0",
+      "Rejected",
+      "0e590759f5a139c4b7f6549b18b9719a22cd3294c2b8a8752a128c758ec5c5ee",
+      "3d48d9b9767df155b744de710fe29edaf9249e5b5659c8f1b40eb13ea519cd09",
       {
         "draws": 1,
         "kind": "value",
@@ -372,109 +383,98 @@
       }
     ],
     [
-      "verifier-s0-a2-z0",
-      "Rejected",
-      "a719d0702e78cefe9c2be6eda6952c68c668a03a7871daac0887dec68b535380",
-      "a16e452a3c7e0488d1fdb4eebc73308fc527fd83f0bcdf413ecb8bc696ab8699",
-      {
-        "draws": 1,
-        "kind": "value",
-        "value": 2
-      }
-    ],
-    [
       "verifier-s0-a2-z1",
       "Rejected",
-      "7b50ceecb2a8b7820d4b74b66f2fac310951e9a21f8a21b5fdc20885d26a14e0",
-      "a16e452a3c7e0488d1fdb4eebc73308fc527fd83f0bcdf413ecb8bc696ab8699",
+      "e01eeffe18f71e71934c59cb0e2762e31b9f443715cff1016417e9f73d253464",
+      "3d48d9b9767df155b744de710fe29edaf9249e5b5659c8f1b40eb13ea519cd09",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s0-a2-z2",
       "Accepted",
-      "7c82bffbe54e73a2763096aba171c2bb17f71a9ef88419daa9ffac16368c883d",
-      "a16e452a3c7e0488d1fdb4eebc73308fc527fd83f0bcdf413ecb8bc696ab8699",
+      "f86b77ba09d15e626dd2eff1ec0e96dfa17c5de04e9b9a835f59b8ce2c69afd4",
+      "3d48d9b9767df155b744de710fe29edaf9249e5b5659c8f1b40eb13ea519cd09",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s1-a0-z0",
-      "Accepted",
-      "1b3ca4ba152e19c4faf8308eec36729bf8998a727410adb75488206a51f52589",
-      "c562fe184fd823f5865a69d0bdc64adfb81260880f852d4f06079d82831f046c",
+      "Rejected",
+      "965be5d044425a5b90664de183e309a2e8c1f05a8bcd4b393efa1f8a273455a6",
+      "7260807b82c2984ae9eb5b0f856bc10415c555fdbf4cc5cf21876690514b1f30",
       {
         "draws": 1,
         "kind": "value",
-        "value": 0
+        "value": 1
       }
     ],
     [
       "verifier-s1-a0-z1",
-      "Rejected",
-      "e5247434f14a71f0081569295ad0927754c960a3c1ff2af4e56f821c1217fc78",
-      "c562fe184fd823f5865a69d0bdc64adfb81260880f852d4f06079d82831f046c",
+      "Accepted",
+      "1c3b99ddee5a8122c09008d4ee0d7601f19d8f1aea02d57e192ea932e46e0dd5",
+      "7260807b82c2984ae9eb5b0f856bc10415c555fdbf4cc5cf21876690514b1f30",
       {
         "draws": 1,
         "kind": "value",
-        "value": 0
+        "value": 1
       }
     ],
     [
       "verifier-s1-a0-z2",
       "Rejected",
-      "bbc62535fe9123663b32a6ff3480fb95ed4ab4d1872afd658238e9a0011630fb",
-      "c562fe184fd823f5865a69d0bdc64adfb81260880f852d4f06079d82831f046c",
+      "33df2229b08fb7788d016dc3438fa34086f5a40579debed04bd7bfcc971038e5",
+      "7260807b82c2984ae9eb5b0f856bc10415c555fdbf4cc5cf21876690514b1f30",
       {
         "draws": 1,
         "kind": "value",
-        "value": 0
+        "value": 1
       }
     ],
     [
       "verifier-s1-a1-z0",
-      "Accepted",
-      "538a46b393d832fc2e3f11ce55acbfd376c27604c22c1e83fc2ad5843eeae79a",
-      "f377d72080749e66e987a86db6463723e7106876b707e7bb96069cc0b08ff5c2",
+      "Rejected",
+      "571360181ed5ecf1995bccc07ad219e4c0b36a843afd4f5a74963e97fc43c592",
+      "c0a725cbe43a2b48162326cf9782091bdaf7ad4ea297485d7df933eaf7f324d3",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s1-a1-z1",
       "Rejected",
-      "6d5ff25fd6c0c71744ad132757ea27df15c8261ca955728c22da50d064e739bb",
-      "f377d72080749e66e987a86db6463723e7106876b707e7bb96069cc0b08ff5c2",
+      "383cd725e4670dc6e7f60b666c2b1cb2907727e5b453df251a191f8ef199b86b",
+      "c0a725cbe43a2b48162326cf9782091bdaf7ad4ea297485d7df933eaf7f324d3",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s1-a1-z2",
-      "Rejected",
-      "7eaa76d10d742d02887d1b48d8496b49551a03690508520b2df9875e6758be13",
-      "f377d72080749e66e987a86db6463723e7106876b707e7bb96069cc0b08ff5c2",
+      "Accepted",
+      "3e5d90c008eb42dacb8aadf4d8f0d728f6e89a83aa70915cebc021a4c675f46c",
+      "c0a725cbe43a2b48162326cf9782091bdaf7ad4ea297485d7df933eaf7f324d3",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s1-a2-z0",
       "Accepted",
-      "f96be742b31b72fbf48f5cd60bfe66aded11aa2795dec46fcbf68ef9d2a11504",
-      "d21481d05db8e392b5e8ef7d276d1444f060a077b47b20535b28ea72a8c78b47",
+      "684c6a7622839db995d470b53f2cfbe81d0c97f4cfe215cb5e154538f081730c",
+      "906bbcf7ee7ec8f11d5ed7c8482e7752ab87ff977630a24315285d7f1d5c1825",
       {
         "draws": 1,
         "kind": "value",
@@ -484,8 +484,8 @@
     [
       "verifier-s1-a2-z1",
       "Rejected",
-      "8eb1c49340a49caeb2531762a021efb85204aba46e1fdde53d5ef7648f1c91fd",
-      "d21481d05db8e392b5e8ef7d276d1444f060a077b47b20535b28ea72a8c78b47",
+      "fa6313adab69847102327710ebeb07ba5510ce5c8319c8f34be7db7a6a48bc3a",
+      "906bbcf7ee7ec8f11d5ed7c8482e7752ab87ff977630a24315285d7f1d5c1825",
       {
         "draws": 1,
         "kind": "value",
@@ -495,8 +495,8 @@
     [
       "verifier-s1-a2-z2",
       "Rejected",
-      "891708069328f20633ac8fc777734e202cbe4c274ef5c3c4f7492bbf7deeeb7e",
-      "d21481d05db8e392b5e8ef7d276d1444f060a077b47b20535b28ea72a8c78b47",
+      "a2191d0923effcdc92d1e400e14456aba8e2b9a18d58819a543e0b67b0de72b5",
+      "906bbcf7ee7ec8f11d5ed7c8482e7752ab87ff977630a24315285d7f1d5c1825",
       {
         "draws": 1,
         "kind": "value",
@@ -506,8 +506,8 @@
     [
       "verifier-s2-a0-z0",
       "Rejected",
-      "bbdd8d6023b749d62d35aa1eee10f7a501b3a81fdec91b204b9e7da6c4e5abb0",
-      "d3f6129e641cc16ca85aeb4471ff3b382a368d2f7ed1a6e585754bff91e6fe61",
+      "4b521d8285dff8e43aa4847fedf97d9e6f81cfaddb5ab146b37e4224bc8b1c2c",
+      "509a043529b92619f5b96902a1b9fba8334b9009d6be46be58fc30cca6758aaf",
       {
         "draws": 1,
         "kind": "value",
@@ -517,8 +517,8 @@
     [
       "verifier-s2-a0-z1",
       "Accepted",
-      "ae02556f24eae7babeb5563d083c755ae17ceabe1745865fa05d1e41663cd4ba",
-      "d3f6129e641cc16ca85aeb4471ff3b382a368d2f7ed1a6e585754bff91e6fe61",
+      "d2686a45afcc23e065437c37d8b7fcfd3be510a7179397681df7a86bf10ba2e6",
+      "509a043529b92619f5b96902a1b9fba8334b9009d6be46be58fc30cca6758aaf",
       {
         "draws": 1,
         "kind": "value",
@@ -528,8 +528,8 @@
     [
       "verifier-s2-a0-z2",
       "Rejected",
-      "d10fa59eb0274e1233fb42683ebe265152feae9da6f1e44a2bcce1a1433f1b40",
-      "d3f6129e641cc16ca85aeb4471ff3b382a368d2f7ed1a6e585754bff91e6fe61",
+      "c6ca50d055f2d214fb3bc436722e6c758537edcb436facbcae32ff24eb9d0030",
+      "509a043529b92619f5b96902a1b9fba8334b9009d6be46be58fc30cca6758aaf",
       {
         "draws": 1,
         "kind": "value",
@@ -539,8 +539,8 @@
     [
       "verifier-s2-a1-z0",
       "Rejected",
-      "64fece6df51f4e061bfc2158d814887ae8c5bd9a22a43ccfa863b7558f16f8e9",
-      "b971666baf67d7e49fbad6ce0eaf04b1fcb63d4a5b3e609731d74f09b3ee2c5c",
+      "93f317ca46ca7bd82c38acd48f537fb2425cdaf7ff4d20a5b261be0d801e7572",
+      "4d5d5392fff392138f12462026bf53dde470e9068342fc97d95ed95b07312763",
       {
         "draws": 1,
         "kind": "value",
@@ -550,8 +550,8 @@
     [
       "verifier-s2-a1-z1",
       "Rejected",
-      "efec37616d3127eb850a9c9b37d6a183bcdc990edd3d86d93857475c3e7b77e2",
-      "b971666baf67d7e49fbad6ce0eaf04b1fcb63d4a5b3e609731d74f09b3ee2c5c",
+      "eca24233fb6d74d36b1fc577c929007792718e5d76e19a354c9439157f204c76",
+      "4d5d5392fff392138f12462026bf53dde470e9068342fc97d95ed95b07312763",
       {
         "draws": 1,
         "kind": "value",
@@ -561,8 +561,8 @@
     [
       "verifier-s2-a1-z2",
       "Accepted",
-      "5d12c6fbea8dbfc70444c6e2f80be135af27b882d4839d6a259fc797d74a04cd",
-      "b971666baf67d7e49fbad6ce0eaf04b1fcb63d4a5b3e609731d74f09b3ee2c5c",
+      "9fc9d94948881e0140ccb862358cfbdeb065f0479731a325f28ff5c175d13980",
+      "4d5d5392fff392138f12462026bf53dde470e9068342fc97d95ed95b07312763",
       {
         "draws": 1,
         "kind": "value",
@@ -571,35 +571,35 @@
     ],
     [
       "verifier-s2-a2-z0",
-      "Accepted",
-      "62effe5302039e4257fddfcb611b094cc09cbcb64edadb03d1e6327651387bfa",
-      "28884b75f0e6a714b8433720e621f8a6d574791d2b8f238531079209acd18475",
+      "Rejected",
+      "20fd4ff54f07acf19ae5949167076fa0fa6cca1f35188648608631a722f51059",
+      "5d634a1b6c692ce66fad9ae37e2d43100415742c98cf5c3685141e7aafcde84b",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s2-a2-z1",
-      "Rejected",
-      "5f62925fc0581dc9dd65b23107654d4b056d5ea75beea26c0f0c104a22e6743a",
-      "28884b75f0e6a714b8433720e621f8a6d574791d2b8f238531079209acd18475",
+      "Accepted",
+      "485118d083d28f05be05898a6767230a15221cc7626a641fd62ba29062cf2d2b",
+      "5d634a1b6c692ce66fad9ae37e2d43100415742c98cf5c3685141e7aafcde84b",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ],
     [
       "verifier-s2-a2-z2",
       "Rejected",
-      "a398098c0fa72a6d7d61d641c7f909c98f1deeb8adaa39d961c6504fd2c2fec1",
-      "28884b75f0e6a714b8433720e621f8a6d574791d2b8f238531079209acd18475",
+      "36a49e16d541ce7b62451cb0d7a5424fb4fb4a0d435d1e09f80095d0e0c1a359",
+      "5d634a1b6c692ce66fad9ae37e2d43100415742c98cf5c3685141e7aafcde84b",
       {
         "draws": 1,
         "kind": "value",
-        "value": 2
+        "value": 1
       }
     ]
   ]

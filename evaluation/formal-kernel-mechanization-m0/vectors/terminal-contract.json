@@ -5885,8 +5885,8 @@
   },
   "source_pins": {
     "docs-next/foundation/executable-foundations.md": "d89443b5cefe4959c7fd4f1f46d38058ce0470e983968870dc8511027f3b9b65",
-    "docs-next/pir/interactive-core.md": "9ef8181f88c3145319c4608c599f51b409157cfe9fdab7c1821fbb57f9da4bce",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "e81d667765ce5f2eb18a96e8bfe19bc3c184df0f651c901fba818764bff2862f",
+    "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "dc610e14675fccac31f416bbcb3b12355f866ed1d99ba4ece6253ed4f0406e7e",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9ecac4e8f2efb6c0f232a4b49fdd1f1cd8f57be0057ae0cf18dd4c9c2f08c93f",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "73220cbf2778b9616fddba4bd9a26d8b80c2d54b98b4c1c7ac9c7f02028f9d2b",

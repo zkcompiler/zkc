@@ -62,7 +62,7 @@ DIRECT_REPAIR_PROFILES = (
 DEPENDENT_REPAIR_PROFILES = DIRECT_REPAIR_PROFILES[1:]
 EXPECTED_REVISIONS = {
     "interaction": 3,
-    "canonical-framed-fiat-shamir": 3,
+    "canonical-framed-fiat-shamir": 4,
     "duplex-sponge-fiat-shamir": 3,
     "public-setup": 2,
     "interface-plan": 2,

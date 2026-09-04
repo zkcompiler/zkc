@@ -49,7 +49,7 @@ REVISED_PROFILES = (
 )
 EXPECTED_REVISIONS = {
     "interaction": 3,
-    "canonical-framed-fiat-shamir": 3,
+    "canonical-framed-fiat-shamir": 4,
     "duplex-sponge-fiat-shamir": 3,
     "public-setup": 2,
     "interface-plan": 2,

@@ -26,6 +26,11 @@ record and outcome lane, never a Core terminal. This wording-only correction
 does not change any case vector, destination, derived verdict, or frozen
 finding; the owner-page pins now name the migrated page bytes.
 
+The current source re-pin also includes the canonical total-schedule position
+rule and the Interface source-compiler insertion. Those edits move owner bytes
+without changing any of this package's structural-axis destinations or
+classifications.
+
 [`cases.json`](cases.json) is a 63-row matrix with exactly one cell for every
 axis in every row. It covers all `P01`--`P10`, `V01`--`V05`, and `H01`--`H05`
 portfolio identifiers, including separate rows where a portfolio cluster or

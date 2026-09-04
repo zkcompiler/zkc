@@ -134,6 +134,22 @@ class PortableProjectionSuite:
     challenge_occurrences: tuple[int, ...]
 
 
+def challenge_occurrence_positions(core: Any) -> dict[int, int]:
+    """Return every challenge's unique position in the total Core schedule."""
+
+    positions: dict[int, int] = {}
+    for position, occurrence in enumerate(core.occurrences):
+        if type(occurrence.effect) is not target.ChallengeEffect:
+            continue
+        challenge_ref = occurrence.effect.challenge
+        if challenge_ref in positions:
+            raise SubjectError("a challenge has more than one Core occurrence")
+        positions[challenge_ref] = position
+    if set(positions) != set(range(len(core.challenges))):
+        raise SubjectError("the Core schedule does not position every challenge exactly once")
+    return positions
+
+
 def _record(*values: Any) -> Any:
     return k1.DatumRecord(tuple(enumerate(values)))
 

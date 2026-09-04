@@ -58,6 +58,35 @@ fixed basis it implements a fixture-exact finite model with:
   remain outside its body and inert portable K1 authority binding; its copied
   metadata cannot substitute for the exact live capability.
 
+## Source-authority compiler dispatch
+
+Every finite PIR source binding in this instrument now selects the producing
+profile's four bound source compilers before forming a profiled semantic ID.
+Interaction static views use arm 0 of the Interaction compiler;
+canonical-framed static views and checked construction results use arms 0 and
+1 of the canonical-framed compiler; and public-setup invocation views use arm
+0 of the public-setup compiler. The payloads contain the owner-defined local
+bodies, while requirement, no-policy, and policy-closure subjects contain the
+owner-defined role and identity references. Consumer and purpose roles use the
+common `(family, ContentRef(coordinate))` bodies.
+
+This changes every finite authority identity derived from the former generic
+six-field payload because the model now hashes the selected owner's tagged
+equation. The tests reconstruct the canonical-framed execution payload from
+its coordinate and ordered field-coordinate bodies, reject both the former
+untagged record and an Interaction-family wrapper. A separate discriminator
+compiles the current duplex owner profile from source, reconstructs its static
+payload, rejects both predecessor shapes, and checks the two tagged arms of
+every duplex source compiler.
+
+The static-view manifest remains bounded to this package's finite field
+catalog. Each represented field maps to one owner path and atomic boundary;
+the instrument does not implement the durable recursive field resolver. The
+checked-result payload uses the required six-field owner shape, but its
+`checker_contract` coordinate is package-local because the owner page does not
+define a content-ID constructor for that coordinate. Passing the gate therefore
+does not establish target-wide checked-result authority correspondence.
+
 Two narrow contract-vector families are target-exact rather than merely
 fixture-shaped. They are built and admitted through K1 directly:
 

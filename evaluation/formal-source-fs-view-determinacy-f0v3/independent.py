@@ -240,6 +240,7 @@ def compile_source(
         or set(profiles) != {"canonical-framed", "duplex-sponge"}
     ):
         raise IndependentError("cold owner-profile catalog is malformed")
+    expected_revisions = {"canonical-framed": 4, "duplex-sponge": 3}
     for key, profile in profiles.items():
         if (
             type(profile) is not dict
@@ -250,7 +251,7 @@ def compile_source(
                 "profile_body_sha256",
             }
             or profile["key"] != key
-            or profile["revision"] != 3
+            or profile["revision"] != expected_revisions[key]
         ):
             raise IndependentError("cold owner-profile pin is malformed")
     for key, cap in (

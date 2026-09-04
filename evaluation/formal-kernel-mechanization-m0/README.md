@@ -34,6 +34,11 @@ collides with a live manifest definition, so its already-frozen graph vector
 is replayed only after digest authentication. That transport limitation
 remains an explicit `CannotAnswer` finding.
 
+The current re-pin updates the Interactive Core bytes and the independently
+refrozen holdout adjudication input. Regenerating the Terminal vector changes
+its authenticated provenance fields only; the Lean/Python carrier outcomes,
+finding checksum, and affirmative aggregate remain unchanged.
+
 The project pins `leanprover/lean4:v4.33.1`. Kernel modules import only package
 modules and Lean core. There is no Mathlib, Batteries, Std, VCVio, ArkLib,
 Lake dependency, declared axiom, or `sorry`. JSON handling remains isolated in

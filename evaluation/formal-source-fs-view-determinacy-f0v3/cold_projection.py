@@ -261,44 +261,37 @@ def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
         additions,
         law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
     )
-    framed_positions = {
-        item["name"]: index
-        for index, item in enumerate(schedule)
-        if _framed_occurrence(item)
-    }
-    transition = None
-    if all(item["name"] in framed_positions for _index, item in challenges):
-        rules = []
-        for _index, item in challenges:
-            input_types = [ref("value-type-body-v0", "Bytes")]
-            input_types.extend(_value_type(raw, dependency) for dependency in item["dependencies"])
-            rules.append(
+    rules = []
+    for position, item in challenges:
+        input_types = [ref("value-type-body-v0", "Bytes")]
+        input_types.extend(_value_type(raw, dependency) for dependency in item["dependencies"])
+        rules.append(
+            record(
+                ref("challenge-ref-body-v0", item["name"]),
+                position,
                 record(
-                    ref("challenge-ref-body-v0", item["name"]),
-                    framed_positions[item["name"]],
-                    record(
-                        algorithm_use("big-endian-rejection-accept-v1", "k2-accept-contract-v1"),
-                        input_types,
-                        ref("value-type-body-v0", "Boolean"),
-                    ),
-                    record(
-                        algorithm_use("big-endian-rejection-decode-v1", "k2-decode-contract-v1"),
-                        input_types,
-                        ref("value-type-body-v0", "Natural"),
-                    ),
-                    record(construction["sample_bytes"], construction["max_attempts"]),
-                )
+                    algorithm_use("big-endian-rejection-accept-v1", "k2-accept-contract-v1"),
+                    input_types,
+                    ref("value-type-body-v0", "Boolean"),
+                ),
+                record(
+                    algorithm_use("big-endian-rejection-decode-v1", "k2-decode-contract-v1"),
+                    input_types,
+                    ref("value-type-body-v0", "Natural"),
+                ),
+                record(construction["sample_bytes"], construction["max_attempts"]),
             )
-        transition = record(
-            tid,
-            cid,
-            law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
-            law("canonical-framed", "canonical-framed-body-grammar-v0"),
-            law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-            law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-            law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
-            rules,
         )
+    transition = record(
+        tid,
+        cid,
+        law("canonical-framed", "canonical-framed-prefix-and-domain-v0"),
+        law("canonical-framed", "canonical-framed-body-grammar-v0"),
+        law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
+        law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
+        law("canonical-framed", "canonical-framed-admission-and-execution-v0"),
+        rules,
+    )
     result = raw["result"]
     result_value = record(
         body("runtime-schema-body-v0", "CheckedFSConstruction"),
@@ -328,8 +321,7 @@ def k2_values(raw: dict[str, Any]) -> dict[str, Any]:
         "CanonicalRequiredInfluenceView": influence,
         "CanonicalFSConstructionView": result_value,
     }
-    if transition is not None:
-        values["CanonicalChallengeTransitionView"] = transition
+    values["CanonicalChallengeTransitionView"] = transition
     return values
 
 

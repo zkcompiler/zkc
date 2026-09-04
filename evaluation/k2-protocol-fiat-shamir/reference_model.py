@@ -2156,12 +2156,145 @@ def _authority_id(profile: object, subject_kind: str, body: object) -> object:
     )
 
 
+class PIRSourceOwnerCompiler(str, Enum):
+    """The closed PIR owner compiler selected for one source family."""
+
+    INTERACTION = "interaction"
+    CANONICAL_FRAMED = "canonical-framed"
+    DUPLEX_SPONGE = "duplex-sponge"
+    PUBLIC_SETUP = "public-setup"
+    INTERFACE_PLAN = "interface-plan"
+
+
+class PIRSourceFamily(str, Enum):
+    STATIC_VIEW = "StaticView"
+    CHECKED_CONSTRUCTION = "CheckedConstruction"
+    PUBLIC_SETUP_INVOCATION_VIEW = "PublicSetupInvocationView"
+    INTERFACE_VIEW = "InterfaceView"
+    CONFIDENTIAL_INITIAL_ORACLE = "ConfidentialInitialOracle"
+    CONFIDENTIAL_PLAN_WITNESS = "ConfidentialPlanWitness"
+
+
+class PIRSourceSubjectKind(str, Enum):
+    BINDING_PAYLOAD = "pir.source-binding-payload"
+    CAPABILITY_REQUIREMENT = "pir.source-capability-requirement"
+    NO_POLICY = "pir.source-no-policy"
+    POLICY_CLOSURE = "pir.source-policy-closure"
+
+
+def _source_subject_arms(
+    common: Mapping[PIRSourceFamily, int],
+    no_policy: Mapping[PIRSourceFamily, int] | None = None,
+) -> Mapping[PIRSourceSubjectKind, Mapping[PIRSourceFamily, int]]:
+    common_arms = MappingProxyType(dict(common))
+    no_policy_arms = common_arms if no_policy is None else MappingProxyType(dict(no_policy))
+    return MappingProxyType(
+        {
+            PIRSourceSubjectKind.BINDING_PAYLOAD: common_arms,
+            PIRSourceSubjectKind.CAPABILITY_REQUIREMENT: common_arms,
+            PIRSourceSubjectKind.NO_POLICY: no_policy_arms,
+            PIRSourceSubjectKind.POLICY_CLOSURE: common_arms,
+        }
+    )
+
+
+_PIR_SOURCE_COMPILER_ARMS = MappingProxyType(
+    {
+        PIRSourceOwnerCompiler.INTERACTION: _source_subject_arms(
+            {
+                PIRSourceFamily.STATIC_VIEW: 0,
+                PIRSourceFamily.CONFIDENTIAL_INITIAL_ORACLE: 1,
+            },
+            {PIRSourceFamily.STATIC_VIEW: 0},
+        ),
+        PIRSourceOwnerCompiler.CANONICAL_FRAMED: _source_subject_arms(
+            {
+                PIRSourceFamily.STATIC_VIEW: 0,
+                PIRSourceFamily.CHECKED_CONSTRUCTION: 1,
+            }
+        ),
+        PIRSourceOwnerCompiler.DUPLEX_SPONGE: _source_subject_arms(
+            {
+                PIRSourceFamily.STATIC_VIEW: 0,
+                PIRSourceFamily.CHECKED_CONSTRUCTION: 1,
+            }
+        ),
+        PIRSourceOwnerCompiler.PUBLIC_SETUP: _source_subject_arms(
+            {PIRSourceFamily.PUBLIC_SETUP_INVOCATION_VIEW: 0}
+        ),
+        PIRSourceOwnerCompiler.INTERFACE_PLAN: _source_subject_arms(
+            {
+                PIRSourceFamily.INTERFACE_VIEW: 0,
+                PIRSourceFamily.CONFIDENTIAL_PLAN_WITNESS: 1,
+            },
+            {PIRSourceFamily.INTERFACE_VIEW: 0},
+        ),
+    }
+)
+
+
+def compile_pir_source_subject_body(
+    owner_compiler: PIRSourceOwnerCompiler,
+    subject_kind: PIRSourceSubjectKind,
+    family: PIRSourceFamily,
+    family_local_body: object,
+) -> object:
+    """Apply one owner's bound source compiler to its tagged family value."""
+
+    if type(owner_compiler) is not PIRSourceOwnerCompiler:
+        raise ModelError("source subject selected no exact PIR owner compiler")
+    if type(subject_kind) is not PIRSourceSubjectKind:
+        raise ModelError("source subject selected no exact PIR subject compiler")
+    if type(family) is not PIRSourceFamily:
+        raise ModelError("source subject selected no exact tagged PIR family")
+    try:
+        arm = _PIR_SOURCE_COMPILER_ARMS[owner_compiler][subject_kind][family]
+    except KeyError as error:
+        raise ModelError("the selected PIR owner compiler does not issue this family") from error
+    return k1.DatumVariant(arm, family_local_body)
+
+
+def _authority_role_id(
+    profile: object,
+    subject_kind: str,
+    family: object,
+    coordinate: object,
+    what: str,
+) -> tuple[object, object]:
+    body = k1.DatumRecord(
+        (
+            (0, family),
+            (1, _any_content_ref(coordinate, what)),
+        )
+    )
+    return _authority_id(profile, subject_kind, body), body
+
+
+def _source_owner_compiler(
+    profile: object,
+    source_family: PIRSourceFamily,
+    profiles: K2SemanticProfiles,
+) -> PIRSourceOwnerCompiler:
+    if profile.identity == profiles.interaction.identity:
+        compiler = PIRSourceOwnerCompiler.INTERACTION
+    elif profile.identity == profiles.transcript_fs.identity:
+        compiler = PIRSourceOwnerCompiler.CANONICAL_FRAMED
+    elif profile.identity == profiles.public_view.identity:
+        compiler = PIRSourceOwnerCompiler.PUBLIC_SETUP
+    else:
+        raise ModelError("source authority selected no owner profile compiler")
+    if source_family not in _PIR_SOURCE_COMPILER_ARMS[compiler][
+        PIRSourceSubjectKind.BINDING_PAYLOAD
+    ]:
+        raise ModelError("source authority family is not issued by the owner profile")
+    return compiler
+
+
 def _authority_components(
     profile: object,
-    owner_domain: str,
+    source_family: PIRSourceFamily,
     capability_family: str,
-    source_body: object,
-    manifest_body: object,
+    binding_payload_local_body: object,
     purpose_label: str,
     consumer_id: object | None,
     purpose_id: object | None,
@@ -2170,6 +2303,7 @@ def _authority_components(
     profile_support: K2SemanticProfileSupport,
 ) -> tuple[object, object, object, object, object, object]:
     family = _symbol(capability_family, "capability family")
+    owner_compiler = _source_owner_compiler(profile, source_family, profiles)
     if consumer_id is None:
         default_consumer_body = k1.DatumRecord(
             ((0, family), (1, k1.Symbol("bounded-downstream-consumer")))
@@ -2187,22 +2321,12 @@ def _authority_components(
             profile_support=profile_support,
             selected_profile=profile,
         )
-    owner_consumer_body = k1.DatumRecord(
-        (
-            (0, family),
-            (
-                1,
-                k1.DatumVariant(
-                    1,
-                    _any_content_ref(consumer_id, "authority consumer"),
-                ),
-            ),
-        )
-    )
-    owner_consumer_id = _authority_id(
+    owner_consumer_id, owner_consumer_body = _authority_role_id(
         profile,
         "pir.source-consumer",
-        owner_consumer_body,
+        family,
+        consumer_id,
+        "authority consumer",
     )
     _authenticate_k2_profiled_subject(
         owner_consumer_id,
@@ -2232,22 +2356,12 @@ def _authority_components(
             profile_support=profile_support,
             selected_profile=profile,
         )
-    owner_purpose_body = k1.DatumRecord(
-        (
-            (0, family),
-            (
-                1,
-                k1.DatumVariant(
-                    1,
-                    _any_content_ref(purpose_id, "authority purpose"),
-                ),
-            ),
-        )
-    )
-    owner_purpose_id = _authority_id(
+    owner_purpose_id, owner_purpose_body = _authority_role_id(
         profile,
         "pir.source-purpose",
-        owner_purpose_body,
+        family,
+        purpose_id,
+        "authority purpose",
     )
     _authenticate_k2_profiled_subject(
         owner_purpose_id,
@@ -2259,15 +2373,11 @@ def _authority_components(
     )
     consumer_ref = _any_content_ref(owner_consumer_id, "authority consumer role")
     purpose_ref = _any_content_ref(owner_purpose_id, "authority purpose role")
-    payload_body = k1.DatumRecord(
-        (
-            (0, k1.Symbol(owner_domain)),
-            (1, family),
-            (2, source_body),
-            (3, manifest_body),
-            (4, consumer_ref),
-            (5, purpose_ref),
-        )
+    payload_body = compile_pir_source_subject_body(
+        owner_compiler,
+        PIRSourceSubjectKind.BINDING_PAYLOAD,
+        source_family,
+        binding_payload_local_body,
     )
     payload_id = _authority_id(
         profile,
@@ -2282,12 +2392,13 @@ def _authority_components(
         profile_support=profile_support,
         selected_profile=profile,
     )
-    no_policy_body = k1.DatumRecord(
-        (
-            (0, family),
-            (1, _any_content_ref(payload_id, "authority payload")),
-            (2, k1.Symbol("owner-defines-no-additional-operation-policy")),
-        )
+    no_policy_body = compile_pir_source_subject_body(
+        owner_compiler,
+        PIRSourceSubjectKind.NO_POLICY,
+        source_family,
+        k1.DatumRecord(
+            ((0, _any_content_ref(profile.identity, "authority owner profile")),)
+        ),
     )
     no_policy_id = _authority_id(
         profile,
@@ -2302,14 +2413,11 @@ def _authority_components(
         profile_support=profile_support,
         selected_profile=profile,
     )
-    requirement_body = k1.DatumRecord(
-        (
-            (0, family),
-            (1, _any_content_ref(payload_id, "authority payload")),
-            (2, consumer_ref),
-            (3, purpose_ref),
-            (4, k1.Symbol("fresh-identical-bearer-capability")),
-        )
+    requirement_body = compile_pir_source_subject_body(
+        owner_compiler,
+        PIRSourceSubjectKind.CAPABILITY_REQUIREMENT,
+        source_family,
+        k1.DatumRecord(((0, consumer_ref), (1, purpose_ref))),
     )
     requirement_id = _authority_id(
         profile,
@@ -2324,13 +2432,17 @@ def _authority_components(
         profile_support=profile_support,
         selected_profile=profile,
     )
-    closure_body = k1.DatumRecord(
-        (
-            (0, family),
-            (1, _any_content_ref(payload_id, "authority payload")),
-            (2, _any_content_ref(no_policy_id, "no-policy declaration")),
-            (3, _any_content_ref(requirement_id, "capability requirement")),
-        )
+    closure_body = compile_pir_source_subject_body(
+        owner_compiler,
+        PIRSourceSubjectKind.POLICY_CLOSURE,
+        source_family,
+        k1.DatumRecord(
+            (
+                (0, _any_content_ref(payload_id, "authority payload")),
+                (1, _any_content_ref(no_policy_id, "no-policy declaration")),
+                (2, _any_content_ref(requirement_id, "capability requirement")),
+            )
+        ),
     )
     closure_id = _authority_id(
         profile,
@@ -2346,7 +2458,7 @@ def _authority_components(
         selected_profile=profile,
     )
     requirement = k1.OwnerCapabilityRequirement(
-        k1.Symbol(owner_domain),
+        k1.Symbol("pir"),
         family,
         requirement_id,
     )
@@ -2360,22 +2472,111 @@ def _authority_components(
     )
 
 
-def _static_authority_source_body(coordinate: StaticViewCoordinate) -> object:
-    owner = (
-        k1.DatumVariant(
-            0,
-            _any_content_ref(coordinate.owner_id, "static-view owner"),
-        )
-        if type(coordinate.owner_id) is k1.TypedContentId
-        else k1.DatumVariant(1, k1.UNIT)
+def _pir_atomic_boundary_body(arm: int) -> object:
+    if type(arm) is not int or not 0 <= arm <= 9:
+        raise ModelError("PIR atomic-boundary arm is outside the owner union")
+    return k1.DatumVariant(arm, k1.UNIT)
+
+
+def _pir_atom_description(atomic_boundary_arm: int) -> object:
+    return k1.DatumVariant(3, _pir_atomic_boundary_body(atomic_boundary_arm))
+
+
+def _pir_record_description(
+    fields: tuple[tuple[str, object], ...],
+) -> object:
+    return k1.DatumVariant(
+        0,
+        k1.DatumSeq(
+            tuple(
+                k1.DatumRecord(((0, k1.Symbol(name)), (1, description)))
+                for name, description in fields
+            )
+        ),
     )
+
+
+def _pir_sequence_description(element: object) -> object:
+    return k1.DatumVariant(2, element)
+
+
+def _checked_fs_result_schema_body() -> object:
+    """Finite PIRDescriptionBody for the checked result carried by this model."""
+
+    content_ref = _pir_atom_description(4)
+    name_pair = _pir_record_description(
+        (
+            ("source", _pir_atom_description(3)),
+            ("target", _pir_atom_description(3)),
+        )
+    )
+    name_map = _pir_sequence_description(name_pair)
+    return _pir_record_description(
+        (
+            ("source_protocol_id", content_ref),
+            ("target_protocol_id", content_ref),
+            ("shared_core_id", content_ref),
+            ("transcript_construction_id", content_ref),
+            ("occurrence_map", name_map),
+            ("value_map", name_map),
+            ("challenge_map", name_map),
+            ("conclusion", _pir_atom_description(3)),
+        )
+    )
+
+
+_CORE_STATIC_VIEW_ARMS = MappingProxyType(
+    {
+        StaticViewKind.PUBLIC_BINDING: 0,
+        StaticViewKind.STRATEGY_DECISION: 1,
+        StaticViewKind.PUBLIC_COIN: 2,
+        StaticViewKind.EFFECT: 3,
+        StaticViewKind.CLAIM_REDUCTION: 4,
+    }
+)
+_CANONICAL_CONSTRUCTION_VIEW_ARMS = MappingProxyType(
+    {
+        StaticViewKind.TRANSCRIPT_DECLARATION: 0,
+        StaticViewKind.REQUIRED_INFLUENCE: 1,
+        StaticViewKind.CHALLENGE_TRANSITION: 2,
+    }
+)
+
+
+def _interaction_static_view_coordinate_body(
+    coordinate: StaticViewCoordinate,
+) -> object:
+    if coordinate.owner_kind is StaticViewOwnerKind.CORE:
+        try:
+            view_arm = _CORE_STATIC_VIEW_ARMS[coordinate.view_kind]
+        except KeyError as error:
+            raise ModelError("Interaction Core coordinate has another profile's view kind") from error
+        owner = k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                (
+                    (0, _any_content_ref(coordinate.owner_id, "static-view Core")),
+                    (1, k1.DatumVariant(view_arm, k1.UNIT)),
+                )
+            ),
+        )
+    elif (
+        coordinate.owner_kind is StaticViewOwnerKind.PROTOCOL
+        and coordinate.view_kind is StaticViewKind.EXECUTION
+    ):
+        owner = k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                ((0, _any_content_ref(coordinate.owner_id, "static-view Protocol")),)
+            ),
+        )
+    else:
+        raise ModelError("Interaction coordinate has another profile's owner kind")
     return k1.DatumRecord(
         (
-            (0, k1.Symbol(coordinate.owner_kind.value)),
-            (1, owner),
-            (2, k1.Symbol(coordinate.view_kind.value)),
+            (0, owner),
             (
-                3,
+                1,
                 _any_content_ref(
                     coordinate.semantic_profile_id,
                     "static-view semantic profile",
@@ -2385,8 +2586,172 @@ def _static_authority_source_body(coordinate: StaticViewCoordinate) -> object:
     )
 
 
-def _static_manifest_body(manifest: tuple[StaticViewField, ...]) -> object:
-    return k1.DatumSeq(tuple(k1.Symbol(item.value) for item in manifest))
+def _canonical_static_view_coordinate_body(
+    coordinate: StaticViewCoordinate,
+    source: object,
+) -> object:
+    if (
+        coordinate.owner_kind is StaticViewOwnerKind.PROTOCOL
+        and coordinate.view_kind is StaticViewKind.EXECUTION
+    ):
+        owner = k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                ((0, _any_content_ref(coordinate.owner_id, "static-view Protocol")),)
+            ),
+        )
+    elif coordinate.owner_kind is StaticViewOwnerKind.CONSTRUCTION:
+        try:
+            view_arm = _CANONICAL_CONSTRUCTION_VIEW_ARMS[coordinate.view_kind]
+        except KeyError as error:
+            raise ModelError("canonical construction coordinate has another view kind") from error
+        owner = k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _any_content_ref(
+                            coordinate.owner_id,
+                            "static-view transcript construction",
+                        ),
+                    ),
+                    (1, k1.DatumVariant(view_arm, k1.UNIT)),
+                )
+            ),
+        )
+    elif (
+        coordinate.owner_kind is StaticViewOwnerKind.FS_RESULT
+        and coordinate.view_kind is StaticViewKind.FS_CONSTRUCTION
+        and type(source) is CheckedFSConstructionIssue
+    ):
+        result = source.result
+        owner = k1.DatumVariant(
+            2,
+            k1.DatumRecord(
+                (
+                    (0, _any_content_ref(result.source_protocol_id, "fresh Protocol")),
+                    (1, _any_content_ref(result.target_protocol_id, "Fiat-Shamir Protocol")),
+                    (2, _any_content_ref(result.shared_core_id, "shared Core")),
+                    (
+                        3,
+                        _any_content_ref(
+                            result.transcript_construction_id,
+                            "transcript construction",
+                        ),
+                    ),
+                    (4, _checked_fs_result_schema_body()),
+                )
+            ),
+        )
+    else:
+        raise ModelError("canonical coordinate has another profile's owner kind")
+    return k1.DatumRecord(
+        (
+            (0, owner),
+            (
+                1,
+                _any_content_ref(
+                    coordinate.semantic_profile_id,
+                    "static-view semantic profile",
+                ),
+            ),
+        )
+    )
+
+
+_STATIC_VIEW_ID_FIELDS = frozenset(
+    {
+        StaticViewField.PB_CORE_ID,
+        StaticViewField.SD_CORE_ID,
+        StaticViewField.PC_CORE_ID,
+        StaticViewField.EF_CORE_ID,
+        StaticViewField.CR_CORE_ID,
+        StaticViewField.EX_PROTOCOL_ID,
+        StaticViewField.EX_CORE_ID,
+        StaticViewField.TD_CONSTRUCTION_ID,
+        StaticViewField.TD_CORE_ID,
+        StaticViewField.RI_CONSTRUCTION_ID,
+        StaticViewField.RI_CORE_ID,
+        StaticViewField.CT_CONSTRUCTION_ID,
+        StaticViewField.CT_CORE_ID,
+        StaticViewField.FS_SOURCE_PROTOCOL,
+        StaticViewField.FS_TARGET_PROTOCOL,
+        StaticViewField.FS_SHARED_CORE,
+        StaticViewField.FS_CONSTRUCTION_ID,
+    }
+)
+_STATIC_VIEW_LAW_FIELDS = frozenset(
+    {
+        StaticViewField.SD_PROVER_VIEW_FORMATION,
+        StaticViewField.EX_VISIBLE_HISTORY,
+        StaticViewField.EX_GENERATION,
+        StaticViewField.EX_REPLAY,
+        StaticViewField.EX_RELATION_RUN,
+        StaticViewField.RI_PREFIX_LAW,
+        StaticViewField.CT_NAMESPACE,
+        StaticViewField.CT_RETRY_FAILURE,
+    }
+)
+
+
+def _static_view_field_boundary_body(field: StaticViewField) -> object:
+    if field in _STATIC_VIEW_ID_FIELDS:
+        return _pir_atomic_boundary_body(4)  # Bytes / ContentRef bytes
+    if field is StaticViewField.PC_ELIGIBILITY:
+        return _pir_atomic_boundary_body(2)  # MetaBoolean
+    if field in _STATIC_VIEW_LAW_FIELDS:
+        return _pir_atomic_boundary_body(8)  # PIRProfileLawReference
+    if field is StaticViewField.TD_APPLICATION_DOMAIN:
+        return _pir_atomic_boundary_body(7)  # PIRReference
+    return _pir_atomic_boundary_body(3)  # bounded model's closed symbolic leaf
+
+
+def _static_view_field_coordinate_body(
+    coordinate_body: object,
+    view_kind: StaticViewKind,
+    field: StaticViewField,
+) -> object:
+    try:
+        ordinal = _VIEW_FIELDS[view_kind].index(field)
+    except (KeyError, ValueError) as error:
+        raise ModelError("static-view manifest field is outside the selected schema") from error
+    return k1.DatumRecord(
+        (
+            (0, coordinate_body),
+            (1, k1.DatumSeq((k1.DatumVariant(0, k1.Nat(ordinal)),))),
+            (2, _static_view_field_boundary_body(field)),
+        )
+    )
+
+
+def _static_binding_payload_local_body(
+    projection: StaticViewProjection,
+    source: object,
+    owner_compiler: PIRSourceOwnerCompiler,
+) -> object:
+    if owner_compiler is PIRSourceOwnerCompiler.INTERACTION:
+        coordinate_body = _interaction_static_view_coordinate_body(
+            projection.coordinate
+        )
+    elif owner_compiler is PIRSourceOwnerCompiler.CANONICAL_FRAMED:
+        coordinate_body = _canonical_static_view_coordinate_body(
+            projection.coordinate,
+            source,
+        )
+    else:
+        raise ModelError("bounded protocol static view selected an unavailable owner compiler")
+    manifest_body = k1.DatumSeq(
+        tuple(
+            _static_view_field_coordinate_body(
+                coordinate_body,
+                projection.coordinate.view_kind,
+                field,
+            )
+            for field in projection.manifest
+        )
+    )
+    return k1.DatumRecord(((0, coordinate_body), (1, manifest_body)))
 
 
 def _static_authority_profile(
@@ -2878,6 +3243,11 @@ def _issue_static_projection(
     except KeyError:
         return QualifiedViewOutcome(QualifiedViewOutcomeKind.CHECKER_FAILURE)
     projection = StaticViewProjection(coordinate, manifest, entries)
+    owner_compiler = _source_owner_compiler(
+        profile,
+        PIRSourceFamily.STATIC_VIEW,
+        profiles,
+    )
     (
         consumer_id,
         purpose_id,
@@ -2887,10 +3257,13 @@ def _issue_static_projection(
         requirement,
     ) = _authority_components(
         profile,
-        "pir",
+        PIRSourceFamily.STATIC_VIEW,
         "static-view",
-        _static_authority_source_body(coordinate),
-        _static_manifest_body(manifest),
+        _static_binding_payload_local_body(
+            projection,
+            source,
+            owner_compiler,
+        ),
         coordinate.view_kind.value,
         consumer_id,
         purpose_id,
@@ -2989,6 +3362,11 @@ def validate_issued_pir_static_view(
             required_subject_kinds=required_subject_kinds,
         )
         k1.validate_owner_local_source_authority_binding(issued.source_binding)
+        owner_compiler = _source_owner_compiler(
+            profile,
+            PIRSourceFamily.STATIC_VIEW,
+            profiles,
+        )
         (
             _,
             _,
@@ -2998,10 +3376,13 @@ def validate_issued_pir_static_view(
             requirement,
         ) = _authority_components(
             profile,
-            "pir",
+            PIRSourceFamily.STATIC_VIEW,
             "static-view",
-            _static_authority_source_body(issued.projection.coordinate),
-            _static_manifest_body(issued.projection.manifest),
+            _static_binding_payload_local_body(
+                issued.projection,
+                issued.capability._source,
+                owner_compiler,
+            ),
             issued.projection.coordinate.view_kind.value,
             consumer_id,
             purpose_id,
@@ -3451,45 +3832,38 @@ class CheckedFSConstructionIssue(_NonTransferableAuthority):
     _issuer: object
 
 
-def _checked_fs_source_body(result: CheckedFSConstruction) -> object:
-    def name_map(items: tuple[tuple[str, str], ...]) -> object:
-        return k1.DatumSeq(
-            tuple(
-                k1.DatumRecord(
-                    (
-                        (0, _symbol(source, "FS source name")),
-                        (1, _symbol(target, "FS target name")),
-                    )
-                )
-                for source, target in items
-            )
-        )
+def _checked_fs_checker_contract_id(profile: object) -> object:
+    return _authority_id(
+        profile,
+        "pir.fs-construction-checker-contract",
+        k1.DatumRecord(((0, k1.Symbol("bounded-check-fs-construction-v0")),)),
+    )
 
+
+def _checked_fs_binding_payload_local_body(
+    result: CheckedFSConstruction,
+    profile: object,
+) -> object:
     return k1.DatumRecord(
         (
-            (0, _any_content_ref(result.source_protocol_id, "FS source protocol")),
-            (1, _any_content_ref(result.target_protocol_id, "FS target protocol")),
-            (2, _any_content_ref(result.shared_core_id, "FS shared core")),
+            (0, _any_content_ref(result.source_protocol_id, "fresh Protocol")),
+            (1, _any_content_ref(result.target_protocol_id, "Fiat-Shamir Protocol")),
+            (2, _any_content_ref(result.shared_core_id, "shared Core")),
             (
                 3,
                 _any_content_ref(
                     result.transcript_construction_id,
-                    "FS transcript construction",
+                    "transcript construction",
                 ),
             ),
-            (4, name_map(result.occurrence_map)),
-            (5, name_map(result.value_map)),
-            (6, name_map(result.challenge_map)),
-            (7, _symbol(result.conclusion, "FS conclusion")),
-        )
-    )
-
-
-def _checked_fs_manifest_body() -> object:
-    return k1.DatumSeq(
-        tuple(
-            k1.Symbol(field.value)
-            for field in _VIEW_FIELDS[StaticViewKind.FS_CONSTRUCTION]
+            (4, _checked_fs_result_schema_body()),
+            (
+                5,
+                _any_content_ref(
+                    _checked_fs_checker_contract_id(profile),
+                    "FS checker contract",
+                ),
+            ),
         )
     )
 
@@ -3603,10 +3977,12 @@ def check_fs_construction(
         requirement,
     ) = _authority_components(
         profiles.transcript_fs,
-        "pir",
+        PIRSourceFamily.CHECKED_CONSTRUCTION,
         "checked-fs-construction",
-        _checked_fs_source_body(result),
-        _checked_fs_manifest_body(),
+        _checked_fs_binding_payload_local_body(
+            result,
+            profiles.transcript_fs,
+        ),
         "issue-fs-construction-view",
         consumer_id,
         purpose_id,
@@ -3706,10 +4082,12 @@ def issue_fs_construction_view(
             requirement,
         ) = _authority_components(
             profiles.transcript_fs,
-            "pir",
+            PIRSourceFamily.CHECKED_CONSTRUCTION,
             "checked-fs-construction",
-            _checked_fs_source_body(checked.result),
-            _checked_fs_manifest_body(),
+            _checked_fs_binding_payload_local_body(
+                checked.result,
+                profiles.transcript_fs,
+            ),
             "issue-fs-construction-view",
             consumer_id,
             purpose_id,
@@ -3879,7 +4257,7 @@ def public_setup_invocation_view_id(
     )
 
 
-def _public_setup_authority_source_body(
+def _public_setup_binding_payload_local_body(
     view_id: object,
     view: PublicSetupInvocationView,
 ) -> object:
@@ -3887,18 +4265,6 @@ def _public_setup_authority_source_body(
         (
             (0, _any_content_ref(view_id, "public-setup view")),
             (1, _any_content_ref(view.protocol_id, "public-setup protocol")),
-            (2, _any_content_ref(view.core_id, "public-setup core")),
-        )
-    )
-
-
-def _public_setup_manifest_body() -> object:
-    return k1.DatumSeq(
-        (
-            k1.Symbol("protocol-id"),
-            k1.Symbol("core-id"),
-            k1.Symbol("public-context-and-parameter-entries"),
-            k1.Symbol("run-established-binding-refs"),
         )
     )
 
@@ -3974,10 +4340,9 @@ def issue_public_setup_invocation_view(
         requirement,
     ) = _authority_components(
         profiles.public_view,
-        "pir",
+        PIRSourceFamily.PUBLIC_SETUP_INVOCATION_VIEW,
         "public-setup-invocation-view",
-        _public_setup_authority_source_body(view_id, view),
-        _public_setup_manifest_body(),
+        _public_setup_binding_payload_local_body(view_id, view),
         "consume-public-setup-invocation-view",
         consumer_id,
         purpose_id,
@@ -4078,10 +4443,12 @@ def validate_issued_public_setup_invocation_view(
             requirement,
         ) = _authority_components(
             profiles.public_view,
-            "pir",
+            PIRSourceFamily.PUBLIC_SETUP_INVOCATION_VIEW,
             "public-setup-invocation-view",
-            _public_setup_authority_source_body(issued.view_id, issued.view),
-            _public_setup_manifest_body(),
+            _public_setup_binding_payload_local_body(
+                issued.view_id,
+                issued.view,
+            ),
             "consume-public-setup-invocation-view",
             consumer_id,
             purpose_id,

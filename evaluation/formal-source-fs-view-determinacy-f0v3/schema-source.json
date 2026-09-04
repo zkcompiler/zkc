@@ -4,9 +4,9 @@
   "owner_profiles": {
     "canonical-framed": {
       "key": "canonical-framed",
-      "revision": 3,
-      "profile_digest": "1a7fe8cc7427590110bd5ea7ddc4713ebd3e65c8d9bfe997a426eae031af4222",
-      "profile_body_sha256": "3668965eaca7973ca1953cd4a45abe7b65196564cbfb47e17d001deba68f745b"
+      "revision": 4,
+      "profile_digest": "026c8bf37837d1de698d859626debd118c1141d4d0679f22e2f91af30b08d41e",
+      "profile_body_sha256": "a0216af58cd0cc80a7c89c4f6ec006fd9b5b7caca7750c5a808b4a8979d27878"
     },
     "duplex-sponge": {
       "key": "duplex-sponge",

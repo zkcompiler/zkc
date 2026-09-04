@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import FrozenInstanceError, replace
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import pickle
@@ -16,6 +17,27 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT))
 
 import reference_model as model  # noqa: E402
+
+
+def live_owner_profile(key: str) -> object:
+    """Compile one current owner profile without consulting the publication table."""
+
+    name = "_zkc_semantic_profile_publication_reference"
+    path = (
+        PACKAGE_ROOT.parent
+        / "semantic-profile-publication"
+        / "reference_model.py"
+    )
+    if name in sys.modules:
+        publication_model = sys.modules[name]
+    else:
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load semantic-profile compiler from {path}")
+        publication_model = importlib.util.module_from_spec(spec)
+        sys.modules[name] = publication_model
+        spec.loader.exec_module(publication_model)
+    return publication_model.compile_repository().profiles[key].profile
 
 
 def completed(result: model.GenerationResult) -> model.RunRecord:
@@ -2491,9 +2513,433 @@ class OwnerIssuedViewContractTest(unittest.TestCase):
             )
         )
         self.assertNotEqual(
+            issued.source_binding.owner_policy_closure,
+            swapped.source_binding.owner_policy_closure,
+        )
+        self.assertEqual(
             issued.source_binding.owner_binding_payload,
             swapped.source_binding.owner_binding_payload,
         )
+        self.assertNotEqual(
+            issued.source_binding.capability_requirement.owner_requirement,
+            swapped.source_binding.capability_requirement.owner_requirement,
+        )
+
+    def test_canonical_static_payload_uses_owner_compiler_and_rejects_old_shapes(self) -> None:
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.EXECUTION,
+            (model.StaticViewField.EX_REPLAY,),
+        )
+        issued = self.assert_affirmative(
+            model.issue_execution_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                manifest,
+            )
+        )
+        assert type(issued) is model.IssuedPIRStaticView
+        profile = model.K2_SEMANTIC_PROFILES.transcript_fs
+        coordinate = issued.projection.coordinate
+        coordinate_body = model._canonical_static_view_coordinate_body(
+            coordinate,
+            issued.capability._source,
+        )
+        local_body = model.k1.DatumRecord(
+            (
+                (0, coordinate_body),
+                (
+                    1,
+                    model.k1.DatumSeq(
+                        tuple(
+                            model._static_view_field_coordinate_body(
+                                coordinate_body,
+                                coordinate.view_kind,
+                                field,
+                            )
+                            for field in issued.projection.manifest
+                        )
+                    ),
+                ),
+            )
+        )
+        expected_body = model.k1.DatumVariant(0, local_body)
+        expected_payload_id = model._authority_id(
+            profile,
+            "pir.source-binding-payload",
+            expected_body,
+        )
+        self.assertEqual(
+            issued.source_binding.owner_binding_payload,
+            expected_payload_id,
+        )
+
+        family = model.k1.Symbol("static-view")
+        consumer_role, _ = model._authority_role_id(
+            profile,
+            "pir.source-consumer",
+            family,
+            issued.capability.consumer_id,
+            "test consumer",
+        )
+        purpose_role, _ = model._authority_role_id(
+            profile,
+            "pir.source-purpose",
+            family,
+            issued.capability.purpose_id,
+            "test purpose",
+        )
+        consumer_ref = model._any_content_ref(consumer_role, "test consumer role")
+        purpose_ref = model._any_content_ref(purpose_role, "test purpose role")
+        expected_no_policy_id = model._authority_id(
+            profile,
+            "pir.source-no-policy",
+            model.k1.DatumVariant(
+                0,
+                model.k1.DatumRecord(
+                    (
+                        (
+                            0,
+                            model._any_content_ref(
+                                profile.identity,
+                                "test owner profile",
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+        expected_requirement_id = model._authority_id(
+            profile,
+            "pir.source-capability-requirement",
+            model.k1.DatumVariant(
+                0,
+                model.k1.DatumRecord(((0, consumer_ref), (1, purpose_ref))),
+            ),
+        )
+        expected_closure_id = model._authority_id(
+            profile,
+            "pir.source-policy-closure",
+            model.k1.DatumVariant(
+                0,
+                model.k1.DatumRecord(
+                    (
+                        (
+                            0,
+                            model._any_content_ref(
+                                expected_payload_id,
+                                "test payload",
+                            ),
+                        ),
+                        (
+                            1,
+                            model._any_content_ref(
+                                expected_no_policy_id,
+                                "test no-policy declaration",
+                            ),
+                        ),
+                        (
+                            2,
+                            model._any_content_ref(
+                                expected_requirement_id,
+                                "test capability requirement",
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+        binding = issued.source_binding
+        self.assertEqual(
+            binding.operation_policy.owner_no_policy_declaration,
+            expected_no_policy_id,
+        )
+        self.assertEqual(
+            binding.capability_requirement.owner_requirement,
+            expected_requirement_id,
+        )
+        self.assertEqual(binding.owner_policy_closure, expected_closure_id)
+
+        old_source_body = model.k1.DatumRecord(
+            (
+                (0, model.k1.Symbol(coordinate.owner_kind.value)),
+                (
+                    1,
+                    model.k1.DatumVariant(
+                        0,
+                        model._any_content_ref(coordinate.owner_id, "test owner"),
+                    ),
+                ),
+                (2, model.k1.Symbol(coordinate.view_kind.value)),
+                (
+                    3,
+                    model._any_content_ref(
+                        coordinate.semantic_profile_id,
+                        "test profile",
+                    ),
+                ),
+            )
+        )
+        old_untagged_body = model.k1.DatumRecord(
+            (
+                (0, model.k1.Symbol("pir")),
+                (1, family),
+                (2, old_source_body),
+                (
+                    3,
+                    model.k1.DatumSeq(
+                        tuple(
+                            model.k1.Symbol(field.value)
+                            for field in issued.projection.manifest
+                        )
+                    ),
+                ),
+                (4, consumer_ref),
+                (5, purpose_ref),
+            )
+        )
+        old_untagged_id = model._authority_id(
+            profile,
+            "pir.source-binding-payload",
+            old_untagged_body,
+        )
+        interaction_local = model._static_binding_payload_local_body(
+            issued.projection,
+            issued.capability._source,
+            model.PIRSourceOwnerCompiler.INTERACTION,
+        )
+        interaction_wrapped_id = model._authority_id(
+            profile,
+            "pir.source-binding-payload",
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.INTERACTION,
+                model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+                model.PIRSourceFamily.STATIC_VIEW,
+                interaction_local,
+            ),
+        )
+        self.assertNotEqual(
+            issued.source_binding.owner_binding_payload,
+            old_untagged_id,
+        )
+        self.assertNotEqual(
+            issued.source_binding.owner_binding_payload,
+            interaction_wrapped_id,
+        )
+
+    def test_duplex_source_compilers_keep_static_and_checked_arms_distinct(self) -> None:
+        duplex_profile = live_owner_profile(
+            "duplex-sponge-fiat-shamir"
+        )
+        protocol_id = model.protocol_id(
+            self.core,
+            self.construction,
+            model.ChallengeInterpretation.FIAT_SHAMIR,
+        )
+        coordinate_body = model.k1.DatumRecord(
+            (
+                (
+                    0,
+                    model.k1.DatumVariant(
+                        0,
+                        model.k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    model._any_content_ref(
+                                        protocol_id,
+                                        "duplex test Protocol",
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                ),
+                (
+                    1,
+                    model._any_content_ref(
+                        duplex_profile.identity,
+                        "duplex test profile",
+                    ),
+                ),
+            )
+        )
+        field_coordinate = model.k1.DatumRecord(
+            (
+                (0, coordinate_body),
+                (
+                    1,
+                    model.k1.DatumSeq(
+                        (model.k1.DatumVariant(0, model.k1.Nat(0)),)
+                    ),
+                ),
+                (2, model.k1.DatumVariant(4, model.k1.UNIT)),
+            )
+        )
+        local = model.k1.DatumRecord(
+            ((0, coordinate_body), (1, model.k1.DatumSeq((field_coordinate,))))
+        )
+        expected_payload_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.k1.DatumVariant(0, local),
+        )
+        compiled_payload_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+                model.PIRSourceFamily.STATIC_VIEW,
+                local,
+            ),
+        )
+        self.assertEqual(compiled_payload_id, expected_payload_id)
+
+        family = model.k1.Symbol("static-view")
+        role_coordinate = model.core_id(self.core)
+        consumer_role, _ = model._authority_role_id(
+            duplex_profile,
+            "pir.source-consumer",
+            family,
+            role_coordinate,
+            "duplex test consumer",
+        )
+        purpose_role, _ = model._authority_role_id(
+            duplex_profile,
+            "pir.source-purpose",
+            family,
+            role_coordinate,
+            "duplex test purpose",
+        )
+        old_untagged_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.k1.DatumRecord(
+                (
+                    (0, model.k1.Symbol("pir")),
+                    (1, family),
+                    (2, coordinate_body),
+                    (3, model.k1.DatumSeq((field_coordinate,))),
+                    (
+                        4,
+                        model._any_content_ref(
+                            consumer_role,
+                            "duplex test consumer role",
+                        ),
+                    ),
+                    (
+                        5,
+                        model._any_content_ref(
+                            purpose_role,
+                            "duplex test purpose role",
+                        ),
+                    ),
+                )
+            ),
+        )
+        interaction_coordinate = model.k1.DatumRecord(
+            (
+                (
+                    0,
+                    model.k1.DatumVariant(
+                        1,
+                        model.k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    model._any_content_ref(
+                                        protocol_id,
+                                        "Interaction test Protocol",
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                ),
+                (
+                    1,
+                    model._any_content_ref(
+                        duplex_profile.identity,
+                        "Interaction test profile",
+                    ),
+                ),
+            )
+        )
+        interaction_local = model.k1.DatumRecord(
+            (
+                (0, interaction_coordinate),
+                (
+                    1,
+                    model.k1.DatumSeq(
+                        (
+                            model.k1.DatumRecord(
+                                (
+                                    (0, interaction_coordinate),
+                                    (
+                                        1,
+                                        model.k1.DatumSeq(
+                                            (
+                                                model.k1.DatumVariant(
+                                                    0,
+                                                    model.k1.Nat(0),
+                                                ),
+                                            )
+                                        ),
+                                    ),
+                                    (
+                                        2,
+                                        model.k1.DatumVariant(
+                                            4,
+                                            model.k1.UNIT,
+                                        ),
+                                    ),
+                                )
+                            ),
+                        )
+                    ),
+                ),
+            )
+        )
+        interaction_wrapped_id = model._authority_id(
+            duplex_profile,
+            "pir.source-binding-payload",
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.INTERACTION,
+                model.PIRSourceSubjectKind.BINDING_PAYLOAD,
+                model.PIRSourceFamily.STATIC_VIEW,
+                interaction_local,
+            ),
+        )
+        self.assertNotEqual(compiled_payload_id, old_untagged_id)
+        self.assertNotEqual(compiled_payload_id, interaction_wrapped_id)
+
+        for subject_kind in model.PIRSourceSubjectKind:
+            self.assertEqual(
+                model.compile_pir_source_subject_body(
+                    model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                    subject_kind,
+                    model.PIRSourceFamily.STATIC_VIEW,
+                    local,
+                ),
+                model.k1.DatumVariant(0, local),
+            )
+            self.assertEqual(
+                model.compile_pir_source_subject_body(
+                    model.PIRSourceOwnerCompiler.DUPLEX_SPONGE,
+                    subject_kind,
+                    model.PIRSourceFamily.CHECKED_CONSTRUCTION,
+                    local,
+                ),
+                model.k1.DatumVariant(1, local),
+            )
+        with self.assertRaisesRegex(model.ModelError, "does not issue"):
+            model.compile_pir_source_subject_body(
+                model.PIRSourceOwnerCompiler.INTERACTION,
+                model.PIRSourceSubjectKind.NO_POLICY,
+                model.PIRSourceFamily.CONFIDENTIAL_INITIAL_ORACLE,
+                local,
+            )
 
     def test_checked_fs_authority_refuses_reconstruction_and_wrong_purpose(self) -> None:
         checked = self.assert_affirmative(

@@ -27,6 +27,10 @@ python3 -B evaluation/formal-schnorr-relations-plan-f2p0/run.py --check
 It freezes 30 findings: 12 affirmative bounded observations, five refused
 inferences, and 13 `CannotAnswer` boundaries.
 
+The contract ledger is re-pinned to the current Interface/Plan bytes. The
+new owner-compiler block shifts the cited Plan ranges but does not alter their
+text, the two reconstructed candidate completions, or any frozen outcome.
+
 ## Exact conditional shape
 
 The forward route supported by the contracts is:

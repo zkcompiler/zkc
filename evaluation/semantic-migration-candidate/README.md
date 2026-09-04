@@ -13,6 +13,12 @@ identity, or select any of the open provider-observable ownership choices.
 The pinned source baseline is commit
 `4ff8358108b6acf4355fa178b9b70529c6fb3778`.
 
+The candidate contract is re-pinned to the current migrated owner pages and
+canonical-framed manifest, including the total-schedule position rule and the
+profile-local source-compiler equations. This package reconstructs profile
+identities from owner text; it does not consume the finite protocol model's
+source-authority IDs.
+
 Run the bounded gate from the repository root:
 
 ```sh

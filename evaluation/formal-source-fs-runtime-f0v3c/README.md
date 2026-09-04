@@ -11,13 +11,13 @@ Run from the repository root:
 python3 -B evaluation/formal-source-fs-runtime-f0v3c/run.py --check
 ```
 
-The frozen aggregate is `CannotAnswer/F0V3C-C-FS-RUNTIME`. The two exact
-constructions admit and execute, but Section 13 requires each challenge rule
-and execution resolver to carry the challenge occurrence's entry in
-`frame_schedule`. The Schnorr challenge is `Always`, has no public conditions,
-and therefore emits no frame under Section 4. The owner text does not say how
-an entry for that unframed occurrence can exist, so this package does not
-invent one.
+The frozen aggregate is `Affirmative/F0V3C-A-FS-RUNTIME`. The two exact
+constructions admit and execute. Each challenge-transition rule now carries
+the occurrence's position in the exact total Core schedule. The Schnorr
+challenge is `Always`, has no public conditions, and therefore emits no frame
+under Section 4; its execution view consequently carries
+`frame_schedule_coordinate = None` while retaining its total-schedule
+position.
 
 ## Admitted subjects
 
@@ -34,15 +34,15 @@ framing, and a typed sampling-exhausted failure.
 The retrying construction and Protocol identities are:
 
 ```text
-zkcidv0:pir.transcript-construction:6bfe6bd860dffbe99ae9aaca09f333154c6ba1a3eeaad3d9cf249b36d79eb172
-zkcidv0:pir.protocol:886af07bc6b90e05dc8618218bd7af7e9e875d9e0b7dcd0dabfee6045bb2df92
+zkcidv0:pir.transcript-construction:c8d7a037c4ba85d9824d33217f5e0101711f1fe515f0a8da8bd8ebdc811d233f
+zkcidv0:pir.protocol:6af3a4c7c224014f49c236b73a6bc64e0365429cd969a7ac2eef06d64ff0d3a8
 ```
 
 The one-shot construction and Protocol identities are:
 
 ```text
-zkcidv0:pir.transcript-construction:26c2fe4fb19dd4b85672edda0fd590e011fa38ceae507889740cc0c83cdbdf5a
-zkcidv0:pir.protocol:12112c333504fa0e6184997c5fd44c0d773cc39803d845ea83c44d4d9add6f64
+zkcidv0:pir.transcript-construction:8bee78815de3b3beaf327e8d8032ea516857e991e2ef6b3f5db7360d01c405d4
+zkcidv0:pir.protocol:8bde0b353976922b49cc9eb35f5ad34f7c307f3767103d7cca91dcc2a7a5aeb0
 ```
 
 Both share Core
@@ -68,8 +68,8 @@ Each subject has all 27 `(statement, witness, nonce)` strategy runs and all 27
 
 | Lane | Retrying | One-shot |
 |---|---:|---:|
-| `Accepted` | 24 | 20 |
-| `Rejected` | 30 | 34 |
+| `Accepted` | 22 | 18 |
+| `Rejected` | 32 | 36 |
 | `Aborted` | 0 | 0 |
 | `InterpretationFailed` | 0 | 0 |
 | `StrategyStopped` | 0 | 0 |
@@ -93,10 +93,10 @@ the second subject independently. The one-shot table is total:
 | `(1,0)`, `(2,2)` | 1 |
 | `(1,1)` | 2 |
 
-Both subjects derive and validate the transcript-declaration,
-required-influence, and checked-construction views through both current schema
-compilers. Their challenge-transition and execution views remain
-`CannotAnswer` at the unframed-coordinate gap above.
+Both subjects derive and validate all four construction views through both
+current schema compilers. They also derive the execution view. The transition
+view uses the total schedule position for the unframed challenge, and the
+execution view records that no frame-schedule entry exists.
 
 ## Repaired-body pressure suite
 
@@ -114,24 +114,25 @@ schema compilers accept all three construction-owned values.
 | owner admission | `Affirmative/F0V3C-A-OWNER-ADMISSION` |
 | retrying execution | `Affirmative/F0V3C-A-FINITE-EXECUTION` |
 | retrying replay | `Affirmative/F0V3C-A-INDEPENDENT-REPLAY` |
-| Schnorr transition/execution views | `CannotAnswer/F0V3C-C-UNFRAMED-CHALLENGE-POSITION` |
+| Schnorr transition/execution views | `Affirmative/F0V3C-A-TOTAL-SCHEDULE-PROJECTION` |
 | repaired-body pressure projection | `Affirmative/F0V3C-A-REPAIRED-VIEW-PROJECTION` |
 | six-lane partition | `Affirmative/F0V3C-A-SIX-LANE-PARTITION` |
 | retrying derivation table | `Affirmative/F0V3C-A-DERIVATION-VECTORS` |
 | one-shot execution | `Affirmative/F0V3C-A-ONE-SHOT-EXECUTION` |
-| aggregate | `CannotAnswer/F0V3C-C-FS-RUNTIME` |
+| aggregate | `Affirmative/F0V3C-A-FS-RUNTIME` |
 
 ## Result boundary
 
 A passing check establishes owner-determined construction for the two exact
 subjects, exhaustive execution of their finite corpora, equality of two
 runtime paths, exact-field replay refusal, measured lane counts, frozen
-derivation tables, the three determined Schnorr construction views, and the
-repaired-body pressure projection.
+derivation tables, all four Schnorr construction views, both execution views,
+and the repaired-body pressure projection. It checks the owner distinction
+between a challenge's total-schedule position and its optional frame-schedule
+coordinate.
 
-It does not supply the missing unframed challenge coordinate, establish either
-Schnorr challenge-transition or execution view, publish owner text, cover
-arbitrary Cores, prove general evaluator correctness, establish
+It does not publish owner text, cover arbitrary Cores, prove general evaluator
+correctness, establish
 compiler/backend/provider correspondence, prove theorem applicability or
 truth, protocol soundness, zero knowledge, Fiat--Shamir security, random-oracle
 or quantum-random-oracle security, concrete-hash suitability, duplex-sponge

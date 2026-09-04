@@ -42,6 +42,17 @@ duplex-sponge Fiat--Shamir, public setup, Interface/Plan, and endpoint source
 view. Canonical-framed and duplex view-schema catalogs are still future
 profile-local work; F0-V1 repairs only their authority-envelope routing.
 
+## Current migration re-pin
+
+The regression now reads canonical-framed revision 4. That revision assigns
+every challenge its exact total Core schedule position and makes the execution
+frame coordinate optional. Both publication paths agree on the resulting
+current source and on this package's synthetic topology result. The executable
+source-authority identities exercised in the protocol and Analysis models
+rotate separately because those models now hash the selected owner's tagged
+compiler output; this package checks the owner compiler topology and does not
+freeze those fixture identities.
+
 ## Independent evidence and mutations
 
 [`model.py`](model.py) forms the candidate and compiles it with the

@@ -643,7 +643,7 @@ def _findings() -> list[Finding]:
             "k2-typed-cold-current-values",
             "Affirmative",
             "F0V3-A-K2-TYPED-COLD-BYTES",
-            "typed and cold paths byte-agree on every owner-determined canonical-framed view for both carriers",
+            "typed and cold paths byte-agree on all four canonical-framed views for both carriers",
         ),
         Finding(
             "duplex-typed-cold-current-values",
@@ -671,9 +671,9 @@ def _findings() -> list[Finding]:
         ),
         Finding(
             "unframed-challenge-position",
-            "CannotAnswer",
-            "F0V3-C-UNFRAMED-CHALLENGE-POSITION",
-            "the owner requires a challenge rule to name its occurrence's frame-schedule position but an unconditional challenge with no condition emits no frame-schedule entry",
+            "Affirmative",
+            "F0V3-A-TOTAL-SCHEDULE-CHALLENGE-POSITION",
+            "every challenge rule names its occurrence's total Core schedule position independently of whether Section 4 emits a frame entry",
         ),
         Finding(
             "witness-as-owner-definition",
@@ -826,8 +826,8 @@ def run_audit() -> dict[str, Any]:
     }
     findings = _findings()
     aggregate = {
-        "outcome": "CannotAnswer",
-        "code": "F0V3-C-MIGRATED-FS-VIEW-DETERMINACY",
+        "outcome": "Affirmative",
+        "code": "F0V3-A-MIGRATED-FS-VIEW-DETERMINACY",
     }
     projection = {
         "aggregate": aggregate,

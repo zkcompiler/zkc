@@ -62,12 +62,12 @@
     },
     {
       "path": "docs-next/pir/interfaces-and-plans.md",
-      "sha256": "e3888d7d2ba6c84ceafdf457255a02079b13d95af4f94fce8a6d3c7e8ae6041c",
+      "sha256": "8b628925220a93a82794a0458e9108a3308a1bd310cdd67ef2610d2a90be4745",
       "ranges": [
         {
           "id": "PROVER-PLAN",
-          "start": 747,
-          "end": 1008,
+          "start": 761,
+          "end": 1022,
           "anchors": [
             "ProverPlan = {",
             "DecisionRecipe = {",
@@ -76,8 +76,8 @@
         },
         {
           "id": "PLAN-REALIZES",
-          "start": 1028,
-          "end": 1251,
+          "start": 1042,
+          "end": 1265,
           "anchors": [
             "PlanLifecycleReadBasis = {",
             "PlanRealizes(",
@@ -86,8 +86,8 @@
         },
         {
           "id": "PLAN-STRATEGY-STEP",
-          "start": 1253,
-          "end": 1521,
+          "start": 1267,
+          "end": 1535,
           "anchors": [
             "PlanStrategyStep(",
             "private state contains the exact Plan state vector",
@@ -96,8 +96,8 @@
         },
         {
           "id": "PLAN-WITNESS-SURFACE",
-          "start": 1685,
-          "end": 1750,
+          "start": 1699,
+          "end": 1764,
           "anchors": [
             "PlanWitnessSurfaceBody = {",
             "SuppliedForGeneration",

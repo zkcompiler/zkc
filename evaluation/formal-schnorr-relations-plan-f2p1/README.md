@@ -29,6 +29,10 @@ python3 -B evaluation/formal-schnorr-relations-plan-f2p1/run.py --check
 The frozen report has 39 findings: 28 `Affirmative`, five `Refused`, one
 `Negative`, and five `CannotAnswer` outcomes.
 
+The source ledger is re-pinned to the current Interface/Plan bytes. The
+inserted owner-compiler definitions move the Plan anchors without changing the
+candidate bodies, their package-local identities, or any frozen finding.
+
 ## Exact additive fixture algebra
 
 The F1-R1B fixture does not encode a multiplicative group. It has one three-

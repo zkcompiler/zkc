@@ -359,30 +359,25 @@ def _construction_views(
         "CanonicalTranscriptDeclarationView": transcript,
         "CanonicalRequiredInfluenceView": influence,
     }
-    missing = tuple(
-        rule.challenge
-        for rule in construction.challenge_rules
-        if rule.challenge not in challenge_frame_entries
+    challenge_positions = model.challenge_occurrence_positions(core)
+    values["CanonicalChallengeTransitionView"] = _record(
+        tid,
+        cid,
+        _law("canonical-framed-prefix-and-domain-v0"),
+        _law("canonical-framed-body-grammar-v0"),
+        _law("canonical-framed-admission-and-execution-v0"),
+        _law("canonical-framed-admission-and-execution-v0"),
+        _law("canonical-framed-admission-and-execution-v0"),
+        [
+            _challenge_rule_value(
+                core,
+                construction,
+                rule,
+                challenge_positions[rule.challenge],
+            )
+            for rule in construction.challenge_rules
+        ],
     )
-    if not missing:
-        values["CanonicalChallengeTransitionView"] = _record(
-            tid,
-            cid,
-            _law("canonical-framed-prefix-and-domain-v0"),
-            _law("canonical-framed-body-grammar-v0"),
-            _law("canonical-framed-admission-and-execution-v0"),
-            _law("canonical-framed-admission-and-execution-v0"),
-            _law("canonical-framed-admission-and-execution-v0"),
-            [
-                _challenge_rule_value(
-                    core,
-                    construction,
-                    rule,
-                    challenge_frame_entries[rule.challenge][0],
-                )
-                for rule in construction.challenge_rules
-            ],
-        )
     if checked is not None:
         values["CanonicalFSConstructionView"] = _record(
             _body("runtime-schema-body-v0", "CheckedFSConstruction"),
@@ -419,7 +414,7 @@ def _construction_views(
                 _law("canonical-framed-same-core-construction-v0"),
             ),
         )
-    return values, missing
+    return values, ()
 
 
 def construction_views(subject: model.Subject) -> dict[str, Any]:
@@ -436,6 +431,9 @@ def execution_view(subject: model.Subject) -> dict[str, Any]:
     _schedule, challenge_frame_entries = _frame_schedule(
         subject.fixture.core_candidate.core
     )
+    challenge_positions = model.challenge_occurrence_positions(
+        subject.fixture.core_candidate.core
+    )
     occurrence_by_challenge = {
         occurrence.effect.challenge: occurrence_ref
         for occurrence_ref, occurrence in enumerate(
@@ -443,17 +441,6 @@ def execution_view(subject: model.Subject) -> dict[str, Any]:
         )
         if type(occurrence.effect) is target.ChallengeEffect
     }
-    missing = tuple(
-        rule.challenge
-        for rule in construction.challenge_rules
-        if rule.challenge not in challenge_frame_entries
-    )
-    if missing:
-        raise ViewUnderdetermined(
-            "docs-next/pir/fiat-shamir.md Section 13 requires each resolver "
-            "coordinate to name the challenge occurrence's frame_schedule "
-            f"entry, but unframed challenge refs {list(missing)} have none"
-        )
     return {
         "protocol_id": model.identifier_text(subject.fs_protocol.identifier),
         "core_id": model.identifier_text(construction.core_id),
@@ -474,14 +461,14 @@ def execution_view(subject: model.Subject) -> dict[str, Any]:
                         rule.challenge
                     ].value_type
                 ),
-                "frame_schedule_coordinate": challenge_frame_entries[
+                "frame_schedule_coordinate": challenge_frame_entries.get(
                     rule.challenge
-                ],
+                ),
                 "decoding_coordinate": _challenge_rule_value(
                     subject.fixture.core_candidate.core,
                     construction,
                     rule,
-                    challenge_frame_entries[rule.challenge][0],
+                    challenge_positions[rule.challenge],
                 ),
             }
             for rule in construction.challenge_rules

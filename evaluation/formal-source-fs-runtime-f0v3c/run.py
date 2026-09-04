@@ -251,9 +251,9 @@ def _subject_evidence(
     view_digests, missing_view_coordinates = views.validate_against_predecessor(
         subject
     )
-    execution_view_digest = None
-    if not missing_view_coordinates:
-        execution_view_digest = _digest(views.execution_view(subject))
+    if missing_view_coordinates:
+        raise CheckFailure("the total Core schedule omitted a challenge coordinate")
+    execution_view_digest = _digest(views.execution_view(subject))
     results, replay_matches = _run_corpus(subject)
     if len(results) != 54 or replay_matches != 54:
         raise CheckFailure(f"the {subject.name} corpus or replay count drifted")
@@ -383,9 +383,9 @@ def evaluate() -> tuple[
         ),
         Finding(
             "views",
-            "CannotAnswer",
-            "F0V3C-C-UNFRAMED-CHALLENGE-POSITION",
-            "the repaired owner body requires the challenge occurrence's frame_schedule position, but each Schnorr challenge is Always with no condition frame and therefore has no frame_schedule entry; the three determined construction values validate under both predecessor compilers",
+            "Affirmative",
+            "F0V3C-A-TOTAL-SCHEDULE-PROJECTION",
+            "each Schnorr transition rule uses its challenge occurrence's total Core schedule position, both four-value construction projections validate, and each execution resolver carries None for its independently absent frame coordinate",
         ),
         Finding(
             "portable-view-pressure",
@@ -407,13 +407,13 @@ def evaluate() -> tuple[
         ),
         Finding(
             "aggregate",
-            "CannotAnswer",
-            "F0V3C-C-FS-RUNTIME",
-            "the bounded execution, replay, partition, derivation, and repaired pressure projections close, but the owner text does not determine the Schnorr challenge-transition or execution-view frame coordinate",
+            "Affirmative",
+            "F0V3C-A-FS-RUNTIME",
+            "the bounded execution, replay, partition, derivation, total-schedule transition, optional-frame execution, and pressure projections all close",
         ),
     ]
     frozen_findings = {
-        "aggregate": {"outcome": "CannotAnswer", "code": "F0V3C-C-FS-RUNTIME"},
+        "aggregate": {"outcome": "Affirmative", "code": "F0V3C-A-FS-RUNTIME"},
         "cases": [
             {"name": item.name, "outcome": item.outcome, "code": item.code}
             for item in findings
@@ -491,7 +491,7 @@ def main() -> int:
             if frozen != observed:
                 raise CheckFailure(f"{label} drifted")
     print(
-        "CannotAnswer/F0V3C-C-FS-RUNTIME "
+        "Affirmative/F0V3C-A-FS-RUNTIME "
         f"runs={len(runs['records']) + len(one_shot_runs['records'])} "
         f"vectors={len(vectors['entries']) + len(one_shot_vectors['entries'])}"
     )

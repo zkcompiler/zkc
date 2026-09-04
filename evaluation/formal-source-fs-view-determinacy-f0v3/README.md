@@ -8,7 +8,7 @@ This package asks one exact question:
 > independently reproduced migration rotation cone?
 
 The frozen answer is
-`CannotAnswer/F0V3-C-MIGRATED-FS-VIEW-DETERMINACY`.
+`Affirmative/F0V3-A-MIGRATED-FS-VIEW-DETERMINACY`.
 
 Run from the repository root:
 
@@ -40,22 +40,22 @@ The current profile identities are:
 
 | Family | Revision | Profile digest | Body SHA-256 |
 |---|---:|---|---|
-| canonical-framed | 3 | `1a7fe8cc7427590110bd5ea7ddc4713ebd3e65c8d9bfe997a426eae031af4222` | `3668965eaca7973ca1953cd4a45abe7b65196564cbfb47e17d001deba68f745b` |
+| canonical-framed | 4 | `026c8bf37837d1de698d859626debd118c1141d4d0679f22e2f91af30b08d41e` | `a0216af58cd0cc80a7c89c4f6ec006fd9b5b7caca7750c5a808b4a8979d27878` |
 | duplex-sponge | 3 | `9629ae8ab75f343b2b32f7ccd1d68a90a96bdc9c75ac4e7ea049c8a389cac7ee` | `c2f4af9d27e0ed12051a0a404d14a4290e1cb38c50a84ab6bb77d5aba2187b36` |
 
 ## Projection checks
 
-The typed and independently structured cold paths byte-agree on ten available
-values: four canonical-framed Schnorr values, three canonical-framed Oracle
-values, and three duplex values. The duplex witness has no checked-result
-issuer, so no result value is invented.
+The typed and independently structured cold paths byte-agree on eleven
+available values: four canonical-framed Schnorr values, four
+canonical-framed Oracle values, and three duplex values. The duplex witness
+has no checked-result issuer, so no result value is invented.
 
-The Oracle fixture cannot form its canonical challenge-transition value. Its
-challenge occurrence is unframed, while the repaired rule body requires the
-position of that occurrence's entry in `frame_schedule`. Section 4 gives an
-`Always` challenge with no condition frames no such entry. The package records
-that exact owner-text gap as
-`CannotAnswer/F0V3-C-UNFRAMED-CHALLENGE-POSITION`.
+The Oracle fixture now forms its canonical challenge-transition value. Its
+challenge occurrence is unframed, so Section 4 derives no frame-schedule
+entry. Section 13 independently assigns it the occurrence's position in the
+exact total Core schedule. Both projection paths derive that position without
+inventing a frame coordinate, closing the former gap as
+`Affirmative/F0V3-A-TOTAL-SCHEDULE-CHALLENGE-POSITION`.
 
 Both validators reject schema-ordinal, owner, law, compiler, wrong-family, and
 checked-result-byte substitutions. They also refuse treating a witness value
@@ -71,14 +71,12 @@ source closure, not publication authority.
 ## What a pass establishes
 
 A pass establishes the current source pins, the 91-field census, agreement of
-the two schema compilers, byte agreement for the ten formable finite values,
-the stated mutation refusals, and agreement of the two publication compilers
-on the measured rotation cone. It also establishes that the missing Oracle
-transition value remains fail-closed instead of receiving an invented
-coordinate.
+the two schema compilers, byte agreement for the eleven formable finite
+values, the stated mutation refusals, and agreement of the two publication
+compilers on the measured rotation cone. It also establishes that the Oracle
+transition uses its total-schedule position while remaining unframed.
 
-It does not resolve the unframed-challenge coordinate, issue the missing view,
-publish an identity, establish a durable owner evaluator, prove implementation
-or backend correspondence, authenticate or apply a theorem, prove
+It does not publish an identity, establish a durable owner evaluator, prove
+implementation or backend correspondence, authenticate or apply a theorem, prove
 Fiat--Shamir soundness, knowledge soundness, zero knowledge, ROM/QROM or
 concrete-instantiation security, or establish production support.

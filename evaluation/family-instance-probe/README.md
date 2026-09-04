@@ -59,6 +59,12 @@ host-dependent: every run reports each median, while the frozen finding for
 each member is the explicit `<= 250,000,000 ns` class. Exceeding that ceiling
 fails the gate.
 
+The source digest now pins the protocol model after its owner-profile compiler
+dispatch repair. Source-authority IDs in that model changed because their
+preimages now use tagged owner equations. This probe derives only Core IDs;
+those bodies contain no source-authority envelope, so all six frozen Core
+identities and affine observations remain unchanged.
+
 ## Frozen observations
 
 The following medians are one authoring run, not immutable values. The frozen
