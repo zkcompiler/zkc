@@ -492,7 +492,9 @@ def _ordinary_core_references(core: Any) -> tuple[tuple[Any, ...], tuple[Any, ..
         if type(occurrence.effect) is foundation.VerifierMessageEffect:
             algorithms.add(occurrence.effect.algorithm)
             contracts.add(occurrence.effect.evaluation_contract)
-    key = lambda item: item.internal_reference()
+    def key(item: Any) -> Any:
+        return item.internal_reference()
+
     return tuple(sorted(algorithms, key=key)), tuple(sorted(contracts, key=key))
 
 
@@ -1783,7 +1785,6 @@ def _transport_type(value_type: Any) -> Any:
 def _interface_body(
     subject: PressureSubject, omit: int | None = None
 ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
-    core = subject.admission.core
     construction = subject.construction
     challenge_ref_type = k1.ValueType(k1.NAT_DOMAIN, k1.NatSchema((1 << 14) - 1))
     draw_count_type = k1.ValueType(k1.NAT_DOMAIN, k1.NatSchema(1 << 20))
