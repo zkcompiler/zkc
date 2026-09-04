@@ -268,6 +268,14 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    and the Core is unchanged. Every repair rotates its profile,
    the re-pinning classes of Section 7 apply, and an eighth review round
    checks the repaired text against the review's reversal conditions.
+12. **The checked construction's checker contract had no identity.** The
+   executable alignment (`total-schedule-and-owner-compiled-source-authority.md`)
+   found that both family pages place `ContentRef(x.checker_contract)` in the
+   checked-construction binding payload while no page, manifest, or other
+   owner defines that content identity's subject kind, body, profile, or
+   dependency on the check operation. The repair defines it on both pages
+   and manifests; until then the executable keeps a package-local coordinate
+   and reports the correspondence as `CannotAnswer`.
 
 ## 7. What remains before publication
 
