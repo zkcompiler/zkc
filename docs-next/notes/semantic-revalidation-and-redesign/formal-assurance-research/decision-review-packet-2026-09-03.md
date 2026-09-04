@@ -60,7 +60,7 @@ reader would have to show to reverse them.
 
 | Item | Recommendation | Where |
 |---|---|---|
-| Publication of the identity table and the staged refreeze | publish; the rehearsal has re-pinned 22 packages against the candidate table | `f0-v2c-refreeze-rehearsal.md` |
+| Publication of the identity table and the staged refreeze | publish, after the refreeze rehearsal is rerun on the closed head: the recorded rehearsal re-pinned 22 packages against the candidate table of an earlier head (`8346f68b`), and the repairs after the pre-freeze deep review rotate the identities again | `f0-v2c-refreeze-rehearsal.md`, `pre-freeze-deep-review-2026-09-04.md` |
 | Schnorr claim binding | fixture-side repair: one initial claim at the statement binding's scope opening | `schnorr-claim-binding-reopening-2026-09-03.md` |
 | Family and instance | Core instance-only; the generator a Compiler transition; family theorems bound pointwise through per-member premises | `../family-and-instance/decision-inputs.md` |
 | Pull request 27 | keep the notes as an appendix and land after the migration | the private ledger |
