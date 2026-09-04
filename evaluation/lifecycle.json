@@ -71,7 +71,8 @@
         "research.semantic-migration-candidate",
         "research.holdout-readjudication",
         "research.migration-text-review",
-        "research.fs-runtime"
+        "research.fs-runtime",
+        "research.formal-source-end-to-end-pressure"
       ]
     },
     {

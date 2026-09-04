@@ -256,12 +256,21 @@ def _claim_uses(
     }
 
 
-def project_views(core_handle: object, protocol_handle: object) -> dict[str, Any]:
-    """Project all six normalized bodies from one exact admitted D1 pair."""
+def project_admitted_values(
+    core: object,
+    core_identifier: object,
+    protocol_identifier: object,
+    *,
+    scenario: str = "integrated-baseline",
+) -> dict[str, Any]:
+    """Pure six-view projection from already admitted owner values.
 
-    core, scenario = d1._retained_core(core_handle)
-    protocol_identifier = _protocol_reference(core_handle, protocol_handle)
-    core_identifier = k1.decode_content_reference(core_handle.core_reference)
+    Admission authority remains the caller's responsibility.  The original
+    ``project_views`` entry point below still authenticates D1 handles before
+    delegating here; later composition packages can reuse the exact projector
+    after their own stricter admitted-carrier gate instead of forking it.
+    """
+
     core_atom = foundation._identifier("core-id-body-v0", core_identifier)
     protocol_atom = foundation._identifier(
         "protocol-id-body-v0", protocol_identifier
@@ -480,7 +489,9 @@ def project_views(core_handle: object, protocol_handle: object) -> dict[str, Any
         4: legal_rows,
     }
 
-    public_coin, _graph_evidence = d1.project_public_coin(core_handle)
+    public_coin, _graph_evidence = d1.project_public_coin_values(
+        core, core_identifier, scenario
+    )
 
     value_rows: list[dict[int, Any]] = []
     value_tables = (
@@ -873,6 +884,20 @@ def project_views(core_handle: object, protocol_handle: object) -> dict[str, Any
     for name, value in views.items():
         codec.encode_value(VIEW_SCHEMAS[name], value)
     return views
+
+
+def project_views(core_handle: object, protocol_handle: object) -> dict[str, Any]:
+    """Project all six normalized bodies from one exact admitted D1 pair."""
+
+    core, scenario = d1._retained_core(core_handle)
+    protocol_identifier = _protocol_reference(core_handle, protocol_handle)
+    core_identifier = k1.decode_content_reference(core_handle.core_reference)
+    return project_admitted_values(
+        core,
+        core_identifier,
+        protocol_identifier,
+        scenario=scenario,
+    )
 
 
 def encode_views(views: Mapping[str, Any]) -> dict[str, bytes]:

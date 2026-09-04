@@ -2327,10 +2327,14 @@ def _backward_closure(
     return seen
 
 
-def project_public_coin(handle: object) -> tuple[dict[int, Any], GraphEvidence]:
-    core, scenario = _retained_core(handle)
+def project_public_coin_values(
+    core: object,
+    identifier: object,
+    scenario: str = "integrated-baseline",
+) -> tuple[dict[int, Any], GraphEvidence]:
+    """Pure PublicCoin projection from an already admitted Core value."""
+
     graph, evidence = derive_graph(core, scenario)
-    identifier = k1.decode_content_reference(handle.core_reference)
     positions = _positions(core)
     consumers: dict[int, list[int]] = {
         index: [] for index in range(len(core.challenges))
@@ -2379,6 +2383,12 @@ def project_public_coin(handle: object) -> tuple[dict[int, Any], GraphEvidence]:
     }
     codec.encode_value(VIEW_SCHEMAS["PublicCoinView"], value)
     return value, evidence
+
+
+def project_public_coin(handle: object) -> tuple[dict[int, Any], GraphEvidence]:
+    core, scenario = _retained_core(handle)
+    identifier = k1.decode_content_reference(handle.core_reference)
+    return project_public_coin_values(core, identifier, scenario)
 
 
 def public_coin_body(handle: object) -> bytes:

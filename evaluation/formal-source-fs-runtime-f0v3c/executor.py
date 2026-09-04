@@ -35,6 +35,17 @@ class ExecutionResult:
     derived: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ChallengeTransitionResult:
+    """One owner-ordered finite challenge transition for library consumers."""
+
+    state: Any
+    value: Any | None
+    draws: tuple[dict[str, Any], ...]
+    prefix_receipt_count: int
+    prefix_state: Any
+
+
 def honest_cases() -> tuple[RunCase, ...]:
     return tuple(
         RunCase(
@@ -187,6 +198,148 @@ def _namespace(subject: model.Subject, draw_ordinal: int) -> Any:
     return k1.admit_value(
         model.TRANSCRIPT_BYTES_TYPE,
         k1.BytesValue(k1.encode_datum(body)),
+    )
+
+
+def _correlation_body(correlation: Any) -> Any:
+    """Compile the two Interaction correlation constructors by exact fields."""
+
+    if not hasattr(correlation, "prior_members"):
+        return _variant(0)
+    return _variant(
+        1,
+        _record(
+            _module_ref(correlation.group),
+            k1.Nat(correlation.index),
+            _seq(tuple(k1.Nat(item) for item in correlation.prior_members)),
+        ),
+    )
+
+
+def challenge_namespace(
+    construction: Any,
+    core: Any,
+    challenge_ref: int,
+    draw_ordinal: int,
+) -> Any:
+    """Form the canonical-framed owner namespace for an arbitrary rule.
+
+    This is the portable library form of ``_namespace``.  It deliberately uses
+    only the owner fields shared by admitted Core and construction carriers, so
+    later finite packages do not fork the draw transition.
+    """
+
+    challenge = core.challenges[challenge_ref]
+    path: list[int] = []
+    current: int | None = challenge.scope
+    while current is not None:
+        path.append(current)
+        current = core.scopes[current].parent
+    body = _record(
+        k1.BytesValue(construction.identifier.internal_reference()),
+        k1.BytesValue(construction.core_id.internal_reference()),
+        _seq(tuple(k1.Nat(item) for item in reversed(path))),
+        k1.Nat(challenge_ref),
+        _module_ref(challenge.domain),
+        k1.value_type_datum(challenge.value_type),
+        _correlation_body(challenge.correlation),
+        k1.Nat(draw_ordinal),
+    )
+    return k1.admit_value(
+        construction.transcript_bytes_type,
+        k1.BytesValue(k1.encode_datum(body)),
+    )
+
+
+def derive_challenge(
+    construction: Any,
+    core: Any,
+    challenge_ref: int,
+    state: Any,
+    public_condition_values: tuple[Any, ...],
+    prior_member_values: tuple[Any, ...],
+    transitions: list[dict[str, Any]],
+) -> ChallengeTransitionResult:
+    """Execute Section 7 for one exact challenge rule.
+
+    The caller owns Core scheduling and framing.  This helper owns squeeze,
+    length checking, state advancement before acceptance, retry, decode, and
+    the exact draw receipts.  It is intentionally reusable by later finite
+    composition packages instead of reproducing those semantics there.
+    """
+
+    matching = [
+        rule for rule in construction.challenge_rules if rule.challenge == challenge_ref
+    ]
+    if len(matching) != 1:
+        raise model.SubjectError("challenge transition lacks one exact rule")
+    rule = matching[0]
+    challenge = core.challenges[challenge_ref]
+    if len(public_condition_values) != len(challenge.public_conditions):
+        raise model.SubjectError("challenge transition condition arity differs")
+    expected_prior = tuple(getattr(challenge.correlation, "prior_members", ()))
+    if len(prior_member_values) != len(expected_prior):
+        raise model.SubjectError("challenge transition prior-member arity differs")
+
+    prefix_state = state
+    prefix_count = len(transitions)
+    draws: list[dict[str, Any]] = []
+    requested = k1.admit_value(construction.natural_type, k1.Nat(rule.draw_bytes))
+    for draw_ordinal in range(rule.maximum_draws):
+        pre_state = state
+        namespace = challenge_namespace(
+            construction, core, challenge_ref, draw_ordinal
+        )
+        output = model.evaluate(
+            construction.squeeze_bytes, (pre_state, namespace, requested)
+        )
+        if (
+            type(output.datum) is not k1.BytesValue
+            or len(output.datum.value) != rule.draw_bytes
+        ):
+            raise model.SubjectError(
+                "squeeze output violated the exact length postcondition"
+            )
+        post_state = model.evaluate(
+            construction.advance_state,
+            (pre_state, namespace, requested, output),
+        )
+        sampling_inputs = (
+            output,
+            *public_condition_values,
+            *prior_member_values,
+        )
+        accepted = model.evaluate(rule.accept, sampling_inputs)
+        if type(accepted.datum) is not bool:
+            raise model.SubjectError("acceptance algorithm did not return Boolean")
+        receipt = {
+            "challenge": challenge_ref,
+            "draw_ordinal": draw_ordinal,
+            "requested_bytes": rule.draw_bytes,
+            "namespace": model.canonical_value_json(namespace),
+            "pre_state": model.canonical_value_json(pre_state),
+            "post_state": model.canonical_value_json(post_state),
+            "output": model.canonical_value_json(output),
+            "accepted": accepted.datum,
+        }
+        draws.append(receipt)
+        transitions.append({"kind": "Squeezed", "draw": receipt})
+        state = post_state
+        if accepted.datum:
+            value = model.evaluate(rule.decode, sampling_inputs)
+            return ChallengeTransitionResult(
+                state,
+                value,
+                tuple(draws),
+                prefix_count,
+                prefix_state,
+            )
+    return ChallengeTransitionResult(
+        state,
+        None,
+        tuple(draws),
+        prefix_count,
+        prefix_state,
     )
 
 

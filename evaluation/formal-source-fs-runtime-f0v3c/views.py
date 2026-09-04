@@ -97,25 +97,34 @@ def _interaction_law(subject: model.Subject, name: str) -> dict[str, str]:
     }
 
 
+def _named(value: Any, name: str) -> bool:
+    """Match isomorphic admitted owner carriers loaded by a sibling package."""
+
+    return type(value).__name__ == name
+
+
 def _occurrence_kind(occurrence: Any) -> str:
     effect = occurrence.effect
-    if type(effect) is target.ProverMessageEffect:
+    if _named(effect, "ProverMessageEffect"):
         return "ProverMessage"
-    if type(effect) is target.ChallengeEffect:
+    if _named(effect, "VerifierMessageEffect"):
+        return "VerifierMessage"
+    if _named(effect, "ChallengeEffect"):
         return "Challenge"
-    if type(effect) is target.CheckEffect:
+    if _named(effect, "CheckEffect"):
         return "Check"
-    if type(effect) is target.TerminalEffect:
+    if _named(effect, "TerminalEffect"):
         return "Terminal"
     raise model.SubjectError("portable projection encountered an unknown occurrence kind")
 
 
 def _occurrence_is_framed(core: Any, occurrence: Any) -> bool:
     return (
-        type(occurrence.guard) is not target.AlwaysGuard
-        or type(occurrence.effect) is target.ProverMessageEffect
+        not _named(occurrence.guard, "AlwaysGuard")
+        or _named(occurrence.effect, "ProverMessageEffect")
+        or _named(occurrence.effect, "VerifierMessageEffect")
         or (
-            type(occurrence.effect) is target.ChallengeEffect
+            _named(occurrence.effect, "ChallengeEffect")
             and bool(core.challenges[occurrence.effect.challenge].public_conditions)
         )
     )
@@ -133,7 +142,7 @@ def _frame_schedule(core: Any) -> tuple[list[dict[int, Any]], dict[int, dict[int
             _ref("occurrence-kind-body-v0", _occurrence_kind(occurrence)),
         )
         schedule.append(coordinate)
-        if type(occurrence.effect) is target.ChallengeEffect:
+        if _named(occurrence.effect, "ChallengeEffect"):
             challenge_frame_entries[occurrence.effect.challenge] = coordinate
     return schedule, challenge_frame_entries
 
@@ -166,7 +175,7 @@ def _required_influence(core: Any, construction: model.TranscriptConstruction, t
             occurrence,
         )
         for index, occurrence in enumerate(core.occurrences)
-        if type(occurrence.effect) is target.ChallengeEffect
+        if _named(occurrence.effect, "ChallengeEffect")
     )
     result: list[dict[int, Any]] = []
     for challenge_ref, challenge_index, challenge_occurrence in occurrences:
@@ -212,7 +221,7 @@ def _required_influence(core: Any, construction: model.TranscriptConstruction, t
         add_scopes(None)
         for index, occurrence in enumerate(core.occurrences[: challenge_index + 1]):
             add_scopes(index)
-            if type(occurrence.guard) is not target.AlwaysGuard:
+            if not _named(occurrence.guard, "AlwaysGuard"):
                 entries.append(
                     _static_atom(
                         5,
@@ -221,7 +230,7 @@ def _required_influence(core: Any, construction: model.TranscriptConstruction, t
                     )
                 )
             effect = occurrence.effect
-            if type(effect) is target.ChallengeEffect:
+            if _named(effect, "ChallengeEffect"):
                 entries.extend(
                     _static_atom(
                         11,
@@ -237,10 +246,22 @@ def _required_influence(core: Any, construction: model.TranscriptConstruction, t
                 )
                 if index < challenge_index:
                     entries.append(_symbolic_draw(effect.challenge))
-            elif index < challenge_index and type(effect) is target.ProverMessageEffect:
+            elif index < challenge_index and _named(
+                effect, "ProverMessageEffect"
+            ):
                 entries.append(
                     _static_atom(
                         6,
+                        _ref("occurrence-ref-body-v0", index),
+                        True,
+                    )
+                )
+            elif index < challenge_index and _named(
+                effect, "VerifierMessageEffect"
+            ):
+                entries.append(
+                    _static_atom(
+                        7,
                         _ref("occurrence-ref-body-v0", index),
                         True,
                     )
@@ -251,15 +272,47 @@ def _required_influence(core: Any, construction: model.TranscriptConstruction, t
     return result
 
 
+def _generic_output_types(core: Any) -> tuple[tuple[Any, ...], ...]:
+    rows: list[tuple[Any, ...]] = []
+    for occurrence in core.occurrences:
+        effect = occurrence.effect
+        if _named(effect, "ProverMessageEffect") or _named(
+            effect, "VerifierMessageEffect"
+        ):
+            rows.append((effect.payload_type,))
+        elif _named(effect, "ChallengeEffect"):
+            rows.append((core.challenges[effect.challenge].value_type,))
+        elif _named(effect, "CheckEffect"):
+            rows.append((k1.BOOL,))
+        else:
+            rows.append(())
+    return tuple(rows)
+
+
+def _generic_value_type(core: Any, outputs: Any, reference: Any) -> Any:
+    name = type(reference).__name__
+    if name == "PublicInputRef":
+        return core.public_inputs[reference.ordinal].value_type
+    if name == "VerifierPrivateInputRef":
+        return core.verifier_private_inputs[reference.ordinal].value_type
+    if name == "ConstantRef":
+        return core.constants[reference.ordinal].value_type
+    if name == "DerivedValueRef":
+        return core.derived_values[reference.ordinal].result_type
+    if name == "OccurrenceOutputRef":
+        return outputs[reference.occurrence][reference.output_ordinal]
+    raise model.SubjectError("portable projection encountered an unknown value ref")
+
+
 def _sampling_input_types(core: Any, construction: model.TranscriptConstruction, challenge_ref: int) -> list[dict[str, str]]:
     challenge = core.challenges[challenge_ref]
-    outputs = target._output_types(core)
+    outputs = _generic_output_types(core)
     value_types = [construction.transcript_bytes_type]
     value_types.extend(
-        target._value_type(core, outputs, condition)
+        _generic_value_type(core, outputs, condition)
         for condition in challenge.public_conditions
     )
-    if type(challenge.correlation) is target.JointCorrelation:
+    if hasattr(challenge.correlation, "prior_members"):
         value_types.extend(
             core.challenges[prior].value_type
             for prior in challenge.correlation.prior_members
@@ -359,7 +412,13 @@ def _construction_views(
         "CanonicalTranscriptDeclarationView": transcript,
         "CanonicalRequiredInfluenceView": influence,
     }
-    challenge_positions = model.challenge_occurrence_positions(core)
+    challenge_positions = {
+        occurrence.effect.challenge: position
+        for position, occurrence in enumerate(core.occurrences)
+        if _named(occurrence.effect, "ChallengeEffect")
+    }
+    if set(challenge_positions) != set(range(len(core.challenges))):
+        raise model.SubjectError("construction view lacks a total challenge schedule")
     values["CanonicalChallengeTransitionView"] = _record(
         tid,
         cid,
@@ -431,15 +490,19 @@ def execution_view(subject: model.Subject) -> dict[str, Any]:
     _schedule, challenge_frame_entries = _frame_schedule(
         subject.fixture.core_candidate.core
     )
-    challenge_positions = model.challenge_occurrence_positions(
-        subject.fixture.core_candidate.core
-    )
+    challenge_positions = {
+        occurrence.effect.challenge: position
+        for position, occurrence in enumerate(
+            subject.fixture.core_candidate.core.occurrences
+        )
+        if _named(occurrence.effect, "ChallengeEffect")
+    }
     occurrence_by_challenge = {
         occurrence.effect.challenge: occurrence_ref
         for occurrence_ref, occurrence in enumerate(
             subject.fixture.core_candidate.core.occurrences
         )
-        if type(occurrence.effect) is target.ChallengeEffect
+        if _named(occurrence.effect, "ChallengeEffect")
     }
     return {
         "protocol_id": model.identifier_text(subject.fs_protocol.identifier),

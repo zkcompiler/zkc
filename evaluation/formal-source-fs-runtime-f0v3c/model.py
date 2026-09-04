@@ -457,7 +457,18 @@ def _require_completed_value(result: Any, label: str) -> Any:
     return result.completion.value
 
 
+_EVALUATION_VALUE_CACHE: dict[tuple[Any, Any, tuple[Any, ...]], Any] = {}
+
+
 def evaluate(use: AlgorithmUse, inputs: tuple[Any, ...]) -> Any:
+    cache_key = (
+        use.algorithm.identity,
+        use.evaluation_contract.identity,
+        inputs,
+    )
+    cached = _EVALUATION_VALUE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     dependencies = set(use.algorithm.module_dependencies)
     modules = {
         identifier: candidate
@@ -470,7 +481,9 @@ def evaluate(use: AlgorithmUse, inputs: tuple[Any, ...]) -> Any:
         modules=modules,
         evaluation_contract=use.evaluation_contract,
     )
-    return _require_completed_value(result, use.algorithm.algorithm_kind.value)
+    value = _require_completed_value(result, use.algorithm.algorithm_kind.value)
+    _EVALUATION_VALUE_CACHE[cache_key] = value
+    return value
 
 
 def make_subject(name: str = "retrying") -> Subject:

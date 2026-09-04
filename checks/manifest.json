@@ -1393,6 +1393,28 @@
       }
     },
     {
+      "id": "research.formal-source-end-to-end-pressure",
+      "title": "Mixed-challenge multi-binding end-to-end pressure",
+      "subject": "Whether one exact admitted Core with independent Boolean and finite additive challenges plus two public bindings composes through PIR admission, owner views, public setup, Interface admission, Fresh and canonical-framed execution and replay, and Analysis premise formation without owner underdetermination.",
+      "claim": "The exact finite subject composes through all exercised PIR contracts, all ten static views and thirteen Analysis read selections, both public-setup partitions, the positive Interface, 486 Fresh runs and 81 canonical-framed runs with independent replay, and a raw-mass-preserving six-lane Boolean map. One fixed-setup and one Interface neighbor refuse at their exact owner clauses. The aggregate remains CannotAnswer because named-premise intake, one Boolean Fresh premise, exact-subject relation and Plan evidence, and a provider declaration are absent.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-end-to-end-pressure-f0v4/run.py", "evaluation/formal-source-end-to-end-pressure-f0v4/model.py", "evaluation/formal-source-end-to-end-pressure-f0v4/README.md", "evaluation/formal-source-end-to-end-pressure-f0v4/expected-findings.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/mixed-challenge-multi-binding-end-to-end-pressure.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "long",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This finite package is not owner adoption or publication, a general admission or runtime implementation, arbitrary-protocol support, provider correspondence, relation truth, theorem applicability, protocol or Fiat-Shamir security, random-oracle or concrete-hash evidence, compiler or backend correspondence, or production evidence."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-end-to-end-pressure-f0v4/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.provider-observable-audit",
       "title": "Provider observable audit",
       "subject": "Whether the exact admitted finite Schnorr Core and Fresh Protocol, as exposed by their six normalized owner views, carry every observable that a VCVio-shaped operational interpretation needs, and exactly which observables are missing.",
