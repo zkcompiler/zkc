@@ -273,9 +273,11 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    found that both family pages place `ContentRef(x.checker_contract)` in the
    checked-construction binding payload while no page, manifest, or other
    owner defines that content identity's subject kind, body, profile, or
-   dependency on the check operation. The repair defines it on both pages
-   and manifests; until then the executable keeps a package-local coordinate
-   and reports the correspondence as `CannotAnswer`.
+   dependency on the check operation. Both pages and manifests now define
+   it, a profile-owned identity over the check operation, the same-Core
+   construction law, the defect schema, and the result schema, and the
+   executable forms it through that equation
+   (`checked-construction-checker-contract-and-family-cone.md`).
 
 ## 7. What remains before publication
 

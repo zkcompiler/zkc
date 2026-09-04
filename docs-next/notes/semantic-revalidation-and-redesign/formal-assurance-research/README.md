@@ -526,6 +526,13 @@ provider, extraction tool, or durable schema.
   the one owner underdetermination the alignment found: the checked
   construction's `checker_contract` content identity has no owner
   definition.
+- [`checked-construction-checker-contract-and-family-cone.md`](checked-construction-checker-contract-and-family-cone.md)
+  forms the checked construction's checker contract in the executable model
+  through the owner equation now defined on both family pages, derives the
+  canonical and duplex identities with discriminators that reject the former
+  package-local coordinate, and re-pins the family cone: every in-scope
+  checkpoint check passes, and the two former `CannotAnswer` findings on the
+  checker identity and the source-authority alignment are affirmative.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them
