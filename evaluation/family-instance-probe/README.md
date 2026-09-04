@@ -3,11 +3,11 @@
 ## Exact question
 
 For two finite protocol-family shapes already representable by the retained
-indexed authoring instrument, does changing a family parameter produce regular,
-separately admitted concrete Core instances and distinct Core identities, and
-does that evidence support keeping family parameterization outside the PIR Core
-while Analysis binds one family theorem to each member through an exact
-pointwise correspondence?
+indexed authoring instrument, what exact measured variation follows from
+changing a family parameter, and do the separately admitted concrete Core
+instances and distinct Core identities support keeping family parameterization
+outside the PIR Core while Analysis binds one family theorem to each member
+through an exact pointwise correspondence?
 
 The frozen aggregate answer is
 `Affirmative/FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE`. This is a bounded design
@@ -50,8 +50,9 @@ For each fiber the runner:
    input, scope, occurrence, claim, reduction, and terminal coordinates;
 5. compares declarations by semantic name and canonical declaration value;
 6. checks which top-level Core body fields changed; and
-7. fits exact integral affine laws to body bytes, fixture-graph nodes and
-   edges, and declaration count over the three measured members.
+7. tests exact integral affine laws for body bytes, fixture-graph nodes and
+   edges, and declaration count over the three measured members, retaining an
+   explicit negative observation when a metric is not affine.
 
 The exact body, identity, graph, declaration, source-digest, and affine-law
 observations are frozen in `expected-findings.json`. Wall time is inherently
@@ -59,11 +60,14 @@ host-dependent: every run reports each median, while the frozen finding for
 each member is the explicit `<= 250,000,000 ns` class. Exceeding that ceiling
 fails the gate.
 
-The source digest now pins the protocol model after its owner-profile compiler
-dispatch repair. Source-authority IDs in that model changed because their
-preimages now use tagged owner equations. This probe derives only Core IDs;
-those bodies contain no source-authority envelope, so all six frozen Core
-identities and affine observations remain unchanged.
+The source digest now pins the protocol model after its challenge declarations
+were made owner-authored Core fields. Those new domain, fresh-law,
+coin-correlation, and reduction-use records enlarge every measured Core body
+and rotate every measured Core identity. Seven of the eight size coordinates
+remain affine on the selected finite domains. FRI-like Core body bytes do not:
+their adjacent increments are 1,712 and 1,713 bytes, so the former affirmative
+eight-law finding is now a frozen negative rather than being rounded or
+silently re-pinned.
 
 ## Frozen observations
 
@@ -72,26 +76,29 @@ performance coordinate is the ceiling class described above.
 
 | Family shape | Parameter | Body bytes | Core identity digest | Admission median | Fixture graph nodes | Fixture graph edges | Declarations | Changed from prior |
 |---|---:|---:|---|---:|---:|---:|---:|---:|
-| FRI-like folding | folds `2` | 7,625 | `8c158862bb8e...38d0c` | 133,673 ns | 42 | 58 | 19 | 0 |
-| FRI-like folding | folds `3` | 8,815 | `298ea61f2db1...9be61` | 148,674 ns | 48 | 67 | 21 | 5 |
-| FRI-like folding | folds `4` | 10,005 | `332a7b9cb17f...3f269` | 168,355 ns | 54 | 76 | 23 | 5 |
-| Sumcheck-like rounds | variables `1` | 4,190 | `aef62014b432...3cfef` | 76,062 ns | 24 | 31 | 12 | 0 |
-| Sumcheck-like rounds | variables `2` | 7,003 | `7820272d0c8d...0c9c7` | 122,913 ns | 35 | 51 | 17 | 6 |
-| Sumcheck-like rounds | variables `4` | 12,629 | `79ed21123a33...ffffd` | 208,206 ns | 57 | 91 | 27 | 11 |
+| FRI-like folding | folds `2` | 9,765 | `b51411139617...ea413` | 161,003 ns | 42 | 58 | 19 | 0 |
+| FRI-like folding | folds `3` | 11,477 | `fc5dd5660711...49c42` | 182,353 ns | 48 | 67 | 21 | 5 |
+| FRI-like folding | folds `4` | 13,190 | `af65f29cb305...c4bc9` | 207,933 ns | 54 | 76 | 23 | 5 |
+| Sumcheck-like rounds | variables `1` | 5,014 | `b10bb6d13ce6...8a3f9` | 86,081 ns | 24 | 31 | 12 | 0 |
+| Sumcheck-like rounds | variables `2` | 8,486 | `356b2975a958...fd7f7` | 141,203 ns | 35 | 51 | 17 | 6 |
+| Sumcheck-like rounds | variables `4` | 15,430 | `5abe3871024a...d8e8a` | 245,544 ns | 57 | 91 | 27 | 11 |
 
 All six compact identity coordinates have the subject kind
 `pir.interactive-core`; the complete fixed profile, regime, identity-profile,
 and hash-suite preimages remain authenticated by the imported Core identity
 routine and are pinned through the imported source digest.
 
-For fold count `r`, the measured laws are:
+For fold count `r`, the three retained measured laws are:
 
 ```text
-Core body bytes          = 5,245 + 1,190 r
 fixture graph nodes      =    30 +     6 r
 fixture graph edges      =    40 +     9 r
 declarations             =    15 +     2 r
 ```
+
+Core body byte counts are `(9,765, 11,477, 13,190)` for `r=(2,3,4)`.
+Their increments `(1,712,1,713)` disprove an exact affine law on this finite
+domain.
 
 Between adjacent measured fold counts, only `schedule` and `reductions` vary.
 One extra fold adds a challenge and an Oracle publication; it also changes the
@@ -102,7 +109,7 @@ consecutive difference count.
 For variable count `v`, the measured laws are:
 
 ```text
-Core body bytes          = 1,377 + 2,813 v
+Core body bytes          = 1,542 + 3,472 v
 fixture graph nodes      =    13 +    11 v
 fixture graph edges      =    11 +    20 v
 declarations             =     7 +     5 v
@@ -173,8 +180,8 @@ sources:
 - exact frozen body, identity, declaration, and fixture-graph observations;
 - a reported median bare-admission time in the frozen ceiling class for every
   member;
-- integral affine variation of four measured size coordinates on each selected
-  finite domain;
+- integral affine variation of seven measured size coordinates, plus the exact
+  negative FRI-like body-byte observation, on the selected finite domains;
 - refusal of an adjacent member's identity as the current member's identity;
   and
 - a structurally complete coordinate ledger in which one theorem source is

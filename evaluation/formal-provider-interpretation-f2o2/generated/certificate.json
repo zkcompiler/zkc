@@ -50,8 +50,8 @@
         }
       },
       "private_state": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
-      "protocol_id": "zkcidv0:pir.protocol:cc2fee36c903072621553a98fdb0d7bf3b84d13a18b0a51b04b7235367b7324f",
-      "published_candidate_bodies_sha256": "2fed3f3bee0838099ee7c93081001771bdc147cab7ce42293792b34f7fc1d4ad",
+      "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+      "published_candidate_bodies_sha256": "cd9935dfa7d97266a3ffb0bf24765064fb449e8ef51e12b53a404127d9620a63",
       "relation": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
       "witness": "x in Z/3Z supplied by Plan WitnessIngress key x"
     },
@@ -64,14 +64,14 @@
         "PublicCoinView": "337744a4db26cfb36cdb354b38df312bba8deb73bc090a53a4ba7030bc7cd5ba",
         "StrategyDecisionView": "69923cb847884fb7589501f07b04fc1ab251a261ee6316963b441008ed2d1785"
       },
-      "core_profiled_body_sha256": "c885c2325c600fbfe498a813f548d7f4e3deacc5da29f4e695f588b632a8264d",
-      "protocol_profiled_body_sha256": "28694eb30e04e3d5c9ecadf81b9de4e3376422008cc5344be52fc281bd82390d",
+      "core_profiled_body_sha256": "cd95af28879446ec0c896a16a248e27d5505b25128ee0501f8d946d334b2caa7",
+      "protocol_profiled_body_sha256": "b10aa4026ffb95be06b4acd2be4a4cd8c2d7f61cbaa0607b5a7948f87a12396f",
       "view_schema_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
     },
     "owner_pages": {
       "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
-      "docs-next/analysis/cryptographic-properties.md": "afbf2f223a24762fba21fe5cb973d0a9ea57b08d6e702bb49f199f4ec4da3186",
-      "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c"
+      "docs-next/analysis/cryptographic-properties.md": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
+      "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"
     },
     "package_inputs": {
       "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "b6046e72fc3bb766c1af690cf7b39d9765dca3681c87d47e75f3109611123b69",
@@ -80,10 +80,10 @@
       "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
     },
     "profile_manifests": {
-      "docs-next/analysis/profiles/cryptographic-property.json": "68bc442056849e2ef7af3cbcc031146675e6e5c85d375fabb0fac9cb60578c17",
+      "docs-next/analysis/profiles/cryptographic-property.json": "60adb5568522e374872ff2df1d5001d07819519f60a1c654e54f7b93e1d74a1d",
       "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
       "docs-next/foundation/semantic-profile-manifests.json": "48e487f34c24317690dd221c066db1a0a09316dfb45f1d06934c5dfe74b058d0",
-      "docs-next/pir/profiles/interaction.json": "40cc1d388b32cb275cda5c1a8044729e12d8ecd6ccc4d2cf773226bfbaebcc1f"
+      "docs-next/pir/profiles/interaction.json": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4"
     }
   },
   "lane_map": [
@@ -182,15 +182,15 @@
       "StrategyDecisionView": 38
     },
     "body_sha256": {
-      "ClaimReductionView": "f22f9d687788fcda6da9cd93d282eb1eab3e5ba2a572caf311b447f360da1364",
-      "EffectView": "b625d3f685ef64e6f498b967ea3c587a64f0f5ee4016b384a25d8a4d2fa4492e",
-      "ExecutionView": "96f1a1c5c3727733a79d1ae3a4506f8e4d04418b9c465e85237a880723329bd1",
-      "PublicBindingView": "99e57e4034005f176ef11d3f7a8a56df8d19a4db7a84f66c4c58061f7ce82677",
-      "PublicCoinView": "f09f2b7807ba757866fa695c3dd9c005c68acc4b5d4371108b643c8f348fd960",
-      "StrategyDecisionView": "7d3911d2d587ec0bfdc6c1ccad713f3ae3fb153481ad35707048962d5600d7f6"
+      "ClaimReductionView": "edc9e9d0ef0c4c9b80cfd5149124420c631728345d60e1e34f031dbe236797ee",
+      "EffectView": "239e6fbd9d4304eb5eef4c17327bb024bbe39cc842e00a076332db75231e5c49",
+      "ExecutionView": "3ff579a58ea436941981f9ea94ba925a48e0ecbe2b573c10fd32eec15f03e8ff",
+      "PublicBindingView": "08c8bd418857c23dfa51f1d9087ab0a2a386e38a73c6251f1f39906112501b7f",
+      "PublicCoinView": "8185f8906053dc9c18d03a5415440169bdb5ca958fae685da2856d6edd8c4f91",
+      "StrategyDecisionView": "4e5e7615aae3c31aea434bce89d125d26ed22b983bbb8c1e8e8482492a4e4cef"
     },
-    "core_id": "zkcidv0:pir.interactive-core:dcb652fdca792d8664c51f2b98dca17d530607ff994c1eab15a59ed5c61cf2b8",
-    "protocol_id": "zkcidv0:pir.protocol:cc2fee36c903072621553a98fdb0d7bf3b84d13a18b0a51b04b7235367b7324f",
+    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
+    "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
     "source_digest": "c03b6e9b53871a95605310a3c89288dff95ff1d99c725faf4995ccbdd1e3d84a"
   },
   "type_map": [

@@ -813,38 +813,38 @@ def _class_fields(tree: ast.Module, selected: Iterable[str]) -> dict[str, list[s
     return result
 
 
-RELATION_GOAL_DIGEST = "e813415c366ec70eb24e98c1ece3de6303211b481f692abb1cc3b0fe08b67f6d"
-FIXED_EXTRACTOR_GOAL_DIGEST = "925d5f664c0726675296928201c1b0bb086a37a8a11eddfdaa1d0f3eff69af3e"
+RELATION_GOAL_DIGEST = "5d7c631352cf496b2c539ff7a8aa4ad90ed527e2d0e75fb4645da070e8751094"
+FIXED_EXTRACTOR_GOAL_DIGEST = "d4b6dd9724364d559f6ea5edbf1d112874cd914a07e6569b5e85a071d9040526"
 
 FROZEN_OWNER_VECTORS = {
     "relation": {
-        "profile": "255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259",
-        "question": "ccc93a33b3995ff86c4e5fdc2420cb9ce308b2871186b10634c1ce088030e176",
+        "profile": "8ac5e7b9ba6d9684efc86c219ad8c3fa8560a90c4d653cc2e05ed4a13d58b807",
+        "question": "a30fbe7a8751b6a116b46b6055968a37c67795aeaff6d8921b2f196ffc928aa4",
         "goal": RELATION_GOAL_DIGEST,
         "premises": {
-            "commit": "183762bd56b13dec770c93ebbb236a5880b503260139a58871f44e85e030d4a8",
-            "respond": "7ac97e0df5a47a47ae167e05e0dbe26c0070f3e63cde9e30e3a51c97e2c7c176",
-            "witness": "006444791732448fd55646bbe70d5e9b59532a1814d3ef2153456944b882b8d0",
-            "relation": "00cf7d5a0728e5d7620555dd924ba268131aed93b9598f9e0c228db4044cbb12",
-            "fresh-coin": "666a06156e8291f46ada3f997c5accacbfc8fedf2786ad9a000569a819cb0338",
-            "prover-state": "d43c88ab4171fbd90de76f198c48b4dfcdc421e6ce36e6a55933566ba0e6ad45",
+            "commit": "aed4d3a7477d0a24995b6042633ff5aa47ed9e02e94659f7ef5c85c621e818c3",
+            "respond": "a2b1d1fbbe862030a6f3e3f506207fcbe9e6524f29da7b381d380316e7cfc229",
+            "witness": "98b5df02c8ec7a13db9e5a2a85427a0122c44bccbaa3ee91e07986e5b9767cc5",
+            "relation": "99461a972621d5d34f7031f934b5912e548fac65a6f26c3aaf870709e15164cf",
+            "fresh-coin": "bfba3ba3a94e38313f5052be057e58a21a818be7db85431e9a205883443c73d7",
+            "prover-state": "d67c7fba56cce556669c51699a0e18f15d1bafe7d73fa153b5fb71423c252999",
         },
     },
     "fixed-extractor": {
-        "profile": "255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259",
-        "question": "c0ea2a71dcb45c532fe9e529a0284df962826be0a8db7af80147d7c7e5b445a3",
+        "profile": "8ac5e7b9ba6d9684efc86c219ad8c3fa8560a90c4d653cc2e05ed4a13d58b807",
+        "question": "d8d5755ee83a992d244485575eb2effcec187c38809938080c6d8e424ea91a14",
         "goal": FIXED_EXTRACTOR_GOAL_DIGEST,
         "premises": {
-            "witness": "1eadaca819c8d95926f577d563b7abc0af8a081a574492d39b9f55ba69a4455c",
-            "relation": "e64b395b325596a0055e71fc67df89b0fb04670a551e67b4e34ba7522be84541",
+            "witness": "806f46edc3794fdbdf364c03f0b08171a6bb17a39e8c252107a042657aa223c5",
+            "relation": "7f6835254422ed8bc613d8c30f6f93b1057125b014dc0e202fb6997eacf96967",
         },
     },
     "family": {
-        "profile": "35a5005529a152da9c52a6b5a0e38888a926c4c6ccbe52e343aa24bcaeacc769",
-        "question": "c7c1e70be1b805cbfde1a028bdebb57e1f77877f1aabdfee5b11521a08b5d169",
+        "profile": "6db9ee6c4acc133f6e17be92eb74bf003deb2d868d147cd572e61422ec00d8f9",
+        "question": "f08cb79dec9d986f3eefb3131f5a5b4f0a309ecbebdb1952bf88a95f1815ca1d",
         "premises": {
-            "sampler": "61580220a03990c796b3a6fc1fa5f3625d98082157028c6d39984f94aff2d66b",
-            "oracle-process": "91ff07a96dd5989f8c25ac39393c604343b060112aa66f8cf90f6b155a2a2f81",
+            "sampler": "77a25e7fcc8946a1f56278d8cb40cbb10a45e27c0b0442f6180bbf04693ccf97",
+            "oracle-process": "b379525d4bf35a2755b230b78e36667c2371cfa3e409f08791ea5dafd68b94c6",
         },
     },
 }
@@ -903,15 +903,15 @@ def _owner_text_goal_reconstructions() -> dict[str, dict[str, Any]]:
     )
     relation_binding = identifier(
         "relations.protocol-binding",
-        "9591054578e663e7a26cfd2e93e918a8fbe1d5950555e21297d976f1c39d147d",
+        "80fcd810f25f74d8065c777cb4e621684eddff39fe66ae6d01599e71db37d86b",
     )
     relation_definition = identifier(
         "relations.definition",
-        "6e059628e334553ae8405f80506da2add6e2de12b6d550f65e9d33e8525137d6",
+        "94fe38e5325477d52f6effc1952280a3bfc70815c0745ba71f3fbe4e0a1ae916",
     )
     challenge_domain = identifier(
         "analysis.challenge-domain",
-        "7641d9ad6d5b2b69451bb60f41a275890cdefb78f45174f9ba320cdd4ef0d5f5",
+        "a783cbd195c2212a97d07bd1770c5fb7c7c6fa63f17b1a33ffa0067949378273",
     )
     extractor = identifier(
         "foundation.portable-algorithm",
@@ -923,27 +923,27 @@ def _owner_text_goal_reconstructions() -> dict[str, dict[str, Any]]:
     )
     relation_interface = identifier(
         "relations.interface",
-        "c547a1a115c712bafd765f9b833060344ded5d533f9b20265b047b0a8082b79f",
+        "681c5c555e3089986021586afa5e10d413344bc71d030d4bb778ddca5d2476da",
     )
     witness_binding = identifier(
         "relations.plan-witness-binding",
-        "1f5e3abaec72044c7b9fcfa09fdc63c049da9d59d3b1af81e036768eb033296e",
+        "528f9b58b81e3e7cb400bdd64d4dc54794800d457ea318b516ac1365101f188d",
     )
     prover_plan = identifier(
         "pir.prover-plan",
-        "1f1d64667d85db047042a2fe3b6ef2fe74355be6af9e0a1cfdecd46d81306a78",
+        "b40c446c691956cd46dd0fd0a6d92ea40508bb023062426b4850baa9de73c894",
     )
     fresh_distribution = identifier(
         "analysis.distribution-profile",
-        "f1008a47b4aa0d1c3a554f70dfa1c216bb0ded26388379bc43807ddb03157f9d",
+        "d623412c6dd29e23052a8303c6bcd653ba11e0c6dc8ca20447e59a95341ec700",
     )
     family = identifier(
         "analysis.asymptotic-protocol-family",
-        "f5ea554b92aa0919b768792446528153785e62f7c90260d8aec8eb0c7a0a54b8",
+        "7da5c1ded28171dc04bfcdc40765993cae800c301cc43134fe085bd88a1fdd70",
     )
     family_distribution = identifier(
         "analysis.distribution-profile",
-        "b758421d12dbe557f0252ba7e738584c62ed0417920e50d168315e3be4dd05f3",
+        "e9cd1e799cff18b80a4e7ea369f8fefa68d2213ccf5b44a27ee550a680295287",
     )
 
     fresh_declaration = k1.DatumRecord(

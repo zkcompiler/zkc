@@ -390,17 +390,27 @@ def check_generated() -> None:
     )
 
 
+def write_generated() -> None:
+    GENERATED.mkdir(parents=True, exist_ok=True)
+    LEAN_OUT.write_text(LEAN_TEXT, encoding="utf-8")
+    CERTIFICATE_OUT.write_text(certificate_text(), encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lean", action="store_true", help="print generated Lean")
     parser.add_argument("--certificate", action="store_true", help="print certificate JSON")
     parser.add_argument("--check", action="store_true", help="compare committed artifacts")
+    parser.add_argument("--write", action="store_true", help="write generated artifacts")
     args = parser.parse_args()
-    if sum((args.lean, args.certificate, args.check)) != 1:
+    if sum((args.lean, args.certificate, args.check, args.write)) != 1:
         parser.error("select exactly one output mode")
     if args.check:
         check_generated()
         print("generated provider module and certificate match their inputs")
+    elif args.write:
+        write_generated()
+        print("generated provider module and certificate written")
     elif args.lean:
         print(LEAN_TEXT, end="")
     else:

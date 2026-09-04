@@ -980,13 +980,19 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ("adaptive-classical-online-prover", "adaptive-prover-strategy-role"),
     ),
     "analysis.typed-purpose": (
+        ("core-public-binding-view", "pir-owner-view-use"),
         ("fresh-public-setup-view", "pir-owner-view-use"),
         ("fiat-shamir-public-setup-view", "pir-owner-view-use"),
+        ("core-strategy-decision-view", "pir-owner-view-use"),
+        ("fresh-acceptance-effect-view", "pir-owner-view-use"),
+        ("core-claim-reduction-view", "pir-owner-view-use"),
         ("fresh-execution-view", "pir-owner-view-use"),
         ("fiat-shamir-execution-view", "pir-owner-view-use"),
         ("fiat-shamir-fs-construction-view", "pir-owner-view-use"),
         ("core-public-coin-view", "pir-owner-view-use"),
         ("transcript-declaration-view", "pir-owner-view-use"),
+        ("required-influence-view", "pir-owner-view-use"),
+        ("challenge-transition-view", "pir-owner-view-use"),
         ("schnorr-relation-definition-view", "relations-owner-view-use"),
         ("finite-special-soundness", "analysis-result-use"),
         ("fixed-extractor-universal-correctness", "analysis-result-use"),
@@ -7794,13 +7800,19 @@ _ANALYSIS_CONSUMER_DECLARATION_OWNERS = {
 }
 
 _ANALYSIS_PURPOSE_DECLARATION_OWNERS = {
+    "core-public-binding-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "fresh-public-setup-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "fiat-shamir-public-setup-view": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "core-strategy-decision-view": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "fresh-acceptance-effect-view": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "core-claim-reduction-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "fresh-execution-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "fiat-shamir-execution-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "fiat-shamir-fs-construction-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "core-public-coin-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "transcript-declaration-view": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "required-influence-view": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "challenge-transition-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "schnorr-relation-definition-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "finite-special-soundness": lambda: ANALYSIS_PROPERTY_PROFILE,
     "fixed-extractor-universal-correctness": lambda: ANALYSIS_PROPERTY_PROFILE,
@@ -18152,19 +18164,73 @@ def schnorr_special_soundness_rule(
 # ---------------------------------------------------------------------------
 
 
+_Analysis_PUBLIC_BINDING_VIEW_MANIFEST = k2.required_static_view_read_closure(
+    k2.StaticViewKind.PUBLIC_BINDING,
+    (
+        k2.StaticViewField.PB_SCOPE_OPENINGS,
+        k2.StaticViewField.PB_BINDINGS,
+    ),
+)
+_Analysis_STRATEGY_DECISION_VIEW_MANIFEST = k2.required_static_view_read_closure(
+    k2.StaticViewKind.STRATEGY_DECISION,
+    (
+        k2.StaticViewField.SD_DECISION_POINTS,
+        k2.StaticViewField.SD_PROVER_VIEW_FORMATION,
+        k2.StaticViewField.SD_GUARANTEED_READS,
+        k2.StaticViewField.SD_LEGAL_MOVE_TYPES,
+    ),
+)
+_Analysis_PUBLIC_COIN_VIEW_MANIFEST = k2.required_static_view_read_closure(
+    k2.StaticViewKind.PUBLIC_COIN,
+    (
+        k2.StaticViewField.PC_ELIGIBILITY,
+        k2.StaticViewField.PC_PRIVATE_CLOSURE,
+        k2.StaticViewField.PC_CHALLENGES,
+    ),
+)
+_Analysis_ACCEPTANCE_EFFECT_VIEW_MANIFEST = k2.required_static_view_read_closure(
+    k2.StaticViewKind.EFFECT,
+    (
+        k2.StaticViewField.EF_OCCURRENCE_SCHEDULE,
+        k2.StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+        k2.StaticViewField.EF_MESSAGES,
+        k2.StaticViewField.EF_CHECKS,
+        k2.StaticViewField.EF_TERMINALS,
+    ),
+)
+_Analysis_CLAIM_REDUCTION_VIEW_MANIFEST = k2.required_static_view_read_closure(
+    k2.StaticViewKind.CLAIM_REDUCTION,
+    (
+        k2.StaticViewField.CR_CLAIMS,
+        k2.StaticViewField.CR_REDUCTIONS,
+        k2.StaticViewField.CR_TERMINAL_DISPOSITIONS,
+    ),
+)
 _Analysis_EXECUTION_VIEW_MANIFEST = tuple(
     item for item in k2.StaticViewField if item.value.startswith("execution.")
-)
-_Analysis_FS_CONSTRUCTION_VIEW_MANIFEST = tuple(
-    item for item in k2.StaticViewField if item.value.startswith("fs-construction.")
-)
-_Analysis_PUBLIC_COIN_VIEW_MANIFEST = tuple(
-    item for item in k2.StaticViewField if item.value.startswith("public-coin.")
 )
 _Analysis_TRANSCRIPT_DECLARATION_VIEW_MANIFEST = tuple(
     item
     for item in k2.StaticViewField
     if item.value.startswith("transcript-declaration.")
+)
+_Analysis_REQUIRED_INFLUENCE_VIEW_MANIFEST = tuple(
+    item for item in k2.StaticViewField if item.value.startswith("required-influence.")
+)
+_Analysis_CHALLENGE_TRANSITION_VIEW_MANIFEST = tuple(
+    item for item in k2.StaticViewField if item.value.startswith("challenge-transition.")
+)
+_Analysis_FS_CONSTRUCTION_VIEW_MANIFEST = k2.required_static_view_read_closure(
+    k2.StaticViewKind.FS_CONSTRUCTION,
+    (
+        k2.StaticViewField.FS_RESULT_SCHEMA,
+        k2.StaticViewField.FS_SOURCE_PROTOCOL,
+        k2.StaticViewField.FS_TARGET_PROTOCOL,
+        k2.StaticViewField.FS_SHARED_CORE,
+        k2.StaticViewField.FS_CONSTRUCTION_ID,
+        k2.StaticViewField.FS_MAPS,
+        k2.StaticViewField.FS_CONCLUSION,
+    ),
 )
 
 
@@ -18174,17 +18240,23 @@ def _k3c_pir_view_consumer_id() -> object:
 
 def _k3c_pir_view_purpose_id(axis: str, view_kind: str) -> object:
     labels = {
+        ("fresh", "public-binding-view"): "core-public-binding-view",
         ("fresh", "public-setup-invocation-view"): "fresh-public-setup-view",
         (
             "fiat-shamir",
             "public-setup-invocation-view",
         ): "fiat-shamir-public-setup-view",
+        ("fresh", "strategy-decision-view"): "core-strategy-decision-view",
+        ("fresh", "effect-view"): "fresh-acceptance-effect-view",
+        ("fresh", "claim-reduction-view"): "core-claim-reduction-view",
         ("fresh", "execution-view"): "fresh-execution-view",
         ("fiat-shamir", "execution-view"): "fiat-shamir-execution-view",
         ("fiat-shamir", "check-fs-construction"): "fiat-shamir-fs-construction-view",
         ("fiat-shamir", "fs-construction-view"): "fiat-shamir-fs-construction-view",
         ("fresh", "public-coin-view"): "core-public-coin-view",
         ("fiat-shamir", "transcript-declaration-view"): "transcript-declaration-view",
+        ("fiat-shamir", "required-influence-view"): "required-influence-view",
+        ("fiat-shamir", "challenge-transition-view"): "challenge-transition-view",
         ("relations", "relation-definition-view"): "schnorr-relation-definition-view",
     }
     try:
@@ -18200,11 +18272,17 @@ class _PIRAnalysisSourceViews:
 
     fresh_public_setup: object = field(compare=False, repr=False)
     fiat_shamir_public_setup: object = field(compare=False, repr=False)
+    public_binding: object = field(compare=False, repr=False)
+    strategy_decision: object = field(compare=False, repr=False)
+    public_coin: object = field(compare=False, repr=False)
+    acceptance_effect: object = field(compare=False, repr=False)
+    claim_reduction: object = field(compare=False, repr=False)
     fresh_execution: object = field(compare=False, repr=False)
     fiat_shamir_execution: object = field(compare=False, repr=False)
-    fs_construction: object = field(compare=False, repr=False)
-    public_coin: object = field(compare=False, repr=False)
     transcript_declaration: object = field(compare=False, repr=False)
+    required_influence: object = field(compare=False, repr=False)
+    challenge_transition: object = field(compare=False, repr=False)
+    fs_construction: object = field(compare=False, repr=False)
     relation_definition: object = field(compare=False, repr=False)
 
 
@@ -18254,6 +18332,56 @@ def _issue_pir_analysis_source_views(
         ),
         "Fiat--Shamir public-setup invocation view",
     )
+    public_binding = _affirmative_pir_view(
+        k2.issue_core_static_view(
+            source.case.core,
+            k2.StaticViewKind.PUBLIC_BINDING,
+            _Analysis_PUBLIC_BINDING_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fresh", "public-binding-view"),
+        ),
+        "Core PublicBindingView",
+    )
+    strategy_decision = _affirmative_pir_view(
+        k2.issue_core_static_view(
+            source.case.core,
+            k2.StaticViewKind.STRATEGY_DECISION,
+            _Analysis_STRATEGY_DECISION_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fresh", "strategy-decision-view"),
+        ),
+        "Core StrategyDecisionView",
+    )
+    public_coin = _affirmative_pir_view(
+        k2.issue_core_static_view(
+            source.case.core,
+            k2.StaticViewKind.PUBLIC_COIN,
+            _Analysis_PUBLIC_COIN_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fresh", "public-coin-view"),
+        ),
+        "Core PublicCoinView",
+    )
+    acceptance_effect = _affirmative_pir_view(
+        k2.issue_core_static_view(
+            source.case.core,
+            k2.StaticViewKind.EFFECT,
+            _Analysis_ACCEPTANCE_EFFECT_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fresh", "effect-view"),
+        ),
+        "Core acceptance EffectView",
+    )
+    claim_reduction = _affirmative_pir_view(
+        k2.issue_core_static_view(
+            source.case.core,
+            k2.StaticViewKind.CLAIM_REDUCTION,
+            _Analysis_CLAIM_REDUCTION_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fresh", "claim-reduction-view"),
+        ),
+        "Core ClaimReductionView",
+    )
     fresh_execution = _affirmative_pir_view(
         k2.issue_execution_view(
             source.case.core,
@@ -18297,16 +18425,6 @@ def _issue_pir_analysis_source_views(
         ),
         "FS construction view",
     )
-    public_coin = _affirmative_pir_view(
-        k2.issue_core_static_view(
-            source.case.core,
-            k2.StaticViewKind.PUBLIC_COIN,
-            _Analysis_PUBLIC_COIN_VIEW_MANIFEST,
-            consumer_id=consumer_id,
-            purpose_id=purpose("fresh", "public-coin-view"),
-        ),
-        "Core PublicCoinView",
-    )
     transcript_declaration = _affirmative_pir_view(
         k2.issue_construction_static_view(
             source.case.core,
@@ -18318,6 +18436,28 @@ def _issue_pir_analysis_source_views(
         ),
         "TranscriptDeclarationView",
     )
+    required_influence = _affirmative_pir_view(
+        k2.issue_construction_static_view(
+            source.case.core,
+            source.case.construction,
+            k2.StaticViewKind.REQUIRED_INFLUENCE,
+            _Analysis_REQUIRED_INFLUENCE_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fiat-shamir", "required-influence-view"),
+        ),
+        "RequiredInfluenceView",
+    )
+    challenge_transition = _affirmative_pir_view(
+        k2.issue_construction_static_view(
+            source.case.core,
+            source.case.construction,
+            k2.StaticViewKind.CHALLENGE_TRANSITION,
+            _Analysis_CHALLENGE_TRANSITION_VIEW_MANIFEST,
+            consumer_id=consumer_id,
+            purpose_id=purpose("fiat-shamir", "challenge-transition-view"),
+        ),
+        "ChallengeTransitionView",
+    )
     relation_definition = _affirmative_pir_view(
         k3.issue_relation_definition_view(
             source.case.definition_sources[0],
@@ -18328,14 +18468,20 @@ def _issue_pir_analysis_source_views(
         "Relations definition view",
     )
     views = _PIRAnalysisSourceViews(
-        fresh_setup,
-        fs_setup,
-        fresh_execution,
-        fs_execution,
-        fs_construction,
-        public_coin,
-        transcript_declaration,
-        relation_definition,
+        fresh_public_setup=fresh_setup,
+        fiat_shamir_public_setup=fs_setup,
+        public_binding=public_binding,
+        strategy_decision=strategy_decision,
+        public_coin=public_coin,
+        acceptance_effect=acceptance_effect,
+        claim_reduction=claim_reduction,
+        fresh_execution=fresh_execution,
+        fiat_shamir_execution=fs_execution,
+        transcript_declaration=transcript_declaration,
+        required_influence=required_influence,
+        challenge_transition=challenge_transition,
+        fs_construction=fs_construction,
+        relation_definition=relation_definition,
     )
     _require_pir_analysis_source_views(source, views)
     return views
@@ -18470,40 +18616,85 @@ def _require_pir_analysis_source_views(
     ):
         raise SourceIngressError("FSConstructionView is stale or axis-mismatched")
 
-    for issued, kind, manifest, axis, purpose_kind in (
+    for issued, kind, manifest, purpose_kind in (
+        (
+            views.public_binding,
+            k2.StaticViewKind.PUBLIC_BINDING,
+            _Analysis_PUBLIC_BINDING_VIEW_MANIFEST,
+            "public-binding-view",
+        ),
+        (
+            views.strategy_decision,
+            k2.StaticViewKind.STRATEGY_DECISION,
+            _Analysis_STRATEGY_DECISION_VIEW_MANIFEST,
+            "strategy-decision-view",
+        ),
         (
             views.public_coin,
             k2.StaticViewKind.PUBLIC_COIN,
             _Analysis_PUBLIC_COIN_VIEW_MANIFEST,
-            "fresh",
             "public-coin-view",
         ),
         (
-            views.transcript_declaration,
-            k2.StaticViewKind.TRANSCRIPT_DECLARATION,
-            _Analysis_TRANSCRIPT_DECLARATION_VIEW_MANIFEST,
-            "fiat-shamir",
-            "transcript-declaration-view",
+            views.acceptance_effect,
+            k2.StaticViewKind.EFFECT,
+            _Analysis_ACCEPTANCE_EFFECT_VIEW_MANIFEST,
+            "effect-view",
+        ),
+        (
+            views.claim_reduction,
+            k2.StaticViewKind.CLAIM_REDUCTION,
+            _Analysis_CLAIM_REDUCTION_VIEW_MANIFEST,
+            "claim-reduction-view",
         ),
     ):
         if not k2.validate_issued_pir_static_view(
             issued,
             expected_consumer_id=consumer_id,
-            expected_purpose_id=purpose(axis, purpose_kind),
+            expected_purpose_id=purpose("fresh", purpose_kind),
         ):
             raise AuthorityError(f"{kind.value} lacks its exact live PIR authority")
         if (
             issued.projection.coordinate.view_kind is not kind
             or issued.projection.manifest != manifest
+            or issued.projection.coordinate.owner_id
+            != source.protocol_source.core_id
         ):
             raise SourceIngressError(f"{kind.value} is stale or manifest-mismatched")
-    if (
-        views.public_coin.projection.coordinate.owner_id
-        != source.protocol_source.core_id
-        or views.transcript_declaration.projection.coordinate.owner_id
-        != source.protocol_source.construction_id
+
+    for issued, kind, manifest, purpose_kind in (
+        (
+            views.transcript_declaration,
+            k2.StaticViewKind.TRANSCRIPT_DECLARATION,
+            _Analysis_TRANSCRIPT_DECLARATION_VIEW_MANIFEST,
+            "transcript-declaration-view",
+        ),
+        (
+            views.required_influence,
+            k2.StaticViewKind.REQUIRED_INFLUENCE,
+            _Analysis_REQUIRED_INFLUENCE_VIEW_MANIFEST,
+            "required-influence-view",
+        ),
+        (
+            views.challenge_transition,
+            k2.StaticViewKind.CHALLENGE_TRANSITION,
+            _Analysis_CHALLENGE_TRANSITION_VIEW_MANIFEST,
+            "challenge-transition-view",
+        ),
     ):
-        raise SourceIngressError("fixed-setup static views name another owner")
+        if not k2.validate_issued_pir_static_view(
+            issued,
+            expected_consumer_id=consumer_id,
+            expected_purpose_id=purpose("fiat-shamir", purpose_kind),
+        ):
+            raise AuthorityError(f"{kind.value} lacks its exact live PIR authority")
+        if (
+            issued.projection.coordinate.view_kind is not kind
+            or issued.projection.manifest != manifest
+            or issued.projection.coordinate.owner_id
+            != source.protocol_source.construction_id
+        ):
+            raise SourceIngressError(f"{kind.value} is stale or manifest-mismatched")
 
     if not k3.validate_issued_relation_definition_view(
         views.relation_definition,
@@ -21165,7 +21356,7 @@ def _selected_statement_template_body(
 # from the body it authenticates: a statement edit must fail closed until a
 # reviewer deliberately rotates the literal and the accompanying source record.
 AFK_SELECTED_STATEMENT_CONTENT_SHA256 = (
-    "0aa14752b5f6bae7fdde366a9eab073f69eacbb2bd3b572f9a5b113adf5521df"
+    "4332d633a4e1ba6555f7210b957574bcdd2343a24e2c2ab6f333c54249c9adb7"
 )
 
 

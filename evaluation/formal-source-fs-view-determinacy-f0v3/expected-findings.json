@@ -137,25 +137,25 @@
       "k2-oracle": {
         "CanonicalChallengeTransitionView": {
           "body_bytes": 4169,
-          "body_sha256": "9519f692590b84306c2f0e08e8b6a51ce78673f1d86a659b3c68e17114b517c0",
+          "body_sha256": "9d4e9c75758943950b4443d886aea56cb7e84b1ae75cd53e46fe29836890aebb",
           "leaf_count": 31,
           "typed_cold_byte_equal": true
         },
         "CanonicalFSConstructionView": {
           "body_bytes": 5971,
-          "body_sha256": "6eefddbe6008a92703fb58078fb680f604a7d74fc255db889ff3c9cdd412201a",
+          "body_sha256": "183efbfbd79be2e25d51ce82599ae80f86da1ae1a8831d90e83b3fc95b7f65be",
           "leaf_count": 39,
           "typed_cold_byte_equal": true
         },
         "CanonicalRequiredInfluenceView": {
           "body_bytes": 7643,
-          "body_sha256": "db760899a71a393359f8247014b0e0fc9fde8a881c37cef9d3442699372ba83c",
+          "body_sha256": "71e280e912de1ca9730a5883a9a5be151c38e06b03cb2ebfd2364b069bb3a7f2",
           "leaf_count": 45,
           "typed_cold_byte_equal": true
         },
         "CanonicalTranscriptDeclarationView": {
           "body_bytes": 3759,
-          "body_sha256": "d27771150ced809e35a1a2afda784e1905c15c526801a264fc267e1dde99b487",
+          "body_sha256": "83f8346712a2fe542960fc82aba4124f734aed2191629672bad93565dc6bbf9a",
           "leaf_count": 24,
           "typed_cold_byte_equal": true
         }
@@ -163,25 +163,25 @@
       "k2-schnorr": {
         "CanonicalChallengeTransitionView": {
           "body_bytes": 3465,
-          "body_sha256": "aab3a02590018af18d07341fbcee669f97db2d5d95bf822dbfa00a90147f324b",
+          "body_sha256": "1532b2ea877e493bb0fc04fd8e13c8ccb9a9e9adc5483d79dd9c2ac918074df5",
           "leaf_count": 21,
           "typed_cold_byte_equal": true
         },
         "CanonicalFSConstructionView": {
           "body_bytes": 5707,
-          "body_sha256": "53435a62451feaf592b90a249215f2815d30a94e6df49d2fd1a447c2a4400508",
+          "body_sha256": "e278f1dddc2f1bd1d1534ce48871b1c395b6fd7830423088195c97deec616c64",
           "leaf_count": 37,
           "typed_cold_byte_equal": true
         },
         "CanonicalRequiredInfluenceView": {
           "body_bytes": 5150,
-          "body_sha256": "306ce55e3f7462afe766d1d6fa0cc0bc4e145db54b11b8877d61774d0370de02",
+          "body_sha256": "53b1a2a9b92602937218edf4be9332f04570b9c7b327cd8398fa7481e19bcbb1",
           "leaf_count": 32,
           "typed_cold_byte_equal": true
         },
         "CanonicalTranscriptDeclarationView": {
           "body_bytes": 3779,
-          "body_sha256": "13a05eab3c6bf13b331dfe911739bb5a9529a67fb030e18d06ab7d7a104d7282",
+          "body_sha256": "df0bc807ce5b0b1b9d7cbca1ee821197bb3b4ae3db6f75e2d7b09555e3725628",
           "leaf_count": 24,
           "typed_cold_byte_equal": true
         }
@@ -278,15 +278,14 @@
         "endpoint-source-view",
         "oir-projection-relation",
         "relations",
+        "analysis-kernel",
         "analysis-cryptographic-property",
         "analysis-afk-transport",
         "analysis-afk-theorem-source-validation",
         "analysis-incremental-composition",
         "analysis-incremental-composition-source-validation"
       ],
-      "stable_profiles": [
-        "analysis-kernel"
-      ]
+      "stable_profiles": []
     },
     "recursive_metrics": {
       "definition_count": 54,
@@ -305,7 +304,7 @@
       "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "ac446c57deb0f0750402142a597e24ed598bd482a139cb7f1eb5d2dcb35734b4",
       "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "76903c1c51e6e0d7f36d559176bc1e6a204ee3b6a41e4d85d266f253d24d2e29",
       "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json": "da3c8387828c61b1f5f0558c8cfd44f1fb8a94fa9dc0f3eb4b97f278b9b7f818",
-      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "993dc934fb9b03a1199784605ba7900f0e581b7f1af571cd7ed4a64e46fe7996"
+      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "152d10d1d0a1349a93fda733c1e0ffbf8eb035994e544a28613ea8d643ee56c7"
     },
     "underdetermined_values": {}
   }

@@ -181,13 +181,13 @@ def run_gate() -> dict[str, Any]:
             "exact-rotation-cone",
             "Affirmative",
             "F0V1-A-ROTATION-CONE",
-            "the migrated text rotates exactly the seventeen-profile import cone",
+            "the migrated and Analysis text rotates all eighteen indexed profiles",
         ),
         _finding(
             "outside-cone-stability",
             "Affirmative",
             "F0V1-A-OUTSIDE-STABLE",
-            "Analysis Kernel retains its exact identity",
+            "the Analysis-head comparison has no stable profile outside the rotation cone",
         ),
         _finding(
             "changed-profile-revisions",

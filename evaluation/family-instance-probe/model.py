@@ -83,6 +83,25 @@ class RegularLaw:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class NonAffineObservation:
+    family: str
+    metric: str
+    parameters: tuple[int, ...]
+    observed_values: tuple[int, ...]
+    successive_changes: tuple[tuple[int, int], ...]
+
+    def value(self) -> dict[str, object]:
+        value = asdict(self)
+        value["parameters"] = list(self.parameters)
+        value["observed_values"] = list(self.observed_values)
+        value["successive_changes"] = [
+            {"parameter_delta": delta, "value_delta": change}
+            for delta, change in self.successive_changes
+        ]
+        return value
+
+
 def _plain(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
@@ -341,23 +360,41 @@ def measure() -> dict[str, tuple[Measurement, ...]]:
     }
 
 
-def affine_laws(
+def finite_variation(
     measurements: dict[str, tuple[Measurement, ...]],
-) -> tuple[RegularLaw, ...]:
+) -> tuple[tuple[RegularLaw, ...], tuple[NonAffineObservation, ...]]:
     laws: list[RegularLaw] = []
+    non_affine: list[NonAffineObservation] = []
     for family, rows in measurements.items():
         for metric in ("body_bytes", "pcgraph_nodes", "pcgraph_edges", "declarations"):
             first, second = rows[0], rows[1]
             delta_parameter = second.parameter - first.parameter
             delta_value = getattr(second, metric) - getattr(first, metric)
-            if delta_parameter <= 0 or delta_value % delta_parameter:
-                raise ValueError(f"{family} {metric} is not integral-affine")
-            slope = delta_value // delta_parameter
-            intercept = getattr(first, metric) - slope * first.parameter
-            if any(getattr(row, metric) != intercept + slope * row.parameter for row in rows):
-                raise ValueError(f"{family} {metric} is not affine on the measured domain")
-            laws.append(RegularLaw(family, metric, intercept, slope))
-    return tuple(laws)
+            if delta_parameter > 0 and delta_value % delta_parameter == 0:
+                slope = delta_value // delta_parameter
+                intercept = getattr(first, metric) - slope * first.parameter
+                if all(
+                    getattr(row, metric) == intercept + slope * row.parameter
+                    for row in rows
+                ):
+                    laws.append(RegularLaw(family, metric, intercept, slope))
+                    continue
+            non_affine.append(
+                NonAffineObservation(
+                    family,
+                    metric,
+                    tuple(row.parameter for row in rows),
+                    tuple(getattr(row, metric) for row in rows),
+                    tuple(
+                        (
+                            right.parameter - left.parameter,
+                            getattr(right, metric) - getattr(left, metric),
+                        )
+                        for left, right in zip(rows, rows[1:])
+                    ),
+                )
+            )
+    return tuple(laws), tuple(non_affine)
 
 
 def adjacent_identity_substitutions_refused(

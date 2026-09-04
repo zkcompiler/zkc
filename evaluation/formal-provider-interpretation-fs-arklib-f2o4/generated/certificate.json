@@ -4,8 +4,8 @@
   "inputs": {
     "owner_pages": {
       "docs-next/analysis/analysis-model.md": "0f8b4a435c68c3a41aca0abba3e26d493cf2bfab752f33485b37e77e1861d795",
-      "docs-next/pir/fiat-shamir.md": "a93525b20c0e9cf77fae9091d263cdf6320181b3313c6ecda3dd84e71890ad7b",
-      "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c"
+      "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
+      "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af"
     },
     "package_inputs": {
       "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "b6046e72fc3bb766c1af690cf7b39d9765dca3681c87d47e75f3109611123b69",
@@ -13,19 +13,19 @@
       "evaluation/formal-provider-interpretation-arklib-f2o3/generated/SchnorrArkLib.lean": "c2cdfa46a46fc5f87c8d71acc7786d161d97fb296878e4d094cdbbc7f9973f09",
       "evaluation/formal-provider-interpretation-fs-arklib-f2o4/TermEvaluatorProbe.lean": "a8104f417f72d67969b45c661b19963701cc186929e1e4b442ad680af1bda334",
       "evaluation/formal-provider-interpretation-fs-arklib-f2o4/template.lean": "dd29aaf64f713fb5f993ba44fba8a4b5d751cef0a1694ce9caed876d06b3484c",
-      "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors-one-shot.json": "50d7e3c5e1cc42bbd04ba855849cd8831d08d430f34747da1ca6f46e97d301b8",
-      "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors.json": "2ca203844fd32836da4d4656313129c57656a7c4c2c444882b4d3098e2562e65",
+      "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors-one-shot.json": "06927908c7395cd8db0108d9bb000675fdc10d7c14b62de204319173b7986f58",
+      "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors.json": "3a6c554eb76040944cce39a1523849dd453650db39ae7931c67ca50d3e7a20f6",
       "evaluation/formal-source-fs-runtime-f0v3c/executor.py": "9a0eea4c0dd43866cce797b335e14825cd11a3e1d2661b0db2a82a91b216ba62",
-      "evaluation/formal-source-fs-runtime-f0v3c/expected-runs-one-shot.json": "e520a81ce0d8acb0b8b25575364a3aaa734fecc3c8b6d57796787fdc57c2113b",
-      "evaluation/formal-source-fs-runtime-f0v3c/expected-runs.json": "8704a7f8b145a1f200c478145bb25755017075c4ee035016860a4e4886fc2d24",
-      "evaluation/formal-source-fs-runtime-f0v3c/model.py": "b6229a5e768b352016eb34fb3836fe6a5566b9c84c635a7ad8fa54d859527509",
+      "evaluation/formal-source-fs-runtime-f0v3c/expected-runs-one-shot.json": "f39550b83c75b120a59db42b67e7c45819f0833da45c712e787c06267be758f3",
+      "evaluation/formal-source-fs-runtime-f0v3c/expected-runs.json": "38403c58f7305f456235f44f1345f55f7cc8ca282c398a6c3375dd0fc7a02f0c",
+      "evaluation/formal-source-fs-runtime-f0v3c/model.py": "0d02e62c4fac4bb90241c49481b7cdcbeaf3c0f75b7713387f6a8264d325cfa1",
       "evaluation/formal-source-fs-runtime-f0v3c/replay.py": "032e078e3ccf7d6847956af21cfd4e928261e444d8c8795ab700e7349f32a285",
-      "evaluation/formal-source-fs-runtime-f0v3c/views.py": "88af564015d716d66556e35771f239e5dfc6cd63a9fd66a6c212302e32fe6085"
+      "evaluation/formal-source-fs-runtime-f0v3c/views.py": "248e9ce8bd7830cb593953c9f88eae2685f13d1fb7b4ceeab31d8caea1e3c4fd"
     },
     "profile_manifests": {
       "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
       "docs-next/foundation/semantic-profile-manifests.json": "48e487f34c24317690dd221c066db1a0a09316dfb45f1d06934c5dfe74b058d0",
-      "docs-next/pir/profiles/interaction.json": "40cc1d388b32cb275cda5c1a8044729e12d8ecd6ccc4d2cf773226bfbaebcc1f"
+      "docs-next/pir/profiles/interaction.json": "0f3a91d744da86818adc62835d71f3586ed4175064db9fa7e0ff513fcdcff5b4"
     }
   },
   "lane_map": [
@@ -68,7 +68,7 @@
       }
     }
   ],
-  "lean_sha256": "941983263c4335818486751bc3f3346cbb62c8d5c13fdd2ec970c411071ddbe2",
+  "lean_sha256": "aeb8c9e0bbbba60f3f2e053273fe46378f445c142dc2a01e64a7d1030dc1c17f",
   "occurrence_to_step": [
     {
       "kind": "ProverMessage",
@@ -131,23 +131,23 @@
     "toolchain": "leanprover/lean4:v4.31.0"
   },
   "question": "Does ArkLib's Fiat-Shamir transform of the generated finite Schnorr reduction correspond run for run to the admitted one-shot canonical-framed protocol under the exact table-backed oracle?",
-  "source_runs_sha256": "e520a81ce0d8acb0b8b25575364a3aaa734fecc3c8b6d57796787fdc57c2113b",
-  "source_table_sha256": "50d7e3c5e1cc42bbd04ba855849cd8831d08d430f34747da1ca6f46e97d301b8",
+  "source_runs_sha256": "f39550b83c75b120a59db42b67e7c45819f0833da45c712e787c06267be758f3",
+  "source_table_sha256": "06927908c7395cd8db0108d9bb000675fdc10d7c14b62de204319173b7986f58",
   "subject": {
-    "core_id": "zkcidv0:pir.interactive-core:dcb652fdca792d8664c51f2b98dca17d530607ff994c1eab15a59ed5c61cf2b8",
+    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
     "finite_table": [
       {
-        "answer": 2,
+        "answer": 0,
         "commitment": 0,
         "statement": 0
       },
       {
-        "answer": 2,
+        "answer": 1,
         "commitment": 1,
         "statement": 0
       },
       {
-        "answer": 0,
+        "answer": 1,
         "commitment": 2,
         "statement": 0
       },
@@ -162,17 +162,17 @@
         "statement": 1
       },
       {
-        "answer": 0,
+        "answer": 2,
         "commitment": 2,
         "statement": 1
       },
       {
-        "answer": 2,
+        "answer": 1,
         "commitment": 0,
         "statement": 2
       },
       {
-        "answer": 2,
+        "answer": 1,
         "commitment": 1,
         "statement": 2
       },
@@ -182,10 +182,10 @@
         "statement": 2
       }
     ],
-    "fs_protocol_id": "zkcidv0:pir.protocol:4a80c29a982ac7ba9dfca5fd86d7c7f1507e2005da407b14691191f79f9bfc21",
+    "fs_protocol_id": "zkcidv0:pir.protocol:025d56bc115790dd71e0390eb36cf3b7dcb9c0f5cc2eb310d10214e6ffe58730",
     "maximum_draws": 1,
     "run_count": 54,
-    "transcript_construction_id": "zkcidv0:pir.transcript-construction:eaebbb902e26db8af22147b867676769bdeebfa9dc95c58af007b25d53876a78"
+    "transcript_construction_id": "zkcidv0:pir.transcript-construction:5a5c06c1cfbbed72fcc033d3851776e6f5d6c4a5cdb62d06c2467a4e90ee946b"
   },
   "type_map": [
     {

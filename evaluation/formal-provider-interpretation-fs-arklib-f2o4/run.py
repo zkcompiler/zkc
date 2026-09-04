@@ -109,7 +109,8 @@ def main() -> int:
         )
         print(
             "all five correspondence clauses agree on 54 source runs; "
-            "six retrying exhaustions remain explicitly unmodelled"
+            "the retrying corpus has zero measured exhaustions while its "
+            "InterpretationFailed lane remains explicitly unmodelled"
         )
     return 0
 

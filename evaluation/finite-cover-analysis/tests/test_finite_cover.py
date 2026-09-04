@@ -352,34 +352,34 @@ class AnalysisActivationTest(unittest.TestCase):
             },
             {
                 "property_profile": (
-                    "255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259"
+                    "8ac5e7b9ba6d9684efc86c219ad8c3fa8560a90c4d653cc2e05ed4a13d58b807"
                 ),
                 "proposition": (
-                    "a0ec8a8659f510534dd9f48dcec8ae1bc753711903a6c2fc83a84b36497d4ace"
+                    "0af228628658457d88864f3ee421b02f81b62fef179a6785cfd81eb28e9442da"
                 ),
                 "goal": (
-                    "925d5f664c0726675296928201c1b0bb086a37a8a11eddfdaa1d0f3eff69af3e"
+                    "d4b6dd9724364d559f6ea5edbf1d112874cd914a07e6569b5e85a071d9040526"
                 ),
                 "premises": (
-                    "1eadaca819c8d95926f577d563b7abc0af8a081a574492d39b9f55ba69a4455c",
-                    "e64b395b325596a0055e71fc67df89b0fb04670a551e67b4e34ba7522be84541",
+                    "7f6835254422ed8bc613d8c30f6f93b1057125b014dc0e202fb6997eacf96967",
+                    "806f46edc3794fdbdf364c03f0b08171a6bb17a39e8c252107a042657aa223c5",
                 ),
                 "semantic_basis": (
-                    "9fedaf24ba9cb6e1c302db95d896087e882005dc345e110404ff2f13113ac1b3"
+                    "fb6945079c3225c43ec5f6430bd0910775972c1b762bb88062ef17722201dc06"
                 ),
                 "support": (
-                    "a449e39c7428cea79253768e370505bb3f5fc65523f6521c793a6460d041447d"
+                    "52538c6aebc76cc6adfea5c18faf2b323a485e9565a481ad891b14dd2a1e02e0"
                 ),
                 "validation": (
-                    "033159bfa342c874335c57dc56e481355fc9d7a17eb36e519a01a885166b36c8"
+                    "0bc35366435bea8fff622650ed8127db04b8c156c88182c09e125fabbd379c09"
                 ),
                 "judgment": (
-                    "1aea236c9f70d87e4c0eccd118ac63d37a92e303a6ed419dbcd4eaa33007e2e4"
+                    "17730f089c6cd1545deb4728ab509e32c396768f6a26fac0e6aff3c81a45b5ad"
                 ),
                 "certificates": (
-                    "57adb780ca7d4ab7146bea89a50545fc37e50a04e6cc5aa73179d5c21c1acfeb",
-                    "b037c969d3a4fe1793463cea16c023c2c5a49b158e0c0aee811d69b71ae903a0",
-                    "f67ef1cba62c49c3215ad20c4248adb7805cf0b62df6bc5d7b240ae12e1f4b35",
+                    "b367d2157e868c31b9a61f6e1eb3c97256560bd62695147466aa42d2ac329d43",
+                    "77f41bf185dfbb664c972d5202c5e478d7aac2ad23a8bb544531afb5e163bf8e",
+                    "5c76ee29851f81828c6e28785a8dc5bcac5cbaad62cbc6ef88feb4163496bb53",
                 ),
             },
         )

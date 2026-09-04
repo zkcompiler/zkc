@@ -57,12 +57,12 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         ),
         (
             "seventeen-profile-rotation",
-            cold["rotated_profiles"] == 17,
+            cold["migration_rotated_profiles"] == 17,
             "MIGRATION-A-ROTATION-17",
         ),
         (
             "analysis-kernel-stability-control",
-            publication["stable_profiles"] == ["analysis-kernel"],
+            publication["migration_stable_profiles"] == ["analysis-kernel"],
             "MIGRATION-A-STABLE-CONTROL",
         ),
         (
@@ -135,6 +135,11 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         "profiles": cold["indexed_profiles"],
         "rotated_profiles": cold["rotated_profiles"],
         "stable_profiles": cold["stable_profiles"],
+        "migration_rotated_profiles": cold["migration_rotated_profiles"],
+        "migration_stable_profiles": cold["migration_stable_profiles"],
+        "analysis_branch_rotated_profiles": cold[
+            "analysis_branch_rotated_profiles"
+        ],
         "owner_pages": cold["owner_pages"],
         "profile_manifests": cold["profile_manifests"],
         "legacy_profile_controls": cold["legacy_profile_controls"],

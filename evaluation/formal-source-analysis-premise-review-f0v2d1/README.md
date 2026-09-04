@@ -49,8 +49,8 @@ questions and additionally verifies that:
   sampler and oracle-process premise bodies use declaration ordinals 13 and 11
   respectively, while the asymptotic family remains the subject of each
   premise coordinate. Their current premise digests are
-  `61580220...2d66b` and `91ff07a9...a2f81` under transport profile
-  `35a50055...cc769`.
+  `77a25e7f...ccf97` and `b379525d...b94c6` under transport profile
+  `6db9ee6c...d8f9`.
 - Both the fixed-setup body projection and formation require the Fresh and
   Fiat--Shamir setup views to have empty `run_established` sequences. The
   selected Schnorr views have lengths zero and equal four-entry sequences. An
@@ -75,6 +75,12 @@ source. It observes property and transport profile revisions `1 -> 2`, the
 `property-core-v0` and `afk-application-v0` declaration revisions, agreement
 between the two publication compilers, and rotation of exactly the property,
 transport, and theorem-source-validation profiles.
+
+This freeze re-pins the repaired canonical-framed Fiat--Shamir page and the
+synchronized downstream Analysis package sources. It also revalidates the
+Interaction page, whose existing frozen digest already matched the current
+bytes. The source rotations change the finite identity vectors reported above
+but do not change the sixteen finding outcomes or the declared provider hold.
 
 The family premise bodies are reconstructed from owner-prescribed fields and
 the Foundation identity primitive. Synchronization of separately assigned

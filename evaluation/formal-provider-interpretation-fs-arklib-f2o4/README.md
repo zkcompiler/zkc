@@ -37,6 +37,15 @@ inputs, and this package's source templates. It also pins ArkLib revision
 revision, its sources, and Lean `v4.31.0`. No research note or sibling
 finding file is a certificate input.
 
+The current owner-authored challenge declarations rotate the Core and
+construction inputs absorbed by the canonical-framed source runtime. The
+nine-point challenge table therefore changes semantically, in row-major
+`(statement, commitment)` order, from `(2,2,0,1,2,0,2,2,1)` to
+`(0,1,1,1,2,2,1,1,1)`. The generated Lean lookup and certificate are
+refrozen to those rederived values; this is not treated as a digest-only
+re-pin. The finite correspondence outcomes below are then recomputed against
+the new table.
+
 ## Independent checker
 
 `checker.py` does not import the generator. It independently:
@@ -68,7 +77,7 @@ All five clauses hold on the complete one-shot corpus:
 | checks and terminals | `Affirmative/F2O4-A-CHECKS-TERMINALS` | the elaborated check denotation and `Option Unit` terminal equal the source check and lane image |
 | traces | `Affirmative/F2O4-A-TRACES` | the proof and completed record agree occurrence by occurrence under the maps, excluding source-only receipts |
 
-The 54 source and provider outcomes are 22 `Accepted` and 32 `Rejected`.
+The 54 source and provider outcomes are 20 `Accepted` and 34 `Rejected`.
 All recorded prover and verifier query sequences are retained in the checker
 report.
 
@@ -87,10 +96,10 @@ executed transform. Its canonical values are `some ()` and `none`.
 `InterpretationFailed`, `StrategyStopped`, and
 `OperationalNoncompletion` are `Unmodelled`.
 
-The source runtime's separate retrying construction retains six measured
-sampling-exhaustion runs. The checker authenticates and reports that count as
-the unmodelled `InterpretationFailed` lane; those runs are outside the
-affirmative one-shot correspondence claim.
+The source runtime's separate retrying construction now has zero measured
+sampling-exhaustion runs at the repaired identities. The checker authenticates
+and reports that exact finite count; it does not generalize the observation
+into retrying-sampler totality or collapse the `InterpretationFailed` lane.
 
 ## Result boundary
 

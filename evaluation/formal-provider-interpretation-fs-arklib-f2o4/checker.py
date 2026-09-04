@@ -253,8 +253,8 @@ def _cold_source() -> dict[str, Any]:
     _require(
         lane_counts
         == {
-            "Accepted": 22,
-            "Rejected": 32,
+            "Accepted": 20,
+            "Rejected": 34,
             "Aborted": 0,
             "InterpretationFailed": 0,
             "StrategyStopped": 0,
@@ -322,8 +322,8 @@ def _cold_source() -> dict[str, Any]:
     retrying_lanes = Counter(row[1] for row in retrying_runs.get("records", []))
     _require(
         len(retrying_runs.get("records", [])) == 54
-        and retrying_lanes["InterpretationFailed"] == 6,
-        "retrying frozen corpus no longer reports six exhaustion runs",
+        and retrying_lanes["InterpretationFailed"] == 0,
+        "retrying frozen corpus no longer reports zero exhaustion runs",
     )
     return {
         "model": model,
@@ -918,7 +918,7 @@ def _compare(
         "provider comparison did not cover every source run",
     )
     _require(
-        dict(lane_counts) == {"Accepted": 22, "Rejected": 32},
+        dict(lane_counts) == {"Accepted": 20, "Rejected": 34},
         "provider outcome counts differ from the source lanes",
     )
     return {

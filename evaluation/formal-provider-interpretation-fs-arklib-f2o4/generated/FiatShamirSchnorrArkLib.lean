@@ -42,14 +42,14 @@ deriving Repr
 
 def finiteTableLookup (statement commitment : Nat) : Option Nat :=
   match statement, commitment with
-  | 0, 0 => some 2
-  | 0, 1 => some 2
-  | 0, 2 => some 0
+  | 0, 0 => some 0
+  | 0, 1 => some 1
+  | 0, 2 => some 1
   | 1, 0 => some 1
   | 1, 1 => some 2
-  | 1, 2 => some 0
-  | 2, 0 => some 2
-  | 2, 1 => some 2
+  | 1, 2 => some 2
+  | 2, 0 => some 1
+  | 2, 1 => some 1
   | 2, 2 => some 1
   | _, _ => none
 

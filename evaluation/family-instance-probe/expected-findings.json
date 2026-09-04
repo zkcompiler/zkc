@@ -25,8 +25,8 @@
     ],
     [
       "regular-finite-variation",
-      "Affirmative",
-      "FAMILYINSTANCE-A-REGULAR-VARIATION"
+      "Negative",
+      "FAMILYINSTANCE-N-FRI-BODY-BYTES-NON-AFFINE"
     ],
     [
       "bounded-admission-time",
@@ -79,13 +79,13 @@
       "FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE"
     ]
   ],
-  "findings_sha256": "1294103d9eb884f02435b7acc3b547ff9b4d45eabc9111366251525af2ca8950",
+  "findings_sha256": "c2a14e0c11f141f122ce951c1034f36fe099068e58bd67161e68e45d2c781f28",
   "measurements": {
     "fri-like-folding": [
       {
         "admission_wall_time_class": "at-most-250000000-ns",
-        "body_bytes": 7625,
-        "core_id": "pir.interactive-core@8c158862bb8e61e9c0e4b12acd92a5c5a2f4a8aa5231b5241707f7dd0a138d0c",
+        "body_bytes": 9765,
+        "core_id": "pir.interactive-core@b51411139617e0ee26548cf9a4ea8d382e1cd5f5da5cbbf95195beb0b29ea413",
         "declarations": 19,
         "declarations_different_from_previous": 0,
         "family": "fri-like-folding",
@@ -97,8 +97,8 @@
       },
       {
         "admission_wall_time_class": "at-most-250000000-ns",
-        "body_bytes": 8815,
-        "core_id": "pir.interactive-core@298ea61f2db12301645bccbbdabf7a8c5390dc1cdaec2b24316310df0c09be61",
+        "body_bytes": 11477,
+        "core_id": "pir.interactive-core@fc5dd5660711805058c04a33b0927b5087dad01df859533b8468da2c10749c42",
         "declarations": 21,
         "declarations_different_from_previous": 5,
         "family": "fri-like-folding",
@@ -113,8 +113,8 @@
       },
       {
         "admission_wall_time_class": "at-most-250000000-ns",
-        "body_bytes": 10005,
-        "core_id": "pir.interactive-core@332a7b9cb17f805fa0b19b2640987f3724671bfde3b1c1201d5a9f021773f269",
+        "body_bytes": 13190,
+        "core_id": "pir.interactive-core@af65f29cb3058ce230e683cb311973a441d227f4bd370fca104cc30d515c4bc9",
         "declarations": 23,
         "declarations_different_from_previous": 5,
         "family": "fri-like-folding",
@@ -131,8 +131,8 @@
     "sumcheck-like-rounds": [
       {
         "admission_wall_time_class": "at-most-250000000-ns",
-        "body_bytes": 4190,
-        "core_id": "pir.interactive-core@aef62014b432f7913ba475a17a31d95b8abe12fc6568ba6d468c281552b3cfef",
+        "body_bytes": 5014,
+        "core_id": "pir.interactive-core@b10bb6d13ce6a7eb46296b256fc020e5316adf8cceaebe7f6d943bb84438a3f9",
         "declarations": 12,
         "declarations_different_from_previous": 0,
         "family": "sumcheck-like-rounds",
@@ -144,8 +144,8 @@
       },
       {
         "admission_wall_time_class": "at-most-250000000-ns",
-        "body_bytes": 7003,
-        "core_id": "pir.interactive-core@7820272d0c8d0e31e24cf35e9f5f6204b777b4519dc146876c6600be3ce0c9c7",
+        "body_bytes": 8486,
+        "core_id": "pir.interactive-core@356b2975a9588d66fbc8cb8b7b0c3196165710539901bbc8814c5e27a96fd7f7",
         "declarations": 17,
         "declarations_different_from_previous": 6,
         "family": "sumcheck-like-rounds",
@@ -161,8 +161,8 @@
       },
       {
         "admission_wall_time_class": "at-most-250000000-ns",
-        "body_bytes": 12629,
-        "core_id": "pir.interactive-core@79ed21123a33b59b1bf0ba129c7a6f138e4ac04991998dc5d26c9dda468ffffd",
+        "body_bytes": 15430,
+        "core_id": "pir.interactive-core@5abe3871024aaaf7f14b02a7d7b426fb536443e2604cbe39d67273cf1dcd8e8a",
         "declarations": 27,
         "declarations_different_from_previous": 11,
         "family": "sumcheck-like-rounds",
@@ -178,13 +178,33 @@
       }
     ]
   },
-  "regularity": [
+  "non_affine": [
     {
       "family": "fri-like-folding",
-      "intercept": 5245,
       "metric": "body_bytes",
-      "slope": 1190
-    },
+      "observed_values": [
+        9765,
+        11477,
+        13190
+      ],
+      "parameters": [
+        2,
+        3,
+        4
+      ],
+      "successive_changes": [
+        {
+          "parameter_delta": 1,
+          "value_delta": 1712
+        },
+        {
+          "parameter_delta": 1,
+          "value_delta": 1713
+        }
+      ]
+    }
+  ],
+  "regularity": [
     {
       "family": "fri-like-folding",
       "intercept": 30,
@@ -205,9 +225,9 @@
     },
     {
       "family": "sumcheck-like-rounds",
-      "intercept": 1377,
+      "intercept": 1542,
       "metric": "body_bytes",
-      "slope": 2813
+      "slope": 3472
     },
     {
       "family": "sumcheck-like-rounds",
@@ -229,12 +249,12 @@
     }
   ],
   "source_sha256": {
-    "docs-next/analysis/cryptographic-properties.md": "0b2783c39ecc57744721e862d28edb9301a45ab828051c32cc8016b510bab20b",
+    "docs-next/analysis/cryptographic-properties.md": "7d57087aeb4a778ebcac2e9be9e64db8db593d353cea3ab0cbe229350740b61e",
     "docs-next/pir/fiat-shamir.md": "840957ade423db5dc02c390cf04934c808255f2fcfe47a9bf7cf8fc4db27d05e",
     "docs-next/pir/interactive-core.md": "e2905145539988292e70c80ec881f8b9e447aecc2b3c161687d17d36e1d857af",
     "docs-next/relations/relation-model.md": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
     "evaluation/indexed-core-elaboration/reference_model.py": "dc7eeb0e3736e16e35e1faca926c32f7bde2b1cfadfd2b15a75801bed1d42abc",
-    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "993dc934fb9b03a1199784605ba7900f0e581b7f1af571cd7ed4a64e46fe7996"
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "152d10d1d0a1349a93fda733c1e0ffbf8eb035994e544a28613ea8d643ee56c7"
   },
   "theorem_binding": {
     "applicability_coordinates": [

@@ -4949,6 +4949,11 @@ _GRAPH_CARRIER_CLASSES = (
     k2.Predicate,
     k2.VerifierRule,
     k2.ChallengeDomain,
+    k2.ProtocolDeclarationRef,
+    k2.IndependentCoin,
+    k2.JointCoinMember,
+    k2.ExclusiveReductionUse,
+    k2.SharedReductionUse,
     k2.ReductionDecl,
     k2.RequiredPublication,
     k2.ClaimConsumerUse,
@@ -4976,18 +4981,24 @@ FROZEN_CARRIER_FIELD_DISPOSITION: Mapping[str, FieldDisposition] = MappingProxyT
         "InputDecl.scope": FieldDisposition.GRAPH_CARRIED,
         "InputDecl.value_sort": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.challenge_domain": FieldDisposition.GRAPH_CARRIED,
+        "Occurrence.challenge_domain_ref": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.check_predicate": FieldDisposition.GRAPH_CARRIED,
+        "Occurrence.correlation": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.dependencies": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.guard": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.kind": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.name": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.oracle_name": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.prover_value_sort": FieldDisposition.GRAPH_CARRIED,
+        "Occurrence.fresh_law": FieldDisposition.GRAPH_CARRIED,
+        "Occurrence.reduction_use": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.scope": FieldDisposition.GRAPH_CARRIED,
         "Occurrence.verifier_rule": FieldDisposition.GRAPH_CARRIED,
         "Predicate.kind": FieldDisposition.GRAPH_CARRIED,
         "Predicate.parameters": FieldDisposition.GRAPH_CARRIED,
         "Predicate.refs": FieldDisposition.GRAPH_CARRIED,
+        "ProtocolDeclarationRef.declaration_kind": FieldDisposition.GRAPH_CARRIED,
+        "ProtocolDeclarationRef.local_name": FieldDisposition.GRAPH_CARRIED,
         "Protocol.core_id": FieldDisposition.DERIVED_REFERENCE,
         "Protocol.interpretation": FieldDisposition.GRAPH_CARRIED,
         "Protocol.transcript_construction_id": FieldDisposition.DERIVED_REFERENCE,
@@ -5007,6 +5018,9 @@ FROZEN_CARRIER_FIELD_DISPOSITION: Mapping[str, FieldDisposition] = MappingProxyT
         "TranscriptConstruction.application_domain": (
             FieldDisposition.EXTERNAL_AUTHENTICATED_BODY
         ),
+        "TranscriptConstruction.challenge_rules": (
+            FieldDisposition.EXTERNAL_AUTHENTICATED_BODY
+        ),
         "TranscriptConstruction.max_attempts": (
             FieldDisposition.EXTERNAL_AUTHENTICATED_BODY
         ),
@@ -5023,6 +5037,10 @@ FROZEN_CARRIER_FIELD_DISPOSITION: Mapping[str, FieldDisposition] = MappingProxyT
         "ValueRef.name": FieldDisposition.GRAPH_CARRIED,
         "VerifierRule.kind": FieldDisposition.GRAPH_CARRIED,
         "VerifierRule.parameters": FieldDisposition.GRAPH_CARRIED,
+        "JointCoinMember.group": FieldDisposition.GRAPH_CARRIED,
+        "JointCoinMember.index": FieldDisposition.GRAPH_CARRIED,
+        "JointCoinMember.prior_members": FieldDisposition.GRAPH_CARRIED,
+        "SharedReductionUse.sharing_contract": FieldDisposition.GRAPH_CARRIED,
     }
 )
 
@@ -5185,6 +5203,11 @@ _DATACLASS_TYPES = {
         k2.Predicate,
         k2.VerifierRule,
         k2.ChallengeDomain,
+        k2.ProtocolDeclarationRef,
+        k2.IndependentCoin,
+        k2.JointCoinMember,
+        k2.ExclusiveReductionUse,
+        k2.SharedReductionUse,
         k2.Occurrence,
         k2.RequiredPublication,
         k2.ReductionDecl,

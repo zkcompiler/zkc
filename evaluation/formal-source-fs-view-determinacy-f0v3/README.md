@@ -70,10 +70,13 @@ or a same-label Interaction body as an owner definition.
 
 ## Rotation control
 
-Both publication compilers reproduce the same repaired migration state without
-writing published identities. Seventeen profiles rotate and
-`analysis-kernel` remains stable. This is a rehearsal control over the current
-source closure, not publication authority.
+Both publication compilers reproduce the same repaired Analysis-head state
+without writing published identities. All eighteen profiles rotate relative
+to the pre-migration pin. The migration head's original result remains a
+seventeen-profile rotation with only `analysis-kernel` stable; the additional
+Analysis-page edits on this branch rotate that profile and its five Analysis
+dependents. This is a rehearsal control over the current source closure, not
+publication authority.
 
 ## What a pass establishes
 

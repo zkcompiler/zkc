@@ -334,18 +334,18 @@ class NamedPremiseMigrationTest(unittest.TestCase):
             },
             {
                 "core": "zkcidv0:pir.interactive-core:d74dc7178424914564445da48051ffd48f8b7c0574b8d81d04cecb33b9c69534",
-                "construction": "zkcidv0:pir.transcript-construction:bf65285c752c5ca9c1f393ecb1c4c3720af960bb589affb5e707e6b9303b6f83",
+                "construction": "zkcidv0:pir.transcript-construction:ce9e327322f82a9532c48eb1a922b10652142f80a21120da9ee1886e5fb0b63c",
                 "fresh": "zkcidv0:pir.protocol:9a1e7e5de6f11ed64911d498cfc415d39a51c4f9e807a3fdf2b72c3414e31af9",
-                "fiat-shamir": "zkcidv0:pir.protocol:fa7568bfcff8c233ec95dc0d06cbbf907765625ad2f7a533dc43b612d262761a",
-                "property-profile": "zkcidv0:foundation.semantic-language-profile:255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259",
-                "question": "zkcidv0:analysis.question:ccc93a33b3995ff86c4e5fdc2420cb9ce308b2871186b10634c1ce088030e176",
-                "goal": "zkcidv0:analysis.goal:e813415c366ec70eb24e98c1ece3de6303211b481f692abb1cc3b0fe08b67f6d",
-                "commit": "zkcidv0:analysis.named-premise:183762bd56b13dec770c93ebbb236a5880b503260139a58871f44e85e030d4a8",
-                "respond": "zkcidv0:analysis.named-premise:7ac97e0df5a47a47ae167e05e0dbe26c0070f3e63cde9e30e3a51c97e2c7c176",
-                "witness": "zkcidv0:analysis.named-premise:006444791732448fd55646bbe70d5e9b59532a1814d3ef2153456944b882b8d0",
-                "relation": "zkcidv0:analysis.named-premise:00cf7d5a0728e5d7620555dd924ba268131aed93b9598f9e0c228db4044cbb12",
-                "fresh-coin": "zkcidv0:analysis.named-premise:666a06156e8291f46ada3f997c5accacbfc8fedf2786ad9a000569a819cb0338",
-                "prover-state": "zkcidv0:analysis.named-premise:d43c88ab4171fbd90de76f198c48b4dfcdc421e6ce36e6a55933566ba0e6ad45",
+                "fiat-shamir": "zkcidv0:pir.protocol:2e24d76e032b6df1da410ebda437858d339c3810162c7bd63101286158792679",
+                "property-profile": "zkcidv0:foundation.semantic-language-profile:8ac5e7b9ba6d9684efc86c219ad8c3fa8560a90c4d653cc2e05ed4a13d58b807",
+                "question": "zkcidv0:analysis.question:a30fbe7a8751b6a116b46b6055968a37c67795aeaff6d8921b2f196ffc928aa4",
+                "goal": "zkcidv0:analysis.goal:5d7c631352cf496b2c539ff7a8aa4ad90ed527e2d0e75fb4645da070e8751094",
+                "commit": "zkcidv0:analysis.named-premise:aed4d3a7477d0a24995b6042633ff5aa47ed9e02e94659f7ef5c85c621e818c3",
+                "respond": "zkcidv0:analysis.named-premise:a2b1d1fbbe862030a6f3e3f506207fcbe9e6524f29da7b381d380316e7cfc229",
+                "witness": "zkcidv0:analysis.named-premise:98b5df02c8ec7a13db9e5a2a85427a0122c44bccbaa3ee91e07986e5b9767cc5",
+                "relation": "zkcidv0:analysis.named-premise:99461a972621d5d34f7031f934b5912e548fac65a6f26c3aaf870709e15164cf",
+                "fresh-coin": "zkcidv0:analysis.named-premise:bfba3ba3a94e38313f5052be057e58a21a818be7db85431e9a205883443c73d7",
+                "prover-state": "zkcidv0:analysis.named-premise:d67c7fba56cce556669c51699a0e18f15d1bafe7d73fa153b5fb71423c252999",
             },
         )
         challenge_index = next(
@@ -391,16 +391,16 @@ class NamedPremiseMigrationTest(unittest.TestCase):
                 ),
             },
             {
-                "transport_profile": "zkcidv0:foundation.semantic-language-profile:e7262be0f0d040b5f9bf69165c5d6458f88dbf63723941b1aa4e2e6a81d4f2d7",
-                "family_question": "zkcidv0:analysis.question:c7c1e70be1b805cbfde1a028bdebb57e1f77877f1aabdfee5b11521a08b5d169",
-                "family_goal": "zkcidv0:analysis.goal:cedc9143445b45c483884ddc1d42b6fdd7e3221845a59beef91d652f549aebf0",
+                "transport_profile": "zkcidv0:foundation.semantic-language-profile:e88837e96d9cb1f57c0de82940715ea30bae3ccbaba8f1a1ab992428275db489",
+                "family_question": "zkcidv0:analysis.question:f08cb79dec9d986f3eefb3131f5a5b4f0a309ecbebdb1952bf88a95f1815ca1d",
+                "family_goal": "zkcidv0:analysis.goal:43b74ed7a50b312c09d36fba0d8421537e6546fccf1e5c35cd13f691a94c8839",
                 "family_premises": (
-                    "zkcidv0:analysis.named-premise:813aa76ca03821aeca72208621b0799abee8bf9e82764ff4350c8f13e7ae14d3",
-                    "zkcidv0:analysis.named-premise:4c229b9c2c9965ff1b8ec87f858ed575eaff08e46e8f76ae6d999cee9c7ba816",
+                    "zkcidv0:analysis.named-premise:d1b1ddb9fdeb4303c49fae6f57bedf9951aa22dbe9cd67502e1be11d59f7d9f2",
+                    "zkcidv0:analysis.named-premise:2708fdab850d04b36713d6777fbe903cf91fca3d5eea4e34c3ce35a3cb9563ab",
                 ),
                 "construction_premises": (
-                    "zkcidv0:analysis.named-premise:8c604841c20b0df79c9a5c2e9a036fd22f16bbf4cf8658ed3b08c8f175148094",
-                    "zkcidv0:analysis.named-premise:fd37c65f8bb943dd2e0e664efcb3156e12b23e3aeac6f6f06cbf56e1b7d16785",
+                    "zkcidv0:analysis.named-premise:cd3e0ef954b0e33dadade7c8415d845d0e386b172b11b3c79045847afb0887d6",
+                    "zkcidv0:analysis.named-premise:6948e63fb598ce1348a5a0c9b142ef148e9a3324b115d4055245089c5b99a797",
                 ),
             },
         )
@@ -2620,7 +2620,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "0aa14752b5f6bae7fdde366a9eab073f69eacbb2bd3b572f9a5b113adf5521df",
+            "4332d633a4e1ba6555f7210b957574bcdd2343a24e2c2ab6f333c54249c9adb7",
         )
         self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)
@@ -3703,6 +3703,49 @@ class PointwiseSpecializationTest(unittest.TestCase):
     def test_fixed_setup_is_paired_owner_view_coordinates_only(self) -> None:
         source, _, _, _, correspondence, *_ = fixed_context()
         setup = correspondence.fixed_public_setup
+        self.assertEqual(
+            tuple(item.name for item in fields(model._PIRAnalysisSourceViews)),
+            (
+                "fresh_public_setup",
+                "fiat_shamir_public_setup",
+                "public_binding",
+                "strategy_decision",
+                "public_coin",
+                "acceptance_effect",
+                "claim_reduction",
+                "fresh_execution",
+                "fiat_shamir_execution",
+                "transcript_declaration",
+                "required_influence",
+                "challenge_transition",
+                "fs_construction",
+                "relation_definition",
+            ),
+        )
+        self.assertEqual(
+            setup._source_views.public_binding.projection.manifest,
+            model._Analysis_PUBLIC_BINDING_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.strategy_decision.projection.manifest,
+            model._Analysis_STRATEGY_DECISION_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.acceptance_effect.projection.manifest,
+            model._Analysis_ACCEPTANCE_EFFECT_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.claim_reduction.projection.manifest,
+            model._Analysis_CLAIM_REDUCTION_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.required_influence.projection.manifest,
+            model._Analysis_REQUIRED_INFLUENCE_VIEW_MANIFEST,
+        )
+        self.assertEqual(
+            setup._source_views.challenge_transition.projection.manifest,
+            model._Analysis_CHALLENGE_TRANSITION_VIEW_MANIFEST,
+        )
         names = {item.name for item in fields(model.FixedPublicSetup)}
         self.assertEqual(
             names,

@@ -243,6 +243,15 @@ the producing owner profiles. The Fresh execution view uses the Interaction
 static-view arm, the Fiat--Shamir execution view uses the canonical-framed
 static-view arm, the checked construction view uses the canonical-framed
 checked-construction arm, and the public-setup view uses the public-setup arm.
+The intake now follows the complete authored Analysis read catalog: the Fresh
+side additionally consumes PublicBinding, StrategyDecision, PublicCoin, the
+acceptance closure of Effect, and ClaimReduction views; the Fiat--Shamir side
+additionally consumes TranscriptDeclaration, RequiredInfluence,
+ChallengeTransition, and FSConstruction views. Each requested field set is
+closed by the PIR owner before issuance and is reauthenticated with its exact
+consumer and purpose. Both public-setup bodies carry `entries` and
+`run_established`; this fixed-setup formation requires the latter sequence to
+be empty on both axes and refuses run-established setup values.
 These authority identities changed because the imported protocol model now
 implements the owner equations instead of hashing a generic six-field record.
 The gate consumes the newly derived identities rather than preserving fixture
