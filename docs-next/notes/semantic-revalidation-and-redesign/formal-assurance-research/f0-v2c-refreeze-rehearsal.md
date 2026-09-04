@@ -477,3 +477,26 @@ package or reverting a carried package away from its direct-owner procedure.
   published, or submitted as a pull request.
 - Main should inspect the dirty tree and commit it with subject:
   `test: re-pin the refreeze rehearsal to the closed owner text`.
+
+## Rerun at the deep-review-closed head
+
+The pre-freeze deep review and its repairs rotated the identities again after
+the re-pin recorded above, so the rehearsal's publication-facing checks were
+rerun on the migration head closed by the ninth review round (`5e8373b5`, the
+head after the holdout and kernel-mechanization sibling re-pins that the
+ninth round's record edit caused).
+
+- Candidate table: the reference and independent publication compilers
+  agree on every profile; the six profiles the committed table covers all
+  rotate against it, none is stable, and the candidate was written only to
+  scratch. Publication remains a byte-for-byte replacement of
+  `docs-next/pir/profiles/published-identities.json`.
+- Carried packages: the research checkpoint tier at this head runs 63 checks
+  and is red only on `research.profile-publication`, the hold. The re-pin
+  lanes after the deep review moved every source-pinning package to the
+  current text and identities; no package needs a second refreeze at
+  publication beyond the publication check's own frozen upstream rows.
+- What a real refreeze must repeat is unchanged from the section above: the
+  table replacement, the confirmation tier, and the retirement of the
+  migration candidates with the refusal control retained.
+
