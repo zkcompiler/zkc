@@ -1150,6 +1150,36 @@ capability, different family or purpose, or different result schema grants no
 authority. Cold use must reauthenticate and readmit all three subjects and
 rerun `CheckFSConstruction`.
 
+The checker contract that the binding records is a profile-owned identity.
+It names the exact operation, law, defect schema, and result schema under
+which the affirmative result was reached, so a consumer holding the binding
+knows which check it holds and a different check can never present an equal
+payload:
+
+```text
+CheckedFSConstructionCheckerContract = {
+  operation: ProfileDeclarationRef<"pir.evaluator-signature">,
+    exactly this profile's canonical-framed-construction-check-v0,
+  law: PIRProfileLawReference,
+    exactly this profile's canonical-framed-same-core-construction-v0,
+  defects: ProfileDeclarationRef<"pir.failure-schema">,
+    exactly this profile's canonical-framed-construction-defects-v0,
+  result_schema: PIRRuntimeSchema,
+    exactly the description of CheckedFSConstruction
+}
+
+CheckedFSConstructionCheckerContractId =
+  ProfiledSemanticId<"pir.checker-contract">(
+    B, PIRCanonicalFramedFSProfileId,
+    CheckedFSConstructionCheckerContractBody(contract))
+```
+
+The binding's `checker_contract` is exactly `CheckedFSConstructionCheckerContractId`. It is
+a constant of this profile: it changes when the check operation's signature,
+the checked same-Core construction law, the defect schema, the result schema,
+or the profile identity changes, and never with a run, a result, or a
+consumer.
+
 For every affirmative result formed by this operation:
 
 ```text
@@ -1636,13 +1666,19 @@ CanonicalFramedStaticViewBindingPayloadBody(x) = R {
   0: CanonicalFramedViewCoordinateBody(x.coordinate),
   1: S[ CanonicalFramedFieldCoordinateBody(c) ... ascending, no repeat ]
 }
+CheckedFSConstructionCheckerContractBody(x) = R {
+  0: ProfileDeclarationRefBody(x.operation),
+  1: ProfileDeclarationRefBody(x.law),
+  2: ProfileDeclarationRefBody(x.defects),
+  3: PIRDescriptionBody(x.result_schema)
+}
 CheckedFSConstructionBindingPayloadBody(x) = R {
   0: ContentRef(x.fresh_protocol_id),
   1: ContentRef(x.fiat_shamir_protocol_id),
   2: ContentRef(x.shared_core_id),
   3: ContentRef(x.transcript_construction_id),
   4: PIRDescriptionBody(x.result_schema),
-  5: ContentRef(x.checker_contract)
+  5: ContentRef(x.checker_contract) // = CheckedFSConstructionCheckerContractId
 }
 CanonicalFramedRequirementBody(x) = R {
   0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)

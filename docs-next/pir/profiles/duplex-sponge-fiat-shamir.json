@@ -2,10 +2,11 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "duplex-sponge-fiat-shamir",
   "profile_family": "pir.duplex-sponge-fiat-shamir",
-  "revision": 3,
+  "revision": 4,
   "owner_page": "docs-next/pir/duplex-sponge-fiat-shamir.md",
   "expected_imports": ["interaction"],
   "supported_subject_kinds": [
+    "pir.checker-contract",
     "pir.protocol",
     "pir.source-binding-payload",
     "pir.source-capability-requirement",
@@ -97,7 +98,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "duplex-sponge-source-views-v0",
-      "revision": 1,
+      "revision": 2,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "## 11. Exact PIR source views",
       "dependencies": [
@@ -238,7 +239,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "duplex-sponge-same-core-construction-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "## 10. Checked same-Core construction",
       "dependencies": []
@@ -258,9 +259,38 @@
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "### 8.4 Replay",
       "dependencies": []
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "duplex-sponge-construction-check-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "CheckDuplexFSConstruction(",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-same-core-construction-v0"}
+      ]
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "duplex-sponge-construction-defects-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "DuplexFSConstructionDefectSet =",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "checker-contract-body-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "CheckedDuplexFSConstructionCheckerContractBody(x) = R",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "duplex-sponge-transcript-construction-body-v0"}
+      ]
     }
   ],
   "subjects": [
+    {"kind": "pir.checker-contract", "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "checker-contract-body-v0"}, "laws": ["duplex-sponge-same-core-construction-v0"], "evaluator": "duplex-sponge-construction-check-v0", "failure_schema": "duplex-sponge-construction-defects-v0"},
     {
       "kind": "pir.protocol",
       "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "fresh-protocol-body-v0"},

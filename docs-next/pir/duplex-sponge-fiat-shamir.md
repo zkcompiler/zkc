@@ -829,6 +829,36 @@ checker/evaluator, and checking occurrence. None has a canonical body, digest
 surrogate, serialization, cache form, or FFI representation. Cold use
 reauthenticates and readmits all three subjects and reruns this checker.
 
+The checker contract that the binding records is a profile-owned identity.
+It names the exact operation, law, defect schema, and result schema under
+which the affirmative result was reached, so a consumer holding the binding
+knows which check it holds and a different check can never present an equal
+payload:
+
+```text
+CheckedDuplexFSConstructionCheckerContract = {
+  operation: ProfileDeclarationRef<"pir.evaluator-signature">,
+    exactly this profile's duplex-sponge-construction-check-v0,
+  law: PIRProfileLawReference,
+    exactly this profile's duplex-sponge-same-core-construction-v0,
+  defects: ProfileDeclarationRef<"pir.failure-schema">,
+    exactly this profile's duplex-sponge-construction-defects-v0,
+  result_schema: PIRRuntimeSchema,
+    exactly the description of the checked duplex construction result
+}
+
+CheckedDuplexFSConstructionCheckerContractId =
+  ProfiledSemanticId<"pir.checker-contract">(
+    B, PIRDuplexSpongeFSProfileId,
+    CheckedDuplexFSConstructionCheckerContractBody(contract))
+```
+
+The binding's `checker_contract` is exactly `CheckedDuplexFSConstructionCheckerContractId`. It is
+a constant of this profile: it changes when the check operation's signature,
+the checked same-Core construction law, the defect schema, the result schema,
+or the profile identity changes, and never with a run, a result, or a
+consumer.
+
 For every affirmative result formed by this operation:
 
 ```text
@@ -1246,13 +1276,19 @@ DuplexStaticViewBindingPayloadBody(x) = R {
   0: DuplexViewCoordinateBody(x.coordinate),
   1: S[ DuplexFieldCoordinateBody(c) ... ascending, no repeat ]
 }
+CheckedDuplexFSConstructionCheckerContractBody(x) = R {
+  0: ProfileDeclarationRefBody(x.operation),
+  1: ProfileDeclarationRefBody(x.law),
+  2: ProfileDeclarationRefBody(x.defects),
+  3: PIRDescriptionBody(x.result_schema)
+}
 CheckedDuplexFSConstructionBindingPayloadBody(x) = R {
   0: ContentRef(x.fresh_protocol_id),
   1: ContentRef(x.fiat_shamir_protocol_id),
   2: ContentRef(x.shared_core_id),
   3: ContentRef(x.transcript_construction_id),
   4: PIRDescriptionBody(x.result_schema),
-  5: ContentRef(x.checker_contract)
+  5: ContentRef(x.checker_contract) // = CheckedDuplexFSConstructionCheckerContractId
 }
 DuplexRequirementBody(x) = R {
   0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)
