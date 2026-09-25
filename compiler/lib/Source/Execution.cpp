@@ -1,11 +1,11 @@
 #include "zkc/Source/Execution.h"
-#include "zkc/Compiler/Instantiation.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Operations.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Kernels.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 
 using namespace llvm;
 namespace zkc::source {
@@ -242,11 +242,11 @@ public:
     for (const auto &instance : module.instances)
       instances.emplace(instance.name, &instance);
     for (const auto &binding : module.bindings) {
-      auto resolved = protocol::resolveBinding(binding, false);
+      auto resolved = protocol::resolveBinding(binding.application, false);
       if (!resolved)
         return resolved.takeError();
       bindings.emplace(binding.name, std::move(*resolved));
-      contracts.emplace(binding.name, binding.contract);
+      contracts.emplace(binding.name, binding.application.contract);
     }
     const source::Instance *root = nullptr;
     for (const auto &e : module.entries)

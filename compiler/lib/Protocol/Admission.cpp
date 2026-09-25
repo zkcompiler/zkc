@@ -1,12 +1,12 @@
 #include "zkc/Protocol/Admission.h"
 #include "EncodingLimits.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Protocol/TypeProperties.h"
-#include "zkc/Protocol/Variant.h"
-#include "zkc/Relation/Authoring.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Source/Codec.h"
+#include "zkc/Source/Relations.h"
 #include "llvm/ADT/StringExtras.h"
 #include <set>
 
@@ -326,7 +326,7 @@ class Admission {
       if (const auto *op = i.get<source::Operation>()) {
         auto binding = bindings.find(op->callee);
         result |= binding != bindings.end() &&
-                  isHistoryTransition(binding->second.contract);
+                  isHistoryTransition(binding->second.application.contract);
       } else if (const auto *call = i.get<source::AlgorithmCall>())
         result |= callsMatchUnsafe(call->callee, seen);
     });
@@ -417,19 +417,20 @@ class Admission {
         auto binding = bindings.find(key.str());
         if (binding == bindings.end())
           return fail("binding-reference");
-        if (inMatch && isHistoryTransition(binding->second.contract))
+        if (inMatch &&
+            isHistoryTransition(binding->second.application.contract))
           return fail("local-match-challenge");
-        auto selected = resolveBinding(binding->second, physical);
+        auto selected = resolveBinding(binding->second.application, physical);
         if (!selected) {
           consumeError(selected.takeError());
           return fail("binding-contract");
         }
-        if (auto e =
-                checkParameters(binding->second.contract, op->attributes,
-                                (binding->second.contract == "field.constant" ||
-                                 binding->second.contract == "vector.constant")
-                                    ? selected->outputs[0].identity
-                                    : ""))
+        if (auto e = checkParameters(
+                binding->second.application.contract, op->attributes,
+                (binding->second.application.contract == "field.constant" ||
+                 binding->second.application.contract == "vector.constant")
+                    ? selected->outputs[0].identity
+                    : ""))
           return fail(toString(std::move(e)));
         for (const auto &t : selected->inputs)
           expected.push_back({"", t.spelling()});
@@ -445,7 +446,7 @@ class Admission {
             // of an installed contraction in this local block. Exact selected
             // signatures above enforce nominal/representation agreement and
             // dense coefficients; producer signatures enforce dense backing.
-            const auto &contract = bindings.at(key.str()).contract;
+            const auto &contract = bindings.at(key.str()).application.contract;
             if (!physical || k != 1 ||
                 (contract != "vector.dot" && contract != "curve.msm"))
               return fail("binding-operation-signature");
@@ -794,7 +795,8 @@ class Admission {
       if (!symbols.insert(decl.name).second)
         return fail("binding-name");
       const auto &binding = decl;
-      if (auto e = checkBindingDeclaration(binding, physical))
+      if (auto e = checkBindingDeclaration(binding.name, binding.application,
+                                           physical))
         return fail(toString(std::move(e)));
       bindings.emplace(binding.name, std::move(binding));
     }

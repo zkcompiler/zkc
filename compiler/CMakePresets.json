@@ -38,6 +38,14 @@
       "cacheVariables": {
         "ZKC_ENABLE_SANITIZERS": "ON"
       }
+    },
+    {
+      "name": "shared",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/../build/compiler-shared",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -52,6 +60,10 @@
     {
       "name": "sanitize",
       "configurePreset": "sanitize"
+    },
+    {
+      "name": "shared",
+      "configurePreset": "shared"
     }
   ],
   "testPresets": [
@@ -91,6 +103,16 @@
         "include": {
           "label": "native"
         }
+      }
+    },
+    {
+      "name": "shared",
+      "configurePreset": "shared",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
       }
     }
   ]

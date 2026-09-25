@@ -1,5 +1,5 @@
 #include "Lexer.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"

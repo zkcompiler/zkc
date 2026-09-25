@@ -1,5 +1,5 @@
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Compiler/Instantiation.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cstdlib>

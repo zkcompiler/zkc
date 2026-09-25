@@ -4,7 +4,7 @@
 #include "../Static/Domains.h"
 #include "../Static/Naturals.h"
 #include "../Syntax/Lexer.h"
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include <limits>
 #include <map>
@@ -371,7 +371,7 @@ class Selector {
       auto selected = bindings.find(callee.str());
       if (selected == bindings.end())
         return;
-      op = selected->second->contract;
+      op = selected->second->application.contract;
     }
     for (size_t i = 0; i < attrs.size() && i < atoms.size(); ++i) {
       bool numeric =

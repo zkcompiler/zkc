@@ -1,4 +1,4 @@
-#include "zkc/Compiler/Generic.h"
+#include "zkc/Contracts/Generic.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 

@@ -1,14 +1,14 @@
 #include "zkc/Protocol/Construction.h"
 #include "ConstructionState.h"
-#include "zkc/Compiler/Instantiation.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Kernels.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Protocol/Algorithms.h"
-#include "zkc/Protocol/Domains.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Protocol/Module.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Resolution.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include <functional>
@@ -49,7 +49,7 @@ std::string Construction::contract(const std::string &key) {
     fail("construction-binding:" + key);
     return {};
   }
-  return found->second.contract;
+  return found->second.application.contract;
 }
 
 const Construction::Signature *Construction::signature(const std::string &key) {
@@ -62,7 +62,7 @@ const Construction::Signature *Construction::signature(const std::string &key) {
     fail("construction-binding:" + key);
     return nullptr;
   }
-  auto selected = resolveBinding(binding->second, false);
+  auto selected = resolveBinding(binding->second.application, false);
   if (!selected) {
     fail("construction-binding:" + key + ":" + toString(selected.takeError()));
     return nullptr;
@@ -288,9 +288,9 @@ void Construction::reserve(const source::Module &module) {
   };
   for (const auto &binding : module.bindings) {
     used.insert(binding.name);
-    used.insert(binding.contract);
-    names(binding.arguments);
-    used.insert(binding.implementation);
+    used.insert(binding.application.contract);
+    names(binding.application.arguments);
+    used.insert(binding.application.implementation);
   }
   for (const auto &fn : module.functions) {
     used.insert(fn.name);

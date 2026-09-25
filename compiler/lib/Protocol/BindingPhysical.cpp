@@ -1,8 +1,12 @@
 #include "BindingPhysical.h"
-#include "Support.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Builders.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Transforms/LinearContraction.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include <set>
 
 using namespace llvm;
@@ -40,13 +44,13 @@ class Planner {
     OpBuilder::InsertionGuard guard(b);
     b.setInsertionPointToStart(&root.getBody().front());
     SmallVector<Attribute> arguments;
-    for (const auto &a : binding.arguments)
+    for (const auto &a : binding.application.arguments)
       arguments.push_back(text(b, a));
     operation(b, "pir.operation_binding", {}, {},
               {named(b, "sym_name", binding.name),
-               named(b, "contract", binding.contract),
+               named(b, "contract", binding.application.contract),
                named(b, "arguments", b.getArrayAttr(arguments)),
-               named(b, "implementation", binding.implementation)},
+               named(b, "implementation", binding.application.implementation)},
               0, location);
   }
 
@@ -68,16 +72,16 @@ class Planner {
                                   to->representation};
     std::string key;
     for (const auto &[name, binding] : bindings)
-      if (binding.contract == "table.relayout" && binding.arguments == args)
+      if (binding.application.contract == "table.relayout" &&
+          binding.application.arguments == args)
         key = name;
     if (key.empty()) {
       key = fresh(symbols, "layout_");
-      source::OperationBinding binding{{},
-                                       key,
-                                       "table.relayout",
-                                       std::move(args),
-                                       "arkworks/table.relayout"};
-      auto installed = resolveBinding(binding, true);
+      source::OperationBinding binding{
+          {},
+          key,
+          {"table.relayout", std::move(args), "arkworks/table.relayout"}};
+      auto installed = resolveBinding(binding.application, true);
       if (!installed)
         return installed.takeError();
       declaration(binding, location);
@@ -119,20 +123,21 @@ public:
       if (!binding)
         return binding.takeError();
       auto choice = choices.find(binding->name);
-      if (!binding->implementation.empty() || choice != choices.end())
+      if (!binding->application.implementation.empty() ||
+          choice != choices.end())
         fixed.insert(binding->name);
       if (choice != choices.end()) {
-        if (!binding->implementation.empty() &&
-            binding->implementation != choice->second)
+        if (!binding->application.implementation.empty() &&
+            binding->application.implementation != choice->second)
           return error("binding-selection-conflict");
-        binding->implementation = choice->second;
-      } else if (binding->implementation.empty()) {
-        auto implementation = defaultImplementation(*binding);
+        binding->application.implementation = choice->second;
+      } else if (binding->application.implementation.empty()) {
+        auto implementation = defaultImplementation(binding->application);
         if (!implementation)
           return implementation.takeError();
-        binding->implementation = std::move(*implementation);
+        binding->application.implementation = std::move(*implementation);
       }
-      auto installed = resolveBinding(*binding, true);
+      auto installed = resolveBinding(binding->application, true);
       if (!installed)
         return installed.takeError();
       if (choice != choices.end())
@@ -157,8 +162,8 @@ public:
             if (found == bindings.end())
               return false;
             auto binding = found->second;
-            binding.implementation = implementation.str();
-            auto installed = resolveBinding(binding, true);
+            binding.application.implementation = implementation.str();
+            auto installed = resolveBinding(binding.application, true);
             if (!installed) {
               consumeError(installed.takeError());
               return false;
@@ -285,7 +290,7 @@ public:
           if (!ref || !bindings.count(ref.getValue().str()))
             return error("binding-reference");
           binding = &bindings.at(ref.getValue().str());
-          auto selected = resolveBinding(*binding, true);
+          auto selected = resolveBinding(binding->application, true);
           if (!selected)
             return selected.takeError();
           for (const auto &t : selected->inputs)
@@ -310,7 +315,7 @@ public:
             operation(b, "plan.kernel", operands, outputs,
                       {named(b, "site", op->getAttr("site")),
                        named(b, "binding", op->getAttr("binding")),
-                       named(b, "kernel", binding->implementation),
+                       named(b, "kernel", binding->application.implementation),
                        named(b, "parameters", op->getAttr("parameters"))},
                       0, op->getLoc());
         op->replaceAllUsesWith(physical->getResults());
@@ -318,8 +323,8 @@ public:
       }
     }
     for (auto declaration : root.getBody().front().getOps<OperationBindingOp>())
-      declaration.setImplementation(
-          bindings.at(declaration.getSymName().str()).implementation);
+      declaration.setImplementation(bindings.at(declaration.getSymName().str())
+                                        .application.implementation);
     root.setStage("physical");
     return Error::success();
   }

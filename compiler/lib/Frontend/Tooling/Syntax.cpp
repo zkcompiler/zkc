@@ -432,10 +432,11 @@ json::Object inspectModule(const syntax::Module &module) {
                             v));
   for (const auto &binding : module.bindings)
     bindings.push_back(located(
-        json::Object{{"name", binding.name},
-                     {"contract", binding.contract},
-                     {"staticArguments", inspectNames(binding.arguments)},
-                     {"implementation", binding.implementation}},
+        json::Object{
+            {"name", binding.name},
+            {"contract", binding.application.contract},
+            {"staticArguments", inspectNames(binding.application.arguments)},
+            {"implementation", binding.application.implementation}},
         binding));
   for (const auto &structure : module.structs) {
     json::Array parameters, fields;

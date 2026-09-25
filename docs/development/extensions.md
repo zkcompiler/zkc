@@ -29,14 +29,16 @@ subjects. Each dialect initializes its generated operation list in
 [`lib/Dialect`](../../compiler/lib/Dialect). The dialect names in
 [GenerateIR.cmake](../../compiler/cmake/GenerateIR.cmake), the umbrella
 [IR.h](../../compiler/include/zkc/Dialect/IR.h), and `registerDialects` in
-[Operations.cpp](../../compiler/lib/Dialect/Operations.cpp) are explicit.
+[Registry.cpp](../../compiler/lib/Dialect/Registry.cpp) are explicit. Registration and
+mandatory verification belong to `ZkcIR`; dialect-local transformation passes
+belong to the upper compiler. See the [checking boundaries](../compiler/ir-verification.md).
 Generated operation declarations stay shared because parent traits cross dialect
 boundaries; definitions and registration lists are generated per dialect.
 
 For an operation in an existing dialect, edit its ODS definition and verifier.
 The generated registration list follows the definition. A new dialect additionally
 needs its initialization file, the explicit generation/registration entries and
-its source in [CMakeLists.txt](../../compiler/CMakeLists.txt). Keep reusable public
+its source under its owning library in [Components.cmake](../../compiler/cmake/Components.cmake). Keep reusable public
 headers under `include/zkc` and implementations under the matching `lib` area.
 
 An operation's mathematical contract, nominal binding and implementation are

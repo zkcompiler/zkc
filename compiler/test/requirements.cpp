@@ -1,5 +1,5 @@
-#include "zkc/Compiler/Requirements.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Contracts/Requirements.h"
+#include "zkc/Support/Json.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <functional>

@@ -1,6 +1,6 @@
 #include "zkc/Relation/R1CS.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
-#include "zkc/Target/Json.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 

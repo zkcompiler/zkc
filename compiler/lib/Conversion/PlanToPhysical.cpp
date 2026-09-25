@@ -1,13 +1,15 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "zkc/Compiler/Physical.h"
-#include "zkc/Target/Source.h"
+#include "zkc/Dialect/Plan/IR/Physical.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Translation/Table.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc {
 namespace {
+LogicalResult lowerToPhysical(ModuleOp, StringRef mode);
+
 class LowerPhysical : public ConversionPattern {
 public:
   LowerPhysical(TypeConverter &types, MLIRContext *context, StringRef mode,
@@ -80,7 +82,6 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       signalPassFailure();
   }
 };
-} // namespace
 LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
   if (mode != "lazy" && mode != "materialized")
     return module.emitError("unsupported-preparation-mode");
@@ -122,6 +123,8 @@ LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
     return failure();
   return verify(module);
 }
+} // namespace
+
 std::unique_ptr<Pass> createLowerPlanToPhysicalPass(StringRef mode) {
   return std::make_unique<PhysicalPass>(mode);
 }

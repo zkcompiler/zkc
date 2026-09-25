@@ -3,8 +3,8 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Claims/Claims.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
-#include "zkc/Target/Json.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;

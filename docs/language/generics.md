@@ -49,14 +49,14 @@ contracts and fully qualified logical and physical ports.
 
 The [frontend checker](../../compiler/lib/Frontend/Semantics/Check.cpp) resolves
 source profiles and static requirements. The
-[installed kernel catalog](../../compiler/lib/Protocol/Library.cpp) supplies
+[installed kernel catalog](../../compiler/lib/Contracts/Kernels.cpp) supplies
 operation implementation selection. Rust checks original-source maps and actual
 bindings; the independent source reference executes its supported typed regions.
 Constructed artifacts have separate producer and validator processes. Automatic
 selection search is outside the implemented carrier.
 
 The finite direct route's
-[`SourceLibraryInterface`](../../compiler/include/zkc/Compiler/Library.h)
+[`SourceLibraryInterface`](../../compiler/include/zkc/Interfaces/SourceLibrary.h)
 registers closed families for that reference profile. It is an independent
 extension boundary, not the API for source-level component libraries or open
 parameterized interactive definitions. See [closed libraries](../compiler/libraries.md)

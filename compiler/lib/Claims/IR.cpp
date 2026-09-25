@@ -1,11 +1,12 @@
-#include "zkc/Dialect/IR.h"
 #include "Internal.h"
+#include "zkc/Dialect/IR.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Support/Json.h"
 
 using namespace llvm;
 using namespace mlir;

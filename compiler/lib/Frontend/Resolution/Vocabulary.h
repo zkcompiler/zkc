@@ -2,7 +2,7 @@
 #define ZKC_FRONTEND_RESOLUTION_VOCABULARY_H
 #include "../Semantics/Types.h"
 #include "Names.h"
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 
 namespace zkc::frontend::resolution {

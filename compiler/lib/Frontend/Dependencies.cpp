@@ -3,7 +3,7 @@
 #include "Syntax/Lexer.h"
 #include "Syntax/Tree.h"
 #include "zkc/Frontend/Compile.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include <filesystem>
 #include <map>
 #include <set>

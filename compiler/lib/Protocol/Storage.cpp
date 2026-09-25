@@ -1,8 +1,12 @@
-#include "Support.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Protocol/TypeProperties.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Builders.h"
+#include "zkc/Support/Json.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;

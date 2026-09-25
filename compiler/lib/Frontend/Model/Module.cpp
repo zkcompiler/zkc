@@ -1,7 +1,7 @@
 #include "Module.h"
 #include "../Resolution/Project.h"
 #include "../Semantics/Libraries.h"
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include <functional>

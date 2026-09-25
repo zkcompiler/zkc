@@ -1,6 +1,7 @@
-#include "zkc/Dialect/IR.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Diagnostics.h"
+#include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/IR.h"
 #include "llvm/Support/raw_ostream.h"
 
 // Exercise the registered hook for every owned operation, including operations
@@ -12,10 +13,12 @@ int main() {
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   mlir::Builder builder(&context);
-  auto unknown = builder.getDictionaryAttr(
-      {builder.getNamedAttr("zkc_unrecognized_property", builder.getUnitAttr())});
+  auto unknown = builder.getDictionaryAttr({builder.getNamedAttr(
+      "zkc_unrecognized_property", builder.getUnitAttr())});
   std::string diagnostic;
+  std::vector<zkc::diagnostics::RefusalInfo> codes;
   mlir::ScopedDiagnosticHandler handler(&context, [&](mlir::Diagnostic &d) {
+    codes = zkc::diagnostics::refusals(d);
     llvm::raw_string_ostream stream(diagnostic);
     d.print(stream);
     return mlir::success();
@@ -24,7 +27,8 @@ int main() {
   for (auto name : context.getRegisteredOperations()) {
     if (!llvm::is_contained(
             llvm::ArrayRef<llvm::StringRef>{"pir", "plan", "algebra", "poly",
-                                            "pcs", "oracle", "claim", "relation"},
+                                            "pcs", "oracle", "claim",
+                                            "relation"},
             name.getDialectNamespace()) ||
         name.getOpPropertyByteSize() == 0)
       continue;
@@ -34,14 +38,16 @@ int main() {
     mlir::OperationState state(builder.getUnknownLoc(), name);
     auto *operation = mlir::Operation::create(state);
     diagnostic.clear();
+    codes.clear();
     auto converted = name.setOpPropertiesFromAttribute(
         name, operation->getPropertiesStorage(), unknown,
         [&] { return mlir::emitError(builder.getUnknownLoc()); });
     operation->destroy();
-    if (mlir::succeeded(converted) ||
-        diagnostic.find("mlir-unknown-property") == std::string::npos) {
+    if (mlir::succeeded(converted) || codes.size() != 1 ||
+        codes[0].code != "mlir-unknown-property") {
       llvm::errs() << name.getStringRef()
-                   << ": missing strict property refusal: " << diagnostic << '\n';
+                   << ": missing strict property refusal: " << diagnostic
+                   << '\n';
       ++failures;
     }
   }

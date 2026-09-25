@@ -1,7 +1,7 @@
 #ifndef ZKC_FRONTEND_STATIC_DOMAINS_H
 #define ZKC_FRONTEND_STATIC_DOMAINS_H
 
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
 
 namespace zkc::frontend {
 /// Dotted spellings name installed identities, never implicit projections.

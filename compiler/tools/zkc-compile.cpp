@@ -1,6 +1,6 @@
 #include "zkc/Compiler/Driver.h"
-#include "zkc/Compiler/TableLibrary.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/TableLibrary.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/raw_ostream.h"

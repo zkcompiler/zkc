@@ -1,10 +1,10 @@
 #include "zkc/Protocol/Admission.h"
 #include "../Syntax/Lexer.h"
 #include "Admission.h"
-#include "zkc/Compiler/Instantiation.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 
 using namespace llvm;

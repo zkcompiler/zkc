@@ -2,7 +2,7 @@
 #define ZKC_PROTOCOL_ENCODINGLIMITS_H
 
 #include "zkc/Source/Model.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 
 namespace zkc::protocol {
 namespace detail {

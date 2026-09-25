@@ -1,6 +1,7 @@
 #include "zkc/Claims/Claims.h"
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Source/Snapshot.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 
@@ -85,7 +86,7 @@ int main() {
   // Selection custody uses the actual source entering physical planning.
   // Typed callers must receive the same admission as JSON callers.
   protocol::ImplementationSelection selected;
-  selected.sourceSnapshot = take(sourceSnapshot(document.root()));
+  selected.sourceSnapshot = take(source::snapshot(document.root()));
   selected.choices = {{"require", "arkworks/control.require"}};
   success(protocol::checkImplementationSelection(selected, document.root()));
   for (unsigned mutation = 0; mutation < 6; ++mutation) {

@@ -1,8 +1,8 @@
 #include "Library.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Variant.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 #include <set>
@@ -77,9 +77,10 @@ class Lowerer {
       return found->second;
     source::OperationBinding out;
     out.name = "__library_operation_" + std::to_string(bindings.size());
-    out.contract = operation.str();
-    out.arguments = std::move(actuals);
-    if (auto e = protocol::checkBindingDeclaration(out, false))
+    out.application.contract = operation.str();
+    out.application.arguments = std::move(actuals);
+    if (auto e =
+            protocol::checkBindingDeclaration(out.name, out.application, false))
       return std::move(e);
     auto name = out.name;
     result.bindings.push_back(std::move(out));

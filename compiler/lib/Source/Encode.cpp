@@ -1,5 +1,5 @@
-#include "zkc/Relation/Authoring.h"
 #include "zkc/Source/Codec.h"
+#include "zkc/Source/Relations.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <type_traits>
 
@@ -201,7 +201,8 @@ class Encoder {
   }
   V binding(const OperationBinding &b) {
     origin(b);
-    return A{b.name, b.contract, names(b.arguments), b.implementation};
+    return A{b.name, b.application.contract, names(b.application.arguments),
+             b.application.implementation};
   }
   V definition(const GenericFunction &f) {
     origin(f);

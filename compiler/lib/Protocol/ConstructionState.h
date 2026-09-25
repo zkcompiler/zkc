@@ -1,10 +1,10 @@
 #ifndef ZKC_PROTOCOL_CONSTRUCTION_STATE_H
 #define ZKC_PROTOCOL_CONSTRUCTION_STATE_H
 
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Protocol/Construction.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/TypeProperties.h"
 #include "llvm/ADT/BitVector.h"
 #include <functional>
 #include <iterator>

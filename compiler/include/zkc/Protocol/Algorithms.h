@@ -1,7 +1,7 @@
 #ifndef ZKC_PROTOCOL_ALGORITHMS_H
 #define ZKC_PROTOCOL_ALGORITHMS_H
 
-#include "zkc/Protocol/Module.h"
+#include "zkc/Translation/Protocol.h"
 
 namespace zkc::protocol {
 /// One retained primitive occurrence after local expansion. Path consists of

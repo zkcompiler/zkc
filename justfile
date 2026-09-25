@@ -23,7 +23,7 @@ build: (build-compiler "release") build-lean build-rust
 configure profile="release":
     python3 scripts/develop.py configure --profile "$1"
 
-# Build the compiler with a release, dev or sanitize profile.
+# Build the compiler with a release, dev, sanitize or shared profile.
 build-compiler profile="release":
     python3 scripts/develop.py compiler --profile "$1"
 

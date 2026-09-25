@@ -12,7 +12,7 @@ Physical table selection and stateful admission have their own bounded consumers
 
 ## Compiler installation and resolution
 
-[`SourceLibraryInterface`](../../compiler/include/zkc/Compiler/Library.h) supplies
+[`SourceLibraryInterface`](../../compiler/include/zkc/Interfaces/SourceLibrary.h) supplies
 the dependency set, type codecs, condition sort and operation resolution. A
 resolved operation records its concrete MLIR name, input/result types, attributes
 and ordering requirement. One model may describe several dialects: the table

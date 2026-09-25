@@ -1,5 +1,5 @@
 #include "zkc/Analysis/PolynomialDomains.h"
-#include "zkc/Protocol/Contracts.h"
+#include "zkc/Contracts/Operations.h"
 #include "llvm/ADT/STLExtras.h"
 #include <tuple>
 

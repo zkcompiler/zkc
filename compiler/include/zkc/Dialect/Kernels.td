@@ -5,7 +5,7 @@ include "zkc/Interfaces/LinearContraction.td"
 // These mathematical operations retain potential failure: no Pure/speculatable
 // marker is inferred merely from a mathematical totality claim. The installed
 // verifier checks types, attributes and physical selection. Semantic facets
-// live in Protocol/Contracts.h; absent facets grant no rewrite permission.
+// live in Contracts/Operations.h; absent facets grant no rewrite permission.
 class KernelOp<Dialect dialect, string name, list<Trait> traits = []> : Op<dialect, name, traits> {
   let arguments = (ins Variadic<Zkc_ProtocolData>:$inputs, StrAttr:$site,
     ArrayAttr:$parameters, OptionalAttr<FlatSymbolRefAttr>:$binding);

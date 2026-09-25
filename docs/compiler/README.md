@@ -23,7 +23,7 @@ source, construction, participant algorithms and physical execution. The
 | Interaction and local computation | [Logical calls](calls.md), [local composition](local-composition.md), [local control](local-control.md), [compact regions](regions.md) |
 | Construction and generation | [Interactive carrier](carrier-consolidation.md), [participant execution boundary](interactive-execution.md), [artifact construction](artifact-execution.md) and [format](artifact-format.md) |
 | Relation and claim consumers | [Relation ingress](relation-ingress.md), [claim composition](claim-composition.md), [targets](targets.md) |
-| Transformation and admission | [Selective lowering](lowering.md), [phase admission](phase-admission.md), [implementation design](design.md), [representation decisions](representation.md) |
+| Transformation and admission | [IR verification](ir-verification.md), [Selective lowering](lowering.md), [phase admission](phase-admission.md), [implementation design](design.md), [representation decisions](representation.md) |
 
 ## Finite reference implementations
 

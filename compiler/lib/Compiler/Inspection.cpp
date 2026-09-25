@@ -1,22 +1,14 @@
 #include "zkc/Compiler/Inspection.h"
 #include "InspectionPrinter.h"
-#include "zkc/Compiler/Instantiation.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Snapshot.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/SHA256.h"
 
 using namespace llvm;
 namespace zkc {
-namespace {
-std::string hashSnapshot(const json::Value &source) {
-  SHA256 hash;
-  hash.update("zkc.source-snapshot/1\n");
-  hash.update(printJson(source));
-  return toHex(hash.final(), true);
-}
-} // namespace
 Error sourceDiagnostic(const source::Document &document, Error error,
                        const source::Node *record) {
   auto span = document.span(record);
@@ -26,16 +18,6 @@ Error sourceDiagnostic(const source::Document &document, Error error,
                            (document.filename(file) + ":" + Twine(line) + ":" +
                             Twine(column) + ": " + toString(std::move(error)))
                                .str());
-}
-Expected<std::string> sourceSnapshot(const source::Module &module) {
-  if (auto e = source::checkStructure(module))
-    return e;
-  return hashSnapshot(source::encode(module));
-}
-Expected<std::string> sourceSnapshot(const source::Content &content) {
-  if (auto e = source::checkStructure(content))
-    return e;
-  return hashSnapshot(source::encode(content));
 }
 Expected<json::Value> inspectSource(const source::Document &document,
                                     const frontend::Analysis *analysis) {
@@ -59,11 +41,12 @@ Expected<json::Value> inspectSource(const source::Document &document,
   }
   // Paths are coordinates in the portable codec, not semantic traversal.
   source::RecordMap records;
-  auto portable = source::encode(*module, &records);
-  auto snapshot = hashSnapshot(portable);
+  auto snapshot = source::snapshot(*module, &records);
+  if (!snapshot)
+    return snapshot.takeError();
   (*report->getAsObject())["selection_template"] =
-      json::Array{"zkc.implementation-selection/1", snapshot, json::Array{}};
-  (*report->getAsObject())["snapshot"] = std::move(snapshot);
+      json::Array{"zkc.implementation-selection/1", *snapshot, json::Array{}};
+  (*report->getAsObject())["snapshot"] = std::move(*snapshot);
   std::map<const source::Node *, source::Path> paths;
   for (const auto &[path, node] : records)
     paths.emplace(node, path);

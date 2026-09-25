@@ -4,9 +4,9 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Relation/AIRPolynomial.h"
-#include "zkc/Relation/IR.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Translation/Relations.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;

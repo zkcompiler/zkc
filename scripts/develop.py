@@ -123,7 +123,7 @@ def execute(args):
              "-G", "Ninja", f"-DZkcCompiler_DIR={package}",
              *[f"-D{key}={value}" for key, value in selected.items()]])
         run(["cmake", "--build", consumer])
-        run([consumer / "consumer"])
+        run(["ctest", "--test-dir", consumer, "--output-on-failure"])
     elif args.operation == "bench":
         output = Path(args.output or ROOT / "build/bench").resolve()
         output.mkdir(parents=True, exist_ok=True)

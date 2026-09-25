@@ -1,9 +1,9 @@
 #include "zkc/Source/Resolution.h"
-#include "zkc/Compiler/Instantiation.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Relation/Authoring.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include <set>
 
 using namespace llvm;

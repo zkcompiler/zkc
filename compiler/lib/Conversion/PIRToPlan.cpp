@@ -1,8 +1,8 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "zkc/Target/Source.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Translation/Table.h"
 using namespace mlir;
 namespace zkc {
 namespace {

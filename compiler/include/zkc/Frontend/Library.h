@@ -1,7 +1,7 @@
 #ifndef ZKC_FRONTEND_LIBRARY_H
 #define ZKC_FRONTEND_LIBRARY_H
 
-#include "zkc/Compiler/Generic.h"
+#include "zkc/Contracts/Generic.h"
 #include "zkc/Frontend/Module.h"
 #include <map>
 #include <set>

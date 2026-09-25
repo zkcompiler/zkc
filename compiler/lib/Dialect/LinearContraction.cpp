@@ -1,7 +1,8 @@
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Domains.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -19,7 +20,7 @@ std::optional<Selection> selection(Operation *op, bool producer) {
     consumeError(binding.takeError());
     return {};
   }
-  auto logical = protocol::resolveBinding(*binding, false);
+  auto logical = protocol::resolveBinding(binding->application, false);
   if (!logical) {
     consumeError(logical.takeError());
     return {};
@@ -33,11 +34,13 @@ std::optional<Selection> selection(Operation *op, bool producer) {
         return false;
     return true;
   };
-  if (op->getName().getStringRef() != logical->operation ||
+  if (op->getName().getStringRef() !=
+          protocol::boundOperationName(binding->application.contract) ||
       !typesMatch(op->getOperandTypes(), logical->inputs) ||
       !typesMatch(op->getResultTypes(), logical->outputs))
     return {};
-  const auto *facts = protocol::operationContracts(binding->contract);
+  const auto *facts =
+      protocol::operationContracts(binding->application.contract);
   if (!facts || (producer ? !facts->diagonalMap : !facts->linearContraction))
     return {};
   const auto &port =
@@ -48,13 +51,15 @@ std::optional<Selection> selection(Operation *op, bool producer) {
   if (!representation)
     return {};
   auto family = StringRef(representation->identity).split('.').first;
-  binding->implementation = (family + "-diagonal/" + binding->contract).str();
-  auto physical = protocol::resolveBinding(*binding, true);
+  binding->application.implementation =
+      (family + "-diagonal/" + binding->application.contract).str();
+  auto physical = protocol::resolveBinding(binding->application, true);
   if (!physical) {
     consumeError(physical.takeError());
     return {};
   }
-  return Selection{facts, representation->identity, binding->implementation};
+  return Selection{facts, representation->identity,
+                   binding->application.implementation};
 }
 std::optional<DiagonalProducerSelection> producerSelection(Operation *op) {
   auto selected = selection(op, true);

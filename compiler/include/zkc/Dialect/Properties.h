@@ -4,16 +4,16 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "llvm/ADT/STLExtras.h"
 
 namespace zkc::detail {
 /// Registration adapter for the generated ODS property conversion. MLIR 23's
 /// converter reads known fields but silently drops unknown dictionary entries.
 /// Check the complete dictionary before calling it. Property-free operations
-/// retain MLIR's empty-properties refusal. Discardable attributes are a separate
-/// surface and never reach this check.
-template <typename Op>
-class StrictProperties : public Op {
+/// retain MLIR's empty-properties refusal. Discardable attributes are a
+/// separate surface and never reach this check.
+template <typename Op> class StrictProperties : public Op {
 public:
   using Op::Op;
   using Properties = typename Op::Properties;
@@ -29,9 +29,9 @@ public:
       for (auto entry : dictionary) {
         if (!llvm::is_contained(Op::getAttributeNames(),
                                 entry.getName().getValue())) {
-          emitError() << "mlir-unknown-property: " << Op::getOperationName()
-                      << " has no property '" << entry.getName().getValue()
-                      << "'";
+          diagnostics::emit(emitError(), "mlir-unknown-property")
+              << ": " << Op::getOperationName() << " has no property '"
+              << entry.getName().getValue() << "'";
           return mlir::failure();
         }
       }

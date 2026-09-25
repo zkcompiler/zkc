@@ -14,7 +14,7 @@ mapping, like `field.add` to `algebra.sum`, with no alternative legacy operation
 or fallback decoder. Coordinate order, dimension and Boolean-table shape are
 polynomial-domain obligations, even when a backend shares the sequence storage.
 
-`Protocol/Contracts.h` attaches these facets to each registered `Kernel`:
+`Contracts/Operations.h` attaches these facets to each registered `Kernel`:
 
 | Facet | Contents | Consumers |
 |---|---|---|
@@ -54,7 +54,7 @@ having a public-challenge construction counterpart.
 
 ## Custody is independent of transport
 
-`Protocol/TypeProperties.h` classifies admitted logical kinds as public-codec
+`Contracts/TypeProperties.h` classifies admitted logical kinds as public-codec
 values, private immutable custody, affine resources or unknown. A public-codec
 classification describes representability, not permission to disclose a secret.
 

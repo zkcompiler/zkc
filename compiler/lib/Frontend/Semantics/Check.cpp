@@ -8,9 +8,9 @@
 #include "Operators.h"
 #include "Protocols.h"
 #include "Types.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Relation/Authoring.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Source/Codec.h"
+#include "zkc/Source/Relations.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
@@ -87,14 +87,14 @@ void elaborateProfile(source::Module &module, StringRef profile) {
       binding.name = op->callee;
       while (!names.insert(binding.name).second)
         binding.name += "_";
-      binding.contract = op->callee;
-      StringRef key = binding.contract;
+      binding.application.contract = op->callee;
+      StringRef key = binding.application.contract;
       if (key.starts_with("pcs."))
-        binding.arguments = {"multilinear.kzg.bls12-381/1"};
+        binding.application.arguments = {"multilinear.kzg.bls12-381/1"};
       else if (key.starts_with("curve.") && key != "curve.response")
-        binding.arguments = {"bls12-381.g1"};
+        binding.application.arguments = {"bls12-381.g1"};
       else if (key.starts_with("transcript.")) {
-        binding.arguments = {"merlin3.bls12-381.fr64be/1"};
+        binding.application.arguments = {"merlin3.bls12-381.fr64be/1"};
         if (key.starts_with("transcript.observe.")) {
           std::string payload = key.drop_front(19).str();
           auto identity = profileIdentity(profile, payload);
@@ -103,22 +103,23 @@ void elaborateProfile(source::Module &module, StringRef profile) {
           auto parsed = protocol::parseBoundType(payload, false);
           if (parsed) {
             if (!parsed->identity.empty())
-              binding.arguments.push_back(parsed->identity);
-            binding.arguments.push_back(protocol::defaultCodec(*parsed).str());
+              binding.application.arguments.push_back(parsed->identity);
+            binding.application.arguments.push_back(
+                protocol::defaultCodec(*parsed).str());
           } else {
             consumeError(parsed.takeError());
           }
         }
       } else if (key != "bool.and" && key != "control.require" &&
                  !key.starts_with("index.") && !key.starts_with("indices."))
-        binding.arguments = {"bls12-381.fr"};
+        binding.application.arguments = {"bls12-381.fr"};
       // Select the actual profile backend; never infer the PCS scheme from its
       // old module name or silently substitute a different representation.
-      binding.implementation =
+      binding.application.implementation =
           (key.starts_with("index.") || key.starts_with("indices.")
                ? "native/"
                : "arkworks/") +
-          binding.contract;
+          binding.application.contract;
       operations.emplace(op->callee, binding.name);
       op->callee = binding.name;
       module.bindings.push_back(std::move(binding));
@@ -2130,7 +2131,7 @@ class Checker {
              "unknown bound operation or helper '" + call.callee + "'");
         return {};
       }
-      auto resolved = protocol::resolveBinding(*it, false);
+      auto resolved = protocol::resolveBinding(it->application, false);
       if (!resolved) {
         fail(call, "source-call-binding", toString(resolved.takeError()));
         return {};
@@ -2307,9 +2308,9 @@ class Checker {
       std::string implementation;
       if (usesProfile(call)) {
         source::OperationBinding requested;
-        requested.contract = call.callee;
-        requested.arguments = statics;
-        auto selected = protocol::defaultImplementation(requested);
+        requested.application.contract = call.callee;
+        requested.application.arguments = statics;
+        auto selected = protocol::defaultImplementation(requested.application);
         if (!selected) {
           fail(call, "source-profile", toString(selected.takeError()));
           return {};
@@ -2317,8 +2318,9 @@ class Checker {
         implementation = *selected;
       }
       auto binding = llvm::find_if(module.bindings, [&](const auto &b) {
-        return b.contract == call.callee && b.arguments == statics &&
-               b.implementation == implementation;
+        return b.application.contract == call.callee &&
+               b.application.arguments == statics &&
+               b.application.implementation == implementation;
       });
       if (binding == module.bindings.end()) {
         target = usesProfile(call)
@@ -2331,9 +2333,9 @@ class Checker {
         source::OperationBinding generated;
         generated.location = call.location;
         generated.name = target;
-        generated.contract = call.callee;
-        generated.arguments = statics;
-        generated.implementation = implementation;
+        generated.application.contract = call.callee;
+        generated.application.arguments = statics;
+        generated.application.implementation = implementation;
         module.bindings.push_back(std::move(generated));
       } else
         target = binding->name;

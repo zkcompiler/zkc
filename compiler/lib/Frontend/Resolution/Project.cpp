@@ -4,8 +4,8 @@
 #include "Names.h"
 #include "Vocabulary.h"
 #include "zkc/Frontend/Dependencies.h"
-#include "zkc/Relation/Authoring.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
@@ -1176,7 +1176,7 @@ class Resolver {
       for (const auto &binding : m.syntax.bindings)
         context->bindingContracts.emplace(
             context->declarations[m.names.at(binding.name).index].symbol,
-            binding.contract);
+            binding.application.contract);
       for (auto [i, u] : enumerate(m.syntax.uses))
         insert(index, u.name, {Binding::Kind::Use, uint32_t(i), u.exported}, u);
       if (m.path.empty())

@@ -1,7 +1,7 @@
 #include "../Support/Input.h"
 #include "Syntax/Tree.h"
 #include "zkc/Frontend/Dependencies.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include <algorithm>
 #include <filesystem>
 #include <map>

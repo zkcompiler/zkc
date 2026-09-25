@@ -6,7 +6,12 @@
 #include "llvm/ADT/StringRef.h"
 #include <memory>
 
+namespace mlir {
+class ModuleOp;
+}
 namespace zkc {
+/// Lower finite source-library programs; refuse other top-level operations.
+mlir::LogicalResult lowerToPlan(mlir::ModuleOp module);
 std::unique_ptr<mlir::Pass> createLowerPIRToPlanPass();
 std::unique_ptr<mlir::Pass>
 createLowerPlanToPhysicalPass(llvm::StringRef mode = "lazy");

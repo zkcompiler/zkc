@@ -1,10 +1,13 @@
-#include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
+#include "zkc/Dialect/Builders.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Protocol/Algorithms.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
 #include <set>
 

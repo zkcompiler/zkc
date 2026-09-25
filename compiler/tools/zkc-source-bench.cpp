@@ -1,14 +1,14 @@
 #include "../lib/Support/Input.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 // Bounded API measurements, not a second admission or elaboration path.
 #include "zkc/Compiler/Inspection.h"
-#include "zkc/Compiler/Instantiation.h"
 #include "zkc/Compiler/SourceLocations.h"
-#include "zkc/Compiler/TableLibrary.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/TableLibrary.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Protocol/Module.h"
+#include "zkc/Protocol/Instantiation.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>

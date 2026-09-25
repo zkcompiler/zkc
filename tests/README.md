@@ -60,7 +60,7 @@ source revision rather than repeating it after unrelated edits.
 | `formal/Tests/` | Lake, through `just build-lean` | Compiled examples, proof obligations, guards and executable assertions |
 | `formal/checks/` and `formal/consumers/` | `just test-lean` | Package audits, CLI controls and independently built consumers |
 | Ordered artifact drivers | `just test-artifact` | Generated fixtures followed by host/reference/differential/baseline comparisons |
-| Installed CMake SDK | `just test-install` | Independent consumer configuration, linking and execution |
+| Installed CMake SDK | `just test-install` | Component consumers and the standalone TableGen service; use `just test-install "" shared` to check shared linkage |
 | Separate benchmark Cargo workspaces | `just test-bench` | Correctness tests; measurement commands remain `just bench` |
 | Optional external integrations | `just test-groth16 W`, `just test-lean-integration`, `nix build .#llzk` | Explicit fixture/dependency/toolchain requirements |
 | Sanitizers and source reconstruction | `just test-sanitize`, `just test-lean-fresh` | Separate validation modes, not substitutes for ordinary tests |

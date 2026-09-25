@@ -2,7 +2,7 @@
 #define ZKC_FRONTEND_DEPENDENCIES_H
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Relation/Authoring.h"
+#include "zkc/Source/Relations.h"
 namespace zkc::frontend {
 /// Capture explicit roots and their declared modules/assets. Logical modules
 /// use root-relative paths (a::b -> a/b.pir); assets use the declaring file's

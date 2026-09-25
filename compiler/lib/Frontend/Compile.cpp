@@ -6,7 +6,7 @@
 #include "Semantics/Check.h"
 #include "Tooling/Access.h"
 #include "zkc/Frontend/Analysis.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::frontend {

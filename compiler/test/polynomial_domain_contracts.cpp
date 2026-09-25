@@ -1,7 +1,7 @@
 #include "zkc/Analysis/PolynomialDomains.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Kernels.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Operations.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 

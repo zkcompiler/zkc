@@ -1,7 +1,7 @@
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "zkc/Dialect/Base.td"
-include "zkc/Dialect/Relation.td"
+include "zkc/Dialect/Relation/IR/Relation.td"
 include "zkc/Interfaces/SourceOpInterface.td"
 def PIRDialect : ZKCDialect {
   let name = "pir";
@@ -237,9 +237,9 @@ def InvokeOp : Op<PlanDialect, "invoke", [MemoryEffects<[MemRead, MemWrite]>]> {
 }
 
 include "zkc/Dialect/Types.td"
-include "zkc/Dialect/Protocol.td"
-include "zkc/Dialect/Participant.td"
+include "zkc/Dialect/PIR/IR/Protocol.td"
+include "zkc/Dialect/PIR/IR/Participant.td"
 include "zkc/Dialect/Kernels.td"
-include "zkc/Dialect/Physical.td"
+include "zkc/Dialect/Plan/IR/Physical.td"
 
-include "zkc/Dialect/Claim.td"
+include "zkc/Dialect/Claim/IR/Claim.td"

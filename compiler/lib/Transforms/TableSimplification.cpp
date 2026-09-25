@@ -1,9 +1,9 @@
 #include "zkc/Transforms/TableSimplification.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Compiler/Physical.h"
-#include "zkc/Target/Source.h"
+#include "zkc/Dialect/Plan/IR/Physical.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Translation/Table.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;

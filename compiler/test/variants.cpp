@@ -1,16 +1,17 @@
 #include "Names.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Protocol/Algorithms.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Module.h"
-#include "zkc/Protocol/TypeProperties.h"
-#include "zkc/Protocol/Variant.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Execution.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -203,7 +204,7 @@ int main() {
   reject(protocol::admit(bad, true), "interactive-instruction");
 
   bad = module;
-  bad.bindings.push_back({{}, "both", "bool.and", {}, ""});
+  bad.bindings.push_back({{}, "both", {"bool.and", {}, ""}});
   bad.functions[0].body->insert(
       bad.functions[0].body->begin() + 1,
       ins("raw",
@@ -425,7 +426,9 @@ int main() {
   challenged.instances.clear();
   challenged.entries.clear();
   challenged.bindings.push_back(
-      {{}, "draw", "transcript.challenge", {"merlin3.bls12-381.fr64be/1"}, ""});
+      {{},
+       "draw",
+       {"transcript.challenge", {"merlin3.bls12-381.fr64be/1"}, ""}});
   const std::string transcript = "transcript:merlin3.bls12-381.fr64be/1";
   auto &challengeFunction = challenged.functions[0];
   challengeFunction.arguments.push_back({"t", transcript});
@@ -453,8 +456,8 @@ int main() {
   reject(protocol::admit(challenged, false), "local-match-challenge");
   for (bool helper : {false, true}) {
     auto observed = challenged;
-    observed.bindings[0].contract = "transcript.observe.bool";
-    observed.bindings[0].arguments.push_back("zkcv.bool/1");
+    observed.bindings[0].application.contract = "transcript.observe.bool";
+    observed.bindings[0].application.arguments.push_back("zkcv.bool/1");
     auto &fn = observed.functions[0];
     fn.results = {transcript};
     auto *match = (*fn.body)[1].get<source::Match>();
@@ -484,9 +487,9 @@ int main() {
     external.protocols.clear();
     external.instances.clear();
     external.entries.clear();
-    external.bindings = {{{}, "effect", contract, {}, ""}};
+    external.bindings = {{{}, "effect", {contract, {}, ""}}};
     const auto signature =
-        take(protocol::resolveBinding(external.bindings[0], false));
+        take(protocol::resolveBinding(external.bindings[0].application, false));
     auto &fn = external.functions[0];
     source::Names inputs, outputs;
     for (size_t i = 0; i < signature.inputs.size(); ++i) {

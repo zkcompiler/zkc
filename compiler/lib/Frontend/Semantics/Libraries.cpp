@@ -5,12 +5,12 @@
 #include "../Resolution/Project.h"
 #include "Captures.h"
 #include "Types.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Library.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Domains.h"
-#include "zkc/Relation/Authoring.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
@@ -865,8 +865,8 @@ public:
               return a.fail(
                   e, "library-source-call",
                   "bound operation cannot receive extra static arguments");
-            operation = binding.contract;
-            for (const auto &s : binding.arguments) {
+            operation = binding.application.contract;
+            for (const auto &s : binding.application.arguments) {
               syntax::Atom atom;
               atom.kind = syntax::Atom::Kind::String;
               atom.value = s;
@@ -875,7 +875,7 @@ public:
                 return t.takeError();
               args.push_back(*t);
             }
-            if (!binding.implementation.empty())
+            if (!binding.application.implementation.empty())
               return a.fail(e, "library-source-implementation",
                             "checked logical calls cannot discard an explicit "
                             "implementation selection");
@@ -2638,9 +2638,10 @@ Expected<syntax::Module> Author::run() {
     auto existing = llvm::find_if(
         out.bindings, [&](const auto &b) { return b.name == binding.name; });
     if (existing != out.bindings.end()) {
-      if (existing->contract != binding.contract ||
-          existing->arguments != binding.arguments ||
-          existing->implementation != binding.implementation)
+      if (existing->application.contract != binding.application.contract ||
+          existing->application.arguments != binding.application.arguments ||
+          existing->application.implementation !=
+              binding.application.implementation)
         return fail(source, "library-source-collision",
                     "lowered binding collides with a different binding");
     } else

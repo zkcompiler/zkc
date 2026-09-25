@@ -1,9 +1,11 @@
+#include "Verification.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "zkc/Compiler/Library.h"
-#include "zkc/Compiler/Physical.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Domains.h"
-#include "zkc/Protocol/Module.h"
+#include "zkc/Dialect/Plan/IR/Physical.h"
+#include "zkc/Interfaces/SourceLibrary.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 using namespace llvm;
@@ -14,7 +16,7 @@ static LogicalResult field(llvm::function_ref<InFlightDiagnostic()> emit,
                            StringRef d) {
   if (d != "f2" && d != "f7" && d != "reference.scalar" &&
       protocol::installedDomains().identitySort(d) != "Field")
-    return emit() << "unknown-domain";
+    return diagnostics::emit(emit(), "unknown-domain");
   return success();
 }
 static bool digits(StringRef n) {
@@ -45,7 +47,7 @@ LogicalResult TableType::verify(llvm::function_ref<InFlightDiagnostic()> e,
   if (failed(field(e, d)))
     return failure();
   if (!digits(n))
-    return e() << "invalid-original-rank";
+    return diagnostics::emit(e(), "invalid-original-rank");
   return success();
 }
 LogicalResult ResidualType::verify(llvm::function_ref<InFlightDiagnostic()> e,
@@ -125,16 +127,11 @@ LogicalResult PlanProgramOp::verifyRegions() { return verifyProgram(*this); }
 static LogicalResult stop(Operation *op, StringRef reason) {
   if (reason != "reject" && reason != "abort" && reason != "exhausted" &&
       reason != "incomplete" && reason != "refused")
-    return op->emitOpError("unknown-stop");
+    return diagnostics::emit(op->emitOpError(), "unknown-stop");
   return success();
 }
 LogicalResult PIRStopOp::verify() { return stop(*this, getReason()); }
 LogicalResult PlanStopOp::verify() { return stop(*this, getReason()); }
-void registerDialects(DialectRegistry &registry) {
-  registry.insert<PIRDialect, AlgebraDialect, PolynomialDialect, PlanDialect,
-                  PCSDialect, OracleDialect, RelationDialect, ClaimDialect,
-                  func::FuncDialect>();
-}
 } // namespace zkc
 
 mlir::LogicalResult zkc::ProtocolModuleOp::verifyRegions() {

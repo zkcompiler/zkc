@@ -1,8 +1,8 @@
 #include "../lib/Frontend/Lowering/Library.h"
 #include "Names.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Frontend/Library.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Protocol/Bindings.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <functional>

@@ -1,11 +1,12 @@
 #include "Names.h"
 #include "zkc/Compiler/Inspection.h"
-#include "zkc/Compiler/Instantiation.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Document.h"
 #include "zkc/Source/Resolution.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Snapshot.h"
+#include "zkc/Support/Json.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 #include <limits>
@@ -111,7 +112,7 @@ void builderProbe() {
     entry main = demo;
   })pir";
   Module module;
-  module.bindings.push_back({{}, "both", "bool.and", {}, ""});
+  module.bindings.push_back({{}, "both", {"bool.and", {}, ""}});
   Function both;
   both.name = "Both";
   both.arguments = {{"a", "bool"}, {"b", "bool"}};
@@ -376,12 +377,12 @@ void structuralBoundaries() {
   module.functions.front().body = Body{
       instruction("op", source::Operation{"op", {"open_static"}, {}, {}, {}})};
   rejects(checkStructure(module), "source-model-shape");
-  rejects(sourceSnapshot(module), "source-model-shape");
+  rejects(source::snapshot(module), "source-model-shape");
   module.functions.front().body = Body{instruction("", source::Return{})};
-  const auto snapshot = take(sourceSnapshot(module));
+  const auto snapshot = take(source::snapshot(module));
   module.location = Span{5, 7};
   module.functions.front().location = Span{20, 30};
-  require(take(sourceSnapshot(module)) == snapshot,
+  require(take(source::snapshot(module)) == snapshot,
           "diagnostic origins do not enter source identity");
   const char *json =
       R"json(["zkc.library/1",[],[],["zkc.protocol/1",[],[],[],[],[]]])json";

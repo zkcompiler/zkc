@@ -1,7 +1,7 @@
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Protocol/TypeProperties.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>

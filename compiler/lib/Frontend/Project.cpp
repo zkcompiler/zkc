@@ -1,6 +1,6 @@
 #include "zkc/Frontend/Input.h"
-#include "zkc/Relation/Authoring.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include <set>
 
 using namespace llvm;

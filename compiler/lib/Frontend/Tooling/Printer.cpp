@@ -1,11 +1,11 @@
 #include "../Lowering/Admission.h"
 #include "../Semantics/Types.h"
 #include "../Syntax/Lexer.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Protocol/Bindings.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
@@ -466,11 +466,11 @@ class Printer {
       out << "bind ";
       name(binding.name);
       out << " = ";
-      operationName(binding.contract);
-      names(binding.arguments);
-      if (!binding.implementation.empty()) {
+      operationName(binding.application.contract);
+      names(binding.application.arguments);
+      if (!binding.application.implementation.empty()) {
         out << " using ";
-        name(binding.implementation);
+        name(binding.application.implementation);
       }
       out << ";\n";
     }

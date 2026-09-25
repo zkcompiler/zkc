@@ -1,11 +1,12 @@
 #include "Internal.h"
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Protocol/Construction.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Protocol/Module.h"
-#include "zkc/Protocol/TypeProperties.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include <set>
 
 using namespace llvm;

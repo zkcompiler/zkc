@@ -1,5 +1,5 @@
 #include "LinkInternal.h"
-#include "zkc/Protocol/Domains.h"
+#include "zkc/Contracts/Domains.h"
 
 namespace zkc::frontend::library::detail {
 // Substitute actuals without crossing any abstract representation boundary.

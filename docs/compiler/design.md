@@ -5,8 +5,10 @@ independent participant algorithms and physical execution; this chapter supplies
 the lower-level responsibilities inside that architecture. The
 [transformation specification](../spec/verification/refinement.md) owns meaning; the
 [compiler guide](README.md) explains it. The compiler is
-one C++ library using MLIR, including graph algorithms that do not need MLIR
-objects, analyses, cost models, search, rewrites, planning and emission. Rust
+a set of [C++ components](../../compiler/README.md#components): MLIR-free common
+services, coordinated IR/translation/verification, and upper compiler workflows.
+Graph algorithms, cost models, search, rewrites, planning and emission remain
+in the native compiler rather than crossing a per-operation language boundary. Rust
 submits complete jobs and consumes completed artifacts.
 The [representation decision](representation.md) selects the native
 implementation and tests mixed-level representation.

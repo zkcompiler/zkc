@@ -58,11 +58,15 @@ frontend, FFI builder, package system or incremental editor database is implemen
 | [Frontend/Compile.h](../../compiler/include/zkc/Frontend/Compile.h) | Lower a checked module; independent PIR admission remains required |
 | [Frontend/Analysis.h](../../compiler/include/zkc/Frontend/Analysis.h) | Retained source identities, types, uses, diagnostics and checked lowering plans |
 | [Frontend/Protocol.h](../../compiler/include/zkc/Frontend/Protocol.h) | Text parsing, checking, printing and token-preserving formatting |
-| [Compiler/Instantiation.h](../../compiler/include/zkc/Compiler/Instantiation.h) | Generic checks, source-preserving preparation and shared specialization |
+| [Protocol/Instantiation.h](../../compiler/include/zkc/Protocol/Instantiation.h) | Generic checks, source-preserving preparation and shared specialization |
 | [Protocol/Admission.h](../../compiler/include/zkc/Protocol/Admission.h) | Common and participant semantic admission |
 | [Protocol/Construction.h](../../compiler/include/zkc/Protocol/Construction.h) | Construction from typed common source and a typed descriptor |
-| [Protocol/Kernels.h](../../compiler/include/zkc/Protocol/Kernels.h) | Kernel/type registry, static parameter checks and type encoding |
-| [Protocol/Module.h](../../compiler/include/zkc/Protocol/Module.h) | MLIR import/export and participant lowering |
+| [Contracts/Kernels.h](../../compiler/include/zkc/Contracts/Kernels.h) | Installed kernel shapes and static parameter checks |
+| [Contracts/Bindings.h](../../compiler/include/zkc/Contracts/Bindings.h) | MLIR-free nominal types and contract application checking |
+| [Source/Snapshot.h](../../compiler/include/zkc/Source/Snapshot.h) | Checked exact portable-source identity |
+| [Dialect/Bindings.h](../../compiler/include/zkc/Dialect/Bindings.h) | MLIR type encoding and binding adapters |
+| [Translation/Protocol.h](../../compiler/include/zkc/Translation/Protocol.h) | MLIR import and checked export |
+| [Transforms/Protocol.h](../../compiler/include/zkc/Transforms/Protocol.h) | Participant projection, physical planning and storage insertion |
 
 `Module` contains functions, protocols, instances, entries, operation bindings,
 generic definitions and configurations. `Participants` is a distinct root with
@@ -101,9 +105,11 @@ inputs intact. Current consumers need neither arenas nor persistent node IDs.
 The `library` flag retains an explicitly empty library envelope for exact encoding;
 it introduces no new protocol property.
 
-`source::OperationBinding` is shared by source and compiler consumers; its
-optional origin remains diagnostic metadata. A resolved `BoundOperation` adds
-the checked signature and represents a different stage. Internal algorithms do
+`source::OperationBinding` combines a symbol and diagnostic origin with a
+`BindingApplication`: contract, static arguments and optional implementation.
+Resolving that application produces a `BoundOperation` with checked input/output
+types, independent of source provenance or MLIR. The dialect adapter selects the
+registered operation separately. Internal algorithms do
 not retain JSON overloads of typed source APIs. Portable codecs, certificates
 and independently read artifacts retain their own encoding boundaries.
 

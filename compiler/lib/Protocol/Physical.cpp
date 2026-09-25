@@ -1,12 +1,15 @@
 #include "BindingPhysical.h"
-#include "Support.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Dialect/Builders.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Kernels.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace llvm;

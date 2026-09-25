@@ -1,5 +1,5 @@
 #include "Internal.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 
 using namespace llvm;
 namespace zkc::claims {

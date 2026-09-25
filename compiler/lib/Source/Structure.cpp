@@ -1,6 +1,6 @@
-#include "zkc/Relation/Authoring.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include <type_traits>
 
 using namespace llvm;
@@ -209,8 +209,9 @@ class Structure {
   }
   template <typename T> size_t environment(const T &m) {
     return list(m.bindings, [&](const OperationBinding &b) {
-      return fields({text(b.name), text(b.contract), names(b.arguments),
-                     text(b.implementation)});
+      return fields({text(b.name), text(b.application.contract),
+                     names(b.application.arguments),
+                     text(b.application.implementation)});
     });
   }
   size_t definition(const GenericFunction &f) {

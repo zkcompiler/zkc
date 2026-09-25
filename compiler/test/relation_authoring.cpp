@@ -1,10 +1,10 @@
 #include "Names.h"
-#include "zkc/Compiler/Instantiation.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Frontend/Dependencies.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Relation/Authoring.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Protocol/Instantiation.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 using namespace llvm;
