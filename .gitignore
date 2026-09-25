@@ -1,17 +1,33 @@
-__pycache__/
-*.pyc
-.venv*/
-.ruff_cache/
+# CMake and Cargo build outputs.
 build/
+target/
 compile_commands.json
 CMakeUserPresets.json
+
+# Python environments and caches.
+.venv*/
+__pycache__/
+*.py[co]
+.pytest_cache/
+.ruff_cache/
+
+# Nix result links, local caches and benchmark records.
+/result
+/result-*
+.cache/
+/bench/*/records/
+
+# Editor and operating-system metadata.
 .vscode/
 .idea/
-.cache/
-**/target/
-docs/private/
+.DS_Store
+._.DS_Store
+
+# Local agent state and private research (not part of the public tree).
 .agents/
 .claude/
 .codex/
-CLAUDE.md
-.DS_Store
+/AGENTS.md
+/CLAUDE.md
+/CLAUDE.local.md
+/docs/private/

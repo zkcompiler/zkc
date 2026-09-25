@@ -1,0 +1,58 @@
+[workspace]
+members = [
+  "crates/zkc-runtime",
+  "crates/zkc-tools",
+  "crates/zkc-arkworks",
+  "crates/zkc-backends",
+  "crates/zkc-test-support",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "unbounded_depth"] }
+num-bigint = "=0.4.8"
+num-traits = "=0.2.19"
+tempfile = "=3.27.0"
+zkc-test-support = { path = "crates/zkc-test-support" }
+
+# Native integration versions are owned here; each crate selects its features.
+ark-bls12-381 = "=0.6.0"
+ark-bn254 = "=0.6.0"
+ark-ec = "=0.6.0"
+ark-ff = "=0.6.0"
+ark-poly = "=0.6.0"
+ark-poly-commit = "=0.6.0"
+ark-serialize = "=0.6.0"
+ark-std = "=0.6.0"
+curve25519-dalek = "=4.1.3"
+merlin = "=3.0.0"
+p3-commit = "=0.5.1"
+p3-dft = "=0.5.1"
+p3-field = "=0.5.1"
+p3-keccak = "=0.5.1"
+p3-koala-bear = "=0.5.1"
+p3-matrix = "=0.5.1"
+p3-merkle-tree = "=0.5.1"
+p3-symmetric = "=0.5.1"
+rand = "=0.8.8"
+serde = "=1.0.229"
+sha2 = "=0.10.9"
+sha3 = "=0.10.9"
+spongefish = { version = "=0.7.4", default-features = false }
+
+# OpenVM adapters use the separately pinned 0.4.3 family.
+p3-baby-bear-043 = { package = "p3-baby-bear", version = "=0.4.3" }
+p3-field-043 = { package = "p3-field", version = "=0.4.3" }
+p3-symmetric-043 = { package = "p3-symmetric", version = "=0.4.3" }
+p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
+
+zkc-runtime = { path = "crates/zkc-runtime" }
+zkc-backends = { path = "crates/zkc-backends" }
+zkc-arkworks = { path = "crates/zkc-arkworks" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

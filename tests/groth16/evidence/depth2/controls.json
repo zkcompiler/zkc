@@ -1,0 +1,83 @@
+{
+  "depth": 2,
+  "passed": 19,
+  "results": [
+    {
+      "name": "root",
+      "result": "witness rejected"
+    },
+    {
+      "name": "secret",
+      "result": "witness rejected"
+    },
+    {
+      "name": "blinding",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-0",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-0",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-0",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-1",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-1",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-1",
+      "result": "witness rejected"
+    },
+    {
+      "name": "zero-inputs-left",
+      "result": "valid witness checked"
+    },
+    {
+      "name": "boundary-inputs-right",
+      "result": "valid witness checked"
+    },
+    {
+      "name": "tampered-wtns-root",
+      "result": "unmodified wtns checker rejected"
+    },
+    {
+      "name": "tampered-wtns-proof",
+      "result": "prover emitted proof; unmodified verifier rejected"
+    },
+    {
+      "name": "changed-public-root",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "noncanonical-public-root",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "negated-A-valid-curve-point",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "G2-coefficients-swapped",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "repeat-r1-s2",
+      "result": "exact canonical proof equality"
+    },
+    {
+      "name": "repeat-r0-s0",
+      "result": "exact canonical proof equality"
+    }
+  ],
+  "unmodifiedVerifier": true
+}

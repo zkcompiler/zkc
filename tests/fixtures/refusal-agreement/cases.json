@@ -1,0 +1,376 @@
+[
+  {
+    "name": "reuse",
+    "phase": "local-admission",
+    "reason": "interactive-resource-reuse",
+    "native_category": "Ssa"
+  },
+  {
+    "name": "duplicate-result",
+    "phase": "local-admission",
+    "reason": "interactive-resource-reuse",
+    "native_category": "Ssa"
+  },
+  {
+    "name": "domain",
+    "phase": "operation-admission",
+    "reason": "binding-operation-signature",
+    "native_category": "Signature"
+  },
+  {
+    "name": "attributes",
+    "phase": "operation-admission",
+    "reason": "interactive-kernel-parameters",
+    "native_category": "Attributes"
+  },
+  {
+    "name": "slot",
+    "phase": "declaration-admission",
+    "reason": "binding-resource-unit-domain",
+    "native_category": "Type"
+  },
+  {
+    "name": "slot-arity",
+    "phase": "declaration-admission",
+    "reason": "binding-resource-unit-domain",
+    "native_category": "Signature"
+  },
+  {
+    "name": "implementation",
+    "phase": "declaration-admission",
+    "reason": "binding-implementation",
+    "native_category": "Signature"
+  },
+  {
+    "name": "loop-leading-zero",
+    "phase": "numeric-decoding",
+    "reason": "noncanonical-natural",
+    "place": "loop",
+    "value": "01",
+    "native_category": "Natural"
+  },
+  {
+    "name": "loop-not-natural",
+    "phase": "numeric-decoding",
+    "reason": "expected-natural",
+    "place": "loop",
+    "value": "+1",
+    "native_category": "Natural"
+  },
+  {
+    "name": "parameter-leading-zero",
+    "phase": "numeric-decoding",
+    "reason": "noncanonical-natural",
+    "place": "parameter",
+    "value": "01",
+    "native_category": "Natural"
+  },
+  {
+    "name": "parameter-not-natural",
+    "phase": "numeric-decoding",
+    "reason": "expected-natural",
+    "place": "parameter",
+    "value": "+1",
+    "native_category": "Natural"
+  },
+  {
+    "name": "index-leading-zero",
+    "phase": "operation-attributes",
+    "reason": "noncanonical-natural",
+    "place": "index",
+    "value": "01",
+    "native_category": "Attributes"
+  },
+  {
+    "name": "index-not-natural",
+    "phase": "operation-attributes",
+    "reason": "expected-natural",
+    "place": "index",
+    "value": "+1",
+    "native_category": "Attributes"
+  },
+  {
+    "name": "scalar-leading-zero",
+    "phase": "operation-attributes",
+    "reason": "noncanonical-natural",
+    "place": "scalar",
+    "value": "01",
+    "native_category": "Attributes"
+  },
+  {
+    "name": "scalar-not-natural",
+    "phase": "operation-attributes",
+    "reason": "expected-natural",
+    "place": "scalar",
+    "value": "+1",
+    "native_category": "Attributes"
+  },
+  {
+    "name": "region-terminal",
+    "phase": "local-admission",
+    "reason": "local-terminal-context",
+    "native_category": "Terminal"
+  },
+  {
+    "name": "branch-yield",
+    "phase": "local-admission",
+    "reason": "local-if-yield",
+    "native_category": "Signature"
+  },
+  {
+    "name": "loop-yield",
+    "phase": "local-admission",
+    "reason": "local-yield-types",
+    "native_category": "Signature"
+  },
+  {
+    "name": "function-return",
+    "phase": "local-admission",
+    "reason": "function-return-types",
+    "native_category": "Signature"
+  },
+  {
+    "name": "variant-version",
+    "phase": "type-decoding",
+    "reason": "binding-type",
+    "graph": [
+      "zkc.variant/2",
+      [
+        "X",
+        "Some",
+        "bool",
+        [
+          "2"
+        ],
+        [
+          "1",
+          "3"
+        ],
+        "None",
+        [],
+        [
+          "5",
+          "6"
+        ],
+        [
+          "4",
+          "7"
+        ],
+        [
+          "0",
+          "8"
+        ]
+      ]
+    ],
+    "native_detail": "variant:version",
+    "native_category": "Type"
+  },
+  {
+    "name": "variant-reference",
+    "phase": "type-decoding",
+    "reason": "binding-type",
+    "graph": [
+      "zkc.variant/1",
+      [
+        [
+          "0"
+        ]
+      ]
+    ],
+    "native_detail": "variant:graph-reference",
+    "native_category": "Type"
+  },
+  {
+    "name": "variant-empty",
+    "phase": "type-decoding",
+    "reason": "binding-type",
+    "graph": [
+      "zkc.variant/1",
+      []
+    ],
+    "native_detail": "variant:descriptor",
+    "native_category": "Type"
+  },
+  {
+    "name": "variant-duplicate-label",
+    "phase": "type-decoding",
+    "reason": "binding-type",
+    "graph": [
+      "zkc.variant/1",
+      [
+        "X",
+        "Same",
+        [],
+        [
+          "1",
+          "2"
+        ],
+        [
+          "3",
+          "3"
+        ],
+        [
+          "0",
+          "4"
+        ]
+      ]
+    ],
+    "native_detail": "variant:duplicate-label",
+    "native_category": "Type"
+  },
+  {
+    "name": "match-yield",
+    "phase": "local-admission",
+    "reason": "local-match-yield",
+    "native_category": "Signature"
+  },
+  {
+    "name": "if-stopped-outputs",
+    "phase": "local-admission",
+    "reason": "local-terminal-outputs",
+    "native_category": "Signature"
+  },
+  {
+    "name": "match-stopped-outputs",
+    "phase": "local-admission",
+    "reason": "local-terminal-outputs",
+    "native_category": "Signature"
+  },
+  {
+    "name": "field-range",
+    "phase": "operation-attributes",
+    "reason": "interactive-constant",
+    "native_category": "Attributes",
+    "place": "field",
+    "value": "52435875175126190479447740508185965837690552500527637822603658699938581184513"
+  },
+  {
+    "name": "curve-index-range",
+    "phase": "operation-attributes",
+    "reason": "interactive-index",
+    "native_category": "Attributes",
+    "place": "curve-index",
+    "value": "1048577"
+  },
+  {
+    "name": "gather-leading-zero",
+    "phase": "operation-attributes",
+    "reason": "noncanonical-natural",
+    "function": "Gather",
+    "attributes": [
+      "0",
+      "01"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "scatter-leading-zero",
+    "phase": "operation-attributes",
+    "reason": "noncanonical-natural",
+    "function": "Scatter",
+    "attributes": [
+      "01",
+      "0"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "matvec-not-natural",
+    "phase": "operation-attributes",
+    "reason": "expected-natural",
+    "function": "Matvec",
+    "attributes": [
+      "1",
+      "+2",
+      "0"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "shape-leading-zero",
+    "phase": "operation-attributes",
+    "reason": "noncanonical-natural",
+    "function": "Shape",
+    "attributes": [
+      "02",
+      "3"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "splat-extent",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Splat",
+    "attributes": [
+      "1048577"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "gather-extent",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Gather",
+    "attributes": [
+      "0",
+      "1048577"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "gather-range-before-syntax",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Gather",
+    "attributes": [
+      "1048577",
+      "01"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "scatter-range-before-syntax",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Scatter",
+    "attributes": [
+      "18446744073709551616",
+      "01"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "shape-range-before-syntax",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Shape",
+    "attributes": [
+      "65537",
+      "01"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "matvec-range-before-syntax",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Matvec",
+    "attributes": [
+      "1048577",
+      "01",
+      "0"
+    ],
+    "native_category": "Attributes"
+  },
+  {
+    "name": "matvec-arity-before-syntax",
+    "phase": "operation-attributes",
+    "reason": "interactive-kernel-parameters",
+    "function": "Matvec",
+    "attributes": [
+      "01"
+    ],
+    "native_category": "Attributes"
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "circom": {
+    "revision": "5de739581d23ebe0bdb9c4255a106f6dc7d8a5cf",
+    "url": "https://github.com/project-llzk/circom.git"
+  },
+  "circomlib": {
+    "revision": "35e54ea21da3e8762557234298dbb553c175ea8d",
+    "url": "https://github.com/iden3/circomlib.git"
+  },
+  "haloumi": {
+    "revision": "8a59e9c64282e7971121df40d08d9a592985d36c",
+    "url": "https://github.com/project-llzk/haloumi.git",
+    "extra_dependencies": {
+      "llzk": "0.7.0",
+      "llzk_sys": "30.1.1",
+      "midnight_zk": "20139c271e472fe86b96944543829c91724ac1c0"
+    }
+  },
+  "llzk-current": {
+    "revision": "60713d2b2947ddb6a5099cd56d4b41b9f29046e4",
+    "url": "https://github.com/project-llzk/llzk-lib.git",
+    "snapshot": "0953f60f plus exact official upstream patch; all tracked blobs verified against 60713d2",
+    "binary_directory": "upstream-60713d2-bin"
+  },
+  "llzk-circom-locked": {
+    "revision": "0953f60f986bec4cad1d5407fdece269bf468caa",
+    "url": "https://github.com/project-llzk/llzk-lib.git",
+    "snapshot": "git archive from sources/llzk-lib",
+    "binary_directory": "current-install/bin"
+  },
+  "llzk-haloumi": {
+    "revision": "342643d904b250a90ef102288ce08dc9fff59ad1",
+    "url": "https://github.com/project-llzk/llzk-lib.git",
+    "snapshot": "git archive",
+    "binary_directory": "haloumi-lib-install/bin"
+  },
+  "llzk-rs": {
+    "revision": "ca2a0610f5b86245064f845299f06c925c70596a",
+    "url": "https://github.com/project-llzk/llzk-rs.git"
+  },
+  "llvm": {
+    "version": "20.1.8"
+  }
+}

@@ -1,0 +1,29 @@
+[
+  "zkc.construction/1",
+  "main",
+  "P",
+  "V",
+  [
+    [
+      "claim",
+      [
+        [
+          "V",
+          "claim"
+        ]
+      ]
+    ]
+  ],
+  [
+    "coins",
+    [
+      [
+        "CheckRoundAndDraw",
+        "draw"
+      ]
+    ]
+  ],
+  "0",
+  "merlin3.bls12-381.fr64be/1",
+  "normalized"
+]

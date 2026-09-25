@@ -1,0 +1,4 @@
+{"id":"scalar-identity","result":{"formation":"checked","law":"identity-plus-valid-cache","source_required":[0],"status":"admitted-conditional","target_required":[0]}}
+{"id":"changed-body","result":{"formation":"checked","law":"identity-plus-valid-cache","source_required":[0],"status":"semantic-law-refused","target_required":[]}}
+{"id":"unknown-profile","result":{"reason":"unresolved-profile","status":"refused-or-malformed"}}
+{"id":"fri-identity","result":{"formation":"checked","law":"identity-plus-valid-cache","source_required":[0],"status":"admitted-conditional","target_required":[0]}}

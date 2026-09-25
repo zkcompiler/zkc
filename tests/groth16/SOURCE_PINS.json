@@ -1,0 +1,28 @@
+{
+  "circom": {
+    "version": "2.2.2",
+    "commit": "5de739581d23ebe0bdb9c4255a106f6dc7d8a5cf",
+    "repository": "https://github.com/iden3/circom",
+    "binaryPolicy": "Source commit and version are portable pins. Record the current supplied binary SHA-256 per run; binaries from different builds need not hash identically."
+  },
+  "circomlib": {
+    "packageVersion": "2.0.5",
+    "commit": "35e54ea21da3e8762557234298dbb553c175ea8d",
+    "gitDescribe": "v2.0.5-9-g35e54ea",
+    "repository": "https://github.com/iden3/circomlib",
+    "note": "Commit pin is authoritative: nine commits after v2.0.5, not the npm release tarball. Fetch or archive this exact commit into the work directory."
+  },
+  "snarkjs": {
+    "version": "0.7.5",
+    "repository": "https://github.com/iden3/snarkjs/tree/v0.7.5",
+    "dependencyLock": "package-lock.json",
+    "sourceIntegrity": "evidence/source-integrity.json"
+  },
+  "setup": {
+    "power": 13,
+    "ptauBeacon": "7e571e577e571e577e571e577e571e577e571e577e571e577e571e577e571e57",
+    "zkeyBeacon": "814748cce1c82c2a499397fc30c8578e495edc6b6dc906bd64e3d077fd24352e",
+    "beaconIterationsExponent": 10,
+    "warning": "Public reproducible local test setup. Trapdoors deliberately reconstructed for algebraic checking. No security claims."
+  }
+}

@@ -1,0 +1,16 @@
+# What a test needs to find before it can compare anything: the tools three
+# separate builds produced, the corpus they all read, and somewhere to leave
+# what it did. It depends on nothing in this workspace, so every crate can take
+# it as a development dependency.
+[package]
+name = "zkc-test-support"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json.workspace = true

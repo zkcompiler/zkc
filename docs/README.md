@@ -1,81 +1,65 @@
-# zkc documentation
+# Documentation
 
-This directory is the public reading map. Authority is separated by kind so
-that implementation evidence, future plans, and normative semantics are not
-mistaken for one another.
+zkc compiles proof protocols and connects their implementations to explicit
+semantic contracts. These documents explain the project, how to work on it,
+what the implementation supports, and the model used to judge it.
 
-## Start here
+## Start with your task
 
-| Question | Document |
+| You want to… | Read |
 |---|---|
-| What is zkc, and what direction does it pursue? | [Project Overview](overview.md) |
-| What does the current checkout claim? | [Current Status](status.md); the [Repository README](../README.md) is a summary |
-| How does the target architecture fit together? | [Architecture](architecture.md) |
-| How does zkc relate to relation compilers, formal systems, backends, and zkVMs? | [Ecosystem](ecosystem.md) |
-| How do I build it? | [Getting Started](getting-started.md) |
-| What comes next? | [Roadmap](roadmap.md) |
-| What are the exact artifact and judgment semantics? | [Specification Overview](spec/overview.md) |
-| What formal evidence is currently recorded? | [Formalization Evidence](formalization.md) |
+| Understand the problem and approach | [Overview](overview.md), then [architecture](architecture.md) |
+| Compile and run a first protocol | [Walkthrough](getting-started.md), then [source notation](language/reference.md) |
+| Author a reusable protocol library | [Source projects](language/projects.md), [checked interfaces](language/components.md#checked-interfaces-and-static-components) and [example clients](../examples/projects/README.md) |
+| Build or develop the repository | [Development guide](development/README.md), [configuration](development/configuration.md) and [repository layout](development/layout.md) |
+| Select and interpret checks | [Test guide](../tests/README.md) and [assurance](assurance.md) |
+| Assess current capabilities and limits | [Implementation status](status.md), then [remaining work](roadmap.md) |
+| Read the mathematical model | [Specification](spec/README.md), [PIR guide](guides/protocol-model.md) and [theory](theory.md) |
+| Use the Lean library independently | [Formal package](../formal/README.md) and its [support map](../formal/SUPPORT.md) |
+| Interpret a performance result | [Benchmarks](../bench/README.md) and the linked campaign's comparison conditions |
+| Extend dialects, passes or backends | [Implementation maintenance](development/extensions.md) |
+| Maintain dependencies or CI | [Maintenance guide](development/maintenance.md) |
+| Contribute code or documentation | [Contribution guide](../.github/CONTRIBUTING.md) and [documentation guide](development/documentation.md) |
 
-[Project Overview](overview.md) explains the stable project model and target
-direction without reporting current implementation support.
-[Architecture](architecture.md) is the non-normative target guide to system
-layers, artifact lifecycle, and trust boundaries; it intentionally includes
-unimplemented parts of the target design. [Ecosystem](ecosystem.md) applies
-those generic boundaries to concrete external projects without making a
-compatibility claim. [Current Status](status.md) owns the public capability and
-evidence dashboard. The setup guide owns the normal development workflow, while
-the roadmap owns dependency order; neither overrides the specification.
+## Reading routes
 
-## Normative specification
+- **Protocol authors:** [walkthrough](getting-started.md) →
+  [language](language/README.md) → [library projects](language/projects.md) →
+  [runtime inputs](runtime/inputs.md).
+- **Compiler and backend contributors:** [architecture](architecture.md) →
+  [compiler pipeline](compiler/protocol-pipeline.md) →
+  [compiler reference](compiler/README.md) or [runtime reference](runtime/README.md) →
+  [extension guide](development/extensions.md).
+- **Formal and research readers:** [model guides](guides/README.md) →
+  [specification](spec/README.md) → [correspondence maps](spec/correspondence/core.md)
+  and the [Lean support map](../formal/SUPPORT.md).
 
-The current specification corpus is:
+## Reference by subject
 
-- [Protocol Kernel](spec/kernel.md)
-- [Soundness Kernel](spec/soundness.md)
-- [Compiler Core](spec/compiler.md)
-- [Vocabularies](spec/vocabularies.md)
-- [Relations](spec/relations.md)
-- [Boundaries](spec/boundaries.md)
-- [Endpoints](spec/endpoints.md)
-- [Carrier](spec/carrier.md)
-- [Versioning and diagnostic allocation](spec/versioning.md)
+| Area | Responsibility |
+|---|---|
+| [Language](language/README.md) | Protocol authoring, types, static components, projects and compiled relations |
+| [Semantic guides](guides/README.md) | Execution, observations, contracts, composition, properties and contrasting protocol interpretations |
+| [Compiler](compiler/README.md) | Retained source, IR, analyses, construction, transformation and lowering |
+| [Runtime](runtime/README.md) | Execution, backend integration, artifact consumption and concrete formats |
+| [Specification](spec/README.md) | Normative definitions, judgments, failure behavior and implementation discretion |
+| [Theory](theory.md) | Mathematical methods, primary references and where their laws apply |
+| [Formal package](../formal/README.md) | Lean definitions, proofs, executable tools and independently resolved integrations |
+| [Rationale](rationale/README.md) | Consequential design choices, alternatives and reopening conditions |
 
-[Specification Overview](spec/overview.md) is the compact reading map. The
-individual specifications own intended semantics. Implementations and tests
-are conformance evidence; registry JSON and encoded artifacts remain subject
-to the validation and identity rules those specifications define.
+A theorem establishes its exact proposition under its hypotheses; an adapter
+identifies the actual source or implementation to which it applies. The
+[assurance map](assurance.md) separates proofs, checker results, implementation
+trust and bounded measurements. [Status](status.md) states what is implemented.
 
-## Formalization evidence
+## Which document decides
 
-[Formalization Evidence](formalization.md) explains the receipt and drift
-checks attached to Soundness Kernel rules, the pinned formalization readings,
-and the conditions for theorem-backed admission. The
-machine-readable annotations and pin files remain authoritative for their own
-contents; the document does not override the specification.
+`docs/` and root `formal/` define the model. Normative definitions live in
+`spec/`; the [specification index](spec/README.md#adopted-scope) lists their exact
+scope, and the domain chapters explain their use. The [status page](status.md)
+distinguishes model coverage from native support. The
+[organization decision](rationale/documentation-structure.md) explains the layout.
 
-## Evaluation and evidence records
-
-- [Evaluation overview](../evaluation/README.md) — active integration evidence
-  and the provenance of source-derived regression fixtures.
-- [Pinned Plonky3 replay/prover harness](../evaluation/upstream/plonky3-replay/README.md)
-  — current fixture-scoped upstream evidence.
-- [FRI generation benchmark record](../evaluation/fri-bench/RECORD.md) —
-  measured wall-clock and allocation evidence for one emitted prover against
-  the pinned upstream prover, scoped to its named machine, revision, and
-  instance.
-
-These records preserve the exact scope and residual trust of experiments. They
-do not override [Current Status](status.md), mint general backend conformance,
-or define protocol semantics.
-
-## Documentation rules
-
-1. Current public capability and evidence claims belong in `status.md`; future
-   direction belongs in `roadmap.md`.
-2. Exact schemas, judgments, identities, and refusal rules belong in `spec/`.
-3. A demonstrated run establishes only the facets and fixed inputs it records.
-4. Soundness, completeness, zero knowledge, relation satisfaction, backend
-   conformance, and implementation correctness are separate claims.
-5. A placeholder, proposal, citation, receipt, or passing test does not acquire
-   stronger authority through proximity or detail.
+Review, research and planning records are development notes and stay outside
+this reference. A finished study reaches it as the design it produced, with a
+[rationale record](rationale/README.md) where a choice needs one.

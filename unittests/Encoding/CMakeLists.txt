@@ -1,3 +1,0 @@
-add_zkc_unittest(ZkcEncodingTests
-  CanonicalJsonTest.cpp)
-target_link_libraries(ZkcEncodingTests PRIVATE ZkcEncodingCore)

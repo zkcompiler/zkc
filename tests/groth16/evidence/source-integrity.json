@@ -1,0 +1,10 @@
+{
+  "version": "0.7.5",
+  "changedFiles": [
+    "src/groth16_prove.js"
+  ],
+  "originalProverSha256": "36b58c6b524596c009cad1afda4342c4e779965c875ff3b5ad5a0c687cce01f6",
+  "controlledProverSha256": "6736dc6d5c8e7c09992356bf02c74083a66828eb2271756be4496f0a9b4153fe",
+  "unmodifiedVerifierSha256": "28b1f2480e208afabd5b690fc758d9dd032e13ed292e541c78e686d3ed6a7a97",
+  "compiledCliSha256": "092c70dbf8bef02b666456db7429127aa51c5dbfce91cef038638d7da3bfdcea"
+}

@@ -1,0 +1,1 @@
+["zkc-request",1,"finite-source-1",["client",[["n",["count"],["shared"],"argument"]],["vector"],[["vector-service","1"]]],[],["apply",["request"],[0],["apply",["sum"],[0],["apply",["request"],[0],["apply",["send"],[1],["return",1]]]]]]

@@ -1,0 +1,173 @@
+[
+  {
+    "id": "scalar-identity",
+    "profile": "sumcheck:q2305843009213697249",
+    "input_types": [
+      "scalar:q2305843009213697249"
+    ],
+    "source": [
+      [
+        1,
+        [
+          "input",
+          0
+        ]
+      ]
+    ],
+    "target": [
+      [
+        1,
+        [
+          "input",
+          0
+        ]
+      ]
+    ],
+    "source_exports": [
+      [
+        1,
+        "scalar:q2305843009213697249"
+      ]
+    ],
+    "target_exports": [
+      [
+        1,
+        "scalar:q2305843009213697249"
+      ]
+    ],
+    "law": "identity-plus-valid-cache"
+  },
+  {
+    "id": "changed-body",
+    "profile": "sumcheck:q2305843009213697249",
+    "input_types": [
+      "scalar:q2305843009213697249"
+    ],
+    "source": [
+      [
+        1,
+        [
+          "input",
+          0
+        ]
+      ]
+    ],
+    "target": [
+      [
+        1,
+        [
+          "literal",
+          "scalar:q2305843009213697249",
+          [
+            1
+          ]
+        ]
+      ]
+    ],
+    "source_exports": [
+      [
+        1,
+        "scalar:q2305843009213697249"
+      ]
+    ],
+    "target_exports": [
+      [
+        1,
+        "scalar:q2305843009213697249"
+      ]
+    ],
+    "law": "identity-plus-valid-cache"
+  },
+  {
+    "id": "unknown-profile",
+    "profile": "other",
+    "input_types": [
+      "scalar:q2305843009213697249"
+    ],
+    "source": [
+      [
+        1,
+        [
+          "input",
+          0
+        ]
+      ]
+    ],
+    "target": [
+      [
+        1,
+        [
+          "input",
+          0
+        ]
+      ]
+    ],
+    "source_exports": [
+      [
+        1,
+        "scalar:q2305843009213697249"
+      ]
+    ],
+    "target_exports": [
+      [
+        1,
+        "scalar:q2305843009213697249"
+      ]
+    ],
+    "law": "identity-plus-valid-cache"
+  },
+  {
+    "id": "fri-identity",
+    "profile": "fri:babybear-r19",
+    "input_types": [
+      "digest:p3"
+    ],
+    "source": [
+      [
+        1,
+        [
+          "apply",
+          "p3.node",
+          [
+            "input",
+            0
+          ],
+          [
+            "input",
+            0
+          ]
+        ]
+      ]
+    ],
+    "target": [
+      [
+        1,
+        [
+          "apply",
+          "p3.node",
+          [
+            "input",
+            0
+          ],
+          [
+            "input",
+            0
+          ]
+        ]
+      ]
+    ],
+    "source_exports": [
+      [
+        1,
+        "digest:p3"
+      ]
+    ],
+    "target_exports": [
+      [
+        1,
+        "digest:p3"
+      ]
+    ],
+    "law": "identity-plus-valid-cache"
+  }
+]

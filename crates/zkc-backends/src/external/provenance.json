@@ -1,0 +1,287 @@
+{
+  "scope": "Finite event replay against archived real upstream proof transcript checkpoints; not proof verification or full endpoint compatibility.",
+  "sources": [
+    {
+      "repository": "monero-project/monero",
+      "revision": "4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5",
+      "file": "src/ringct/bulletproofs_plus.cc",
+      "sha256": "02f240549b5c51a47d48494303a5bfe781ab4041e51e13bd2e5a3b35c52a7832"
+    },
+    {
+      "repository": "monero-project/monero",
+      "revision": "4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5",
+      "file": "src/ringct/rctOps.cpp",
+      "sha256": "6a7c9856d05708b1b3df2397b5062c41de264dfc71113f34870fff7ed96ba882"
+    },
+    {
+      "repository": "monero-project/monero",
+      "revision": "4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5",
+      "file": "src/crypto/hash.c",
+      "sha256": "955cd6bc5f83ed6e6d5a2a657afb673d3de5bad3aa54f3db3c2a30097af7381a"
+    },
+    {
+      "repository": "openvm-org/stark-backend",
+      "revision": "362c7ad8c6b042b320471a137e3eadec7ec69a44",
+      "file": "crates/stark-backend/src/transcript/duplex_sponge.rs",
+      "sha256": "4191a605175b5f22aaa6de010a9846f55972d7014b27686fecae82fef9150e49"
+    },
+    {
+      "repository": "openvm-org/stark-backend",
+      "revision": "362c7ad8c6b042b320471a137e3eadec7ec69a44",
+      "file": "crates/stark-backend/src/transcript/traits.rs",
+      "sha256": "c44ad1a72a11db63ff36fc701b782241aed2dd1213c7608a708fdd075b503a2d"
+    },
+    {
+      "repository": "openvm-org/stark-backend",
+      "revision": "362c7ad8c6b042b320471a137e3eadec7ec69a44",
+      "file": "crates/stark-sdk/src/config/baby_bear_poseidon2.rs",
+      "sha256": "b8446d2e0a77775a82a0b20499d701f036d24a6f8fdec0da96fb59a758e8b87c"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "p3-baby-bear",
+      "version": "0.4.3",
+      "registry_package_sha256": "3a1a49f4d9c8b8cbdab61e25d9de1b78b3c8347dd2fb88b11d990b3efa8cdd3a"
+    },
+    {
+      "name": "p3-field",
+      "version": "0.4.3",
+      "registry_package_sha256": "4819a3e4c1882431a63d4847ffa10d110017aee4cb9cf4319ca6dca191930969"
+    },
+    {
+      "name": "p3-symmetric",
+      "version": "0.4.3",
+      "registry_package_sha256": "a14456a42a7d9e65f13999706f1bca2832175935169b3a54286e18331cf1d82f"
+    },
+    {
+      "name": "p3-challenger",
+      "version": "0.4.3",
+      "registry_package_sha256": "a7d2d45f5a51dc3f965e8d6da60a6c26c807e88657863d56da275eaa05ad36f1"
+    },
+    {
+      "name": "p3-poseidon2",
+      "version": "0.4.3",
+      "registry_package_sha256": "2c6fc2368447576283f8b3849a36095017f25addf06eab9e33b0ce7f96b0b99d"
+    },
+    {
+      "name": "p3-monty-31",
+      "version": "0.4.3",
+      "registry_package_sha256": "c9fe0be661891af1f703ceaf57334fcbd540804988984dc2b500dd99740e7c81"
+    },
+    {
+      "name": "sha3",
+      "version": "0.10.9",
+      "registry_package_sha256": "77fd7028345d415a4034cf8777cd4f8ab1851274233b45f84e3d955502d93874"
+    },
+    {
+      "name": "curve25519-dalek",
+      "version": "4.1.3",
+      "registry_package_sha256": "97fb8b7c4503de7d6ae7b42ab72a5a59857b4c937ec27a3d4539dba95b5ab2be"
+    }
+  ],
+  "fixtures": [
+    {
+      "file": "ordinary-monero-1.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "7fa30b6243b93bf58de6d982314687d53e4c035f53d351f6d1a10817dd3195bb"
+    },
+    {
+      "file": "ordinary-monero-1.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "4d0bc74db01de87e23ac6789090240dcf856c56720c1d89c10d1944ff7cdfbc6"
+    },
+    {
+      "file": "ordinary-monero-16.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "c2f87d8789d892df8ede5bfc6e42c80cb67cb5268e99fcf3cff51fd34b18ab7b"
+    },
+    {
+      "file": "ordinary-monero-16.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "09a3c6e40fa51a69557bb43daf601fb3c06740d41bdd79f86a811b942284f7a5"
+    },
+    {
+      "file": "ordinary-monero-2.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "d22765ac64ffa9d30ed07ba6bd3423f9984ac8a685352c35d15cb1cd4c077a4a"
+    },
+    {
+      "file": "ordinary-monero-2.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "7c354aaaa73499f774120e321099fe6c2419b0ec964f2c1b671d78c8842ef91c"
+    },
+    {
+      "file": "ordinary-monero-3.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "2beffdd449e9a386c336f8e27eed570220c75cf3be19d0d72fae7f2811ece717"
+    },
+    {
+      "file": "ordinary-monero-3.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "5bca2739f4e757552c0559dbaf4ad67563c69fd793e7779a454e168cd7b7b92b"
+    },
+    {
+      "file": "ordinary-monero-4.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "bacd81ee1dfe45e21c4760d9447e217293ed10d35827a4b54dcab731f2724d3d"
+    },
+    {
+      "file": "ordinary-monero-4.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "13b0088310464aa6bbdd682575f8810ad37bec2702891fb816a122913e27eb1d"
+    },
+    {
+      "file": "ordinary-monero-8.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "b070807150abd50433e20387251e3e115008a00341f0a8f8962e035ecb77f523"
+    },
+    {
+      "file": "ordinary-monero-8.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "643a518e617e3d8596ea0867829ae4ca9877c2d61fd5e6bc383140108176f84b"
+    },
+    {
+      "file": "ordinary-monero-9.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "21509f1ef6ee43b18eb76832095023f6f5a650fa4697f2caa92952479a3f1372"
+    },
+    {
+      "file": "ordinary-monero-9.proof",
+      "origin": "monero-project/monero at the pinned revision; unmodified prover and verifier",
+      "sha256": "999f9318e4afed5965dcb154aa3f4d0e47136e7b12e24f567482705979ada50f"
+    },
+    {
+      "file": "ordinary-openvm-0.transcript.json",
+      "origin": "openvm-org/openvm and openvm-org/stark-backend at the pinned revisions; unmodified prover",
+      "sha256": "832a3037060498bf97ec4c790a4c3936bee54bea772238a7410116593dda33f8"
+    },
+    {
+      "file": "ordinary-openvm-1.transcript.json",
+      "origin": "openvm-org/openvm and openvm-org/stark-backend at the pinned revisions; unmodified prover",
+      "sha256": "400de60c181a1fa3d87dce547428621b27d281c2ce0742a632458e299d041af2"
+    },
+    {
+      "file": "ordinary-openvm-2.transcript.json",
+      "origin": "openvm-org/openvm and openvm-org/stark-backend at the pinned revisions; unmodified prover",
+      "sha256": "765638c0e9447beff72a0263bf1fcaa76f0cdd9b72a7ac0256a8ea34afd6b257"
+    },
+    {
+      "file": "ordinary-openvm-mixture-1.transcript.json",
+      "origin": "openvm-org/openvm and openvm-org/stark-backend at the pinned revisions; unmodified prover",
+      "sha256": "33e74e33fac8463b420799e8159ffcf0e33c62c0d35bd45a7d1fef39003d54bd"
+    },
+    {
+      "file": "ordinary-openvm-mixture-4.transcript.json",
+      "origin": "openvm-org/openvm and openvm-org/stark-backend at the pinned revisions; unmodified prover",
+      "sha256": "4707e87562d4aaffaea8450a0d7d97979d268fb529250b7e957e49fca33e1818"
+    },
+    {
+      "file": "instrumented-monero-1.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "a95a5b22f3fc7364dbe4e2524f623e3d78f4d308daa7ba58cfcdc8e61d825901"
+    },
+    {
+      "file": "instrumented-monero-1.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "69b4f36a978f613b04d42fad8dfe616f6a23511de974c0114426df678b902752"
+    },
+    {
+      "file": "instrumented-monero-16.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "0425fff8d0f6110ee81a84ea55db49fc7da6b2e413d4b2aeda380284cb3854c3"
+    },
+    {
+      "file": "instrumented-monero-16.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "fb61b3c89477b20103b31bf841f5e02319664623b7f59f9483da1d1c18646b72"
+    },
+    {
+      "file": "instrumented-monero-2.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "624c0546ab3a4eea6940ade1c2635a7cf43ef334c6c5abf9b05576a719427e25"
+    },
+    {
+      "file": "instrumented-monero-2.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "d698060026453156bd86cf5d043552cf62502cd51b847dd269d8baceaa72ad6a"
+    },
+    {
+      "file": "instrumented-monero-3.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "e6a8ca91e6009ccc2b315da63046a89d7c45aa52cb7538f5a78287f0f2e20172"
+    },
+    {
+      "file": "instrumented-monero-3.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "9dc6448fe3719067a5925b30634b587024d35d5d478b8b66ac6dc1749b9cc4c4"
+    },
+    {
+      "file": "instrumented-monero-4.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "4326f298c475ed47d0efbb69df4001158415a3cf095ed75b006e72534662ae5a"
+    },
+    {
+      "file": "instrumented-monero-4.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "088f9975c024b771f8a682393bad0886b030e100bd6fd1c61e73d02b9b549052"
+    },
+    {
+      "file": "instrumented-monero-8.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "67c00370fe8d773e813aee85ea7a56a8e52fe0ad8a18498056fbb52fda6faf37"
+    },
+    {
+      "file": "instrumented-monero-8.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "9f2cb45ac215ac4ac46943199e1a8f28ac841b0c5ff94b7ed1b4201bbd4a763c"
+    },
+    {
+      "file": "instrumented-monero-9.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "2cbaa87ede719a3383bc63882aedbb69bbaefe374d7d92803a5e35dda74d7013"
+    },
+    {
+      "file": "instrumented-monero-9.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests; verifier unmodified",
+      "sha256": "41b4bc2e3bff267ec470498c89643f53660d15dbd5c83882c75050648af3b44f"
+    },
+    {
+      "file": "instrumented-monero-consistent-torsion.transcript.json",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests and to add a torsion component before hashing; verifier unmodified",
+      "sha256": "469e9ae42588b97795591a130ff688344d9419e0d186da0aa608302bbe742ff3"
+    },
+    {
+      "file": "instrumented-monero-consistent-torsion.proof",
+      "origin": "monero-project/monero at the pinned revision; prover instrumented to record its coin requests and to add a torsion component before hashing; verifier unmodified",
+      "sha256": "c0da8cad8fca216aa0469c91f6dd8024b22844a6ab45d6845f57dfaab6aa0182"
+    }
+  ],
+  "primitive_vectors": [
+    {
+      "file": "monero-hash-vectors.json",
+      "source": "Pinned native cn_fast_hash and independent Python scalar reduction",
+      "sha256": "2506d1ca20235bee5f482ccc24a834b9b1aac440bb73f24091261f0d30f6a376"
+    }
+  ],
+  "construction_targets": [
+    {
+      "repo": "monero-project/monero",
+      "tag": "v0.18.5.1",
+      "revision": "4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5",
+      "sha256": "4fdd15401af04e1ce84dcae40c8c114320d1cc9b449db25c0d57efa4b4054881"
+    },
+    {
+      "repo": "openvm-org/openvm",
+      "tag": "v2.0.2",
+      "revision": "59a69b8b0cbee7011ac978e4cc07707ee3681944",
+      "sha256": "368b85c15de8fb1caa6db2d69d062242ce5aac7beeeaca1e78c5124d26308681"
+    },
+    {
+      "repo": "openvm-org/stark-backend",
+      "tag": "v2.0.1",
+      "revision": "362c7ad8c6b042b320471a137e3eadec7ec69a44",
+      "sha256": "54b46630de049eff2c5bd788048342707dd7bfc4519910decf20c987cfd456f5"
+    }
+  ]
+}

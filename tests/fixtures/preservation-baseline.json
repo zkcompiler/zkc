@@ -1,0 +1,215 @@
+{
+  "scope": "Frozen before frontend implementation; hashes of canonical JSON values, not formatting. Exact source custody and selected constructed artifacts only.",
+  "baseline_compiler_sha256": "b96fa75872a401c56890ecbe88550cacd82b1da67615160439c94cb3e4408a3e",
+  "corpus": [
+    {
+      "path": "tests/fixtures/bound-operations.pir",
+      "source_sha256": "d85a54aa9a33a39c78ad9c73aebd46247a099f4b519861126c4f49a1078c1d2f"
+    },
+    {
+      "path": "tests/fixtures/claims.pir",
+      "source_sha256": "6073053ca1ac883e761cec34444b127eeab0736001948b297535ecec34069eab"
+    },
+    {
+      "path": "tests/fixtures/coset-kernels.pir",
+      "source_sha256": "4de05c989c8f4b14fd04eca0cd47a13f07d77e80f752f400f54054ae01c667d3"
+    },
+    {
+      "path": "tests/fixtures/generic-committed-two-factor.pir",
+      "source_sha256": "20c28fdfb48f866e275389e4cf10541ef0eaa199e0690ed4ba9ab661aade2c62"
+    },
+    {
+      "path": "tests/fixtures/generic-composition.pir",
+      "source_sha256": "c64830fb1af7cdf436c9cdda4ee367a5b1edb1c95e80586f526b89a012f98541"
+    },
+    {
+      "path": "tests/fixtures/generic-construction.pir",
+      "source_sha256": "b88b7008e0ac73eaada6f4a6ef5340166711c9928db409d19eb4d35a8697661a"
+    },
+    {
+      "path": "tests/fixtures/generic-dleq.pir",
+      "source_sha256": "487fd0a27a9a62194427de07367c764299bdd5c8e5fa8218fa25ae193f7713b9"
+    },
+    {
+      "path": "tests/fixtures/generic-nonces.pir",
+      "source_sha256": "0124ae9f498fdfabf89bb8aace8a129b07ac5710cc268b0ba56d29fbf15a3ecb"
+    },
+    {
+      "path": "tests/fixtures/generic-opening-reuse.pir",
+      "source_sha256": "a70a5821df0df2afa5138eed2271279de1987e065b2bbda78ad21b36add14bdf"
+    },
+    {
+      "path": "tests/fixtures/generic-openings.pir",
+      "source_sha256": "d4a4743cfc7334124f6ae51991198f1660fae70000179a07c1cf30bb1cf83a94"
+    },
+    {
+      "path": "tests/fixtures/generic-operations.pir",
+      "source_sha256": "dc7e74699f244bf714b64f9d3e38d8db74b0227778e853257a16bf7a868b3575"
+    },
+    {
+      "path": "tests/fixtures/generic-stops.pir",
+      "source_sha256": "ab4a9d21f84e04feb2f18f58d8ca96eb42171cf69f5f3a39e54b82b9fdee6b68"
+    },
+    {
+      "path": "tests/fixtures/generic-transcripts.pir",
+      "source_sha256": "aac1d74b365039e284af3e4e13e698fce3bb0be8a146207c6f1085084d74dd51"
+    },
+    {
+      "path": "tests/fixtures/generic-verify-opening.pir",
+      "source_sha256": "582dbbcc02801a8a09272861acf9eed95e4fbf6c65398d08e4e7509fcdcf70b5"
+    },
+    {
+      "path": "tests/fixtures/linear-contractions.pir",
+      "source_sha256": "41a7f2ab6bc3a866a19fdbce523da3fac57903a199be2e5481b694f39a83d01b"
+    },
+    {
+      "path": "tests/fixtures/local-algorithms.pir",
+      "source_sha256": "26e834794b57d76dd4ebc7fb250129b82b173c8faa68ac539186e2375f5a54d7"
+    },
+    {
+      "path": "tests/fixtures/local-authentication.pir",
+      "source_sha256": "2cd53c289e26064439282557f316765b72ca84908a1c1a07c7922f6e3aa7c0bd"
+    },
+    {
+      "path": "tests/fixtures/local-construction.pir",
+      "source_sha256": "abe35d75736548099edd1650b88a9fe3ac4e2363681ce1465da551fa6bd7e35d"
+    },
+    {
+      "path": "tests/fixtures/local-linear.pir",
+      "source_sha256": "dfb972a2f1cb1e450fa073f711d4cdbdfc78e3d56695e6c11cbe313e6b07eb16"
+    },
+    {
+      "path": "tests/fixtures/local-vocabulary.pir",
+      "source_sha256": "dd04b09ba7bad4716c1339c26c36d7e7c86c6d48889fd932c242d063a0fdf9b8"
+    },
+    {
+      "path": "tests/fixtures/oracle-access.pir",
+      "source_sha256": "b702046247773bcd90259c3baedb1a96fd1ae45f593eeba76d07b70e4adb93f4"
+    },
+    {
+      "path": "tests/fixtures/oracle-construction.construction.pir",
+      "source_sha256": "6c6f831c38da82f935bfca20c5b7702e4d04253c9a27e495f575d7bc9554f829"
+    },
+    {
+      "path": "tests/fixtures/oracle-construction.pir",
+      "source_sha256": "017778d795f3ec101054ecbee8b3604c574d565abc2261a162373240acdd1b27"
+    },
+    {
+      "path": "tests/fixtures/oracle-provenance-random.construction.pir",
+      "source_sha256": "c96e6635d513a82a7e00034300f2bb6bd0b4ab0069e135bedea962424f9e388b"
+    },
+    {
+      "path": "tests/fixtures/oracle-provenance-random.pir",
+      "source_sha256": "240bf745f4fba5451d0affcd80c896b9a260e1d01235da70e7dd0a4025ff7fbf"
+    },
+    {
+      "path": "tests/fixtures/oracle-provenance.pir",
+      "source_sha256": "c99f4a6745a13ded9e05c8e946b7f3b2027d68be357da4ea048b45c4cb5da34c"
+    },
+    {
+      "path": "examples/protocols/aggregated-range.construction.pir",
+      "source_sha256": "d93aef4a45feb14a6141b8588e4ebe703b92b7c72a8984ae81c45adef49b7489"
+    },
+    {
+      "path": "examples/protocols/aggregated-range.pir",
+      "source_sha256": "856fca22e22fea1ec86b3bd4930f776db671f0a455052944db736cebfee6ae5d"
+    },
+    {
+      "path": "examples/protocols/air-oracle/affine-tables.construction.pir",
+      "source_sha256": "f97dab9716c61c1362ddd235a29ab7951a4f85b37eaa06d7753e1273f33f64a6"
+    },
+    {
+      "path": "examples/protocols/air-oracle/affine-tables.pir",
+      "source_sha256": "63f78e989d434bde90b9a8616c29c8bedbeb121439cf44ed5b046224e9422460"
+    },
+    {
+      "path": "examples/protocols/air-oracle/air-permutation.construction.pir",
+      "source_sha256": "8a6dc56215e7312a6b3261bbadfc1d7bea219e36372deb1fbafd6a8c3dcdb91d"
+    },
+    {
+      "path": "examples/protocols/air-oracle/air-permutation.pir",
+      "source_sha256": "9aba56205646bee99a37bba9f1f6dd775108639f94f001ece535cf43c4aa9c2e"
+    },
+    {
+      "path": "examples/protocols/arithmetic-trace.construction.pir",
+      "source_sha256": "da53039a2411634958b9df349a984660450d5bdaa7b8959495845930ebd482ed"
+    },
+    {
+      "path": "examples/protocols/arithmetic-trace.pir",
+      "source_sha256": "f884393d095b125dde7e830fa022a0a5fedfb3eb60339e0807d14582843c4553"
+    },
+    {
+      "path": "examples/protocols/committed-two-factor.construction.pir",
+      "source_sha256": "2c8297981ea7bbb864fa3fb7f37fb44c079db9bc8acb4a4cb4725c9744c0298a"
+    },
+    {
+      "path": "examples/protocols/committed-two-factor.pir",
+      "source_sha256": "fc5b70bb9ca38736fe65e5c3b31fc3bb4be5e69d66f5b1dd38b3df871d1cd7b0"
+    },
+    {
+      "path": "examples/protocols/confidential-transaction.construction.pir",
+      "source_sha256": "0f5fc273c6342dec4efbc6a0de5bff8e62f4194cc0600e9207b2627b5ce3bdc1"
+    },
+    {
+      "path": "examples/protocols/confidential-transaction.pir",
+      "source_sha256": "9c7024ce80eabaedf79e046a9aae99b8949fffee7ac597676e56cd542ff97408"
+    },
+    {
+      "path": "examples/protocols/dleq.construction.pir",
+      "source_sha256": "76f9076060d3f0206b48126e5a49a4c68c48e08f73dc124f62804647a9b69ebb"
+    },
+    {
+      "path": "examples/protocols/dleq.pir",
+      "source_sha256": "29fec74a21365f58175135c02de404c019b9a97a15ad1285e1ca61bd13d476e5"
+    },
+    {
+      "path": "examples/protocols/execution-proof.construction.pir",
+      "source_sha256": "66b08a4fb4c357fb7dece313dec3390bcf5301b14755bff907d313bf39877f33"
+    },
+    {
+      "path": "examples/protocols/execution-proof.pir",
+      "source_sha256": "59dd368c1c399d7d7d62975374504b1d32fe2e7c18cbc72558f5a3f8cbb1442a"
+    },
+    {
+      "path": "examples/protocols/folded-contraction.pir",
+      "source_sha256": "2d6efd345677f0e9e93cd6d49464a5e73eec11498dc1caad1af912559337bf2d"
+    },
+    {
+      "path": "examples/protocols/group-exchange.pir",
+      "source_sha256": "8a89ba0e446db0827cd36c72b63112d36216f621edaf21a7389643dd14d5650a"
+    },
+    {
+      "path": "examples/protocols/linear-relation.construction.pir",
+      "source_sha256": "8fdb692d44f77f34a5514ed9ac0d74e8c5d64943dd415e83bcfcc50e4e293697"
+    },
+    {
+      "path": "examples/protocols/linear-relation.pir",
+      "source_sha256": "ec0b48a29cc22649ca3c506f4de586a5f5cfa44c0f0818a367e61e95d945882a"
+    },
+    {
+      "path": "examples/protocols/two-factor.construction.pir",
+      "source_sha256": "a4f9dad7dc1ac25757a5478807bd9e6f4c6aded0060d3a95ab036be48c6b808d"
+    },
+    {
+      "path": "examples/protocols/two-factor.pir",
+      "source_sha256": "6523ad3fca0c1423fc0f03252e9ffc49efb29bc1f1dcfb6e350e2ab8cf3008fb"
+    }
+  ],
+  "artifacts": [
+    {
+      "source": "examples/protocols/two-factor.json",
+      "construction": "examples/protocols/two-factor.construction.json",
+      "artifact_sha256": "a4d22c468179be1bf11d6d069424e658a2532def89c89ddda1ca1588de2bd5ae"
+    },
+    {
+      "source": "examples/protocols/committed-two-factor.json",
+      "construction": "examples/protocols/committed-two-factor.construction.json",
+      "artifact_sha256": "e728a9e9c306965d5256fe1a6d7031f451cb6b7f603f396584269d50cb4b7520"
+    },
+    {
+      "source": "examples/protocols/dleq.json",
+      "construction": "examples/protocols/dleq.construction.json",
+      "artifact_sha256": "774b0c2e6a2e81f928c4743b7c97d7ce8d77f66fe1223b6d623fc8204a84fc4f"
+    }
+  ]
+}

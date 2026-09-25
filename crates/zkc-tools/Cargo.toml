@@ -1,0 +1,53 @@
+[package]
+name = "zkc-tools"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+[dependencies]
+ark-bn254.workspace = true
+ark-ff.workspace = true
+ark-serialize.workspace = true
+serde = { workspace = true, features = ["derive"] }
+zkc-runtime.workspace = true
+zkc-backends.workspace = true
+zkc-arkworks.workspace = true
+merlin.workspace = true
+spongefish = { workspace = true, features = ["keccak", "zeroize"] }
+curve25519-dalek.workspace = true
+sha2.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+[lints]
+workspace = true
+[dev-dependencies]
+num-bigint.workspace = true
+num-traits.workspace = true
+zkc-test-support.workspace = true
+[[bin]]
+name = "zkc"
+path = "src/main.rs"
+
+[[bin]]
+name = "artifact-primitive"
+path = "src/bin/artifact-primitive.rs"
+
+[features]
+test-utils = ["zkc-backends/test-utils"]
+
+[[test]]
+name = "protocol_supplied"
+path = "tests/protocol_supplied.rs"
+required-features = ["test-utils"]
+
+# This example carries its own controls over the wire encodings it writes, and
+# Cargo does not build an example's test harness unless it is asked to, so
+# without this they compiled nowhere and ran nowhere.
+[[example]]
+name = "artifact_baseline"
+path = "examples/artifact_baseline/main.rs"
+test = true
+
+[[example]]
+name = "linear_relation_interactive"
+path = "examples/linear_relation_interactive.rs"
+required-features = ["test-utils"]

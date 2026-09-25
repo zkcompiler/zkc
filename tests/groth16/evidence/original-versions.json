@@ -1,0 +1,171 @@
+{
+  "node": "v24.20.0",
+  "circom": "circom compiler 2.2.2",
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "workerLimit": 4,
+  "packages": {
+    "@iden3/bigarray": {
+      "name": "@iden3/bigarray",
+      "version": "0.0.2"
+    },
+    "@iden3/binfileutils": {
+      "name": "@iden3/binfileutils",
+      "version": "0.0.12"
+    },
+    "async": {
+      "name": "async",
+      "version": "3.2.6"
+    },
+    "b4a": {
+      "name": "b4a",
+      "version": "1.9.0"
+    },
+    "balanced-match": {
+      "name": "balanced-match",
+      "version": "1.0.2"
+    },
+    "bfj": {
+      "name": "bfj",
+      "version": "7.1.0"
+    },
+    "blake2b-wasm": {
+      "name": "blake2b-wasm",
+      "version": "2.4.0"
+    },
+    "bluebird": {
+      "name": "bluebird",
+      "version": "3.7.2"
+    },
+    "brace-expansion": {
+      "name": "brace-expansion",
+      "version": "2.1.7"
+    },
+    "check-types": {
+      "name": "check-types",
+      "version": "11.2.3"
+    },
+    "circom_runtime": {
+      "name": "circom_runtime",
+      "version": "0.1.28"
+    },
+    "ejs": {
+      "name": "ejs",
+      "version": "3.1.10"
+    },
+    "escodegen/node_modules/esprima": {
+      "name": "esprima",
+      "version": "4.0.1"
+    },
+    "escodegen": {
+      "name": "escodegen",
+      "version": "2.1.0"
+    },
+    "esprima": {
+      "name": "esprima",
+      "version": "1.2.5"
+    },
+    "estraverse": {
+      "name": "estraverse",
+      "version": "5.3.0"
+    },
+    "esutils": {
+      "name": "esutils",
+      "version": "2.0.3"
+    },
+    "fastfile": {
+      "name": "fastfile",
+      "version": "0.0.20"
+    },
+    "ffjavascript": {
+      "name": "ffjavascript",
+      "version": "0.3.1"
+    },
+    "filelist": {
+      "name": "filelist",
+      "version": "1.0.6"
+    },
+    "hoopy": {
+      "name": "hoopy",
+      "version": "0.1.4"
+    },
+    "jake": {
+      "name": "jake",
+      "version": "10.9.4"
+    },
+    "js-sha3": {
+      "name": "js-sha3",
+      "version": "0.8.0"
+    },
+    "jsonpath": {
+      "name": "jsonpath",
+      "version": "1.3.0"
+    },
+    "logplease": {
+      "name": "logplease",
+      "version": "1.2.15"
+    },
+    "minimatch": {
+      "name": "minimatch",
+      "version": "5.1.9"
+    },
+    "nanoassert": {
+      "name": "nanoassert",
+      "version": "2.0.0"
+    },
+    "picocolors": {
+      "name": "picocolors",
+      "version": "1.1.1"
+    },
+    "r1csfile/node_modules/ffjavascript": {
+      "name": "ffjavascript",
+      "version": "0.3.0"
+    },
+    "r1csfile": {
+      "name": "r1csfile",
+      "version": "0.0.48"
+    },
+    "snarkjs": {
+      "name": "snarkjs",
+      "version": "0.7.5"
+    },
+    "source-map": {
+      "name": "source-map",
+      "version": "0.6.1"
+    },
+    "static-eval": {
+      "name": "static-eval",
+      "version": "2.1.1"
+    },
+    "tryer": {
+      "name": "tryer",
+      "version": "1.0.1"
+    },
+    "underscore": {
+      "name": "underscore",
+      "version": "1.13.6"
+    },
+    "wasmbuilder": {
+      "name": "wasmbuilder",
+      "version": "0.0.16"
+    },
+    "wasmcurves": {
+      "name": "wasmcurves",
+      "version": "0.2.2"
+    },
+    "web-worker": {
+      "name": "web-worker",
+      "version": "1.2.0"
+    }
+  },
+  "originalFilesConfirmedUnchanged": [
+    "snarkjs/src/groth16_verify.js",
+    "snarkjs/src/groth16_prove.js",
+    "snarkjs/build/cli.cjs",
+    "ffjavascript/src/wasm_field1.js",
+    "wasmcurves/src/build_qap.js"
+  ],
+  "dependencyLockSha256": "28ca065e009f3df40a14b57bcf8b049e86334bddfa949cc21dd71bcefb85e920",
+  "circomBinarySha256": "16c4e01eae5489c5b2433f04af0a504633736d48e06c383a5cd4011d1f99c810",
+  "note": "Original fixture machine observation, not a portable binary pin."
+}

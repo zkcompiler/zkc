@@ -1,0 +1,13 @@
+# The tests in this directory keep what they write. A working directory deleted
+# on the way out throws away the plans and sources of exactly the run worth
+# reading: the one that failed. `records()` in support/tools.py hands out a
+# directory under the build's reports instead, which CI keeps and a developer
+# can open. A test that genuinely wants a throwaway says so here rather than
+# leaving the next reader to find out by failing.
+extend = "../../pyproject.toml"
+
+[lint]
+extend-select = ["TID251"]
+
+[lint.flake8-tidy-imports.banned-api]
+"tempfile" = { msg = "these tests keep their evidence: use records() from support/tools.py" }

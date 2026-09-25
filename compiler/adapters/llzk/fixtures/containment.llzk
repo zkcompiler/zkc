@@ -1,0 +1,19 @@
+module attributes {llzk.lang, llzk.main = !struct.type<@Main>} {
+  struct.def @Main {
+    struct.member @out : !felt.type<"bn254"> {llzk.pub}
+    function.def @compute(%a: !felt.type<"bn254"> {function.arg_name = "a"}) -> !struct.type<@Main> {
+      %self = struct.new : !struct.type<@Main>
+      struct.writem %self[@out] = %a : !struct.type<@Main>, !felt.type<"bn254">
+      function.return %self : !struct.type<@Main>
+    }
+    function.def @constrain(%self: !struct.type<@Main>, %a: !felt.type<"bn254"> {llzk.pub}) {
+      %zero = felt.const 0 : !felt.type<"bn254">
+      %one = felt.const 1 : !felt.type<"bn254">
+      %table = array.new %zero, %one : !array.type<2 x !felt.type<"bn254">>
+      constrain.in %table, %a : !array.type<2 x !felt.type<"bn254">>, !felt.type<"bn254">
+      %out = struct.readm %self[@out] : !struct.type<@Main>, !felt.type<"bn254">
+      constrain.eq %out, %a : !felt.type<"bn254">
+      function.return
+    }
+  }
+}

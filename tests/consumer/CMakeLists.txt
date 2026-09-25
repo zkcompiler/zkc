@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(ZkcConsumer LANGUAGES C CXX)
+find_package(ZkcCompiler REQUIRED CONFIG)
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE Zkc::Compiler)

@@ -1,0 +1,2 @@
+# Lake dependencies and build outputs, including nested Lean packages.
+.lake/

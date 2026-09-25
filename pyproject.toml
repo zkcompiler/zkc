@@ -1,0 +1,53 @@
+# Python in this repository is a driver, not a product: it runs the compiler,
+# the runtime and the Lean checkers as separate processes and compares what they
+# do. Every script uses the standard library alone, so what is pinned here are
+# the two tools that are not part of it — the test runner and the linter.
+#
+# One interpreter runs everything: the one already on the machine. The compiler
+# build finds it through CMake and the checkers are invoked as `python3`, so uv
+# uses it too rather than fetching a second one. The floor below is the oldest
+# release this code is written against, not a second version to support.
+#
+# This is deliberately not a Python package. `uv sync` installs the tools;
+# `uv run pytest` and `uv run ruff` use them. A script that needs neither still
+# runs under plain `python3`.
+
+[project]
+name = "zkc"
+version = "0"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.16.9",
+]
+
+[tool.uv]
+package = false
+# Never download an interpreter: the tests must run on the same one that the
+# compiler build and the plain scripts use.
+python-preference = "only-system"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests/support", "compiler/test/support", "scripts"]
+addopts = "--strict-markers --strict-config"
+# A hung tool is a failure with a stack, not a suite that never returns.
+timeout = 900
+
+# The rule set is narrow on purpose. This code is judged by what it checks, not
+# by its layout. So the selection is the classes that name actual defects:
+# undefined and unused names, shadowed or duplicated definitions, imports that
+# do not resolve, and syntax that does not mean what it looks like.
+[tool.ruff]
+# Nix source archives have no Git metadata, so .gitignore is not sufficient.
+# Lake downloads upstream Python scripts that are outside our lint ownership.
+extend-exclude = [".lake"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# Statement layout is not a defect, and no formatter runs over this code.
+ignore = ["E701", "E702"]

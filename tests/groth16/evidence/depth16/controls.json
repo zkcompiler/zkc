@@ -1,0 +1,251 @@
+{
+  "depth": 16,
+  "passed": 61,
+  "results": [
+    {
+      "name": "root",
+      "result": "witness rejected"
+    },
+    {
+      "name": "secret",
+      "result": "witness rejected"
+    },
+    {
+      "name": "blinding",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-0",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-0",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-0",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-1",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-1",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-1",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-2",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-2",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-2",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-3",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-3",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-3",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-4",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-4",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-4",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-5",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-5",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-5",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-6",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-6",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-6",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-7",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-7",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-7",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-8",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-8",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-8",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-9",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-9",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-9",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-10",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-10",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-10",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-11",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-11",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-11",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-12",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-12",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-12",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-13",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-13",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-13",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-14",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-14",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-14",
+      "result": "witness rejected"
+    },
+    {
+      "name": "sibling-15",
+      "result": "witness rejected"
+    },
+    {
+      "name": "direction-flip-15",
+      "result": "witness rejected"
+    },
+    {
+      "name": "nonboolean-15",
+      "result": "witness rejected"
+    },
+    {
+      "name": "zero-inputs-left",
+      "result": "valid witness checked"
+    },
+    {
+      "name": "boundary-inputs-right",
+      "result": "valid witness checked"
+    },
+    {
+      "name": "tampered-wtns-root",
+      "result": "unmodified wtns checker rejected"
+    },
+    {
+      "name": "tampered-wtns-proof",
+      "result": "prover emitted proof; unmodified verifier rejected"
+    },
+    {
+      "name": "changed-public-root",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "noncanonical-public-root",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "negated-A-valid-curve-point",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "G2-coefficients-swapped",
+      "result": "unmodified verifier rejected"
+    },
+    {
+      "name": "repeat-r1-s2",
+      "result": "exact canonical proof equality"
+    },
+    {
+      "name": "repeat-r0-s0",
+      "result": "exact canonical proof equality"
+    }
+  ],
+  "unmodifiedVerifier": true
+}
