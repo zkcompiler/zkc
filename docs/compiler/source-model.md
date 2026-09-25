@@ -60,7 +60,7 @@ frontend, FFI builder, package system or incremental editor database is implemen
 | [Frontend/Protocol.h](../../compiler/include/zkc/Frontend/Protocol.h) | Text parsing, checking, printing and token-preserving formatting |
 | [Protocol/Instantiation.h](../../compiler/include/zkc/Protocol/Instantiation.h) | Generic checks, source-preserving preparation and shared specialization |
 | [Protocol/Admission.h](../../compiler/include/zkc/Protocol/Admission.h) | Common and participant semantic admission |
-| [Protocol/Construction.h](../../compiler/include/zkc/Protocol/Construction.h) | Construction from typed common source and a typed descriptor |
+| [Compiler/Construction.h](../../compiler/include/zkc/Compiler/Construction.h) | Checked construction from typed common source and a typed descriptor |
 | [Contracts/Kernels.h](../../compiler/include/zkc/Contracts/Kernels.h) | Installed kernel shapes and static parameter checks |
 | [Contracts/Bindings.h](../../compiler/include/zkc/Contracts/Bindings.h) | MLIR-free nominal types and contract application checking |
 | [Source/Snapshot.h](../../compiler/include/zkc/Source/Snapshot.h) | Checked exact portable-source identity |

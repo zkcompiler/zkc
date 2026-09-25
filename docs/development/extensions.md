@@ -53,7 +53,7 @@ code named by an input artifact.
 
 All built-in factories are declared in
 [Passes.h](../../compiler/include/zkc/Transforms/Passes.h); tools call
-`registerCompilerPasses()` explicitly. Each implementation owns its name, options,
+`registerCompilerPasses()` from `Compiler/Passes.h` explicitly. Each implementation owns its name, options,
 description, dialect dependencies and statistics. With this small pass set,
 ordinary MLIR C++ definitions remain sufficient; there is no second metadata
 catalogue or custom registration framework.
@@ -77,7 +77,7 @@ When adding a pass:
 
 1. Implement the transformation in its owning conversion, analysis or transform
    area and expose a factory in `Passes.h`.
-2. Add that factory to [Passes.cpp](../../compiler/lib/Transforms/Passes.cpp) and
+2. Add that factory to [Passes.cpp](../../compiler/lib/Compiler/Passes.cpp) and
    its implementation to the build. Declare any dialects it can create.
 3. State the accepted stage, preconditions, observations and failure behavior
    beside the implementation. Preserve or invalidate analyses explicitly if the

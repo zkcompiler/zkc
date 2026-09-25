@@ -1,9 +1,10 @@
-#include "BindingPhysical.h"
+#include "Bindings.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Builders.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/LinearContraction.h"
@@ -27,12 +28,12 @@ lowerPhysical(ModuleOp module,
     return failure();
   auto candidate = exportSource(module);
   if (!candidate)
-    return module.emitError() << toString(candidate.takeError());
+    return diagnostics::emit(module.emitError(), candidate.takeError());
   if (auto e = admit(*candidate, true))
-    return module.emitError() << toString(std::move(e));
+    return diagnostics::emit(module.emitError(), std::move(e));
   auto root = cast<ProtocolModuleOp>(&module.getBody()->front());
   if (root.getStage() != "logical")
-    return root.emitError("interactive-physical-stage");
+    return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   if (failed(lowerBoundPhysical(module, selections, linearContractions, stats)))
     return failure();
   return releaseStorage ? releaseLocalStorage(module) : success();
@@ -40,14 +41,17 @@ lowerPhysical(ModuleOp module,
 namespace {
 struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PhysicalPass)
-  PhysicalPass(source::Assignments selected, bool linear, bool release)
-      : selections(std::move(selected)) {
+  PhysicalPass(source::Assignments selected, bool linear, bool release,
+               LinearContractionStats *output)
+      : selections(std::move(selected)), output(output) {
     linearContractions = linear;
     releaseStorage = release;
   }
   PhysicalPass(const PhysicalPass &other)
-      : PassWrapper(other), selections(other.selections) {}
+      : PassWrapper(other), selections(other.selections), output(other.output) {
+  }
   source::Assignments selections;
+  LinearContractionStats *output;
   Option<bool> linearContractions{
       *this, "linear-contractions",
       llvm::cl::desc("Select local all-uses depth-one diagonal contractions"),
@@ -80,15 +84,18 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
     eligible += stats.eligiblePairs;
     selected += stats.selectedPairs;
     selectedProducers += stats.selectedProducers;
-    if (linearContractions)
+    if (output)
+      *output = stats;
+    else if (linearContractions)
       printLinearContractionStats(stats, llvm::errs());
   }
 };
 } // namespace
-std::unique_ptr<Pass> createPlanParticipantsPass(source::Assignments selections,
-                                                 bool linearContractions,
-                                                 bool releaseStorage) {
-  return std::make_unique<PhysicalPass>(std::move(selections),
-                                        linearContractions, releaseStorage);
+std::unique_ptr<Pass>
+createPlanParticipantsPass(source::Assignments selections,
+                           bool linearContractions, bool releaseStorage,
+                           LinearContractionStats *statistics) {
+  return std::make_unique<PhysicalPass>(
+      std::move(selections), linearContractions, releaseStorage, statistics);
 }
 } // namespace zkc::protocol

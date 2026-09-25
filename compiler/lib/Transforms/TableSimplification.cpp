@@ -1,6 +1,7 @@
 #include "zkc/Transforms/TableSimplification.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Plan/IR/Physical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Table.h"
@@ -52,19 +53,20 @@ struct SimplifyPass : PassWrapper<SimplifyPass, OperationPass<ModuleOp>> {
 LogicalResult simplifyTableRegions(ModuleOp module) {
   if (!llvm::hasSingleElement(*module.getBody()) ||
       !isa<PIRProgramOp, PlanProgramOp>(module.getBody()->front()))
-    return module.emitError("expected-logical-program");
+    return diagnostics::emit(module.emitError(), "expected-logical-program");
   if (failed(verify(module)))
     return failure();
   Operation *program = &module.getBody()->front();
   if (isPhysicalProgram(program))
-    return program->emitError("expected-logical-program");
+    return diagnostics::emit(program->emitError(), "expected-logical-program");
   auto library = resolveProgramLibrary(program);
   if (!library)
-    return program->emitError(llvm::toString(library.takeError()));
+    return diagnostics::emit(program->emitError(), library.takeError());
   if ((*library)->dependencies() !=
       llvm::json::Value(
           llvm::json::Array{llvm::json::Array{"table-protocol", "1"}}))
-    return program->emitError("unsupported-simplification-library");
+    return diagnostics::emit(program->emitError(),
+                             "unsupported-simplification-library");
 
   // A verified program consists of single-block structured regions: each
   // definition precedes its uses. A top-down forward walk therefore resolves

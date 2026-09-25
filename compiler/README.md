@@ -235,17 +235,18 @@ explains the proved contract and native checks.
 
 ## Components
 
-The build separates four MLIR-free foundations, pure frontend analysis and
-optional input loading, a coordinated IR library, and the upper compiler.
-Arrows here mean “depends on”:
+The build separates semantic services, frontend processing, IR, transformations,
+compilation workflows and command handling. Arrows mean “depends on”:
 
 ```text
-Zkc::Compiler (interface aggregate)
-  → Zkc::CompilerCore
-      → Zkc::IR → Zkc::Protocol → Zkc::Relation → Zkc::Contracts → Zkc::Support → LLVM
-          → MLIR IR and interfaces
-      → Zkc::FrontendLoading → Zkc::Frontend → Zkc::Protocol
-      → MLIR parser and passes
+Compiler (interface aggregate) → CompilerCore, Driver
+Driver → CompilerCore, FrontendLoading, MLIR parser
+CompilerCore → Transforms, Frontend
+Transforms → IR, MLIR passes and conversions
+IR → Claims, MLIR IR and interfaces
+Claims → Protocol → Relation → Contracts → Support → LLVM
+Frontend → Protocol
+FrontendLoading → Frontend
 ```
 
 | Target | Responsibility and implementation homes |
@@ -254,10 +255,13 @@ Zkc::Compiler (interface aggregate)
 | `Zkc::Contracts` | Requirements, generic signatures, installed domains, operation contracts, representations and binding applications in `Contracts` |
 | `Zkc::Relation` | R1CS/AIR data, identities, sparse matrices and AIR polynomial evaluation in `Relation` |
 | `Zkc::Protocol` | Common `Source` records/codecs/snapshots, generated relation views, admission, generic preparation, source analyses and physical selection requests |
+| `Zkc::Claims` | MLIR-free conditional claim analysis, derivation and checking in `Claims` |
 | `Zkc::IR` | Dialects, operation interfaces, binding adapters, translation and mandatory root verification in `Dialect`, `Interfaces` and `Translation` |
 | `Zkc::Frontend` | Captured-input resolution, checked authoring, static selection, retained analysis and common lowering in `Frontend` |
 | `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
-| `Zkc::CompilerCore` | Construction, projection, transformations, compiler services and drivers |
+| `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion` and `Target` |
+| `Zkc::CompilerCore` | Typed compilation, checked construction/claim workflows, inspection and pipeline/pass registration in `Compiler` |
+| `Zkc::Driver` | Command options, file loading and output rendering in `Driver` |
 
 The foundations have no MLIR, frontend or driver dependency. A contract
 application contains the contract, static arguments and optional implementation;
@@ -292,16 +296,29 @@ the convenience aggregate, while `Dialect/Registry.h` supports registration
 without importing every operation declaration. `Translation/{Protocol,Table,Relations}.h`
 exposes import/export and relation adapters; transformation APIs are separate.
 
-CompilerCore is the remaining upper grouping, to be separated in subsequent
-restructuring phases. Its main homes are:
+[Compilation.h](include/zkc/Compiler/Compilation.h) provides typed protocol and
+table requests. A `Compilation` owns its context, module, source spelling and
+expansion origins; moves preserve their lifetimes. `compileProtocol` checks
+source-bound implementation choices before specialization and projection. Failed
+calls return owned diagnostics, never a partially compiled artifact. The CLI uses
+the same API. `Compiler/Source.h` freezes retained frontend output and prepares
+source-name-preserving local algorithms.
 
-- `Protocol`: construction, projection, algorithm expansion and physical planning.
-  Projection/planning APIs are declared in [Transforms/Protocol.h](include/zkc/Transforms/Protocol.h).
-- `Relation` and `Claims`: IR consumers, correspondence and caller-owned judgments.
-- `Conversion`, `Transforms` and `Dialect/<Name>/Transforms`: representation
-  conversion and rewrites, including relation deduplication.
-- `Compiler`: inspection, pipeline assembly and driver services. Pass factories
-  and opt-in registration live in [Transforms/Passes.h](include/zkc/Transforms/Passes.h).
+Construction retains both IR boundaries: the prepared original is imported and
+verified before dependency analysis, and the emitted source is imported and
+verified before publication. The pure preparation bridge is package-private;
+[Compiler/Construction.h](include/zkc/Compiler/Construction.h) exposes the checked
+workflow. [Compiler/Claims.h](include/zkc/Compiler/Claims.h) composes independent
+caller contracts with construction and physical candidate checking.
+[Translation/Claims.h](include/zkc/Translation/Claims.h) owns the analysis IR;
+claim derivation itself needs no MLIR context.
+
+Pass factories live in [Transforms/Passes.h](include/zkc/Transforms/Passes.h).
+Aggregate registration lives in [Compiler/Passes.h](include/zkc/Compiler/Passes.h),
+and pipeline builders in [Compiler/Pipelines.h](include/zkc/Compiler/Pipelines.h).
+Linking transformation code does not register command-line passes. Target policy
+selects among legal installed implementations; Contracts retains legality and
+canonical authoring defaults.
 
 The corresponding public headers live under `include/zkc/` and implementations
 under `lib/`. A directory can contain files owned by different build libraries;

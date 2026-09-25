@@ -15,6 +15,7 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(compilation CompilerCore compilation-api)
 add_zkc_test(json Support json-carrier)
 add_zkc_test(requirements Contracts)
 add_zkc_test(generic Contracts generic-signatures)

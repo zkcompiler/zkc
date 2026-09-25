@@ -1,7 +1,10 @@
 #include "zkc/Claims/Claims.h"
 #include "zkc/Compiler/Inspection.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Protocol/PhysicalOptions.h"
 #include "zkc/Source/Snapshot.h"
+#include "zkc/Translation/Claims.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 
@@ -78,7 +81,7 @@ int main() {
           "unexpected derivation");
   success(claims::check(source, contract, certificate));
 
-  // Public import must load its dialects even in a fresh client context.
+  // Translation initializes the dialects it creates in a fresh context.
   mlir::MLIRContext context;
   auto ir = take(claims::import(source, contract, certificate, context));
   success(claims::checkIR(source, contract, *ir));

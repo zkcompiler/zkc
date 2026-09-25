@@ -1,11 +1,12 @@
-#include "Internal.h"
-#include "zkc/Dialect/IR.h"
+#include "zkc/Translation/Claims.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Claims/Analysis.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/IR.h"
 #include "zkc/Support/Json.h"
 
 using namespace llvm;
@@ -16,8 +17,6 @@ Expected<OwningOpRef<ModuleOp>> build(const Contract &contract,
                                       const Certificate &certificate,
                                       const Checked &checked,
                                       MLIRContext &ctx) {
-  ctx.loadDialect<ClaimDialect, PIRDialect, AlgebraDialect, PolynomialDialect,
-                  PCSDialect, PlanDialect>();
   OpBuilder b(&ctx);
   OwningOpRef<ModuleOp> module(ModuleOp::create(b.getUnknownLoc()));
   (*module)->setAttr("claim.source", b.getStringAttr(checked.source.digest));
@@ -144,6 +143,10 @@ Expected<OwningOpRef<ModuleOp>> import(const source::Module &module,
   auto proof = steps(*checked, certificate);
   if (!proof)
     return proof.takeError();
+  // Translation initializes the dialects it creates. Candidate checking below
+  // never changes its caller's registry or dialect loading state.
+  ctx.loadDialect<ClaimDialect, PIRDialect, AlgebraDialect, PolynomialDialect,
+                  PCSDialect, PlanDialect>();
   return build(contract, certificate, *checked, ctx);
 }
 Error checkIR(const source::Module &module, const Contract &contract,
@@ -177,8 +180,15 @@ Error checkIR(const source::Module &module, const Contract &contract,
   auto proof = steps(*checked, certificate);
   if (!proof)
     return proof.takeError();
-  auto expected =
-      build(contract, certificate, *checked, *candidate.getContext());
+  auto &ctx = *candidate.getContext();
+  if (!ctx.getLoadedDialect<ClaimDialect>() ||
+      !ctx.getLoadedDialect<PIRDialect>() ||
+      !ctx.getLoadedDialect<AlgebraDialect>() ||
+      !ctx.getLoadedDialect<PolynomialDialect>() ||
+      !ctx.getLoadedDialect<PCSDialect>() ||
+      !ctx.getLoadedDialect<PlanDialect>())
+    return error("claim-ir-mismatch");
+  auto expected = build(contract, certificate, *checked, ctx);
   if (!expected)
     return expected.takeError();
   if (!OperationEquivalence::isEquivalentTo(

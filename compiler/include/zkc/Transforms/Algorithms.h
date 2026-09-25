@@ -1,5 +1,5 @@
-#ifndef ZKC_PROTOCOL_ALGORITHMS_H
-#define ZKC_PROTOCOL_ALGORITHMS_H
+#ifndef ZKC_TRANSFORMS_ALGORITHMS_H
+#define ZKC_TRANSFORMS_ALGORITHMS_H
 
 #include "zkc/Translation/Protocol.h"
 

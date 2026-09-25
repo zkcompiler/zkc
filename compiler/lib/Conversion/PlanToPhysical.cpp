@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Plan/IR/Physical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Table.h"
@@ -84,19 +85,21 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
 };
 LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
   if (mode != "lazy" && mode != "materialized")
-    return module.emitError("unsupported-preparation-mode");
+    return diagnostics::emit(module.emitError(),
+                             "unsupported-preparation-mode");
   // A closed direct plan is the admitted input of this representation pass.
   auto direct = exportPlan(module);
   if (!direct)
-    return module.emitError(toString(direct.takeError()));
+    return diagnostics::emit(module.emitError(), direct.takeError());
   Operation &program = module.getBody()->front();
   if (isPhysicalProgram(&program))
-    return program.emitError("expected-direct-plan");
+    return diagnostics::emit(program.emitError(), "expected-direct-plan");
   auto library = resolveProgramLibrary(&program);
   if (!library)
-    return program.emitError(toString(library.takeError()));
+    return diagnostics::emit(program.emitError(), library.takeError());
   if (printJson((*library)->dependencies()) != "[[\"table-protocol\",\"1\"]]")
-    return program.emitError("unsupported-physical-library");
+    return diagnostics::emit(program.emitError(),
+                             "unsupported-physical-library");
   llvm::DenseMap<Operation *, std::string> descriptors;
   module.walk([&](Operation *op) {
     if (auto source = dyn_cast<SourceOpInterface>(op))

@@ -1,4 +1,4 @@
-#include "zkc/Protocol/Algorithms.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
@@ -6,6 +6,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Builders.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
@@ -47,9 +48,10 @@ LogicalResult canonicalizeCaptures(Operation *op) {
         continue;
       auto type = encodeBoundType(value.getType(), false);
       if (!type)
-        return op->emitOpError(toString(type.takeError()));
+        return diagnostics::emit(op->emitOpError(), type.takeError());
       if (!duplicable(type->spelling()))
-        return op->emitOpError("interactive-resource-reuse");
+        return diagnostics::emit(op->emitOpError(),
+                                 "interactive-resource-reuse");
       for (Region &region : op->getRegions()) {
         Block &block = region.front();
         unsigned start = block.getNumArguments() - captures;
@@ -90,7 +92,7 @@ class Expander {
       // Bound traversal as well as output: empty helpers can also form an
       // exponentially large DAG. Admission separately bounds depth/cycles.
       if (++work > 32768)
-        return op.emitOpError("algorithm-expansion-limit");
+        return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
       if (auto ret = dyn_cast<func::ReturnOp>(op)) {
         for (auto value : ret.getOperands())
           returned.push_back(mapping.lookup(value));
@@ -118,7 +120,7 @@ class Expander {
         if (encode) {
           auto encoded = algorithmSite(path, site);
           if (!encoded)
-            return op.emitOpError(toString(encoded.takeError()));
+            return diagnostics::emit(op.emitOpError(), encoded.takeError());
           site = std::move(*encoded);
         }
         auto *copy = builder.cloneWithoutRegions(op, mapping);
@@ -145,7 +147,8 @@ class Expander {
             llvm::all_of(copy->getRegions(), [](Region &region) {
               return isa<HaltOp>(region.front().back());
             }))
-          return copy->emitOpError("algorithm-terminal-results");
+          return diagnostics::emit(copy->emitOpError(),
+                                   "algorithm-terminal-results");
         // Cloning retains the leaf diagnostic location. The checked site path
         // carries the nested occurrence separately from diagnostic metadata.
         origins.push_back(
@@ -212,12 +215,12 @@ LogicalResult expandAlgorithms(ModuleOp module,
                                std::vector<AlgorithmOrigin> *origins) {
   auto source = exportSource(module);
   if (!source)
-    return module.emitError(toString(source.takeError()));
+    return diagnostics::emit(module.emitError(), source.takeError());
   auto *common = std::get_if<source::Module>(&*source);
   if (!common)
-    return module.emitError("algorithm-expansion-stage");
+    return diagnostics::emit(module.emitError(), "algorithm-expansion-stage");
   if (auto e = admit(*common, true))
-    return module.emitError(toString(std::move(e)));
+    return diagnostics::emit(module.emitError(), std::move(e));
   bool calls = false;
   for (const auto &fn : common->functions)
     if (fn.body)

@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Table.h"
 using namespace mlir;
@@ -51,7 +52,7 @@ LogicalResult lowerToPlan(ModuleOp module) {
     return failure();
   for (auto &op : module.getBody()->getOperations())
     if (!isa<PIRProgramOp, PlanProgramOp>(op))
-      return op.emitOpError("expected-finite-program");
+      return diagnostics::emit(op.emitOpError(), "expected-finite-program");
   ConversionTarget target(*module.getContext());
   target.addLegalDialect<PIRDialect, PlanDialect, AlgebraDialect,
                          PolynomialDialect>();

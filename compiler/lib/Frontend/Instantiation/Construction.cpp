@@ -1,4 +1,4 @@
-#include "../Resolution/Declarations.h"
+#include "../Model/Module.h"
 #include "../Resolution/Project.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Support/Json.h"
@@ -6,30 +6,34 @@
 using namespace llvm;
 namespace zkc::frontend {
 Expected<source::Construction>
-bindConstruction(const ProjectInput &input, const source::Module &source,
+bindConstruction(const CheckedModule &checked,
                  source::Construction descriptor) {
   if (descriptor.draws.size() > 32768)
     return zkc::error("construction-descriptor-limit");
-  auto resolved = resolution::resolve(input, true);
-  if (!resolved.diagnostics.empty()) {
-    const auto &d = resolved.diagnostics.front();
-    return diagnostic(input, d);
-  }
-  // Printed carrier text is another spelling of the closed JSON subject.
-  // It has no authoring aliases; its descriptor already uses carrier names.
-  if (const auto *module = std::get_if<syntax::Module>(&resolved.content);
-      module && module->carrier)
+  const auto &model = *checked.model;
+  const auto *sourceModule = std::get_if<source::Module>(&*model.finalized);
+  if (!sourceModule)
+    return zkc::error("construction-input-kind");
+  const auto &source = *sourceModule;
+  if (!model.resolution)
+    return zkc::error("construction-input-kind");
+  if (model.resolution->carrier)
     return descriptor;
+  const auto &context = *model.resolution;
+  auto indexed = resolution::constructionSelectors(context);
+  if (!indexed)
+    return indexed.takeError();
+  const auto &index = *indexed;
   std::set<std::string> functions;
   std::map<std::string, std::string> functionOrigins;
   std::set<std::string> sharedOrigins, authoredGroups, ambiguousFunctions;
   // A function declared under this name, as opposed to the copies and entries
   // that linking and imports emit under an existing origin.
   auto authored = [&](const std::string &name) {
-    auto found = resolved.context->selectors.find(name);
-    if (found == resolved.context->selectors.end())
+    auto found = index.selectors.find(name);
+    if (found == index.selectors.end())
       return false;
-    const auto &d = resolved.context->declarations[found->second];
+    const auto &d = context.declarations[found->second];
     return d.kind == resolution::Declaration::Kind::Function &&
            d.symbol == name;
   };
@@ -54,20 +58,20 @@ bindConstruction(const ProjectInput &input, const source::Module &source,
       ambiguousFunctions.insert(name);
   auto bind = [&](std::string &name, bool origin) -> Error {
     if (!origin) {
-      auto entry = resolved.context->entrySelectors.find(name);
-      if (entry != resolved.context->entrySelectors.end()) {
-        name = resolved.context->declarations[entry->second].symbol;
+      auto entry = index.entrySelectors.find(name);
+      if (entry != index.entrySelectors.end()) {
+        name = context.declarations[entry->second].symbol;
         return Error::success();
       }
     }
     auto head = name;
     std::string suffix;
     for (;;) {
-      if (resolved.context->ambiguousOrigins.count(head))
+      if (index.ambiguousOrigins.count(head))
         return zkc::error("construction-source-selector-ambiguous");
-      auto found = resolved.context->selectors.find(head);
-      if (found != resolved.context->selectors.end()) {
-        const auto &d = resolved.context->declarations[found->second];
+      auto found = index.selectors.find(head);
+      if (found != index.selectors.end()) {
+        const auto &d = context.declarations[found->second];
         // A definition selector follows all its instantiations; a configure
         // selector names one closed instance. Ordinary functions are direct
         // selectors, including explicit group members. Generic functions are

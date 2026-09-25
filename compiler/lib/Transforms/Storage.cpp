@@ -4,6 +4,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Builders.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
@@ -16,13 +17,14 @@ LogicalResult releaseLocalStorage(ModuleOp module) {
   if (failed(verify(module)))
     return failure();
   if (!llvm::hasSingleElement(*module.getBody()))
-    return module.emitError("interactive-release-context");
+    return diagnostics::emit(module.emitError(), "interactive-release-context");
   auto root = dyn_cast<ProtocolModuleOp>(&module.getBody()->front());
   if (!root || root.getStage() != "physical")
-    return module.emitError("interactive-release-context");
+    return diagnostics::emit(module.emitError(), "interactive-release-context");
   for (auto function : root.getBody().front().getOps<func::FuncOp>()) {
     if (!llvm::hasSingleElement(function.getBody()))
-      return function.emitError("interactive-release-context");
+      return diagnostics::emit(function.emitError(),
+                               "interactive-release-context");
     SmallVector<Block *> blocks;
     function.walk([&](Operation *op) {
       for (auto &region : op->getRegions())
@@ -46,7 +48,7 @@ LogicalResult releaseLocalStorage(ModuleOp module) {
       for (Value value : values) {
         auto type = encodeBoundType(value.getType(), true);
         if (!type)
-          return function.emitError() << toString(type.takeError());
+          return diagnostics::emit(function.emitError(), type.takeError());
         bool canDiscard = discardable(type->spelling());
         if (!canDiscard)
           continue;

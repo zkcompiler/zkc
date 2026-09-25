@@ -1,9 +1,11 @@
-#include "BindingPhysical.h"
+#include "Bindings.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Builders.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Target/Selection.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
@@ -123,23 +125,15 @@ public:
       if (!binding)
         return binding.takeError();
       auto choice = choices.find(binding->name);
-      if (!binding->application.implementation.empty() ||
-          choice != choices.end())
+      auto selected = target::selectImplementation(
+          binding->application, choice == choices.end()
+                                    ? std::nullopt
+                                    : std::optional<StringRef>(choice->second));
+      if (!selected)
+        return selected.takeError();
+      if (selected->fixed)
         fixed.insert(binding->name);
-      if (choice != choices.end()) {
-        if (!binding->application.implementation.empty() &&
-            binding->application.implementation != choice->second)
-          return error("binding-selection-conflict");
-        binding->application.implementation = choice->second;
-      } else if (binding->application.implementation.empty()) {
-        auto implementation = defaultImplementation(binding->application);
-        if (!implementation)
-          return implementation.takeError();
-        binding->application.implementation = std::move(*implementation);
-      }
-      auto installed = resolveBinding(binding->application, true);
-      if (!installed)
-        return installed.takeError();
+      binding->application = std::move(selected->application);
       if (choice != choices.end())
         choices.erase(choice);
       bindings.emplace(binding->name, std::move(*binding));
@@ -199,12 +193,12 @@ public:
     // Callable/control interfaces receive explicit physical ports. Kernel
     // outputs below instead receive their selected implementation's ports;
     // consequently one logical type can have several live representations.
-    std::string failureCode;
+    Error failure = Error::success();
     auto assign = [&](Type type) -> Type {
       auto selected = port(type);
       if (!selected) {
-        if (failureCode.empty())
-          failureCode = toString(selected.takeError());
+        if (!failure)
+          failure = selected.takeError();
         else
           consumeError(selected.takeError());
         return type;
@@ -212,7 +206,7 @@ public:
       return *selected;
     };
     root->walk([&](Operation *op) {
-      if (!failureCode.empty())
+      if (failure)
         return;
       location = op->getLoc();
       for (auto &region : op->getRegions())
@@ -233,8 +227,8 @@ public:
         for (auto value : op->getResults())
           value.setType(assign(value.getType()));
     });
-    if (!failureCode.empty())
-      return error(failureCode);
+    if (failure)
+      return failure;
 
     for (auto function : root.getBody().front().getOps<func::FuncOp>()) {
       std::set<std::string> sites;
@@ -340,7 +334,7 @@ lowerBoundPhysical(ModuleOp original,
   Planner planner(*candidate);
   LinearContractionStats result;
   if (auto e = planner.run(selections, linearContractions, result)) {
-    emitError(planner.failureLocation()) << toString(std::move(e));
+    diagnostics::emit(emitError(planner.failureLocation()), std::move(e));
     return failure();
   }
   if (failed(verify(*candidate)))

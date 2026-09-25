@@ -1,28 +1,28 @@
-#include "zkc/Compiler/Driver.h"
-#include "../Claims/Driver.h"
-#include "../Relation/Driver.h"
+#include "zkc/Driver/Compiler.h"
 #include "../Support/Input.h"
+#include "Claims.h"
 #include "InspectionPrinter.h"
+#include "Relations.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Analysis/OracleAccess.h"
 #include "zkc/Analysis/PolynomialDomains.h"
+#include "zkc/Compiler/Compilation.h"
+#include "zkc/Compiler/Construction.h"
 #include "zkc/Compiler/Inspection.h"
-#include "zkc/Compiler/Pipelines.h"
-#include "zkc/Compiler/SourceLocations.h"
+#include "zkc/Compiler/Source.h"
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Frontend/Inspection.h"
 #include "zkc/Frontend/Loading.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Protocol/Algorithms.h"
-#include "zkc/Protocol/Construction.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Protocol/PhysicalOptions.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Support/MLIRInput.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Translation/Protocol.h"
 #include "zkc/Translation/Table.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -389,16 +389,7 @@ int zkc::runCompiler(int argc, char **argv,
     if (auto error = captureSource())
       return std::move(error);
     sourceAnalysis = frontend::analyzeProject(*project);
-    auto content = sourceAnalysis->lower();
-    if (!content)
-      return content.takeError();
-    if (auto error = source::checkStructure(*content))
-      return std::move(error);
-    std::vector<source::File> files;
-    for (const auto &library : project->libraries())
-      for (const auto &file : library.sources)
-        files.push_back({file.input.text().str(), file.input.filename().str()});
-    return source::Document(std::move(*content), std::move(files));
+    return lowerSource(*sourceAnalysis);
   };
   if (mode == "protocol-resolve") {
     auto document = loadSourceDocument();
@@ -481,30 +472,13 @@ int zkc::runCompiler(int argc, char **argv,
         printSourceInspection(*report, outs());
       return 0;
     }
-    if (mode == "protocol-prepare" && document->module()) {
-      const source::Node *failure = nullptr;
-      auto prepared =
-          document->module()->isLibrary()
-              ? generic::prepareLibrary(*document->module(), &failure)
-              : Expected<source::Module>(*document->module());
+    if (mode == "protocol-prepare") {
+      mlir::MLIRContext context(registry);
+      context.printOpOnDiagnostic(false);
+      context.loadAllAvailableDialects();
+      auto prepared = prepareSource(*document, context);
       if (!prepared)
-        return fail(sourceDiagnostic(*document, prepared.takeError(), failure));
-      bool calls = false;
-      for (const auto &fn : prepared->functions)
-        if (fn.body)
-          for (const auto &ins : *fn.body)
-            calls |= ins.get<source::AlgorithmCall>() != nullptr;
-      if (calls) {
-        mlir::MLIRContext context(registry);
-        context.printOpOnDiagnostic(false);
-        context.loadAllAvailableDialects();
-        auto expanded = protocol::expandAlgorithms(*prepared, context);
-        if (!expanded)
-          return fail(expanded.takeError());
-        prepared = std::move(expanded->source);
-      } else if (auto e = protocol::admit(*prepared, false)) {
-        return fail(std::move(e));
-      }
+        return fail(prepared.takeError());
       outs() << printJson(source::encode(*prepared)) << '\n';
     } else {
       if (auto e = frontend::checkProtocolDocument(*document))
@@ -513,12 +487,12 @@ int zkc::runCompiler(int argc, char **argv,
     }
     return 0;
   }
-  mlir::MLIRContext context(registry);
-  // A diagnostic already names its operation's location. Appending the whole
-  // operation would put arbitrarily large IR into a refusal; zkc-opt keeps
-  // MLIR's option for inspecting it.
-  context.printOpOnDiagnostic(false);
-  context.loadAllAvailableDialects();
+  std::unique_ptr<mlir::MLIRContext> context;
+  if (construction || mode == "export" || mode == "protocol-export") {
+    context = std::make_unique<mlir::MLIRContext>(registry);
+    context->printOpOnDiagnostic(false);
+    context->loadAllAvailableDialects();
+  }
   mlir::OwningOpRef<mlir::ModuleOp> module;
   if (construction) {
     auto source = loadSourceDocument();
@@ -534,8 +508,11 @@ int zkc::runCompiler(int argc, char **argv,
       return fail(zkc::error("construction-input-kind"));
     auto constructionDescriptor = *descriptor->construction();
     if (project) {
+      auto checked = sourceAnalysis->checkedModule();
+      if (!checked)
+        return fail(checked.takeError());
       auto bound = frontend::bindConstruction(
-          *project, *source->module(), std::move(constructionDescriptor));
+          *checked, std::move(constructionDescriptor));
       if (!bound)
         return fail(bound.takeError());
       constructionDescriptor = std::move(*bound);
@@ -548,13 +525,13 @@ int zkc::runCompiler(int argc, char **argv,
       if (!candidate)
         return fail(candidate.takeError());
       if (auto e = zkc::protocol::checkConstruction(
-              *source->module(), constructionDescriptor, *candidate, context))
+              *source->module(), constructionDescriptor, *candidate, *context))
         return fail(std::move(e));
       outs() << "construction-checked\n";
       return 0;
     }
     auto result = zkc::protocol::construct(*source->module(),
-                                           constructionDescriptor, context);
+                                           constructionDescriptor, *context);
     if (!result)
       return fail(result.takeError());
     if (mode == "protocol-construct-ir") {
@@ -568,16 +545,13 @@ int zkc::runCompiler(int argc, char **argv,
     if (mode == "protocol-export") {
       if (!mlirNestingWithinLimit(*text))
         return fail(zkc::error("mlir-depth-limit"));
-      module = mlir::parseSourceString<mlir::ModuleOp>(*text, &context);
+      module = mlir::parseSourceString<mlir::ModuleOp>(*text, context.get());
       if (!module)
         return 1;
     } else {
       auto document = loadSourceDocument();
       if (!document)
         return fail(document.takeError());
-      if (auto e = protocol::checkImplementationSelection(
-              options.implementations, document->root()))
-        return fail(std::move(e));
       if (mode == "protocol-admit") {
         if (document->construction())
           return fail(zkc::error("interactive-format"));
@@ -586,83 +560,48 @@ int zkc::runCompiler(int argc, char **argv,
         outs() << "declaration-admitted\n";
         return 0;
       }
-      std::optional<source::Content> specialized;
-      const source::Content *closed = &document->root();
-      if (document->module() && document->module()->isLibrary()) {
-        const source::Node *failure = nullptr;
-        auto elaborated =
-            generic::elaborateLibrary(*document->module(), &failure);
-        if (!elaborated)
-          return fail(
-              sourceDiagnostic(*document, elaborated.takeError(), failure));
-        specialized = std::move(*elaborated);
-        closed = &*specialized;
-      }
-      const source::Node *failure = nullptr;
-      SourceLocations locations(*document, context);
-      auto imported = protocol::importModule(
-          *closed, context,
-          [&](const source::Node &node) { return locations(node); }, &failure);
-      if (!imported)
-        return fail(sourceDiagnostic(*document, imported.takeError(), failure));
-      module = std::move(*imported);
-      if (mode == "protocol-expand" || mode == "protocol-algorithm-map") {
-        std::vector<protocol::AlgorithmOrigin> origins;
-        if (mlir::failed(protocol::expandAlgorithms(*module, &origins)))
-          return fail(zkc::error("algorithm-expansion-failed"));
-        if (mode == "protocol-algorithm-map") {
-          json::Array rows;
-          for (const auto &origin : origins) {
-            json::Array path;
-            for (const auto &[site, callee] : origin.path)
-              path.push_back(json::Array{site, callee});
-            rows.push_back(json::Array{origin.function, origin.site,
-                                       origin.definition, origin.originalSite,
-                                       std::move(path)});
-          }
-          outs() << printJson(json::Array{"zkc.algorithm-expansion/1",
-                                          "canonical-expanded-locals/1",
-                                          std::move(rows)})
-                 << "\n";
-        } else {
-          auto expanded = protocol::exportModule(*module);
-          if (!expanded)
-            return fail(expanded.takeError());
-          outs() << printJson(*expanded) << "\n";
-        }
-        return 0;
-      }
-      if (mode == "protocol-import") {
-        module->print(outs(),
-                      mlir::OpPrintingFlags().enableDebugInfo(showLocations));
-        outs() << '\n';
-        return 0;
-      }
-      if (mode == "protocol-project" || mode == "protocol-compile" ||
-          mode == "protocol-physical-ir") {
-        mlir::PassManager pipeline(&context);
-        buildParticipantPipeline(pipeline, options, mode == "protocol-project");
-        // A pass that refuses the whole module reports it at the module, where
-        // MLIR's location adds nothing: print it as the driver prints its own
-        // refusals. A diagnostic at an operation keeps its located form.
-        mlir::ScopedDiagnosticHandler refusals(
-            &context, [&](mlir::Diagnostic &diagnostic) {
-              if (diagnostic.getSeverity() != mlir::DiagnosticSeverity::Error ||
-                  diagnostic.getLocation() != module->getLoc())
-                return mlir::failure();
-              errs() << diagnostic.str() << '\n';
-              return mlir::success();
-            });
-        if (mlir::failed(pipeline.run(*module)))
-          return 1;
-        if (mode == "protocol-physical-ir") {
-          module->print(outs(),
-                        mlir::OpPrintingFlags().enableDebugInfo(showLocations));
-          outs() << '\n';
-          return 0;
-        }
-      } else
+      ProtocolOptions request;
+      request.physical = options;
+      if (mode == "protocol-import")
+        request.action = ProtocolAction::Import;
+      else if (mode == "protocol-expand" || mode == "protocol-algorithm-map")
+        request.action = ProtocolAction::Expand;
+      else if (mode == "protocol-project")
+        request.action = ProtocolAction::Project;
+      else if (mode == "protocol-compile" || mode == "protocol-physical-ir")
+        request.action = ProtocolAction::Plan;
+      else
         return fail(zkc::error("unknown-command"));
+      auto compiled = compileProtocol(std::move(*document), request, registry);
+      if (!compiled)
+        return fail(compiled.takeError());
+      if (options.linearContractions)
+        printLinearContractionStats(compiled->statistics(), errs());
+      if (mode == "protocol-import" || mode == "protocol-physical-ir") {
+        compiled->module().print(
+            outs(), mlir::OpPrintingFlags().enableDebugInfo(showLocations));
+        outs() << '\n';
+      } else if (mode == "protocol-algorithm-map") {
+        json::Array rows;
+        for (const auto &origin : compiled->origins()) {
+          json::Array path;
+          for (const auto &[site, callee] : origin.path)
+            path.push_back(json::Array{site, callee});
+          rows.push_back(json::Array{origin.function, origin.site,
+                                     origin.definition, origin.originalSite,
+                                     std::move(path)});
+        }
+        outs() << printJson(json::Array{"zkc.algorithm-expansion/1",
+                                        "canonical-expanded-locals/1",
+                                        std::move(rows)})
+               << '\n';
+      } else {
+        auto result = protocol::exportModule(compiled->module());
+        if (!result)
+          return fail(result.takeError());
+        outs() << printJson(*result) << '\n';
+      }
+      return 0;
     }
     auto result = zkc::protocol::exportModule(*module);
     if (!result)
@@ -673,26 +612,32 @@ int zkc::runCompiler(int argc, char **argv,
   if (mode == "export") {
     if (!mlirNestingWithinLimit(*text))
       return fail(zkc::error("mlir-depth-limit"));
-    module = mlir::parseSourceString<mlir::ModuleOp>(*text, &context);
+    module = mlir::parseSourceString<mlir::ModuleOp>(*text, context.get());
     if (!module)
       return 1;
   } else if (mode == "import" || mode == "compile") {
     auto json = zkc::parseJson(*text);
     if (!json)
       return fail(json.takeError());
-    auto imported = zkc::importSource(*json, context);
-    if (!imported)
-      return fail(imported.takeError());
-    module = std::move(*imported);
+    TableOptions request;
+    request.simplify = simplify;
+    request.action = mode == "import"             ? TableAction::Import
+                     : physical == "lazy"         ? TableAction::Lazy
+                     : physical == "materialized" ? TableAction::Materialized
+                                                  : TableAction::Plan;
+    auto compiled = compileTable(*json, request, registry);
+    if (!compiled)
+      return fail(compiled.takeError());
     if (mode == "import") {
-      module->print(outs());
+      compiled->module().print(outs());
       outs() << '\n';
-      return 0;
+    } else {
+      auto plan = exportPlan(compiled->module());
+      if (!plan)
+        return fail(plan.takeError());
+      outs() << printJson(*plan) << '\n';
     }
-    mlir::PassManager pipeline(&context);
-    buildTablePipeline(pipeline, simplify, physical);
-    if (mlir::failed(pipeline.run(*module)))
-      return 1;
+    return 0;
   } else
     return fail(zkc::error("unknown-command"));
   auto plan = zkc::exportPlan(*module);

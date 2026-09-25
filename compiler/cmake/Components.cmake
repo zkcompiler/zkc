@@ -49,6 +49,10 @@ add_zkc_component(Protocol
   lib/Protocol/Instantiation.cpp
   lib/Protocol/Admission.cpp
   lib/Protocol/PhysicalOptions.cpp
+  lib/Protocol/Construction.cpp
+  lib/Protocol/ConstructionAvailability.cpp
+  lib/Protocol/ConstructionEmission.cpp
+  lib/Protocol/ConstructionResources.cpp
   lib/Source/Relations.cpp
   lib/Source/RelationLowering.cpp
   lib/Source/Decode.cpp
@@ -60,7 +64,13 @@ add_zkc_component(Protocol
   lib/Source/Structure.cpp
   lib/Source/Snapshot.cpp
 )
+add_zkc_component(Claims
+  lib/Claims/Trace.cpp
+  lib/Claims/Codec.cpp
+  lib/Claims/Check.cpp
+)
 add_zkc_component(IR
+  lib/Translation/Claims.cpp
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Bindings.cpp
@@ -110,6 +120,7 @@ add_zkc_component(Frontend
   lib/Frontend/Resolution/Environment.cpp
   lib/Frontend/Resolution/Names.cpp
   lib/Frontend/Resolution/Project.cpp
+  lib/Frontend/Resolution/Selectors.cpp
   lib/Frontend/Semantics/Aggregates.cpp
   lib/Frontend/Semantics/Analysis.cpp
   lib/Frontend/Semantics/Body.cpp
@@ -136,33 +147,35 @@ add_zkc_component(FrontendLoading
   lib/Frontend/Loading/Capture.cpp
   lib/Frontend/Loading/Relations.cpp
 )
-add_zkc_component(CompilerCore
-  lib/Claims/Trace.cpp
-  lib/Claims/Codec.cpp
-  lib/Claims/Check.cpp
-  lib/Claims/IR.cpp
-  lib/Claims/Driver.cpp
-  lib/Compiler/Driver.cpp
-  lib/Compiler/Inspection.cpp
-  lib/Compiler/Pipelines.cpp
-  lib/Compiler/SourceLocations.cpp
+add_zkc_component(Transforms
   lib/Conversion/PIRToPlan.cpp
   lib/Conversion/PlanToPhysical.cpp
-  lib/Protocol/Algorithms.cpp
-  lib/Protocol/BindingPhysical.cpp
-  lib/Protocol/Construction.cpp
-  lib/Protocol/ConstructionAvailability.cpp
-  lib/Protocol/ConstructionEmission.cpp
-  lib/Protocol/ConstructionResources.cpp
-  lib/Protocol/Physical.cpp
-  lib/Protocol/Storage.cpp
-  lib/Protocol/Projection.cpp
-  lib/Relation/AIRCommands.cpp
-  lib/Relation/Driver.cpp
-  lib/Transforms/Passes.cpp
+  lib/Conversion/Bindings.cpp
+  lib/Conversion/Participants.cpp
+  lib/Transforms/Algorithms.cpp
+  lib/Transforms/Participants.cpp
+  lib/Transforms/Storage.cpp
   lib/Transforms/LinearContraction.cpp
   lib/Transforms/TableSimplification.cpp
   lib/Dialect/Relation/Transforms/Deduplicate.cpp
+  lib/Target/Selection.cpp
+)
+add_zkc_component(CompilerCore
+  lib/Compiler/Compilation.cpp
+  lib/Compiler/Claims.cpp
+  lib/Compiler/Construction.cpp
+  lib/Compiler/Inspection.cpp
+  lib/Compiler/Passes.cpp
+  lib/Compiler/Pipelines.cpp
+  lib/Compiler/Source.cpp
+  lib/Compiler/SourceLocations.cpp
+)
+add_zkc_component(Driver
+  lib/Driver/Compiler.cpp
+  lib/Driver/Claims.cpp
+  lib/Driver/Relations.cpp
+  lib/Driver/AIR.cpp
+  lib/Driver/Inspection.cpp
 )
 # Match the external package's LLVM linkage. Mixing its shared LLVM with a
 # second static Support copy duplicates process-global LLVM state.
@@ -179,23 +192,25 @@ add_dependencies(ZkcIR ZkcIRGen)
 target_include_directories(ZkcIR SYSTEM PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<BUILD_INTERFACE:${MLIR_INCLUDE_DIRS}>)
-target_link_libraries(ZkcIR PUBLIC ZkcProtocol
+target_link_libraries(ZkcClaims PUBLIC ZkcProtocol)
+target_link_libraries(ZkcIR PUBLIC ZkcClaims
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFuncDialect)
 target_link_libraries(ZkcFrontend PUBLIC ZkcProtocol)
 target_link_libraries(ZkcFrontendLoading PUBLIC ZkcFrontend)
-# Passes and application workflows separate in the next phase.
-target_link_libraries(ZkcCompilerCore PUBLIC ZkcIR ZkcFrontendLoading
-  MLIRParser MLIRPass MLIRTransforms MLIRTransformUtils)
+target_link_libraries(ZkcTransforms PUBLIC ZkcIR
+  MLIRPass MLIRTransforms MLIRTransformUtils)
+target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcFrontend)
+target_link_libraries(ZkcDriver PUBLIC ZkcCompilerCore ZkcFrontendLoading MLIRParser)
 add_library(ZkcCompiler INTERFACE)
 add_library(Zkc::Compiler ALIAS ZkcCompiler)
 set_target_properties(ZkcCompiler PROPERTIES EXPORT_NAME Compiler)
-target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore)
+target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore ZkcDriver)
 # TableGen consumers query the aggregate's include root directly.
 target_include_directories(ZkcCompiler INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcIR ZkcFrontend ZkcFrontendLoading ZkcCompilerCore)
+set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

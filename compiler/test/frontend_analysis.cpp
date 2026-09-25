@@ -228,11 +228,19 @@ void capturedProjectShapes() {
   }
   require(root, "a child module cannot declare a library identity:" + seen);
 }
+void failedImportsAreNotReplayed() {
+  auto analysis = analyzeProtocol("module { use absent::name as imported; }");
+  size_t failures = 0;
+  for (const auto &d : analysis.diagnostics())
+    failures += d.code == "source-name-unresolved";
+  require(failures == 1, "retaining selector data replayed a failed import");
+}
 void constructionSelectorBounds() {
   auto project = ProjectInput::single(Input("module {}", "empty.pir"));
   source::Construction descriptor;
   descriptor.draws.resize(32769, {"Unused", "draw"});
-  auto bound = bindConstruction(project, source::Module{}, descriptor);
+  auto checked = take(analyzeProject(project).checkedModule());
+  auto bound = bindConstruction(checked, descriptor);
   require(!bound, "too many selectors fail before project traversal");
   require(toString(bound.takeError()) == "construction-descriptor-limit",
           "selector limit has a stable diagnostic");
@@ -240,6 +248,7 @@ void constructionSelectorBounds() {
 } // namespace
 
 int main() {
+  failedImportsAreNotReplayed();
   retainedTypes();
   checkedSnapshotAndLexicalTypes();
   incompleteCannotEmit();

@@ -10,6 +10,7 @@ namespace mlir {
 class ModuleOp;
 }
 namespace zkc {
+struct LinearContractionStats;
 /// Lower finite source-library programs; refuse other top-level operations.
 mlir::LogicalResult lowerToPlan(mlir::ModuleOp module);
 std::unique_ptr<mlir::Pass> createLowerPIRToPlanPass();
@@ -20,18 +21,14 @@ namespace protocol {
 std::unique_ptr<mlir::Pass> createExpandAlgorithmsPass();
 std::unique_ptr<mlir::Pass> createProjectParticipantsPass();
 /// Selections have already been checked against the caller's retained source.
-std::unique_ptr<mlir::Pass>
-createPlanParticipantsPass(source::Assignments selections = {},
-                           bool linearContractions = false,
-                           bool releaseStorage = false);
+std::unique_ptr<mlir::Pass> createPlanParticipantsPass(
+    source::Assignments selections = {}, bool linearContractions = false,
+    bool releaseStorage = false, LinearContractionStats *statistics = nullptr);
 } // namespace protocol
 namespace relation {
 /// Remove only exact duplicate normalized rows; preserve witness/public layout
 /// and relation families.
 std::unique_ptr<mlir::Pass> createDeduplicateRelationsPass();
 } // namespace relation
-/// Register built-in passes. Tools opt into registration; linking the library
-/// does not mutate MLIR's global pass registry.
-void registerCompilerPasses();
 } // namespace zkc
 #endif

@@ -8,7 +8,7 @@ if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "@LLVM_PACKAGE_VERSION@")
 endif()
 include("${CMAKE_CURRENT_LIST_DIR}/ZkcCompilerTargets.cmake")
 # External imported libraries do not propagate their header paths themselves.
-foreach(component Support Contracts Relation Protocol IR Frontend FrontendLoading CompilerCore)
+foreach(component Support Contracts Relation Protocol Claims IR Frontend FrontendLoading Transforms CompilerCore Driver)
   set_property(TARGET Zkc::${component} APPEND PROPERTY
     INTERFACE_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
   set_property(TARGET Zkc::${component} APPEND PROPERTY

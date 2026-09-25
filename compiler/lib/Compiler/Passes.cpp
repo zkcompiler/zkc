@@ -1,5 +1,6 @@
-#include "zkc/Transforms/Passes.h"
+#include "zkc/Compiler/Passes.h"
 #include "mlir/Pass/PassRegistry.h"
+#include "zkc/Transforms/Passes.h"
 
 namespace zkc {
 void registerCompilerPasses() {

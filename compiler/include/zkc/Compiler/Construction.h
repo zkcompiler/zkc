@@ -1,5 +1,5 @@
-#ifndef ZKC_PROTOCOL_CONSTRUCTION_H
-#define ZKC_PROTOCOL_CONSTRUCTION_H
+#ifndef ZKC_COMPILER_CONSTRUCTION_H
+#define ZKC_COMPILER_CONSTRUCTION_H
 
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Source/Model.h"

@@ -14,12 +14,13 @@ void buildTablePipeline(mlir::OpPassManager &pm, bool simplify,
 }
 void buildParticipantPipeline(mlir::OpPassManager &pm,
                               const protocol::PhysicalOptions &options,
-                              bool projectOnly) {
+                              bool projectOnly,
+                              LinearContractionStats *statistics) {
   pm.addPass(protocol::createProjectParticipantsPass());
   if (!projectOnly)
     pm.addPass(protocol::createPlanParticipantsPass(
         options.implementations.choices, options.linearContractions,
-        options.releaseStorage));
+        options.releaseStorage, statistics));
 }
 namespace {
 struct TableOptions : mlir::PassPipelineOptions<TableOptions> {

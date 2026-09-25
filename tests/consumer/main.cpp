@@ -1,6 +1,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Pass/PassRegistry.h"
+#include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Compile.h"

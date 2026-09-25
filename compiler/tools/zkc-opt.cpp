@@ -1,5 +1,6 @@
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 #include "mlir/Transforms/Passes.h"
+#include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TableLibrary.h"

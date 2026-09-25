@@ -219,7 +219,6 @@ class Resolver {
   std::map<uint32_t, std::set<uint32_t>> signatureReferences;
   std::map<uint32_t, std::vector<std::string>> componentMembers;
   size_t work = 0;
-  bool constructionSelectors = false;
   size_t assetCount = 0, assetBytes = 0;
   bool syntaxPartial = false;
   static constexpr size_t maxWork = 262144;
@@ -450,8 +449,8 @@ class Resolver {
     return Candidate{b, visible};
   }
 
-  bool authorizes(Binding &b, ReferenceKind kind,
-                  const source::Node &node, unsigned depth = 0) {
+  bool authorizes(Binding &b, ReferenceKind kind, const source::Node &node,
+                  unsigned depth = 0) {
     if (depth > 64) {
       fail(node, "source-resolution-limit",
            "member resolution exceeds 64 levels");
@@ -519,9 +518,8 @@ class Resolver {
     auto [head, tail] = memberStep(b.suffix);
     if (surface.base) {
       const auto &base = *surface.base;
-      auto targets =
-          candidates(base.module, base.name, base.module,
-                     base.kind, node, base.quoted, depth + 1);
+      auto targets = candidates(base.module, base.name, base.module, base.kind,
+                                node, base.quoted, depth + 1);
       if (targets.size() != 1 || !targets.front().visible)
         return false;
       auto target = targets.front().binding;
@@ -606,7 +604,8 @@ class Resolver {
                                     uint32_t request, ReferenceKind kind,
                                     const source::Node &node,
                                     bool quoted = false, unsigned depth = 0,
-                                    bool root = true, bool diagnosticOnly = false) {
+                                    bool root = true,
+                                    bool diagnosticOnly = false) {
     std::vector<Candidate> out;
     if (depth > 64) {
       fail(node, "source-resolution-limit",
@@ -665,7 +664,8 @@ class Resolver {
             add(*candidate);
         } else if (b.kind == Binding::Kind::Module && !remaining.empty()) {
           auto nested = candidates(
-              b.index, remaining.drop_front(remaining.starts_with("::") ? 2 : 1),
+              b.index,
+              remaining.drop_front(remaining.starts_with("::") ? 2 : 1),
               request, kind, node, false, depth + 1, false, diagnosticOnly);
           for (auto c : nested) {
             c.visible &= candidate->visible;
@@ -915,8 +915,8 @@ class Resolver {
     // it can report the missing alternative or dependency precisely. This
     // diagnostic-only fallback never contributes an ambiguity candidate and
     // never turns an ordinary function into a suffix namespace.
-    const bool authorized = !choices.empty() || leafOwner(*b, kind) ||
-                            authorizes(*b, kind, node);
+    const bool authorized =
+        !choices.empty() || leafOwner(*b, kind) || authorizes(*b, kind, node);
     if (!authorized) {
       fail(
           node, "source-name-kind",
@@ -1392,105 +1392,6 @@ class Resolver {
             queue.push_back(dependency);
     }
   }
-  static bool drawSelectable(Declaration::Kind kind) {
-    using K = Declaration::Kind;
-    switch (kind) {
-    case K::Function:
-    case K::Protocol:
-    case K::Component:
-    case K::Selection:
-    case K::Link:
-    case K::View:
-    case K::Configuration:
-      return true;
-    default:
-      return false;
-    }
-  }
-  void selectors(uint32_t module, StringRef prefix, bool publicOnly,
-                 std::set<uint32_t> visited = {}) {
-    if (!visited.insert(module).second || !spend(modules[module].syntax))
-      return;
-    for (const auto &[name, binding] : modules[module].names) {
-      if (!spend(modules[module].syntax))
-        return;
-      if (publicOnly && !binding.exported)
-        continue;
-      auto target = binding.kind == Binding::Kind::Use
-                        ? use(module, binding.index)
-                        : std::optional<Binding>(binding);
-      if (!target)
-        continue;
-      auto path = prefix.empty() ? name : (prefix + "." + name).str();
-      if (path.size() > 4096) {
-        fail(modules[module].syntax, "source-resolution-limit",
-             "construction selector path exceeds 4096 bytes");
-        work = maxWork + 1;
-        return;
-      }
-      if (target->kind == Binding::Kind::Module)
-        selectors(target->index, path, true, visited);
-      else if (target->kind == Binding::Kind::Declaration) {
-        const auto kind = context->declarations[target->index].kind;
-        const bool entry = kind == Declaration::Kind::Entry;
-        if (!entry && !drawSelectable(kind))
-          continue;
-        auto &index = entry ? context->entrySelectors : context->selectors;
-        if (!entry && index.size() >= 32768 && !index.count(path)) {
-          fail(modules[module].syntax, "source-resolution-limit",
-               "construction selector budget exhausted");
-          work = maxWork + 1;
-          return;
-        }
-        auto [it, inserted] = index.emplace(path, target->index);
-        if (!inserted && it->second != target->index)
-          fail(modules[module].syntax, "source-selector-ambiguity",
-               "construction selector names different declarations: '" + path +
-                   "'");
-      }
-    }
-  }
-  void selectorAmbiguities() {
-    // Index closed spellings once, including whole component member origins.
-    // Source paths may not silently capture another owner's closed selector.
-    std::map<std::string, std::set<uint32_t>> closed;
-    auto add = [&](StringRef name, uint32_t declaration) {
-      closed[name.str()].insert(context->declarations[declaration].owner);
-    };
-    for (uint32_t i = 0; i < context->declarations.size(); ++i) {
-      const auto &d = context->declarations[i];
-      if (!drawSelectable(d.kind))
-        continue;
-      if (!spend(source::Node{d.location}))
-        return;
-      add(d.symbol, i);
-      add(d.origin, i);
-      for (const auto &member : componentMembers[i]) {
-        if (!spend(source::Node{d.location}))
-          return;
-        add(d.symbol + "." + member, i);
-        add(d.origin + "." + member, i);
-      }
-    }
-    auto check = [&](StringRef path, uint32_t declaration) {
-      auto found = closed.find(path.str());
-      if (found == closed.end())
-        return;
-      const auto owner = context->declarations[declaration].owner;
-      if (found->second.size() > 1 || !found->second.count(owner))
-        context->ambiguousOrigins.insert(path.str());
-    };
-    for (const auto &[path, target] : context->selectors) {
-      if (!spend(source::Node{context->declarations[target].location}))
-        return;
-      check(path, target);
-      for (const auto &member : componentMembers[target]) {
-        if (!spend(source::Node{context->declarations[target].location}))
-          return;
-        check(path + "." + member, target);
-      }
-    }
-  }
 
   std::optional<syntax::Content> recover(const syntax::Module &out) {
     if (diagnostics.empty())
@@ -1548,9 +1449,8 @@ class Resolver {
   }
 
 public:
-  Resolver(ProjectInput input, bool constructionSelectors)
-      : context(std::make_shared<Context>(std::move(input))),
-        constructionSelectors(constructionSelectors) {}
+  explicit Resolver(ProjectInput input)
+      : context(std::make_shared<Context>(std::move(input))) {}
   Result run() {
     syntax::Module out;
     if (!collect())
@@ -1578,12 +1478,29 @@ public:
               });
     publicSignatures();
     environments();
-    if (constructionSelectors &&
-        !modules[context->owners[0].root].syntax.carrier) {
-      selectors(context->owners[0].root, {}, false);
-      for (const auto &[alias, target] : context->owners[0].dependencies)
-        selectors(context->owners[target].root, alias, true);
-      selectorAmbiguities();
+    // Retain the resolved name graph. Construction indexes it only when a
+    // checked source snapshot is used with a descriptor; ordinary checking
+    // does not acquire construction selector limits or diagnostics.
+    context->selectorWork = work;
+    context->componentMembers = componentMembers;
+    context->carrier = modules[context->owners[0].root].syntax.carrier;
+    context->selectorScopes.resize(modules.size());
+    for (uint32_t i = 0; i < modules.size(); ++i) {
+      auto &scope = context->selectorScopes[i];
+      scope.location = modules[i].syntax.location;
+      for (const auto &[name, binding] : modules[i].names) {
+        // All imports were resolved above. Failed imports have no cache entry;
+        // never resolve them again merely to retain selector lookup data.
+        auto alias = aliases.find({i, binding.index});
+        auto target =
+            binding.kind != Binding::Kind::Use ? std::optional<Binding>(binding)
+            : alias == aliases.end() ? std::nullopt
+                                     : std::optional<Binding>(alias->second);
+        scope.names.push_back(
+            {name, binding.exported,
+             target && target->kind == Binding::Kind::Module,
+             target ? std::optional<uint32_t>(target->index) : std::nullopt});
+      }
     }
     // Root order is deterministic by exact owner identity, then module path.
     // Dependency traversal order affects checking, not declaration identity.
@@ -1612,7 +1529,5 @@ public:
   }
 };
 } // namespace
-Result resolve(const ProjectInput &input, bool constructionSelectors) {
-  return Resolver(input, constructionSelectors).run();
-}
+Result resolve(const ProjectInput &input) { return Resolver(input).run(); }
 } // namespace zkc::frontend::resolution

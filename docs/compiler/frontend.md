@@ -191,3 +191,10 @@ Package distribution, separately serialized abstract interface artifacts, generi
 carriers, generic runtime preparation packages, general dependent inference, macros and
 a full editor are later extensions. The retained model provides a place for their
 source obligations; it does not report those features as already implemented.
+
+Construction descriptor binding takes a `CheckedModule`, so it cannot pair the
+resolved names of one project with the emitted source of another. Resolution
+retains the name graph; selector paths and their additional work limits are
+computed only for construction. Ordinary source analysis neither traverses that
+selector graph nor acquires its limits. No project is reloaded or re-resolved
+when binding a descriptor.

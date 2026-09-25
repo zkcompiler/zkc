@@ -19,6 +19,8 @@ class CheckedModule {
       : model(std::move(value)) {}
   friend class Analysis;
   friend llvm::Expected<source::Content> lower(const CheckedModule &);
+  friend llvm::Expected<source::Construction>
+  bindConstruction(const CheckedModule &, source::Construction);
 };
 /// Ordinals belong to one immutable source module. They are not artifact
 /// identities.

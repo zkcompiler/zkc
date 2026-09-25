@@ -2,9 +2,10 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "zkc/Dialect/Builders.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Protocol/Algorithms.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
@@ -32,7 +33,7 @@ typename Map::mapped_type *lookup(Map &map, const typename Map::key_type &key) {
   return found == map.end() ? nullptr : &found->second;
 }
 Error missingBinding(Operation *op) {
-  op->emitOpError("interactive-projection-binding");
+  diagnostics::emit(op->emitOpError(), "interactive-projection-binding");
   return error("interactive-projection-binding");
 }
 class Projector {
@@ -356,7 +357,7 @@ struct ProjectionPass : PassWrapper<ProjectionPass, OperationPass<ModuleOp>> {
   void runOnOperation() final {
     auto target = project(getOperation());
     if (!target) {
-      getOperation().emitError() << toString(target.takeError());
+      diagnostics::emit(getOperation().emitError(), target.takeError());
       return signalPassFailure();
     }
     getOperation().getBodyRegion().takeBody((*target)->getBodyRegion());
