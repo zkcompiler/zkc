@@ -1,0 +1,104 @@
+name = "zkc"
+version = "0.1.0"
+# Every library and executable declared below. What a build of this package
+# means is stated here rather than in a list the justfile and the workflow
+# each keep their own copy of.
+defaultTargets = [
+  "Zkc",
+  "ZkcTests",
+  "ZkcExamples",
+  "ZkcToolSupport",
+  "source-plan-example",
+  "interactive-round",
+  "requirement-checker",
+  "block-checker",
+  "table-protocol",
+  "vector-service",
+  "table-physical-reference",
+  "interactive-protocol",
+  "artifact-reference",
+  "relation-reference",
+  "iteration-reference",
+]
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "0df444a360eaa60ab8c11dca51a86af692955474"
+
+[[lean_lib]]
+name = "Zkc"
+globs = ["Zkc.*"]
+
+[[lean_lib]]
+name = "ZkcTests"
+roots = ["Tests"]
+globs = ["Tests.+"]
+needs = ["variant-history-contracts"]
+
+# `Tests.Variant` reads this fixture with `include_str`, which Lake does not
+# trace by itself. Declared here, an edit to the fixture rebuilds the tests
+# instead of replaying a cached pass.
+[[input_file]]
+name = "variant-history-contracts"
+path = "../tests/fixtures/variants/history-contracts.txt"
+text = true
+
+[[lean_lib]]
+name = "ZkcExamples"
+roots = ["Examples"]
+globs = ["Examples.+"]
+
+[[lean_lib]]
+name = "ZkcToolSupport"
+roots = ["Tools.SourceConsumer", "Tools.TableAdmission", "Tools.JsonSupport", "Tools.BlockChecker", "Tools.DeclarationAudit", "Tools.ImportHeaders", "Tools.RelationReference", "Tools.Interactive", "Tools.Artifact"]
+globs = ["Tools.SourceConsumer", "Tools.TableAdmission", "Tools.JsonSupport", "Tools.BlockChecker", "Tools.DeclarationAudit", "Tools.ImportHeaders", "Tools.RelationReference", "Tools.Interactive.*", "Tools.Artifact.*", "Tools.Crypto.+", "Tools.RequirementChecker.+"]
+
+[[lean_exe]]
+name = "source-plan-example"
+root = "Tools.SourcePlanExample"
+
+[[lean_exe]]
+name = "interactive-round"
+root = "Tools.InteractiveRound"
+
+[[lean_exe]]
+name = "requirement-checker"
+root = "Tools.RequirementChecker"
+
+[[lean_exe]]
+name = "block-checker"
+root = "Tools.BlockChecker"
+
+[[lean_exe]]
+name = "table-protocol"
+root = "Tools.TableProtocol"
+
+[[lean_exe]]
+name = "vector-service"
+root = "Tools.VectorService"
+
+[[lean_exe]]
+name = "table-physical-reference"
+root = "Tools.TablePhysical"
+
+[[lean_exe]]
+name = "interactive-protocol"
+root = "Tools.Interactive"
+
+[[lean_exe]]
+name = "artifact-reference"
+root = "Tools.Artifact"
+
+[[lean_exe]]
+name = "relation-reference"
+root = "Tools.RelationReference"
+
+[[lean_exe]]
+name = "iteration-reference"
+root = "Tools.Iteration"

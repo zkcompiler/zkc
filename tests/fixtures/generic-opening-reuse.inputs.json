@@ -1,0 +1,13 @@
+[
+  "zkc.run/2", "main", "repeated-opening",
+  [["key", "development", "2"]],
+  [["P",
+    [["prover_key", "prover", "key"], ["verifier_key", "verifier", "key"]],
+    [["key", ["host", "prover"]], ["verifier", ["host", "verifier"]],
+     ["table", ["table", ["0", "1", "4", "9"]]],
+     ["first", ["point", ["2", "3"]]], ["second", ["point", ["5", "7"]]],
+     ["r", ["field", "11"]]],
+    [["key", "2", "key"], ["verifier", "2", "key"],
+     ["table", "2", null], ["first", "2", null], ["second", "2", null]]]],
+  []
+]

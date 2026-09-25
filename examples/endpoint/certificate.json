@@ -1,0 +1,15 @@
+[
+  "bind",
+  [
+    "next",
+    [
+      "terminal"
+    ]
+  ],
+  [
+    "next",
+    [
+      "terminal"
+    ]
+  ]
+]

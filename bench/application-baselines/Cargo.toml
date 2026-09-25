@@ -1,0 +1,22 @@
+[package]
+name = "zkc-application-baselines"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+zkc-arkworks = { path = "../../crates/zkc-arkworks" }
+ark-ff = "=0.6.0"
+bulletproofs = "=5.0.0"
+curve25519-dalek = { version = "=4.1.3", features = ["rand_core", "digest"] }
+merlin = "=3.0.0"
+rand_core = { version = "=0.6.4", features = ["getrandom"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+sha3 = "=0.10.9"
+
+[lints.rust]
+unsafe_code = "forbid"

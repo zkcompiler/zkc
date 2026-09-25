@@ -1,0 +1,2 @@
+# Unified diff context lines require a leading space, even for blank lines.
+tests/groth16/evidence/*.diff whitespace=-blank-at-eol

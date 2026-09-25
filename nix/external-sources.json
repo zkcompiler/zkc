@@ -1,0 +1,22 @@
+{
+  "0953f60f986bec4cad1d5407fdece269bf468caa": {
+    "format": "canonical-git-v1",
+    "hash": "sha256-xjTnKV7QldVIDnRR6H1ktJwjD6+S7LtJ6OM6xC+h1hc=",
+    "url": "https://github.com/project-llzk/llzk-lib.git"
+  },
+  "35e54ea21da3e8762557234298dbb553c175ea8d": {
+    "format": "canonical-git-v1",
+    "hash": "sha256-MY8NxHvWfUDVNcBHwY86/bI4+Da5rRLybwZpq54KnZ0=",
+    "url": "https://github.com/iden3/circomlib"
+  },
+  "5de739581d23ebe0bdb9c4255a106f6dc7d8a5cf": {
+    "format": "canonical-git-v1",
+    "hash": "sha256-ALMqWq8FDKiUtyJ/W8EuIvM7uBvPDegGWHQDor2bP4Y=",
+    "url": "https://github.com/iden3/circom"
+  },
+  "60713d2b2947ddb6a5099cd56d4b41b9f29046e4": {
+    "format": "canonical-git-v1",
+    "hash": "sha256-8IzQJlx78C0JfcjspOdQ2BrriUKnjY4fw8+HPBOcY7k=",
+    "url": "https://github.com/project-llzk/llzk-lib.git"
+  }
+}

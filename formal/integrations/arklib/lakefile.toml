@@ -1,0 +1,26 @@
+name = "zkc_arklib"
+version = "0.1.0"
+defaultTargets = ["ZkcArkLib", "ZkcArkLibTests"]
+
+[leanOptions]
+autoImplicit = false
+warningAsError = true
+
+[[require]]
+name = "zkc"
+path = "../.."
+
+[[require]]
+name = "Arklib"
+git = "https://github.com/Verified-zkEVM/ArkLib.git"
+rev = "3f3f045dd295834c262bd6f0d9dfdfee07cc8e76"
+
+[[lean_lib]]
+name = "ZkcArkLib"
+roots = ["ZkcArkLib"]
+globs = ["ZkcArkLib.+"]
+
+[[lean_lib]]
+name = "ZkcArkLibTests"
+roots = ["TestsArkLib"]
+globs = ["TestsArkLib.+"]

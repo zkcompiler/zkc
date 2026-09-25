@@ -1,0 +1,15 @@
+[
+  ["bound", "interactive-family-bound"],
+  ["wide-bound", "interactive-family-bound"],
+  ["noncanonical-bound", "interactive-family-binding"],
+  ["missing-role", "interactive-family-roles"],
+  ["duplicate-role", "interactive-family-roles"],
+  ["selector", "interactive-family-selector"],
+  ["signature", "interactive-family-signature"],
+  ["count", "interactive-loop-parameter"],
+  ["unknown-input", "interactive-family-argument"],
+  ["future-input", "interactive-family-argument"],
+  ["cross-role-input", "interactive-family-input"],
+  ["duplicate-input", "interactive-family-argument"],
+  ["missing-input", "interactive-family-signature"]
+]

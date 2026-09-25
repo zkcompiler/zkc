@@ -1,151 +1,170 @@
-name: CI
+name: Build and check
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Validation scope
+        type: choice
+        default: quick
+        options: [quick, all, main, optional, fresh, cache]
 
-# Nothing here writes to the repository or reads a secret.
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Superseded pull-request runs are noise; a run on main is the record of
-  # what that commit did, so it is left to finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
-    # bash with -e and -o pipefail, so a failure inside a pipeline is a
-    # failure of the step.
     shell: bash
 
-env:
-  # zkc needs MLIR 23 or newer; see the floor check in CMakeLists.txt. The
-  # major is all this selects: any 23.x the archive serves is acceptable, and
-  # a later major becomes a deliberate edit here once the suite has run
-  # against it.
-  LLVM_MAJOR: "23"
-
 jobs:
-  # Cheap and first: the public tree does not carry development-repository
-  # material, and a pull request that adds some should say so before any
-  # build time is spent on it.
-  public-tree:
-    name: Public tree boundary
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  quick:
+    name: Quick source and harness checks
+    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'quick' || inputs.scope == 'all'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Refuse development-repository paths
-        run: tools/public-tree-guard.sh
+      - uses: ./.github/actions/nix
+        with:
+          cache: "false"
+      - name: Check sources without building project tools
+        run: |
+          mkdir -p build/reports
+          nix develop .#quick --command bash .github/scripts/check-quick.sh \
+            2>&1 | tee build/reports/quick-checks.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: quick-checks-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 14
 
-  reference:
-    name: Reference suites (conformance oracle)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  main:
+    name: Full main packages and checks
+    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'main' || inputs.scope == 'cache')
+    runs-on: ${{ vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ inputs.scope == 'cache' && 360 || 180 }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Check capacity for the full resource-boundary suite
+        run: |
+          memory_kib=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+          if (( memory_kib < 24 * 1024 * 1024 )); then
+            echo "::error::The full suite has a measured 19 GiB checker peak. Configure ZKC_MAIN_RUNNER with a Linux x86_64 runner with at least 24 GiB RAM (32 GiB recommended)."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # No floating major tag is published for this action, so the exact
-      # release is named. The twin declares no dependencies, so there is
-      # nothing for the uv cache to hold.
-      - uses: astral-sh/setup-uv@v9.0.0
-      - name: Sync the reference environment
-        working-directory: reference
-        run: uv sync --locked
-      - name: Run the oracle self-checks
-        working-directory: reference
-        run: uv run --locked python -m oracle.model
-      # Every Python in the tree, under the one configuration in
-      # ruff.toml. The fixture generators were outside this and had no
-      # reason to be: what they emit is pinned by lit, so a defect in
-      # one of them shows up as a mismatch nobody can read rather than
-      # as a lint finding.
-      - name: Lint the Python (defect rules only)
-        run: uvx ruff check .
+      - name: Check the public source tree
+        run: bash .github/scripts/public-tree-guard.sh
+      - name: Reserve space for LLVM and Lean source builds
+        if: runner.environment == 'github-hosted'
+        run: sudo rm -rf /usr/local/lib/android
+      - uses: ./.github/actions/nix
+      - name: Require restoration on a fresh project store
+        if: github.event_name == 'workflow_dispatch' && inputs.scope == 'cache'
+        run: bash .github/scripts/check-nix-cache.sh
+      - name: Record selected tools and lock
+        run: |
+          mkdir -p build/reports/environment
+          nix develop --profile build/nix-dev --command python3 scripts/doctor.py --json \
+            | tee build/reports/environment/tools.json
+          cp flake.lock build/reports/environment/
+          nix config show sandbox > build/reports/environment/sandbox.txt
+          test "$(cat build/reports/environment/sandbox.txt)" = true
+      - name: Check all main packages in the sandbox
+        run: nix flake check -L --keep-going 2>&1 | tee build/reports/nix-check.log
+      - name: Retain successful check records
+        run: |
+          read -r -a check_names <<< "$(nix eval --raw .#checks.x86_64-linux --apply 'checks: builtins.concatStringsSep " " (builtins.attrNames checks)')"
+          for check in "${check_names[@]}"; do
+            nix build ".#checks.x86_64-linux.$check" --out-link "build/nix-$check"
+          done
+          nix build '.#formal^library' --out-link build/nix-formal-library
+          cp -RL build/nix-project/reports build/reports/packaged
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: main-checks-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 14
 
-  build:
-    name: Build and test (C++ / MLIR)
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+  optional:
+    name: Optional (${{ matrix.package }})
+    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'optional')
+    runs-on: ${{ vars.ZKC_OPTIONAL_RUNNER || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [arklib, llzk, groth16-checks, compiler-sanitize]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      # Rust enables the cargo-gated suites: the emit workspace's unit
-      # tests and lints here, and — because lit detects cargo — the
-      # emitter and pinned-Plonky3 integration tests inside check-zkc.
-      # The runner image ships rustup; this pins nothing beyond stable,
-      # matching the documented toolchain floor policy.
-      - name: Provide Rust (cargo-gated suites)
+      - name: Reserve build space
+        if: runner.environment == 'github-hosted'
+        run: sudo rm -rf /usr/local/lib/android
+      - uses: ./.github/actions/nix
+      - name: Build and test the selected integration
+        env:
+          PACKAGE: ${{ matrix.package }}
         run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
-          rustup default stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
+          mkdir -p build/reports
+          nix build -L ".#$PACKAGE" --out-link "build/nix-$PACKAGE" \
+            2>&1 | tee "build/reports/$PACKAGE.log"
+          if [ -d "build/nix-$PACKAGE/reports" ]; then
+            cp -RL "build/nix-$PACKAGE/reports" "build/reports/$PACKAGE"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            emit/target
-            build/cargo-target
-          key: cargo-${{ runner.os }}-${{ hashFiles('emit/Cargo.lock', 'evaluation/upstream/plonky3-replay/Cargo.lock') }}
+          name: optional-${{ matrix.package }}-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 14
 
-      - name: Emit workspace suites (tests, lints, format)
+  fresh:
+    name: Formal source rebuild without a project cache
+    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'all' || inputs.scope == 'fresh')
+    runs-on: ${{ vars.ZKC_FRESH_RUNNER || vars.ZKC_OPTIONAL_RUNNER || vars.ZKC_MAIN_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reserve build space
+        if: runner.environment == 'github-hosted'
+        run: sudo rm -rf /usr/local/lib/android
+      - uses: ./.github/actions/nix
+        with:
+          cache: "false"
+      - name: Require a fresh project store
         run: |
-          cargo test --locked --manifest-path emit/Cargo.toml -p zkc-emit
-          cargo test --locked --manifest-path emit/Cargo.toml -p zkc-rt --features toy,plonky3
-          cargo clippy --locked --manifest-path emit/Cargo.toml --all-targets --all-features -- -D warnings
-          (cd emit && cargo fmt --check)
-
-      - name: Install MLIR and the build tools
+          for package in formal arklib; do
+            output=$(nix eval --raw ".#$package.outPath")
+            if nix-store --check-validity "$output" 2>/dev/null; then
+              echo "::error::$package already exists in this store. Configure ZKC_FRESH_RUNNER with an ephemeral runner or a fresh Nix store; disabling cache restore alone does not force source reconstruction."
+              exit 1
+            fi
+          done
+      - name: Build main and optional Lean packages from sources
         run: |
-          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-          # Scoped to this one archive rather than added to the system-wide
-          # trusted set.
-          sudo install -d -m 0755 /usr/share/keyrings
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-            | sudo tee /usr/share/keyrings/apt.llvm.org.asc > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.asc]" \
-               "http://apt.llvm.org/${codename}/" \
-               "llvm-toolchain-${codename}-${LLVM_MAJOR} main" \
-            | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            "libmlir-${LLVM_MAJOR}-dev" \
-            "mlir-${LLVM_MAJOR}-tools" \
-            "llvm-${LLVM_MAJOR}-dev" \
-            "llvm-${LLVM_MAJOR}-tools" \
-            ninja-build
-          echo "/usr/lib/llvm-${LLVM_MAJOR}/bin" >> "$GITHUB_PATH"
-
-      - name: Report the toolchain this run resolved
-        run: |
-          echo "LLVM/MLIR $(llvm-config --version)"
-          command -v mlir-tblgen FileCheck not count
-
-      - uses: astral-sh/setup-uv@v9.0.0
-      - name: Sync the reference environment (differential harness)
-        working-directory: reference
-        run: uv sync --locked
-
-      - name: Provide lit
-        run: |
-          uv tool install lit
-          echo "LLVM_EXTERNAL_LIT=$(uv tool dir --bin)/lit" >> "$GITHUB_ENV"
-
-      - name: Configure
-        run: MLIR_DIR="/usr/lib/llvm-${LLVM_MAJOR}/lib/cmake/mlir" cmake --preset ci
-
-      - name: Build
-        run: cmake --build --preset ci
-
-      - name: Lit suite (with cross-implementation differentials)
-        run: cmake --build --preset ci --target check-zkc
+          mkdir -p build/reports
+          nix build -L .#formal .#arklib --no-link \
+            --option substituters https://cache.nixos.org \
+            2>&1 | tee build/reports/formal-fresh.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: formal-fresh-${{ github.run_id }}
+          path: build/reports/
+          retention-days: 30

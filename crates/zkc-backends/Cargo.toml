@@ -1,0 +1,41 @@
+[package]
+name = "zkc-backends"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+test-utils = ["zkc-arkworks/test-utils"]
+
+[dependencies]
+sha3.workspace = true
+p3-baby-bear-043.workspace = true
+p3-field-043.workspace = true
+p3-symmetric-043.workspace = true
+zkc-runtime.workspace = true
+zkc-arkworks.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+sha2.workspace = true
+merlin.workspace = true
+spongefish = { workspace = true, features = ["keccak", "zeroize"] }
+curve25519-dalek = { workspace = true, features = ["rand_core"] }
+ark-poly.workspace = true
+ark-ff.workspace = true
+p3-field.workspace = true
+p3-koala-bear.workspace = true
+p3-dft.workspace = true
+p3-commit.workspace = true
+p3-matrix.workspace = true
+p3-merkle-tree.workspace = true
+p3-keccak.workspace = true
+p3-symmetric.workspace = true
+rand.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+p3-challenger-043.workspace = true
+zkc-test-support.workspace = true

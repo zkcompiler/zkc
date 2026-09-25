@@ -1,0 +1,69 @@
+name: Nix environment
+description: Install upstream Nix and optionally enable the GitHub Actions binary cache
+inputs:
+  cache:
+    description: Read and write build outputs in the GitHub Actions cache
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      with:
+        install_url: https://releases.nixos.org/nix/nix-2.35.2/install
+        enable_kvm: false
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+          sandbox = true
+          sandbox-fallback = false
+          max-jobs = 2
+          cores = 2
+    - name: Report Nix version and verify settings
+      shell: bash
+      run: |
+        # Existing installations may use a newer release. Check the settings
+        # and actual build isolation below, not an arbitrary version equality.
+        nix --version
+        for setting in 'sandbox true' 'sandbox-fallback false' 'max-jobs 2' 'cores 2'; do
+          read -r name expected <<< "$setting"
+          if [ "$(nix config show "$name")" != "$expected" ]; then
+            echo "::error::The runner must configure Nix $name = $expected. The installer does not reconfigure an existing installation."
+            exit 1
+          fi
+        done
+    - name: Prefer the signed upstream cache
+      shell: bash
+      run: |
+        # The GitHub cache daemon sets priority=1. Prefer upstream packages
+        # while retaining GitHub storage for project outputs missing upstream.
+        nix_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/nix"
+        mkdir -p "$nix_config_dir"
+        touch "$nix_config_dir/nix.conf"
+        upstream='extra-substituters = https://cache.nixos.org?priority=0'
+        if ! grep -Fxq "$upstream" "$nix_config_dir/nix.conf"; then
+          printf '%s\n' "$upstream" >> "$nix_config_dir/nix.conf"
+        fi
+    - name: Fetch the pinned cache daemon
+      if: inputs.cache == 'true'
+      shell: bash
+      run: |
+        curl --fail --location --retry 3 \
+          https://install.determinate.systems/magic-nix-cache-closure/rev/5a7f052c8f0c6511bbef3570eeed4d39242171ef/X64-Linux \
+          --output "$RUNNER_TEMP/zkc-magic-nix-cache.xz"
+        echo "8a854c5cd4d8519b3893e2cf1f0c3429ed57dd83b7f6d8defc048fa75750d410  $RUNNER_TEMP/zkc-magic-nix-cache.xz" | sha256sum --check
+    - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7
+      if: inputs.cache == 'true'
+      env:
+        OTEL_SDK_DISABLED: "true"
+      with:
+        source-binary: ${{ runner.temp }}/zkc-magic-nix-cache.xz
+        use-gha-cache: enabled
+        use-flakehub: disabled
+        diff-store: false
+        diagnostic-endpoint: ""
+    - name: Verify effective build isolation
+      shell: bash
+      run: |
+        touch /tmp/zkc-sandbox-ambient
+        trap 'rm -f /tmp/zkc-sandbox-ambient' EXIT
+        nix build .#checks.x86_64-linux.sandbox --no-link
+        nix build .#checks.x86_64-linux.sandbox --no-link --rebuild

@@ -1,0 +1,23 @@
+[
+  "zkc.run/2", "main", "two-independent-openings",
+  [["small", "development", "2"], ["large", "development", "3"]],
+  [
+    ["P",
+      [["prover_key", "ka", "small"], ["prover_key", "kb", "large"]],
+      [["ka", ["host", "ka"]], ["kb", ["host", "kb"]],
+       ["a", ["table", ["0", "1", "4", "9"]]],
+       ["b", ["table", ["0", "1", "2", "3", "4", "5", "6", "7"]]]],
+      [["ka", "2", "small"], ["kb", "3", "large"],
+       ["a", "2", null], ["b", "3", null]]],
+    ["V",
+      [["verifier_key", "va", "small"], ["verifier_key", "vb", "large"]],
+      [["va", ["host", "va"]], ["vb", ["host", "vb"]],
+       ["ra", ["point", ["2", "3"]]], ["rb", ["point", ["2", "3", "5"]]]],
+      [["va", "2", "small"], ["vb", "3", "large"],
+       ["ra", "2", null], ["rb", "3", null]]]
+  ],
+  [["concrete", "V", "commit_a", "small"],
+   ["concrete", "V", "proof_a", "small"],
+   ["concrete", "V", "commit_b", "large"],
+   ["concrete", "V", "proof_b", "large"]]
+]

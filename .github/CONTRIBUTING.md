@@ -32,8 +32,9 @@ or volume.
 | What the project is and where it is going | [Project Overview](../docs/overview.md) |
 | What the current checkout actually claims | [Current Status](../docs/status.md) |
 | Which document decides what | [documentation authority map](../docs/README.md) |
-| How to build and run the checks | [Getting Started](../docs/getting-started.md) |
-| The exact semantics of a surface | [Specification](../docs/spec/overview.md) |
+| How to build and run the checks | [Development guide](../docs/development/README.md) and [test scopes](../tests/README.md) |
+| Where documentation belongs | [Documentation guide](../docs/development/documentation.md) |
+| The exact semantics of a surface | [Specification](../docs/spec/README.md) |
 
 ## Submitting a pull request
 
@@ -41,11 +42,14 @@ Work happens on a branch and lands through a pull request; nothing is pushed
 to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`,
 `docs/…`, `test/…`.
 
-1. Run the checks in
-   [Getting Started](../docs/getting-started.md#5-run-the-checks). They are
-   what continuous integration runs, and the lints and format checks are
-   part of that set — most red builds here are one of those rather than a
-   failing test.
+1. Run the tests and lint checks affected by the change, using the
+   [test guide](../tests/README.md#selecting-checks). Use `just test` for broad
+   integration validation, not for every edit. Run optional suites when their
+   integration boundary changes, and describe the checks actually performed.
+   Automatic CI checks sources, formatting, documentation and the test harness.
+   Full builds, Nix packaging and cross-language suites are separate manual
+   workflow scopes. Run affected checks locally and record their results; see the
+   [maintenance guide](../docs/development/maintenance.md).
 2. Open the pull request and write its title and body as described below.
 3. Respond to review on the branch. What review confirms is fixed in the
    same pull request rather than deferred to a later one.
@@ -91,32 +95,40 @@ belongs in the pull request body, which is what survives the squash.
 
 ## Change requirements
 
-- **Tests.** Test at the level the change acts: lit tests for behavior
-  through the tools, unit tests for the pure cores, and a negative test for
-  every refusal a change introduces.
+- **Tests.** Test at the level the change acts: tests through the tools for
+  behavior, unit tests for the pure cores, and a negative test for
+  every refusal a change introduces. A file in `compiler/test` is one test to
+  CTest, so a bare `assert` ends it and hides every check after it. Where such
+  a file walks a list of independent inputs, `with case(...)` from
+  `support/cases.py` lets each one fail on its own and names it in the report.
+  It is optional, and blocks that share state belong in one case. A Lean
+  module whose entry point is `def run : IO Unit` has the same choice:
+  `Tests.Checks` records a condition that does not hold and carries on, while
+  a shape error stays fatal because there is no value to go on with.
 - **Semantics.** Update the owning specification. `docs/spec/` describes the
-  intended model and is not weakened to match what is built; a gap between
-  the two belongs in the gap ledger, not in the specification.
-- **Artifact and registry formats.** These may change freely at v0; a break
+  intended model and is not weakened to match what is built; what is built
+  belongs on the [status page](../docs/status.md), not in the
+  specification.
+- **Carrier formats.** These may change freely at v0; a break
   is the norm rather than an event. What a change carries is that the
-  implementations and their goldens move in the same change set, and that
-  loading stays fail closed. See
-  [Versioning](../docs/spec/versioning.md).
-- **The reference twin.** `reference/` is an independently written
-  implementation, not a mirror to update mechanically. A change to a surface
-  the two share moves both. Where they disagree, the specification decides,
-  and the twin is as likely to be the one that is wrong.
+  compiler, the native workspace and the Lean reference move in the same
+  change set, and that loading stays fail closed.
+- **Independent implementations.** The compiler, the native runtime and the
+  Lean reference admit the same carriers independently. A change to a surface
+  they share moves all of them. Where they disagree, the specification decides.
 - **Diagnostics.** Identifiers are the stable surface and message prose is
-  not, so a new diagnostic is allocated and asserted by a test that names
-  the identifier. [Versioning](../docs/spec/versioning.md) owns the
-  allocation rules, and a lint enforces them.
+  not, so a new diagnostic is asserted by a test that names
+  the identifier.
 - **Security rules and judgments.** Keep what a judgment rests on explicit.
   A citation is not a proof of what it cites, and a passing test is not a
   judgment.
-- **External integrations.** Pin exact sources, state the adapter boundary,
-  and update [THIRD_PARTY.md](../THIRD_PARTY.md). One reproduced run is not
-  a conformance claim.
+- **External integrations.** Pin exact sources in the manifest that owns them
+  and state the adapter boundary. Code adapted from elsewhere names its source
+  in the file that holds it. One reproduced run is not a conformance claim.
 - **Documentation.** Update whatever the change makes wrong or incomplete,
-  in the document that owns it.
+  in the [document that owns it](../docs/development/documentation.md). A design choice that a reader could reasonably
+  have made differently gets a [rationale record](../docs/rationale/README.md)
+  only when its reason does not fit beside the definition; that page states
+  what a record contains and what it never contains.
 
 Generated files and private development records are not committed.

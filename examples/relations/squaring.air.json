@@ -1,0 +1,18 @@
+{
+  "schema": "zkc.air.v1", "field": "bn254.fr", "columns": 1, "public_inputs": 1,
+  "constraints": [
+    {"scope": {"kind": "transition", "lookahead": 1}, "nodes": [
+      {"op": "read", "offset": 1, "column": 0},
+      {"op": "read", "offset": 0, "column": 0},
+      {"op": "mul", "lhs": 1, "rhs": 1},
+      {"op": "neg", "operand": 2},
+      {"op": "add", "lhs": 0, "rhs": 3}
+    ]},
+    {"scope": {"kind": "first"}, "nodes": [
+      {"op": "read", "offset": 0, "column": 0},
+      {"op": "public", "index": 0},
+      {"op": "neg", "operand": 1},
+      {"op": "add", "lhs": 0, "rhs": 2}
+    ]}
+  ]
+}

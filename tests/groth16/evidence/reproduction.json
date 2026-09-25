@@ -1,0 +1,346 @@
+{
+  "schema": "zkc.groth16-reproduction/1",
+  "date": "2026-09-18",
+  "scope": "Fixture-only; no zkc PIR result. Public deterministic setup, not secure.",
+  "dependencyBootstrap": "npm ci --ignore-scripts --offline using existing tarball cache; exact clean circomlib checkout exported with git archive",
+  "compilerBootstrap": "Explicit existing binary; source commit/version checked and current binary hash recorded. Fresh native compiler build and network fetch were not exercised.",
+  "runs": [
+    {
+      "mode": "validate",
+      "status": "passed",
+      "fixtureControls": 80,
+      "vectorHashes": 26,
+      "exactFixedProofs": 4,
+      "deterministicArtifactHashes": 39,
+      "maintainedSourceUnchanged": true,
+      "sourceCopyReadOnly": false,
+      "recordedStageSeconds": 21.087808,
+      "executedStageCount": 22,
+      "driverSha256": "725cbb1e37c0cdef95ce0868ca17ef6fb98732aca89404949b0b3324216ab3f8",
+      "mathReferenceSha256": "b26786e24d22a0f1b59f3749e319779b6d6397cb648328cd047fb9f9d0b329f4",
+      "node": "v24.20.0",
+      "npm": "11.19.0",
+      "python": "3.12.3",
+      "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+      "circom": {
+        "invoked": false,
+        "reason": "Reused hash-checked compiler artifacts"
+      },
+      "dependencyLockSha256": "28ca065e009f3df40a14b57bcf8b049e86334bddfa949cc21dd71bcefb85e920"
+    },
+    {
+      "mode": "all",
+      "status": "passed",
+      "fixtureControls": 80,
+      "vectorHashes": 26,
+      "exactFixedProofs": 4,
+      "deterministicArtifactHashes": 39,
+      "maintainedSourceUnchanged": true,
+      "sourceCopyReadOnly": true,
+      "recordedStageSeconds": 107.116865,
+      "executedStageCount": 48,
+      "driverSha256": "5bb008da1a87b1c16384affdb2e3f572af56693b28b9d755ff8b47b473ce533f",
+      "mathReferenceSha256": "b1bd7f2c1ac56f70e2014c94930a86e293c880ea62be844490af3afa9cb2faba",
+      "node": "v24.20.0",
+      "npm": "11.19.0",
+      "python": "3.12.3",
+      "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+      "circom": {
+        "version": "circom compiler 2.2.2",
+        "binarySha256": "16c4e01eae5489c5b2433f04af0a504633736d48e06c383a5cd4011d1f99c810",
+        "sourceCommitPin": "5de739581d23ebe0bdb9c4255a106f6dc7d8a5cf",
+        "sourceCheckoutVerified": true,
+        "buildOrigin": "Local build or user-supplied binary; version/hash recorded. An existing binary's build provenance is the caller's responsibility."
+      },
+      "dependencyLockSha256": "28ca065e009f3df40a14b57bcf8b049e86334bddfa949cc21dd71bcefb85e920",
+      "stages": [
+        {
+          "name": "compile-depth2",
+          "seconds": 0.603033,
+          "exit": 0
+        },
+        {
+          "name": "compile-depth16",
+          "seconds": 0.726132,
+          "exit": 0
+        },
+        {
+          "name": "make-inputs",
+          "seconds": 0.04376,
+          "exit": 0
+        },
+        {
+          "name": "witness-depth2",
+          "seconds": 0.045943,
+          "exit": 0
+        },
+        {
+          "name": "witness-check-depth2",
+          "seconds": 0.249211,
+          "exit": 0
+        },
+        {
+          "name": "r1cs-json-depth2",
+          "seconds": 0.439279,
+          "exit": 0
+        },
+        {
+          "name": "witness-json-depth2",
+          "seconds": 0.10053,
+          "exit": 0
+        },
+        {
+          "name": "witness-depth16",
+          "seconds": 0.058626,
+          "exit": 0
+        },
+        {
+          "name": "witness-check-depth16",
+          "seconds": 0.316821,
+          "exit": 0
+        },
+        {
+          "name": "r1cs-json-depth16",
+          "seconds": 1.142747,
+          "exit": 0
+        },
+        {
+          "name": "witness-json-depth16",
+          "seconds": 0.146843,
+          "exit": 0
+        },
+        {
+          "name": "ptau-new",
+          "seconds": 0.381891,
+          "exit": 0
+        },
+        {
+          "name": "ptau-beacon",
+          "seconds": 3.388813,
+          "exit": 0
+        },
+        {
+          "name": "ptau-prepare",
+          "seconds": 56.94604,
+          "exit": 0
+        },
+        {
+          "name": "setup-depth2",
+          "seconds": 1.828917,
+          "exit": 0
+        },
+        {
+          "name": "zkey-beacon-depth2",
+          "seconds": 0.335219,
+          "exit": 0
+        },
+        {
+          "name": "zkey-verify-depth2",
+          "seconds": 1.871879,
+          "exit": 0
+        },
+        {
+          "name": "vk-depth2",
+          "seconds": 0.240324,
+          "exit": 0
+        },
+        {
+          "name": "prove-random-depth2",
+          "seconds": 0.332438,
+          "exit": 0
+        },
+        {
+          "name": "verify-random-depth2",
+          "seconds": 0.232721,
+          "exit": 0
+        },
+        {
+          "name": "setup-depth16",
+          "seconds": 7.518803,
+          "exit": 0
+        },
+        {
+          "name": "zkey-beacon-depth16",
+          "seconds": 0.879326,
+          "exit": 0
+        },
+        {
+          "name": "zkey-verify-depth16",
+          "seconds": 7.905717,
+          "exit": 0
+        },
+        {
+          "name": "vk-depth16",
+          "seconds": 0.251525,
+          "exit": 0
+        },
+        {
+          "name": "prove-random-depth16",
+          "seconds": 0.601826,
+          "exit": 0
+        },
+        {
+          "name": "verify-random-depth16",
+          "seconds": 0.244501,
+          "exit": 0
+        },
+        {
+          "name": "prepare-reference",
+          "seconds": 0.041587,
+          "exit": 0
+        },
+        {
+          "name": "witness-check-depth2",
+          "seconds": 0.249521,
+          "exit": 0
+        },
+        {
+          "name": "zkey-verify-depth2",
+          "seconds": 1.870924,
+          "exit": 0
+        },
+        {
+          "name": "prove-random-depth2",
+          "seconds": 0.340163,
+          "exit": 0
+        },
+        {
+          "name": "verify-random-depth2",
+          "seconds": 0.238362,
+          "exit": 0
+        },
+        {
+          "name": "deterministic-depth2-r1-s2",
+          "seconds": 0.518894,
+          "exit": 0
+        },
+        {
+          "name": "cli-verify-depth2-r1-s2",
+          "seconds": 0.237642,
+          "exit": 0
+        },
+        {
+          "name": "deterministic-depth2-r0-s0",
+          "seconds": 0.513454,
+          "exit": 0
+        },
+        {
+          "name": "cli-verify-depth2-r0-s0",
+          "seconds": 0.239232,
+          "exit": 0
+        },
+        {
+          "name": "math-reference-depth2",
+          "seconds": 0.722306,
+          "exit": 0
+        },
+        {
+          "name": "controls-depth2",
+          "seconds": 0.786249,
+          "exit": 0
+        },
+        {
+          "name": "witness-check-depth16",
+          "seconds": 0.319098,
+          "exit": 0
+        },
+        {
+          "name": "zkey-verify-depth16",
+          "seconds": 7.790069,
+          "exit": 0
+        },
+        {
+          "name": "prove-random-depth16",
+          "seconds": 0.566687,
+          "exit": 0
+        },
+        {
+          "name": "verify-random-depth16",
+          "seconds": 0.232067,
+          "exit": 0
+        },
+        {
+          "name": "deterministic-depth16-r1-s2",
+          "seconds": 0.758723,
+          "exit": 0
+        },
+        {
+          "name": "cli-verify-depth16-r1-s2",
+          "seconds": 0.235703,
+          "exit": 0
+        },
+        {
+          "name": "deterministic-depth16-r0-s0",
+          "seconds": 0.760889,
+          "exit": 0
+        },
+        {
+          "name": "cli-verify-depth16-r0-s0",
+          "seconds": 0.234012,
+          "exit": 0
+        },
+        {
+          "name": "math-reference-depth16",
+          "seconds": 1.681819,
+          "exit": 0
+        },
+        {
+          "name": "controls-depth16",
+          "seconds": 1.904971,
+          "exit": 0
+        },
+        {
+          "name": "source-integrity-after-validation",
+          "seconds": 0.041628,
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "mode": "reuse-setup",
+      "status": "passed",
+      "fixtureControls": 80,
+      "vectorHashes": 26,
+      "exactFixedProofs": 4,
+      "deterministicArtifactHashes": 39,
+      "maintainedSourceUnchanged": true,
+      "sourceCopyReadOnly": true,
+      "recordedStageSeconds": 45.89521,
+      "executedStageCount": 45,
+      "driverSha256": "554ce332ec9842f82c76f9ea7987dc222291086f53882fc25a41fa85f96854c6",
+      "mathReferenceSha256": "ae13a31032aead8e612ecd96a9332376602dcf69802c8433ed795c229ab861aa",
+      "node": "v24.20.0",
+      "npm": "11.19.0",
+      "python": "3.12.3",
+      "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+      "circom": {
+        "version": "circom compiler 2.2.2",
+        "binarySha256": "16c4e01eae5489c5b2433f04af0a504633736d48e06c383a5cd4011d1f99c810",
+        "sourceCommitPin": "5de739581d23ebe0bdb9c4255a106f6dc7d8a5cf",
+        "sourceCheckoutVerified": true,
+        "buildOrigin": "Local build or user-supplied binary; version/hash recorded. An existing binary's build provenance is the caller's responsibility."
+      },
+      "dependencyLockSha256": "28ca065e009f3df40a14b57bcf8b049e86334bddfa949cc21dd71bcefb85e920"
+    }
+  ],
+  "maintainedTests": {
+    "passed": 14,
+    "coverage": "artifact/proof/lock drift, upstream source/version drift, source/workdir separation, clean pinned checkouts, stale-success refusal, repeated staging of read-only copies"
+  },
+  "staticChecks": [
+    "ruff check --no-cache",
+    "ruff format --check --no-cache",
+    "Python parse",
+    "node --check for each authored JS file"
+  ],
+  "rerunAfterReadOnlyStagingRepair": {
+    "status": "passed",
+    "fixtureControls": 80,
+    "vectorHashes": 26,
+    "exactFixedProofs": 4,
+    "deterministicArtifactHashes": 39,
+    "maintainedSourceUnchanged": true,
+    "driverSha256": "3e945ebd52f62f571c7c530d792e8e328b222c4a57a9a089682da70c3e10966c",
+    "mathReferenceSha256": "ae13a31032aead8e612ecd96a9332376602dcf69802c8433ed795c229ab861aa"
+  }
+}

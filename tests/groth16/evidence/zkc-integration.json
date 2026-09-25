@@ -1,0 +1,877 @@
+{
+  "status": "passed",
+  "scope": "Two pinned public-test-setup fixtures through the actual relation-aware compiled PIR CLI; no general conformance or secure ceremony claim",
+  "depths": [
+    {
+      "depth": 2,
+      "relationIdentity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "fixedProofs": 2,
+      "refusalControls": 8,
+      "proofHashes": {
+        "r1-s2": {
+          "zkcJsonSha256": "769ed0949609a78551d4d0967fd76f360d37bf5483c9655da35b408d41e6d001",
+          "canonicalJsonSha256": "06c352d2e0a0e6bebb215ecc604d1e50336ba597f5cb089ec8d90ecd0f14f7d6"
+        },
+        "r0-s0": {
+          "zkcJsonSha256": "24c51cf037da2a1c1e9261c473054a4d649773c4fba6431fd374db5e2d0058d7",
+          "canonicalJsonSha256": "eecb7b4aa6f530cf33b2d9c3d040353ef5ff2bec1f5400df4ec065bcfd10845f"
+        }
+      },
+      "compiledSourceSha256": "57ca944bc8f35a6795ecedb3590c11c19825724c1a1df82b1ed03d0b3e1279aa",
+      "physicalEndpointsSha256": "26078aa47bf46b97b5d917a793ea116496af4738dc6868bebd3463c366050e82"
+    },
+    {
+      "depth": 16,
+      "relationIdentity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "fixedProofs": 2,
+      "refusalControls": 8,
+      "proofHashes": {
+        "r1-s2": {
+          "zkcJsonSha256": "a1f9d9e06ef5be55efa9f2d9524258e29de97a949fae6f7266207d0d76906a98",
+          "canonicalJsonSha256": "3fbc8ca6717b8f058cfaf5d41474dc1eeab10be453981baabeb980c29cc36350"
+        },
+        "r0-s0": {
+          "zkcJsonSha256": "6bbb852703ecb9d8b08802e73b9e9fcb821fb45a835010a6160a94b94ef99df1",
+          "canonicalJsonSha256": "9a439b90d39fb16d6fe85dd5276d33e8d1c9b30f6724380a524c6ec2c7d5f6be"
+        }
+      },
+      "compiledSourceSha256": "635aa5c474d7cf44628dc12e30acc4c415ba9a9dd1491da1c5af1f63b87ce529",
+      "physicalEndpointsSha256": "e1bba48c4f1fe0eb1944aad6240c15c0f37c3a04cdd53f2e88a0be57fc91a220"
+    }
+  ],
+  "fixtureControlsSeparate": 80,
+  "zkcRefusalControls": 16,
+  "exactFixedProofs": 4,
+  "binaries": {
+    "zkc": "59881c87699aacb753d719b1d5a3947a8ef85705efdfcbb4526bac81cc3de61a",
+    "compiler": "24bf43739dbce99e4c088858d0f8ea759c96eb67e1702d94c09e0082786e80e6",
+    "lean": "e4956093fe6dfc09a1ee35b9cbaf2468f06ba4d36b16829394f99e0e2d958e3f"
+  },
+  "pirSourceSha256": "1e80c37075c33ab5016f91b2a51c94d2f6c92e8335c087e1322b6ca53f743c0e",
+  "driverSha256": "40e0b968a176b0f1b9bdcfa8746bcd4b0b4f3ff4fcea796fdea9f9fb65979e58",
+  "verifierHasNoProvingInputs": true,
+  "records": [
+    {
+      "name": "depth2-compile-prove-r1-s2",
+      "process_ms": 932.9208380077034,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 726,
+          "domain_size": 1024,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 731
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd"
+      },
+      "key_import_ms": 71.853008,
+      "preparation_ms": 831.856801,
+      "proof_json_ms": [
+        0.155275
+      ],
+      "prove_ms": [
+        23.927554999999998
+      ],
+      "randomness": "explicit-test-tape",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "computed-from-imported-r1cs",
+      "snarkjs_json_bytes": 722,
+      "statement_binding_ms": 0.439064,
+      "status": "accepted",
+      "verify_ms": [
+        1.659232
+      ]
+    },
+    {
+      "name": "depth2-snarkjs-verifies-r1-s2",
+      "process_ms": 250.91115501709282,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth2-zkc-verifies-upstream-r1-s2",
+      "process_ms": 47.55114100407809,
+      "artifact_bytes": null,
+      "command": "verify",
+      "iterations": 1,
+      "key_binding": null,
+      "key_import_ms": 0.548137,
+      "preparation_ms": 40.616254999999995,
+      "proof_json_ms": [],
+      "prove_ms": [],
+      "randomness": "os",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": null,
+      "statement_binding_ms": 0.573768,
+      "status": "accepted",
+      "verify_ms": [
+        3.772067
+      ]
+    },
+    {
+      "name": "depth2-prove-r0-s0",
+      "process_ms": 278.13672297634184,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 726,
+          "domain_size": 1024,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 731
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd"
+      },
+      "key_import_ms": 208.181444,
+      "preparation_ms": 40.394428000000005,
+      "proof_json_ms": [
+        0.160215
+      ],
+      "prove_ms": [
+        24.517424
+      ],
+      "randomness": "explicit-test-tape",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 721,
+      "statement_binding_ms": 0.463915,
+      "status": "accepted",
+      "verify_ms": [
+        1.726163
+      ]
+    },
+    {
+      "name": "depth2-snarkjs-verifies-r0-s0",
+      "process_ms": 418.2125530205667,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth2-zkc-verifies-upstream-r0-s0",
+      "process_ms": 112.4703609966673,
+      "artifact_bytes": null,
+      "command": "verify",
+      "iterations": 1,
+      "key_binding": null,
+      "key_import_ms": 0.796695,
+      "preparation_ms": 75.380587,
+      "proof_json_ms": [],
+      "prove_ms": [],
+      "randomness": "os",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": null,
+      "statement_binding_ms": 0.712372,
+      "status": "accepted",
+      "verify_ms": [
+        29.371565
+      ]
+    },
+    {
+      "name": "depth2-repeat-fixed",
+      "process_ms": 892.7932120277546,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 726,
+          "domain_size": 1024,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 731
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd"
+      },
+      "key_import_ms": 488.594061,
+      "preparation_ms": 118.308513,
+      "proof_json_ms": [
+        0.329571
+      ],
+      "prove_ms": [
+        262.613193
+      ],
+      "randomness": "explicit-test-tape",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 722,
+      "statement_binding_ms": 1.1530360000000002,
+      "status": "accepted",
+      "verify_ms": [
+        5.15831
+      ]
+    },
+    {
+      "name": "depth2-fresh-zkc-0",
+      "process_ms": 634.5022129826248,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 726,
+          "domain_size": 1024,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 731
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd"
+      },
+      "key_import_ms": 424.768308,
+      "preparation_ms": 141.4201,
+      "proof_json_ms": [
+        0.235277
+      ],
+      "prove_ms": [
+        53.481204
+      ],
+      "randomness": "os",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 725,
+      "statement_binding_ms": 0.631809,
+      "status": "accepted",
+      "verify_ms": [
+        2.901291
+      ]
+    },
+    {
+      "name": "depth2-snarkjs-verifies-fresh-0",
+      "process_ms": 298.88802900677547,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth2-fresh-zkc-1",
+      "process_ms": 329.8364980146289,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 726,
+          "domain_size": 1024,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 731
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd"
+      },
+      "key_import_ms": 260.315256,
+      "preparation_ms": 40.50045,
+      "proof_json_ms": [
+        0.162636
+      ],
+      "prove_ms": [
+        23.215023000000002
+      ],
+      "randomness": "os",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 722,
+      "statement_binding_ms": 0.458304,
+      "status": "accepted",
+      "verify_ms": [
+        1.7048219999999998
+      ]
+    },
+    {
+      "name": "depth2-snarkjs-verifies-fresh-1",
+      "process_ms": 310.62460102839395,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth2-fresh-upstream",
+      "process_ms": 345.6000169971958,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth2-zkc-verifies-fresh-upstream",
+      "process_ms": 47.1292250440456,
+      "artifact_bytes": null,
+      "command": "verify",
+      "iterations": 1,
+      "key_binding": null,
+      "key_import_ms": 0.5503669999999999,
+      "preparation_ms": 40.365975,
+      "proof_json_ms": [],
+      "prove_ms": [],
+      "randomness": "os",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": null,
+      "statement_binding_ms": 0.561357,
+      "status": "accepted",
+      "verify_ms": [
+        3.492879
+      ]
+    },
+    {
+      "name": "depth2-reject-changed-root",
+      "process_ms": 46.508906001690775,
+      "error": "groth16-rejected",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-noncanonical-root",
+      "process_ms": 42.24593396065757,
+      "error": "groth16-noncanonical-scalar: noncanonical-encoding",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-negated-A",
+      "process_ms": 46.59481899579987,
+      "error": "groth16-rejected",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-swapped-G2",
+      "process_ms": 42.575524013955146,
+      "error": "groth16-invalid-g2: invalid-encoding",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-context",
+      "process_ms": 42.99795697443187,
+      "error": "groth16-execution: Format(Header)",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-wrong-vk",
+      "process_ms": 46.47016496164724,
+      "error": "groth16-rejected",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-truncated-artifact",
+      "process_ms": 43.291035981383175,
+      "error": "groth16-execution: Format(Truncated)",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-reject-private-witness",
+      "process_ms": 260.06855501327664,
+      "error": "groth16-execution: Stopped(Stop { origin: Origin { format: ExplicitBindings, session: \"eb4dd2d1f0f0cba46a1da9ed43e0e3926ceb01dd996aff665513e03336d9377b\", entry: \"main\", instance: \"proof\", path: [] }, role: \"P\", site: Some(\"__site_3\"), kind: Backend(BackendError { code: \"rejected:require\" }), cleanup_errors: [] })",
+      "status": "refused"
+    },
+    {
+      "name": "depth2-prepared-benchmark",
+      "process_ms": 320.366878004279,
+      "artifact_bytes": 210,
+      "command": "bench",
+      "iterations": 3,
+      "key_binding": {
+        "computed": {
+          "constraints": 726,
+          "domain_size": 1024,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 731
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd"
+      },
+      "key_import_ms": 207.586194,
+      "preparation_ms": 40.608102,
+      "proof_json_ms": [
+        0.16239499999999998,
+        0.16286499999999998,
+        0.159775
+      ],
+      "prove_ms": [
+        22.652014,
+        20.144216,
+        20.785096
+      ],
+      "randomness": "os",
+      "relation_identity": "16dad9fcff1f27effa9aeb61fadc4c3093b7045d8e3eb68736a51f28e2a287cd",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 722,
+      "statement_binding_ms": 0.458604,
+      "status": "accepted",
+      "verify_ms": [
+        1.645531,
+        1.664692,
+        1.683992
+      ]
+    },
+    {
+      "name": "depth16-compile-prove-r1-s2",
+      "process_ms": 5863.920662028249,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 4128,
+          "domain_size": 8192,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 4147
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945"
+      },
+      "key_import_ms": 355.901501,
+      "preparation_ms": 5434.340835999999,
+      "proof_json_ms": [
+        0.162165
+      ],
+      "prove_ms": [
+        66.665656
+      ],
+      "randomness": "explicit-test-tape",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "computed-from-imported-r1cs",
+      "snarkjs_json_bytes": 724,
+      "statement_binding_ms": 0.7665540000000001,
+      "status": "accepted",
+      "verify_ms": [
+        1.858648
+      ]
+    },
+    {
+      "name": "depth16-snarkjs-verifies-r1-s2",
+      "process_ms": 270.40665899403393,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth16-zkc-verifies-upstream-r1-s2",
+      "process_ms": 47.43331897770986,
+      "artifact_bytes": null,
+      "command": "verify",
+      "iterations": 1,
+      "key_binding": null,
+      "key_import_ms": 0.5565169999999999,
+      "preparation_ms": 40.522245999999996,
+      "proof_json_ms": [],
+      "prove_ms": [],
+      "randomness": "os",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": null,
+      "statement_binding_ms": 0.608479,
+      "status": "accepted",
+      "verify_ms": [
+        3.7928469999999996
+      ]
+    },
+    {
+      "name": "depth16-prove-r0-s0",
+      "process_ms": 1379.2636329890229,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 4128,
+          "domain_size": 8192,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 4147
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945"
+      },
+      "key_import_ms": 1241.083553,
+      "preparation_ms": 42.425194,
+      "proof_json_ms": [
+        0.285668
+      ],
+      "prove_ms": [
+        87.352335
+      ],
+      "randomness": "explicit-test-tape",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 721,
+      "statement_binding_ms": 0.466095,
+      "status": "accepted",
+      "verify_ms": [
+        2.867409
+      ]
+    },
+    {
+      "name": "depth16-snarkjs-verifies-r0-s0",
+      "process_ms": 266.6033459827304,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth16-zkc-verifies-upstream-r0-s0",
+      "process_ms": 50.3156179911457,
+      "artifact_bytes": null,
+      "command": "verify",
+      "iterations": 1,
+      "key_binding": null,
+      "key_import_ms": 0.795314,
+      "preparation_ms": 40.454843,
+      "proof_json_ms": [],
+      "prove_ms": [],
+      "randomness": "os",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": null,
+      "statement_binding_ms": 0.94352,
+      "status": "accepted",
+      "verify_ms": [
+        6.449229
+      ]
+    },
+    {
+      "name": "depth16-repeat-fixed",
+      "process_ms": 1319.1653179819696,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 4128,
+          "domain_size": 8192,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 4147
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945"
+      },
+      "key_import_ms": 1201.752424,
+      "preparation_ms": 46.670306000000004,
+      "proof_json_ms": [
+        0.164245
+      ],
+      "prove_ms": [
+        63.343709999999994
+      ],
+      "randomness": "explicit-test-tape",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 724,
+      "statement_binding_ms": 0.464714,
+      "status": "accepted",
+      "verify_ms": [
+        1.7357239999999998
+      ]
+    },
+    {
+      "name": "depth16-fresh-zkc-0",
+      "process_ms": 1265.1841139886528,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 4128,
+          "domain_size": 8192,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 4147
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945"
+      },
+      "key_import_ms": 1148.65614,
+      "preparation_ms": 40.462652,
+      "proof_json_ms": [
+        0.160005
+      ],
+      "prove_ms": [
+        68.847779
+      ],
+      "randomness": "os",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 725,
+      "statement_binding_ms": 0.463264,
+      "status": "accepted",
+      "verify_ms": [
+        1.731924
+      ]
+    },
+    {
+      "name": "depth16-snarkjs-verifies-fresh-0",
+      "process_ms": 241.13423598464578,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth16-fresh-zkc-1",
+      "process_ms": 1224.8090790235437,
+      "artifact_bytes": 210,
+      "command": "prove",
+      "iterations": 1,
+      "key_binding": {
+        "computed": {
+          "constraints": 4128,
+          "domain_size": 8192,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 4147
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945"
+      },
+      "key_import_ms": 1108.4331519999998,
+      "preparation_ms": 40.454101,
+      "proof_json_ms": [
+        0.175925
+      ],
+      "prove_ms": [
+        68.34620199999999
+      ],
+      "randomness": "os",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 722,
+      "statement_binding_ms": 0.460044,
+      "status": "accepted",
+      "verify_ms": [
+        1.691143
+      ]
+    },
+    {
+      "name": "depth16-snarkjs-verifies-fresh-1",
+      "process_ms": 235.08042294997722,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth16-fresh-upstream",
+      "process_ms": 583.1752960220911,
+      "status": "accepted",
+      "implementation": "unmodified snarkjs CLI"
+    },
+    {
+      "name": "depth16-zkc-verifies-fresh-upstream",
+      "process_ms": 45.961890020407736,
+      "artifact_bytes": null,
+      "command": "verify",
+      "iterations": 1,
+      "key_binding": null,
+      "key_import_ms": 0.541686,
+      "preparation_ms": 38.32836399999999,
+      "proof_json_ms": [],
+      "prove_ms": [],
+      "randomness": "os",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": null,
+      "statement_binding_ms": 0.690562,
+      "status": "accepted",
+      "verify_ms": [
+        4.149077999999999
+      ]
+    },
+    {
+      "name": "depth16-reject-changed-root",
+      "process_ms": 44.7117910371162,
+      "error": "groth16-rejected",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-noncanonical-root",
+      "process_ms": 40.02681700512767,
+      "error": "groth16-noncanonical-scalar: noncanonical-encoding",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-negated-A",
+      "process_ms": 44.74914295133203,
+      "error": "groth16-rejected",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-swapped-G2",
+      "process_ms": 40.704177983570844,
+      "error": "groth16-invalid-g2: invalid-encoding",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-context",
+      "process_ms": 43.28998696291819,
+      "error": "groth16-execution: Format(Header)",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-wrong-vk",
+      "process_ms": 45.456882973667234,
+      "error": "groth16-rejected",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-truncated-artifact",
+      "process_ms": 41.25333297997713,
+      "error": "groth16-execution: Format(Truncated)",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-reject-private-witness",
+      "process_ms": 1177.5799969909713,
+      "error": "groth16-execution: Stopped(Stop { origin: Origin { format: ExplicitBindings, session: \"f8e755ca8fc319be6abf85239ec184be8141418e8b01d93ced9e8b12246d1a42\", entry: \"main\", instance: \"proof\", path: [] }, role: \"P\", site: Some(\"__site_3\"), kind: Backend(BackendError { code: \"rejected:require\" }), cleanup_errors: [] })",
+      "status": "refused"
+    },
+    {
+      "name": "depth16-prepared-benchmark",
+      "process_ms": 1347.8491199784912,
+      "artifact_bytes": 210,
+      "command": "bench",
+      "iterations": 3,
+      "key_binding": {
+        "computed": {
+          "constraints": 4128,
+          "domain_size": 8192,
+          "field": "bn254.fr",
+          "n_public": 1,
+          "n_vars": 4147
+        },
+        "convention": "snarkjs-0.7.5-zkey/1",
+        "cross_checked": {
+          "zkey_AB_equals_R1CS_AB_with_public_rows": true
+        },
+        "external_premises": {
+          "C_IC_H_key_derivation": "unverified",
+          "ceremony": "unverified",
+          "group_queries_and_setup_consistency": "unverified"
+        },
+        "format": "zkc.groth16-key-binding/1",
+        "relation": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945"
+      },
+      "key_import_ms": 1104.74,
+      "preparation_ms": 40.561152,
+      "proof_json_ms": [
+        0.15784499999999999,
+        0.163625,
+        0.165285
+      ],
+      "prove_ms": [
+        62.439836,
+        62.508438,
+        66.069278
+      ],
+      "randomness": "os",
+      "relation_identity": "9d7fb92bea1f64ace61571e78c54bd62083f7f4b5635bbd73e6973e17b844945",
+      "relation_identity_basis": "application-declared-cached-source-context",
+      "snarkjs_json_bytes": 722,
+      "statement_binding_ms": 0.455834,
+      "status": "accepted",
+      "verify_ms": [
+        1.6897920000000002,
+        1.684942,
+        1.868968
+      ]
+    }
+  ]
+}
