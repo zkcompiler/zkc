@@ -9,6 +9,8 @@ namespace zkc::protocol {
 /// Logical IR operation for an installed contract; empty when no mapping
 /// exists.
 llvm::StringRef boundOperationName(llvm::StringRef contract);
+/// Decode in already loaded dialects; return a null type if one is missing.
+/// This operation never registers or loads dialects into the caller context.
 mlir::Type decodeBoundType(mlir::MLIRContext *, const BoundType &);
 llvm::Expected<BoundType> encodeBoundType(mlir::Type, bool physical);
 llvm::Expected<source::OperationBinding> readBinding(mlir::Operation *);

@@ -7,7 +7,6 @@
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Frontend/Library.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Table.h"
 
 int main() {

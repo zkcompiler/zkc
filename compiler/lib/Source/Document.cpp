@@ -68,6 +68,16 @@ std::optional<Span> Document::span(const Node *node) const {
   return found == storage->locations.end() ? std::nullopt
                                            : std::optional(found->second);
 }
+std::optional<Span> Document::diagnosticSpan(const Node &node) const {
+  if (!node.location)
+    return std::nullopt;
+  const auto &span = *node.location;
+  if (span.file >= storage->files.size() ||
+      span.offset > text(span.file).size() ||
+      span.length > text(span.file).size() - span.offset)
+    return std::nullopt;
+  return span;
+}
 std::pair<unsigned, unsigned> Document::lineColumn(size_t offset,
                                                    uint32_t file) const {
   if (file >= storage->lines.size())

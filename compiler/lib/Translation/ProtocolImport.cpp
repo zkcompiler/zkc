@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Builders.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Relations.h"
@@ -544,6 +545,8 @@ import(const Root &root, MLIRContext &ctx,
        const source::Node **failureLocation) {
   if (auto e = admit(root, false, failureLocation))
     return e;
+  if (!hasProtocolDialects(ctx))
+    return createStringError("protocol import requires loaded zkc dialects");
   bool physical = false;
   if constexpr (std::is_same_v<Root, source::Participants>)
     physical = root.stage == source::Participants::Stage::Physical;

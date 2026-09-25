@@ -291,8 +291,9 @@ field computation does not become machine arithmetic by sharing a bit width.
 Public C++ interfaces live under `compiler/include/zkc/`, with implementation
 under `compiler/lib/`. `Support` and `Contracts` own MLIR-free common services
 and installed contract facts. `Frontend`, `Source` and `Protocol` own source and
-interaction; `Dialect` and `Interfaces` own IR; `Compiler`, `Analysis`,
-`Transforms` and `Target` own compiler mechanisms; `Relation` and `Claims` own
+interaction; source `Analysis` belongs to the MLIR-free Protocol component.
+`Dialect` and `Interfaces` own IR; `Compiler`, `Transforms` and `Target` own
+compiler mechanisms; `Relation` and `Claims` own
 their respective consumers. Conversion implementations live in `lib/Conversion/`.
 The [component map](../../compiler/README.md#components) records enforced build
 ownership, which need not be one library per directory. Tools and tests sit

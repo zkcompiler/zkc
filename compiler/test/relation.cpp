@@ -30,6 +30,15 @@ int main() {
   Constraint row{LinearForm{{2, "1"}}, LinearForm{{3, "1"}},
                  LinearForm{{1, "1"}}};
   auto relation = value(R1CS::create("koala-bear", 4, 1, 1, {row}));
+  auto parsed = value(parseR1CSText(zkc::printJson(relation.encode())));
+  require(value(decodeR1CS(parsed)).identity() == relation.identity(),
+          "bounded text reader changed the relation");
+  refuses(parseR1CSText(std::string(9, '[')), "relation-depth-limit");
+  refuses(parseR1CSText("[\"" + std::string(1025, 'x') + "\"]"),
+          "relation-string-limit");
+  refuses(parseR1CSText("{}"), "relation-json");
+  refuses(parseR1CSText(std::string(Limits::bytes + 1, ' ')),
+          "relation-byte-limit");
   auto honest = value(evaluate(relation, {"21", "3"}, {"1", "21", "3", "7"}));
   require(honest.bound && honest.satisfied, "honest relation");
   require(honest.products[0] == std::vector<std::string>{"3"} &&

@@ -24,8 +24,12 @@ interfaces:
 | Separate compiler-owned typed contract plus original source | Preserves the runtime ABI; allows independent requirements and exact source correspondence; needs an explicit caller authority boundary | Implemented |
 | Protocol summaries alone | Useful for scale, but a function symbol or signature cannot establish execution binding or a law | No opaque/blanket summaries in this implementation |
 
-The public owned API is
+The MLIR-free derivation/checking API is
 [`zkc/Claims/Claims.h`](../../compiler/include/zkc/Claims/Claims.h).
+[`zkc/Translation/Claims.h`](../../compiler/include/zkc/Translation/Claims.h)
+owns claim IR import and candidate checking;
+[`zkc/Compiler/Claims.h`](../../compiler/include/zkc/Compiler/Claims.h)
+owns construction and physical-lowering correspondence workflows.
 `Contract` contains extensible predicate signatures, exact predicate instances,
 requirements, operational terminals, trust laws and bound rules. `Certificate`
 contains only two fingerprints and an ordered list of already admitted rule

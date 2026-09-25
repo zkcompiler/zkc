@@ -1,11 +1,12 @@
-#ifndef ZKC_CLAIMS_ANALYSIS_H
-#define ZKC_CLAIMS_ANALYSIS_H
+#ifndef ZKC_CLAIMS_INTERNAL_ANALYSIS_H
+#define ZKC_CLAIMS_INTERNAL_ANALYSIS_H
 #include "zkc/Analysis/Obligations.h"
 #include "zkc/Claims/Claims.h"
 #include "zkc/Source/Execution.h"
 #include <map>
 namespace zkc::claims {
-/// Derived source-relative analysis, not caller authority or a security proof.
+/// Private derived facts. Only admit() establishes the indexes consumed by
+/// steps() and the IR translator; callers use the checked public workflows.
 inline constexpr size_t maxRecords = 32768;
 inline constexpr size_t maxItems = 200000;
 struct Trace : source::Execution {

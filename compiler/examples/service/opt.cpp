@@ -3,7 +3,6 @@
 #include "mlir/Transforms/Passes.h"
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
-#include "zkc/Transforms/Passes.h"
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
   zkc::service::registerService(registry);

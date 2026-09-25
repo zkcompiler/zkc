@@ -31,6 +31,52 @@ Expected<uint32_t> count(const json::Value &value, uint32_t maximum) {
 }
 } // namespace
 
+/// Relation transport is arrays and short strings, not the source language's
+/// natural-number marker format. Bound before invoking the generic JSON parser.
+Expected<json::Value> parseR1CSText(StringRef text) {
+  if (text.size() > Limits::bytes)
+    return zkc::error("relation-byte-limit");
+  unsigned depth = 0;
+  size_t nodes = 0;
+  for (size_t i = 0; i < text.size(); ++i) {
+    char ch = text[i];
+    if (ch == '"') {
+      size_t start = i++;
+      while (i < text.size() && text[i] != '"') {
+        if (text[i] == '\\')
+          ++i;
+        ++i;
+        if (i - start > 1024)
+          return zkc::error("relation-string-limit");
+      }
+      if (i >= text.size() || !validStringEncoding(text.slice(start, i + 1)))
+        return zkc::error("relation-json");
+      ++nodes;
+    } else if (ch == '[') {
+      if (++depth > 8)
+        return zkc::error("relation-depth-limit");
+      ++nodes;
+    } else if (ch == ']') {
+      if (!depth)
+        return zkc::error("relation-json");
+      --depth;
+    } else if (ch != ',' && ch != ' ' && ch != '\n' && ch != '\t' &&
+               ch != '\r') {
+      return zkc::error("relation-json");
+    }
+    if (nodes > 4 * Limits::terms + 4 * Limits::rows + 16)
+      return zkc::error("relation-node-limit");
+  }
+  if (depth)
+    return zkc::error("relation-json");
+  auto value = json::parse(text);
+  if (!value) {
+    consumeError(value.takeError());
+    return zkc::error("relation-json");
+  }
+  return value;
+}
+
 R1CS::R1CS(std::string field, uint32_t columns, uint32_t publicOutputs,
            uint32_t publicInputs, std::vector<Constraint> constraints)
     : fieldName(std::move(field)), columnCount(columns),

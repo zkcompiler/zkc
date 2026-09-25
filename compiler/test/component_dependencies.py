@@ -1,4 +1,4 @@
-"""Enforce common, IR and pure frontend dependency boundaries."""
+"""Enforce source/header ownership and component/private phase dependencies."""
 
 import os
 from pathlib import Path
@@ -82,7 +82,7 @@ def main():
         "ZkcProtocol": {ROOT / "lib/Protocol/EncodingLimits.h", ROOT / "lib/Protocol/ConstructionState.h", ROOT / "lib/Protocol/Construction.h"},
         "ZkcIR": {ROOT / "lib/Dialect/Plan/IR/PhysicalEncoding.h", ROOT / "lib/Dialect/Verification.h"},
     }
-    private_headers["ZkcClaims"] = {ROOT / "lib/Claims/Internal.h"}
+    private_headers["ZkcClaims"] = {ROOT / "lib/Claims/Internal.h", ROOT / "lib/Claims/Analysis.h"}
     private_headers["ZkcTransforms"] = {ROOT / "lib/Conversion/Bindings.h"}
     private_headers["ZkcCompilerCore"] = set()
     private_headers["ZkcDriver"] = set((ROOT / "lib/Driver").glob("*.h"))
@@ -90,6 +90,31 @@ def main():
     private_headers["ZkcFrontendLoading"] = set((ROOT / "lib/Frontend/Loading").rglob("*.h"))
     public_headers = {name: header_set(roots) for name, roots in HEADER_ROOTS.items()}
     public_headers["ZkcFrontend"] -= public_headers["ZkcFrontendLoading"]
+
+    header_owners = {}
+    for name in COMPONENTS:
+        for path in public_headers[name] | private_headers[name]:
+            assert path.is_file(), f"nonexistent header: {path}"
+            assert path not in header_owners, f"multiple owners: {path}"
+            header_owners[path] = name
+    assert set(header_owners) == set((ROOT / "include/zkc").rglob("*.h")) | set((ROOT / "lib").rglob("*.h")), "unowned headers"
+    private = set().union(*private_headers.values())
+    # Implementation bridges are explicit and uninstalled. Loading uses syntax
+    # records for capture and bounded file I/O; it does not invoke a checker.
+    bridges = {
+        ("ZkcCompilerCore", ROOT / "lib/Protocol/Construction.h"),
+        ("ZkcIR", ROOT / "lib/Claims/Analysis.h"),
+        ("ZkcDriver", ROOT / "lib/Support/Input.h"),
+        ("ZkcFrontendLoading", ROOT / "lib/Support/Input.h"),
+        ("ZkcFrontendLoading", ROOT / "lib/Frontend/Syntax/Tree.h"),
+        ("ZkcFrontendLoading", ROOT / "lib/Frontend/Syntax/Lexer.h"),
+    }
+
+    def check_private_edge(path, target):
+        sender = header_owners.get(path, owners.get(str(path.relative_to(ROOT))))
+        if target in private:
+            assert not path.is_relative_to(ROOT / "include"), f"public header includes private implementation: {path} -> {target}"
+            assert header_owners[target] == sender or (sender, target) in bridges, f"private component dependency: {path} -> {target}"
 
     def closure(name):
         result = {name}
@@ -124,10 +149,14 @@ def main():
                         "filesystem", "fstream", "llvm/Support/FileSystem.h",
                         "llvm/Support/MemoryBuffer.h", "llvm/Support/Program.h",
                     ), f"{name}: input loading belongs to FrontendLoading: {path}"
+                if name != "ZkcDriver":
+                    assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to Driver: {path}"
                 if name == "ZkcIR":
                     assert not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
                 elif "ZkcIR" not in closure(name):
                     assert not include.startswith("mlir/"), f"{name}: {path} includes {include}"
+                if include.endswith(".cpp.inc"):
+                    assert owners.get(str(path.relative_to(ROOT))) == "ZkcIR" and path.suffix == ".cpp", f"generated implementation outside IR: {path} -> {include}"
                 if include.startswith("zkc/"):
                     target = ROOT / "include" / include
                     if include.endswith(".inc"):
@@ -142,10 +171,22 @@ def main():
                         dependency = target.relative_to(frontend).parts[0]
                         if owner in FRONTEND_LAYERS:
                             assert dependency in FRONTEND_LAYERS[owner], f"frontend phase dependency: {path} -> {target}"
+                    check_private_edge(path, target)
                     visit(target)
 
         for path in public_headers[name] | {ROOT / source for source in sources}:
             visit(path)
+    # Tools consume public interfaces. The source benchmark is itself a bounded
+    # file-reading CLI, so it shares only the driver's private input helper.
+    for directory in (ROOT / "tools", ROOT / "examples/service"):
+        for path in directory.rglob("*"):
+            if path.suffix not in (".cpp", ".h", ".td"):
+                continue
+            for include in re.findall(r'^\s*(?:#\s*include|include)\s*[<"]([^">]+)[">]', path.read_text(), re.M):
+                target = (path.parent / include).resolve()
+                allowed_input = path == ROOT / "tools/zkc-source-bench.cpp" and target == ROOT / "lib/Support/Input.h"
+                assert not target.is_relative_to(ROOT / "lib") or allowed_input, f"tool/extension includes compiler implementation: {path} -> {include}"
+                assert not include.startswith("zkc/") or not include.endswith(".cpp.inc"), f"tool/extension includes generated definitions: {path} -> {include}"
     print("component source ownership, target edges and all component include closures passed")
 
 

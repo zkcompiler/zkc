@@ -12,9 +12,8 @@ SourceLocations::SourceLocations(const source::Document &document,
                                                   1, 1))) {}
 
 Location SourceLocations::operator()(const source::Node &node) const {
-  auto span = node.location;
-  if (!span || span->offset > document.text(span->file).size() ||
-      span->length > document.text(span->file).size() - span->offset)
+  auto span = document.diagnosticSpan(node);
+  if (!span)
     return fallback;
   auto [line, column] = document.lineColumn(span->offset, span->file);
   return FileLineColLoc::get(context, document.filename(span->file), line,

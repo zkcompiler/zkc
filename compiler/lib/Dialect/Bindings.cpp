@@ -167,10 +167,20 @@ StringRef boundOperationName(StringRef contract) {
   return {};
 }
 
+namespace {
+// Decoding must not initialize a caller's context. Missing dialects are an
+// ordinary translation failure, not a fatal call into an unregistered type.
+template <typename T, typename... Args>
+Type loadedType(MLIRContext *ctx, Args &&...args) {
+  if (!ctx->getLoadedDialect(T::dialectName))
+    return {};
+  return T::get(ctx, std::forward<Args>(args)...);
+}
+} // namespace
 Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
   Type result;
   if (t.kind == "variant")
-    result = VariantType::get(ctx, "variant:" + t.identity);
+    result = loadedType<VariantType>(ctx, "variant:" + t.identity);
   else if (t.kind == "bool")
     result = IntegerType::get(ctx, 1);
   else if (t.kind == "index")
@@ -180,34 +190,37 @@ Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
         RankedTensorType::get({ShapedType::kDynamic},
                               IntegerType::get(ctx, 64, IntegerType::Unsigned));
   else if (t.kind == "field")
-    result = FieldType::get(ctx, t.identity);
+    result = loadedType<FieldType>(ctx, t.identity);
   else if (t.kind == "matrix")
-    result = MatrixType::get(ctx, t.identity);
+    result = loadedType<MatrixType>(ctx, t.identity);
   else if (t.kind == "table")
-    result = MultilinearType::get(ctx, t.identity);
+    result = loadedType<MultilinearType>(ctx, t.identity);
   else if (t.kind == "point")
-    result = PointType::get(ctx, t.identity);
+    result = loadedType<PointType>(ctx, t.identity);
   else if (t.kind == "round")
-    result = QuadraticType::get(ctx, t.identity);
+    result = loadedType<QuadraticType>(ctx, t.identity);
   else if (t.kind == "group")
-    result = GroupType::get(ctx, t.identity);
-  else if (t.kind == "vector" || t.kind == "groups")
-    result = RankedTensorType::get({ShapedType::kDynamic},
-                                   t.kind == "vector"
-                                       ? Type(FieldType::get(ctx, t.identity))
-                                       : Type(GroupType::get(ctx, t.identity)));
-  else if (t.kind == "polynomial")
-    result = UnivariateType::get(ctx, t.identity);
+    result = loadedType<GroupType>(ctx, t.identity);
+  else if (t.kind == "vector" || t.kind == "groups") {
+    Type element = t.kind == "vector" ? loadedType<FieldType>(ctx, t.identity)
+                                      : loadedType<GroupType>(ctx, t.identity);
+    if (!element)
+      return {};
+    result = RankedTensorType::get({ShapedType::kDynamic}, element);
+  } else if (t.kind == "polynomial")
+    result = loadedType<UnivariateType>(ctx, t.identity);
   else if (t.kind == "resource_unit" || t.kind == "rng" || t.kind == "nonce" ||
            t.kind == "transcript")
-    result = CapabilityType::get(ctx, t.kind + ":" + t.identity);
+    result = loadedType<CapabilityType>(ctx, t.kind + ":" + t.identity);
   else if (installedDomains().hasFact("VectorCommitment", {t.identity}))
-    result = OracleObjectType::get(ctx, t.identity, t.kind);
+    result = loadedType<OracleObjectType>(ctx, t.identity, t.kind);
   else
-    result = ObjectType::get(ctx, t.identity, t.kind);
+    result = loadedType<ObjectType>(ctx, t.identity, t.kind);
+  if (!result)
+    return {};
   return t.representation.empty()
              ? result
-             : DataType::get(ctx, result, t.representation);
+             : loadedType<DataType>(ctx, result, t.representation);
 }
 
 Expected<BoundType> encodeBoundType(Type type, bool physical) {

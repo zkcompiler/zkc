@@ -15,57 +15,13 @@
 using namespace llvm;
 namespace zkc::relation {
 namespace {
-/// Relation transport is arrays and short strings, not the source language's
-/// natural-number marker format. Bound before invoking the generic JSON parser.
-Expected<json::Value> parse(StringRef text) {
-  unsigned depth = 0;
-  size_t nodes = 0;
-  for (size_t i = 0; i < text.size(); ++i) {
-    char ch = text[i];
-    if (ch == '"') {
-      size_t start = i++;
-      while (i < text.size() && text[i] != '"') {
-        if (text[i] == '\\')
-          ++i;
-        ++i;
-        if (i - start > 1024)
-          return zkc::error("relation-string-limit");
-      }
-      if (i >= text.size() || !validStringEncoding(text.slice(start, i + 1)))
-        return zkc::error("relation-json");
-      ++nodes;
-    } else if (ch == '[') {
-      if (++depth > 8)
-        return zkc::error("relation-depth-limit");
-      ++nodes;
-    } else if (ch == ']') {
-      if (!depth)
-        return zkc::error("relation-json");
-      --depth;
-    } else if (ch != ',' && ch != ' ' && ch != '\n' && ch != '\t' &&
-               ch != '\r') {
-      return zkc::error("relation-json");
-    }
-    if (nodes > 4 * Limits::terms + 4 * Limits::rows + 16)
-      return zkc::error("relation-node-limit");
-  }
-  if (depth)
-    return zkc::error("relation-json");
-  auto value = json::parse(text);
-  if (!value) {
-    consumeError(value.takeError());
-    return zkc::error("relation-json");
-  }
-  return value;
-}
-
 Expected<R1CS> read(StringRef filename) {
   auto bytes = readInput(filename, Limits::bytes);
   if (!bytes)
     return bytes.takeError();
   if (StringRef(*bytes).starts_with("r1cs"))
     return readR1CS(*bytes);
-  auto data = parse(*bytes);
+  auto data = parseR1CSText(*bytes);
   if (!data)
     return data.takeError();
   return decodeR1CS(*data);
@@ -74,7 +30,7 @@ Expected<std::vector<std::string>> values(StringRef filename) {
   auto text = readInput(filename, Limits::bytes);
   if (!text)
     return text.takeError();
-  auto parsed = parse(*text);
+  auto parsed = parseR1CSText(*text);
   if (!parsed)
     return parsed.takeError();
   auto *array = parsed->getAsArray();

@@ -31,7 +31,8 @@ subjects. Each dialect initializes its generated operation list in
 [IR.h](../../compiler/include/zkc/Dialect/IR.h), and `registerDialects` in
 [Registry.cpp](../../compiler/lib/Dialect/Registry.cpp) are explicit. Registration and
 mandatory verification belong to `ZkcIR`; dialect-local transformation passes
-belong to the upper compiler. See the [checking boundaries](../compiler/ir-verification.md).
+belong to `Zkc::Transforms`; aggregate pass registration belongs to
+`Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
 Generated operation declarations stay shared because parent traits cross dialect
 boundaries; definitions and registration lists are generated per dialect.
 

@@ -31,7 +31,11 @@ class Planner {
     auto physical = defaultRepresentation(*type);
     if (!physical)
       return physical.takeError();
-    return decodeBoundType(b.getContext(), *physical);
+    auto decoded = decodeBoundType(b.getContext(), *physical);
+    if (!decoded)
+      return createStringError(
+          "physical conversion requires loaded zkc dialects");
+    return decoded;
   }
 
   std::string fresh(std::set<std::string> &used, StringRef prefix) {
@@ -292,6 +296,10 @@ public:
           for (const auto &t : selected->outputs)
             outputs.push_back(decodeBoundType(b.getContext(), t));
         }
+        if (llvm::is_contained(inputs, Type{}) ||
+            llvm::is_contained(outputs, Type{}))
+          return createStringError(
+              "physical conversion requires loaded zkc dialects");
         if (inputs.size() != op->getNumOperands())
           return error("binding-operation-signature");
         SmallVector<mlir::Value> operands;

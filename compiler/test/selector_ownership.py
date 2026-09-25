@@ -5,7 +5,7 @@ import json
 from cases import case
 from commands import Commands
 from selector_cases import descriptor, family_source, source
-from tools import compiler, records
+from tools import compiler, construction_test, records
 
 
 directory = records()
@@ -255,8 +255,28 @@ with case('an-imported-library-function-reaches-its-copies'):
                                f'random coins at ({spelling} call_1); accept 0; '
                                'suite "merlin3.bls12-381.fr64be/1"; }')
             chosen = write('linking.construction.pir', descriptor_text)
-            constructed = json.loads(run('protocol-construct', app, chosen, f'--library={library}'))
+            printed = run('protocol-construct', app, chosen, f'--library={library}')
+            assert commands.run([construction_test, app, chosen, library]) == printed
+            constructed = json.loads(printed)
             selected = {selector[0] for selector in constructed[1][5][1]}
             assert selected == ({'Sample'} if identity == 'exact' else copies), selected
+
+# Force the SSA-expansion branch with an unrelated identity call. It must choose
+# exactly the same reached primitive occurrences as the call-free fast path.
+# The construction identity prefix changes with source, so compare occurrence
+# provenance and the actual substituted challenge operations, not proof bytes.
+for identity in ("exact", "normalized"):
+    for offset in (False, True):
+        with case(f"expansion-occurrence-parity-{identity}-{offset}"):
+            results = []
+            for calls in (False, True):
+                raw = write("parity.json", source(offset=offset, calls=calls))
+                draw = write("parity-descriptor.json", descriptor(identity, ["F", "A"]))
+                results.append(json.loads(run("protocol-construct", raw, draw)))
+            # Generated helper symbols contain the source identity prefix.
+            provenance = [[row[1:] for row in result[4]] for result in results]
+            assert provenance[0] == provenance[1], "expansion changed primitive provenance"
+            selected = [row for row in provenance[0] if row[-1] == "construction"]
+            assert len(selected) == 4, "both selected draws must be substituted for both roles"
 
 print(f'{commands.save()} selector ownership checks passed')

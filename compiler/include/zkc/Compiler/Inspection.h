@@ -10,6 +10,9 @@ class Analysis;
 }
 namespace zkc {
 /// One checked inspection path for textual and programmatic source clients.
+/// Pass the retained analysis for a multi-file project. Without it, the
+/// optional elaborated-call report re-analyzes only the document's root
+/// spelling.
 llvm::Expected<llvm::json::Value>
 inspectSource(const source::Document &, const frontend::Analysis * = nullptr);
 llvm::Error sourceDiagnostic(const source::Document &, llvm::Error,

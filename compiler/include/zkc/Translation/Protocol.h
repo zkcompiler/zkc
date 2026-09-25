@@ -10,8 +10,10 @@
 
 namespace zkc::protocol {
 /// Import requires loaded dialects: registerDialects(registry), construct the
-/// context from that registry, then context.loadAllAvailableDialects().
-/// Locations are diagnostic metadata, never evidence of source correspondence.
+/// context from that registry, then context.loadAllAvailableDialects(). A
+/// missing built-in dialect returns a context setup error; import never loads
+/// dialects. Locations are diagnostic metadata, never evidence of source
+/// correspondence.
 llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>> importModule(
     const source::Content &, mlir::MLIRContext &,
     llvm::function_ref<mlir::Location(const source::Node &)> locations = {},

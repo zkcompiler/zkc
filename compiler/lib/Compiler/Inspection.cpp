@@ -11,7 +11,7 @@ using namespace llvm;
 namespace zkc {
 Error sourceDiagnostic(const source::Document &document, Error error,
                        const source::Node *record) {
-  auto span = document.span(record);
+  auto span = record ? document.diagnosticSpan(*record) : std::nullopt;
   const auto file = span ? span->file : 0;
   auto [line, column] = document.lineColumn(span ? span->offset : 0, file);
   std::vector<diagnostics::RefusalInfo> refusals;
@@ -21,11 +21,13 @@ Error sourceDiagnostic(const source::Document &document, Error error,
       refusals.push_back({refusal.code, refusal.detail});
     }
   });
-  return make_error<CompilationError>((document.filename(file) + ":" +
-                                       Twine(line) + ":" + Twine(column) +
-                                       ": " + toString(std::move(error)))
-                                          .str(),
-                                      std::move(refusals));
+  return make_error<CompilationError>(
+      (document.filename(file) + ":" + Twine(line) + ":" + Twine(column) +
+       ": " + toString(std::move(error)))
+          .str(),
+      std::move(refusals),
+      std::vector<DiagnosticLocation>{
+          {document.filename(file).str(), line, column}});
 }
 Expected<json::Value> inspectSource(const source::Document &document,
                                     const frontend::Analysis *analysis) {

@@ -1,10 +1,10 @@
+#include "mlir/IR/DialectRegistry.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 #include "mlir/Transforms/Passes.h"
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
-#include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/TableLibrary.h"
-#include "zkc/Transforms/Passes.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/CommandLine.h"
 int main(int argc, char **argv) {

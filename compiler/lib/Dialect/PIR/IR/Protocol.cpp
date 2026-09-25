@@ -601,7 +601,10 @@ Expected<SmallVector<Type>> variantPayloadTypes(ArrayRef<std::string> payload,
         return zkc::error("binding-representation");
       }
     }
-    types.push_back(protocol::decodeBoundType(context, *parsed));
+    auto type = protocol::decodeBoundType(context, *parsed);
+    if (!type)
+      return zkc::error("variant-type");
+    types.push_back(type);
   }
   return types;
 }

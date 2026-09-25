@@ -7,7 +7,8 @@ class MLIRContext;
 }
 namespace zkc::claims {
 /// Context registration is an invocation responsibility; load required dialects
-/// before checking. These APIs never change the supplied registry.
+/// before checking. Missing built-ins refuse without loading more dialects.
+/// These APIs never change the supplied registry.
 /// Same original source is mandatory at both independent checking boundaries.
 llvm::Error checkConstruction(const source::Module &, const Contract &,
                               const Certificate &, const source::Construction &,

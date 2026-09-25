@@ -38,8 +38,9 @@ llvm::Expected<source::Content> prepareSource(const source::Document &document,
   bool calls = false;
   for (const auto &fn : prepared->functions)
     if (fn.body)
-      for (const auto &ins : *fn.body)
+      source::walk(*fn.body, [&](const source::Instruction &ins) {
         calls |= ins.get<source::AlgorithmCall>() != nullptr;
+      });
   if (calls) {
     auto expanded = protocol::expandAlgorithms(*prepared, context);
     if (!expanded)

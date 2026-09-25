@@ -14,11 +14,14 @@ struct ConstructionResult {
   llvm::json::Value certificate;
 };
 
-/// Construct from the original source and descriptor snapshots. Structural and
-/// semantic admission, source-relative dependency/resource analysis, and MLIR
-/// verification remain mandatory for programmatically built records. The JSON
-/// certificate includes the common source. The owned module is that same
-/// source after checked import; callers need not decode or import it again.
+/// Requires loaded built-in dialects (registerDialects then
+/// loadAllAvailableDialects); an uninitialized context returns an error without
+/// mutation. Construct from the original source and descriptor snapshots.
+/// Structural and semantic admission, source-relative dependency/resource
+/// analysis, and MLIR verification remain mandatory for programmatically built
+/// records. The JSON certificate includes the common source. The owned module
+/// is that same source after checked import; callers need not decode or import
+/// it again.
 llvm::Expected<ConstructionResult> construct(const source::Module &,
                                              const source::Construction &,
                                              mlir::MLIRContext &);

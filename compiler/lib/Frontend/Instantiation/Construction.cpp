@@ -11,6 +11,8 @@ bindConstruction(const CheckedModule &checked,
   if (descriptor.draws.size() > 32768)
     return zkc::error("construction-descriptor-limit");
   const auto &model = *checked.model;
+  if (!model.finalized)
+    return zkc::error("construction-input-kind");
   const auto *sourceModule = std::get_if<source::Module>(&*model.finalized);
   if (!sourceModule)
     return zkc::error("construction-input-kind");

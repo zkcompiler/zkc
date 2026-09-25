@@ -31,6 +31,22 @@ template <typename T> void refuse(Expected<T> result, StringRef code) {
 }
 } // namespace
 int main() {
+  mlir::MLIRContext fresh;
+  for (StringRef spelling : {"field:bls12-381.fr", "vector:bls12-381.fr",
+                             "group:bls12-381.g1", "groups:bls12-381.g1"}) {
+    auto bound = accept(parseBoundType(spelling, false));
+    require(!decodeBoundType(&fresh, bound),
+            "unloaded type decoding must fail without initializing dialects");
+  }
+  require(bool(decodeBoundType(&fresh, {"bool", "", ""})),
+          "builtin Boolean decoding needs no zkc dialect");
+  fresh.loadDialect<AlgebraDialect>();
+  auto field = accept(parseBoundType("field:bls12-381.fr", false));
+  require(bool(decodeBoundType(&fresh, field)), "loaded field type refused");
+  auto physical = accept(defaultRepresentation(field));
+  require(!decodeBoundType(&fresh, physical),
+          "physical wrapper requires its own loaded dialect");
+
   mlir::DialectRegistry registry;
   registerDialects(registry);
   mlir::MLIRContext context(registry);

@@ -15,4 +15,15 @@ void registerDialects(mlir::DialectRegistry &registry) {
                   PCSDialect, OracleDialect, RelationDialect, ClaimDialect,
                   mlir::func::FuncDialect>();
 }
+bool hasProtocolDialects(mlir::MLIRContext &context) {
+  return context.getLoadedDialect<PIRDialect>() &&
+         context.getLoadedDialect<AlgebraDialect>() &&
+         context.getLoadedDialect<PolynomialDialect>() &&
+         context.getLoadedDialect<PlanDialect>() &&
+         context.getLoadedDialect<PCSDialect>() &&
+         context.getLoadedDialect<OracleDialect>() &&
+         context.getLoadedDialect<RelationDialect>() &&
+         context.getLoadedDialect<ClaimDialect>() &&
+         context.getLoadedDialect<mlir::func::FuncDialect>();
+}
 } // namespace zkc

@@ -12,6 +12,7 @@
 #include "zkc/Compiler/Construction.h"
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Compiler/Source.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Frontend/Inspection.h"
@@ -33,7 +34,10 @@
 #include <set>
 using namespace llvm;
 int zkc::runCompiler(int argc, char **argv,
-                     const mlir::DialectRegistry &registry) {
+                     const mlir::DialectRegistry &extensions) {
+  mlir::DialectRegistry registry;
+  registerDialects(registry);
+  extensions.appendTo(registry);
   if (argc == 2 &&
       (StringRef(argv[1]) == "--help" || StringRef(argv[1]) == "-h")) {
     outs()

@@ -1,8 +1,8 @@
 #include "zkc/Translation/Claims.h"
+#include "../Claims/Analysis.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Claims/Analysis.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Bindings.h"
@@ -146,7 +146,7 @@ Expected<OwningOpRef<ModuleOp>> import(const source::Module &module,
   // Translation initializes the dialects it creates. Candidate checking below
   // never changes its caller's registry or dialect loading state.
   ctx.loadDialect<ClaimDialect, PIRDialect, AlgebraDialect, PolynomialDialect,
-                  PCSDialect, PlanDialect>();
+                  PCSDialect, PlanDialect, OracleDialect>();
   return build(contract, certificate, *checked, ctx);
 }
 Error checkIR(const source::Module &module, const Contract &contract,
@@ -181,12 +181,7 @@ Error checkIR(const source::Module &module, const Contract &contract,
   if (!proof)
     return proof.takeError();
   auto &ctx = *candidate.getContext();
-  if (!ctx.getLoadedDialect<ClaimDialect>() ||
-      !ctx.getLoadedDialect<PIRDialect>() ||
-      !ctx.getLoadedDialect<AlgebraDialect>() ||
-      !ctx.getLoadedDialect<PolynomialDialect>() ||
-      !ctx.getLoadedDialect<PCSDialect>() ||
-      !ctx.getLoadedDialect<PlanDialect>())
+  if (!ctx.getLoadedDialect<ClaimDialect>())
     return error("claim-ir-mismatch");
   auto expected = build(contract, certificate, *checked, ctx);
   if (!expected)

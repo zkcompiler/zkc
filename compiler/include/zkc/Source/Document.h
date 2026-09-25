@@ -31,7 +31,12 @@ public:
   }
   llvm::StringRef text(uint32_t file = 0) const;
   llvm::StringRef filename(uint32_t file = 0) const;
+  /// Snapshot member lookup; foreign/copied nodes are not members.
   std::optional<Span> span(const Node *) const;
+  /// Diagnostic provenance, also for copied/elaborated nodes. Bounds are
+  /// checked against captured files; this does not establish membership or
+  /// correspondence.
+  std::optional<Span> diagnosticSpan(const Node &) const;
   /// One-based byte coordinates, clamped to EOF (not Unicode display columns).
   std::pair<unsigned, unsigned> lineColumn(size_t offset,
                                            uint32_t file = 0) const;
