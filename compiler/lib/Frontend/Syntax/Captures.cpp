@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <set>
 using namespace llvm;
-namespace zkc::frontend::semantics {
+namespace zkc::frontend::syntax {
 namespace {
 using Names = std::set<std::string>;
 class FreePlaces {
@@ -282,4 +282,4 @@ bool hasLexicalTraversals(const syntax::Body &body) {
       return true;
   return false;
 }
-} // namespace zkc::frontend::semantics
+} // namespace zkc::frontend::syntax

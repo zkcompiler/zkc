@@ -1,6 +1,6 @@
 #include "Names.h"
 #include "zkc/Frontend/Compile.h"
-#include "zkc/Frontend/Dependencies.h"
+#include "zkc/Frontend/Loading.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Relations.h"

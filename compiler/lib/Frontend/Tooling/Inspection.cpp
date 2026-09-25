@@ -1,8 +1,8 @@
 #include "zkc/Frontend/Inspection.h"
+#include "../Model/Access.h"
 #include "../Resolution/Project.h"
 #include "../Semantics/Libraries.h"
 #include "../Syntax/Tree.h"
-#include "Access.h"
 #include "Libraries.h"
 #include "Lints.h"
 
@@ -277,9 +277,9 @@ json::Value inspectAnalysis(const Analysis &analysis) {
   for (const auto &warning : tooling::unusedBindingWarnings(analysis))
     warnings.push_back(renderDiagnostic(warning, "warning"));
   json::Value libraries = nullptr;
-  if (auto retained = semantics::AnalysisAccess::libraries(analysis))
+  if (auto retained = model::AnalysisAccess::libraries(analysis))
     libraries = tooling::inspectLibraries(
-        *retained, semantics::AnalysisAccess::get(analysis).resolution.get());
+        *retained, model::AnalysisAccess::get(analysis).resolution.get());
   if (!analysis.complete())
     if (auto *report = libraries.getAsObject()) {
       (*report)["query_state"] = "retained_partial_checked_capabilities";
@@ -343,7 +343,7 @@ json::Value inspectAnalysis(const Analysis &analysis) {
                                         {"source", d.source},
                                         {"target", d.target},
                                         {"span", span(d.location)}});
-  const auto &model = semantics::AnalysisAccess::get(analysis);
+  const auto &model = model::AnalysisAccess::get(analysis);
   if (model.resolution)
     for (const auto &d : model.resolution->declarations) {
       std::string display;
@@ -363,7 +363,7 @@ json::Value inspectAnalysis(const Analysis &analysis) {
           {"exported", d.exported},
           {"span", span(d.location)}});
     }
-  auto retained = semantics::AnalysisAccess::libraries(analysis);
+  auto retained = model::AnalysisAccess::libraries(analysis);
   size_t checkedBodies = 0;
   for (const auto &d : analysis.declarations())
     checkedBodies +=

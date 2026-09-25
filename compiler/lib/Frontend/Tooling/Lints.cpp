@@ -1,11 +1,11 @@
 #include "Lints.h"
-#include "Access.h"
+#include "../Model/Access.h"
 #include <map>
 #include <set>
 
 namespace zkc::frontend::tooling {
 std::vector<Diagnostic> unusedBindingWarnings(const Analysis &analysis) {
-  const auto &model = semantics::AnalysisAccess::get(analysis);
+  const auto &model = model::AnalysisAccess::get(analysis);
   std::set<DeclId> checked;
   for (const auto &body : model.bodies)
     if (body.body)

@@ -3,10 +3,6 @@
 
 #include "../Syntax/Tree.h"
 
-namespace zkc::frontend::semantics {
-struct LibraryReport;
-}
-
 namespace zkc::frontend::instantiation {
 struct DomainArgument {
   std::string name;
@@ -23,12 +19,12 @@ struct Selection {
   syntax::Content content;
   std::vector<Specialization> specializations;
   std::map<std::string, uint64_t> constants;
-  std::shared_ptr<const semantics::LibraryReport> libraries = {};
 };
 /// Pure bounded static construction on a copied syntax snapshot. This performs
 /// no dependency loading and does not replace subsequent type/PIR admission.
-llvm::Expected<Selection>
-select(const syntax::Content &, llvm::StringRef text, llvm::StringRef filename,
-       std::shared_ptr<const semantics::LibraryReport> *retained = nullptr);
+/// Reserve entry headers supplied separately by prior library elaboration.
+llvm::Expected<Selection> select(const syntax::Content &, llvm::StringRef text,
+                                 llvm::StringRef filename,
+                                 llvm::ArrayRef<std::string> reservedNames);
 } // namespace zkc::frontend::instantiation
 #endif

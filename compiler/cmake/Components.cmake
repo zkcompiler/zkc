@@ -85,27 +85,12 @@ add_zkc_component(IR
   lib/Translation/R1CS.cpp
   lib/Translation/Table.cpp
 )
-add_zkc_component(CompilerCore
-  lib/Claims/Trace.cpp
-  lib/Claims/Codec.cpp
-  lib/Claims/Check.cpp
-  lib/Claims/IR.cpp
-  lib/Claims/Driver.cpp
-  lib/Compiler/Driver.cpp
-  lib/Compiler/Inspection.cpp
-  lib/Compiler/Pipelines.cpp
-  lib/Compiler/SourceLocations.cpp
-  lib/Conversion/PIRToPlan.cpp
-  lib/Conversion/PlanToPhysical.cpp
+add_zkc_component(Frontend
+  lib/Frontend/Analysis.cpp
   lib/Frontend/Compile.cpp
-  lib/Frontend/Dependencies.cpp
   lib/Frontend/Diagnostic.cpp
   lib/Frontend/Input.cpp
-  lib/Frontend/Project.cpp
-  lib/Frontend/Capture.cpp
-  lib/Frontend/Resolution/Project.cpp
-  lib/Frontend/Resolution/Names.cpp
-  lib/Frontend/Resolution/Environment.cpp
+  lib/Frontend/Instantiation/Construction.cpp
   lib/Frontend/Instantiation/Select.cpp
   lib/Frontend/Library/Body.cpp
   lib/Frontend/Library/Conformance.cpp
@@ -118,16 +103,24 @@ add_zkc_component(CompilerCore
   lib/Frontend/Library/World.cpp
   lib/Frontend/Lowering/Admission.cpp
   lib/Frontend/Lowering/Library.cpp
+  lib/Frontend/Lowering/LibrarySource.cpp
   lib/Frontend/Lowering/PIR.cpp
   lib/Frontend/Model/Module.cpp
+  lib/Frontend/Project.cpp
+  lib/Frontend/Resolution/Environment.cpp
+  lib/Frontend/Resolution/Names.cpp
+  lib/Frontend/Resolution/Project.cpp
   lib/Frontend/Semantics/Aggregates.cpp
+  lib/Frontend/Semantics/Analysis.cpp
   lib/Frontend/Semantics/Body.cpp
-  lib/Frontend/Semantics/Captures.cpp
   lib/Frontend/Semantics/Check.cpp
   lib/Frontend/Semantics/Libraries.cpp
+  lib/Frontend/Semantics/LibraryEntries.cpp
   lib/Frontend/Semantics/Local.cpp
   lib/Frontend/Semantics/Protocols.cpp
+  lib/Frontend/Semantics/Provenance.cpp
   lib/Frontend/Static/Naturals.cpp
+  lib/Frontend/Syntax/Captures.cpp
   lib/Frontend/Syntax/Format.cpp
   lib/Frontend/Syntax/Lexer.cpp
   lib/Frontend/Syntax/Parser.cpp
@@ -138,6 +131,23 @@ add_zkc_component(CompilerCore
   lib/Frontend/Tooling/Lints.cpp
   lib/Frontend/Tooling/Printer.cpp
   lib/Frontend/Tooling/Syntax.cpp
+)
+add_zkc_component(FrontendLoading
+  lib/Frontend/Loading/Capture.cpp
+  lib/Frontend/Loading/Relations.cpp
+)
+add_zkc_component(CompilerCore
+  lib/Claims/Trace.cpp
+  lib/Claims/Codec.cpp
+  lib/Claims/Check.cpp
+  lib/Claims/IR.cpp
+  lib/Claims/Driver.cpp
+  lib/Compiler/Driver.cpp
+  lib/Compiler/Inspection.cpp
+  lib/Compiler/Pipelines.cpp
+  lib/Compiler/SourceLocations.cpp
+  lib/Conversion/PIRToPlan.cpp
+  lib/Conversion/PlanToPhysical.cpp
   lib/Protocol/Algorithms.cpp
   lib/Protocol/BindingPhysical.cpp
   lib/Protocol/Construction.cpp
@@ -172,8 +182,10 @@ target_include_directories(ZkcIR SYSTEM PUBLIC
 target_link_libraries(ZkcIR PUBLIC ZkcProtocol
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFuncDialect)
-# Frontend, passes and application workflows separate in subsequent phases.
-target_link_libraries(ZkcCompilerCore PUBLIC ZkcIR
+target_link_libraries(ZkcFrontend PUBLIC ZkcProtocol)
+target_link_libraries(ZkcFrontendLoading PUBLIC ZkcFrontend)
+# Passes and application workflows separate in the next phase.
+target_link_libraries(ZkcCompilerCore PUBLIC ZkcIR ZkcFrontendLoading
   MLIRParser MLIRPass MLIRTransforms MLIRTransformUtils)
 add_library(ZkcCompiler INTERFACE)
 add_library(Zkc::Compiler ALIAS ZkcCompiler)
@@ -183,7 +195,7 @@ target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore)
 target_include_directories(ZkcCompiler INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcIR ZkcCompilerCore)
+set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcIR ZkcFrontend ZkcFrontendLoading ZkcCompilerCore)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

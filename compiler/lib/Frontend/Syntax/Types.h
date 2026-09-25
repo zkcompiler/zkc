@@ -1,5 +1,5 @@
-#ifndef ZKC_FRONTEND_SEMANTICS_TYPES_H
-#define ZKC_FRONTEND_SEMANTICS_TYPES_H
+#ifndef ZKC_FRONTEND_SYNTAX_TYPES_H
+#define ZKC_FRONTEND_SYNTAX_TYPES_H
 #include "llvm/ADT/StringRef.h"
 namespace zkc::frontend {
 struct TypeSpelling {

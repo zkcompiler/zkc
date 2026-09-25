@@ -159,7 +159,7 @@ operations, capabilities and domain facts are installed in separate tables,
 and none of them holds notation. Until the catalog is grouped by domain, the
 spellings are one table in the frontend,
 [`Operators.h`](../../compiler/lib/Frontend/Semantics/Operators.h), beside the type
-names in [`Types.h`](../../compiler/lib/Frontend/Semantics/Types.h). This is a
+names in [`Types.h`](../../compiler/lib/Frontend/Syntax/Types.h). This is a
 temporary home. Both tables move into the per-domain definitions when that
 grouping is made, which belongs with the language and type-system design
 because capabilities, associated domains and notation are what that design

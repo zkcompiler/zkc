@@ -16,6 +16,10 @@ struct DependencyLimits {
 llvm::Expected<llvm::json::Value>
 readSnapshotJSON(llvm::StringRef,
                  size_t maximumBytes = DependencyLimits::snapshotBytes);
+/// Decode captured relation bytes without filesystem or frontend dependencies.
+/// The caller supplies the declaration name and location after decoding.
+llvm::Expected<source::RelationDeclaration> decodeAsset(llvm::StringRef family,
+                                                        llvm::StringRef bytes);
 /// Canonical content identity, including nominal field and exact ordered
 /// layout.
 std::string identity(const source::RelationDeclaration &);

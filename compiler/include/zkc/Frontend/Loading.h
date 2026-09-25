@@ -1,5 +1,5 @@
-#ifndef ZKC_FRONTEND_DEPENDENCIES_H
-#define ZKC_FRONTEND_DEPENDENCIES_H
+#ifndef ZKC_FRONTEND_LOADING_H
+#define ZKC_FRONTEND_LOADING_H
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Source/Relations.h"
@@ -10,11 +10,6 @@ namespace zkc::frontend {
 /// File IDs enumerate library/source order, with the application first.
 llvm::Expected<ProjectInput>
 captureProject(Input application, llvm::ArrayRef<Input> libraryRoots = {});
-
-/// Pure shared relation decoder. The caller supplies the declaration's name
-/// and location after decoding; this function never reads a file.
-llvm::Expected<source::RelationDeclaration>
-decodeRelationAsset(llvm::StringRef family, llvm::StringRef bytes);
 
 /// Explicit bounded loading boundary. Callback returns owned bytes and must
 /// honor the requested maximum. Parsing/formatting never invoke this API.

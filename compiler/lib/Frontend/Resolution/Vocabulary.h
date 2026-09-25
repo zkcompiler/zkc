@@ -1,6 +1,6 @@
 #ifndef ZKC_FRONTEND_RESOLUTION_VOCABULARY_H
 #define ZKC_FRONTEND_RESOLUTION_VOCABULARY_H
-#include "../Semantics/Types.h"
+#include "../Syntax/Types.h"
 #include "Names.h"
 #include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"

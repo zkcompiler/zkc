@@ -9,9 +9,9 @@
 #include <memory>
 
 namespace zkc::frontend {
-namespace semantics {
+namespace model {
 struct AnalysisAccess;
-} // namespace semantics
+} // namespace model
 enum class AnalysisState {
   SyntaxPartial,
   SemanticError,
@@ -21,7 +21,7 @@ enum class AnalysisState {
 class Analysis {
   std::shared_ptr<const model::Module> model;
   explicit Analysis(std::shared_ptr<const model::Module>);
-  friend struct semantics::AnalysisAccess;
+  friend struct model::AnalysisAccess;
 
 public:
   llvm::StringRef sourceText() const;

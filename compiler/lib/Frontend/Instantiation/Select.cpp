@@ -1,6 +1,5 @@
 #include "Select.h"
 #include "../Resolution/Project.h"
-#include "../Semantics/Libraries.h"
 #include "../Static/Domains.h"
 #include "../Static/Naturals.h"
 #include "../Syntax/Lexer.h"
@@ -675,7 +674,11 @@ class Selector {
 public:
   Selector(const Module &source, StringRef text, StringRef filename)
       : source(source), out(source), text(text), filename(filename) {}
-  Expected<Selection> run() {
+  Expected<Selection> run(ArrayRef<std::string> reservedNames) {
+    for (const auto &name : reservedNames) {
+      names.insert(name);
+      ++nameCounts[name];
+    }
     // Only additions need staging's global collision check. Existing modules
     // without static construction retain their previous admission boundary.
     auto reserve = [&](const auto &section) {
@@ -896,23 +899,10 @@ public:
   }
 };
 } // namespace
-Expected<Selection>
-select(const Content &content, StringRef text, StringRef filename,
-       std::shared_ptr<const semantics::LibraryReport> *retained) {
-  if (const auto *module = std::get_if<Module>(&content)) {
-    std::shared_ptr<const semantics::LibraryReport> libraries;
-    auto integrated =
-        semantics::integrateLibraries(*module, text, filename, &libraries);
-    if (retained)
-      *retained = libraries;
-    if (!integrated)
-      return integrated.takeError();
-    auto selected = Selector(*integrated, text, filename).run();
-    if (!selected)
-      return selected.takeError();
-    selected->libraries = std::move(libraries);
-    return selected;
-  }
+Expected<Selection> select(const Content &content, StringRef text,
+                           StringRef filename, ArrayRef<std::string> reservedNames) {
+  if (const auto *module = std::get_if<Module>(&content))
+    return Selector(*module, text, filename).run(reservedNames);
   return Selection{content, {}, {}};
 }
 } // namespace zkc::frontend::instantiation

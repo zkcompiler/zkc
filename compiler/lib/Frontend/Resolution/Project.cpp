@@ -1,9 +1,8 @@
 #include "Project.h"
-#include "../Semantics/Captures.h"
+#include "../Syntax/Captures.h"
 #include "Declarations.h"
 #include "Names.h"
 #include "Vocabulary.h"
-#include "zkc/Frontend/Dependencies.h"
 #include "zkc/Source/Relations.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
@@ -997,7 +996,7 @@ class Resolver {
             break;
           }
           assetBytes += captured->bytes.size();
-          auto decoded = decodeRelationAsset(asset.family, captured->bytes);
+          auto decoded = relation::decodeAsset(asset.family, captured->bytes);
           if (!decoded) {
             handleAllErrors(decoded.takeError(), [&](const Refusal &e) {
               fail(asset, e.code, e.detail);
@@ -1606,7 +1605,7 @@ public:
       append(out, std::move(m.syntax));
     }
     out.project = context;
-    semantics::inferCaptures(out);
+    syntax::inferCaptures(out);
     auto recovered = recover(out);
     return {std::move(out), context, std::move(diagnostics), syntaxPartial,
             std::move(recovered)};

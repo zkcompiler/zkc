@@ -13,11 +13,11 @@ captured project sources and relation assets
                 │
    exact project names / public interfaces
                 │
-   static constants / protocol selections
-                │
    interfaces / abstract component checking
                 │
      coherent linking / typed layouts
+                │
+   static constants / protocol selections
                 │
    retained source analysis + ordered body plans
                 ├──────── semantic inspection
@@ -72,8 +72,10 @@ immutable snapshot. It remains valid after the `Analysis` is destroyed. The
 `SourceChecked` state describes source formation, not common admission.
 `Analysis::lower()` is a convenience route through that same gate.
 
-`lower()` emits structurally checked common records from resolved signatures and
-ordered body plans. It refuses incomplete/failed analysis. Source formation is
+Successful analysis finalizes common records once from resolved signatures and
+ordered body plans and checks their structure. `lower()` returns an owned copy of
+that finalized content; changing it cannot change subsequent queries. It refuses
+incomplete/failed analysis. Source formation is
 not PIR admission: clients must still call `checkProtocolDocument` or an entry
 point that performs common admission. Text, portable JSON and programmatic common
 records all meet that same downstream boundary.
@@ -91,6 +93,12 @@ report `relation-unresolved`. `analyzeProject` accepts immutable captured files 
 assets. File-based CLI queries and compilation use `captureProject` first, with
 explicit `--library=FILE` roots and bounded relative asset loading. All then use
 the same semantic pipeline; `protocol-resolve` exports the frozen relation snapshot.
+
+Library elaboration returns emitted functions and entry plans separately from its
+immutable inspection report. Static selection consumes the remaining ordinary
+source; it does not run library checking as a hidden side effect. A later phase
+failure retains completed library judgments and diagnostics, while partial
+recovery never exposes a `CheckedModule` or finalized common output.
 
 Recovery is at module declaration boundaries. It can retain usable declarations
 before and after a malformed declaration; it is not a complete IDE, incremental
@@ -115,20 +123,34 @@ common admission still checks the emitted roles, messages, values and resources.
 Imported interfaces and source-only assurance would need their own retained
 checking subject. Common JSON alone cannot reconstruct an erased nominal type.
 
+Closed aggregate library entries retain an authored header and a typed forwarding
+plan. The ordinary source checker forms the header, preserving nominal records,
+zero-length array element types and formation limits. It then checks the plan's
+leaf paths, types, target, order and forwarding shape against that formed header
+and the checked library function. Checked-record constructor authority also
+applies to nested results. This avoids reconstructing aggregate source expressions
+only to flatten them again. Variant ports retain the existing flat boundary.
+
+Inspection reports a generated forwarding call at its alias's source location;
+it does not invent authored constructions or local bindings for that adapter.
+Generated forwarding bodies do not consume the static evaluator's authored
+syntax budget. Library linking/layout and ordinary header limits still apply.
+
 ## Engineering boundaries and assurance
 
 | Component | Responsibility |
 |---|---|
-| `Syntax/` | Tokens, parser tree, spans, formatting and bounded recovery; no retained semantic model |
-| `Model/` | Owned types, domains, declarations, lexical bindings/scopes, resolved calls and ordered body plans; no parser tree or MLIR pointers |
+| `Syntax/` | Tokens, parser tree, spans, formatting, lexical capture discovery and bounded recovery; no retained semantic model |
+| `Model/` | Owned types, domains, declarations, lexical bindings/scopes, resolved calls, ordered body plans, immutable library reports and finalized content; no parser tree or MLIR pointers |
 | `Resolution/` | Exact project names, public exports, captured dependencies and lexical lookup |
 | `Library/` | Checked interface/component formation, conformance and static linking |
 | `Static/` | Pure bounded natural evaluation and domain-term formation rules |
 | `Semantics/` | Source typing, requirements, nominal construction, local SSA/control and participant ownership |
-| `Instantiation/` | Closed selection, substitution, child/helper generation and provenance |
-| `Lowering/` | Common headers and bodies from checked types and resolved declaration references; downstream admission integration |
+| `Instantiation/` | Closed selection, substitution, child/helper generation, provenance and authored construction-selector binding |
+| `Lowering/` | Library emission/entry adapters and common headers/bodies from checked types and resolved declaration references |
 | `Tooling/` | Inspection and presentation of syntax or immutable semantic snapshots; no independent inference engine |
-| `Input.cpp`, `Compile.cpp` | Immutable input and public phase orchestration |
+| `Loading/` | Optional bounded file capture and relation-asset loading; pure analysis never calls this layer |
+| `Input.cpp`, `Analysis.cpp`, `Compile.cpp` | Immutable input, explicit phase orchestration and public compile/lower entry points |
 | Common source / MLIR | Independent admission, transformations, construction and realization |
 
 Abstract families and concrete protocols share one source checker. Its typed
@@ -138,6 +160,12 @@ interface before emission, including nominal record identity. Local algorithms
 reuse the existing bounded inference and SSA-construction algorithms, with leaf
 signatures projected from retained authored types. This is one pipeline; it is
 not a claim that every useful parsing or inference algorithm was rewritten.
+
+`Zkc::Frontend` links the MLIR-free common services. `Zkc::FrontendLoading` adds
+external input capture; neither library depends on IR or CompilerCore. Private
+layer dependencies are checked alongside the component DAG. Mutable builders are
+consumed when publishing a snapshot, so consumers cannot retain a mutable alias
+to the analysis they query.
 
 For the two supported closed module profiles, default domains are resolved while
 forming types, including nested logical types. There is no later string rewrite

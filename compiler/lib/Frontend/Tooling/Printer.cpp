@@ -1,6 +1,6 @@
 #include "../Lowering/Admission.h"
-#include "../Semantics/Types.h"
 #include "../Syntax/Lexer.h"
+#include "../Syntax/Types.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Protocol.h"

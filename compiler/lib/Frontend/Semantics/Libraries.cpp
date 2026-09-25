@@ -1,10 +1,9 @@
 #include "Libraries.h"
 #include "../Library/Callable.h"
 #include "../Library/Diagnostic.h"
-#include "../Lowering/Library.h"
+#include "../Lowering/LibrarySource.h"
 #include "../Resolution/Project.h"
-#include "Captures.h"
-#include "Types.h"
+#include "../Syntax/Captures.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Frontend/Diagnostic.h"
@@ -71,7 +70,7 @@ class Author {
   StringRef text, filename;
   lib::LibraryId identity;
   lib::Environment environment;
-  std::shared_ptr<LibraryReport> report;
+  model::LibraryReport &report;
   Terms capturedAssociations;
   std::map<std::string, std::string> componentBounds;
   std::map<std::string, lib::Interface> interfaces;
@@ -89,8 +88,8 @@ class Author {
 
 public:
   Author(const syntax::Module &s, StringRef t, StringRef f,
-         std::shared_ptr<LibraryReport> report)
-      : source(s), text(t), filename(f), report(std::move(report)) {}
+         model::LibraryReport &report)
+      : source(s), text(t), filename(f), report(report) {}
   Error locate(Error error, const source::Node &n,
                std::vector<DiagnosticCause> context = {}) {
     Error result = Error::success();
@@ -1711,7 +1710,7 @@ public:
     if (!formed)
       return locate(formed.takeError(), s);
     interfaces.emplace(s.name, std::move(*formed));
-    report->interfaces.emplace_back(s.name, interfaces.at(s.name));
+    report.interfaces.emplace_back(s.name, interfaces.at(s.name));
     return Error::success();
   }
   Expected<lib::CheckedComponent>
@@ -1776,7 +1775,7 @@ public:
                          .run();
       if (!checked)
         return checked.takeError();
-      report->componentBodies.emplace_back(s.name + "::" + f.name, *checked);
+      report.componentBodies.emplace_back(s.name + "::" + f.name, *checked);
       if (!result.functions.emplace(f.name, std::move(*checked)).second)
         return fail(f, "library-source-duplicate",
                     "duplicate component function");
@@ -1920,7 +1919,7 @@ public:
     if (!checked)
       return checked.takeError();
     clients.emplace(f.name, std::move(*checked));
-    report->clients.emplace_back(f.name, clients.at(f.name));
+    report.clients.emplace_back(f.name, clients.at(f.name));
     return Error::success();
   }
   Error checkHelpers() {
@@ -1978,219 +1977,12 @@ public:
         return error;
     return Error::success();
   }
-  // A closed alias is still an authored function boundary. Reintroduce its
-  // product/record ports before the ordinary argument binder sees it; only
-  // the wrapper's call to the already checked body uses flattened leaves.
-  Expected<syntax::Function> entryWrapper(const lib::LinkedFunction &linked,
-                                          const source::Function &flat,
-                                          StringRef alias) {
-    syntax::Function result;
-    result.name = alias.str();
-    result.origin = source::LogicalOrigin{
-        source.project ? source.project->origin(id(alias)) : alias.str(), {}};
-    result.body.emplace();
-    auto leafType = [&](StringRef spelling) -> Expected<syntax::Type> {
-      auto [kind, domain] = spelling.split(':');
-      syntax::Type t, argument;
-      argument.name = domain.str();
-      argument.quoted = true;
-      if (kind == "field" || kind == "group") {
-        t = argument;
-        t.members = {"Element"};
-      } else if (kind == "vector" || kind == "groups" || kind == "matrix") {
-        syntax::Type element = argument;
-        element.members = {"Element"};
-        t.name = kind == "matrix" ? "Matrix" : "Vector";
-        t.arguments.push_back(std::move(element));
-      } else if (kind == "resource_unit") {
-        t.name = "ResourceUnit";
-        t.arguments.push_back(std::move(argument));
-      } else {
-        for (const auto &name : typeSpellings)
-          if (name.constructor == kind)
-            t.name = name.surface.str();
-        // Lowering admitted every leaf as a bound type, and every bound
-        // constructor has a source spelling.
-        if (t.name.empty())
-          report_fatal_error("linked leaf type has no source spelling");
-        if (!domain.empty())
-          t.arguments.push_back(std::move(argument));
-      }
-      return t;
-    };
-    std::function<Expected<syntax::Type>(const lib::Type &, const lib::Layout &,
-                                         const source::Names &,
-                                         std::vector<unsigned>)>
-        shape;
-    shape = [&](const lib::Type &type, const lib::Layout &layout,
-                const source::Names &spellings,
-                std::vector<unsigned> path) -> Expected<syntax::Type> {
-      for (size_t i = 0; i < layout.leaves.size(); ++i)
-        if (layout.leaves[i].path == path)
-          return leafType(spellings[i]);
-      syntax::Type t;
-      if (type.kind == lib::Type::Kind::Record) {
-        const auto *resolved =
-            source.project ? source.project->lookup(type.declaration) : nullptr;
-        // Resolution registers every struct of every captured module.
-        if (source.project && !resolved)
-          report_fatal_error(
-              "linked record is absent from the captured project");
-        t.name = resolved ? resolved->symbol : type.declaration.name;
-        return t;
-      }
-      // Zero-length arrays still retain their element type even though no
-      // physical leaf supplies its spelling.
-      if (type.kind == lib::Type::Kind::Logical) {
-        std::string spelling = type.name;
-        if (!type.arguments.empty()) {
-          auto domain =
-              lib::resolvedDomain(type.arguments.front(), environment);
-          if (!domain)
-            return domain.takeError();
-          spelling += ":" + *domain;
-        }
-        return leafType(spelling);
-      }
-      // Linking closes parameters and abstract members, and entries with a
-      // variant port keep their flat boundary.
-      if (type.kind != lib::Type::Kind::Product &&
-          type.kind != lib::Type::Kind::Array)
-        report_fatal_error("linked entry port has no source shape");
-      const bool array = type.kind == lib::Type::Kind::Array;
-      t.product = !array;
-      const size_t count =
-          array ? type.arguments.front().number : type.elements.size();
-      if (array) {
-        auto child = path;
-        child.push_back(0);
-        auto element = shape(type.elements.front(), layout, spellings, child);
-        if (!element)
-          return element.takeError();
-        t.name = "Array";
-        syntax::Type extent;
-        extent.natural = true;
-        extent.name = std::to_string(count);
-        t.arguments = {std::move(*element), std::move(extent)};
-        return t;
-      }
-      for (size_t i = 0; i < count; ++i) {
-        auto child = path;
-        child.push_back(i);
-        auto element =
-            shape(type.elements[array ? 0 : i], layout, spellings, child);
-        if (!element)
-          return element.takeError();
-        t.arguments.push_back(std::move(*element));
-      }
-      return t;
-    };
-    auto projection = [](const lib::Type &type, StringRef root,
-                         const std::vector<unsigned> &path) {
-      std::string name = root.str();
-      const lib::Type *at = &type;
-      for (auto index : path) {
-        name +=
-            "." + (at->kind == lib::Type::Kind::Record ? at->fields.at(index)
-                                                       : std::to_string(index));
-        at = &at->elements.at(at->kind == lib::Type::Kind::Array ? 0 : index);
-      }
-      return name;
-    };
-    syntax::Call call;
-    call.callee = flat.name;
-    call.destructure = true;
-    size_t offset = 0;
-    for (size_t port = 0; port < linked.body.inputs.size(); ++port) {
-      const auto &layout = linked.values.at(linked.body.inputs[port].id.index);
-      source::Names spellings;
-      for (size_t i = 0; i < layout.leaves.size(); ++i)
-        spellings.push_back(flat.arguments.at(offset++).type);
-      auto t = shape(layout.concreteType, layout, spellings, {});
-      if (!t)
-        return t.takeError();
-      const auto name = linked.body.signature.inputLabels.empty()
-                            ? "arg" + std::to_string(port)
-                            : linked.body.signature.inputLabels[port];
-      result.arguments.push_back({name, std::move(*t)});
-      for (const auto &leaf : layout.leaves)
-        call.inputs.push_back(projection(layout.concreteType, name, leaf.path));
-    }
-    std::string prefix = "__link_result_";
-    while (llvm::any_of(result.arguments, [&](const auto &p) {
-      return StringRef(p.name).starts_with(prefix);
-    }))
-      prefix += "_";
-    for (size_t i = 0; i < flat.results.size(); ++i)
-      call.outputs.push_back(prefix + std::to_string(i));
-    syntax::Instruction invoke;
-    invoke.site = "invoke";
-    invoke.value = call;
-    result.body->push_back(std::move(invoke));
-    std::function<syntax::Expression(const lib::Type &, const lib::Layout &,
-                                     size_t, std::vector<unsigned>)>
-        assemble;
-    assemble = [&](const auto &type, const auto &layout, size_t start,
-                   std::vector<unsigned> path) {
-      syntax::Expression e;
-      for (size_t i = 0; i < layout.leaves.size(); ++i)
-        if (layout.leaves[i].path == path) {
-          e.name = call.outputs[start + i];
-          return e;
-        }
-      e.kind = type.kind == lib::Type::Kind::Record
-                   ? syntax::Expression::Kind::Struct
-               : type.kind == lib::Type::Kind::Array
-                   ? syntax::Expression::Kind::Vector
-                   : syntax::Expression::Kind::Product;
-      if (type.kind == lib::Type::Kind::Record) {
-        const auto *resolved =
-            source.project ? source.project->lookup(type.declaration) : nullptr;
-        e.name = resolved ? resolved->symbol : type.declaration.name;
-        e.fields = type.fields;
-      }
-      const bool array = type.kind == lib::Type::Kind::Array;
-      const size_t count =
-          array ? type.arguments.front().number : type.elements.size();
-      for (size_t i = 0; i < count; ++i) {
-        auto child = path;
-        child.push_back(i);
-        e.operands.push_back(
-            assemble(type.elements[array ? 0 : i], layout, start, child));
-      }
-      return e;
-    };
-    offset = 0;
-    syntax::Expression returns;
-    returns.kind = syntax::Expression::Kind::Product;
-    for (const auto &layout : linked.results) {
-      source::Names spellings;
-      for (size_t i = 0; i < layout.leaves.size(); ++i)
-        spellings.push_back(flat.results.at(offset + i));
-      auto t = shape(layout.concreteType, layout, spellings, {});
-      if (!t)
-        return t.takeError();
-      result.results.push_back(std::move(*t));
-      returns.operands.push_back(
-          assemble(layout.concreteType, layout, offset, {}));
-      offset += layout.leaves.size();
-    }
-    if (returns.operands.size() == 1) {
-      auto only = std::move(returns.operands.front());
-      returns = std::move(only);
-    }
-    syntax::Instruction ret;
-    ret.site = "return";
-    ret.value = syntax::Exit{std::move(returns)};
-    result.body->push_back(std::move(ret));
-    return result;
-  }
-  Expected<syntax::Module> run();
+  Expected<lowering::LibrarySource> run();
 };
 
 // This bridge is deliberately after core checking, linking and representation
 // selection. It does not reparse text or specialize an unchecked generic body.
-Expected<syntax::Module> Author::run() {
+Expected<lowering::LibrarySource> Author::run() {
   if (!source.project && source.libraryIdentities.size() != 1)
     return fail(
         source, "library-source-identity",
@@ -2275,7 +2067,7 @@ Expected<syntax::Module> Author::run() {
     declareStatic(q, lib::Sort::association());
     environment.statics.back().capturedSubject = s.captured;
     capturedAssociations.emplace(s.name, lib::StaticTerm::root(q));
-    report->associations.push_back({s.name, "opaque", s.captured});
+    report.associations.push_back({s.name, "opaque", s.captured});
   }
   for (const auto &r : source.relations) {
     if (!std::visit([](const auto &value) { return bool(value); }, r.value))
@@ -2288,7 +2080,7 @@ Expected<syntax::Module> Author::run() {
     declareStatic(q, lib::Sort::association());
     environment.statics.back().capturedSubject = canonical;
     capturedAssociations.emplace(r.name, lib::StaticTerm::root(q));
-    report->associations.push_back(
+    report.associations.push_back(
         {r.name, r.value.index() == 0 ? "r1cs" : "air", std::move(canonical)});
   }
   // Validate every enum declaration, including unused and phantom parameters,
@@ -2403,7 +2195,7 @@ Expected<syntax::Module> Author::run() {
   // route.
   for (const auto &f : source.functions) {
     bool client =
-        (f.body && hasLexicalTraversals(*f.body)) ||
+        (f.body && syntax::hasLexicalTraversals(*f.body)) ||
         llvm::any_of(f.parameters,
                      [&](const auto &p) {
                        return llvm::any_of(p.bounds, [&](const auto &b) {
@@ -2453,7 +2245,7 @@ Expected<syntax::Module> Author::run() {
                  "component must implement this exact interface"),
            cause(DiagnosticCause::Kind::SelectedComponent, q,
                  "component declaration under conformance checking")});
-    report->components.emplace_back(s.name, *checked);
+    report.components.emplace_back(s.name, *checked);
     templates.emplace(
         s.name, ComponentTemplate{std::move(selection), std::move(*checked)});
   }
@@ -2495,7 +2287,6 @@ Expected<syntax::Module> Author::run() {
   out.librarySelections.clear();
   llvm::erase_if(out.functions,
                  [&](const auto &f) { return callables.count(f.name); });
-  std::set<std::string> emitted;
   std::vector<lib::LinkedProgram> programs;
   std::map<std::string, source::Names> entryAliases;
   auto requestedLinks = source.libraryLinks;
@@ -2613,131 +2404,15 @@ Expected<syntax::Module> Author::run() {
     auto linked = lib::link(std::move(request));
     if (!linked)
       return locate(linked.takeError(), link, std::move(context));
-    report->links.emplace_back(link.name, *linked);
+    report.links.emplace_back(link.name, *linked);
     entryAliases[linked->entry()].push_back(link.name);
     programs.push_back(std::move(*linked));
   }
-  if (programs.empty())
-    return out;
-  // All requested links share one layout world and resource-slot allocator.
-  auto concrete = lib::lower(programs, [&](const auto &id) {
-    if (source.project)
-      return source.project->origin(id);
-    auto result = llvm::join(id.module, ".");
-    return result.empty() ? id.name : result + "." + id.name;
-  });
-  if (!concrete)
-    return concrete.takeError();
-  if (concrete->library || !concrete->definitions.empty() ||
-      !concrete->configurations.empty() || !concrete->relations.empty() ||
-      !concrete->relationViews.empty() || !concrete->protocols.empty() ||
-      !concrete->instances.empty() || !concrete->entries.empty())
-    report_fatal_error("library lowering produced a module section other than "
-                       "functions and bindings");
-  for (const auto &binding : concrete->bindings) {
-    auto existing = llvm::find_if(
-        out.bindings, [&](const auto &b) { return b.name == binding.name; });
-    if (existing != out.bindings.end()) {
-      if (existing->application.contract != binding.application.contract ||
-          existing->application.arguments != binding.application.arguments ||
-          existing->application.implementation !=
-              binding.application.implementation)
-        return fail(source, "library-source-collision",
-                    "lowered binding collides with a different binding");
-    } else
-      out.bindings.push_back(binding);
-  }
-  std::set<std::string> wrappedEntries;
-  for (const auto &program : programs) {
-    const auto &entry = *llvm::find_if(program.functions(), [&](const auto &f) {
-      return f.symbol == program.entry();
-    });
-    auto aggregate = [](const lib::Layout &layout) {
-      return layout.leaves.size() != 1 || !layout.leaves.front().path.empty();
-    };
-    bool needsWrapper = llvm::any_of(entry.results, aggregate);
-    for (const auto &input : entry.body.inputs)
-      needsWrapper |= aggregate(entry.values.at(input.id.index));
-    if (!needsWrapper || wrappedEntries.count(program.entry()))
-      continue;
-    const auto &flat = *llvm::find_if(concrete->functions, [&](const auto &f) {
-      return f.name == program.entry();
-    });
-    // The ordinary checker has no source spelling for closed variant
-    // descriptors. Preserve its existing flat boundary; project integration
-    // must register the retained logical layouts to bind aggregate variants.
-    // A variant inside an empty array has no flat leaf, so the concrete
-    // types the wrapper would spell decide as well; the logical signature
-    // would miss a variant hidden behind a component's abstract member.
-    std::function<bool(const lib::Type &)> variant = [&](const lib::Type &t) {
-      return t.kind == lib::Type::Kind::Variant ||
-             llvm::any_of(t.elements, variant);
-    };
-    bool variantPort =
-        llvm::any_of(flat.arguments,
-                     [](const auto &p) {
-                       return StringRef(p.type).starts_with("variant:");
-                     }) ||
-        llvm::any_of(flat.results, [](const auto &t) {
-          return StringRef(t).starts_with("variant:");
-        });
-    for (const auto &input : entry.body.inputs)
-      variantPort |= variant(entry.values.at(input.id.index).concreteType);
-    for (const auto &result : entry.results)
-      variantPort |= variant(result.concreteType);
-    if (variantPort)
-      continue;
-    wrappedEntries.insert(program.entry());
-    for (const auto &alias : entryAliases.at(program.entry())) {
-      auto wrapper = entryWrapper(entry, flat, alias);
-      if (!wrapper)
-        return wrapper.takeError();
-      out.functions.push_back(std::move(*wrapper));
-    }
-  }
-  std::map<std::string, std::string> rename;
-  for (const auto &[symbol, aliases] : entryAliases)
-    if (!wrappedEntries.count(symbol))
-      rename.emplace(symbol, aliases.front());
-  std::set<std::string> foundEntries;
-  for (const auto &original : concrete->functions) {
-    source::Names aliases{original.name};
-    if (auto entry = entryAliases.find(original.name);
-        entry != entryAliases.end()) {
-      if (!wrappedEntries.count(entry->first))
-        aliases = entry->second;
-      foundEntries.insert(entry->first);
-    }
-    for (const auto &alias : aliases) {
-      auto f = original;
-      f.name = alias;
-      const bool publicEntry = entryAliases.count(original.name) &&
-                               !wrappedEntries.count(original.name);
-      // Internal link symbols are cache locators, not authored occurrence
-      // names. Keep the checked member's logical definition; distinct call
-      // sites retain instance identity in the expansion path. Public aliases
-      // name entry roots.
-      if (f.origin && publicEntry)
-        f.origin->definition =
-            source.project ? source.project->origin(id(f.name)) : f.name;
-      if (!emitted.insert(f.name).second ||
-          (!publicEntry && names.count(f.name)))
-        return fail(source, "library-source-collision",
-                    "lowered function name collides with another declaration");
-      if (f.body)
-        source::walk(*f.body, [&](source::Instruction &instruction) {
-          if (auto *call = instruction.get<source::AlgorithmCall>()) {
-            auto target = rename.find(call->callee);
-            if (target != rename.end())
-              call->callee = target->second;
-          }
-        });
-      report->lowered.functions.push_back(std::move(f));
-    }
-  }
-  if (foundEntries.size() != entryAliases.size())
-    report_fatal_error("library lowering dropped a linked entry");
-  return out;
+  auto emitted = lowering::emitLibrarySource(std::move(out), environment,
+                                             programs, entryAliases, names);
+  if (!emitted)
+    return locate(emitted.takeError(), source);
+  return std::move(*emitted);
 }
 } // namespace
 bool hasLibraries(const syntax::Module &m) {
@@ -2745,20 +2420,17 @@ bool hasLibraries(const syntax::Module &m) {
          !m.libraryInterfaces.empty() || !m.libraryComponents.empty() ||
          !m.libraryLinks.empty() || !m.librarySelections.empty() ||
          !m.enums.empty() || llvm::any_of(m.functions, [](const auto &f) {
-           return f.body && hasLexicalTraversals(*f.body);
+           return f.body && syntax::hasLexicalTraversals(*f.body);
          });
 }
-Expected<syntax::Module>
-integrateLibraries(const syntax::Module &m, StringRef text, StringRef filename,
-                   std::shared_ptr<const LibraryReport> *output) {
+LibraryElaboration elaborateLibraries(const syntax::Module &m, StringRef text,
+                                      StringRef filename) {
   if (!hasLibraries(m))
-    return m;
-  auto report = std::make_shared<LibraryReport>();
-  auto result = Author(m, text, filename, report).run();
-  if (output)
-    *output = report;
+    return {lowering::LibrarySource{m, {}}, {}};
+  auto report = std::make_unique<model::LibraryReport>();
+  auto result = Author(m, text, filename, *report).run();
   if (result)
-    return result;
+    return {std::move(result), std::move(report)};
   Error error = Error::success();
   handleAllErrors(
       result.takeError(),
@@ -2779,6 +2451,6 @@ integrateLibraries(const syntax::Module &m, StringRef text, StringRef filename,
         error = diagnostic(text, filename, m.location ? m.location->offset : 0,
                            e.code, e.detail);
       });
-  return std::move(error);
+  return {std::move(error), std::move(report)};
 }
 } // namespace zkc::frontend::semantics

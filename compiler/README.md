@@ -235,8 +235,8 @@ explains the proved contract and native checks.
 
 ## Components
 
-The build separates four MLIR-free foundations, a coordinated IR library, and
-the upper compiler.
+The build separates four MLIR-free foundations, pure frontend analysis and
+optional input loading, a coordinated IR library, and the upper compiler.
 Arrows here mean “depends on”:
 
 ```text
@@ -244,6 +244,7 @@ Zkc::Compiler (interface aggregate)
   → Zkc::CompilerCore
       → Zkc::IR → Zkc::Protocol → Zkc::Relation → Zkc::Contracts → Zkc::Support → LLVM
           → MLIR IR and interfaces
+      → Zkc::FrontendLoading → Zkc::Frontend → Zkc::Protocol
       → MLIR parser and passes
 ```
 
@@ -254,7 +255,9 @@ Zkc::Compiler (interface aggregate)
 | `Zkc::Relation` | R1CS/AIR data, identities, sparse matrices and AIR polynomial evaluation in `Relation` |
 | `Zkc::Protocol` | Common `Source` records/codecs/snapshots, generated relation views, admission, generic preparation, source analyses and physical selection requests |
 | `Zkc::IR` | Dialects, operation interfaces, binding adapters, translation and mandatory root verification in `Dialect`, `Interfaces` and `Translation` |
-| `Zkc::CompilerCore` | Frontend, construction, projection, transformations, compiler services and drivers |
+| `Zkc::Frontend` | Captured-input resolution, checked authoring, static selection, retained analysis and common lowering in `Frontend` |
+| `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
+| `Zkc::CompilerCore` | Construction, projection, transformations, compiler services and drivers |
 
 The foundations have no MLIR, frontend or driver dependency. A contract
 application contains the contract, static arguments and optional implementation;
@@ -274,6 +277,14 @@ part of checking a whole protocol, including exact generated relation bodies.
 Public export remains checked. A valid local operation or root does not establish
 source/candidate correspondence or readiness for every lowering.
 
+Frontend has no MLIR, driver or filesystem dependency. It analyzes immutable
+captured inputs and publishes an immutable checked snapshot; common admission
+remains a separate judgment. `Frontend/Loading.h` provides the optional loading
+API. Pure relation-asset decoding belongs to `Source/Relations.h` in Protocol.
+The [frontend architecture](../docs/compiler/frontend.md) describes phase results,
+generated entry checking and recovery. The component dependency check enforces
+both library edges and private frontend layer dependencies.
+
 IR registration lives under `Dialect/<Name>/IR`; interfaces live under
 `Interfaces`. Shared type and operation declarations remain coordinated because
 cross-dialect parent traits need shared forward declarations. `Dialect/IR.h` is
@@ -284,7 +295,6 @@ exposes import/export and relation adapters; transformation APIs are separate.
 CompilerCore is the remaining upper grouping, to be separated in subsequent
 restructuring phases. Its main homes are:
 
-- `Frontend`: syntax, retained language semantics, queries and common lowering.
 - `Protocol`: construction, projection, algorithm expansion and physical planning.
   Projection/planning APIs are declared in [Transforms/Protocol.h](include/zkc/Transforms/Protocol.h).
 - `Relation` and `Claims`: IR consumers, correspondence and caller-owned judgments.
@@ -330,7 +340,9 @@ including generated headers under `include/zkc/`, and all component targets abov
 Build-tree consumers can use the same `Zkc::` aliases. `Zkc::Compiler` links the
 upper compiler and its dependencies without recompiling sources; a source-only
 client links `Zkc::Protocol`; a direct IR client links `Zkc::IR` without the
-frontend or passes. Static and shared builds use the same target graph.
+frontend or passes. A captured-source client links `Zkc::Frontend`, adding
+`Zkc::FrontendLoading` only to load external files. Static and shared builds use
+the same target graph.
 The package currently discovers the matching LLVM/MLIR installation even for a
 foundation-only consumer; that consumer does not link MLIR or CompilerCore.
 The independent [consumer](../tests/consumer/CMakeLists.txt) checks that API;

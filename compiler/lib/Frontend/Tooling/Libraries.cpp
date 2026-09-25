@@ -1,6 +1,6 @@
 #include "Libraries.h"
+#include "../Model/Libraries.h"
 #include "../Resolution/Project.h"
-#include "../Semantics/Libraries.h"
 
 using namespace llvm;
 namespace zkc::frontend::tooling {
@@ -280,7 +280,7 @@ json::Value layoutLeafView(const lib::LayoutLeaf &leaf) {
                       {"path", std::move(path)}};
 }
 } // namespace
-json::Value inspectLibraries(const semantics::LibraryReport &report,
+json::Value inspectLibraries(const model::LibraryReport &report,
                              const resolution::Context *context) {
   auto readable = [&](StringRef name) {
     if (context)

@@ -1,6 +1,7 @@
-#include "../Support/Input.h"
-#include "Syntax/Tree.h"
-#include "zkc/Frontend/Dependencies.h"
+#include "../../Support/Input.h"
+#include "../Syntax/Tree.h"
+#include "Paths.h"
+#include "zkc/Frontend/Loading.h"
 #include "zkc/Support/Json.h"
 #include <algorithm>
 #include <filesystem>
@@ -12,22 +13,6 @@ namespace zkc::frontend {
 namespace {
 namespace fs = std::filesystem;
 
-bool contained(const fs::path &base, const fs::path &path) {
-  return std::mismatch(base.begin(), base.end(), path.begin(), path.end())
-             .first == base.end();
-}
-bool relativeAsset(StringRef name) {
-  if (name.empty() || name.size() > 4096 || name.contains('\\') ||
-      name.contains('\0'))
-    return false;
-  fs::path path(name.str());
-  if (path.is_absolute())
-    return false;
-  for (const auto &part : path)
-    if (part == "..")
-      return false;
-  return true;
-}
 bool moduleName(StringRef name) {
   return !name.empty() && name.size() <= 128 && name != "." && name != ".." &&
          !name.contains('/') && !name.contains('\\') && !name.contains('\0');
@@ -49,7 +34,7 @@ struct Capture {
     if (ec)
       return zkc::error(asset ? "relation-asset-missing"
                               : "project-source-missing");
-    if (!base.empty() && !contained(base, resolved))
+    if (!base.empty() && !loading::contained(base, resolved))
       return zkc::error(asset ? "relation-asset-path" : "project-source-path");
     if (!fs::is_regular_file(resolved, ec) || ec)
       return zkc::error(asset ? "relation-asset-missing"
@@ -115,7 +100,7 @@ struct Capture {
         return zkc::error("relation-duplicate-alias");
       if (import.family != "r1cs" && import.family != "air")
         return zkc::error("relation-import-family");
-      if (!relativeAsset(import.path))
+      if (!loading::relativeAsset(import.path))
         return zkc::error("relation-asset-path");
     }
     std::set<std::string> children;

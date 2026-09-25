@@ -112,7 +112,7 @@ registration and build/test commands.
 4. If the operation or a new logical type has authoring notation, add its
    operator spelling to
    [`Operators.h`](../../compiler/lib/Frontend/Semantics/Operators.h) and its type name to
-   [`Types.h`](../../compiler/lib/Frontend/Semantics/Types.h). Notation belongs to the
+   [`Types.h`](../../compiler/lib/Frontend/Syntax/Types.h). Notation belongs to the
    domain's definition; these frontend tables are its temporary home until the
    catalog is grouped by domain. A spelling is compared with the installed
    signature where it is used, and

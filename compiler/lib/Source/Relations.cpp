@@ -7,6 +7,31 @@
 
 using namespace llvm;
 namespace zkc::relation {
+Expected<source::RelationDeclaration> decodeAsset(StringRef family,
+                                                  StringRef bytes) {
+  source::RelationDeclaration declaration;
+  if (family == "air") {
+    auto air = relation::readAIRText(bytes);
+    if (!air)
+      return air.takeError();
+    declaration.value = std::make_shared<const relation::AIR>(std::move(*air));
+  } else if (family == "r1cs") {
+    auto r1cs = [&]() -> Expected<relation::R1CS> {
+      if (bytes.starts_with("r1cs"))
+        return relation::readR1CS(bytes);
+      auto json = relation::readSnapshotJSON(bytes, relation::Limits::bytes);
+      if (!json)
+        return json.takeError();
+      return relation::decodeR1CS(*json);
+    }();
+    if (!r1cs)
+      return r1cs.takeError();
+    declaration.value =
+        std::make_shared<const relation::R1CS>(std::move(*r1cs));
+  } else
+    return zkc::error("relation-import-family");
+  return declaration;
+}
 namespace {
 Error declarations(const source::Module &m) {
   if (m.relations.size() > DependencyLimits::count ||

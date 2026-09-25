@@ -1,8 +1,9 @@
-#include "zkc/Frontend/Dependencies.h"
-#include "../Support/Input.h"
-#include "Syntax/Lexer.h"
-#include "Syntax/Tree.h"
+#include "../../Support/Input.h"
+#include "../Syntax/Lexer.h"
+#include "../Syntax/Tree.h"
+#include "Paths.h"
 #include "zkc/Frontend/Compile.h"
+#include "zkc/Frontend/Loading.h"
 #include "zkc/Support/Json.h"
 #include <filesystem>
 #include <map>
@@ -10,45 +11,6 @@
 
 using namespace llvm;
 namespace zkc::frontend {
-namespace {
-bool relativeAsset(StringRef name) {
-  if (name.empty() || name.size() > 4096 || name.contains('\\') ||
-      name.contains('\0'))
-    return false;
-  std::filesystem::path path(name.str());
-  if (path.is_absolute())
-    return false;
-  for (const auto &part : path)
-    if (part == "..")
-      return false;
-  return true;
-}
-} // namespace
-Expected<source::RelationDeclaration> decodeRelationAsset(StringRef family,
-                                                          StringRef bytes) {
-  source::RelationDeclaration declaration;
-  if (family == "air") {
-    auto air = relation::readAIRText(bytes);
-    if (!air)
-      return air.takeError();
-    declaration.value = std::make_shared<const relation::AIR>(std::move(*air));
-  } else if (family == "r1cs") {
-    auto r1cs = [&]() -> Expected<relation::R1CS> {
-      if (bytes.starts_with("r1cs"))
-        return relation::readR1CS(bytes);
-      auto json = relation::readSnapshotJSON(bytes, relation::Limits::bytes);
-      if (!json)
-        return json.takeError();
-      return relation::decodeR1CS(*json);
-    }();
-    if (!r1cs)
-      return r1cs.takeError();
-    declaration.value =
-        std::make_shared<const relation::R1CS>(std::move(*r1cs));
-  } else
-    return zkc::error("relation-import-family");
-  return declaration;
-}
 Expected<source::Document> loadProtocolDocument(StringRef text,
                                                 StringRef filename,
                                                 AssetResolver resolver) {
@@ -74,7 +36,7 @@ Expected<source::Document> loadProtocolDocument(StringRef text,
       return zkc::error("relation-duplicate-alias");
     if (import.family != "r1cs" && import.family != "air")
       return zkc::error("relation-import-family");
-    if (!relativeAsset(import.path))
+    if (!loading::relativeAsset(import.path))
       return zkc::error("relation-asset-path");
   }
   size_t total = 0;
@@ -119,14 +81,12 @@ Expected<source::Document> loadProtocolFile(const Input &source) {
   return loadProtocolDocument(
       text, filename,
       [&](StringRef name, size_t maximum) -> Expected<std::string> {
-        if (!relativeAsset(name))
+        if (!loading::relativeAsset(name))
           return zkc::error("relation-asset-path");
         auto path = fs::canonical(base / name.str(), error);
         if (error || !fs::is_regular_file(path, error) || error)
           return zkc::error("relation-asset-missing");
-        auto [left, right] =
-            std::mismatch(base.begin(), base.end(), path.begin(), path.end());
-        if (left != base.end())
+        if (!loading::contained(base, path))
           return zkc::error("relation-asset-path");
         auto found = captured.find(path);
         if (found == captured.end()) {

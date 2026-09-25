@@ -6,7 +6,7 @@ target_link_libraries(consumer PRIVATE Zkc::Compiler)
 
 enable_testing()
 add_test(NAME compiler-consumer COMMAND consumer)
-foreach(component Support Contracts Relation Protocol IR)
+foreach(component Support Contracts Relation Protocol IR Frontend FrontendLoading)
   string(TOLOWER ${component} name)
   add_executable(${name}-consumer ${name}.cpp)
   target_link_libraries(${name}-consumer PRIVATE Zkc::${component})

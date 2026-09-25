@@ -6,14 +6,12 @@
 #include "zkc/Frontend/Module.h"
 #include <map>
 
-namespace zkc::frontend::semantics {
-struct LibraryReport;
-}
 namespace zkc::frontend::resolution {
 struct Context;
 }
 
 namespace zkc::frontend::model {
+struct LibraryReport;
 /// A checked definition body; call targets are scoped references, not strings
 /// or positional entries in a parallel table.
 struct DefinitionBody {
@@ -47,14 +45,15 @@ struct Module {
   /// typed declarations/plans, never recovered from these records.
   source::Module metadata;
   std::optional<source::Construction> construction;
+  /// Derived, structurally checked emission prepared once before publication.
+  /// This is not common admission or a construction/security judgment.
+  std::optional<source::Content> finalized;
   std::map<std::pair<ScopeId, std::string>, DeclId> names;
   std::map<std::string, DomainId> domainKeys;
   std::map<std::string, TypeId> typeKeys;
-  std::shared_ptr<const semantics::LibraryReport> libraries = {};
+  std::shared_ptr<const model::LibraryReport> libraries = {};
 
   Module();
-  /// Retain query provenance after semantic checking, without changing keys.
-  void retainQueryMetadata();
   ScopeId addScope(ScopeId parent, DeclId owner);
   DeclId add(Declaration::Kind, ScopeId, llvm::StringRef,
              std::optional<source::Span> = {});
