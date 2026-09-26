@@ -1,8 +1,6 @@
 #ifndef ZKC_CLAIMS_CLAIMS_H
 #define ZKC_CLAIMS_CLAIMS_H
 
-#include "mlir/IR/BuiltinOps.h"
-#include "zkc/Protocol/PhysicalOptions.h"
 #include "zkc/Source/Model.h"
 #include "llvm/Support/JSON.h"
 
@@ -54,26 +52,5 @@ llvm::Expected<llvm::json::Value> inspect(const source::Module &,
 llvm::Expected<Certificate> derive(const source::Module &, const Contract &);
 llvm::Error check(const source::Module &, const Contract &,
                   const Certificate &);
-/// Registered, inspectable analysis IR, separate from executable PIR. Context
-/// must outlive result. No API here erases or transforms executable checks.
-llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>> import(const source::Module &,
-                                                         const Contract &,
-                                                         const Certificate &,
-                                                         mlir::MLIRContext &);
-llvm::Error checkIR(const source::Module &, const Contract &, mlir::ModuleOp);
-/// Same original source is mandatory at both independent checking boundaries.
-llvm::Error checkConstruction(const source::Module &, const Contract &,
-                              const Certificate &, const source::Construction &,
-                              const llvm::json::Value &, mlir::MLIRContext &);
-/// Re-run existing construction, projection and physical lowering, then compare
-/// the actual exported candidate. The bounded API supports the existing
-/// physical transformations and explicit implementation selections. A selection
-/// snapshot refers to the checked constructed protocol.
-llvm::Error checkLowering(const source::Module &, const Contract &,
-                          const Certificate &, const source::Construction &,
-                          const llvm::json::Value &construction,
-                          const llvm::json::Value &physical,
-                          mlir::MLIRContext &,
-                          const protocol::PhysicalOptions &options = {});
 } // namespace zkc::claims
 #endif

@@ -1,4 +1,5 @@
 #include "LinkInternal.h"
+#include "Work.h"
 #include <algorithm>
 
 namespace zkc::frontend::library {
@@ -88,7 +89,11 @@ llvm::Error expandTraversals(Body &body, World &world, const LinkScope &scope) {
       for (auto &p : ps)
         p = replacePlace(p, aliases);
     };
-    for (auto instruction : r.instructions) {
+    for (const auto &original : r.instructions) {
+      if (auto error =
+              work::charge(world.budget, WorkAccount::LibraryFormation))
+        return error;
+      auto instruction = original;
       if (exhaustedIds)
         return fail("library-limit", "expanded ValueId space exhausted");
       if (++steps > world.environment.expansionLimit)
@@ -118,6 +123,9 @@ llvm::Error expandTraversals(Body &body, World &world, const LinkScope &scope) {
         auto carried = a->initial;
         std::vector<Place> collected;
         for (uint64_t index = 0; index < count.number && !stops; ++index) {
+          if (auto error =
+                  work::charge(world.budget, WorkAccount::LibraryFormation))
+            return error;
           Aliases args;
           Place element = input;
           element.path.push_back(index);
@@ -146,6 +154,9 @@ llvm::Error expandTraversals(Body &body, World &world, const LinkScope &scope) {
         if (stops)
           break;
         for (size_t i = 0; i < a->outputs.size(); ++i) {
+          if (auto error =
+                  work::charge(world.budget, WorkAccount::LibraryFormation))
+            return error;
           auto output = value(a->outputs[i]);
           result.instructions.push_back(Project{carried[i], output});
           if (++steps > world.environment.expansionLimit)
@@ -153,6 +164,9 @@ llvm::Error expandTraversals(Body &body, World &world, const LinkScope &scope) {
                         "expanded state transfer exceeds limit");
         }
         if (a->collected) {
+          if (auto error =
+                  work::charge(world.budget, WorkAccount::LibraryFormation))
+            return error;
           result.instructions.push_back(
               Construct{value(*a->collected), std::move(collected)});
           if (++steps > world.environment.expansionLimit)
@@ -607,16 +621,23 @@ llvm::Error refineResourcePaths(LinkedFunction &f,
 struct ResourceAdapters {
   LinkedFunction &function;
   const Environment &environment;
+  WorkBudget &budget;
   uint64_t next = 0, work = 0;
 
-  ResourceAdapters(LinkedFunction &f, const Environment &e)
-      : function(f), environment(e) {
+  ResourceAdapters(LinkedFunction &f, const Environment &e, WorkBudget &budget)
+      : function(f), environment(e), budget(budget) {
     for (const auto &v : f.values)
       next = std::max(next, uint64_t(v.first) + 1);
   }
   llvm::Expected<Value> fresh(const Layout &layout, const std::string &role) {
     if (next >= uint64_t(UINT32_MAX) || ++work > environment.expansionLimit)
       return fail("library-limit", "resource adapters exceed expansion limit");
+    if (auto error =
+            frontend::work::charge(budget, WorkAccount::LibraryFormation))
+      return error;
+    if (auto error = frontend::work::charge(
+            budget, WorkAccount::LibraryFormation, layout.leaves.size()))
+      return error;
     Value value{{uint32_t(next++)}, {layout.concreteType, role}};
     function.values.emplace(value.id.index, layout);
     return value;
@@ -627,6 +648,14 @@ struct ResourceAdapters {
                               unsigned depth = 0) {
     if (depth > 128)
       return fail("library-limit", "resource adapter recursion exceeds limit");
+    if (auto error =
+            frontend::work::charge(budget, WorkAccount::LibraryFormation))
+      return error;
+    for (auto count : {function.values.at(input.value.index).leaves.size(),
+                       expected.leaves.size()})
+      if (auto error = frontend::work::charge(
+              budget, WorkAccount::LibraryFormation, count))
+        return error;
     auto actual = selectedLeaves(function, input);
     if (compatibleLeaves(actual, expected.leaves, environment) &&
         std::equal(
@@ -832,11 +861,17 @@ llvm::Expected<std::string> World::helper(const SourceCall &call,
   if (!helperFunctions.count(symbol)) {
     if (helperSymbols.size() > environment.expansionLimit)
       return fail("library-limit", "helper specialization count exceeds limit");
+    auto before = budget.used(WorkAccount::LibraryFormation);
     auto linked = function(body->second, scope, symbol);
     if (!linked)
       return linked.takeError();
     linked->exactSubject = subject.bytes;
     helperFunctions.emplace(symbol, std::move(*linked));
+    helperCosts.emplace(symbol,
+                        budget.used(WorkAccount::LibraryFormation) - before);
+  } else if (auto error = work::charge(budget, WorkAccount::LibraryFormation,
+                                       helperCosts.at(symbol))) {
+    return error;
   }
   DependencyRecord record;
   record.selection = record.normalizedSelection = selection.bytes;
@@ -866,6 +901,8 @@ llvm::Expected<LinkedFunction> World::function(const CheckedBody &checked,
                                                std::string symbol,
                                                const Signature *publicSignature,
                                                const LinkScope *publicScope) {
+  if (auto error = chargeBody(budget, checked.body()))
+    return error;
   LinkedFunction out;
   out.symbol = std::move(symbol);
   out.body = checked.body();
@@ -1078,8 +1115,16 @@ const std::string &LinkedProgram::fingerprint() const {
   return data->fingerprint;
 }
 llvm::Expected<LinkedProgram> link(LinkRequest request) {
+  WorkBudget budget;
+  return link(std::move(request), budget);
+}
+llvm::Expected<LinkedProgram> link(LinkRequest request, WorkBudget &budget) {
   using namespace detail;
-  World world;
+  for (auto count :
+       {size_t(1), request.bindings.size(), request.helpers.size()})
+    if (auto error = work::charge(budget, WorkAccount::LibraryFormation, count))
+      return error;
+  World world(budget);
   if (request.selectionEnvironment)
     if (auto err = world.merge(*request.selectionEnvironment))
       return err;
@@ -1215,7 +1260,7 @@ llvm::Expected<LinkedProgram> link(LinkRequest request) {
   for (auto &f : data->functions)
     functions.emplace(f.symbol, &f);
   for (auto &f : data->functions) {
-    ResourceAdapters adapters(f, world.environment);
+    ResourceAdapters adapters(f, world.environment, budget);
     std::map<std::vector<size_t>, LinkedCall> calls;
     std::function<llvm::Error(Region &, const std::vector<Layout> &,
                               std::vector<size_t>, std::vector<size_t>)>

@@ -289,11 +289,19 @@ Use `arith` only where its integer/floating semantics match the selected domain;
 field computation does not become machine arithmetic by sharing a bit width.
 
 Public C++ interfaces live under `compiler/include/zkc/`, with implementation
-under `compiler/lib/`. `Frontend`, `Source` and `Protocol` own source and
-interaction; `Dialect` and `Interfaces` own IR; `Compiler`, `Analysis`,
-`Transforms` and `Target` own compiler mechanisms; `Relation` and `Claims` own
-their respective consumers. Conversion implementations live in `lib/Conversion/`.
-Tools and tests sit alongside these libraries.
+under `compiler/lib/`. `Support` and `Contracts` own MLIR-free common services
+and installed contract facts. `Frontend`, `Source` and `Protocol` own source and
+interaction; source `Analysis` belongs to the MLIR-free Protocol component.
+`Dialect` and `Interfaces` own IR; `Compiler`, `Transforms` and `Target` own
+compiler mechanisms; `Relation` and `Claims` own
+their respective consumers. The optional `ClaimTranslation` component bridges
+Claims and IR for claim import and independent candidate checking. IR retains
+the claim dialect's structure and mandatory protocol verification without a
+Claims dependency. CompilerCore links ClaimTranslation for its claim workflows.
+Conversion implementations live in `lib/Conversion/`.
+The [component map](../../compiler/README.md#components) records enforced build
+ownership, which need not be one library per directory. Tools and tests sit
+alongside these libraries.
 Common interaction, participant control and domain definitions live in separate
 `Protocol.td`, `Participant.td` and `Kernels.td` files. `IR.td` retains the distinct
 finite evidence carrier; it is not the definition of the current common route.

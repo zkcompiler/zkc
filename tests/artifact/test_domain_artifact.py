@@ -79,7 +79,7 @@ def main(policy):
     assert response[0] == "ok" and len(bytes.fromhex(response[1])) == 64
     observed = invoke("accepted")
     assert observed[1] == ["accepted", [["bool", "5a4b4356010501"]]]
-    assert observed[3] == [pair[0] for pair in replies[1]], "unexpected/legacy primitive request"
+    assert observed[3] == [pair[0] for pair in replies[1]], "primitive request sequence differs from supplied replies"
     challenges = [event for event in observed[2] if event[0] == "challenge"]
     modulus = 2**252 + 27742317777372353535851937790883648493
     scalar = int.from_bytes(bytes.fromhex(response[1]), "little") % modulus

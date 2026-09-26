@@ -10,15 +10,13 @@ class Analysis;
 }
 namespace zkc {
 /// One checked inspection path for textual and programmatic source clients.
+/// Pass the retained analysis for a multi-file project. Without it, the
+/// optional elaborated-call report re-analyzes only the document's root
+/// spelling.
 llvm::Expected<llvm::json::Value>
 inspectSource(const source::Document &, const frontend::Analysis * = nullptr);
 llvm::Error sourceDiagnostic(const source::Document &, llvm::Error,
                              const source::Node *record = nullptr);
-/// Exact portable-source snapshot used by persisted compiler selectors. This
-/// is neither a transcript identity nor an authentication claim.
-llvm::Expected<std::string> sourceSnapshot(const source::Content &);
-/// Programmatic callers must pass structural validation before hashing.
-llvm::Expected<std::string> sourceSnapshot(const source::Module &);
 } // namespace zkc
 
 #endif

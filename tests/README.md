@@ -60,7 +60,7 @@ source revision rather than repeating it after unrelated edits.
 | `formal/Tests/` | Lake, through `just build-lean` | Compiled examples, proof obligations, guards and executable assertions |
 | `formal/checks/` and `formal/consumers/` | `just test-lean` | Package audits, CLI controls and independently built consumers |
 | Ordered artifact drivers | `just test-artifact` | Generated fixtures followed by host/reference/differential/baseline comparisons |
-| Installed CMake SDK | `just test-install` | Independent consumer configuration, linking and execution |
+| Installed CMake SDK | `just test-install` | Component consumers and the standalone TableGen service; use `just test-install "" shared` to check shared linkage |
 | Separate benchmark Cargo workspaces | `just test-bench` | Correctness tests; measurement commands remain `just bench` |
 | Optional external integrations | `just test-groth16 W`, `just test-lean-integration`, `nix build .#llzk` | Explicit fixture/dependency/toolchain requirements |
 | Sanitizers and source reconstruction | `just test-sanitize`, `just test-lean-fresh` | Separate validation modes, not substitutes for ordinary tests |
@@ -102,7 +102,7 @@ A test sits under the thing it constrains, not under the mechanism it uses.
 | `harness/` | Tool and report selection, command forwarding, suite discovery, subprocess failures and grouped-case reporting |
 | `support/` | The vocabulary these tests share with each other and with the compiler's own tests: tool resolution, what a test does to a tool and keeps of it, the Lean reference driver, source and explicit-binding construction, the canonical matrix wire encoder, and the cases and candidates two implementations are compared on |
 | [`fixtures/`](fixtures/README.md) | Shared inputs and expected results; the fixture guide maps their consumers and update rules |
-| `consumer/` | A small CMake project that builds against the installed compiler package, so the exported package is checked and not only produced |
+| `consumer/` | CMake clients of the installed aggregate and each component, including pure claims, transformation factories, owned compilation, command embedding and an external TableGen service dialect |
 | `groth16/` | The Circom and snarkjs fixture generator, its pinned pipeline and the preserved known-answer vectors |
 
 A test names the tool it needs and states what it requires of it through

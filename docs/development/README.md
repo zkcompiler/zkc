@@ -90,7 +90,7 @@ any difference between the cached and selected paths.
 ## Build profiles and editor tools
 
 The checked-in [CMake presets](../../compiler/CMakePresets.json) define independent
-`release`, `dev` and `sanitize` build directories. `release` remains the default.
+`release`, `dev`, `sanitize` and `shared` build directories. `release` remains the default.
 
 ```sh
 just test-compiler dev
@@ -111,6 +111,13 @@ that boundary requires an instrumented LLVM/MLIR build. LeakSanitizer also needs
 an execution environment that permits its thread inspection; a ptrace-restricted
 supervisor cannot validate it. The complete ordinary compiler suite still runs
 in the release profile.
+
+The `shared` profile builds the same component graph as shared libraries. On
+Linux, ordinary component links reject undefined symbols; sanitizer builds leave
+their runtime hooks for the final executable. For changes to library ownership,
+linkage or installed headers, run `just test-install` and
+`just test-install "" shared`; this checks each installed component and the
+standalone service extension in both linkage modes without running the full suite.
 
 The profile argument selects the CMake preset; the preset owns its output
 path. For integration tests using a development compiler, first build it and
@@ -143,7 +150,7 @@ The check also invokes help and version reporting from the installed compiler
 tools by absolute path, so development binaries on `PATH` cannot mask a broken install.
 Installed compiler tools retain runtime search paths to their selected LLVM/MLIR
 libraries. Keep that dependency installation available; the SDK does not bundle
-LLVM. Its own shared library, when enabled, is found relative to the tool prefix.
+LLVM. Its shared component libraries are found relative to the tool prefix.
 
 The shell supplies clangd, clang-format and rust-analyzer. Point clangd at
 `build/compiler/compile_commands.json`, or at the selected development build's

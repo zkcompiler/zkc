@@ -207,11 +207,11 @@ source[3][0][7][2][4] = ['other_coins']
 descriptor_path.write_text(json.dumps(descriptor))
 run('protocol-construct', source, descriptor_path, refuses='construction-challenge-field')
 
-# An untyped legacy profile must never acquire Ristretto by descriptor alone.
-legacy = json.loads((examples / 'two-factor.json').read_text())
+# A BLS12-381 RNG port cannot become Ristretto by changing only the suite.
+bls_source = json.loads((examples / 'two-factor.json').read_text())
 desc = json.loads((examples / 'two-factor.construction.json').read_text())
 desc[7] = 'merlin3.ristretto255.scalar64le/1'
 descriptor_path.write_text(json.dumps(desc))
-run('protocol-construct', legacy, descriptor_path, refuses='construction-rng-port')
+run('protocol-construct', bls_source, descriptor_path, refuses='construction-rng-port')
 
 print(f'construction locals: {commands.save()} current-compiler checks; both suites, per-op origins, reached shared pair, hostile manifests')

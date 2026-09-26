@@ -96,6 +96,50 @@ compile-time input error. The initial native implementation needs explicit
 returned/stopped control and a path-sensitive flow verifier. Straight-line
 single-use checking in the experiment does not establish that CFG invariant.
 
+## Checked physical decisions
+
+Physical lowering separates three steps inside the existing Target and
+Conversion owners:
+
+1. Target proposes binding implementations, physical ports and direct conversions
+   without modifying the logical module. Original explicit choices remain fixed.
+2. An independent validator checks the proposal against the unchanged input,
+   installed Contracts, actual SSA uses and the selected candidate policy. Only
+   it can construct the private `CheckedPhysicalPlan` result.
+3. Conversion materializes those checked choices on an owned clone, verifies the
+   resulting IR, then publishes it. It does not search for another implementation.
+
+The proposal records original operation indices rather than borrowing operations
+as decisions. Its input snapshot checks module identity, live object identities
+and complete generic IR text, including locations. Validation and materialization
+both reject a stale input; the checked result owns its choices, so later edits to
+an unchecked proposal cannot change them. This is a same-invocation check, not a
+persisted certificate, a mutation-history journal or protection against concurrent
+IR mutation. Fixedness is reconstructed from the source and the invocation
+options retained in the private immutable snapshot.
+
+Each mismatched operand receives its own conversion immediately before its
+consumer, in operand order. Conversion declarations may be shared; dynamic
+instructions and results are not shared or hoisted. Function and control ports
+use installed default representations. Selected kernel results retain their own
+physical representation until a use requires a crossing. The Lean local checker
+independently consumes these ordered crossings, including control captures and
+loop-carried inputs.
+
+`target::CandidateCatalog` supplies deterministic preferences for installed
+implementations and direct adapters. It cannot install new contracts or establish
+conversion laws. The current direct table adapter is `table.relayout`; this is
+not general conversion-path search. Optional diagonal groups require all actual
+uses to be compatible local contractions. Declaration accounting reserves space
+for required relayouts and can drop optional groups before refusing the dense
+plan.
+
+This validator establishes implementation and placement admissibility. It does
+not prove equal runtime allocation, exhaustion or failure behavior between
+realizations. Successful algebraic laws, finite correspondence tests, and installed
+backend contracts remain distinct evidence; none alone establishes native or
+cryptographic security refinement.
+
 ## 3. Protocol walkthroughs
 
 ### Sumcheck

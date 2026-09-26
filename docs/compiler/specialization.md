@@ -72,7 +72,7 @@ PCS parameters solely from its containing namespace.
 
 ## Requirement fragment
 
-The native engine in `Compiler/Requirements` handles equality, associated-member
+The native engine in `Contracts/Requirements` handles equality, associated-member
 congruence, named relations with ordered arguments, and explicitly installed
 unary capability implications. It emits shared topological derivations. The
 Lean checker validates actual conclusions, premise indices and declaration

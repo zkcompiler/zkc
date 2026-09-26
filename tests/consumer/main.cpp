@@ -1,13 +1,13 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Pass/PassRegistry.h"
+#include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Frontend/Library.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Target/Source.h"
-#include "zkc/Transforms/Passes.h"
+#include "zkc/Translation/Table.h"
 
 int main() {
   mlir::DialectRegistry registry;

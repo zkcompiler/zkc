@@ -107,12 +107,12 @@ registration and build/test commands.
    structure; the binding/verifier layer checks resolved contracts. A same-named
    operation or same-width representation does not establish compatibility.
 3. Install nominal facts, codecs and applicable representations in the immutable
-   [domain catalog](../../compiler/include/zkc/Protocol/Domains.h). Catalog
+   [domain catalog](../../compiler/include/zkc/Contracts/Domains.h). Catalog
    membership is separate from a kernel implementation and its semantics.
 4. If the operation or a new logical type has authoring notation, add its
    operator spelling to
    [`Operators.h`](../../compiler/lib/Frontend/Semantics/Operators.h) and its type name to
-   [`Types.h`](../../compiler/lib/Frontend/Semantics/Types.h). Notation belongs to the
+   [`Types.h`](../../compiler/lib/Frontend/Syntax/Types.h). Notation belongs to the
    domain's definition; these frontend tables are its temporary home until the
    catalog is grouped by domain. A spelling is compared with the installed
    signature where it is used, and

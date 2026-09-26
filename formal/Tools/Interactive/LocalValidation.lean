@@ -50,6 +50,15 @@ private def crossOperands (candidate : Explicit.CandidateLocals) (env : Environm
     rest := tail
   return (result, rest)
 
+/-- Control ports use the default representation. Consume crossings in operand
+order and retain source names for checking the region against converted values.
+This environment is local to the use; later uses require their own crossings. -/
+private def crossControlOperands (candidate : Explicit.CandidateLocals) (env : Environment)
+    (inputs : List Name) (body : List Instruction) : Result (Environment × List Instruction) := do
+  let types ← inputs.mapM fun input => do return boundaryType candidate.physical (← lookup input env).2
+  let (values, rest) ← crossOperands candidate env inputs types body
+  return (inputs.zip (values.zip types), rest)
+
 structure LocalCorrespondence where
   configuration : Name
   function : Name
@@ -93,13 +102,14 @@ private def compareBody (bindings : List OperationBinding) (candidate : Explicit
             env := env ++ [(output, (actualOutput, target))]
             rest := tail
         | .localMatch site input captures arms outputs =>
-            let .localMatch actualSite actualInput actualCaptures actualArms actualOutputs :: tail := rest
+            let (operands, tail) ← crossControlOperands candidate env (input :: captures) rest
+            let .localMatch actualSite actualInput actualCaptures actualArms actualOutputs :: tail := tail
               | throw "local-control-correspondence"
-            let scrutinee ← lookup input env
+            let scrutinee ← lookup input operands
+            let captured := operands.drop 1
             ensure (site == actualSite && actualInput == scrutinee.1 &&
-              actualCaptures == (← captures.mapM fun n => do return (← lookup n env).1) &&
+              actualCaptures == captured.map (fun (_, value, _) => value) &&
               arms.map Prod.fst == actualArms.map Prod.fst) "local-control-correspondence"
-            let captured ← captures.mapM fun n => do return (n, ← lookup n env)
             let mut resultTypes : Option (List Ty) := none
             for (label, payload, nested) in arms do
               let leaves ← Bindings.variantPayload {scrutinee.2 with representation := ""}.spelling label
@@ -120,11 +130,12 @@ private def compareBody (bindings : List OperationBinding) (candidate : Explicit
             ensure (rest == [.stop site owner reason]) "local-stop-correspondence"
             rest := []
         | .conditional site condition captures yes no outputs =>
-            let .conditional actualSite actualCondition actualCaptures actualYes actualNo actualOutputs :: tail := rest
+            let (operands, tail) ← crossControlOperands candidate env (condition :: captures) rest
+            let .conditional actualSite actualCondition actualCaptures actualYes actualNo actualOutputs :: tail := tail
               | throw "local-control-correspondence"
-            ensure (site == actualSite && actualCondition == (← lookup condition env).1 &&
-              actualCaptures == (← captures.mapM fun n => do return (← lookup n env).1)) "local-control-correspondence"
-            let captured ← captures.mapM fun n => do return (n, ← lookup n env)
+            let captured := operands.drop 1
+            ensure (site == actualSite && actualCondition == (← lookup condition operands).1 &&
+              actualCaptures == captured.map (fun (_, value, _) => value)) "local-control-correspondence"
             let sourceContext := captured.map fun (n, _, ty) => Port.mk n "" {ty with representation := ""}.spelling
             let yesTypes ← admitLocalFlow (environmentSignature (.explicit bindings) "logical") false [] limits.depth true sourceContext none yes
             let noTypes ← admitLocalFlow (environmentSignature (.explicit bindings) "logical") false [] limits.depth true sourceContext yesTypes no
@@ -135,14 +146,17 @@ private def compareBody (bindings : List OperationBinding) (candidate : Explicit
             env := env ++ outputs.zip (actualOutputs.zip types)
             rest := tail
         | .forLoop site induction lower upper carried captures nested outputs =>
-            let .forLoop actualSite actualInduction actualLower actualUpper actualCarried actualCaptures actualBody actualOutputs :: tail := rest
+            let (operands, tail) ← crossControlOperands candidate env
+              ([lower, upper] ++ carried.map Prod.snd ++ captures) rest
+            let .forLoop actualSite actualInduction actualLower actualUpper actualCarried actualCaptures actualBody actualOutputs :: tail := tail
               | throw "local-control-correspondence"
-            ensure (site == actualSite && actualLower == (← lookup lower env).1 && actualUpper == (← lookup upper env).1 &&
-              actualCarried.map Prod.snd == (← (carried.map Prod.snd).mapM fun n => do return (← lookup n env).1) &&
-              actualCaptures == (← captures.mapM fun n => do return (← lookup n env).1)) "local-control-correspondence"
-            let types ← (carried.map Prod.snd).mapM fun n => do return (← lookup n env).2
-            let captured ← captures.mapM fun n => do return (n, ← lookup n env)
-            let inner := [(induction, (actualInduction, (← lookup lower env).2))] ++
+            let initial := (operands.drop 2).take carried.length
+            let captured := operands.drop (2 + carried.length)
+            ensure (site == actualSite && actualLower == (← lookup lower operands).1 && actualUpper == (← lookup upper operands).1 &&
+              actualCarried.map Prod.snd == initial.map (fun (_, value, _) => value) &&
+              actualCaptures == captured.map (fun (_, value, _) => value)) "local-control-correspondence"
+            let types := initial.map (fun (_, _, ty) => ty)
+            let inner := [(induction, (actualInduction, (← lookup lower operands).2))] ++
               (carried.map Prod.fst).zip ((actualCarried.map Prod.fst).zip types) ++ captured
             ensure (carried.length == actualCarried.length) "local-result-correspondence"
             compareBody bindings candidate depth true inner types nested actualBody

@@ -139,7 +139,7 @@ references are `[name, revision]`. Claim is `[relation, observation, scope]`.
 
 The source and direct plan share this first control grammar, while typed
 constructors and evaluators remain separate. This is an experimental logical
-format, not the legacy artifact ABI or the future native-plan layout. There is
+format, distinct from the compiled-artifact ABI and native physical plans. There is
 no hash identity or canonical-byte theorem; checking compares decoded data.
 
 ## 5. Implemented example and assurance

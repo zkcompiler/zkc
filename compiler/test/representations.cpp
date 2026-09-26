@@ -1,4 +1,4 @@
-#include "zkc/Protocol/Representations.h"
+#include "zkc/Contracts/Representations.h"
 #include <cstdlib>
 #include <iostream>
 #include <limits>

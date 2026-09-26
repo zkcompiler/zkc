@@ -27,7 +27,6 @@ __pycache__/
 .agents/
 .claude/
 .codex/
-/AGENTS.md
-/CLAUDE.md
+/AGENTS.local.md
 /CLAUDE.local.md
 /docs/private/

@@ -23,12 +23,11 @@ findLinearContractions(func::FuncOp function, LinearContractionStats &stats) {
     if (!producer)
       continue;
     ++stats.producers;
-    auto production = producer.getDiagonalProducerSelection();
+    auto production = producer.getDiagonalProducerRoles();
     if (!production || production->result >= op.getNumResults() ||
         production->factorsOperand >= op.getNumOperands() ||
         production->valuesOperand >= op.getNumOperands() ||
-        production->factorsOperand == production->valuesOperand ||
-        production->representation.empty())
+        production->factorsOperand == production->valuesOperand)
       continue;
     Value result = op.getResult(production->result);
     if (result.use_empty() ||
@@ -47,12 +46,11 @@ findLinearContractions(func::FuncOp function, LinearContractionStats &stats) {
         compatible = false;
         break;
       }
-      auto contraction = consumer.getDiagonalContractionSelection();
+      auto contraction = consumer.getDiagonalContractionRoles();
       if (!contraction ||
           use.getOperandNumber() != contraction->valuesOperand ||
           contraction->coefficientsOperand >= user->getNumOperands() ||
           contraction->coefficientsOperand == contraction->valuesOperand ||
-          production->representation != contraction->representation ||
           op.getOperand(production->factorsOperand).getType() !=
               user->getOperand(contraction->coefficientsOperand).getType()) {
         compatible = false;

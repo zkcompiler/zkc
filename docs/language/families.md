@@ -117,7 +117,13 @@ Numeric attribute substitution covers the existing natural slots of
 `random.vector`, `curve.at`, `matrix.shape_check` and `vector.matvec`. Other
 attributes retain their spelling and all slots still pass their operation owner's
 checks. Natural expression/dependency depth is bounded at 64, each intermediate
-at `2^32-1`, specialization count at 1024, generation depth at 64 and construction
-work at 262144 visits per constant-evaluation or instantiation phase. Generated declaration names are bounded at 64 KiB.
+at `2^32-1`, specialization count at 1024 and generation depth at 64. The default
+authored/static compiler budget is 262144 cumulative logical units per analysis
+invocation, shared by constant evaluation, static selection and syntax copies
+across captured modules and specializations. This policy retains the numeric
+default but can reject inputs accepted by the earlier independent phase counters.
+Library formation, generated source and output have separate accounts; see
+[compiler work budgets](../compiler/frontend-budgets.md) for charges, configurable
+limits and exclusions. Generated declaration names are bounded at 64 KiB.
 Static evaluation cannot access host files, backend state, randomness or witness
 values. The dependency loader supplies relation assets explicitly.

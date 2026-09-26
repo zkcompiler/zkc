@@ -86,7 +86,8 @@ def test_formal_and_python_reports_share_one_root(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("profile,relative", [("release", "build/compiler"),
                                                ("dev", "build/compiler-dev"),
-                                               ("sanitize", "build/compiler-sanitize")])
+                                               ("sanitize", "build/compiler-sanitize"),
+                                               ("shared", "build/compiler-shared")])
 def test_profile_directory_agrees_with_cmake_presets(profile, relative):
     assert workspace.compiler_directory(profile) == ROOT / relative
 

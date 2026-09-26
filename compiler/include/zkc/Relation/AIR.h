@@ -99,6 +99,8 @@ public:
   llvm::ArrayRef<AIRConstraint> constraints() const { return constraints_; }
   llvm::ArrayRef<AIRConstraintAnalysis> facts() const { return facts_; }
   llvm::json::Value encode() const;
+  /// SHA256 of the exact canonical relation descriptor.
+  std::string identity() const;
   llvm::json::Value analysis() const;
   llvm::Expected<AIRPlan> compile(uint32_t height) const;
   /// Dense admission checks every field value, including unused coordinates.

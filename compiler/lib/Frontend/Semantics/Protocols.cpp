@@ -1,6 +1,6 @@
 #include "Protocols.h"
 #include "../Static/Domains.h"
-#include "zkc/Protocol/Bindings.h"
+#include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include <functional>
 #include <set>

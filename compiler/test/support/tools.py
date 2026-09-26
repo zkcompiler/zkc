@@ -51,6 +51,7 @@ TOOLS = {
     "service_compiler": ("zkc-service-compile", "ZKC_CTEST_SERVICE_COMPILER", "examples/service"),
     "service_optimizer": ("zkc-service-opt", "ZKC_CTEST_SERVICE_OPTIMIZER", "examples/service"),
     "requirements_test": ("zkc-requirements-test", "ZKC_CTEST_REQUIREMENTS_TEST", "test"),
+    "construction_test": ("zkc-construction-test", "ZKC_CTEST_CONSTRUCTION_TEST", "test"),
 }
 
 

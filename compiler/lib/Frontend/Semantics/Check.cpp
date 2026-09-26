@@ -1,16 +1,18 @@
 #include "Check.h"
+#include "../Model/Libraries.h"
 #include "../Resolution/Project.h"
 #include "../Static/Domains.h"
 #include "../Syntax/Lexer.h"
 #include "../Syntax/Tree.h"
-#include "Libraries.h"
+#include "../Syntax/Types.h"
+#include "LibraryEntries.h"
 #include "Local.h"
 #include "Operators.h"
 #include "Protocols.h"
-#include "Types.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Relation/Authoring.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Source/Codec.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
@@ -87,14 +89,14 @@ void elaborateProfile(source::Module &module, StringRef profile) {
       binding.name = op->callee;
       while (!names.insert(binding.name).second)
         binding.name += "_";
-      binding.contract = op->callee;
-      StringRef key = binding.contract;
+      binding.application.contract = op->callee;
+      StringRef key = binding.application.contract;
       if (key.starts_with("pcs."))
-        binding.arguments = {"multilinear.kzg.bls12-381/1"};
+        binding.application.arguments = {"multilinear.kzg.bls12-381/1"};
       else if (key.starts_with("curve.") && key != "curve.response")
-        binding.arguments = {"bls12-381.g1"};
+        binding.application.arguments = {"bls12-381.g1"};
       else if (key.starts_with("transcript.")) {
-        binding.arguments = {"merlin3.bls12-381.fr64be/1"};
+        binding.application.arguments = {"merlin3.bls12-381.fr64be/1"};
         if (key.starts_with("transcript.observe.")) {
           std::string payload = key.drop_front(19).str();
           auto identity = profileIdentity(profile, payload);
@@ -103,22 +105,23 @@ void elaborateProfile(source::Module &module, StringRef profile) {
           auto parsed = protocol::parseBoundType(payload, false);
           if (parsed) {
             if (!parsed->identity.empty())
-              binding.arguments.push_back(parsed->identity);
-            binding.arguments.push_back(protocol::defaultCodec(*parsed).str());
+              binding.application.arguments.push_back(parsed->identity);
+            binding.application.arguments.push_back(
+                protocol::defaultCodec(*parsed).str());
           } else {
             consumeError(parsed.takeError());
           }
         }
       } else if (key != "bool.and" && key != "control.require" &&
                  !key.starts_with("index.") && !key.starts_with("indices."))
-        binding.arguments = {"bls12-381.fr"};
+        binding.application.arguments = {"bls12-381.fr"};
       // Select the actual profile backend; never infer the PCS scheme from its
       // old module name or silently substitute a different representation.
-      binding.implementation =
+      binding.application.implementation =
           (key.starts_with("index.") || key.starts_with("indices.")
                ? "native/"
                : "arkworks/") +
-          binding.contract;
+          binding.application.contract;
       operations.emplace(op->callee, binding.name);
       op->callee = binding.name;
       module.bindings.push_back(std::move(binding));
@@ -161,7 +164,10 @@ class Checker {
   const Module *original;
   StringRef text, filename;
   source::Module module;
-  source::Module generatedRelations;
+  source::Module generated;
+  const LibraryEmission &linked;
+  std::vector<const syntax::Function *> functions;
+  std::map<std::string, const LibraryEntry *> entries;
 
   std::string code, message;
   std::optional<source::Span> failure;
@@ -178,10 +184,9 @@ class Checker {
   // A convenience profile belongs to its authored root. Imported and child
   // definitions keep explicit domains and implementations regardless of caller.
   bool usesProfile(const source::Node &node) const {
-    return syntax.profile &&
-           (!syntax.project ||
-            (node.location && !syntax.project->owners.empty() &&
-             node.location->file == syntax.project->owners.front().root));
+    const auto &project = *model.resolution;
+    return syntax.profile && node.location && !project.owners.empty() &&
+           node.location->file == project.owners.front().root;
   }
 
   void predeclare() {
@@ -195,8 +200,8 @@ class Checker {
     };
     for (const auto &d : syntax.structs)
       add(d, Declaration::Kind::Record);
-    for (const auto &d : syntax.functions)
-      add(d, Declaration::Kind::Function);
+    for (const auto *d : functions)
+      add(*d, Declaration::Kind::Function);
     for (const auto &d : syntax.protocols)
       add(d, Declaration::Kind::Protocol);
     for (const auto &d : syntax.bundles)
@@ -253,14 +258,17 @@ class Checker {
       for (const auto &constructor : d.constructors)
         model.declarations[owner.index].constructors.push_back(id(constructor));
     }
-    for (const auto &d : syntax.functions) {
+    for (const auto *header : functions) {
+      const auto &d = *header;
       auto owner = id(d.name);
       parameters(owner, d.parameters);
       model.declarations[owner.index].generic = d.generic;
-      model.declarations[owner.index].hasBody = bool(d.body);
+      model.declarations[owner.index].hasBody =
+          bool(d.body) || entries.count(d.name);
       model.declarations[owner.index].bodyState =
-          d.body ? Declaration::BodyState::Deferred
-                 : Declaration::BodyState::External;
+          model.declarations[owner.index].hasBody
+              ? Declaration::BodyState::Deferred
+              : Declaration::BodyState::External;
     }
     if (original)
       for (const auto &p : original->protocols) {
@@ -280,8 +288,9 @@ class Checker {
       auto owner = id(d.name);
       model.declarations[owner.index].hasBody = bool(d.body);
       model.declarations[owner.index].bodyState =
-          d.body ? Declaration::BodyState::Deferred
-                 : Declaration::BodyState::External;
+          model.declarations[owner.index].hasBody
+              ? Declaration::BodyState::Deferred
+              : Declaration::BodyState::External;
       model.declarations[owner.index].roles = d.roles;
       model.declarations[owner.index].naturalParameters = d.parameters;
       ScopeId scope = model.declarations[owner.index].members;
@@ -692,7 +701,7 @@ class Checker {
       function(f, std::move(f.body), {});
     for (auto &f : module.functions)
       function(f, std::move(f.body), f.origin);
-    for (auto &f : generatedRelations.functions) {
+    for (auto &f : generated.functions) {
       // Retain source call queries for generated checked-library functions too.
       // Their bodies bypass authoring syntax, but not declaration resolution.
       if (f.body)
@@ -1137,14 +1146,18 @@ class Checker {
     if (inserted)
       return true;
     size_t offset = previous->second ? previous->second->offset : 0;
-    auto prefix = text.take_front(offset);
+    const auto *file =
+        previous->second ? model.resolution->input.file(previous->second->file)
+                         : nullptr;
+    auto prefix = (file ? file->text() : text).take_front(offset);
     size_t line = prefix.count('\n') + 1;
     size_t last = prefix.rfind('\n');
     size_t column = last == StringRef::npos ? offset + 1 : offset - last;
     return fail(node, "source-duplicate-symbol",
                 "duplicate declaration '" + name +
-                    "'; previous declaration at " + filename + ":" +
-                    Twine(line) + ":" + Twine(column));
+                    "'; previous declaration at " +
+                    (file ? file->filename() : filename) + ":" + Twine(line) +
+                    ":" + Twine(column));
   }
   Sorts sorts(const std::vector<source::StaticParameter> &parameters) {
     Sorts result;
@@ -1445,11 +1458,11 @@ class Checker {
   void checkCheckedStructs() {
     for (const auto &declaration : syntax.structs)
       for (const auto &name : declaration.constructors) {
-        auto function =
-            llvm::find_if(syntax.functions, [&](const auto &candidate) {
-              return candidate.name == name;
-            });
-        bool returns = function != syntax.functions.end() && function->body &&
+        auto function = llvm::find_if(functions, [&](const auto *candidate) {
+          return candidate->name == name;
+        });
+        bool returns = function != functions.end() &&
+                       model.declarations[id(name).index].hasBody &&
                        llvm::any_of(getSignature(name).outputShapes,
                                     [&](const auto &shape) {
                                       return shape && shape->declaration ==
@@ -1463,12 +1476,12 @@ class Checker {
           return;
         }
       }
-    for (const auto &function : syntax.functions)
-      if (!function.body)
-        for (const auto &shape : getSignature(function.name).outputShapes)
+    for (const auto *function : functions)
+      if (!model.declarations[id(function->name).index].hasBody)
+        for (const auto &shape : getSignature(function->name).outputShapes)
           if (shape && containsChecked(*shape)) {
-            fail(function, "source-checked-external",
-                 "'" + function.name + "' has no body, so its " + shape->name +
+            fail(*function, "source-checked-external",
+                 "'" + function->name + "' has no body, so its " + shape->name +
                      " result would not come from a constructor");
             return;
           }
@@ -1536,24 +1549,23 @@ class Checker {
            "use the explicit dependency loader or protocol-resolve");
       return;
     }
-    generatedRelations.relations = module.relations;
-    generatedRelations.relationViews = module.relationViews;
-    if (auto e = relation::materializeViews(generatedRelations)) {
+    generated.relations = module.relations;
+    generated.relationViews = module.relationViews;
+    if (auto e = relation::materializeViews(generated)) {
       fail(syntax, "relation-admission", toString(std::move(e)));
       return;
     }
     // Linked bodies have already passed the abstract library checker. Preserve
-    // exact carrier types and nested code; common MLIR independently admits it.
-    if (model.libraries)
-      generatedRelations.functions.insert(
-          generatedRelations.functions.end(),
-          model.libraries->lowered.functions.begin(),
-          model.libraries->lowered.functions.end());
+    // exact carrier types and nested code; common admission independently
+    // checks it.
+    generated.functions.insert(generated.functions.end(),
+                               linked.module.functions.begin(),
+                               linked.module.functions.end());
     for (const auto &r : module.relations)
       declare(r.name, r);
     for (const auto &v : module.relationViews)
       declare(v.name, v);
-    for (const auto &f : generatedRelations.functions) {
+    for (const auto &f : generated.functions) {
       declare(f.name, f);
       model.declarations[id(f.name).index].kind = Declaration::Kind::Function;
       algorithms.insert(f.name);
@@ -1577,9 +1589,8 @@ class Checker {
         sig.inputs.push_back(p.type);
       signatures.emplace(id(f.name), std::move(sig));
     }
-    module.bindings.insert(module.bindings.end(),
-                           generatedRelations.bindings.begin(),
-                           generatedRelations.bindings.end());
+    module.bindings.insert(module.bindings.end(), generated.bindings.begin(),
+                           generated.bindings.end());
     module.configurations = syntax.configurations;
     for (auto &configuration : module.configurations)
       for (auto &argument : configuration.arguments)
@@ -1601,7 +1612,8 @@ class Checker {
       declareStructs();
     if (!good())
       return;
-    for (const auto &f : syntax.functions) {
+    for (const auto *header : functions) {
+      const auto &f = *header;
       activeScope = model.declarations[id(f.name).index].members;
       declare(f.name, f);
       algorithms.insert(f.name);
@@ -2130,7 +2142,7 @@ class Checker {
              "unknown bound operation or helper '" + call.callee + "'");
         return {};
       }
-      auto resolved = protocol::resolveBinding(*it, false);
+      auto resolved = protocol::resolveBinding(it->application, false);
       if (!resolved) {
         fail(call, "source-call-binding", toString(resolved.takeError()));
         return {};
@@ -2307,9 +2319,9 @@ class Checker {
       std::string implementation;
       if (usesProfile(call)) {
         source::OperationBinding requested;
-        requested.contract = call.callee;
-        requested.arguments = statics;
-        auto selected = protocol::defaultImplementation(requested);
+        requested.application.contract = call.callee;
+        requested.application.arguments = statics;
+        auto selected = protocol::defaultImplementation(requested.application);
         if (!selected) {
           fail(call, "source-profile", toString(selected.takeError()));
           return {};
@@ -2317,8 +2329,9 @@ class Checker {
         implementation = *selected;
       }
       auto binding = llvm::find_if(module.bindings, [&](const auto &b) {
-        return b.contract == call.callee && b.arguments == statics &&
-               b.implementation == implementation;
+        return b.application.contract == call.callee &&
+               b.application.arguments == statics &&
+               b.application.implementation == implementation;
       });
       if (binding == module.bindings.end()) {
         target = usesProfile(call)
@@ -2331,9 +2344,9 @@ class Checker {
         source::OperationBinding generated;
         generated.location = call.location;
         generated.name = target;
-        generated.contract = call.callee;
-        generated.arguments = statics;
-        generated.implementation = implementation;
+        generated.application.contract = call.callee;
+        generated.application.arguments = statics;
+        generated.application.implementation = implementation;
         module.bindings.push_back(std::move(generated));
       } else
         target = binding->name;
@@ -2633,6 +2646,94 @@ class Checker {
     return elaborateLocal(input, std::move(values),
                           structParameters[owner.str()], callbacks, symbols);
   }
+  bool constructionAllowed(const StructInfo &info,
+                           const source::Node &expression, StringRef owner) {
+    const auto &declared = info.shape;
+    // A checked struct is built only where its checks are written. Everywhere
+    // else its values can be passed, returned and read, but not made.
+    if (info.declaration->checked &&
+        !llvm::is_contained(info.declaration->constructors, owner.str())) {
+      fail(expression, "source-checked-construction",
+           "'" + declared.name + "' is constructed only in " +
+               llvm::join(info.declaration->constructors, ", ") +
+               "; call a constructor to obtain a value");
+      return false;
+    }
+    return true;
+  }
+  void checkEntry(const LibraryEntry &entry, source::Function &formed) {
+    const auto owner = id(formed.name);
+    std::vector<source::Names> paths;
+    for (const auto &port : model.declarations[owner.index].outputs) {
+      source::Names names;
+      for (const auto &leaf : model.leaves(port))
+        names.push_back(leaf.name);
+      paths.push_back(std::move(names));
+    }
+    // Resolve the expected target from the checked link judgment, independently
+    // of the generated call being checked. Equal port types alone do not make
+    // a different linked implementation the correct target for this alias.
+    const auto &links = model.libraries->links;
+    auto link = llvm::find_if(links, [&](const auto &binding) {
+      return binding.first == formed.name;
+    });
+    auto target = llvm::find_if(linked.module.functions, [&](const auto &f) {
+      return link != links.end() && f.name == link->second.entry();
+    });
+    if (target == linked.module.functions.end()) {
+      fail(entry.header, "source-library-entry-layout",
+           "linked entry has no internal target");
+      return;
+    }
+    if (auto error = checkLibraryEntry(entry, formed, paths, *target)) {
+      handleAllErrors(std::move(error), [&](const Refusal &e) {
+        fail(entry.header, e.code, e.detail);
+      });
+      return;
+    }
+    // The old source wrapper reconstructed result records. Retain its
+    // constructor-authority judgment, including nested records; an empty array
+    // creates no element. Formation has already checked its element type.
+    std::function<bool(TypeId)> constructible = [&](TypeId id) {
+      const auto t = model.types.at(id.index);
+      if (t.kind == frontend::Type::Kind::Array)
+        return t.count == 0 || constructible(t.elements.front());
+      if (t.kind == frontend::Type::Kind::Product)
+        return llvm::all_of(t.elements, constructible);
+      if (t.kind != frontend::Type::Kind::Record)
+        return true;
+      const auto declaration = model.declarations[t.declaration.index];
+      std::map<DeclId, DomainId> substitution;
+      for (auto [parameter, argument] :
+           zip(declaration.parameters, t.arguments))
+        substitution.emplace(parameter, argument);
+      for (const auto &field : declaration.fields)
+        if (!constructible(model.substitute(field.type, substitution)))
+          return false;
+      const auto &name = declaration.name;
+      return constructionAllowed(structs.at(name), entry.header, formed.name);
+    };
+    for (const auto &port : model.declarations[owner.index].outputs)
+      if (!constructible(port.type))
+        return;
+    // A forwarding call is useful provenance. Invented local bindings and
+    // record-construction expressions are not authored source events.
+    ResolvedUse use;
+    const auto *call =
+        entry.forwarding.body->front().get<source::AlgorithmCall>();
+    use.owner = owner;
+    use.target = id(target->name);
+    use.scope = activeScope;
+    use.location = entry.header.location;
+    use.site = "invoke";
+    for (size_t i = 0; i < call->outputs.size(); ++i)
+      use.results.push_back({call->outputs[i],
+                             {},
+                             model.logical(target->results[i], activeScope),
+                             entry.header.location});
+    model.uses.push_back(std::move(use));
+    formed.body = entry.forwarding.body;
+  }
   /// A construction arranges existing values and emits nothing. Its static
   /// arguments follow the rule used for calls, with the struct's leaf types in
   /// the place of a callee's parameters.
@@ -2649,16 +2750,8 @@ class Checker {
     }
     const auto &info = found->second;
     const AggregateShape &declared = info.shape;
-    // A checked struct is built only where its checks are written. Everywhere
-    // else its values can be passed, returned and read, but not made.
-    if (info.declaration->checked &&
-        !llvm::is_contained(info.declaration->constructors, owner.str())) {
-      fail(expression, "source-checked-construction",
-           "'" + declared.name + "' is constructed only in " +
-               llvm::join(info.declaration->constructors, ", ") +
-               "; call a constructor to obtain a value");
+    if (!constructionAllowed(info, expression, owner))
       return {};
-    }
     std::map<std::string, const ConstructedField *> written;
     for (const auto &field : fields)
       if (!written.emplace(field.name, &field).second ||
@@ -2945,13 +3038,22 @@ class Checker {
   std::vector<PendingPlacement> pendingPlacements;
 
 public:
-  Checker(model::Module &model, const Module &syntax, const Module *original)
+  Checker(model::Module &model, const Module &syntax, const Module *original,
+          const LibraryEmission &linked)
       : model(model), syntax(syntax), original(original), text(model.text),
-        filename(model.filename) {}
-  void run() {
+        filename(model.filename), linked(linked) {
+    assert(model.resolution && "semantic checking requires resolved input");
+    for (const auto &f : syntax.functions)
+      functions.push_back(&f);
+    for (const auto &entry : linked.entries) {
+      functions.push_back(&entry.header);
+      entries.emplace(entry.header.name, &entry);
+    }
+  }
+  bool run() {
     predeclare();
     if (!good())
-      return;
+      return false;
     headers();
     if (good())
       profiles();
@@ -2985,10 +3087,11 @@ public:
           return placement(owner, block, site, ports, emit);
         };
         if (!checkProtocolBody(model, p, resolve, local))
-          return;
+          return false;
       }
     size_t gi = 0, fi = 0;
-    for (const auto &f : syntax.functions) {
+    for (const auto *header : functions) {
+      const auto &f = *header;
       if (!good())
         break;
       activeScope = model.declarations[id(f.name).index].members;
@@ -3008,7 +3111,9 @@ public:
                              values, true, f.name);
       } else {
         auto &out = module.functions[fi++];
-        if (f.body)
+        if (auto entry = entries.find(f.name); entry != entries.end())
+          checkEntry(*entry->second, out);
+        else if (f.body)
           out.body = localBody(*f.body, {}, {}, values, false, f.name);
       }
     }
@@ -3027,26 +3132,28 @@ public:
           return placement(owner, block, site, ports, emit);
         };
         if (!checkProtocolBody(model, p, resolve, local, &out))
-          return;
+          return false;
       }
     if (!good())
-      return;
+      return false;
     retainPlans();
     for (const auto &plan : model.bodies)
       if (plan.body)
         model.declarations[plan.declaration.index].bodyState =
             Declaration::BodyState::Checked;
-    model.complete = good();
+    return good();
   }
 };
 } // namespace
-void check(model::Module &model, const syntax::Content &content,
-           const syntax::Content &original) {
+bool check(model::Module &model, const syntax::Content &content,
+           const syntax::Content &original, const LibraryEmission &linked) {
   if (const auto *module = std::get_if<syntax::Module>(&content))
-    Checker(model, *module, std::get_if<syntax::Module>(&original)).run();
+    return Checker(model, *module, std::get_if<syntax::Module>(&original),
+                   linked)
+        .run();
   else {
     model.construction = std::get<source::Construction>(content);
-    model.complete = true;
+    return true;
   }
 }
 } // namespace zkc::frontend::semantics

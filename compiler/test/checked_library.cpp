@@ -1,8 +1,8 @@
 #include "../lib/Frontend/Lowering/Library.h"
 #include "Names.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Frontend/Library.h"
 #include "zkc/Protocol/Admission.h"
-#include "zkc/Protocol/Bindings.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <functional>
@@ -12,6 +12,12 @@ using zkc::frontend::ValueId;
 using namespace zkc::frontend::library;
 namespace {
 int failures = 0;
+// Each independent lowering test owns its invocation budget explicitly.
+llvm::Expected<zkc::source::Module>
+lowerForTest(llvm::ArrayRef<LinkedProgram> programs) {
+  zkc::frontend::WorkBudget budget;
+  return lower(programs, {}, budget);
+}
 void expect(bool ok, llvm::StringRef name) {
   if (!ok) {
     llvm::errs() << "FAIL: " << name << '\n';
@@ -866,7 +872,8 @@ void linkedBindingAndCaptureIdentity() {
             {}}),
       "library-selection-capture");
   // Main's shared lowering owner consumes these exact metadata fields.
-  refusal(lower(std::vector<LinkedProgram>{p, q}), "library-selection-capture");
+  refusal(lowerForTest(std::vector<LinkedProgram>{p, q}),
+          "library-selection-capture");
 }
 
 void capturedDomainAuthority() {
@@ -882,7 +889,7 @@ void capturedDomainAuthority() {
   expect(must(resolvedDomain(f.root("F"), linked.environment())) ==
              "koala-bear",
          "linked domain environment is immutable");
-  must(lower(linked));
+  must(lowerForTest(linked));
   for (auto &d : changed.statics)
     if (d.id.name == "F")
       d.capturedDependencies = {f.root("A")};
@@ -1000,7 +1007,7 @@ void checkedRegions() {
     auto linked = must(link({checked, {{f.root("C"), impl, "C"}}, {}}));
     expect(linked.functions().back().calls.count({0, 0, 0}) == 1,
            "nested member calls retain stable region path");
-    auto lowered = must(lower(linked));
+    auto lowered = must(lowerForTest(linked));
     expect(lowered.functions.back().body->front().get<zkc::source::Match>() !=
                nullptr,
            "active-only match lowers through common carrier");
@@ -1052,7 +1059,7 @@ void checkedRegions() {
       must(link({nestedChecked, {{f.root("C"), nestedImpl, "C"}}, {}}));
   expect(nestedLinked.functions().back().calls.size() == 2,
          "array expansion resolves both nested call sites");
-  (void)must(lower(nestedLinked));
+  (void)must(lowerForTest(nestedLinked));
   // A checked handle snapshots shared region builders.
   empty->returns = {{{99}, {}}};
   expect(std::get<Match>(checked.body().instructions[0])
@@ -1081,7 +1088,7 @@ void checkedRegions() {
         must(link({fold,
                    {{f.root("C"), impl, "C"}},
                    {{{f.root("N"), StaticTerm::natural(count)}}, {}}}));
-    auto lowered = must(lower(linked));
+    auto lowered = must(lowerForTest(linked));
     expect(!lowered.functions.empty(),
            "symbolic traversal lowers including zero trip");
     const auto &is = linked.functions().back().body.instructions;
@@ -1137,7 +1144,7 @@ void genericVariantsAndTraversalBounds() {
   refusal(checkBody(permissionTest, f.env), "library-resource-leak");
   auto generic = must(checkBody(body, f.env));
   auto linked = must(link({generic, {}, {{}, {{f.id("T"), f.field()}}}}));
-  auto lowered = must(lower(linked));
+  auto lowered = must(lowerForTest(linked));
   const auto &instructions = *lowered.functions.back().body;
   expect(instructions[0].get<zkc::source::VariantConstruct>() != nullptr,
          "generic constructor becomes one logical variant");
@@ -1238,7 +1245,7 @@ void privateVariantBoundary() {
                                                         {},
                                                         {}});
     auto linked = must(link({checked, {{f.root("C"), selected, "C"}}, {}}));
-    auto lowered = must(lower(linked));
+    auto lowered = must(lowerForTest(linked));
     expect(lowered.functions.size() == 2,
            "private variant result retains public nominal boundary");
   }
@@ -1269,7 +1276,7 @@ void associatedVariantsAndCounts() {
     impl->selection = StaticTerm::apply(f.id("functor"), {subject});
     auto linked = must(link({checked, {{f.root("C"), impl, "C"}}, {}}));
     spellings.push_back(
-        must(lower(linked)).functions.back().arguments.front().type);
+        must(lowerForTest(linked)).functions.back().arguments.front().type);
   }
   expect(spellings[0] != spellings[1],
          "association substitution survives equal opaque payload layouts");
@@ -1308,7 +1315,7 @@ void associatedVariantsAndCounts() {
   auto linked = must(link({generic, {{counts.root("C"), impl, "C"}}, {}}));
   expect(linked.functions().back().body.instructions.size() == 4,
          "associated count selects three unique element transfers");
-  (void)must(lower(linked));
+  (void)must(lowerForTest(linked));
 }
 void variantFormationSeam() {
   Fixture f;
@@ -1379,7 +1386,7 @@ void terminalStops() {
   auto checked = must(checkBody(b, f.env, {{f.root("C"), iface}}));
   auto impl = f.implementation(iface, Type::product({}));
   auto linked = must(link({checked, {{f.root("C"), impl, "C"}}, {}}));
-  auto lowered = must(lower(linked));
+  auto lowered = must(lowerForTest(linked));
   const auto *matched =
       lowered.functions.back().body->front().get<zkc::source::Match>();
   expect(matched && matched->outputs.size() == 1 && matched->arms.size() == 2,
@@ -1433,7 +1440,7 @@ void terminalStops() {
       {{0}, {}}, "", {}, {}, {{"Ready", stopReady}, {"Empty", stopEmpty}}}};
   auto everyArm = must(checkBody(all, f.env, {{f.root("C"), iface}}));
   auto stopping = must(link({everyArm, {{f.root("C"), impl, "C"}}, {}}));
-  auto stoppingLowered = must(lower(stopping));
+  auto stoppingLowered = must(lowerForTest(stopping));
   const auto &stoppingBody = *stoppingLowered.functions.back().body;
   matched = stoppingBody.front().get<zkc::source::Match>();
   expect(matched && matched->outputs.empty() &&
@@ -1488,7 +1495,7 @@ void terminalStops() {
   auto nested = must(checkBody(deep, f.env, {{f.root("C"), iface}}));
   expect(terminal(deep.instructions), "a nested all-terminal join is terminal");
   auto nestedLowered =
-      must(lower(must(link({nested, {{f.root("C"), impl, "C"}}, {}}))));
+      must(lowerForTest(must(link({nested, {{f.root("C"), impl, "C"}}, {}}))));
   const auto *outer =
       nestedLowered.functions.back().body->front().get<zkc::source::Match>();
   expect(outer && last(outer->arms[0].body).get<zkc::source::Stop>() &&
@@ -1517,7 +1524,7 @@ void terminalStops() {
   expect(stopCall.functions().front().body.returns.empty() &&
              stopCall.functions().front().results.size() == 1,
          "a stopping member keeps its declared result boundary");
-  auto calling = must(lower(stopCall));
+  auto calling = must(lowerForTest(stopCall));
   const zkc::source::Function *callee = nullptr, *caller = nullptr;
   for (const auto &fn : calling.functions)
     (fn.name == stopCall.entry() ? caller : callee) = &fn;
@@ -1557,7 +1564,7 @@ void terminalStops() {
              zeroStorage.functions().back().results[0].leaves[0].kind ==
                  LayoutLeaf::Kind::ResourceUnit,
          "a stopping body keeps a zero-storage promised result");
-  auto promisedLowered = must(lower(zeroStorage));
+  auto promisedLowered = must(lowerForTest(zeroStorage));
   expect(
       promisedLowered.functions.back().results.size() == 1 &&
           last(*promisedLowered.functions.back().body).get<zkc::source::Stop>(),
@@ -1636,7 +1643,7 @@ void stopsThroughTraversal() {
              noTrip.body.returns.size() == 1,
          "a zero-trip traversal returns its initial state even when the body "
          "stops");
-  auto zeroLowered = must(lower(zero));
+  auto zeroLowered = must(lowerForTest(zero));
   expect(last(*zeroLowered.functions.back().body).get<zkc::source::Return>(),
          "the zero-trip lowering returns rather than stops");
   admissible(zeroLowered, "zero trip");
@@ -1648,7 +1655,7 @@ void stopsThroughTraversal() {
              std::holds_alternative<Stop>(aborted.body.instructions[0]) &&
              aborted.body.returns.empty() && aborted.results.size() == 1,
          "a positive trip aborts and transfers no carried state");
-  auto abortedLowered = must(lower(positive));
+  auto abortedLowered = must(lowerForTest(positive));
   expect(last(*abortedLowered.functions.back().body).get<zkc::source::Stop>() &&
              abortedLowered.functions.back().results.size() == 1,
          "an aborted traversal lowers to a stop with declared results");
@@ -1693,7 +1700,7 @@ void stopsThroughTraversal() {
   expect(std::get<Match>(trips[0]).outputs[0].id.index !=
              std::get<Match>(trips[1]).outputs[0].id.index,
          "each expanded trip defines its own join result");
-  auto lowered = must(lower(conditional));
+  auto lowered = must(lowerForTest(conditional));
   expect(last(*lowered.functions.back().body).get<zkc::source::Return>(),
          "a conditionally stopping traversal still returns");
   admissible(lowered, "conditionally stopping trips");
@@ -1761,7 +1768,7 @@ void checkedConditionals() {
        {f.field(), Type::product({}), Type::product({f.field(), f.field()})}) {
     auto impl = f.implementation(iface, representation);
     auto linked = must(link({checked, {{f.root("C"), impl, "C"}}, {}}));
-    auto lowered = must(lower(linked));
+    auto lowered = must(lowerForTest(linked));
     const auto *conditional =
         lowered.functions.back().body->front().get<zkc::source::Conditional>();
     expect(conditional && !conditional->captures.empty(),
@@ -1831,7 +1838,7 @@ void checkedConditionals() {
       "selected terminal call loses its dead yield while mixed join continues");
   expect(std::holds_alternative<Call>(join.arms[0].body->instructions[0]),
          "normalization retains the executed stopping call");
-  admissible(must(lower(selected)), "selected terminal conditional arm");
+  admissible(must(lowerForTest(selected)), "selected terminal conditional arm");
   auto alsoCalls = std::make_shared<Region>(*no);
   alsoCalls->instructions = {Call{MemberCall{f.root("C"), "step"},
                                   "",
@@ -1854,7 +1861,7 @@ void checkedConditionals() {
       std::get<Conditional>(closed.body.instructions.front()).branches;
   expect(stoppedJoin.outputs.empty() && terminal(closed.body.instructions),
          "selected all-terminal join discards unreachable results");
-  admissible(must(lower(stopped)), "selected all-terminal conditional");
+  admissible(must(lowerForTest(stopped)), "selected all-terminal conditional");
 }
 
 void conditionalPermissions() {
@@ -1935,7 +1942,7 @@ void variantStaticCaptures() {
     one.signature = {{{v, ""}}, {{v, ""}}, {}, {}, {}};
     one.inputs = {{{0}, {v, ""}}};
     auto linked = must(link({must(checkBody(one, f.env)), {}, {}}));
-    return must(lower(linked)).functions.back().arguments.front().type;
+    return must(lowerForTest(linked)).functions.back().arguments.front().type;
   };
   expect(spelling(left) != spelling(right),
          "captured actuals reach the lowered nominal descriptor");
@@ -1962,7 +1969,7 @@ void variantStaticCaptures() {
     auto impl = f.implementation(iface, f.field(), selection);
     auto linked = must(link({client, {{f.root("C"), impl, selection}}, {}}));
     selected.push_back(
-        must(lower(linked)).functions.back().arguments.front().type);
+        must(lowerForTest(linked)).functions.back().arguments.front().type);
   }
   expect(selected[0] != selected[1],
          "a phantom component capture follows its selection into the nominal");
@@ -1977,7 +1984,7 @@ void variantStaticCaptures() {
   wide.inputs = {{{0}, {oversized, ""}}};
   wide.returns = {{{0}, {}}};
   auto wideSource =
-      must(lower(must(link({must(checkBody(wide, f.env)), {}, {}}))));
+      must(lowerForTest(must(link({must(checkBody(wide, f.env)), {}, {}}))));
   expect(wideSource.functions.back().arguments.front().type != spelling(left),
          "repeated static captures remain part of exact nominal identity");
   admissible(wideSource, "repeated nominal captures");
@@ -2012,7 +2019,7 @@ void locatedLoweringBoundary() {
   body.returns = {{{0}, {}}};
   auto checked = must(checkBody(body, f.env));
   auto linked = must(link({checked, {}, {}}));
-  refusal(lower(linked), "library-lowering");
+  refusal(lowerForTest(linked), "library-lowering");
 }
 
 void qualifiedOriginCollisions() {
@@ -2024,10 +2031,10 @@ void qualifiedOriginCollisions() {
   auto environment = f.env;
   environment.libraries.push_back({foreign.id.library, {foreign.id}});
   auto second = must(link({must(checkBody(foreign, environment)), {}, {}}));
-  must(lower(first));
-  must(lower(second));
-  must(lower(std::vector<LinkedProgram>{first, first}));
-  refusal(lower(std::vector<LinkedProgram>{first, second}),
+  must(lowerForTest(first));
+  must(lowerForTest(second));
+  must(lowerForTest(std::vector<LinkedProgram>{first, first}));
+  refusal(lowerForTest(std::vector<LinkedProgram>{first, second}),
           "library-origin-ambiguity");
 }
 
@@ -2066,7 +2073,7 @@ void checkedSourceCalls() {
          "closed helper retains its public label and selected abstract type");
   expect(linked.dependencies().size() == 2,
          "source helper carries exact body dependency");
-  must(lower(linked));
+  must(lowerForTest(linked));
   auto missing = request;
   missing.helpers.clear();
   refusal(link(missing), "library-open-call");
@@ -2153,7 +2160,7 @@ void checkedHelperTypeActuals() {
   callerBody.returns = {{{1}, {}}};
   auto caller = must(checkBody(callerBody, f.env));
   auto linked = must(link({caller, {}, {}, {helper}}));
-  must(lower(linked));
+  must(lowerForTest(linked));
   auto invisible = f.env;
   for (auto &library : invisible.libraries)
     llvm::erase_if(library.declarations, [&](const auto &decl) {

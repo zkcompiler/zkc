@@ -1,6 +1,6 @@
-#include "zkc/Relation/Authoring.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 
 using namespace llvm;
 namespace zkc::source {
@@ -348,9 +348,9 @@ class Decoder {
     locate(v);
     if (const auto *r = array(v, 4, "binding-declaration")) {
       out.name = string((*r)[0]);
-      out.contract = string((*r)[1]);
-      out.arguments = names((*r)[2]);
-      out.implementation = string((*r)[3]);
+      out.application.contract = string((*r)[1]);
+      out.application.arguments = names((*r)[2]);
+      out.application.implementation = string((*r)[3]);
     }
     return out;
   }

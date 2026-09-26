@@ -1,6 +1,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Protocol/Module.h"
+#include "zkc/Transforms/Protocol.h"
+#include "zkc/Translation/Protocol.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;

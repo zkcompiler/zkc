@@ -1,13 +1,16 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "zkc/Compiler/Physical.h"
-#include "zkc/Target/Source.h"
+#include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Plan/IR/Physical.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Translation/Table.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc {
 namespace {
+LogicalResult lowerToPhysical(ModuleOp, StringRef mode);
+
 class LowerPhysical : public ConversionPattern {
 public:
   LowerPhysical(TypeConverter &types, MLIRContext *context, StringRef mode,
@@ -80,22 +83,23 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       signalPassFailure();
   }
 };
-} // namespace
 LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
   if (mode != "lazy" && mode != "materialized")
-    return module.emitError("unsupported-preparation-mode");
+    return diagnostics::emit(module.emitError(),
+                             "unsupported-preparation-mode");
   // A closed direct plan is the admitted input of this representation pass.
   auto direct = exportPlan(module);
   if (!direct)
-    return module.emitError(toString(direct.takeError()));
+    return diagnostics::emit(module.emitError(), direct.takeError());
   Operation &program = module.getBody()->front();
   if (isPhysicalProgram(&program))
-    return program.emitError("expected-direct-plan");
+    return diagnostics::emit(program.emitError(), "expected-direct-plan");
   auto library = resolveProgramLibrary(&program);
   if (!library)
-    return program.emitError(toString(library.takeError()));
+    return diagnostics::emit(program.emitError(), library.takeError());
   if (printJson((*library)->dependencies()) != "[[\"table-protocol\",\"1\"]]")
-    return program.emitError("unsupported-physical-library");
+    return diagnostics::emit(program.emitError(),
+                             "unsupported-physical-library");
   llvm::DenseMap<Operation *, std::string> descriptors;
   module.walk([&](Operation *op) {
     if (auto source = dyn_cast<SourceOpInterface>(op))
@@ -122,6 +126,8 @@ LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
     return failure();
   return verify(module);
 }
+} // namespace
+
 std::unique_ptr<Pass> createLowerPlanToPhysicalPass(StringRef mode) {
   return std::make_unique<PhysicalPass>(mode);
 }

@@ -1,6 +1,6 @@
 #include "zkc/Analysis/OracleAccess.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Kernels.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Operations.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include <limits>

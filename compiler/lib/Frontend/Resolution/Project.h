@@ -55,9 +55,19 @@ struct Context {
   // Disjoint top-level declaration intervals, sorted by offset per source file.
   std::vector<std::vector<uint32_t>> intervals;
   std::vector<std::set<uint32_t>> available;
-  std::map<std::string, uint32_t> selectors;
-  // Native entry translation is separate from bounded draw-selector expansion.
-  std::map<std::string, uint32_t> entrySelectors;
+  struct SelectorName {
+    std::string name;
+    bool exported, module;
+    std::optional<uint32_t> target;
+  };
+  struct SelectorScope {
+    std::optional<source::Span> location;
+    std::vector<SelectorName> names;
+  };
+  std::vector<SelectorScope> selectorScopes;
+  std::map<uint32_t, std::vector<std::string>> componentMembers;
+  size_t selectorWork = 0;
+  bool carrier = false;
   std::set<std::string> ambiguousOrigins;
   std::vector<uint32_t> order;
   std::vector<Reference> references;
@@ -83,6 +93,11 @@ struct Result {
 /// checkers consume injectively named AST references, never concatenated text.
 /// Construction selectors are a property of a construction request, so their
 /// index, bounds and ambiguities are computed only when one is being bound.
-Result resolve(const ProjectInput &, bool constructionSelectors = false);
+Result resolve(const ProjectInput &);
+struct SelectorIndex {
+  std::map<std::string, uint32_t> selectors, entrySelectors;
+  std::set<std::string> ambiguousOrigins;
+};
+llvm::Expected<SelectorIndex> constructionSelectors(const Context &);
 } // namespace zkc::frontend::resolution
 #endif

@@ -85,7 +85,7 @@ for code, candidate in malformed(released, projected):
 # Linear provider tokens cannot be released. Immutable private custody can be
 # discarded locally despite having no public message codec.
 for ty in ["rng", "transcript", "nonce", "opening_state", "prover_key", "verifier_key"]:
-    legacy = [
+    resource_plan = [
         "zkc.participants/1",
         [],
         "physical",
@@ -94,19 +94,19 @@ for ty in ["rng", "transcript", "nonce", "opening_state", "prover_key", "verifie
         [["entry", "main", [["P", "p"]]]],
     ]
     if ty in ["rng", "transcript", "nonce"]:
-        run("protocol-import", json.dumps(legacy), refuses="interactive-release-resource")
+        run("protocol-import", json.dumps(resource_plan), refuses="interactive-release-resource")
     else:
-        run("protocol-import", json.dumps(legacy))
+        run("protocol-import", json.dumps(resource_plan))
 
 # Readable profile convenience reaches the identical storage-only pass.
 profile_text = source.replace('module {\n  bind both = bool.and();',
                               'module "arkworks.multilinear.bls12-381/1" {').replace('= both(', '= bool.and(')
-legacy_source = json.loads(run("protocol-source", profile_text))
-legacy_dense = json.loads(run("protocol-compile", json.dumps(legacy_source)))
-legacy_released = json.loads(
-    run("protocol-compile", json.dumps(legacy_source), "--release-storage")
+profile_source = json.loads(run("protocol-source", profile_text))
+profile_dense = json.loads(run("protocol-compile", json.dumps(profile_source)))
+profile_released = json.loads(
+    run("protocol-compile", json.dumps(profile_source), "--release-storage")
 )
-assert erase(legacy_released) == legacy_dense
+assert erase(profile_released) == profile_dense
 
 # Independently supplied MLIR must reject a release before the later use.
 lines = ir.splitlines()

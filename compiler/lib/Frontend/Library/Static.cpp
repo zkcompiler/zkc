@@ -1,8 +1,8 @@
 #include "Diagnostic.h"
 #include "Internal.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Domains.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Support/Json.h"
 #include <algorithm>
 
 namespace zkc::frontend::library {

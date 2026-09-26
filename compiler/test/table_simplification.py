@@ -353,6 +353,7 @@ refused(
     "--simplify",
     "--physical=lazy",
 )
+assert commands.last.stderr == "error: unsupported-simplification-library\n", commands.last.stderr
 for text in ("module {}", "module { module {} }"):
     ir.write_text(text)
     refused(

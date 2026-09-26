@@ -1,7 +1,7 @@
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/Domains.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -9,17 +9,15 @@ using namespace mlir;
 
 namespace zkc {
 namespace {
-struct Selection {
-  const protocol::OperationContracts *facts;
-  std::string representation, implementation;
-};
-std::optional<Selection> selection(Operation *op, bool producer) {
+const protocol::OperationContracts *semanticRoles(Operation *op) {
   auto binding = protocol::operationBinding(op);
   if (!binding) {
     consumeError(binding.takeError());
     return {};
   }
-  auto logical = protocol::resolveBinding(*binding, false);
+  // An explicit physical choice does not change the logical roles.
+  binding->application.implementation.clear();
+  auto logical = protocol::resolveBinding(binding->application, false);
   if (!logical) {
     consumeError(logical.takeError());
     return {};
@@ -33,62 +31,43 @@ std::optional<Selection> selection(Operation *op, bool producer) {
         return false;
     return true;
   };
-  if (op->getName().getStringRef() != logical->operation ||
+  if (op->getName().getStringRef() !=
+          protocol::boundOperationName(binding->application.contract) ||
       !typesMatch(op->getOperandTypes(), logical->inputs) ||
       !typesMatch(op->getResultTypes(), logical->outputs))
     return {};
-  const auto *facts = protocol::operationContracts(binding->contract);
-  if (!facts || (producer ? !facts->diagonalMap : !facts->linearContraction))
-    return {};
-  const auto &port =
-      producer ? logical->outputs[facts->diagonalMap->result]
-               : logical->inputs[facts->linearContraction->valuesOperand];
-  auto *representation = protocol::installedDomains().representationForLayout(
-      port.kind, port.identity, "diagonal");
-  if (!representation)
-    return {};
-  auto family = StringRef(representation->identity).split('.').first;
-  binding->implementation = (family + "-diagonal/" + binding->contract).str();
-  auto physical = protocol::resolveBinding(*binding, true);
-  if (!physical) {
-    consumeError(physical.takeError());
-    return {};
-  }
-  return Selection{facts, representation->identity, binding->implementation};
+  return protocol::operationContracts(binding->application.contract);
 }
-std::optional<DiagonalProducerSelection> producerSelection(Operation *op) {
-  auto selected = selection(op, true);
-  if (!selected)
+std::optional<DiagonalProducerRoles> producerRoles(Operation *op) {
+  const auto *facts = semanticRoles(op);
+  if (!facts || !facts->diagonalMap)
     return {};
-  const auto &map = *selected->facts->diagonalMap;
-  return DiagonalProducerSelection{map.factorsOperand, map.valuesOperand,
-                                   map.result, selected->representation,
-                                   selected->implementation};
+  const auto &map = *facts->diagonalMap;
+  return DiagonalProducerRoles{map.factorsOperand, map.valuesOperand,
+                               map.result};
 }
-std::optional<DiagonalContractionSelection> consumerSelection(Operation *op) {
-  auto selected = selection(op, false);
-  if (!selected)
+std::optional<DiagonalContractionRoles> consumerRoles(Operation *op) {
+  const auto *facts = semanticRoles(op);
+  if (!facts || !facts->linearContraction)
     return {};
-  const auto &contraction = *selected->facts->linearContraction;
-  return DiagonalContractionSelection{
-      contraction.coefficientsOperand, contraction.valuesOperand,
-      selected->representation, selected->implementation};
+  const auto &contraction = *facts->linearContraction;
+  return DiagonalContractionRoles{contraction.coefficientsOperand,
+                                  contraction.valuesOperand};
 }
 } // namespace
-std::optional<DiagonalProducerSelection>
-VectorMulOp::getDiagonalProducerSelection() {
-  return producerSelection(*this);
+std::optional<DiagonalProducerRoles> VectorMulOp::getDiagonalProducerRoles() {
+  return producerRoles(*this);
 }
-std::optional<DiagonalProducerSelection>
-CurveScaleEachOp::getDiagonalProducerSelection() {
-  return producerSelection(*this);
+std::optional<DiagonalProducerRoles>
+CurveScaleEachOp::getDiagonalProducerRoles() {
+  return producerRoles(*this);
 }
-std::optional<DiagonalContractionSelection>
-VectorDotOp::getDiagonalContractionSelection() {
-  return consumerSelection(*this);
+std::optional<DiagonalContractionRoles>
+VectorDotOp::getDiagonalContractionRoles() {
+  return consumerRoles(*this);
 }
-std::optional<DiagonalContractionSelection>
-CurveMSMOp::getDiagonalContractionSelection() {
-  return consumerSelection(*this);
+std::optional<DiagonalContractionRoles>
+CurveMSMOp::getDiagonalContractionRoles() {
+  return consumerRoles(*this);
 }
 } // namespace zkc

@@ -1,6 +1,13 @@
 #include "zkc/Claims/Claims.h"
+#include "mlir/Parser/Parser.h"
+#include "zkc/ClaimTranslation/Claims.h"
 #include "zkc/Compiler/Inspection.h"
+#include "zkc/Dialect/Claim/IR/ClaimDialect.h"
+#include "zkc/Dialect/Oracle/IR/OracleDialect.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Protocol/PhysicalOptions.h"
+#include "zkc/Source/Snapshot.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 
@@ -77,15 +84,47 @@ int main() {
           "unexpected derivation");
   success(claims::check(source, contract, certificate));
 
-  // Public import must load its dialects even in a fresh client context.
+  // Translation initializes the dialects it creates in a fresh context.
   mlir::MLIRContext context;
   auto ir = take(claims::import(source, contract, certificate, context));
   success(claims::checkIR(source, contract, *ir));
 
+  // Parsing a Boolean-only candidate loads only its actual Claim dialect.
+  // Checking it must neither require nor initialize unrelated dialects.
+  std::string text;
+  raw_string_ostream stream(text);
+  ir->print(stream);
+  mlir::MLIRContext minimal;
+  minimal.loadDialect<ClaimDialect>();
+  auto candidate = mlir::parseSourceString<mlir::ModuleOp>(text, &minimal);
+  require(bool(candidate), "minimal-context candidate did not parse");
+  const auto loaded = minimal.getLoadedDialects().size();
+  success(claims::checkIR(source, contract, *candidate));
+  require(minimal.getLoadedDialects().size() == loaded,
+          "candidate checking loaded an unrelated dialect");
+
+  // Source execution records include oracle-valued inputs even when the
+  // conditional claim itself concerns only a Boolean guard.
+  auto oracleSource = source;
+  oracleSource.protocols.front().arguments.push_back(
+      {"root", "Verifier", "commitment:rows.merkle-keccak256.koala-bear/1"});
+  auto oracleContract = contract;
+  oracleContract.sourceDigest = take(claims::inspect(oracleSource, "main"))
+                                    .getAsObject()
+                                    ->getString("source_digest")
+                                    ->str();
+  auto oracleCertificate = take(claims::derive(oracleSource, oracleContract));
+  mlir::MLIRContext oracleContext;
+  auto oracleIR = take(claims::import(oracleSource, oracleContract,
+                                      oracleCertificate, oracleContext));
+  require(oracleContext.getLoadedDialect<OracleDialect>() != nullptr,
+          "fresh claim import did not initialize oracle subject types");
+  success(claims::checkIR(oracleSource, oracleContract, *oracleIR));
+
   // Selection custody uses the actual source entering physical planning.
   // Typed callers must receive the same admission as JSON callers.
   protocol::ImplementationSelection selected;
-  selected.sourceSnapshot = take(sourceSnapshot(document.root()));
+  selected.sourceSnapshot = take(source::snapshot(document.root()));
   selected.choices = {{"require", "arkworks/control.require"}};
   success(protocol::checkImplementationSelection(selected, document.root()));
   for (unsigned mutation = 0; mutation < 6; ++mutation) {

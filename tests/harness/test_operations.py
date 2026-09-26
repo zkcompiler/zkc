@@ -76,7 +76,7 @@ def test_install_uses_empty_prefix_and_fresh_consumer(explicit, monkeypatch, tmp
             assert Path(args[0]).parent == prefixes[-1] / "bin"
             discovery.append(args)
         else:
-            assert args == [str(builds[-1] / "consumer")]
+            assert args == ["ctest", "--test-dir", str(builds[-1]), "--output-on-failure"]
             completed.append(builds[-1])
 
     monkeypatch.setattr(developer, "run", run)

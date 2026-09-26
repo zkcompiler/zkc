@@ -138,8 +138,8 @@ module intact. This interface supplies reproducible fixed choices, not search.
 
 ## Implementation boundaries
 
-- [Native contracts and types](../../../../compiler/include/zkc/Protocol/Bindings.h)
-  and [MLIR planning](../../../../compiler/lib/Protocol/BindingPhysical.cpp).
+- [Native contracts and types](../../../../compiler/include/zkc/Contracts/Bindings.h)
+  and [MLIR planning](../../../../compiler/lib/Conversion/Bindings.cpp).
 - [Mixed operation fixture](../../../../tests/fixtures/bound-operations.pir)
   and [native pipeline controls](../../../../compiler/test/bound_protocols.py).
 - [Generic static requirements](generic-definitions.md).

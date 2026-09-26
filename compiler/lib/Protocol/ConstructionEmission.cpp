@@ -12,7 +12,7 @@ std::string Construction::transcriptBinding(const std::string &operation,
   auto found = generatedBindings.find(cacheKey);
   if (found != generatedBindings.end())
     return found->second;
-  source::OperationBinding binding{{}, fresh(), operation, {suite}, ""};
+  source::OperationBinding binding{{}, fresh(), {operation, {suite}, ""}};
   if (!payload.empty()) {
     auto ty = parseBoundType(payload, false);
     if (!ty) {
@@ -26,10 +26,10 @@ std::string Construction::transcriptBinding(const std::string &operation,
       return {};
     }
     if (!ty->identity.empty())
-      binding.arguments.push_back(ty->identity);
-    binding.arguments.push_back(codec.str());
+      binding.application.arguments.push_back(ty->identity);
+    binding.application.arguments.push_back(codec.str());
   }
-  auto selected = resolveBinding(binding, false);
+  auto selected = resolveBinding(binding.application, false);
   if (!selected) {
     fail("construction-transcript-binding:" + operation + ":" +
          toString(selected.takeError()));
@@ -56,8 +56,8 @@ std::string Construction::seedBinding(const std::string &operation,
   auto found = generatedBindings.find(cacheKey);
   if (found != generatedBindings.end())
     return found->second;
-  source::OperationBinding binding{{}, fresh(), operation, {identity}, ""};
-  auto selected = resolveBinding(binding, false);
+  source::OperationBinding binding{{}, fresh(), {operation, {identity}, ""}};
+  auto selected = resolveBinding(binding.application, false);
   if (!selected) {
     fail("construction-seed-binding:" + payload + ":" +
          toString(selected.takeError()));

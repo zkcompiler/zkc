@@ -14,15 +14,16 @@ void buildTablePipeline(mlir::OpPassManager &pm, bool simplify,
 }
 void buildParticipantPipeline(mlir::OpPassManager &pm,
                               const protocol::PhysicalOptions &options,
-                              bool projectOnly) {
+                              bool projectOnly,
+                              LinearContractionStats *statistics) {
   pm.addPass(protocol::createProjectParticipantsPass());
   if (!projectOnly)
     pm.addPass(protocol::createPlanParticipantsPass(
         options.implementations.choices, options.linearContractions,
-        options.releaseStorage));
+        options.releaseStorage, statistics));
 }
 namespace {
-struct TableOptions : mlir::PassPipelineOptions<TableOptions> {
+struct TablePipelineOptions : mlir::PassPipelineOptions<TablePipelineOptions> {
   Option<bool> simplify{*this, "simplify", llvm::cl::init(false),
                         llvm::cl::desc("Simplify identical table endpoints")};
   Option<std::string> physical{*this, "physical", llvm::cl::init(""),
@@ -39,9 +40,9 @@ struct ParticipantOptions : mlir::PassPipelineOptions<ParticipantOptions> {
 };
 } // namespace
 void registerCompilerPipelines() {
-  static mlir::PassPipelineRegistration<TableOptions> tables(
+  static mlir::PassPipelineRegistration<TablePipelineOptions> tables(
       "zkc-table-pipeline", "Lower a finite closed-source program",
-      [](mlir::OpPassManager &pm, const TableOptions &options) {
+      [](mlir::OpPassManager &pm, const TablePipelineOptions &options) {
         buildTablePipeline(pm, options.simplify, options.physical);
       });
   static mlir::PassPipelineRegistration<ParticipantOptions> participants(

@@ -2,9 +2,9 @@
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Protocol.h"
-#include "zkc/Relation/Authoring.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Relations.h"
+#include "zkc/Support/Json.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::frontend {

@@ -8,10 +8,6 @@
 #include <set>
 #include <tuple>
 
-namespace zkc::frontend::resolution {
-struct Context;
-}
-
 namespace zkc::frontend::syntax {
 // Authoring syntax owns unresolved calls and type expressions. It is never
 // passed to a common-source, MLIR, artifact, or formal consumer.
@@ -309,7 +305,6 @@ struct Module : source::Node {
   // A self-contained common-carrier representation, not a source library.
   // This is explicit input syntax, never trusted compiler provenance.
   bool carrier = false;
-  std::shared_ptr<const resolution::Context> project;
   std::vector<ModuleDeclaration> modules;
   std::vector<LibraryDependency> dependencies;
   std::vector<Use> uses;

@@ -1,9 +1,9 @@
 #ifndef ZKC_RELATION_FIELD_H
 #define ZKC_RELATION_FIELD_H
 
-#include "zkc/Protocol/Domains.h"
-#include "zkc/Protocol/Kernels.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
 

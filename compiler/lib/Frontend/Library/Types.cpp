@@ -1,6 +1,6 @@
 #include "Internal.h"
-#include "zkc/Protocol/Domains.h"
-#include "zkc/Protocol/Kernels.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Kernels.h"
 #include <algorithm>
 
 namespace zkc::frontend::library {

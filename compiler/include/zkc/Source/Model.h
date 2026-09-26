@@ -1,6 +1,8 @@
 #ifndef ZKC_SOURCE_MODEL_H
 #define ZKC_SOURCE_MODEL_H
 
+#include "zkc/Contracts/Binding.h"
+
 #include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include <cstdint>
@@ -239,9 +241,7 @@ struct Entry : Node {
 /// a reference, not a transcript/session/resource identity.
 struct OperationBinding : Node {
   std::string name;
-  std::string contract;
-  Names arguments;
-  std::string implementation;
+  protocol::BindingApplication application;
 };
 
 struct StaticParameter {

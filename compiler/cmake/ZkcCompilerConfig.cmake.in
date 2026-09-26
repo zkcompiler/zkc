@@ -7,12 +7,23 @@ if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "@LLVM_PACKAGE_VERSION@")
     "ZkcCompiler was built with LLVM/MLIR @LLVM_PACKAGE_VERSION@; found ${LLVM_PACKAGE_VERSION}")
 endif()
 include("${CMAKE_CURRENT_LIST_DIR}/ZkcCompilerTargets.cmake")
-# MLIR's imported libraries do not propagate header search paths themselves.
-set_property(TARGET Zkc::Compiler APPEND PROPERTY
-  INTERFACE_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS};${MLIR_INCLUDE_DIRS}")
-set_property(TARGET Zkc::Compiler APPEND PROPERTY
-  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS};${MLIR_INCLUDE_DIRS}")
-separate_arguments(zkc_llvm_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
-set_property(TARGET Zkc::Compiler APPEND PROPERTY
-  INTERFACE_COMPILE_OPTIONS "${zkc_llvm_definitions}")
+# External imported libraries do not propagate their header paths themselves.
+set_property(TARGET Zkc::Support APPEND PROPERTY
+  INTERFACE_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
+set_property(TARGET Zkc::Support APPEND PROPERTY
+  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
+set_property(TARGET Zkc::IR APPEND PROPERTY
+  INTERFACE_INCLUDE_DIRECTORIES "${MLIR_INCLUDE_DIRS}")
+set_property(TARGET Zkc::IR APPEND PROPERTY
+  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${MLIR_INCLUDE_DIRS}")
+foreach(component IN LISTS ZkcCompiler_FIND_COMPONENTS)
+  if(TARGET Zkc::${component})
+    set(ZkcCompiler_${component}_FOUND TRUE)
+  else()
+    set(ZkcCompiler_${component}_FOUND FALSE)
+    if(ZkcCompiler_FIND_REQUIRED_${component})
+      set(ZkcCompiler_NOT_FOUND_MESSAGE "Unknown ZkcCompiler component: ${component}")
+    endif()
+  endif()
+endforeach()
 check_required_components(ZkcCompiler)

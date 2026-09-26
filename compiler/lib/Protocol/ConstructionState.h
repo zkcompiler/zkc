@@ -1,10 +1,10 @@
 #ifndef ZKC_PROTOCOL_CONSTRUCTION_STATE_H
 #define ZKC_PROTOCOL_CONSTRUCTION_STATE_H
 
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Construction.h"
-#include "zkc/Protocol/Contracts.h"
-#include "zkc/Protocol/TypeProperties.h"
+#include "Construction.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/BitVector.h"
 #include <functional>
 #include <iterator>
@@ -207,9 +207,8 @@ struct Binding {
 // Availability and exact resource origins have separate summaries; emission
 // consumes both without changing the admitted source or its identity.
 class Construction {
-  const source::Module &source, &sourceIdentity;
-  const source::Construction &descriptor;
-  mlir::MLIRContext &ctx;
+  source::Module source, sourceIdentity;
+  source::Construction descriptor;
   std::string suite, entry, producer, validator, root, selectedRng;
   DependencyTokens dependencyTokens{
       {}, {}, [this](size_t cost) { return budget(cost); }};
@@ -318,12 +317,17 @@ class Construction {
   void reserve(const source::Module &module);
 
 public:
-  Construction(const source::Module &source,
-               const source::Module &sourceIdentity,
-               const source::Construction &descriptor, mlir::MLIRContext &ctx)
-      : source(source), sourceIdentity(sourceIdentity), descriptor(descriptor),
-        ctx(ctx) {}
-  Expected<ConstructionResult> run();
+  Construction(source::Module source, source::Module original,
+               source::Construction descriptor)
+      : source(std::move(source)), sourceIdentity(std::move(original)),
+        descriptor(std::move(descriptor)) {}
+  Construction(const Construction &) = delete;
+  Construction &operator=(const Construction &) = delete;
+  Construction(Construction &&) = delete;
+  Construction &operator=(Construction &&) = delete;
+  const source::Module &input() const { return source; }
+  llvm::Error prepare();
+  Expected<ConstructionDraft> emit();
 };
 
 } // namespace zkc::protocol::construction

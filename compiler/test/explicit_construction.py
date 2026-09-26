@@ -1,7 +1,7 @@
 """Explicit construction, origins and physical lowering, without proof execution.
 
-Legacy fixtures supply contrasting control graphs. Their monomorphic operations
-are explicitly bound here as test inputs, never through a production profile.
+Current protocol fixtures supply contrasting control graphs. Tests clear their
+fixed implementations and optionally select a physical polynomial fold.
 """
 import copy
 from bls_fixture import module
@@ -26,7 +26,8 @@ def run(mode, source, *files, refuses=None):
     return printed
 
 
-def explicit(source, implementation=""):
+def with_fold_implementation(source, implementation=""):
+    """Clear fixed implementations except for the requested poly.fold choice."""
     source = copy.deepcopy(source)
     assert source[0] == "zkc.protocol/1"
     for binding in source[1]:
@@ -129,11 +130,11 @@ for example in ("two-factor", "committed-two-factor", "dleq"):
     descriptor = temporary / f"{example}.exact.construction.pir"
     descriptor.write_text((examples / f"{example}.construction.pir").read_text().replace(
         "construction main {", "construction main identity exact {"))
-    legacy = json.loads((examples / f"{example}.json").read_text())
     if example == "dleq":
         source = json.loads(run("protocol-source", (corpus / "generic-dleq.pir").read_text()))
     else:
-        source = explicit(legacy, "arkworks-msb/poly.fold")
+        fixture_source = json.loads((examples / f"{example}.json").read_text())
+        source = with_fold_implementation(fixture_source, "arkworks-msb/poly.fold")
     result = json.loads(run("protocol-construct", source, descriptor))
     plan = inspect(source, result)
     ir = run("protocol-construct-ir", source, descriptor)
@@ -224,10 +225,10 @@ for kind, constructor in (("bool", None), ("field", "field.constant"),
     descriptor = temporary / "seed-descriptor.json"
     descriptor.write_text(json.dumps(["zkc.construction/1", "main", "P", "V", [],
                                      ["coins", []], "0", suite, "exact"]))
-    result = json.loads(run("protocol-construct", explicit(source), descriptor))
+    result = json.loads(run("protocol-construct", with_fold_implementation(source), descriptor))
     candidate = temporary / ("seed-" + kind + ".json")
     candidate.write_text(json.dumps(result))
-    run("protocol-check-construction", explicit(source), descriptor, candidate)
+    run("protocol-check-construction", with_fold_implementation(source), descriptor, candidate)
     run("protocol-compile", result[2])
 
 # Restoring authored selector names after normalized construction may push

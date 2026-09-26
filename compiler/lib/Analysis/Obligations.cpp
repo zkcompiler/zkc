@@ -1,5 +1,5 @@
 #include "zkc/Analysis/Obligations.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 
 using namespace llvm;

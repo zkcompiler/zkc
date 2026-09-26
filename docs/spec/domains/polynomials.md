@@ -115,7 +115,7 @@ source and uses the bounded execution occurrence view. Its report includes
 exact-expression terms, parameter origins, installed conventions, congruence
 classes, producer-to-consumer compatibility and explicit unknown/different
 reasons. IDs are local to that report. The installed analysis uses optional
-operation facets in `Protocol/Contracts`; unsupported operations, including
+operation facets in `Contracts/Operations`; unsupported operations, including
 multilinear folds, acquire no coset fact. Immediate may-dependency edges are
 reported separately from exact terms, with sender provenance marked separately
 at receptions.

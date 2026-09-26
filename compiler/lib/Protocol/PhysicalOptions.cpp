@@ -1,6 +1,6 @@
 #include "zkc/Protocol/PhysicalOptions.h"
-#include "zkc/Compiler/Inspection.h"
-#include "zkc/Target/Json.h"
+#include "zkc/Source/Snapshot.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include <set>
 
@@ -68,7 +68,7 @@ Error checkImplementationSelection(const ImplementationSelection &selection,
     return e;
   if (selection.sourceSnapshot.empty())
     return Error::success();
-  auto snapshot = sourceSnapshot(source);
+  auto snapshot = source::snapshot(source);
   if (!snapshot)
     return snapshot.takeError();
   if (selection.sourceSnapshot != *snapshot)

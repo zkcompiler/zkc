@@ -1,31 +1,55 @@
 #ifndef ZKC_FRONTEND_DEPENDENCIES_H
 #define ZKC_FRONTEND_DEPENDENCIES_H
+
+#include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Input.h"
-#include "zkc/Frontend/Protocol.h"
-#include "zkc/Relation/Authoring.h"
+
 namespace zkc::frontend {
-/// Capture explicit roots and their declared modules/assets. Logical modules
-/// use root-relative paths (a::b -> a/b.pir); assets use the declaring file's
-/// parent. All child paths must remain under their canonical library root.
-/// File IDs enumerate library/source order, with the application first.
-llvm::Expected<ProjectInput>
-captureProject(Input application, llvm::ArrayRef<Input> libraryRoots = {});
+enum class SourceForm { Unknown, Module, CarrierModule, Construction };
 
-/// Pure shared relation decoder. The caller supplies the declaration's name
-/// and location after decoding; this function never reads a file.
-llvm::Expected<source::RelationDeclaration>
-decodeRelationAsset(llvm::StringRef family, llvm::StringRef bytes);
+struct ModuleReference {
+  std::string name;
+  std::optional<source::Span> location;
+};
+struct RelationReference {
+  std::string name, family, path;
+  std::optional<source::Span> location;
+};
+struct LibraryIdentityDeclaration {
+  std::string nameSpace, name, version, resolution;
+  std::optional<source::Span> location;
+};
+struct LibraryDependency {
+  std::string name;
+  LibraryIdentityDeclaration identity;
+  std::optional<source::Span> location;
+};
 
-/// Explicit bounded loading boundary. Callback returns owned bytes and must
-/// honor the requested maximum. Parsing/formatting never invoke this API.
-using AssetResolver = llvm::function_ref<llvm::Expected<std::string>(
-    llvm::StringRef path, size_t maximumBytes)>;
-llvm::Expected<source::Document> loadProtocolDocument(llvm::StringRef text,
-                                                      llvm::StringRef filename,
-                                                      AssetResolver resolver);
-/// Constrained filesystem resolver rooted at the source file's parent
-/// directory. Relative regular files only; canonical containment rejects
-/// symlink escapes. A source with no file has no directory to resolve against.
-llvm::Expected<source::Document> loadProtocolFile(const Input &source);
+/// Owned dependency spelling and declaration classification, without filesystem
+/// access, relation decoding, name resolution, or semantic admission. Locations
+/// use the caller's snapshot-local file ID and byte offsets in the input.
+struct DependencyDeclarations {
+  SourceForm form = SourceForm::Unknown;
+  std::optional<source::Span> location;
+  std::optional<std::string> profile;
+  std::vector<ModuleReference> modules;
+  std::vector<RelationReference> relations;
+  std::vector<LibraryIdentityDeclaration> libraryIdentities;
+  std::vector<LibraryDependency> libraries;
+  std::vector<Diagnostic> diagnostics;
+  /// True only when parsing and dependency declaration checks both succeed.
+  bool complete = false;
+  /// A parsed document exists and its recognized dependency declarations pass
+  /// duplicate-name, module-name, and family checks. A recovering loader may
+  /// discover these dependencies even when complete is false. This never
+  /// authorizes compilation or overrides project admission.
+  bool recoverable = false;
+};
+
+/// Inspect textual frontend syntax using the ordinary recovering parser.
+/// Malformed declarations are omitted by that parser; fully recognized ones
+/// retain their spelling even when a later declaration fails. Portable JSON
+/// documents use parseProtocolDocument and contain no external requests.
+DependencyDeclarations inspectDependencies(const Input &, uint32_t file = 0);
 } // namespace zkc::frontend
 #endif

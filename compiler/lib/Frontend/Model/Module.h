@@ -4,16 +4,15 @@
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Module.h"
+#include "zkc/Frontend/Work.h"
 #include <map>
 
-namespace zkc::frontend::semantics {
-struct LibraryReport;
-}
 namespace zkc::frontend::resolution {
 struct Context;
 }
 
 namespace zkc::frontend::model {
+struct LibraryReport;
 /// A checked definition body; call targets are scoped references, not strings
 /// or positional entries in a parallel table.
 struct DefinitionBody {
@@ -25,11 +24,12 @@ struct DefinitionBody {
   std::vector<source::Dependency> dependencies;
 };
 struct Module {
-  std::optional<ProjectInput> project;
+  WorkUsage workUsage{};
+  /// Owns the captured input for analyzed source, including partial analyses.
+  /// Raw standalone model utilities may leave resolution absent.
   std::shared_ptr<const resolution::Context> resolution;
   bool resolutionComplete = false;
   std::string text, filename;
-  bool complete = false;
   bool syntaxPartial = false;
   std::vector<Scope> scopes;
   std::vector<Declaration> declarations;
@@ -50,11 +50,9 @@ struct Module {
   std::map<std::pair<ScopeId, std::string>, DeclId> names;
   std::map<std::string, DomainId> domainKeys;
   std::map<std::string, TypeId> typeKeys;
-  std::shared_ptr<const semantics::LibraryReport> libraries = {};
+  std::shared_ptr<const model::LibraryReport> libraries = {};
 
   Module();
-  /// Retain query provenance after semantic checking, without changing keys.
-  void retainQueryMetadata();
   ScopeId addScope(ScopeId parent, DeclId owner);
   DeclId add(Declaration::Kind, ScopeId, llvm::StringRef,
              std::optional<source::Span> = {});

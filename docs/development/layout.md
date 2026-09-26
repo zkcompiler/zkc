@@ -46,11 +46,14 @@ compiler/
   CMakeLists.txt, CMakePresets.json
   cmake/
   include/zkc/
-    Dialect/                       registered dialects
+    Contracts/                     MLIR-free domains, signatures and operation contracts
+    Dialect/                       per-dialect IR/Transforms homes and shared MLIR adapters
     Frontend/, Source/             authoring language and common source
     Protocol/, Relation/, Claims/  protocols, relations and claims
-    Analysis/, Transforms/, Compiler/, Target/, Interfaces/, Support/
-  lib/                             mirrors public include components
+    ClaimTranslation/              optional claim-to-IR adapters
+    Analysis/, Translation/, Transforms/, Target/
+    Compiler/, Driver/, Interfaces/, Support/
+  lib/                             implementation homes; build ownership is in cmake/Components.cmake
   tools/                           zkc-opt.cpp, zkc-compile.cpp
   test/                            tool-level roundtrip and malformed IR
   adapters/                        optional external toolchains, built separately

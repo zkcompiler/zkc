@@ -7,6 +7,7 @@
 namespace zkc {
 struct LinearContractionStats {
   unsigned producers = 0;
+  /// Semantic all-uses opportunities, independent of installed target support.
   unsigned eligiblePairs = 0;
   unsigned selectedPairs = 0;
   unsigned eligibleProducers = 0;
@@ -18,16 +19,19 @@ void printLinearContractionStats(const LinearContractionStats &,
                                  llvm::raw_ostream &);
 struct LinearContractionUse {
   mlir::Operation *consumer;
-  DiagonalContractionSelection contraction;
+  DiagonalContractionRoles contraction;
 };
 struct LinearContractionGroup {
   mlir::Operation *producer;
-  DiagonalProducerSelection production;
+  DiagonalProducerRoles production;
   llvm::SmallVector<LinearContractionUse> uses;
 };
 /// Read-only, same-function all-uses analysis. Groups are atomic. No operation
-/// moves; unavailable interfaces, escaping values and unmatched domains retain
-/// dense execution.
+/// moves. This reports semantic opportunities without testing backend
+/// availability; Target separately admits installed physical choices.
+/// Only direct operations in a single-block function are considered; nested
+/// region pairs remain outside this planner even when carrier admission allows
+/// them.
 llvm::SmallVector<LinearContractionGroup>
 findLinearContractions(mlir::func::FuncOp, LinearContractionStats &);
 } // namespace zkc

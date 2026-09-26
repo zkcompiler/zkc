@@ -1,7 +1,8 @@
 """Small explicit-binding test authoring vocabulary, independent of the compiler.
 
-These builders create /2 records directly. They never accept a serialized /1
-module or candidate. Instruction sites and order are supplied by each test.
+The module builder expands test fragments into the current zkc.protocol/1
+carrier with explicit operation bindings and nominal types. It does not convert
+serialized modules or candidates. Instruction sites and order come from each test.
 """
 import copy
 

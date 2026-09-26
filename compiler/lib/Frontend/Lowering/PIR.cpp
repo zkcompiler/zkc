@@ -1,5 +1,6 @@
 #include "PIR.h"
 #include "../Resolution/Project.h"
+#include "OutputWork.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Source/Codec.h"
 #include <map>
@@ -101,30 +102,110 @@ Expected<source::Body> lowerBody(const model::Module &module,
   return result;
 }
 } // namespace
-Expected<source::Content> lower(const model::Module &model) {
-  if (!model.complete) {
-    if (!model.diagnostics.empty()) {
-      const auto &d = model.diagnostics.front();
-      return diagnostic(model.text, model.filename,
-                        d.location ? d.location->offset : 0, d.code, d.message);
-    }
-    // Analysis marks a model incomplete only while recording why.
-    report_fatal_error("an incomplete analysis carries no diagnostic");
+struct SourceEmitter {
+  static model::EmittedSource
+  finish(model::CheckedSource checked, source::Content content,
+         const std::map<DeclId, std::string> &names) {
+    auto model = std::move(checked).takeModel();
+    for (const auto &[id, name] : names)
+      model->declarations.at(id.index).loweredName = name;
+    return model::EmittedSource(std::move(model), std::move(content));
   }
-  if (model.construction)
-    return source::Content(*model.construction);
+};
+Expected<model::EmittedSource> lower(model::CheckedSource &&checked,
+                                     WorkBudget &budget) {
+  const auto &model = checked.get();
+  constexpr auto account = WorkAccount::Output;
+  if (auto error = work::charge(budget, account))
+    return error;
+  if (model.construction) {
+    for (auto count : {model.construction->publicBindings.size(),
+                       model.construction->draws.size()})
+      if (auto error = work::charge(budget, account, count))
+        return error;
+    for (const auto &binding : model.construction->publicBindings)
+      if (auto error = work::charge(budget, account, binding.ports.size()))
+        return error;
+    if (auto error = source::checkStructure(*model.construction))
+      return error;
+    return SourceEmitter::finish(std::move(checked), *model.construction, {});
+  }
+  // Metadata has no callable bodies; those are supplied by plans below.
+  for (auto count :
+       {model.metadata.bindings.size(), model.metadata.instances.size(),
+        model.metadata.entries.size(), model.metadata.configurations.size(),
+        model.metadata.relations.size(), model.metadata.relationViews.size()})
+    if (auto error = work::charge(budget, account, count))
+      return error;
+  for (const auto &binding : model.metadata.bindings)
+    if (auto error =
+            work::charge(budget, account, binding.application.arguments.size()))
+      return error;
+  for (const auto &configuration : model.metadata.configurations)
+    for (auto count :
+         {configuration.arguments.size(), configuration.implementations.size()})
+      if (auto error = work::charge(budget, account, count))
+        return error;
+  for (const auto &instance : model.metadata.instances) {
+    for (auto count : {instance.parameters.size(), instance.dependencies.size(),
+                       instance.roles.size()})
+      if (auto error = work::charge(budget, account, count))
+        return error;
+    for (const auto &parameter : instance.parameters)
+      if (const auto *ingress =
+              std::get_if<source::FamilyIngress>(&parameter.second)) {
+        if (auto error =
+                work::charge(budget, account, ingress->selectors.size()))
+          return error;
+        for (const auto &selector : ingress->selectors)
+          if (auto error =
+                  work::charge(budget, account, selector.arguments.size()))
+            return error;
+      }
+  }
   source::Module out = model.metadata;
+  std::map<DeclId, std::string> names;
   for (const auto &plan : model.bodies) {
     if (!plan.emit)
       continue;
+    if (auto error = work::charge(budget, account))
+      return error;
+    const auto &declaration = model.declarations.at(plan.declaration.index);
+    for (auto count : {plan.roles.size(), plan.naturalParameters.size(),
+                       plan.dependencies.size(), declaration.parameters.size(),
+                       declaration.requirements.size()})
+      if (auto error = work::charge(budget, account, count))
+        return error;
+    for (const auto &requirement : declaration.requirements)
+      if (auto error =
+              work::charge(budget, account, requirement.arguments.size()))
+        return error;
+    for (const auto &dependency : plan.dependencies)
+      if (auto error =
+              work::charge(budget, account, dependency.agreements.size()))
+        return error;
+    for (const auto *ports : {&declaration.inputs, &declaration.outputs})
+      for (const auto &port : *ports) {
+        // Charge the authored port even if its flattened layout has no leaves.
+        if (auto error = work::charge(budget, account))
+          return error;
+        auto count = model.types.at(port.type.index).kind == Type::Kind::Logical
+                         ? size_t(1)
+                         : model.layouts.at(port.type).size();
+        if (auto error = work::charge(budget, account, count))
+          return error;
+      }
     std::optional<source::Body> body;
     if (plan.body) {
+      if (auto error = chargeBody(budget, account, *plan.body))
+        return error;
       auto lowered = lowerBody(model, *plan.body);
       if (!lowered)
         return lowered.takeError();
       body = std::move(*lowered);
     }
     const auto &d = model.declarations.at(plan.declaration.index);
+    names.emplace(plan.declaration, d.name);
     auto inputs = [&] {
       std::vector<source::Parameter> flat;
       for (const auto &p : d.inputs)
@@ -190,7 +271,8 @@ Expected<source::Content> lower(const model::Module &model) {
   // independent instantiator. Allocate those anchors from the same exact
   // project identities as ordinary and checked functions. No carrier extension
   // or downstream hash-to-source guess is needed.
-  if (model.resolution) {
+  assert(model.resolution && "checked source retains resolved project input");
+  {
     std::map<std::string, std::string> renamed;
     std::set<std::string> reserved;
     auto reserve = [&](const auto &declarations) {
@@ -214,6 +296,11 @@ Expected<source::Content> lower(const model::Module &model) {
             "a generic origin conflicts with another emitted declaration");
       renamed.emplace(std::move(name), f.name);
     }
+    for (auto &[id, name] : names)
+      if (model.declarations.at(id.index).generic &&
+          model.declarations.at(id.index).kind != Declaration::Kind::Protocol)
+        if (auto found = renamed.find(name); found != renamed.end())
+          name = found->second;
     for (auto &configuration : out.configurations)
       if (auto it = renamed.find(configuration.base); it != renamed.end())
         configuration.base = it->second;
@@ -235,6 +322,6 @@ Expected<source::Content> lower(const model::Module &model) {
   }
   if (auto error = source::checkStructure(out))
     return error;
-  return source::Content(std::move(out));
+  return SourceEmitter::finish(std::move(checked), std::move(out), names);
 }
 } // namespace zkc::frontend::lowering

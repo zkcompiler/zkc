@@ -25,19 +25,47 @@ upstream library.
 ## Dialects and operations
 
 [IR.td](../../compiler/include/zkc/Dialect/IR.td) includes the maintained ODS
-subjects. Each dialect initializes its generated operation list in
-[`lib/Dialect`](../../compiler/lib/Dialect). The dialect names in
-[GenerateIR.cmake](../../compiler/cmake/GenerateIR.cmake), the umbrella
-[IR.h](../../compiler/include/zkc/Dialect/IR.h), and `registerDialects` in
-[Operations.cpp](../../compiler/lib/Dialect/Operations.cpp) are explicit.
+subjects. Each dialect owns its public `<Name>/IR/<Name>Dialect.h` and its
+initialization file under [`lib/Dialect`](../../compiler/lib/Dialect).
+[IR.h](../../compiler/include/zkc/Dialect/IR.h) collects shared generated operation
+declarations; dialect class declarations live in the per-dialect headers.
+Registration and mandatory verification belong to `Zkc::IR`; dialect-local
+transformation passes belong to `Zkc::Transforms`; aggregate pass registration
+belongs to `Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
 Generated operation declarations stay shared because parent traits cross dialect
 boundaries; definitions and registration lists are generated per dialect.
+Public dialect queries and verifiers remain extension APIs. Raw construction
+helpers under `Dialect/detail/Builders.h` are unsupported same-version details
+and do not establish admission. Claim IR structure belongs to IR; the optional
+`Zkc::ClaimTranslation` bridge owns source-bound claim import and checking.
 
 For an operation in an existing dialect, edit its ODS definition and verifier.
-The generated registration list follows the definition. A new dialect additionally
-needs its initialization file, the explicit generation/registration entries and
-its source in [CMakeLists.txt](../../compiler/CMakeLists.txt). Keep reusable public
-headers under `include/zkc` and implementations under the matching `lib` area.
+The generated registration list follows the definition. Bound kernel operations
+also declare their logical contract keys on the actual ODS operation record.
+`zkc-tblgen` generates the contract-to-operation adapter used by IR; Contracts
+remains MLIR-free and independently owns signature and implementation legality.
+An explicit family such as `transcript.observe.*` is intersected with installed
+contracts. Add independent expected mapping and discriminating behavior checks
+when extending it: importer/verifier agreement through the same generated map
+cannot detect a shared wrong mapping. No purity or cryptographic law is inferred
+from this metadata.
+
+A new built-in dialect
+also needs:
+
+1. Its public dialect header and initialization implementation.
+2. Entries in `zkc_dialects` and `zkc_dialect_owners` in
+   [GenerateIR.cmake](../../compiler/cmake/GenerateIR.cmake), which own generation
+   and registration ownership.
+3. Membership in the `ProtocolDialects` type list in
+   [Registry.cpp](../../compiler/lib/Dialect/Registry.cpp). This list drives both
+   `registerDialects` and the loaded-context precondition `hasProtocolDialects`.
+4. Its source assigned to `ZkcIR` in
+   [Components.cmake](../../compiler/cmake/Components.cmake).
+
+Optional external dialects register in the caller's registry and do not join the
+built-in protocol precondition. Keep reusable public headers under `include/zkc`
+and implementations under the matching `lib` area.
 
 An operation's mathematical contract, nominal binding and implementation are
 separate. Follow [protocol libraries](../compiler/protocol-libraries.md) for the
@@ -51,7 +79,7 @@ code named by an input artifact.
 
 All built-in factories are declared in
 [Passes.h](../../compiler/include/zkc/Transforms/Passes.h); tools call
-`registerCompilerPasses()` explicitly. Each implementation owns its name, options,
+`registerCompilerPasses()` from `Compiler/Passes.h` explicitly. Each implementation owns its name, options,
 description, dialect dependencies and statistics. With this small pass set,
 ordinary MLIR C++ definitions remain sufficient; there is no second metadata
 catalogue or custom registration framework.
@@ -75,7 +103,7 @@ When adding a pass:
 
 1. Implement the transformation in its owning conversion, analysis or transform
    area and expose a factory in `Passes.h`.
-2. Add that factory to [Passes.cpp](../../compiler/lib/Transforms/Passes.cpp) and
+2. Add that factory to [Passes.cpp](../../compiler/lib/Compiler/Passes.cpp) and
    its implementation to the build. Declare any dialects it can create.
 3. State the accepted stage, preconditions, observations and failure behavior
    beside the implementation. Preserve or invalidate analyses explicitly if the

@@ -5,45 +5,69 @@
 #
 # A test name is optional. Without one the file is built but registers no test,
 # which is for an executable a Python test here drives as a tool.
-function(add_zkc_test name)
+function(add_zkc_test name component)
   add_executable(zkc-${name}-test ${name}.cpp)
-  target_link_libraries(zkc-${name}-test PRIVATE ZkcCompiler)
+  target_link_libraries(zkc-${name}-test PRIVATE Zkc${component})
   target_compile_options(zkc-${name}-test PRIVATE -Wall -Wextra -Werror)
-  if(ARGC GREATER 1)
-    add_test(NAME ${ARGV1} COMMAND zkc-${name}-test)
-    set_tests_properties(${ARGV1} PROPERTIES LABELS native)
+  if(ARGC GREATER 2)
+    add_test(NAME ${ARGV2} COMMAND zkc-${name}-test)
+    set_tests_properties(${ARGV2} PROPERTIES LABELS native)
   endif()
 endfunction()
 
-add_zkc_test(json json-carrier)
-add_zkc_test(requirements)
-add_zkc_test(generic generic-signatures)
-add_zkc_test(bindings operation-bindings)
-add_zkc_test(source source-document)
-add_zkc_test(frontend_analysis frontend-analysis)
-add_zkc_test(checked_library checked-library)
-add_zkc_test(export protocol-export)
-add_zkc_test(admission protocol-admission)
-add_zkc_test(variants local-variants)
-add_zkc_test(symbols protocol-symbols)
-add_zkc_test(family_symbols input-family-symbols)
-add_zkc_test(relation relation-model)
-add_zkc_test(relation_authoring relation-authoring-model)
-add_zkc_test(air air-model)
-add_zkc_test(air_polynomial air-polynomial-model)
-add_zkc_test(claims claims-api)
-add_zkc_test(execution source-execution)
-add_zkc_test(input_family_provenance input-family-static-provenance)
-add_zkc_test(oracle_access oracle-access)
-add_zkc_test(operation_contracts operation-contracts)
+add_zkc_test(compilation CompilerCore compilation-api)
+add_zkc_test(construction CompilerCore)
+target_link_libraries(zkc-construction-test PRIVATE ZkcFrontendLoading)
+add_zkc_test(json Support json-carrier)
+add_zkc_test(requirements Contracts)
+add_zkc_test(generic Contracts generic-signatures)
+add_zkc_test(bindings IR operation-bindings)
+add_zkc_test(contract_mappings IR operation-contract-mappings)
+add_test(NAME contract-mapping-generation
+  COMMAND ${CMAKE_COMMAND}
+    "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
+    "-DZKC_TABLEGEN_INCLUDES=${zkc_tablegen_includes}"
+    "-DZKC_MAPPING_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-mapping-generation"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_mapping_generation.cmake")
+set_tests_properties(contract-mapping-generation PROPERTIES LABELS native)
+add_zkc_test(frontend_dependencies Frontend frontend-dependencies)
+add_zkc_test(frontend_loading FrontendLoading frontend-loading)
+add_zkc_test(source CompilerCore source-document)
+add_zkc_test(frontend_analysis FrontendLoading frontend-analysis)
+add_zkc_test(frontend_budgets Frontend frontend-work-budgets)
+add_zkc_test(checked_library Frontend checked-library)
+add_zkc_test(library_entry Frontend library-entry-layout)
+add_zkc_test(frontend_provenance Frontend frontend-provenance)
+add_zkc_test(export CompilerCore protocol-export)
+add_zkc_test(admission Protocol protocol-admission)
+add_zkc_test(variants Transforms local-variants)
+add_zkc_test(symbols IR protocol-symbols)
+add_zkc_test(family_symbols CompilerCore input-family-symbols)
+add_zkc_test(relation Relation relation-model)
+add_zkc_test(relation_authoring FrontendLoading relation-authoring-model)
+add_zkc_test(air Relation air-model)
+add_zkc_test(air_polynomial Relation air-polynomial-model)
+add_zkc_test(claims CompilerCore claims-api)
+add_zkc_test(execution Frontend source-execution)
+add_zkc_test(input_family_provenance Frontend input-family-static-provenance)
+add_zkc_test(oracle_access Protocol oracle-access)
+add_zkc_test(operation_contracts Contracts operation-contracts)
 target_compile_definitions(zkc-operation_contracts-test PRIVATE
   ZKC_HISTORY_FIXTURE="${PROJECT_SOURCE_DIR}/../tests/fixtures/variants/history-contracts.txt")
-add_zkc_test(polynomial_domain_contracts polynomial-domain-contracts)
-add_zkc_test(linear_interfaces linear-interfaces)
-add_zkc_test(obligations obligation-closure)
-add_zkc_test(domains nominal-domains)
-add_zkc_test(representations representation-domains)
-add_zkc_test(properties registered-properties)
+add_zkc_test(polynomial_domain_contracts Protocol polynomial-domain-contracts)
+add_zkc_test(linear_interfaces Transforms linear-interfaces)
+add_zkc_test(target_decisions Transforms target-decisions)
+add_zkc_test(obligations Protocol obligation-closure)
+add_zkc_test(domains IR nominal-domains)
+add_zkc_test(representations Contracts representation-domains)
+add_zkc_test(properties IR registered-properties)
+
+add_zkc_test(diagnostics IR ir-diagnostics)
+add_zkc_test(ir_verification IR ir-verification)
+mlir_target_link_libraries(zkc-symbols-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-variants-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-family_symbols-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-claims-test PRIVATE MLIRParser)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
@@ -54,12 +78,14 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # path, so no test can be handed the wrong one. To run one by hand, run it from
 # here: ctest --test-dir BUILD -R NAME -V.
 set(zkc_script_environment
+  ZKC_CTEST_COMPONENTS=${PROJECT_BINARY_DIR}/component-dependencies.txt
   ZKC_CTEST_COMPILER=$<TARGET_FILE:zkc-compile>
   ZKC_CTEST_OPTIMIZER=$<TARGET_FILE:zkc-opt>
   ZKC_CTEST_SOURCE_BENCH=$<TARGET_FILE:zkc-source-bench>
   ZKC_CTEST_SERVICE_COMPILER=$<TARGET_FILE:zkc-service-compile>
   ZKC_CTEST_SERVICE_OPTIMIZER=$<TARGET_FILE:zkc-service-opt>
   ZKC_CTEST_REQUIREMENTS_TEST=$<TARGET_FILE:zkc-requirements-test>
+  ZKC_CTEST_CONSTRUCTION_TEST=$<TARGET_FILE:zkc-construction-test>
   PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../tests/support)
 
 # Every Python file in this directory is a test, and its name is the test's

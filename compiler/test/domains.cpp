@@ -1,7 +1,8 @@
-#include "zkc/Protocol/Domains.h"
+#include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Kernels.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 #include <map>
@@ -316,26 +317,32 @@ void installedBindings() {
         any_of(operation.signature.requirements, [](const auto &predicate) {
           return predicate.relation == "TwoAdicField";
         });
-    source::OperationBinding binding{{}, "test", operation.name, {}, ""};
+    source::OperationBinding binding{{}, "test", {operation.name, {}, ""}};
     for (auto [i, term] : enumerate(operation.signature.scope.terms))
       if (!term.parent) {
         const auto &sort = operation.signature.scope.sorts[i];
-        binding.arguments.push_back(
+        binding.application.arguments.push_back(
             sort == "Codec"
                 ? codecs.at(
                       StringRef(operation.name)
                           .drop_front(StringRef("transcript.observe.").size())
                           .str())
-            : sort == "Commitment" && (oracle || operation.name == "transcript.observe.commitments")
+            : sort == "Commitment" &&
+                    (oracle ||
+                     operation.name == "transcript.observe.commitments")
                 ? "rows.merkle-keccak256.koala-bear/1"
-            : sort == "Transcript" && (operation.name == "transcript.draw_index" || operation.name == "transcript.observe.commitments") ? "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
-            : sort == "Field" && (embedding || operation.name == "random.index") ? "koala-bear.ext8-binomial3"
+            : sort == "Transcript" &&
+                    (operation.name == "transcript.draw_index" ||
+                     operation.name == "transcript.observe.commitments")
+                ? "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
+            : sort == "Field" && (embedding || operation.name == "random.index")
+                ? "koala-bear.ext8-binomial3"
             : sort == "Field" && operation.name == "pairing.check" ? "bn254.fr"
-            : sort == "Field" && twoAdic   ? "koala-bear"
-                                           : roots.at(sort));
+            : sort == "Field" && twoAdic ? "koala-bear"
+                                         : roots.at(sort));
       }
-    const auto logical = accept(resolveBinding(binding, false));
-    const auto selected = accept(defaultImplementation(binding));
+    const auto logical = accept(resolveBinding(binding.application, false));
+    const auto selected = accept(defaultImplementation(binding.application));
     const std::string defaultPrefix =
         (StringRef(selected).split('/').first + "/").str();
     for (StringRef prefix :
@@ -348,8 +355,8 @@ void installedBindings() {
                                   "poly.empty_point", "poly.append_point"},
               operation.name))
         continue;
-      binding.implementation = (prefix + operation.name).str();
-      const auto physical = accept(resolveBinding(binding, true));
+      binding.application.implementation = (prefix + operation.name).str();
+      const auto physical = accept(resolveBinding(binding.application, true));
       auto compare = [&](ArrayRef<BoundType> before,
                          ArrayRef<BoundType> after) {
         require(before.size() == after.size(), "installed signature arity");
@@ -365,7 +372,8 @@ void installedBindings() {
       };
       compare(logical.inputs, physical.inputs);
       compare(logical.outputs, physical.outputs);
-      const auto constrained = accept(resolveBinding(binding, false));
+      const auto constrained =
+          accept(resolveBinding(binding.application, false));
       require(constrained.inputs == logical.inputs &&
                   constrained.outputs == logical.outputs,
               "implementation constraints retain logical port types");
@@ -387,19 +395,21 @@ void installedBindings() {
   source::OperationBinding conversion{
       {},
       "convert",
-      "table.relayout",
-      {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
-      "arkworks/table.relayout"};
-  require(accept(resolveBinding(conversion, true)).outputs[0].representation ==
-              "arkworks.mle-msb/1",
+      {"table.relayout",
+       {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
+       "arkworks/table.relayout"}};
+  require(accept(resolveBinding(conversion.application, true))
+                  .outputs[0]
+                  .representation == "arkworks.mle-msb/1",
           "explicit table conversion");
-  conversion.arguments[0] = "unsupported";
-  refuse(resolveBinding(conversion, true), "binding-conversion");
-  conversion.arguments[0] = "bls12-381.fr";
-  conversion.arguments[1] = conversion.arguments[2];
-  refuse(resolveBinding(conversion, true), "binding-conversion");
-  conversion.arguments[1] = "missing";
-  refuse(resolveBinding(conversion, true), "binding-representation");
+  conversion.application.arguments[0] = "unsupported";
+  refuse(resolveBinding(conversion.application, true), "binding-conversion");
+  conversion.application.arguments[0] = "bls12-381.fr";
+  conversion.application.arguments[1] = conversion.application.arguments[2];
+  refuse(resolveBinding(conversion.application, true), "binding-conversion");
+  conversion.application.arguments[1] = "missing";
+  refuse(resolveBinding(conversion.application, true),
+         "binding-representation");
 }
 } // namespace
 
@@ -422,14 +432,15 @@ void numericalField() {
                          "transcript", "prover_key", "verifier_key"})
     require(!catalog.defaultRepresentation(kind, "koala-bear"),
             "field availability does not imply unrelated representations");
-  source::OperationBinding dot{{}, "dot", "vector.dot", {"koala-bear"}, ""};
-  require(accept(defaultImplementation(dot)) == "plonky3/vector.dot",
+  source::OperationBinding dot{{}, "dot", {"vector.dot", {"koala-bear"}, ""}};
+  require(accept(defaultImplementation(dot.application)) ==
+              "plonky3/vector.dot",
           "numerical provider selected from the installed contract");
-  dot.implementation = "arkworks/vector.dot";
-  refuse(resolveBinding(dot, true), "binding-implementation");
-  dot.arguments = {"bls12-381.fr"};
-  dot.implementation = "plonky3/vector.dot";
-  refuse(resolveBinding(dot, true), "binding-implementation");
+  dot.application.implementation = "arkworks/vector.dot";
+  refuse(resolveBinding(dot.application, true), "binding-implementation");
+  dot.application.arguments = {"bls12-381.fr"};
+  dot.application.implementation = "plonky3/vector.dot";
+  refuse(resolveBinding(dot.application, true), "binding-implementation");
 }
 
 void extensionField() {
@@ -457,19 +468,22 @@ void extensionField() {
                          "group", "prover_key", "verifier_key"})
     require(!catalog.defaultRepresentation(kind, extension),
             "no unsupported extension services");
-  source::OperationBinding embed{{}, "embed", "field.embed", {extension}, ""};
-  const auto logical = accept(resolveBinding(embed, false));
+  source::OperationBinding embed{{}, "embed", {"field.embed", {extension}, ""}};
+  const auto logical = accept(resolveBinding(embed.application, false));
   require(
       logical.inputs == std::vector<BoundType>{{"field", "koala-bear", ""}} &&
           logical.outputs == std::vector<BoundType>{{"field", extension, ""}},
       "embedding signature uses the associated base");
-  embed.implementation = accept(defaultImplementation(embed));
-  require(embed.implementation == "plonky3/field.embed", "extension provider");
-  require(accept(resolveBinding(embed, true)).inputs[0].representation ==
-              "plonky3.koala-bear/1",
+  embed.application.implementation =
+      accept(defaultImplementation(embed.application));
+  require(embed.application.implementation == "plonky3/field.embed",
+          "extension provider");
+  require(accept(resolveBinding(embed.application, true))
+                  .inputs[0]
+                  .representation == "plonky3.koala-bear/1",
           "embedding has distinct physical ports");
-  embed.arguments = {"koala-bear"};
-  refuse(resolveBinding(embed, true), "binding-static-identity");
+  embed.application.arguments = {"koala-bear"};
+  refuse(resolveBinding(embed.application, true), "binding-static-identity");
 }
 
 void bn254Domains() {
@@ -529,11 +543,13 @@ void bn254Domains() {
       if (!StringRef(op.name).starts_with("curve.") ||
           op.name == "curve.commit" || op.name == "curve.response")
         continue;
-      source::OperationBinding binding{{}, "bn", op.name, {group.str()}, ""};
-      binding.implementation = accept(defaultImplementation(binding));
-      require(binding.implementation == "arkworks/" + op.name,
+      source::OperationBinding binding{{}, "bn", {op.name, {group.str()}, ""}};
+      binding.application.implementation =
+          accept(defaultImplementation(binding.application));
+      require(binding.application.implementation == "arkworks/" + op.name,
               "existing arkworks curve operation dispatches by nominal group");
-      for (const auto &type : accept(resolveBinding(binding, true)).inputs)
+      for (const auto &type :
+           accept(resolveBinding(binding.application, true)).inputs)
         if (type.kind == "group" || type.kind == "groups")
           require(type.identity == group, "curve inputs keep G1/G2 identity");
     }
@@ -552,30 +568,32 @@ void bn254Domains() {
           "BN254 and BLS scalar codecs remain nominally distinct");
   source::OperationBinding msb{{},
                                "round",
-                               "poly.round_evaluate",
-                               {"bn254.fr"},
-                               "arkworks-msb/poly.round_evaluate"};
-  refuse(resolveBinding(msb, true), "binding-implementation");
+                               {"poly.round_evaluate",
+                                {"bn254.fr"},
+                                "arkworks-msb/poly.round_evaluate"}};
+  refuse(resolveBinding(msb.application, true), "binding-implementation");
   source::OperationBinding pairing{
-      {}, "check", "pairing.check", {"bn254.fr"}, ""};
-  auto logical = accept(resolveBinding(pairing, false));
-  require(logical.operation == "algebra.pairing_check" &&
+      {}, "check", {"pairing.check", {"bn254.fr"}, ""}};
+  auto logical = accept(resolveBinding(pairing.application, false));
+  require(boundOperationName(pairing.application.contract) ==
+                  "algebra.pairing_check" &&
               logical.inputs ==
                   std::vector<BoundType>{{"groups", "bn254.g1", ""},
                                          {"groups", "bn254.g2", ""}} &&
               logical.outputs == std::vector<BoundType>{{"bool", "", ""}},
           "pairing has ordered distinct group-vector operands");
-  require(accept(defaultImplementation(pairing)) == "arkworks/pairing.check",
+  require(accept(defaultImplementation(pairing.application)) ==
+              "arkworks/pairing.check",
           "pairing uses the existing arkworks provider");
-  pairing.implementation = "dalek/pairing.check";
-  refuse(resolveBinding(pairing, true), "binding-implementation");
-  pairing.implementation.clear();
-  pairing.arguments = {"bn254.g1", "bn254.g2"};
-  refuse(resolveBinding(pairing, false), "binding-static-identity");
-  pairing.arguments = {"bls12-381.fr"};
-  refuse(resolveBinding(pairing, false), "binding-static-identity");
-  pairing.arguments.clear();
-  refuse(resolveBinding(pairing, false), "binding-static-arity");
+  pairing.application.implementation = "dalek/pairing.check";
+  refuse(resolveBinding(pairing.application, true), "binding-implementation");
+  pairing.application.implementation.clear();
+  pairing.application.arguments = {"bn254.g1", "bn254.g2"};
+  refuse(resolveBinding(pairing.application, false), "binding-static-identity");
+  pairing.application.arguments = {"bls12-381.fr"};
+  refuse(resolveBinding(pairing.application, false), "binding-static-identity");
+  pairing.application.arguments.clear();
+  refuse(resolveBinding(pairing.application, false), "binding-static-arity");
 
   for (StringRef contract :
        {"field.add", "vector.dot", "matrix.mul_vector", "poly.coset_evaluate",
@@ -584,8 +602,8 @@ void bn254Domains() {
         "poly.divide_opening", "poly.univariate_evaluate",
         "poly.round_evaluate", "random.draw", "random.vector"}) {
     source::OperationBinding binding{
-        {}, "bn", contract.str(), {"bn254.fr"}, ""};
-    require(accept(defaultImplementation(binding)) ==
+        {}, "bn", {contract.str(), {"bn254.fr"}, ""}};
+    require(accept(defaultImplementation(binding.application)) ==
                 ("arkworks/" + contract).str(),
             "BN254 numerical contracts have installed physical carriers");
   }

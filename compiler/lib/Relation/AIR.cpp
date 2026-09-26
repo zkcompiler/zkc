@@ -1,6 +1,9 @@
 #include "zkc/Relation/AIR.h"
 #include "Field.h"
+#include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -269,6 +272,11 @@ json::Value AIR::encode() const {
                       {"public_inputs", publicCount},
                       {"constraints", std::move(constraints)}};
 }
+std::string AIR::identity() const {
+  auto bytes = zkc::printJson(encode());
+  return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
+}
+
 json::Value AIR::analysis() const {
   json::Array constraints;
   uint32_t maxDegree = 0, maxOffset = 0;

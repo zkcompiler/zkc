@@ -1402,10 +1402,10 @@ class Parser {
         source::OperationBinding binding;
         binding.name = name();
         expect("=");
-        binding.contract = path();
-        binding.arguments = list("(", ")", [&] { return path(); });
+        binding.application.contract = path();
+        binding.application.arguments = list("(", ")", [&] { return path(); });
         if (eat("using"))
-          binding.implementation = name();
+          binding.application.implementation = name();
         expect(";");
         declaration.bindings.push_back(record(std::move(binding), start));
       } else if (tag == "relation" && explicitBindings) {

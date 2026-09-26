@@ -1,6 +1,6 @@
 #include "Service.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "zkc/Compiler/Library.h"
+#include "zkc/Interfaces/SourceLibrary.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "ServiceDialect.cpp.inc"

@@ -1,9 +1,10 @@
-#include "zkc/Protocol/Kernels.h"
+#include "zkc/Contracts/Kernels.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Bindings.h"
-#include "zkc/Protocol/Module.h"
-#include "zkc/Protocol/TypeProperties.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
@@ -17,14 +18,15 @@ LogicalResult verifyKernel(Operation *op, bool physical) {
   while (owner && isa<LocalIfOp, LocalForOp, LocalMatchOp>(owner))
     owner = owner->getParentOp();
   if (!module || !isa_and_nonnull<func::FuncOp>(owner))
-    return op->emitOpError(
-        "interactive-kernel-context: expected a local function in pir.module");
+    return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",
+                             "expected a local function in pir.module");
   auto stage = module.getStageAttr();
   if (!stage)
-    return op->emitOpError("interactive-kernel-context: missing stage");
+    return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",
+                             "missing stage");
   if (physical ? stage.getValue() != "physical"
                : stage.getValue() != "common" && stage.getValue() != "logical")
-    return op->emitOpError("interactive-kernel-stage");
+    return diagnostics::emit(op->emitOpError(), "interactive-kernel-stage");
 
   return protocol::verifyBoundOperation(op, physical);
 }
@@ -181,26 +183,27 @@ LogicalResult ReleaseOp::verify() {
   auto function = dyn_cast_or_null<func::FuncOp>(owner);
   if (!root || root.getStage() != "physical" || !function ||
       !llvm::hasSingleElement(function.getBody()))
-    return emitOpError("interactive-release-context");
+    return diagnostics::emit(emitOpError(), "interactive-release-context");
   if (getValues().empty())
-    return emitOpError("interactive-release-empty");
+    return diagnostics::emit(emitOpError(), "interactive-release-empty");
   llvm::DenseSet<Value> seen;
   for (auto value : getValues()) {
     if (!seen.insert(value).second)
-      return emitOpError("interactive-release-unavailable");
+      return diagnostics::emit(emitOpError(),
+                               "interactive-release-unavailable");
     auto type = protocol::encodeBoundType(value.getType(), true);
     if (!type)
-      return emitOpError() << toString(type.takeError());
+      return diagnostics::emit(emitOpError(), type.takeError());
     bool canDiscard = protocol::discardable(type->spelling());
     if (!canDiscard)
-      return emitOpError("interactive-release-resource");
+      return diagnostics::emit(emitOpError(), "interactive-release-resource");
     for (auto &use : value.getUses()) {
       auto *owner = use.getOwner();
       if (owner == getOperation())
         continue;
       if (owner->getBlock() != (*this)->getBlock() ||
           !owner->isBeforeInBlock(getOperation()))
-        return emitOpError("interactive-release-live");
+        return diagnostics::emit(emitOpError(), "interactive-release-live");
     }
   }
   return success();

@@ -1,10 +1,12 @@
 #include "Select.h"
+#include "../Resolution/Declarations.h"
 #include "../Resolution/Project.h"
-#include "../Semantics/Libraries.h"
 #include "../Static/Domains.h"
 #include "../Static/Naturals.h"
 #include "../Syntax/Lexer.h"
-#include "zkc/Protocol/Bindings.h"
+#include "../Work.h"
+#include "Work.h"
+#include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include <limits>
 #include <map>
@@ -17,10 +19,10 @@ namespace {
 using Substitution = std::map<std::string, std::string>;
 using Names = std::set<std::string>;
 constexpr unsigned maxDepth = 64, maxSpecializations = 1024;
-constexpr size_t maxWork = 262144;
 
 class Selector {
   const Module &source;
+  const resolution::Context &project;
   Module out;
   StringRef text, filename;
   Error error = Error::success();
@@ -34,24 +36,20 @@ class Selector {
   std::map<std::string, const source::OperationBinding *> bindings;
   std::vector<std::string> stack;
   std::vector<Specialization> provenance;
-  size_t work = 0;
+  WorkBudget &budget;
   unsigned expansions = 0;
 
   bool good() { return !error; }
   bool fail(const source::Node &node, StringRef code, const Twine &message) {
     if (good())
-      error = source.project
-                  ? diagnostic(source.project->input,
-                               node.location.value_or(source::Span{}), code,
-                               message)
-                  : diagnostic(text, filename,
-                               node.location ? node.location->offset : 0, code,
-                               message);
+      error = diagnostic(project.input, node.location.value_or(source::Span{}),
+                         code, message);
     return false;
   }
-  bool tick(const source::Node &node) {
-    return ++work <= maxWork || fail(node, "source-staging-limit",
-                                     "static construction exceeds work budget");
+  bool tick(const source::Node &node, uint64_t amount = 1) {
+    return budget.charge(WorkAccount::AuthoredStatic, amount) ||
+           fail(node, "source-staging-limit",
+                "compiler work budget exhausted: authored-static");
   }
   bool declare(StringRef name, const source::Node &node) {
     return names.insert(name.str()).second ||
@@ -371,7 +369,7 @@ class Selector {
       auto selected = bindings.find(callee.str());
       if (selected == bindings.end())
         return;
-      op = selected->second->contract;
+      op = selected->second->application.contract;
     }
     for (size_t i = 0; i < attrs.size() && i < atoms.size(); ++i) {
       bool numeric =
@@ -598,12 +596,14 @@ class Selector {
     if (!arguments(definition, actuals, terms, outer, sub, node))
       return;
     stack.push_back(definition.name);
-    work += definition.roles.size() + definition.parameters.size() +
-            definition.arguments.size() + definition.results.size() +
-            definition.dependencies.size();
-    if (work > maxWork) {
+    for (auto count : {definition.roles.size(), definition.parameters.size(),
+                       definition.arguments.size(), definition.results.size(),
+                       definition.dependencies.size()})
+      if (!tick(node, count))
+        return;
+    if (!chargeDeclarationCopy(budget, definition)) {
       fail(node, "source-staging-limit",
-           "static construction exceeds work budget");
+           "compiler work budget exhausted: authored-static");
       return;
     }
     Protocol p = definition;
@@ -673,9 +673,27 @@ class Selector {
   }
 
 public:
-  Selector(const Module &source, StringRef text, StringRef filename)
-      : source(source), out(source), text(text), filename(filename) {}
-  Expected<Selection> run() {
+  Selector(const Module &source, const resolution::Context &project,
+           StringRef text, StringRef filename, WorkBudget &budget)
+      : source(source), project(project), text(text), filename(filename),
+        budget(budget) {}
+  Expected<Selection> run(ArrayRef<std::string> reservedNames) {
+    // Snapshot admission charges declarations before copying them; recursive
+    // staging operations below have their own charges.
+    if (!tick(source))
+      return std::move(error);
+    resolution::declarations(source, [&](const auto &d, auto) {
+      if (good() && !chargeDeclarationCopy(budget, d))
+        fail(d, "source-staging-limit",
+             "compiler work budget exhausted: authored-static");
+    });
+    if (!good())
+      return std::move(error);
+    out = source;
+    for (const auto &name : reservedNames) {
+      names.insert(name);
+      ++nameCounts[name];
+    }
     // Only additions need staging's global collision check. Existing modules
     // without static construction retain their previous admission boundary.
     auto reserve = [&](const auto &section) {
@@ -703,8 +721,7 @@ public:
       if (!declare(c.name, c))
         return std::move(error);
     auto evaluated = static_eval::evaluateNaturals(
-        source.constants, text, filename,
-        source.project ? &source.project->input : nullptr);
+        source.constants, text, filename, &project.input, budget);
     if (!evaluated)
       return evaluated.takeError();
     values = std::move(*evaluated);
@@ -896,23 +913,16 @@ public:
   }
 };
 } // namespace
-Expected<Selection>
-select(const Content &content, StringRef text, StringRef filename,
-       std::shared_ptr<const semantics::LibraryReport> *retained) {
-  if (const auto *module = std::get_if<Module>(&content)) {
-    std::shared_ptr<const semantics::LibraryReport> libraries;
-    auto integrated =
-        semantics::integrateLibraries(*module, text, filename, &libraries);
-    if (retained)
-      *retained = libraries;
-    if (!integrated)
-      return integrated.takeError();
-    auto selected = Selector(*integrated, text, filename).run();
-    if (!selected)
-      return selected.takeError();
-    selected->libraries = std::move(libraries);
-    return selected;
-  }
+Expected<Selection> select(const Content &content,
+                           const resolution::Context &project, StringRef text,
+                           StringRef filename,
+                           ArrayRef<std::string> reservedNames,
+                           WorkBudget &budget) {
+  if (const auto *module = std::get_if<Module>(&content))
+    return Selector(*module, project, text, filename, budget)
+        .run(reservedNames);
+  if (auto error = work::charge(budget, WorkAccount::AuthoredStatic))
+    return error;
   return Selection{content, {}, {}};
 }
 } // namespace zkc::frontend::instantiation

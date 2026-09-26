@@ -74,6 +74,11 @@ private:
   std::vector<Constraint> rows;
 };
 
+/// Bounded text transport for standalone R1CS relations and assignments.
+/// Checks byte, nesting, node and string limits before the recursive JSON
+/// parser; decodeR1CS performs relation-shape validation after this transport
+/// check.
+llvm::Expected<llvm::json::Value> parseR1CSText(llvm::StringRef);
 /// Strict canonical, versioned zkc interchange. No witness or generator state.
 llvm::Expected<R1CS> decodeR1CS(const llvm::json::Value &);
 /// Circom-compatible R1CS v1 container; reject custom gates and unknown

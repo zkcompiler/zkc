@@ -44,9 +44,9 @@ def main():
     profile = source.replace('module {\n  bind both = bool.and();',
                              'module "arkworks.multilinear.bls12-381/1" {')
     profile = profile.replace('= both(', '= bool.and(')
-    legacy_source = compile("protocol-source", profile)
-    legacy_released = compile("protocol-compile", json.dumps(legacy_source),
-                              "--release-storage")
+    profile_source = compile("protocol-source", profile)
+    profile_released = compile("protocol-compile", json.dumps(profile_source),
+                               "--release-storage")
 
     directory = journal.directory
     source_path = Path(directory) / "source.json"
@@ -63,7 +63,7 @@ def main():
     check(original, dense, True)
     for _, candidate in malformed(released, projected):
         check(original, candidate, False)
-    check(legacy_source, legacy_released, True)
+    check(profile_source, profile_released, True)
 
     print(f"{journal.save()} storage release reference checks passed")
 

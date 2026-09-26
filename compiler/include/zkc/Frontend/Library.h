@@ -1,7 +1,9 @@
 #ifndef ZKC_FRONTEND_LIBRARY_H
 #define ZKC_FRONTEND_LIBRARY_H
 
-#include "zkc/Compiler/Generic.h"
+#include "zkc/Frontend/Work.h"
+
+#include "zkc/Contracts/Generic.h"
 #include "zkc/Frontend/Module.h"
 #include <map>
 #include <set>
@@ -428,7 +430,7 @@ class LinkedProgram {
   struct Data;
   std::shared_ptr<const Data> data;
   explicit LinkedProgram(std::shared_ptr<const Data>);
-  friend llvm::Expected<LinkedProgram> link(LinkRequest);
+  friend llvm::Expected<LinkedProgram> link(LinkRequest, WorkBudget &);
 
 public:
   const Environment &environment() const;
@@ -451,6 +453,9 @@ llvm::Expected<CheckedBody> checkBody(Body, Environment,
                                       std::vector<Import> imports = {});
 llvm::Expected<CheckedComponent> checkComponent(ComponentDecl, Environment);
 llvm::Expected<LinkedProgram> link(LinkRequest);
+/// Share one invocation account across independently requested aliases. The
+/// budget is borrowed for this call and is never retained by LinkedProgram.
+llvm::Expected<LinkedProgram> link(LinkRequest, WorkBudget &);
 // Resolve solely from captured installed-domain authority; unknown/open
 // refuses.
 llvm::Expected<std::string> resolvedDomain(const StaticTerm &,
