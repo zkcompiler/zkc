@@ -510,7 +510,7 @@ and checked prime-subgroup images. Only the latter admits scalar-module
 rewrites. Its ordered evaluation domains retain axis labels; folds, permutations,
 rotations and embeddings validate their source/target meaning. These are native
 adapter APIs, not an installed Edwards PIR arithmetic suite or an optimization
-pass. Compiler law-admission objects live in `Protocol/Representations.h` and
+pass. Compiler law-admission objects live in `Contracts/Representations.h` and
 conditional mathematical laws in `Zkc.Algebra.Representations`.
 
 `choices::Sampler` owns a provider and role/purpose namespaces across attempts.

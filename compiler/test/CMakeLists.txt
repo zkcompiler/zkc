@@ -52,10 +52,10 @@ add_zkc_test(properties IR registered-properties)
 
 add_zkc_test(diagnostics IR ir-diagnostics)
 add_zkc_test(ir_verification IR ir-verification)
-target_link_libraries(zkc-symbols-test PRIVATE MLIRParser)
-target_link_libraries(zkc-variants-test PRIVATE MLIRParser)
-target_link_libraries(zkc-family_symbols-test PRIVATE MLIRParser)
-target_link_libraries(zkc-claims-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-symbols-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-variants-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-family_symbols-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-claims-test PRIVATE MLIRParser)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 

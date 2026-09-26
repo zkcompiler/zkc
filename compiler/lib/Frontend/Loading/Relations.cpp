@@ -1,5 +1,4 @@
 #include "../../Support/Input.h"
-#include "../Syntax/Lexer.h"
 #include "../Syntax/Tree.h"
 #include "Paths.h"
 #include "zkc/Frontend/Compile.h"

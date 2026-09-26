@@ -1,5 +1,6 @@
 #include "../lib/Frontend/Semantics/LibraryEntries.h"
 #include "Names.h"
+#include "llvm/Support/raw_ostream.h"
 #include <functional>
 
 using namespace zkc;
@@ -35,43 +36,88 @@ int main() {
   // Identical leaf counts do not establish a correspondence: paths, types,
   // target, order and single-use forwarding must all agree independently.
   using Change = std::function<void(lowering::LibraryEntry &)>;
-  const Change invalid[] = {
-      [](auto &e) { e.forwarding.arguments[0].name = "pair.other"; },
-      [](auto &e) { e.forwarding.arguments[0].type = "index"; },
-      [](auto &e) { std::swap(e.resultPaths[0][0], e.resultPaths[0][1]); },
-      [](auto &e) { e.forwarding.results.pop_back(); },
-      [](auto &e) { e.header.body.emplace(); },
-      [](auto &e) { e.forwarding.body->front().site = "other"; },
-      [](auto &e) { e.forwarding.body->back().site = "return"; },
-      [](auto &e) { e.forwarding.body->push_back(e.forwarding.body->back()); },
-      [](auto &e) {
-        e.forwarding.body->front()
-            .template get<source::AlgorithmCall>()
-            ->callee = "Other";
-      },
-      [](auto &e) {
-        e.forwarding.body->back().template get<source::Return>()->values[1] =
-            "result0";
-      },
-      [](auto &e) {
-        e.forwarding.body->front()
-            .template get<source::AlgorithmCall>()
-            ->outputs[0] = "pair.first";
-        e.forwarding.body->back().template get<source::Return>()->values[0] =
-            "pair.first";
-      },
+  const std::pair<llvm::StringRef, Change> invalid[] = {
+      {"argument path",
+       [](auto &e) { e.forwarding.arguments[0].name = "pair.other"; }},
+      {"argument type",
+       [](auto &e) { e.forwarding.arguments[0].type = "index"; }},
+      {"result paths",
+       [](auto &e) { std::swap(e.resultPaths[0][0], e.resultPaths[0][1]); }},
+      {"result arity", [](auto &e) { e.forwarding.results.pop_back(); }},
+      {"authored body", [](auto &e) { e.header.body.emplace(); }},
+      {"invoke site",
+       [](auto &e) { e.forwarding.body->front().site = "other"; }},
+      {"return site",
+       [](auto &e) { e.forwarding.body->back().site = "return"; }},
+      {"extra instruction",
+       [](auto &e) {
+         e.forwarding.body->push_back(e.forwarding.body->back());
+       }},
+      {"wrong target",
+       [](auto &e) {
+         e.forwarding.body->front()
+             .template get<source::AlgorithmCall>()
+             ->callee = "Other";
+       }},
+      {"input order",
+       [](auto &e) {
+         auto &inputs = e.forwarding.body->front()
+                            .template get<source::AlgorithmCall>()
+                            ->inputs;
+         std::swap(inputs[0], inputs[1]);
+       }},
+      {"static arguments",
+       [](auto &e) {
+         e.forwarding.body->front()
+             .template get<source::AlgorithmCall>()
+             ->staticArguments.push_back("koala-bear");
+       }},
+      {"repeated return",
+       [](auto &e) {
+         e.forwarding.body->back().template get<source::Return>()->values[1] =
+             "result0";
+       }},
+      {"shadowed output",
+       [](auto &e) {
+         e.forwarding.body->front()
+             .template get<source::AlgorithmCall>()
+             ->outputs[0] = "pair.first";
+         e.forwarding.body->back().template get<source::Return>()->values[0] =
+             "pair.first";
+       }},
   };
-  for (const auto &change : invalid) {
+  unsigned failures = 0;
+  auto rejects = [&](llvm::StringRef name, llvm::Error result) {
+    if (!namesIdentifier(llvm::toString(std::move(result)),
+                         "source-library-entry-layout")) {
+      llvm::errs() << name << ": expected source-library-entry-layout\n";
+      ++failures;
+    }
+  };
+  for (const auto &[name, change] : invalid) {
     auto candidate = entry;
     change(candidate);
-    if (!namesIdentifier(llvm::toString(check(candidate)),
-                         "source-library-entry-layout"))
-      return 2;
+    rejects(name, check(candidate));
   }
+  auto different = target;
+  different.arguments[0].type = "index";
+  rejects("target input type",
+          semantics::checkLibraryEntry(entry, formed, entry.resultPaths,
+                                       different));
+  different = target;
+  different.results[0] = "index";
+  rejects("target result type",
+          semantics::checkLibraryEntry(entry, formed, entry.resultPaths,
+                                       different));
+  different = target;
+  different.name = "Other";
+  rejects("same signature, different expected entry",
+          semantics::checkLibraryEntry(entry, formed, entry.resultPaths,
+                                       different));
   // Empty aggregate paths agree only with an empty formed result layout.
   auto paths = entry.resultPaths;
   paths[0].clear();
-  return !namesIdentifier(llvm::toString(semantics::checkLibraryEntry(
-                              entry, formed, paths, target)),
-                          "source-library-entry-layout");
+  rejects("empty result paths",
+          semantics::checkLibraryEntry(entry, formed, paths, target));
+  return failures ? 1 : 0;
 }

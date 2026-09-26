@@ -1,5 +1,5 @@
-#ifndef ZKC_COMPILER_INSPECTION_PRINTER_H
-#define ZKC_COMPILER_INSPECTION_PRINTER_H
+#ifndef ZKC_DRIVER_INSPECTION_PRINTER_H
+#define ZKC_DRIVER_INSPECTION_PRINTER_H
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 namespace zkc {

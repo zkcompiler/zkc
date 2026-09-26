@@ -1,5 +1,5 @@
-#ifndef ZKC_PROTOCOL_RESOURCE_UNIT_H
-#define ZKC_PROTOCOL_RESOURCE_UNIT_H
+#ifndef ZKC_CONTRACTS_RESOURCE_UNIT_H
+#define ZKC_CONTRACTS_RESOURCE_UNIT_H
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 namespace zkc::protocol {

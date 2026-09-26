@@ -1,4 +1,4 @@
-#include "zkc/Dialect/IR.h"
+#include "mlir/IR/DialectRegistry.h"
 #include "zkc/Dialect/TableLibrary.h"
 #include "zkc/Driver/Compiler.h"
 #include "llvm/ADT/StringRef.h"
@@ -11,7 +11,6 @@ int main(int argc, char **argv) {
     return 0;
   }
   mlir::DialectRegistry registry;
-  zkc::registerDialects(registry);
   zkc::registerTableLibrary(registry);
   return zkc::runCompiler(argc, argv, registry);
 }

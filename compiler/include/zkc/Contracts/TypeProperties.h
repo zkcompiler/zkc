@@ -1,5 +1,5 @@
-#ifndef ZKC_PROTOCOL_TYPE_PROPERTIES_H
-#define ZKC_PROTOCOL_TYPE_PROPERTIES_H
+#ifndef ZKC_CONTRACTS_TYPE_PROPERTIES_H
+#define ZKC_CONTRACTS_TYPE_PROPERTIES_H
 
 #include "zkc/Contracts/Variant.h"
 #include "llvm/ADT/StringRef.h"

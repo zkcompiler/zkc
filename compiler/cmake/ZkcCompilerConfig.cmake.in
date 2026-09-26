@@ -8,21 +8,18 @@ if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "@LLVM_PACKAGE_VERSION@")
 endif()
 include("${CMAKE_CURRENT_LIST_DIR}/ZkcCompilerTargets.cmake")
 # External imported libraries do not propagate their header paths themselves.
-foreach(component Support Contracts Relation Protocol Claims IR Frontend FrontendLoading Transforms CompilerCore Driver)
-  set_property(TARGET Zkc::${component} APPEND PROPERTY
-    INTERFACE_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
-  set_property(TARGET Zkc::${component} APPEND PROPERTY
-    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
-endforeach()
+set_property(TARGET Zkc::Support APPEND PROPERTY
+  INTERFACE_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
+set_property(TARGET Zkc::Support APPEND PROPERTY
+  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${LLVM_INCLUDE_DIRS}")
 set_property(TARGET Zkc::IR APPEND PROPERTY
   INTERFACE_INCLUDE_DIRECTORIES "${MLIR_INCLUDE_DIRS}")
 set_property(TARGET Zkc::IR APPEND PROPERTY
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${MLIR_INCLUDE_DIRS}")
-foreach(component Compiler Support Contracts Relation Protocol Claims IR Frontend FrontendLoading Transforms CompilerCore Driver)
-  set(ZkcCompiler_${component}_FOUND TRUE)
-endforeach()
 foreach(component IN LISTS ZkcCompiler_FIND_COMPONENTS)
-  if(NOT TARGET Zkc::${component})
+  if(TARGET Zkc::${component})
+    set(ZkcCompiler_${component}_FOUND TRUE)
+  else()
     set(ZkcCompiler_${component}_FOUND FALSE)
     if(ZkcCompiler_FIND_REQUIRED_${component})
       set(ZkcCompiler_NOT_FOUND_MESSAGE "Unknown ZkcCompiler component: ${component}")

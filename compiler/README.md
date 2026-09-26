@@ -259,7 +259,7 @@ FrontendLoading → Frontend
 | `Zkc::IR` | Dialects, operation interfaces, binding adapters, translation and mandatory root verification in `Dialect`, `Interfaces` and `Translation` |
 | `Zkc::Frontend` | Captured-input resolution, checked authoring, static selection, retained analysis and common lowering in `Frontend` |
 | `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
-| `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion` and `Target` |
+| `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion`, `Target` and `Dialect/Relation/Transforms` |
 | `Zkc::CompilerCore` | Typed compilation, checked construction/claim workflows, inspection and pipeline/pass registration in `Compiler` |
 | `Zkc::Driver` | Command options, file loading and output rendering in `Driver` |
 
@@ -274,6 +274,8 @@ portable codecs and admission stay together in Protocol because their checks
 are mutually dependent: decoding materializes views, while generation and
 admission validate their exact correspondence. Splitting those checks into
 separate libraries would create a dependency cycle or weaken validation.
+The same component also owns source-analysis services layered on that core;
+those services are not themselves part of the cycle.
 
 The IR target has no frontend, pass or driver dependency. Translation and root
 verification stay together: reconstructing common source and admitting it is
@@ -301,8 +303,11 @@ table requests. A `Compilation` owns its context and module; protocol results
 also retain original source spelling and expansion origins. Table results have
 no source `Document`. Moves preserve these lifetimes. `compileProtocol` checks
 source-bound implementation choices before specialization and projection. Failed
-calls return owned diagnostics, never a partially compiled artifact. The CLI uses
-the same API. `Compiler/Source.h` freezes retained frontend output and prepares
+calls return owned diagnostics, never a partially compiled artifact. Protocol
+and table compilation commands use these APIs. Construction commands instead
+use the lower-level construction/checking APIs to retain their carrier and
+CLI rendering; they do not call `constructProtocol` or wrap all failures in
+`CompilationError`. `Compiler/Source.h` freezes retained frontend output and prepares
 source-name-preserving local algorithms.
 
 Every failed coarse compilation or construction request returns one
@@ -329,15 +334,20 @@ claim derivation itself needs no MLIR context.
 Pass factories live in [Transforms/Passes.h](include/zkc/Transforms/Passes.h).
 Aggregate registration lives in [Compiler/Passes.h](include/zkc/Compiler/Passes.h),
 and pipeline builders in [Compiler/Pipelines.h](include/zkc/Compiler/Pipelines.h).
-Linking transformation code does not register command-line passes. Target policy
-selects among legal installed implementations; Contracts retains legality and
-canonical authoring defaults.
+Linking transformation code does not register command-line passes. `Target`
+selects default implementations and applies explicit choices among legal
+installed implementations. Conversion still owns contraction replacement and
+concrete layout-conversion insertion, including `arkworks/table.relayout`; these
+are not yet general target-policy hooks. Contracts retains legality and canonical
+authoring defaults.
 
 The corresponding public headers live under `include/zkc/` and implementations
 under `lib/`. A directory can contain files owned by different build libraries;
 [Components.cmake](cmake/Components.cmake) assigns each translation unit exactly
 once. `tools` contains thin entry points. `test` contains native API and CLI
-checks, including a fast component dependency check. The independent
+checks, including a fast component dependency check. That check enforces declared
+ownership, include closure and known forbidden I/O headers; it is a structural
+lint, not a proof that code cannot perform file I/O. The independent
 [service consumer](examples/service) exercises the finite table extension
 interface; cross-language checks live in [tests](../tests/README.md).
 

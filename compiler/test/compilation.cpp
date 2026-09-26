@@ -1,6 +1,7 @@
 #include "zkc/Compiler/Compilation.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Compiler/Claims.h"
 #include "zkc/Compiler/Construction.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Inspection.h"
@@ -162,6 +163,19 @@ public:
   }
 };
 void tableOwnership() {
+  mlir::DialectRegistry unloadedRegistry;
+  registerDialects(unloadedRegistry);
+  registerTableLibrary(unloadedRegistry);
+  mlir::MLIRContext unloaded(unloadedRegistry);
+  auto requestBeforeLoad = take(parseJson(R"(["zkc-request",1,"finite-source-1",
+    ["trace",[["x",["scalar","f7"],["shared"],"argument"]],
+      ["scalar","f7"],[["table-protocol","1"]]],[],["return",0]])"));
+  auto importedBeforeLoad = importSource(requestBeforeLoad, unloaded);
+  require(!importedBeforeLoad, "table import accepted an unloaded dialect");
+  require(toString(importedBeforeLoad.takeError()) ==
+                  "table import requires the loaded pir dialect" &&
+              unloaded.getLoadedDialects().size() == 1,
+          "table import must refuse without changing the caller's context");
   for (auto action : {TableAction::Import, TableAction::Plan, TableAction::Lazy,
                       TableAction::Materialized}) {
     auto compiled = table(action);
@@ -270,10 +284,59 @@ void constructionOwnership() {
   consumeError(uninitialized.takeError());
   require(fresh.getLoadedDialects().size() == 1,
           "low-level import changed the caller's context");
+  auto catalog = take(claims::inspect(original, "main"));
+  claims::Contract contract;
+  contract.sourceDigest =
+      catalog.getAsObject()->getString("source_digest")->str();
+  contract.entry = "main";
+  contract.validator = "V";
+  auto certificate = take(claims::derive(original, contract));
+  for (bool physical : {false, true}) {
+    auto refused =
+        physical
+            ? claims::checkLowering(original, contract, certificate, descriptor,
+                                    result.certificate, json::Value(nullptr),
+                                    fresh)
+            : claims::checkConstruction(original, contract, certificate,
+                                        descriptor, result.certificate, fresh);
+    require(bool(refused), "claim checking initialized the caller's context");
+    require(toString(std::move(refused)) ==
+                    "protocol import requires loaded zkc dialects" &&
+                fresh.getLoadedDialects().size() == 1,
+            "claim checker lost its loaded-context precondition");
+  }
   auto failed = frontend::analyzeProtocol("module {", "broken.pir");
   auto bad = constructProtocol(failed, descriptor, mlir::DialectRegistry{});
   require(!bad, "incomplete analysis constructed a protocol");
-  handleAllErrors(bad.takeError(), [](const CompilationError &) {});
+  bool located = false;
+  handleAllErrors(bad.takeError(), [&](const CompilationError &e) {
+    located = e.refusals.size() == 1 &&
+              e.refusals.front().code == "source-syntax" &&
+              !e.refusals.front().detail.empty() && e.locations.size() == 1 &&
+              e.locations.front().filename == "broken.pir" &&
+              e.locations.front().line == 1 && e.locations.front().column == 9;
+  });
+  require(located, "construction discarded structured frontend diagnostics");
+  // A diagnostic in a captured child must use that file's text, not the root's.
+  auto project = take(frontend::ProjectInput::capture(
+      {{{{{}, frontend::Input("module { mod child; }", "root.pir")},
+         {{"child"},
+          frontend::Input("module {\n  fn Broken(x: Absent) -> () "
+                          "{ return (); }\n}",
+                          "child.pir")}}}}));
+  auto invalidProject = frontend::analyzeProject(project);
+  auto childError =
+      constructProtocol(invalidProject, descriptor, mlir::DialectRegistry{});
+  require(!childError, "invalid child module constructed a protocol");
+  located = false;
+  handleAllErrors(childError.takeError(), [&](const CompilationError &e) {
+    located =
+        !e.refusals.empty() && !e.locations.empty() &&
+        e.refusals.front().code == invalidProject.diagnostics().front().code &&
+        e.locations.front().filename == "child.pir" &&
+        e.locations.front().line == 2 && e.locations.front().column > 1;
+  });
+  require(located, "construction used root coordinates for a child diagnostic");
 }
 void copiedLocations() {
   auto document = take(frontend::parseProtocolDocument(program, "copied.pir"));

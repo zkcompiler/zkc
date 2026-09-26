@@ -19,6 +19,17 @@ public:
 };
 char ExtendedRefusal::ID;
 
+class TrackedRefusal : public ErrorInfo<TrackedRefusal, zkc::Refusal> {
+  bool &destroyed;
+
+public:
+  static char ID;
+  explicit TrackedRefusal(bool &destroyed)
+      : ErrorInfo("disabled", ""), destroyed(destroyed) {}
+  ~TrackedRefusal() override { destroyed = true; }
+};
+char TrackedRefusal::ID;
+
 void require(bool ok, StringRef message) {
   if (!ok) {
     errs() << message << '\n';
@@ -91,8 +102,11 @@ int main() {
   require(codes.size() == 1 && codes[0].code == "extension" &&
               codes[0].detail == "detail" && text == "extension-specific text",
           "native refusal extensions retain their own rendering");
-  // An inactive MLIR diagnostic must still consume a native Error.
-  zkc::diagnostics::emit(InFlightDiagnostic(), zkc::error("disabled"));
+  // Check payload lifetime even when LLVM unchecked-error assertions are off.
+  bool destroyed = false;
+  zkc::diagnostics::emit(InFlightDiagnostic(),
+                         make_error<TrackedRefusal>(destroyed));
+  require(destroyed, "inactive diagnostic retained its error payload");
 
   auto type =
       zkc::TableType::getChecked([&] { return emitError(location); }, &context,

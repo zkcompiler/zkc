@@ -418,8 +418,8 @@ Error Construction::prepare() {
     if (!safe)
       return error("construction-local-control-resource");
   }
-  // Check the actual admitted source IR before analysis. Encoding here only
-  // measures the established portable source byte limit.
+  // Measure the portable source byte limit after pure construction checks.
+  // The compiler workflow separately imports and verifies the actual IR.
   if (printJson(source::encode(source)).size() > 1024 * 1024)
     return error("construction-byte-limit");
   return Error::success();

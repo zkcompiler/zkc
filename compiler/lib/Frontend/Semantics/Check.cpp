@@ -1,4 +1,5 @@
 #include "Check.h"
+#include "../Model/Libraries.h"
 #include "../Resolution/Project.h"
 #include "../Static/Domains.h"
 #include "../Syntax/Lexer.h"
@@ -2667,12 +2668,15 @@ class Checker {
         names.push_back(leaf.name);
       paths.push_back(std::move(names));
     }
-    const auto *call =
-        entry.forwarding.body && !entry.forwarding.body->empty()
-            ? entry.forwarding.body->front().get<source::AlgorithmCall>()
-            : nullptr;
+    // Resolve the expected target from the checked link judgment, independently
+    // of the generated call being checked. Equal port types alone do not make
+    // a different linked implementation the correct target for this alias.
+    const auto &links = model.libraries->links;
+    auto link = llvm::find_if(links, [&](const auto &binding) {
+      return binding.first == formed.name;
+    });
     auto target = llvm::find_if(linked.module.functions, [&](const auto &f) {
-      return call && f.name == call->callee;
+      return link != links.end() && f.name == link->second.entry();
     });
     if (target == linked.module.functions.end()) {
       fail(entry.header, "source-library-entry-layout",
@@ -2713,6 +2717,8 @@ class Checker {
     // A forwarding call is useful provenance. Invented local bindings and
     // record-construction expressions are not authored source events.
     ResolvedUse use;
+    const auto *call =
+        entry.forwarding.body->front().get<source::AlgorithmCall>();
     use.owner = owner;
     use.target = id(target->name);
     use.scope = activeScope;

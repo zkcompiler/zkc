@@ -25,22 +25,33 @@ upstream library.
 ## Dialects and operations
 
 [IR.td](../../compiler/include/zkc/Dialect/IR.td) includes the maintained ODS
-subjects. Each dialect initializes its generated operation list in
-[`lib/Dialect`](../../compiler/lib/Dialect). The dialect names in
-[GenerateIR.cmake](../../compiler/cmake/GenerateIR.cmake), the umbrella
-[IR.h](../../compiler/include/zkc/Dialect/IR.h), and `registerDialects` in
-[Registry.cpp](../../compiler/lib/Dialect/Registry.cpp) are explicit. Registration and
-mandatory verification belong to `ZkcIR`; dialect-local transformation passes
-belong to `Zkc::Transforms`; aggregate pass registration belongs to
-`Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
+subjects. Each dialect owns its public `<Name>/IR/<Name>Dialect.h` and its
+initialization file under [`lib/Dialect`](../../compiler/lib/Dialect).
+[IR.h](../../compiler/include/zkc/Dialect/IR.h) collects shared generated operation
+declarations; dialect class declarations live in the per-dialect headers.
+Registration and mandatory verification belong to `Zkc::IR`; dialect-local
+transformation passes belong to `Zkc::Transforms`; aggregate pass registration
+belongs to `Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
 Generated operation declarations stay shared because parent traits cross dialect
 boundaries; definitions and registration lists are generated per dialect.
 
 For an operation in an existing dialect, edit its ODS definition and verifier.
-The generated registration list follows the definition. A new dialect additionally
-needs its initialization file, the explicit generation/registration entries and
-its source under its owning library in [Components.cmake](../../compiler/cmake/Components.cmake). Keep reusable public
-headers under `include/zkc` and implementations under the matching `lib` area.
+The generated registration list follows the definition. A new built-in dialect
+also needs:
+
+1. Its public dialect header and initialization implementation.
+2. Entries in `zkc_dialects` and `zkc_dialect_owners` in
+   [GenerateIR.cmake](../../compiler/cmake/GenerateIR.cmake), which own generation
+   and registration ownership.
+3. Membership in the `ProtocolDialects` type list in
+   [Registry.cpp](../../compiler/lib/Dialect/Registry.cpp). This list drives both
+   `registerDialects` and the loaded-context precondition `hasProtocolDialects`.
+4. Its source assigned to `ZkcIR` in
+   [Components.cmake](../../compiler/cmake/Components.cmake).
+
+Optional external dialects register in the caller's registry and do not join the
+built-in protocol precondition. Keep reusable public headers under `include/zkc`
+and implementations under the matching `lib` area.
 
 An operation's mathematical contract, nominal binding and implementation are
 separate. Follow [protocol libraries](../compiler/protocol-libraries.md) for the

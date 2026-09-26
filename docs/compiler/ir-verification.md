@@ -95,8 +95,11 @@ IR cannot include frontend, workflow or transformation headers or MLIR pass
 infrastructure. The
 [installed IR consumer](../../tests/consumer/ir.cpp) links only `Zkc::IR`, imports
 and exports a generated relation view, and checks that a stale view is rejected.
-It also imports and verifies a finite-table program, then checks that malformed
-nested IR is rejected before root verification accesses its fields.
+It also imports and verifies a finite-table program and rejects a nested operation
+with missing required operands. These checks do not establish that every
+nested verifier runs before root verification: MLIR can run region verification
+before SSA dominance checks. In particular, a use before definition can reach
+source export and be reported as `implicit-capture`.
 [Native controls](../../compiler/test/ir_verification.cpp) exercise exact generated
 body checks across five views; separate diagnostic and property tests cover
 structured refusals. These are bounded implementation checks, not native

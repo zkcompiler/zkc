@@ -10,20 +10,24 @@
 #include "zkc/Dialect/Relation/IR/RelationDialect.h"
 
 namespace zkc {
+namespace {
+template <typename... Dialects> struct DialectSet {
+  static void registerIn(mlir::DialectRegistry &registry) {
+    registry.insert<Dialects...>();
+  }
+  static bool loadedIn(mlir::MLIRContext &context) {
+    return (bool(context.getLoadedDialect<Dialects>()) && ...);
+  }
+};
+using ProtocolDialects =
+    DialectSet<PIRDialect, AlgebraDialect, PolynomialDialect, PlanDialect,
+               PCSDialect, OracleDialect, RelationDialect, ClaimDialect,
+               mlir::func::FuncDialect>;
+} // namespace
 void registerDialects(mlir::DialectRegistry &registry) {
-  registry.insert<PIRDialect, AlgebraDialect, PolynomialDialect, PlanDialect,
-                  PCSDialect, OracleDialect, RelationDialect, ClaimDialect,
-                  mlir::func::FuncDialect>();
+  ProtocolDialects::registerIn(registry);
 }
 bool hasProtocolDialects(mlir::MLIRContext &context) {
-  return context.getLoadedDialect<PIRDialect>() &&
-         context.getLoadedDialect<AlgebraDialect>() &&
-         context.getLoadedDialect<PolynomialDialect>() &&
-         context.getLoadedDialect<PlanDialect>() &&
-         context.getLoadedDialect<PCSDialect>() &&
-         context.getLoadedDialect<OracleDialect>() &&
-         context.getLoadedDialect<RelationDialect>() &&
-         context.getLoadedDialect<ClaimDialect>() &&
-         context.getLoadedDialect<mlir::func::FuncDialect>();
+  return ProtocolDialects::loadedIn(context);
 }
 } // namespace zkc

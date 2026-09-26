@@ -193,15 +193,20 @@ target_include_directories(ZkcIR SYSTEM PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<BUILD_INTERFACE:${MLIR_INCLUDE_DIRS}>)
 target_link_libraries(ZkcClaims PUBLIC ZkcProtocol)
-target_link_libraries(ZkcIR PUBLIC ZkcClaims
+target_link_libraries(ZkcIR PUBLIC ZkcClaims)
+# Follow MLIR's package linkage too: embedding static MLIR archives alongside
+# its dylib duplicates MLIR definitions and process-global state.
+mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFuncDialect)
 target_link_libraries(ZkcFrontend PUBLIC ZkcProtocol)
 target_link_libraries(ZkcFrontendLoading PUBLIC ZkcFrontend)
-target_link_libraries(ZkcTransforms PUBLIC ZkcIR
+target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
+mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils)
 target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcFrontend)
-target_link_libraries(ZkcDriver PUBLIC ZkcCompilerCore ZkcFrontendLoading MLIRParser)
+target_link_libraries(ZkcDriver PUBLIC ZkcCompilerCore ZkcFrontendLoading)
+mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
 add_library(ZkcCompiler INTERFACE)
 add_library(Zkc::Compiler ALIAS ZkcCompiler)
 set_target_properties(ZkcCompiler PROPERTIES EXPORT_NAME Compiler)

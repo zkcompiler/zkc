@@ -64,6 +64,7 @@ def main():
     owners = {}
     for line in manifest.read_text().splitlines():
         name, links, interface, sources = line.split("|")
+        assert name not in targets, f"duplicate component: {name}"
         targets[name] = (
             set(filter(None, links.split(";"))),
             set(filter(None, interface.split(";"))),
@@ -72,6 +73,7 @@ def main():
         for source in targets[name][2]:
             assert source not in owners, f"{source} compiled by both {owners.get(source)} and {name}"
             owners[source] = name
+    assert set(targets) == set(COMPONENTS) | {"ZkcCompiler"}, "component manifest and ownership policy disagree"
     implementation = {str(path.relative_to(ROOT)) for path in (ROOT / "lib").rglob("*.cpp")}
     assert set(owners) == implementation, f"unowned or nonexistent implementations: {set(owners) ^ implementation}"
     assert targets["ZkcCompiler"] == (set(), {"ZkcCompilerCore", "ZkcDriver"}, []), "aggregate must not compile sources"
@@ -107,14 +109,12 @@ def main():
         ("ZkcDriver", ROOT / "lib/Support/Input.h"),
         ("ZkcFrontendLoading", ROOT / "lib/Support/Input.h"),
         ("ZkcFrontendLoading", ROOT / "lib/Frontend/Syntax/Tree.h"),
-        ("ZkcFrontendLoading", ROOT / "lib/Frontend/Syntax/Lexer.h"),
     }
 
-    def check_private_edge(path, target):
-        sender = header_owners.get(path, owners.get(str(path.relative_to(ROOT))))
+    def check_private_edge(component, path, target):
         if target in private:
             assert not path.is_relative_to(ROOT / "include"), f"public header includes private implementation: {path} -> {target}"
-            assert header_owners[target] == sender or (sender, target) in bridges, f"private component dependency: {path} -> {target}"
+            assert header_owners[target] == component or (component, target) in bridges, f"private component dependency: {component}: {path} -> {target}"
 
     def closure(name):
         result = {name}
@@ -128,7 +128,10 @@ def main():
     for name in COMPONENTS:
         links, interface, sources = targets[name]
         assert links == interface, f"{name}: hidden private or extra interface dependencies"
-        assert links == ALLOWED[name] or (name == "ZkcSupport" and links == {"LLVM"}), (name, links)
+        expected = ALLOWED[name]
+        mlir = {link for link in expected if link.startswith("MLIR")}
+        dylib = expected - mlir | {"MLIR"} if mlir else expected
+        assert links in (expected, dylib) or (name == "ZkcSupport" and links == {"LLVM"}), (name, links)
         permitted = set().union(*(public_headers[d] | private_headers[d] for d in closure(name)))
         if name == "ZkcFrontend":
             permitted.discard(ROOT / "lib/Support/Input.h")
@@ -146,7 +149,7 @@ def main():
             for include in re.findall(r'^\s*#\s*include\s*[<"]([^">]+)[">]', path.read_text(), re.M):
                 if name == "ZkcFrontend":
                     assert include not in (
-                        "filesystem", "fstream", "llvm/Support/FileSystem.h",
+                        "filesystem", "fstream", "cstdio", "stdio.h", "llvm/Support/FileSystem.h",
                         "llvm/Support/MemoryBuffer.h", "llvm/Support/Program.h",
                     ), f"{name}: input loading belongs to FrontendLoading: {path}"
                 if name != "ZkcDriver":
@@ -171,7 +174,7 @@ def main():
                         dependency = target.relative_to(frontend).parts[0]
                         if owner in FRONTEND_LAYERS:
                             assert dependency in FRONTEND_LAYERS[owner], f"frontend phase dependency: {path} -> {target}"
-                    check_private_edge(path, target)
+                    check_private_edge(name, path, target)
                     visit(target)
 
         for path in public_headers[name] | {ROOT / source for source in sources}:

@@ -45,6 +45,7 @@ with case("link, configure and self-link preserve the same aggregate boundary"):
     uses = [u for u in report["uses"] if u["owner"] in owners]
     assert len(uses) == 4 and all(u["kind"] == "call" and u["site"] == "invoke" for u in uses), uses
     assert all(u["span"] is not None for u in uses), uses
+    assert not [b for b in report["local_bindings"] if b["owner"] in owners], report["local_bindings"]
 
 with case("linked result construction cannot bypass checked record authority"):
     for shape in ("Ticket", "(Ticket, bool)", "Array<Ticket, 1>"):

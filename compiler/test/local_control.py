@@ -41,6 +41,11 @@ def walk(body):
 
 text = (corpus / 'local-control.pir').read_text()
 source = native('protocol-source', text)
+# Preparation must discover calls inside local control, not only at the root.
+prepared = native('protocol-prepare', text)
+assert prepared != source, "nested calls did not trigger preparation"
+assert not any(ins[0] == 'apply' for fn in prepared[2] if isinstance(fn[4], list) for ins in walk(fn[4]))
+
 formatted = native('protocol-format', text)
 assert native('protocol-source', formatted) == source
 assert native('protocol-format', formatted) == formatted

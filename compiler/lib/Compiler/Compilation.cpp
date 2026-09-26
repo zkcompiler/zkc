@@ -50,7 +50,8 @@ const LinearContractionStats &Compilation::statistics() const {
 namespace {
 void collectError(const Error &error,
                   std::vector<diagnostics::RefusalInfo> &refusals,
-                  std::vector<DiagnosticLocation> &locations) {
+                  std::vector<DiagnosticLocation> &locations,
+                  const frontend::ProjectInput *project = nullptr) {
   visitErrors(error, [&](const ErrorInfoBase &info) {
     if (info.isA<Refusal>()) {
       const auto &refusal = static_cast<const Refusal &>(info);
@@ -59,13 +60,33 @@ void collectError(const Error &error,
       const auto &compilation = static_cast<const CompilationError &>(info);
       llvm::append_range(refusals, compilation.refusals);
       llvm::append_range(locations, compilation.locations);
+    } else if (info.isA<frontend::SourceDiagnostic>()) {
+      const auto &source =
+          static_cast<const frontend::SourceDiagnostic &>(info);
+      refusals.push_back({source.code, source.message});
+      auto locate = [&](source::Span span) {
+        const auto *input = project ? project->file(span.file) : nullptr;
+        if (!input)
+          return;
+        auto prefix = input->text().take_front(span.offset);
+        auto newline = prefix.rfind('\n');
+        locations.push_back(
+            {input->filename().str(), unsigned(prefix.count('\n') + 1),
+             unsigned(newline == StringRef::npos ? prefix.size() + 1
+                                                 : prefix.size() - newline)});
+      };
+      locate(source.location);
+      for (const auto &related : source.related)
+        if (related.location)
+          locate(*related.location);
     }
   });
 }
-Error compilationError(Error error) {
+Error compilationError(Error error,
+                       const frontend::ProjectInput *project = nullptr) {
   std::vector<diagnostics::RefusalInfo> refusals;
   std::vector<DiagnosticLocation> locations;
-  collectError(error, refusals, locations);
+  collectError(error, refusals, locations, project);
   return make_error<CompilationError>(
       toString(std::move(error)), std::move(refusals), std::move(locations));
 }
@@ -219,13 +240,13 @@ constructProtocol(const frontend::Analysis &analysis,
                   const DialectRegistry &registry) {
   auto checked = analysis.checkedModule();
   if (!checked)
-    return compilationError(checked.takeError());
+    return compilationError(checked.takeError(), analysis.project());
   auto bound = frontend::bindConstruction(*checked, std::move(descriptor));
   if (!bound)
-    return compilationError(bound.takeError());
+    return compilationError(bound.takeError(), analysis.project());
   auto document = lowerSource(analysis);
   if (!document)
-    return compilationError(document.takeError());
+    return compilationError(document.takeError(), analysis.project());
   if (!document->module())
     return compilationError(error("construction-input-kind"));
   auto result = std::make_unique<Compilation::Storage>(registry);
