@@ -1,5 +1,6 @@
 #include "zkc/Claims/Claims.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/ClaimTranslation/Claims.h"
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Dialect/Claim/IR/ClaimDialect.h"
 #include "zkc/Dialect/Oracle/IR/OracleDialect.h"
@@ -7,7 +8,6 @@
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Protocol/PhysicalOptions.h"
 #include "zkc/Source/Snapshot.h"
-#include "zkc/Translation/Claims.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 

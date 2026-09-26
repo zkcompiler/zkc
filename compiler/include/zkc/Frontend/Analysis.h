@@ -4,6 +4,7 @@
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Module.h"
+#include "zkc/Frontend/Work.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/Error.h"
 #include <memory>
@@ -20,7 +21,9 @@ enum class AnalysisState {
 };
 class Analysis {
   std::shared_ptr<const model::Module> model;
+  std::shared_ptr<const model::CompletedAnalysis> completed;
   explicit Analysis(std::shared_ptr<const model::Module>);
+  explicit Analysis(std::shared_ptr<const model::CompletedAnalysis>);
   friend struct model::AnalysisAccess;
 
 public:
@@ -30,6 +33,8 @@ public:
   /// Complete source analysis is deliberately distinct from PIR admission.
   bool complete() const;
   AnalysisState state() const;
+  /// Deterministic logical charges, including work retained on failure.
+  WorkUsage workUsage() const;
   bool resolutionComplete() const;
   llvm::Expected<CheckedModule> checkedModule() const;
   llvm::ArrayRef<Scope> scopes() const;
@@ -56,7 +61,11 @@ public:
 /// Own text, parse, stage exactly once and analyze. Errors retain query data.
 Analysis analyzeProtocol(llvm::StringRef text,
                          llvm::StringRef filename = "<stdin>");
+Analysis analyzeProtocol(llvm::StringRef text, llvm::StringRef filename,
+                         WorkLimits);
 Analysis analyzeProtocol(const Input &input);
+Analysis analyzeProtocol(const Input &input, WorkLimits);
 Analysis analyzeProject(const ProjectInput &);
+Analysis analyzeProject(const ProjectInput &, WorkLimits);
 } // namespace zkc::frontend
 #endif

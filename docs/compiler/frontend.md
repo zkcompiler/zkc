@@ -94,11 +94,23 @@ assets. File-based CLI queries and compilation use `captureProject` first, with
 explicit `--library=FILE` roots and bounded relative asset loading. All then use
 the same semantic pipeline; `protocol-resolve` exports the frozen relation snapshot.
 
-Library elaboration returns emitted functions and entry plans separately from its
-immutable inspection report. Static selection consumes the remaining ordinary
-source; it does not run library checking as a hidden side effect. A later phase
-failure retains completed library judgments and diagnostics, while partial
-recovery never exposes a `CheckedModule` or finalized common output.
+Library checking returns linked programs, their environment and aliases, and an
+immutable inspection report. The coordinator then asks Lowering to prepare common
+library functions and typed entry adapters before static selection and ordinary
+source checking. Semantics never invokes Lowering. A checked source product is
+required for final emission; successful emission keeps its model, actual emitted
+names and common content together. Only that paired result can become a completed
+analysis. A later failure retains earlier library judgments and diagnostics;
+partial recovery cannot expose a `CheckedModule` or final common output.
+
+[`inspectDependencies`](../../compiler/include/zkc/Frontend/Dependencies.h) is a
+pure query for owned module, library and relation declarations, source spans and
+parse diagnostics. It performs no asset decoding or resolution. Loading consumes
+that public result rather than private parser records. Strict loading refuses
+incomplete declarations before invoking an asset resolver. Recovering project
+capture may discover fully recognized dependencies in partial text; this does not
+authorize compilation. Both paths preflight logical requests before reads, and
+repeated aliases still consume the relation dependency allowance.
 
 Recovery is at module declaration boundaries. It can retain usable declarations
 before and after a malformed declaration; it is not a complete IDE, incremental
@@ -134,14 +146,30 @@ only to flatten them again. Variant ports retain the existing flat boundary.
 Inspection reports a generated forwarding call at its alias's source location;
 it does not invent authored constructions or local bindings for that adapter.
 Generated forwarding bodies do not consume the static evaluator's authored
-syntax budget. Library linking/layout and ordinary header limits still apply.
+syntax budget. They do consume generated-source and output work; library
+linking/layout and ordinary header limits still apply.
+
+## Compiler work limits
+
+[`WorkLimits`](../../compiler/include/zkc/Frontend/Work.h) separates authored
+static evaluation, library formation, generated source and final output.
+One invocation owns its counters across links and aliases; charges occur before
+expansion. Empty layouts still charge their declarations, and caches do not erase
+logical obligations. `Analysis::workUsage()` retains completed charges on success
+or failure. Callers may inject smaller limits for bounded work and focused tests.
+
+These limits cover selected formation and expansion work, not all compiler time
+or allocation. They are separate from protocol runtime resources and portable
+admission limits. Exhaustion reports a resource stop with the exhausted account;
+it does not refute the source semantics. The [accounting contract](frontend-budgets.md)
+defines charged work, omitted work and artifact monotonicity under larger limits.
 
 ## Engineering boundaries and assurance
 
 | Component | Responsibility |
 |---|---|
 | `Syntax/` | Tokens, parser tree, spans, formatting, lexical capture discovery and bounded recovery; no retained semantic model |
-| `Model/` | Owned types, domains, declarations, lexical bindings/scopes, resolved calls, ordered body plans, immutable library reports and finalized content; no parser tree or MLIR pointers |
+| `Model/` | Owned analysis and phase products, typed body plans, immutable reports and paired final content; no retained parser tree or MLIR pointers |
 | `Resolution/` | Exact project names, public exports, captured dependencies and lexical lookup |
 | `Library/` | Checked interface/component formation, conformance and static linking |
 | `Static/` | Pure bounded natural evaluation and domain-term formation rules |

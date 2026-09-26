@@ -50,6 +50,7 @@ compiler/
     Dialect/                       per-dialect IR/Transforms homes and shared MLIR adapters
     Frontend/, Source/             authoring language and common source
     Protocol/, Relation/, Claims/  protocols, relations and claims
+    ClaimTranslation/              optional claim-to-IR adapters
     Analysis/, Translation/, Transforms/, Target/
     Compiler/, Driver/, Interfaces/, Support/
   lib/                             implementation homes; build ownership is in cmake/Components.cmake

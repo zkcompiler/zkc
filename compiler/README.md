@@ -241,9 +241,10 @@ compilation workflows and command handling. Arrows mean “depends on”:
 ```text
 Compiler (interface aggregate) → CompilerCore, Driver
 Driver → CompilerCore, FrontendLoading, MLIR parser
-CompilerCore → Transforms, Frontend
+CompilerCore → Transforms, Frontend, ClaimTranslation
 Transforms → IR, MLIR passes and conversions
-IR → Claims, MLIR IR and interfaces
+IR → Protocol, MLIR IR and interfaces
+ClaimTranslation → Claims, IR
 Claims → Protocol → Relation → Contracts → Support → LLVM
 Frontend → Protocol
 FrontendLoading → Frontend
@@ -257,6 +258,7 @@ FrontendLoading → Frontend
 | `Zkc::Protocol` | Common `Source` records/codecs/snapshots, generated relation views, admission, generic preparation, source analyses and physical selection requests |
 | `Zkc::Claims` | MLIR-free conditional claim analysis, derivation and checking in `Claims` |
 | `Zkc::IR` | Dialects, operation interfaces, binding adapters, translation and mandatory root verification in `Dialect`, `Interfaces` and `Translation` |
+| `Zkc::ClaimTranslation` | Optional source-bound claim IR import and candidate checking in `ClaimTranslation` |
 | `Zkc::Frontend` | Captured-input resolution, checked authoring, static selection, retained analysis and common lowering in `Frontend` |
 | `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
 | `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion`, `Target` and `Dialect/Relation/Transforms` |
@@ -297,6 +299,15 @@ cross-dialect parent traits need shared forward declarations. `Dialect/IR.h` is
 the convenience aggregate, while `Dialect/Registry.h` supports registration
 without importing every operation declaration. `Translation/{Protocol,Table,Relations}.h`
 exposes import/export and relation adapters; transformation APIs are separate.
+The claim dialect's structural definitions and all mandatory protocol root checks
+remain in IR. Ordinary IR clients do not link Claims. Optional claim derivation
+checking is explicitly requested through Claims or ClaimTranslation; CompilerCore
+links the latter for its existing claim workflows. Its sole private Claims bridge
+is the uninstalled `lib/Claims/Admission.h`, audited with a direct Claims dependency.
+
+Raw construction helpers live in `Dialect/detail/Builders.h`, an unsupported
+same-version detail surface. They do not establish admission. Public extension
+query and verifier interfaces remain in their ordinary `Dialect` headers.
 
 [Compilation.h](include/zkc/Compiler/Compilation.h) provides typed protocol and
 table requests. A `Compilation` owns its context and module; protocol results
@@ -328,7 +339,8 @@ source-bound descriptor with another subject. Empty extension registries are
 valid for the coarse workflows and `runCompiler`; table libraries remain opt-in.
 [Compiler/Claims.h](include/zkc/Compiler/Claims.h) composes independent
 caller contracts with construction and physical candidate checking.
-[Translation/Claims.h](include/zkc/Translation/Claims.h) owns the analysis IR;
+[ClaimTranslation/Claims.h](include/zkc/ClaimTranslation/Claims.h) owns claim IR
+translation and independent candidate checking;
 claim derivation itself needs no MLIR context.
 
 Pass factories live in [Transforms/Passes.h](include/zkc/Transforms/Passes.h).
@@ -386,7 +398,8 @@ chosen source-library interface, such as `registerTableLibrary`; an interactive
 protocol's built-in operations do not select a table library implicitly.
 `Zkc::Transforms` supports caller-owned MLIR contexts and pass factories without
 frontend or driver linkage. `Zkc::Claims` supports conditional claim checking
-without MLIR. `Zkc::Driver` preserves the command dispatcher for tool embedders.
+without MLIR. `Zkc::ClaimTranslation` supports direct claim IR clients without
+frontend or pipeline linkage. `Zkc::Driver` preserves the command dispatcher for tool embedders.
 `Zkc::Compiler` remains an optional aggregate of the application components.
 
 The [installed consumers](../tests/consumer) exercise these targets separately,
@@ -508,7 +521,10 @@ The flag is off by default and prints producer, eligible-pair and selected-pair
 counts on stderr, plus eligible/selected producer counts. A shared producer with
 two consumers counts as two pairs and one producer. These are static counts
 including retained, uncalled source functions, not execution counts. The
-example selects two pairs:
+eligible counts describe semantic opportunities independently of installed
+implementations; selection also requires target support. This planner considers
+direct operations in a single-block function, not pairs nested inside local
+control regions. The example selects two pairs:
 
 | Logical producer → contraction | Selected representation | Implementation prefix |
 |---|---|---|

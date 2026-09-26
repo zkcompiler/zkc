@@ -9,12 +9,14 @@
 namespace zkc::diagnostics {
 struct RefusalInfo {
   std::string code;
-  /// Detail supplied at emission; later streamed context stays in MLIR's text.
+  /// Complete owned detail supplied at emission.
   std::string detail;
 };
 
 /// Attach owned, nonprinting metadata and render the refusal on the existing
 /// diagnostic. Its location, severity, operation prefix and notes are retained.
+/// Form the complete detail before calling: subsequently streamed text does
+/// not update metadata. Attach related context as notes on the returned value.
 mlir::InFlightDiagnostic emit(mlir::InFlightDiagnostic diagnostic,
                               llvm::StringRef code,
                               const llvm::Twine &detail = {});

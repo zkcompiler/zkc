@@ -1,10 +1,11 @@
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Snapshot.h"
-#include "zkc/Support/Json.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 
 using namespace llvm;
@@ -15,19 +16,32 @@ Error sourceDiagnostic(const source::Document &document, Error error,
   const auto file = span ? span->file : 0;
   auto [line, column] = document.lineColumn(span ? span->offset : 0, file);
   std::vector<diagnostics::RefusalInfo> refusals;
+  std::vector<InvocationPrecondition> preconditions;
+  bool hasSourceError = false;
   visitErrors(error, [&](const ErrorInfoBase &info) {
+    if (info.isA<DialectRegistrationError>()) {
+      preconditions.push_back(
+          static_cast<const DialectRegistrationError &>(info).precondition);
+      return;
+    }
+    hasSourceError = true;
     if (info.isA<Refusal>()) {
       const auto &refusal = static_cast<const Refusal &>(info);
       refusals.push_back({refusal.code, refusal.detail});
     }
   });
+  if (!hasSourceError)
+    return make_error<CompilationError>(
+        toString(std::move(error)), std::move(refusals),
+        std::vector<DiagnosticLocation>{}, std::move(preconditions));
   return make_error<CompilationError>(
       (document.filename(file) + ":" + Twine(line) + ":" + Twine(column) +
        ": " + toString(std::move(error)))
           .str(),
       std::move(refusals),
       std::vector<DiagnosticLocation>{
-          {document.filename(file).str(), line, column}});
+          {document.filename(file).str(), line, column}},
+      std::move(preconditions));
 }
 Expected<json::Value> inspectSource(const source::Document &document,
                                     const frontend::Analysis *analysis) {

@@ -4,167 +4,75 @@
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Support/Json.h"
+#include "zkc/Support/Refusal.h"
+#include "llvm/ADT/StringSet.h"
+#include <array>
 
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
 
+namespace {
+struct ContractAssociation {
+  StringLiteral key;
+  StringLiteral value;
+  bool family;
+};
+
+#include "zkc/Dialect/ContractMappings.cpp.inc"
+
+// The installed contract set has static lifetime. Build its membership index
+// once without adding MLIR knowledge or generated adapter data to Contracts.
+bool installedContract(StringRef contract) {
+  static const llvm::StringSet<> installed = [] {
+    llvm::StringSet<> result;
+    for (const auto &kernel : kernels())
+      result.insert(kernel.key);
+    return result;
+  }();
+  return installed.contains(contract);
+}
+
+auto associationBegin(ArrayRef<ContractAssociation> rows, StringRef key) {
+  return llvm::lower_bound(rows, key, [](const auto &row, StringRef value) {
+    return row.key < value;
+  });
+}
+
+const ContractAssociation *contractAssociation(StringRef key, bool family) {
+  ArrayRef<ContractAssociation> rows = contractAssociations;
+  auto found = associationBegin(rows, key);
+  return found != rows.end() && found->key == key && found->family == family
+             ? found
+             : nullptr;
+}
+} // namespace
+
 StringRef boundOperationName(StringRef contract) {
-  if (contract.starts_with("transcript.observe.") &&
-      llvm::any_of(kernels(), [&](const Kernel &kernel) {
-        return kernel.key == contract;
-      }))
-    return TranscriptObserveOp::getOperationName();
-  static const std::pair<StringRef, StringRef> operations[] = {
-      {"resource_unit.create", ResourceUnitCreateOp::getOperationName()},
-      {"resource_unit.pass", ResourceUnitPassOp::getOperationName()},
-      {"resource_unit.consume", ResourceUnitConsumeOp::getOperationName()},
-      {"external.monero.init", ExternalMoneroInitOp::getOperationName()},
-      {"external.monero.hash", ExternalMoneroHashOp::getOperationName()},
-      {"external.monero.update", ExternalMoneroUpdateOp::getOperationName()},
-      {"external.openvm.init", ExternalOpenvmInitOp::getOperationName()},
-      {"external.openvm.observe", ExternalOpenvmObserveOp::getOperationName()},
-      {"external.openvm.sample", ExternalOpenvmSampleOp::getOperationName()},
-      {"external.openvm.sample_ext",
-       ExternalOpenvmSampleExtOp::getOperationName()},
-      {"external.openvm.sample_bits",
-       ExternalOpenvmSampleBitsOp::getOperationName()},
-      {"external.openvm.check_witness",
-       ExternalOpenvmCheckWitnessOp::getOperationName()},
-      {"index.constant", IndexConstantOp::getOperationName()},
-      {"index.add", IndexAddOp::getOperationName()},
-      {"index.sub", IndexSubOp::getOperationName()},
-      {"index.mul", IndexMulOp::getOperationName()},
-      {"index.div", IndexDivOp::getOperationName()},
-      {"index.mod", IndexModOp::getOperationName()},
-      {"index.equal", IndexEqualOp::getOperationName()},
-      {"index.less", IndexLessOp::getOperationName()},
-      {"indices.empty", IndicesEmptyOp::getOperationName()},
-      {"indices.append", IndicesAppendOp::getOperationName()},
-      {"indices.at", IndicesAtOp::getOperationName()},
-      {"indices.length", IndicesLengthOp::getOperationName()},
-      {"vector.get", VectorGetOp::getOperationName()},
-      {"vector.slice", VectorSliceOp::getOperationName()},
-      {"vector.length", VectorLengthOp::getOperationName()},
-      {"vector.rotate", VectorRotateOp::getOperationName()},
-      {"vector.interleave", VectorInterleaveOp::getOperationName()},
-      {"vector.prefix_product", VectorPrefixProductOp::getOperationName()},
-      {"vector.prefix_sum", VectorPrefixSumOp::getOperationName()},
-      {"vector.inverse", VectorInverseOp::getOperationName()},
-      {"vector.embed", VectorEmbedOp::getOperationName()},
-      {"vector.fill", VectorFillOp::getOperationName()},
-      {"vector.geometric", VectorGeometricOp::getOperationName()},
-      {"field.from_index", FieldFromIndexOp::getOperationName()},
-      {"poly.coefficient_count", CoefficientCountOp::getOperationName()},
-      {"poly.coset_evaluate", CosetEvaluateOp::getOperationName()},
-      {"poly.coset_interpolate", CosetInterpolateOp::getOperationName()},
-      {"poly.domain_point", DomainPointOp::getOperationName()},
-      {"poly.domain_root", DomainRootOp::getOperationName()},
-      {"poly.domain_points", DomainPointsOp::getOperationName()},
-      {"poly.even_odd_fold", EvenOddFoldOp::getOperationName()},
-      {"poly.divide_opening", DivideOpeningOp::getOperationName()},
-      {"poly.opening_quotient", OpeningQuotientOp::getOperationName()},
-      {"field.sub", FieldSubtractOp::getOperationName()},
-      {"field.neg", FieldNegateOp::getOperationName()},
-      {"field.inverse", FieldInverseOp::getOperationName()},
-      {"field.embed", FieldEmbedOp::getOperationName()},
-      {"matrix.mul_vector", MatrixMulVectorOp::getOperationName()},
-      {"matrix.transpose_mul_vector",
-       MatrixTransposeMulVectorOp::getOperationName()},
-      {"matrix.bilinear", MatrixBilinearOp::getOperationName()},
-      {"matrix.shape_check", MatrixShapeCheckOp::getOperationName()},
-      {"matrix.identity_check", MatrixIdentityCheckOp::getOperationName()},
-      {"vector.constant", VectorConstantOp::getOperationName()},
-      {"vector.scatter_sum", VectorScatterSumOp::getOperationName()},
-      {"vector.empty", VectorEmptyOp::getOperationName()},
-      {"vector.append", VectorAppendOp::getOperationName()},
-      {"vector.splat", VectorSplatOp::getOperationName()},
-      {"vector.powers", VectorPowersOp::getOperationName()},
-      {"vector.add", VectorAddOp::getOperationName()},
-      {"vector.sub", VectorSubOp::getOperationName()},
-      {"vector.mul", VectorMulOp::getOperationName()},
-      {"vector.dot", VectorDotOp::getOperationName()},
-      {"vector.concat", VectorConcatOp::getOperationName()},
-      {"vector.kronecker", VectorKroneckerOp::getOperationName()},
-      {"vector.matvec", VectorMatvecOp::getOperationName()},
-      {"vector.scale", VectorScaleOp::getOperationName()},
-      {"vector.sum", VectorSumOp::getOperationName()},
-      {"vector.split", VectorSplitOp::getOperationName()},
-      {"vector.at", VectorAtOp::getOperationName()},
-      {"vector.length_check", VectorLengthCheckOp::getOperationName()},
-      {"vector.gather", VectorGatherOp::getOperationName()},
-      {"vector.from_point", PointToVectorOp::getOperationName()},
-      {"vector.from_table", TableToVectorOp::getOperationName()},
-      {"vector.to_point", PointFromVectorOp::getOperationName()},
-      {"vector.to_table", TableFromVectorOp::getOperationName()},
-      {"poly.equality_weights", EqualityWeightsOp::getOperationName()},
-      {"poly.from_coefficients", FromCoefficientsOp::getOperationName()},
-      {"poly.coefficients", CoefficientsOp::getOperationName()},
-      {"poly.degree_check", DegreeCheckOp::getOperationName()},
-      {"poly.univariate_evaluate", UnivariateEvaluateOp::getOperationName()},
-      {"poly.univariate_boundary", UnivariateBoundaryOp::getOperationName()},
-      {"random.vector", RandomVectorOp::getOperationName()},
-      {"curve.neg", CurveNegateOp::getOperationName()},
-      {"curve.nonidentity", CurveNonidentityOp::getOperationName()},
-      {"curve.msm", CurveMSMOp::getOperationName()},
-      {"curve.scale_each", CurveScaleEachOp::getOperationName()},
-      {"curve.vector_add", CurveVectorAddOp::getOperationName()},
-      {"curve.vector_scale", CurveVectorScaleOp::getOperationName()},
-      {"curve.split", CurveSplitOp::getOperationName()},
-      {"curve.concat", CurveConcatOp::getOperationName()},
-      {"pairing.check", PairingCheckOp::getOperationName()},
-      {"field.constant", FieldConstantOp::getOperationName()},
-      {"field.add", FieldSumOp::getOperationName()},
-      {"field.mul", FieldProductOp::getOperationName()},
-      {"field.equal", FieldCompareOp::getOperationName()},
-      {"bool.and", BooleanAndOp::getOperationName()},
-      {"bool.not", BooleanNotOp::getOperationName()},
-      {"bool.or", BooleanOrOp::getOperationName()},
-      {"control.require", RequireOp::getOperationName()},
-      {"poly.product_sum", ProductSumOp::getOperationName()},
-      {"poly.product_round", ProductRoundOp::getOperationName()},
-      {"poly.boundary", BoundaryOp::getOperationName()},
-      {"poly.round_evaluate", RoundEvaluateOp::getOperationName()},
-      {"poly.fold", FoldOp::getOperationName()},
-      {"poly.evaluate", MLEEvaluateOp::getOperationName()},
-      {"poly.empty_point", EmptyPointOp::getOperationName()},
-      {"poly.append_point", AppendPointOp::getOperationName()},
-      {"oracle.commit", OracleCommitOp::getOperationName()},
-      {"oracle.open", OracleOpenOp::getOperationName()},
-      {"oracle.check", OracleCheckOp::getOperationName()},
-      {"commitments.empty", CommitmentsEmptyOp::getOperationName()},
-      {"commitments.append", CommitmentsAppendOp::getOperationName()},
-      {"commitments.at", CommitmentsAtOp::getOperationName()},
-      {"commitments.length", CommitmentsLengthOp::getOperationName()},
-      {"opening_states.empty", OpeningStatesEmptyOp::getOperationName()},
-      {"opening_states.append", OpeningStatesAppendOp::getOperationName()},
-      {"opening_states.at", OpeningStatesAtOp::getOperationName()},
-      {"opening_states.length", OpeningStatesLengthOp::getOperationName()},
-      {"pcs.commit", PCSCommitOp::getOperationName()},
-      {"pcs.open", PCSOpenOp::getOperationName()},
-      {"pcs.check", PCSCheckOp::getOperationName()},
-      {"random.index", RandomIndexOp::getOperationName()},
-      {"transcript.draw_index", TranscriptDrawIndexOp::getOperationName()},
-      {"random.draw", RandomDrawOp::getOperationName()},
-      {"pcs.equal", PCSEqualOp::getOperationName()},
-      {"curve.generator", CurveGeneratorOp::getOperationName()},
-      {"curve.add", CurveAddOp::getOperationName()},
-      {"curve.scale", CurveScaleOp::getOperationName()},
-      {"curve.equal", CurveEqualOp::getOperationName()},
-      {"curve.empty", CurveEmptyOp::getOperationName()},
-      {"curve.append", CurveAppendOp::getOperationName()},
-      {"curve.at", CurveAtOp::getOperationName()},
-      {"curve.get", CurveGetOp::getOperationName()},
-      {"curve.length", CurveLengthOp::getOperationName()},
-      {"curve.commit", CurveCommitOp::getOperationName()},
-      {"curve.response", CurveResponseOp::getOperationName()},
-      {"transcript.challenge", TranscriptChallengeOp::getOperationName()},
-  };
-  for (const auto &[key, name] : operations)
-    if (key == contract)
-      return name;
+  if (!installedContract(contract))
+    return {};
+  if (const auto *exact = contractAssociation(contract, false))
+    return exact->value;
+  // Families are explicit dotted prefixes, not guessed mnemonic rewrites.
+  // Each candidate uses the generated index; overlapping rules fail generation.
+  for (size_t dot = contract.rfind('.'); dot != StringRef::npos;
+       dot = contract.take_front(dot).rfind('.'))
+    if (const auto *family =
+            contractAssociation(contract.take_front(dot + 1), true))
+      return family->value;
   return {};
+}
+
+bool operationSupportsContract(StringRef operationName, StringRef contract) {
+  if (!installedContract(contract))
+    return false;
+  ArrayRef<ContractAssociation> rows = operationAssociations;
+  for (auto found = associationBegin(rows, operationName);
+       found != rows.end() && found->key == operationName; ++found)
+    if (found->family ? contract.starts_with(found->value)
+                      : contract == found->value)
+      return true;
+  return false;
 }
 
 namespace {
@@ -335,8 +243,8 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
     if (!isa<ExecuteKernelOp>(op) || !key ||
         key.getValue() != selected->application.implementation)
       return diagnostics::emit(op->emitOpError(), "binding-implementation");
-  } else if (op->getName().getStringRef() !=
-             boundOperationName(selected->application.contract))
+  } else if (!operationSupportsContract(op->getName().getStringRef(),
+                                        selected->application.contract))
     return diagnostics::emit(op->emitOpError(), "binding-operation");
   auto types = [&](TypeRange actual, ArrayRef<BoundType> expected) {
     if (actual.size() != expected.size())

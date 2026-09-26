@@ -17,7 +17,7 @@ source, construction, participant algorithms and physical execution. The
 
 | Boundary | Pages |
 |---|---|
-| Source analysis and elaboration | [Frontend](frontend.md), [elaboration rules](elaboration.md), [common source model](source-model.md) |
+| Source analysis and elaboration | [Frontend](frontend.md), [compiler work budgets](frontend-budgets.md), [elaboration rules](elaboration.md), [common source model](source-model.md) |
 | Static and semantic selection | [Specialization](specialization.md), [independent generic validation](library-design/validation.md), [components](components.md) |
 | Shared compiler contracts | [Operation contracts](operation-contracts.md), [protocol library extension](protocol-libraries.md), [closed reference libraries](libraries.md) |
 | Interaction and local computation | [Logical calls](calls.md), [local composition](local-composition.md), [local control](local-control.md), [compact regions](regions.md) |

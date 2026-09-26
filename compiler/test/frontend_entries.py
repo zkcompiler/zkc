@@ -81,4 +81,16 @@ with case("generated entries reserve aliases during static specialization"):
       }
       entry E = Family::<F = koala-bear>;
     }"""
-    commands.source("protocol-source", source, refuses="source-static-duplicate")
+    for shape in ("bool", "(bool, bool)"):
+        commands.source("protocol-source", source.replace("(bool, bool)", shape),
+                        refuses="source-static-duplicate")
+
+with case("authored alias collisions have one declaration diagnostic"):
+    for shape in ("bool", "(bool, bool)"):
+        source = f'''module {{
+          library(namespace="test", name="collision", version="1", resolution="one");
+          fn Echo(x: {shape}) -> {shape} {{ return x; }}
+          link Alias = Echo<>;
+          fn Alias(x: {shape}) -> {shape} {{ return x; }}
+        }}'''
+        commands.source("protocol-source", source, refuses="source-duplicate-symbol")

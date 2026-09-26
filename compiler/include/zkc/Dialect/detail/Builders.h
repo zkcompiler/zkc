@@ -1,5 +1,8 @@
-#ifndef ZKC_DIALECT_BUILDERS_H
-#define ZKC_DIALECT_BUILDERS_H
+#ifndef ZKC_DIALECT_DETAIL_BUILDERS_H
+#define ZKC_DIALECT_DETAIL_BUILDERS_H
+// Unsupported implementation helpers, installed only for same-version use.
+// Raw construction establishes no admission or verification guarantee. Public
+// extension queries and verifiers live in the supported Dialect headers.
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/IR.h"

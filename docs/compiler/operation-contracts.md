@@ -24,7 +24,7 @@ polynomial-domain obligations, even when a backend shares the sequence storage.
 | Public replay | An explicitly installed construction recipe | Availability analysis and participant mirroring |
 | Acceptance guard | An operation whose completing execution requires its Boolean input | Execution view and oracle acceptance analysis |
 | Conjunction | An output whose truth entails its Boolean inputs | Acceptance-sink closure |
-| Diagonal map / linear contraction | Factor, coefficient, value and result roles under the domain's scalar-action law | Typed MLIR diagonal representation selection |
+| Diagonal map / linear contraction | Factor, coefficient, value and result roles under the domain's scalar-action law | MLIR opportunity analysis and independently checked target selection |
 | Ordered coset / exact domain value | Shift, size, vector-result and fold roles; a small vocabulary of exact value equations | Conditional nominal-domain congruence and compatibility inspection |
 
 These are compiler contracts for installed operations, not arbitrary source
@@ -42,10 +42,13 @@ No facet implicitly grants MLIR purity, speculation, cryptographic security or
 permission to discard a failure, frame, logical charge or transcript occurrence.
 
 Algebraic map/contraction facts do not name a physical layout. MLIR's optional
-`DiagonalProducerInterface` and `DiagonalContractionInterface` expose installed
-representation choices after exact binding/type checks. Their absence does not
-make an operation nonlinear; their presence is not a new algebraic proof. This
-separates the mathematical contract from current Arkworks/Dalek applicability.
+`DiagonalProducerInterface` and `DiagonalContractionInterface` expose logical
+operand/result roles after exact binding/type checks. They select neither a
+backend nor a layout. Target separately proposes installed alternatives and
+checks their full contracts, ports and every actual result use. Interface absence
+does not make an operation nonlinear; presence is not a new algebraic proof.
+The [physical decision boundary](representation.md#checked-physical-decisions)
+separates these responsibilities from current Arkworks/Dalek applicability.
 
 The current RNG type's nominal field parameter selects the installed sampling
 capability. Entropy, bounded-index sampling and field algebra remain independent

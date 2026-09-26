@@ -1,13 +1,15 @@
 #include "zkc/Frontend/Compile.h"
-#include "Model/Module.h"
+#include "Model/Checked.h"
 #include "zkc/Frontend/Analysis.h"
 namespace zkc::frontend {
 llvm::Expected<source::Content> lower(const CheckedModule &module) {
-  if (!module.model->finalized)
-    llvm::report_fatal_error("checked analysis has no finalized source");
-  return *module.model->finalized;
+  return module.completed->content;
 }
 llvm::Expected<source::Content> compileProject(const ProjectInput &input) {
-  return analyzeProject(input).lower();
+  return compileProject(input, {});
+}
+llvm::Expected<source::Content> compileProject(const ProjectInput &input,
+                                               WorkLimits limits) {
+  return analyzeProject(input, limits).lower();
 }
 } // namespace zkc::frontend

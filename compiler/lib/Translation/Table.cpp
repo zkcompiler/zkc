@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/PIR/IR/PIRDialect.h"
 #include "zkc/Dialect/Plan/IR/Physical.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Interfaces/SourceLibrary.h"
 #include "llvm/ADT/StringSet.h"
 #include <optional>
@@ -483,7 +484,9 @@ Expected<OwningOpRef<ModuleOp>> importSource(const json::Value &request,
       !(*a)[4].getAsArray())
     return error("invalid-request");
   if (!context.getLoadedDialect<PIRDialect>())
-    return createStringError("table import requires the loaded pir dialect");
+    return make_error<DialectRegistrationError>(
+        InvocationPrecondition::LoadedPIRDialect,
+        "table import requires the loaded pir dialect");
   OpBuilder b(&context);
   auto ctx = decodeContext((*a)[3], b);
   if (!ctx)

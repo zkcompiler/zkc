@@ -1,7 +1,10 @@
 #include "LibrarySource.h"
+#include "../Library/Diagnostic.h"
 #include "../Resolution/Project.h"
 #include "../Syntax/Types.h"
+#include "../Work.h"
 #include "Library.h"
+#include "OutputWork.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
@@ -14,27 +17,30 @@ namespace lib = library;
 /// boundary. The library's internal functions are already typed common bodies;
 /// only aggregate entry adapters still go through the ordinary source checker.
 class EntryAdapter {
-  const syntax::Module &source;
+  const resolution::Context &project;
   const lib::Environment &environment;
+  WorkBudget &budget;
 
 public:
-  EntryAdapter(const syntax::Module &source,
-               const lib::Environment &environment)
-      : source(source), environment(environment) {}
+  EntryAdapter(const resolution::Context &project,
+               const lib::Environment &environment, WorkBudget &budget)
+      : project(project), environment(environment), budget(budget) {}
   // A closed alias is still an authored function boundary. Reintroduce its
   // product/record ports before the ordinary argument binder sees it; only
   // the wrapper's call to the already checked body uses flattened leaves.
   Expected<LibraryEntry> adapt(const lib::LinkedFunction &linked,
                                const source::Function &flat, StringRef alias) {
+    if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+      return error;
     LibraryEntry entry;
     auto &result = entry.header;
     result.name = alias.str();
-    const auto *declaration = source.project->lookup(alias);
+    const auto *declaration = project.lookup(alias);
     if (!declaration)
       report_fatal_error("linked alias is absent from the captured project");
     result.location = declaration->location;
-    result.origin = source::LogicalOrigin{
-        source.project->origin(declaration->identity), {}};
+    result.origin =
+        source::LogicalOrigin{project.origin(declaration->identity), {}};
     auto &forwarding = entry.forwarding;
     forwarding.name = result.name;
     forwarding.origin = result.origin;
@@ -75,13 +81,15 @@ public:
     shape = [&](const lib::Type &type, const lib::Layout &layout,
                 const source::Names &spellings,
                 std::vector<unsigned> path) -> Expected<syntax::Type> {
+      if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+        return error;
       for (size_t i = 0; i < layout.leaves.size(); ++i)
         if (layout.leaves[i].path == path)
           return leafType(spellings[i]);
       syntax::Type t;
       t.location = result.location;
       if (type.kind == lib::Type::Kind::Record) {
-        const auto *resolved = source.project->lookup(type.declaration);
+        const auto *resolved = project.lookup(type.declaration);
         // Resolution registers every struct of every captured module.
         if (!resolved)
           report_fatal_error(
@@ -153,6 +161,9 @@ public:
     size_t offset = 0;
     for (size_t port = 0; port < linked.body.inputs.size(); ++port) {
       const auto &layout = linked.values.at(linked.body.inputs[port].id.index);
+      if (auto error = work::charge(budget, WorkAccount::GeneratedSource,
+                                    layout.leaves.size()))
+        return error;
       source::Names spellings;
       for (size_t i = 0; i < layout.leaves.size(); ++i)
         spellings.push_back(flat.arguments.at(offset++).type);
@@ -175,10 +186,16 @@ public:
       return StringRef(p.name).starts_with(prefix);
     }))
       prefix += "_";
+    if (auto error = work::charge(budget, WorkAccount::GeneratedSource,
+                                  flat.results.size()))
+      return error;
     for (size_t i = 0; i < flat.results.size(); ++i)
       call.outputs.push_back(prefix + std::to_string(i));
     offset = 0;
     for (const auto &layout : linked.results) {
+      if (auto error = work::charge(budget, WorkAccount::GeneratedSource,
+                                    layout.leaves.size()))
+        return error;
       source::Names spellings;
       for (size_t i = 0; i < layout.leaves.size(); ++i)
         spellings.push_back(flat.results.at(offset + i));
@@ -208,29 +225,37 @@ Expected<LibrarySource>
 emitLibrarySource(syntax::Module out, const library::Environment &environment,
                   ArrayRef<library::LinkedProgram> programs,
                   const std::map<std::string, source::Names> &entryAliases,
-                  const std::set<std::string> &names) {
+                  const std::set<std::string> &names,
+                  const resolution::Context &project, WorkBudget &budget) {
   source::Module linked;
   std::vector<LibraryEntry> entries;
   std::set<std::string> emitted;
   if (programs.empty())
     return LibrarySource{std::move(out),
                          {std::move(linked), std::move(entries)}};
-  if (!out.project)
-    report_fatal_error("library emission requires a resolved project");
+  auto atSource = [&](Error error, std::optional<source::Span> location) {
+    return handleErrors(
+        std::move(error),
+        [&](const Refusal &e) {
+          return diagnostic(project.input,
+                            Diagnostic{e.code, e.detail, location});
+        },
+        [&](const lib::Diagnostic &e) {
+          return diagnostic(project.input,
+                            Diagnostic{e.code, e.message, location});
+        });
+  };
   auto atAlias = [&](Error error, StringRef alias) {
-    const auto *declaration = out.project->lookup(alias);
+    const auto *declaration = project.lookup(alias);
     if (!declaration)
       report_fatal_error("linked alias is absent from the captured project");
-    return handleErrors(std::move(error), [&](const Refusal &e) {
-      return diagnostic(out.project->input,
-                        Diagnostic{e.code, e.detail, declaration->location});
-    });
+    return atSource(std::move(error), declaration->location);
   };
   // All requested links share one layout world and resource-slot allocator.
   auto concrete = lib::lower(
-      programs, [&](const auto &id) { return out.project->origin(id); });
+      programs, [&](const auto &id) { return project.origin(id); }, budget);
   if (!concrete)
-    return concrete.takeError();
+    return atSource(concrete.takeError(), out.location);
   if (concrete->library || !concrete->definitions.empty() ||
       !concrete->configurations.empty() || !concrete->relations.empty() ||
       !concrete->relationViews.empty() || !concrete->protocols.empty() ||
@@ -245,8 +270,11 @@ emitLibrarySource(syntax::Module out, const library::Environment &environment,
           existing->application.arguments != binding.application.arguments ||
           existing->application.implementation !=
               binding.application.implementation)
-        return zkc::error("library-source-collision",
-                          "lowered binding collides with a different binding");
+        return diagnostic(
+            project.input,
+            Diagnostic{"library-source-collision",
+                       "lowered binding collides with a different binding",
+                       existing->location});
     } else
       out.bindings.push_back(binding);
   }
@@ -299,7 +327,8 @@ emitLibrarySource(syntax::Module out, const library::Environment &environment,
       continue;
     wrappedEntries.insert(program.entry());
     for (const auto &alias : entryAliases.at(program.entry())) {
-      auto wrapper = EntryAdapter(out, environment).adapt(entry, flat, alias);
+      auto wrapper =
+          EntryAdapter(project, environment, budget).adapt(entry, flat, alias);
       if (!wrapper)
         return atAlias(wrapper.takeError(), alias);
       entries.push_back(std::move(*wrapper));
@@ -319,6 +348,9 @@ emitLibrarySource(syntax::Module out, const library::Environment &environment,
       foundEntries.insert(entry->first);
     }
     for (const auto &alias : aliases) {
+      if (auto error =
+              chargeFunction(budget, WorkAccount::GeneratedSource, original))
+        return error;
       auto f = original;
       f.name = alias;
       const bool publicEntry = entryAliases.count(original.name) &&
@@ -328,15 +360,17 @@ emitLibrarySource(syntax::Module out, const library::Environment &environment,
       // sites retain instance identity in the expansion path. Public aliases
       // name entry roots.
       if (f.origin && publicEntry)
-        f.origin->definition =
-            out.project->origin(out.project->qualify(f.name));
+        f.origin->definition = project.origin(project.qualify(f.name));
       if (!emitted.insert(f.name).second ||
           (!publicEntry && names.count(f.name))) {
         auto error = zkc::error(
             "library-source-collision",
             "lowered function name collides with another declaration");
-        return publicEntry ? atAlias(std::move(error), alias)
-                           : std::move(error);
+        if (publicEntry)
+          return atAlias(std::move(error), alias);
+        if (const auto *declaration = project.lookup(f.name))
+          return atSource(std::move(error), declaration->location);
+        return atSource(std::move(error), out.location);
       }
       if (f.body)
         source::walk(*f.body, [&](source::Instruction &instruction) {

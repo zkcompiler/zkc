@@ -1,12 +1,10 @@
 #include "../../Support/Input.h"
-#include "../Syntax/Tree.h"
-#include "Paths.h"
+#include "Requests.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Frontend/Loading.h"
 #include "zkc/Support/Json.h"
 #include <filesystem>
 #include <map>
-#include <set>
 
 using namespace llvm;
 namespace zkc::frontend {
@@ -21,39 +19,31 @@ Expected<source::Document> loadProtocolDocument(StringRef text,
       return std::move(e);
     return std::move(*document);
   }
-  auto parsed = syntax::parse(text, filename);
-  if (!parsed)
-    return parsed.takeError();
-  auto *module = std::get_if<syntax::Module>(&*parsed);
-  if (!module)
+  auto input = Input::withoutFile(text.str(), filename.str());
+  auto declarations = inspectDependencies(input);
+  // Unlike project capture, this callback API must not perform external work
+  // after any parse failure, even if the parser recovered valid imports.
+  if (!declarations.complete)
+    return loading::dependencyError(input, declarations);
+  if (declarations.form == SourceForm::Construction)
     return parseProtocolDocument(text, filename);
-  if (module->imports.size() > relation::DependencyLimits::count)
-    return zkc::error("relation-dependency-limit");
-  std::set<std::string> names;
-  for (const auto &import : module->imports) {
-    if (!names.insert(import.name).second)
-      return zkc::error("relation-duplicate-alias");
-    if (import.family != "r1cs" && import.family != "air")
-      return zkc::error("relation-import-family");
-    if (!loading::relativeAsset(import.path))
-      return zkc::error("relation-asset-path");
-  }
-  size_t total = 0;
+  loading::RequestBudget budget;
+  if (auto error = budget.preflight(declarations.relations))
+    return std::move(error);
   std::vector<ProjectAsset> assets;
-  for (const auto &import : module->imports) {
-    auto maximum = import.family == "air" ? relation::AIRLimits::bytes
-                                          : relation::Limits::bytes;
-    maximum = std::min(maximum, relation::DependencyLimits::bytes - total);
-    auto bytes = resolver(import.path, maximum);
+  for (const auto &import : declarations.relations) {
+    auto maximum = budget.maximum(import);
+    if (!maximum)
+      return maximum.takeError();
+    auto bytes = resolver(import.path, *maximum);
     if (!bytes)
       return bytes.takeError();
-    if (bytes->size() > maximum)
-      return zkc::error("relation-dependency-limit");
-    total += bytes->size();
+    if (auto error = budget.charge(bytes->size(), *maximum))
+      return std::move(error);
     assets.push_back({0, import.path, std::move(*bytes)});
   }
-  auto project = ProjectInput::capture(
-      {{{{{}, Input(text.str(), filename.str())}}}}, std::move(assets));
+  auto project =
+      ProjectInput::capture({{{{{}, std::move(input)}}}}, std::move(assets));
   if (!project)
     return project.takeError();
   auto elaborated = compileProject(*project);

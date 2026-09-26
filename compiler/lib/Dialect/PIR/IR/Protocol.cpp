@@ -33,8 +33,8 @@ LogicalResult bindings(Operation *user, ArrayAttr array, bool symbols,
     auto alias = cast<StringAttr>(pair[0]).getValue();
     if (!out.try_emplace(alias, pair[1]).second)
       return diagnostics::emit(user->emitOpError(),
-                               "interactive-binding-attribute")
-             << ": duplicate binding " << alias;
+                               "interactive-binding-attribute",
+                               "duplicate binding " + alias);
   }
   return success();
 }
@@ -98,18 +98,25 @@ Op resolve(Operation *user, FlatSymbolRefAttr ref,
   auto found =
       ref ? tables.lookupNearestSymbolFrom(scope ? scope : user, ref) : nullptr;
   auto result = dyn_cast_or_null<Op>(found);
-  if (!result)
-    diagnostics::emit(user->emitOpError(), "interactive-symbol-kind")
-        << ": expected " << Op::getOperationName() << " for " << ref;
+  if (!result) {
+    std::string detail;
+    raw_string_ostream(detail)
+        << "expected " << Op::getOperationName() << " for " << ref;
+    diagnostics::emit(user->emitOpError(), "interactive-symbol-kind", detail);
+  }
   return result;
 }
 LogicalResult callSignature(Operation *call, Operation *definition) {
   auto ft = signature(definition);
   if (!ft || call->getOperandTypes() != ft.getInputs() ||
-      call->getResultTypes() != ft.getResults())
-    return diagnostics::emit(call->emitOpError(), "interactive-call-signature")
-           << ": operands/results must match "
-           << definition->getAttr("sym_name") << " function_type";
+      call->getResultTypes() != ft.getResults()) {
+    std::string detail;
+    raw_string_ostream(detail)
+        << "operands/results must match " << definition->getAttr("sym_name")
+        << " function_type";
+    return diagnostics::emit(call->emitOpError(), "interactive-call-signature",
+                             detail);
+  }
   return success();
 }
 LogicalResult callableBody(Operation *op, Region &body, FunctionType type,
@@ -141,9 +148,9 @@ LogicalResult sharedRoles(Operation *user, ProtocolOp caller,
     return failure();
   for (const auto &role : child)
     if (!parent.contains(role.getKey()))
-      return diagnostics::emit(user->emitOpError(),
-                               "interactive-dependency-role")
-             << ": child formal role is absent in caller: " << role.getKey();
+      return diagnostics::emit(
+          user->emitOpError(), "interactive-dependency-role",
+          "child formal role is absent in caller: " + role.getKey());
   return success();
 }
 
@@ -413,8 +420,8 @@ LogicalResult ProtocolCallOp::verifySymbolUses(SymbolTableCollection &tables) {
   // SymbolRef.
   auto selected = dependencies.find(getDependency());
   if (selected == dependencies.end())
-    return diagnostics::emit(emitOpError(), "interactive-dependency")
-           << ": undeclared alias " << getDependency();
+    return diagnostics::emit(emitOpError(), "interactive-dependency",
+                             "undeclared alias " + getDependency());
   auto callee = resolve<ProtocolOp>(
       *this, cast<FlatSymbolRefAttr>(selected->second), tables, caller);
   if (!callee || failed(sharedRoles(*this, caller, callee)))
@@ -457,8 +464,8 @@ LogicalResult InstanceOp::verifySymbolUses(SymbolTableCollection &tables) {
   for (const auto &binding : expected) {
     auto selection = actual.find(binding.getKey());
     if (selection == actual.end())
-      return diagnostics::emit(emitOpError(), "interactive-dependency-binding")
-             << ": missing alias " << binding.getKey();
+      return diagnostics::emit(emitOpError(), "interactive-dependency-binding",
+                               "missing alias " + binding.getKey());
     auto expectedDef = resolve<ProtocolOp>(
         *this, cast<FlatSymbolRefAttr>(binding.second), tables, definition);
     auto child = resolve<InstanceOp>(

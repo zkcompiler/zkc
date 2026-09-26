@@ -4,7 +4,13 @@
 namespace zkc {
 struct LinearContractionStats;
 }
+namespace zkc::target {
+class CheckedPhysicalPlan;
+}
 namespace zkc::protocol {
+// Internal in-place application; refuses stale inputs before any mutation.
+llvm::Error materializePhysical(mlir::ModuleOp,
+                                const target::CheckedPhysicalPlan &);
 // Called after lowerPhysical admits a logical module with explicit bindings.
 mlir::LogicalResult lowerBoundPhysical(
     mlir::ModuleOp,

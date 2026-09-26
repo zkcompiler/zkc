@@ -3,8 +3,8 @@
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
-#include "zkc/Dialect/Builders.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/LinearContraction.h"
@@ -61,7 +61,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       llvm::cl::desc("Release discardable local storage after last use"),
       llvm::cl::init(false)};
   Statistic eligible{this, "linear-contraction-eligible",
-                     "Eligible local pairs"};
+                     "Semantic all-uses contraction pairs"};
   Statistic selected{this, "linear-contraction-selected",
                      "Selected local pairs"};
   Statistic selectedProducers{this, "linear-contraction-selected-producers",

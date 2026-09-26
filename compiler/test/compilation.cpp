@@ -136,7 +136,7 @@ Compilation table(TableAction action) {
 }
 // A deliberately misbehaving extension emits an error while returning a valid
 // type. The workflow must not publish an artifact on that apparent success.
-class NoisyLibrary final : public SourceLibraryInterface {
+class NoisyLibrary : public SourceLibraryInterface {
 public:
   using SourceLibraryInterface::SourceLibraryInterface;
   json::Value dependencies() const final {
@@ -146,7 +146,7 @@ public:
     return b.getI1Type();
   }
   Expected<mlir::Type> decodeType(const json::Value &,
-                                  mlir::Builder &b) const final {
+                                  mlir::Builder &b) const override {
     auto diagnostic =
         mlir::emitError(b.getUnknownLoc(), "extension reported an error");
     diagnostic.attachNote(
@@ -162,6 +162,17 @@ public:
     return error("unknown-operation");
   }
 };
+// Exercise Compiler's LLVM-error adapter independently of MLIR emission.
+class SetupFailureLibrary final : public NoisyLibrary {
+public:
+  using NoisyLibrary::NoisyLibrary;
+  Expected<mlir::Type> decodeType(const json::Value &,
+                                  mlir::Builder &) const final {
+    return make_error<DialectRegistrationError>(
+        InvocationPrecondition::LoadedProtocolDialects,
+        "extension invocation setup failed");
+  }
+};
 void tableOwnership() {
   mlir::DialectRegistry unloadedRegistry;
   registerDialects(unloadedRegistry);
@@ -172,9 +183,14 @@ void tableOwnership() {
       ["scalar","f7"],[["table-protocol","1"]]],[],["return",0]])"));
   auto importedBeforeLoad = importSource(requestBeforeLoad, unloaded);
   require(!importedBeforeLoad, "table import accepted an unloaded dialect");
-  require(toString(importedBeforeLoad.takeError()) ==
-                  "table import requires the loaded pir dialect" &&
-              unloaded.getLoadedDialects().size() == 1,
+  bool tablePrecondition = false;
+  handleAllErrors(
+      importedBeforeLoad.takeError(), [&](const DialectRegistrationError &e) {
+        tablePrecondition =
+            e.precondition == InvocationPrecondition::LoadedPIRDialect &&
+            e.detail == "table import requires the loaded pir dialect";
+      });
+  require(tablePrecondition && unloaded.getLoadedDialects().size() == 1,
           "table import must refuse without changing the caller's context");
   for (auto action : {TableAction::Import, TableAction::Plan, TableAction::Lazy,
                       TableAction::Materialized}) {
@@ -225,6 +241,22 @@ void tableOwnership() {
   });
   require(structured,
           "upstream error was not retained without inventing a code");
+  mlir::DialectRegistry setupRegistry;
+  setupRegistry.addExtension(+[](mlir::MLIRContext *, PIRDialect *dialect) {
+    dialect->addInterfaces<SetupFailureLibrary>();
+  });
+  auto setup =
+      compileTable(request, {TableAction::Import, false}, setupRegistry);
+  require(!setup, "extension setup failure published a compilation");
+  structured = false;
+  handleAllErrors(setup.takeError(), [&](const CompilationError &e) {
+    structured =
+        e.message == "extension invocation setup failed" &&
+        e.refusals.empty() && e.locations.empty() &&
+        e.invocationPreconditions ==
+            std::vector{InvocationPrecondition::LoadedProtocolDialects};
+  });
+  require(structured, "Compiler lost an extension invocation precondition");
 }
 void constructionOwnership() {
   constexpr StringLiteral text = R"(module {
@@ -276,12 +308,32 @@ void constructionOwnership() {
   mlir::MLIRContext fresh;
   auto imported = protocol::importModule(original, fresh);
   require(!imported, "uninitialized import context accepted");
-  require(toString(imported.takeError()) ==
-              "protocol import requires loaded zkc dialects",
-          "missing dialect precondition did not refuse cleanly");
+  auto missingDialects = imported.takeError();
+  bool precondition = false;
+  visitErrors(missingDialects, [&](const ErrorInfoBase &e) {
+    precondition = e.isA<DialectRegistrationError>() && !e.isA<Refusal>();
+  });
+  require(precondition, "missing dialects became a semantic refusal");
+  auto wrapped = sourceDiagnostic(*result.compilation.source(),
+                                  std::move(missingDialects));
+  precondition = false;
+  handleAllErrors(std::move(wrapped), [&](const CompilationError &e) {
+    precondition =
+        e.message == "protocol import requires loaded zkc dialects" &&
+        e.refusals.empty() && e.locations.empty() &&
+        e.invocationPreconditions ==
+            std::vector{InvocationPrecondition::LoadedProtocolDialects};
+  });
+  require(precondition, "invocation setup failure acquired source blame");
   auto uninitialized = protocol::construct(original, descriptor, fresh);
   require(!uninitialized, "uninitialized construction context accepted");
-  consumeError(uninitialized.takeError());
+  precondition = false;
+  handleAllErrors(
+      uninitialized.takeError(), [&](const DialectRegistrationError &e) {
+        precondition =
+            e.detail == "protocol import requires loaded zkc dialects";
+      });
+  require(precondition, "construction lost its invocation precondition");
   require(fresh.getLoadedDialects().size() == 1,
           "low-level import changed the caller's context");
   auto catalog = take(claims::inspect(original, "main"));
@@ -357,6 +409,49 @@ void copiedLocations() {
   copy.location->file = 999;
   require(!document.diagnosticSpan(copy), "foreign file span accepted");
 }
+void registryPreconditions() {
+  auto document = take(frontend::parseProtocolDocument(program, "setup.pir"));
+  // Neither registering without loading nor loading only some dialects
+  // satisfies the import precondition. Failure must not initialize the context.
+  for (bool partial : {false, true}) {
+    auto failure = [&]() -> Error {
+      mlir::DialectRegistry registry;
+      registerDialects(registry);
+      mlir::MLIRContext context(registry);
+      if (partial)
+        context.getOrLoadDialect<PIRDialect>();
+      auto count = context.getLoadedDialects().size();
+      auto result = protocol::importModule(*document.module(), context);
+      require(!result, "incompletely initialized registry imported source");
+      require(context.getLoadedDialects().size() == count,
+              "failed import loaded missing dialects");
+      return result.takeError();
+    }();
+    bool structured = false;
+    handleAllErrors(std::move(failure), [&](const DialectRegistrationError &e) {
+      structured = e.detail == "protocol import requires loaded zkc dialects";
+    });
+    require(structured, "registry failure did not survive context teardown");
+  }
+  // A joined source error retains its identifier and coordinate without
+  // giving the embedding failure a semantic identifier.
+  auto mixed = sourceDiagnostic(
+      document, joinErrors(make_error<DialectRegistrationError>(
+                               InvocationPrecondition::LoadedProtocolDialects,
+                               "setup detail"),
+                           error("source-test", "source detail")));
+  bool structured = false;
+  handleAllErrors(std::move(mixed), [&](const CompilationError &e) {
+    structured =
+        e.refusals.size() == 1 && e.refusals[0].code == "source-test" &&
+        e.refusals[0].detail == "source detail" && e.locations.size() == 1 &&
+        e.locations[0].filename == "setup.pir" &&
+        e.invocationPreconditions ==
+            std::vector{InvocationPrecondition::LoadedProtocolDialects};
+  });
+  require(structured,
+          "mixed source and invocation failures lost their boundary");
+}
 } // namespace
 int main() {
   ownership();
@@ -364,4 +459,5 @@ int main() {
   tableOwnership();
   constructionOwnership();
   copiedLocations();
+  registryPreconditions();
 }

@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Relation/IR/RelationDialect.h"
 
 namespace zkc {
+char DialectRegistrationError::ID;
 namespace {
 template <typename... Dialects> struct DialectSet {
   static void registerIn(mlir::DialectRegistry &registry) {

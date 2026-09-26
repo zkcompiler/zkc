@@ -34,9 +34,23 @@ transformation passes belong to `Zkc::Transforms`; aggregate pass registration
 belongs to `Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
 Generated operation declarations stay shared because parent traits cross dialect
 boundaries; definitions and registration lists are generated per dialect.
+Public dialect queries and verifiers remain extension APIs. Raw construction
+helpers under `Dialect/detail/Builders.h` are unsupported same-version details
+and do not establish admission. Claim IR structure belongs to IR; the optional
+`Zkc::ClaimTranslation` bridge owns source-bound claim import and checking.
 
 For an operation in an existing dialect, edit its ODS definition and verifier.
-The generated registration list follows the definition. A new built-in dialect
+The generated registration list follows the definition. Bound kernel operations
+also declare their logical contract keys on the actual ODS operation record.
+`zkc-tblgen` generates the contract-to-operation adapter used by IR; Contracts
+remains MLIR-free and independently owns signature and implementation legality.
+An explicit family such as `transcript.observe.*` is intersected with installed
+contracts. Add independent expected mapping and discriminating behavior checks
+when extending it: importer/verifier agreement through the same generated map
+cannot detect a shared wrong mapping. No purity or cryptographic law is inferred
+from this metadata.
+
+A new built-in dialect
 also needs:
 
 1. Its public dialect header and initialization implementation.

@@ -299,13 +299,10 @@ json::Value inspectAnalysis(const Analysis &analysis) {
           json::Object{{"file", int64_t(file)},
                        {"syntax", syntax::inspect(*parsed.content)}});
     };
-    if (const auto *project = analysis.project()) {
-      uint32_t file = 0;
-      for (const auto &library : project->libraries())
-        for (const auto &source : library.sources)
-          inspectFile(source.input.text(), source.input.filename(), file++);
-    } else
-      inspectFile(analysis.sourceText(), analysis.filename(), 0);
+    uint32_t file = 0;
+    for (const auto &library : analysis.project()->libraries())
+      for (const auto &source : library.sources)
+        inspectFile(source.input.text(), source.input.filename(), file++);
     if (checkedSyntax)
       libraries =
           json::Object{{"query_state", "typed_library_queries_unavailable"},
@@ -315,10 +312,10 @@ json::Value inspectAnalysis(const Analysis &analysis) {
                        {"pir_admission", "not_requested"}};
   }
   json::Array files;
-  if (const auto *project = analysis.project()) {
+  {
     uint32_t file = 0;
     uint32_t owner = 0;
-    for (const auto &library : project->libraries()) {
+    for (const auto &library : analysis.project()->libraries()) {
       for (const auto &source : library.sources) {
         json::Array module;
         for (const auto &part : source.module)
@@ -332,11 +329,7 @@ json::Value inspectAnalysis(const Analysis &analysis) {
       }
       ++owner;
     }
-  } else
-    files.push_back(
-        json::Object{{"id", 0},
-                     {"filename", analysis.filename()},
-                     {"bytes", int64_t(analysis.sourceText().size())}});
+  }
   json::Array dependencies, resolvedDeclarations;
   for (const auto &d : analysis.dependencies())
     dependencies.push_back(json::Object{{"category", dependencyKind(d.kind)},
@@ -344,25 +337,24 @@ json::Value inspectAnalysis(const Analysis &analysis) {
                                         {"target", d.target},
                                         {"span", span(d.location)}});
   const auto &model = model::AnalysisAccess::get(analysis);
-  if (model.resolution)
-    for (const auto &d : model.resolution->declarations) {
-      std::string display;
-      for (const auto &part : d.identity.module)
-        display += part + "::";
-      display += d.identity.name;
-      resolvedDeclarations.push_back(json::Object{
-          {"symbol", d.symbol},
-          {"origin", model.resolution->origin(d.identity)},
-          {"display_name", display},
-          {"identity", qualifiedDeclaration(d.identity)},
-          {"identity_key", library::identity(d.identity)},
-          {"resolution", model.resolution->unavailable.count(d.symbol)
-                             ? "unavailable"
-                         : analysis.resolutionComplete() ? "resolved"
-                                                         : "collected"},
-          {"exported", d.exported},
-          {"span", span(d.location)}});
-    }
+  for (const auto &d : model.resolution->declarations) {
+    std::string display;
+    for (const auto &part : d.identity.module)
+      display += part + "::";
+    display += d.identity.name;
+    resolvedDeclarations.push_back(json::Object{
+        {"symbol", d.symbol},
+        {"origin", model.resolution->origin(d.identity)},
+        {"display_name", display},
+        {"identity", qualifiedDeclaration(d.identity)},
+        {"identity_key", library::identity(d.identity)},
+        {"resolution", model.resolution->unavailable.count(d.symbol)
+                           ? "unavailable"
+                       : analysis.resolutionComplete() ? "resolved"
+                                                       : "collected"},
+        {"exported", d.exported},
+        {"span", span(d.location)}});
+  }
   auto retained = model::AnalysisAccess::libraries(analysis);
   size_t checkedBodies = 0;
   for (const auto &d : analysis.declarations())

@@ -1,4 +1,5 @@
 #include "LinkInternal.h"
+#include "Work.h"
 #include "zkc/Contracts/Domains.h"
 
 namespace zkc::frontend::library::detail {
@@ -156,6 +157,8 @@ llvm::Error World::bounds(const std::vector<TypeBound> &bs,
 }
 llvm::Expected<Layout> World::layout(const Type &source, const LinkScope &scope,
                                      unsigned depth) {
+  if (auto error = chargeType(budget, source))
+    return error;
   if (!depth)
     layoutSteps = 0;
   if (++layoutSteps > environment.expansionLimit)
@@ -253,6 +256,16 @@ llvm::Expected<Layout> World::layout(const Type &source, const LinkScope &scope,
       return count.takeError();
     shape.arguments[0] = *count;
   }
+  if (shape.kind == Type::Kind::Array) {
+    const auto &count = shape.arguments.front();
+    if (count.kind == StaticTerm::Kind::Natural)
+      if (auto error = chargeType(budget, shape.elements.front(), count.number))
+        return error;
+  } else {
+    for (const auto &element : shape.elements)
+      if (auto error = chargeType(budget, element))
+        return error;
+  }
   auto elements = children(shape, environment);
   if (!elements)
     return elements.takeError();
@@ -260,6 +273,9 @@ llvm::Expected<Layout> World::layout(const Type &source, const LinkScope &scope,
     auto child = layout((*elements)[i], scope, depth + 1);
     if (!child)
       return child.takeError();
+    if (auto error = work::charge(budget, WorkAccount::LibraryFormation,
+                                  child->leaves.size()))
+      return error;
     for (auto leaf : child->leaves) {
       leaf.path.insert(leaf.path.begin(), i);
       result.leaves.push_back(std::move(leaf));

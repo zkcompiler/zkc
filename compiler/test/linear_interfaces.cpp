@@ -47,11 +47,14 @@ public:
   using Op::Op;
   static StringRef getOperationName() { return "extension.map"; }
   static ArrayRef<StringRef> getAttributeNames() { return {}; }
-  std::optional<DiagonalProducerSelection> getDiagonalProducerSelection() {
+  std::optional<DiagonalProducerRoles> getDiagonalProducerRoles() {
     if ((*this)->hasAttr("unavailable"))
       return {};
-    return DiagonalProducerSelection{0, 1, 0, "extension.diagonal/1",
-                                     "extension/map"};
+    if ((*this)->hasAttr("bad_result"))
+      return DiagonalProducerRoles{0, 1, 1};
+    if ((*this)->hasAttr("overlapping_roles"))
+      return DiagonalProducerRoles{1, 1, 0};
+    return DiagonalProducerRoles{0, 1, 0};
   }
 };
 class ContractOp
@@ -61,12 +64,14 @@ public:
   using Op::Op;
   static StringRef getOperationName() { return "extension.contract"; }
   static ArrayRef<StringRef> getAttributeNames() { return {}; }
-  std::optional<DiagonalContractionSelection>
-  getDiagonalContractionSelection() {
+  std::optional<DiagonalContractionRoles> getDiagonalContractionRoles() {
     if ((*this)->hasAttr("unavailable"))
       return {};
-    return DiagonalContractionSelection{0, 1, "extension.diagonal/1",
-                                        "extension/contract"};
+    if ((*this)->hasAttr("bad_coefficient"))
+      return DiagonalContractionRoles{2, 1};
+    if ((*this)->hasAttr("swapped_roles"))
+      return DiagonalContractionRoles{1, 0};
+    return DiagonalContractionRoles{0, 1};
   }
 };
 class ExtensionDialect : public Dialect {
@@ -215,8 +220,7 @@ void catalogAndCarriers(MLIRContext &ctx) {
       "unknown",
       {"vector.unknown", {"bls12-381.fr"}, "arkworks/vector.unknown"}};
   refuse(resolveBinding(unknown.application, true), "binding-contract");
-  refuse(checkParameters("vector.gather", {"00"}),
-         "noncanonical-natural");
+  refuse(checkParameters("vector.gather", {"00"}), "noncanonical-natural");
   refuse(checkParameters("vector.matvec", {"1", "2", "01"}),
          "noncanonical-natural");
   refuse(checkParameters("field.constant", {"0"}, "missing.field"),
@@ -256,6 +260,21 @@ void optionalInterfaces(MLIRContext &ctx) {
   };
   require(count() == 1,
           "shared analysis uses interfaces, not known operation names");
+  auto roles =
+      cast<DiagonalProducerInterface>(producer).getDiagonalProducerRoles();
+  require(roles && roles->factorsOperand == 0 && roles->valuesOperand == 1 &&
+              roles->result == 0,
+          "synthetic semantic roles need no binding or installed backend");
+  for (StringRef attribute : {"bad_result", "overlapping_roles"}) {
+    producer->setAttr(attribute, b.getUnitAttr());
+    require(count() == 0, "invalid synthetic producer roles refuse grouping");
+    producer->removeAttr(attribute);
+  }
+  for (StringRef attribute : {"bad_coefficient", "swapped_roles"}) {
+    consumer->setAttr(attribute, b.getUnitAttr());
+    require(count() == 0, "invalid synthetic consumer roles refuse grouping");
+    consumer->removeAttr(attribute);
+  }
   b.setInsertionPoint(ret);
   auto *second =
       op("extension.contract", {block->getArgument(2), producer->getResult(0)},

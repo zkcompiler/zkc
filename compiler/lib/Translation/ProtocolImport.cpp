@@ -3,8 +3,8 @@
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Builders.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Relations.h"
@@ -29,13 +29,6 @@ class Importer {
 
   void locate(const source::Node &node) {
     location = locations ? locations(node) : b.getUnknownLoc();
-  }
-  Operation *operation(OpBuilder &builder, StringRef name,
-                       ValueRange inputs = {}, TypeRange outputs = {},
-                       ArrayRef<NamedAttribute> attrs = {},
-                       unsigned regions = 0) {
-    return protocol::operation(builder, name, inputs, outputs, attrs, regions,
-                               location);
   }
   Type type(StringRef spelling) {
     auto parsed = parseBoundType(spelling, physical);
@@ -110,26 +103,25 @@ class Importer {
         auto values = operands(ret ? ret->values : yield->values, env);
         if (yield && localRegion)
           llvm::append_range(values, forwarded);
-        operation(b,
-                  yield && localRegion ? "pir.local_yield"
-                  : local              ? "func.return"
-                  : ret                ? "pir.finish"
-                                       : "pir.yield",
-                  values);
+        if (yield && localRegion)
+          LocalYieldOp::create(b, location, values);
+        else if (local)
+          func::ReturnOp::create(b, location, values);
+        else if (ret)
+          FinishOp::create(b, location, values);
+        else
+          ProtocolYieldOp::create(b, location, values);
         continue;
       }
       if (const auto *release = instruction.get<source::Release>()) {
-        operation(b, "plan.release", operands(release->values, env));
+        ReleaseOp::create(b, location, operands(release->values, env));
         continue;
       }
-      SmallVector<NamedAttribute> attrs{named(b, "site", instruction.site)};
       if (instruction.get<source::Incomplete>()) {
-        operation(b, "pir.incomplete", {}, {}, attrs);
+        IncompleteOp::create(b, location, instruction.site);
       } else if (const auto *stop = instruction.get<source::Stop>()) {
-        attrs.push_back(named(b, "reason", stop->reason));
-        if (!target && !local)
-          attrs.push_back(named(b, "role", stop->role));
-        operation(b, "pir.halt", {}, {}, attrs);
+        HaltOp::create(b, location, instruction.site, stop->reason,
+                       !target && !local ? text(b, stop->role) : StringAttr());
       } else if (const auto *op = instruction.get<source::Operation>()) {
         SmallVector<Type> outputs;
         const auto &binding = bindings.at(op->callee);
@@ -137,32 +129,34 @@ class Importer {
         assert(selected && "admitted operation binding");
         for (const auto &t : selected->outputs)
           outputs.push_back(decodeBoundType(b.getContext(), t));
-        attrs.push_back(named(b, "parameters", strings(op->attributes)));
-        attrs.push_back(
-            named(b, "binding",
-                  FlatSymbolRefAttr::get(b.getContext(), binding.name)));
+        auto parameters = strings(op->attributes);
+        auto bindingRef = FlatSymbolRefAttr::get(b.getContext(), binding.name);
+        Operation *created;
         if (physical)
-          attrs.push_back(
-              named(b, "kernel", binding.application.implementation));
-        auto *created = operation(
-            b,
-            physical ? ExecuteKernelOp::getOperationName()
-                     : boundOperationName(binding.application.contract),
-            operands(op->inputs, env), outputs, attrs);
+          created = ExecuteKernelOp::create(
+              b, location, outputs, operands(op->inputs, env), instruction.site,
+              binding.application.implementation, parameters, bindingRef);
+        else
+          created =
+              operation(b, boundOperationName(binding.application.contract),
+                        operands(op->inputs, env), outputs,
+                        {named(b, "site", instruction.site),
+                         named(b, "parameters", parameters),
+                         named(b, "binding", bindingRef)},
+                        0, location);
         bind(op->outputs, created->getResults(), env);
       } else if (const auto *call = instruction.get<source::AlgorithmCall>()) {
-        attrs.push_back(named(
-            b, "callee", FlatSymbolRefAttr::get(b.getContext(), call->callee)));
-        auto *op = operation(b, "func.call", operands(call->inputs, env),
-                             signatures.at(call->callee).getResults(), attrs);
+        auto op = func::CallOp::create(
+            b, location, signatures.at(call->callee).getResults(),
+            FlatSymbolRefAttr::get(b.getContext(), call->callee),
+            operands(call->inputs, env), ArrayAttr(), ArrayAttr(), UnitAttr());
+        op->setAttr("site", text(b, instruction.site));
         bind(call->outputs, op->getResults(), env);
       } else if (const auto *call = instruction.get<source::LocalCall>()) {
-        attrs.push_back(named(
-            b, "callee", FlatSymbolRefAttr::get(b.getContext(), call->callee)));
-        if (!target)
-          attrs.push_back(named(b, "role", call->role));
-        auto *op = operation(b, "pir.local_call", operands(call->inputs, env),
-                             signatures.at(call->callee).getResults(), attrs);
+        auto op = LocalCallOp::create(
+            b, location, signatures.at(call->callee).getResults(),
+            operands(call->inputs, env), call->callee, instruction.site,
+            !target ? text(b, call->role) : StringAttr());
         bind(call->outputs, op->getResults(), env);
       } else if (const auto *call = instruction.get<source::ProtocolCall>()) {
         std::string signature = call->callee;
@@ -171,38 +165,36 @@ class Importer {
           for (const auto &dep : definition->dependencies)
             if (dep.name == call->callee)
               signature = dep.protocol;
-          attrs.push_back(named(b, "dependency", call->callee));
-        } else
-          attrs.push_back(
-              named(b, "callee",
-                    FlatSymbolRefAttr::get(b.getContext(), call->callee)));
-        auto *op =
-            operation(b, target ? "pir.participant_call" : "pir.protocol_call",
-                      operands(call->inputs, env),
-                      signatures.at(signature).getResults(), attrs);
+        }
+        Operation *op;
+        if (target)
+          op = ParticipantCallOp::create(
+              b, location, signatures.at(signature).getResults(),
+              operands(call->inputs, env), instruction.site, call->callee);
+        else
+          op = ProtocolCallOp::create(
+              b, location, signatures.at(signature).getResults(),
+              operands(call->inputs, env), instruction.site, call->callee);
         bind(call->outputs, op->getResults(), env);
       } else if (const auto *message = instruction.get<source::Message>()) {
-        attrs.push_back(named(b, "schema", message->schema));
-        attrs.push_back(named(b, "sender", message->sender));
-        attrs.push_back(named(b, "receiver", message->receiver));
         auto input = env.at(message->input);
-        auto *op = operation(b, "pir.message", input, input.getType(), attrs);
+        auto op = MessageOp::create(b, location, input.getType(), input,
+                                    instruction.site, message->schema,
+                                    message->sender, message->receiver);
         env.emplace(message->output, op->getResult(0));
       } else if (const auto *send = instruction.get<source::Send>()) {
-        attrs.push_back(named(b, "schema", send->schema));
-        attrs.push_back(named(b, "peer", send->peer));
-        operation(b, "pir.emit", env.at(send->input), {}, attrs);
+        EmitOp::create(b, location, env.at(send->input), instruction.site,
+                       send->schema, send->peer);
       } else if (const auto *receive = instruction.get<source::Receive>()) {
-        attrs.push_back(named(b, "schema", receive->schema));
-        attrs.push_back(named(b, "peer", receive->peer));
-        auto *op = operation(b, "pir.await", {}, type(receive->type), attrs);
+        auto op =
+            AwaitOp::create(b, location, type(receive->type), instruction.site,
+                            receive->schema, receive->peer);
         env.emplace(receive->output, op->getResult(0));
       } else if (const auto *pack =
                      instruction.get<source::VariantConstruct>()) {
-        attrs.push_back(named(b, "alternative", pack->alternative));
-        auto *op =
-            operation(b, "pir.variant_inject", operands(pack->payload, env),
-                      type(pack->type), attrs);
+        auto op = VariantInjectOp::create(b, location, type(pack->type),
+                                          operands(pack->payload, env),
+                                          instruction.site, pack->alternative);
         env.emplace(pack->output, op->getResult(0));
       } else if (const auto *match = instruction.get<source::Match>()) {
         SmallVector<mlir::Value> inputs{env.at(match->input)};
@@ -246,9 +238,9 @@ class Importer {
           regions.push_back(std::move(region));
         }
         locate(instruction);
-        attrs.push_back(named(b, "alternatives", strings(alternatives)));
-        auto *op = operation(b, "pir.local_match", inputs, outputs, attrs,
-                             regions.size());
+        auto op =
+            LocalMatchOp::create(b, location, outputs, inputs, instruction.site,
+                                 strings(alternatives), regions.size());
         for (auto [i, region] : enumerate(regions))
           op->getRegion(i).takeBody(*region);
         bind(match->outputs, op->getResults(), env);
@@ -276,7 +268,8 @@ class Importer {
         for (auto &region : regions)
           if (isa<LocalYieldOp>(region.front().back()))
             outputs = region.front().back().getOperandTypes();
-        auto *op = operation(b, "pir.local_if", inputs, outputs, attrs, 2);
+        auto op =
+            LocalIfOp::create(b, location, outputs, inputs, instruction.site);
         for (unsigned i = 0; i < 2; ++i)
           op->getRegion(i).takeBody(regions[i]);
         bind(branch->outputs, op->getResults(), env);
@@ -289,7 +282,8 @@ class Importer {
           outputs.push_back(env.at(initial).getType());
         }
         llvm::append_range(inputs, operands(loop->captures, env));
-        auto *op = operation(b, "pir.local_for", inputs, outputs, attrs, 1);
+        auto op =
+            LocalForOp::create(b, location, outputs, inputs, instruction.site);
         auto *block = new Block();
         op->getRegion(0).push_back(block);
         Env inner;
@@ -325,14 +319,10 @@ class Importer {
           names.push_back(capture);
           inputs.push_back(env.at(capture));
         }
-        attrs.push_back(
-            named(b, "carried", b.getI64IntegerAttr(outputs.size())));
-        attrs.push_back(named(b, "count", loop->count.value));
-        attrs.push_back(
-            named(b, "parameter",
-                  b.getBoolAttr(loop->count.kind ==
-                                source::LoopCount::Kind::Parameter)));
-        auto *op = operation(b, "pir.loop", inputs, outputs, attrs, 1);
+        auto op = ProtocolLoopOp::create(
+            b, location, outputs, inputs, instruction.site, outputs.size(),
+            loop->count.value,
+            loop->count.kind == source::LoopCount::Kind::Parameter);
         auto *block = new Block();
         op->getRegion(0).push_back(block);
         Env inner;
@@ -397,18 +387,10 @@ class Importer {
       inputRoles.push_back(text(b, arg.role));
     for (const auto &result : p.results)
       outputRoles.push_back(text(b, result.role));
-    auto *op = operation(
-        b, "pir.protocol", {}, {},
-        {named(b, "sym_name", p.name),
-         named(b, "function_type", TypeAttr::get(signatures.at(p.name))),
-         named(b, "roles", strings(p.roles)),
-         named(b, "parameters", strings(p.parameters)),
-         named(b, "dependencies", dependencies(p.dependencies)),
-         named(b, "input_roles", b.getArrayAttr(inputRoles)),
-         named(b, "argument_names", b.getArrayAttr(argumentNames)),
-         named(b, "output_roles", b.getArrayAttr(outputRoles)),
-         named(b, "external", b.getBoolAttr(!p.body))},
-        1);
+    auto op = ProtocolOp::create(
+        b, location, p.name, signatures.at(p.name), b.getArrayAttr(inputRoles),
+        b.getArrayAttr(outputRoles), strings(p.roles), strings(p.parameters),
+        dependencies(p.dependencies), !p.body, b.getArrayAttr(argumentNames));
     if (p.body)
       definitionBody(p, op, *p.body, false);
   }
@@ -417,34 +399,26 @@ class Importer {
     SmallVector<Attribute> argumentNames;
     for (const auto &arg : p.arguments)
       argumentNames.push_back(text(b, arg.name));
-    auto *op = operation(
-        b, "pir.participant", {}, {},
-        {named(b, "sym_name", p.name),
-         named(b, "function_type", TypeAttr::get(signatures.at(p.name))),
-         named(b, "instance", p.instance), named(b, "role", p.role),
-         named(b, "parameters", parameterBindings(p.parameters)),
-         named(b, "argument_names", b.getArrayAttr(argumentNames))},
-        1);
+    auto op = ParticipantOp::create(
+        b, location, p.name, signatures.at(p.name), p.instance, p.role,
+        parameterBindings(p.parameters), b.getArrayAttr(argumentNames));
     definitionBody(p, op, p.body, false);
   }
   template <typename Root> OwningOpRef<ModuleOp> start(const Root &m) {
     locate(m);
     auto module = ModuleOp::create(location);
     b.setInsertionPointToEnd(module.getBody());
-    SmallVector<NamedAttribute> attrs{named(
-        b, "stage", target ? physical ? "physical" : "logical" : "common")};
-    auto *root = operation(b, "pir.module", {}, {}, attrs, 1);
+    auto root = ProtocolModuleOp::create(
+        b, location, target ? physical ? "physical" : "logical" : "common");
     auto *top = new Block();
     root->getRegion(0).push_back(top);
     b.setInsertionPointToEnd(top);
     for (const auto &binding : m.bindings) {
       locate(binding);
-      operation(
-          b, "pir.operation_binding", {}, {},
-          {named(b, "sym_name", binding.name),
-           named(b, "contract", binding.application.contract),
-           named(b, "arguments", strings(binding.application.arguments)),
-           named(b, "implementation", binding.application.implementation)});
+      OperationBindingOp::create(b, location, binding.name,
+                                 binding.application.contract,
+                                 strings(binding.application.arguments),
+                                 binding.application.implementation);
       bindings.emplace(binding.name, binding);
     }
     for (const auto &f : m.functions)
@@ -453,8 +427,7 @@ class Importer {
   }
   void entry(StringRef name, ArrayAttr targets, const source::Node &node) {
     locate(node);
-    operation(b, "pir.entry", {}, {},
-              {named(b, "sym_name", name), named(b, "targets", targets)});
+    ProtocolEntryOp::create(b, location, name, targets);
   }
 
 public:
@@ -509,14 +482,10 @@ public:
       definition(p);
     for (const auto &instance : m.instances) {
       locate(instance);
-      operation(
-          b, "pir.instance", {}, {},
-          {named(b, "sym_name", instance.name),
-           named(b, "protocol",
-                 FlatSymbolRefAttr::get(b.getContext(), instance.protocol)),
-           named(b, "parameters", parameterBindings(instance.parameters)),
-           named(b, "dependencies", pairs(instance.dependencies, true)),
-           named(b, "roles", pairs(instance.roles))});
+      InstanceOp::create(b, location, instance.name, instance.protocol,
+                         parameterBindings(instance.parameters),
+                         pairs(instance.dependencies, true),
+                         pairs(instance.roles));
     }
     for (const auto &e : m.entries)
       entry(
@@ -546,7 +515,9 @@ import(const Root &root, MLIRContext &ctx,
   if (auto e = admit(root, false, failureLocation))
     return e;
   if (!hasProtocolDialects(ctx))
-    return createStringError("protocol import requires loaded zkc dialects");
+    return make_error<DialectRegistrationError>(
+        InvocationPrecondition::LoadedProtocolDialects,
+        "protocol import requires loaded zkc dialects");
   bool physical = false;
   if constexpr (std::is_same_v<Root, source::Participants>)
     physical = root.stage == source::Participants::Stage::Physical;

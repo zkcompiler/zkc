@@ -23,6 +23,7 @@ endfunction()
 
 add_zkc_component(Support
   lib/Support/Input.cpp
+  lib/Support/Refusal.cpp
   lib/Support/Json.cpp
 )
 add_zkc_component(Contracts
@@ -70,7 +71,6 @@ add_zkc_component(Claims
   lib/Claims/Check.cpp
 )
 add_zkc_component(IR
-  lib/Translation/Claims.cpp
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Bindings.cpp
@@ -94,6 +94,9 @@ add_zkc_component(IR
   lib/Translation/ProtocolImport.cpp
   lib/Translation/R1CS.cpp
   lib/Translation/Table.cpp
+)
+add_zkc_component(ClaimTranslation
+  lib/ClaimTranslation/Claims.cpp
 )
 add_zkc_component(Frontend
   lib/Frontend/Analysis.cpp
@@ -135,6 +138,7 @@ add_zkc_component(Frontend
   lib/Frontend/Syntax/Format.cpp
   lib/Frontend/Syntax/Lexer.cpp
   lib/Frontend/Syntax/Parser.cpp
+  lib/Frontend/Tooling/Dependencies.cpp
   lib/Frontend/Tooling/Analysis.cpp
   lib/Frontend/Tooling/Calls.cpp
   lib/Frontend/Tooling/Inspection.cpp
@@ -145,7 +149,7 @@ add_zkc_component(Frontend
 )
 add_zkc_component(FrontendLoading
   lib/Frontend/Loading/Capture.cpp
-  lib/Frontend/Loading/Relations.cpp
+  lib/Frontend/Loading/Document.cpp
 )
 add_zkc_component(Transforms
   lib/Conversion/PIRToPlan.cpp
@@ -159,6 +163,8 @@ add_zkc_component(Transforms
   lib/Transforms/TableSimplification.cpp
   lib/Dialect/Relation/Transforms/Deduplicate.cpp
   lib/Target/Selection.cpp
+  lib/Target/Catalog.cpp
+  lib/Target/PhysicalPlan.cpp
 )
 add_zkc_component(CompilerCore
   lib/Compiler/Compilation.cpp
@@ -193,7 +199,8 @@ target_include_directories(ZkcIR SYSTEM PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<BUILD_INTERFACE:${MLIR_INCLUDE_DIRS}>)
 target_link_libraries(ZkcClaims PUBLIC ZkcProtocol)
-target_link_libraries(ZkcIR PUBLIC ZkcClaims)
+target_link_libraries(ZkcIR PUBLIC ZkcProtocol)
+target_link_libraries(ZkcClaimTranslation PUBLIC ZkcClaims ZkcIR)
 # Follow MLIR's package linkage too: embedding static MLIR archives alongside
 # its dylib duplicates MLIR definitions and process-global state.
 mlir_target_link_libraries(ZkcIR PUBLIC
@@ -204,7 +211,7 @@ target_link_libraries(ZkcFrontendLoading PUBLIC ZkcFrontend)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils)
-target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcFrontend)
+target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcFrontend ZkcClaimTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompilerCore ZkcFrontendLoading)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
 add_library(ZkcCompiler INTERFACE)
@@ -215,7 +222,7 @@ target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore ZkcDriver)
 target_include_directories(ZkcCompiler INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
+set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

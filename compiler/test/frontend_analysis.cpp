@@ -1,3 +1,4 @@
+#include "../lib/Frontend/Model/Access.h"
 #include "../lib/Frontend/Resolution/Project.h"
 #include "Names.h"
 #include "zkc/Frontend/Analysis.h"
@@ -245,6 +246,78 @@ void constructionSelectorBounds() {
   require(toString(bound.takeError()) == "construction-descriptor-limit",
           "selector limit has a stable diagnostic");
 }
+
+void constructionRetainsProject() {
+  auto analysis = analyzeProtocol(R"(construction main {
+    producer P; validator V; random coins at (Draw pick);
+    accept 0; suite "merlin3.bls12-381.fr64be/1";
+  })",
+                                  "construction.pir");
+  require(analysis.complete(), "valid construction completes source analysis");
+  require(analysis.project() && analysis.project()->file(0) &&
+              analysis.project()->file(0)->filename() == "construction.pir",
+          "successful construction retains its project provenance");
+  auto emitted = take(analysis.lower());
+  require(std::holds_alternative<source::Construction>(emitted),
+          "checked construction emits its own source kind");
+}
+
+void retainedProjectOwnership() {
+  for (bool valid : {true, false}) {
+    auto analysis = [&] {
+      auto project = take(ProjectInput::capture(
+          {{{{{}, Input("module { mod child; }", "root.pir")},
+             {{"child"},
+              Input(
+                  valid
+                      ? "module { pub fn Echo(x: bool) -> bool { return x; } }"
+                      : "module { pub fn Echo(x: bool) -> bool { return "
+                        "missing; } }",
+                  "child.pir")}}}}));
+      return analyzeProject(project);
+    }();
+    auto copy = analysis;
+    const auto &model = model::AnalysisAccess::get(copy);
+    require(copy.project() == &model.resolution->input &&
+                copy.project() == analysis.project(),
+            "analysis borrows its sole retained project from resolution");
+    require(copy.project()->file(1)->filename() == "child.pir" &&
+                copy.project()->file(1)->text().contains("pub fn Echo"),
+            "captured child survives the caller's project lifetime");
+    require(copy.complete() == valid, "success and failure retain provenance");
+    if (!valid) {
+      auto checked = copy.checkedModule();
+      require(!checked, "invalid child cannot publish checked source");
+      require(StringRef(toString(checked.takeError())).contains("child.pir"),
+              "failure rendering uses the retained child file");
+    }
+  }
+}
+
+void partialLibrarySyntaxInspection() {
+  auto analysis = analyzeProtocol(
+      "module { library(namespace=\"test\", name=\"partial\", version=\"1\", "
+      "resolution=\"one\"); fn Broken(x: ",
+      "partial.pir");
+  require(analysis.state() == AnalysisState::SyntaxPartial,
+          "unfinished library remains partial syntax");
+  auto view = inspectAnalysis(analysis);
+  auto *libraries = view.getAsObject()->getObject("checked_libraries");
+  require(libraries && libraries->getString("query_state") ==
+                           StringRef("typed_library_queries_unavailable"),
+          "syntax inspection does not claim a checked library");
+  auto *files = libraries->getArray("syntax_files");
+  require(files && files->size() == 1 &&
+              files->front().getAsObject()->getInteger("file") == 0,
+          "partial library syntax retains its captured file index");
+  auto *syntax = files->front().getAsObject()->getObject("syntax");
+  require(
+      syntax && syntax->getObject("content") &&
+          syntax->getObject("content")->getArray("libraryIdentities") &&
+          syntax->getObject("content")->getArray("libraryIdentities")->size() ==
+              1,
+      "tooling still reparses and exposes the recoverable declaration");
+}
 } // namespace
 
 int main() {
@@ -255,5 +328,8 @@ int main() {
   malformedProjectRefuses();
   capturedProjectShapes();
   constructionSelectorBounds();
+  constructionRetainsProject();
+  retainedProjectOwnership();
+  partialLibrarySyntaxInspection();
   outs() << "frontend semantic analysis: " << checks << " checks passed\n";
 }

@@ -1,9 +1,9 @@
 #include "Libraries.h"
 #include "../Library/Callable.h"
 #include "../Library/Diagnostic.h"
-#include "../Lowering/LibrarySource.h"
 #include "../Resolution/Project.h"
 #include "../Syntax/Captures.h"
+#include "../Work.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Frontend/Diagnostic.h"
@@ -67,6 +67,7 @@ std::string domainSort(StringRef s) {
 
 class Author {
   const syntax::Module &source;
+  const resolution::Context &project;
   StringRef text, filename;
   lib::LibraryId identity;
   lib::Environment environment;
@@ -84,12 +85,14 @@ class Author {
   std::map<std::string, std::shared_ptr<const lib::Implementation>> selections;
   std::map<std::string, ComponentTemplate> templates;
   std::set<std::string> active;
-  size_t work = 0;
+  WorkBudget &budget;
+  std::map<std::string, uint64_t> selectionCosts;
 
 public:
-  Author(const syntax::Module &s, StringRef t, StringRef f,
-         model::LibraryReport &report)
-      : source(s), text(t), filename(f), report(report) {}
+  Author(const syntax::Module &s, const resolution::Context &p, StringRef t,
+         StringRef f, model::LibraryReport &report, WorkBudget &budget)
+      : source(s), project(p), text(t), filename(f), report(report),
+        budget(budget) {}
   Error locate(Error error, const source::Node &n,
                std::vector<DiagnosticCause> context = {}) {
     Error result = Error::success();
@@ -98,17 +101,9 @@ public:
         [&](const SourceDiagnostic &d) {
           auto causes = d.causes;
           causes.insert(causes.end(), context.begin(), context.end());
-          if (source.project)
-            result = diagnostic(source.project->input,
-                                Diagnostic{d.code, d.message, d.location,
-                                           d.related, std::move(causes)});
-          else {
-            auto detail = std::make_unique<SourceDiagnostic>(
-                d.code, d.message, d.rendered, d.location);
-            detail->related = d.related;
-            detail->causes = std::move(causes);
-            result = Error(std::move(detail));
-          }
+          result = diagnostic(project.input,
+                              Diagnostic{d.code, d.message, d.location,
+                                         d.related, std::move(causes)});
         },
         [&](const lib::Diagnostic &d) {
           auto causes = context;
@@ -142,28 +137,14 @@ public:
              std::vector<DiagnosticCause> context = {}) {
     Diagnostic result{code.str(), message.str(), n.location};
     result.causes = std::move(context);
-    if (source.project) {
-      if (const auto *d = source.project->enclosing(n))
-        result.causes.push_back({DiagnosticCause::Kind::Declaration,
-                                 lib::identity(d->identity), d->origin,
-                                 d->location});
-      return diagnostic(source.project->input, result);
-    }
-    auto error = diagnostic(text, filename, n.location ? n.location->offset : 0,
-                            code, message);
-    Error located = Error::success();
-    handleAllErrors(std::move(error), [&](const SourceDiagnostic &d) {
-      auto detail = std::make_unique<SourceDiagnostic>(d.code, d.message,
-                                                       d.rendered, d.location);
-      detail->causes = std::move(result.causes);
-      located = Error(std::move(detail));
-    });
-    return located;
+    if (const auto *d = project.enclosing(n))
+      result.causes.push_back({DiagnosticCause::Kind::Declaration,
+                               lib::identity(d->identity), d->origin,
+                               d->location});
+    return diagnostic(project.input, result);
   }
   lib::QualifiedDecl id(StringRef name, std::vector<std::string> module = {}) {
-    lib::QualifiedDecl result =
-        source.project ? source.project->qualify(name, module)
-                       : lib::QualifiedDecl{identity, module, name.str()};
+    lib::QualifiedDecl result = project.qualify(name, module);
     if (result.library.name.empty())
       result.library = identity;
     auto owner = llvm::find_if(environment.libraries, [&](const auto &l) {
@@ -184,14 +165,12 @@ public:
   DiagnosticCause cause(DiagnosticCause::Kind kind,
                         const lib::QualifiedDecl &subject,
                         StringRef explanation) const {
-    const auto *decl =
-        source.project ? source.project->lookup(subject) : nullptr;
+    const auto *decl = project.lookup(subject);
     return {kind, lib::identity(subject), explanation.str(),
             decl ? decl->location : std::nullopt};
   }
   lib::Environment environmentFor(const lib::QualifiedDecl &owner) const {
-    return source.project ? source.project->environment(environment, owner)
-                          : environment;
+    return project.environment(environment, owner);
   }
   void declareStatic(lib::QualifiedDecl q, lib::Sort sort,
                      std::map<std::string, lib::Sort> members = {},
@@ -258,9 +237,9 @@ public:
     return out;
   }
   Expected<lib::StaticTerm> root(const syntax::Atom &a, const Terms &terms) {
-    if (++work > 262144)
+    if (!budget.charge(WorkAccount::LibraryFormation))
       return fail(a, "library-source-limit",
-                  "library elaboration exceeds work budget");
+                  "compiler work budget exhausted: library-formation");
     if (a.kind == syntax::Atom::Kind::Number) {
       uint64_t n;
       if (StringRef(a.value).getAsInteger(10, n))
@@ -394,9 +373,9 @@ public:
     if (depth > 64)
       return fail(s, "library-source-limit",
                   "record/type expansion exceeds depth 64");
-    if (++work > 262144)
+    if (!budget.charge(WorkAccount::LibraryFormation))
       return fail(s, "library-source-limit",
-                  "library type expansion exceeds work budget");
+                  "compiler work budget exhausted: library-formation");
     if (s.product) {
       std::vector<lib::Type> elements;
       for (const auto &a : s.arguments) {
@@ -556,6 +535,8 @@ public:
   }
   Expected<lib::Signature> signature(const syntax::Function &f,
                                      const Terms &terms, const Types &types) {
+    if (auto error = work::charge(budget, WorkAccount::LibraryFormation))
+      return locate(std::move(error), f);
     if (f.explicitOrigin)
       return fail(f, "library-source-origin",
                   "checked library identity comes from its captured "
@@ -944,9 +925,9 @@ public:
     }
     Expected<lib::Place> expression(const syntax::Expression &e,
                                     const lib::Type *expected = nullptr) {
-      if (++a.work > 262144)
+      if (!a.budget.charge(WorkAccount::LibraryFormation))
         return a.fail(e, "library-source-limit",
-                      "body expansion exceeds work budget");
+                      "compiler work budget exhausted: library-formation");
       using K = syntax::Expression::Kind;
       if (e.kind == K::Map || e.kind == K::Fold)
         return lexicalTraversal(e, expected);
@@ -1672,6 +1653,11 @@ public:
     }
   };
   Error form(const syntax::LibraryInterface &s) {
+    for (auto count :
+         {size_t(1), s.types.size(), s.statics.size(), s.facets.size()})
+      if (auto error =
+              work::charge(budget, WorkAccount::LibraryFormation, count))
+        return locate(std::move(error), s);
     lib::InterfaceDecl d;
     d.id = id(s.name);
     d.self = lib::StaticTerm::root(id("Self", {s.name}));
@@ -1795,8 +1781,13 @@ public:
       if (!key)
         return key.takeError();
       auto cached = selections.find(*key);
-      if (cached != selections.end())
+      if (cached != selections.end()) {
+        if (auto error = work::charge(budget, WorkAccount::LibraryFormation,
+                                      selectionCosts.at(*key)))
+          return error;
         return cached->second;
+      }
+      auto before = budget.used(WorkAccount::LibraryFormation);
       // term() already bounded and rejected alias cycles before recursive
       // selection.
       auto target = select(alias->second->target);
@@ -1806,6 +1797,8 @@ public:
         return *target;
       auto result = std::make_shared<lib::Implementation>(**target);
       result->selection = *selected;
+      selectionCosts.emplace(*key, budget.used(WorkAccount::LibraryFormation) -
+                                       before);
       selections.emplace(*key, result);
       return std::shared_ptr<const lib::Implementation>(std::move(result));
     }
@@ -1819,8 +1812,13 @@ public:
     if (!key)
       return key.takeError();
     auto cached = selections.find(*key);
-    if (cached != selections.end())
+    if (cached != selections.end()) {
+      if (auto error = work::charge(budget, WorkAccount::LibraryFormation,
+                                    selectionCosts.at(*key)))
+        return error;
       return cached->second;
+    }
+    auto before = budget.used(WorkAccount::LibraryFormation);
     if (active.size() >= 64 || !active.insert(*key).second ||
         selections.size() >= 1024)
       return fail(s, "library-source-cycle",
@@ -1860,6 +1858,8 @@ public:
         result->arguments.statics.push_back({formal, selected->arguments[n]});
     }
     active.erase(*key);
+    selectionCosts.emplace(*key,
+                           budget.used(WorkAccount::LibraryFormation) - before);
     selections.emplace(*key, result);
     return std::shared_ptr<const lib::Implementation>(std::move(result));
   }
@@ -1977,29 +1977,22 @@ public:
         return error;
     return Error::success();
   }
-  Expected<lowering::LibrarySource> run();
+  Expected<LinkedLibrarySource> run();
 };
 
 // This bridge is deliberately after core checking, linking and representation
 // selection. It does not reparse text or specialize an unchecked generic body.
-Expected<lowering::LibrarySource> Author::run() {
-  if (!source.project && source.libraryIdentities.size() != 1)
-    return fail(
-        source, "library-source-identity",
-        "checked libraries require exactly one explicit captured identity");
+Expected<LinkedLibrarySource> Author::run() {
   if (source.profile)
     return fail(source, "library-source-profile",
                 "checked libraries require an explicit-binding module");
-  if (source.project) {
-    identity = source.project->owners.front().identity;
-    for (const auto &owner : source.project->owners)
-      environment.libraries.push_back({owner.identity, {}});
-    for (const auto &d : source.project->declarations)
-      id(d.symbol);
-  } else {
-    const auto &i = source.libraryIdentities.front();
-    identity = {i.nameSpace, i.name, i.version, i.resolution};
-    environment.libraries.push_back({identity, {}});
+  identity = project.owners.front().identity;
+  for (const auto &owner : project.owners)
+    environment.libraries.push_back({owner.identity, {}});
+  for (const auto &d : project.declarations) {
+    if (auto error = work::charge(budget, WorkAccount::LibraryFormation))
+      return error;
+    id(d.symbol);
   }
   // Installed contracts are one fixed environment, not a caller-discovered
   // subset. An unrelated dependent cannot change a library's judgment identity.
@@ -2254,19 +2247,18 @@ Expected<lowering::LibrarySource> Author::run() {
   // A caller of an abstract checked helper needs the same checked call path.
   // Closed helpers keep ordinary aliases below, so they do not force unrelated
   // ordinary functions onto that path.
-  if (source.project) {
+  {
     bool changed = true;
     while (changed) {
       changed = false;
       for (const auto &f : source.functions) {
         if (callables.count(f.name))
           continue;
-        bool required =
-            llvm::any_of(source.project->references, [&](const auto &edge) {
-              return !edge.signature && edge.source == f.name &&
-                     callables.count(edge.target) &&
-                     !clientParameters.at(edge.target).empty();
-            });
+        bool required = llvm::any_of(project.references, [&](const auto &edge) {
+          return !edge.signature && edge.source == f.name &&
+                 callables.count(edge.target) &&
+                 !clientParameters.at(edge.target).empty();
+        });
         if (required) {
           if (auto error = checkClient(f))
             return error;
@@ -2343,12 +2335,13 @@ Expected<lowering::LibrarySource> Author::run() {
       syntax::LibraryLink link;
       link.name = name;
       link.client = name;
-      if (source.project)
-        if (const auto *d = source.project->lookup(name))
-          link.location = d->location;
+      if (const auto *d = project.lookup(name))
+        link.location = d->location;
       requestedLinks.push_back(std::move(link));
     }
   for (const auto &link : requestedLinks) {
+    if (auto error = work::charge(budget, WorkAccount::LibraryFormation))
+      return locate(std::move(error), link);
     auto client = clients.find(link.client);
     if (client == clients.end())
       return fail(link,
@@ -2371,7 +2364,7 @@ Expected<lowering::LibrarySource> Author::run() {
           callables.at(link.client).declaration().parameters[n]);
       auto sort = lib::sortOf(formal, environment);
       if (!sort)
-        return sort.takeError();
+        return locate(sort.takeError(), link, context);
       if (sort->kind == lib::Sort::Kind::Component) {
         auto selected = select(link.arguments[n]);
         if (!selected)
@@ -2393,7 +2386,7 @@ Expected<lowering::LibrarySource> Author::run() {
       } else {
         auto selected = term(link.arguments[n], {});
         if (!selected)
-          return selected.takeError();
+          return locate(selected.takeError(), link, context);
         if (sort->kind == lib::Sort::Kind::Association)
           context.push_back(
               {DiagnosticCause::Kind::CapturedSubject, lib::identity(*selected),
@@ -2401,18 +2394,16 @@ Expected<lowering::LibrarySource> Author::run() {
         request.arguments.statics.push_back({formal, *selected});
       }
     }
-    auto linked = lib::link(std::move(request));
+    auto linked = lib::link(std::move(request), budget);
     if (!linked)
       return locate(linked.takeError(), link, std::move(context));
     report.links.emplace_back(link.name, *linked);
     entryAliases[linked->entry()].push_back(link.name);
     programs.push_back(std::move(*linked));
   }
-  auto emitted = lowering::emitLibrarySource(std::move(out), environment,
-                                             programs, entryAliases, names);
-  if (!emitted)
-    return locate(emitted.takeError(), source);
-  return std::move(*emitted);
+  return LinkedLibrarySource{std::move(out), std::move(environment),
+                             std::move(programs), std::move(entryAliases),
+                             std::move(names)};
 }
 } // namespace
 bool hasLibraries(const syntax::Module &m) {
@@ -2423,33 +2414,33 @@ bool hasLibraries(const syntax::Module &m) {
            return f.body && syntax::hasLexicalTraversals(*f.body);
          });
 }
-LibraryElaboration elaborateLibraries(const syntax::Module &m, StringRef text,
-                                      StringRef filename) {
+LibraryElaboration elaborateLibraries(const syntax::Module &m,
+                                      const resolution::Context &project,
+                                      StringRef text, StringRef filename,
+                                      WorkBudget &budget) {
   if (!hasLibraries(m))
-    return {lowering::LibrarySource{m, {}}, {}};
+    return {LinkedLibrarySource{m, {}, {}, {}, {}}, {}};
   auto report = std::make_unique<model::LibraryReport>();
-  auto result = Author(m, text, filename, *report).run();
+  auto result = Author(m, project, text, filename, *report, budget).run();
   if (result)
     return {std::move(result), std::move(report)};
   Error error = Error::success();
   handleAllErrors(
       result.takeError(),
       [&](const SourceDiagnostic &d) {
-        error = m.project ? diagnostic(m.project->input,
-                                       Diagnostic{d.code, d.message, d.location,
-                                                  d.related, d.causes})
-                          : diagnostic(text, filename, d.location.offset,
-                                       d.code, d.message);
+        error =
+            diagnostic(project.input, Diagnostic{d.code, d.message, d.location,
+                                                 d.related, d.causes});
       },
       [&](const lib::Diagnostic &d) {
-        error = diagnostic(text, filename, m.location ? m.location->offset : 0,
-                           d.code, d.message);
+        error = diagnostic(project.input,
+                           Diagnostic{d.code, d.message, m.location});
       },
       [&](const Refusal &e) {
         // A check of the lowered library source keeps its own identifier; the
         // module is the only location it has.
-        error = diagnostic(text, filename, m.location ? m.location->offset : 0,
-                           e.code, e.detail);
+        error =
+            diagnostic(project.input, Diagnostic{e.code, e.detail, m.location});
       });
   return {std::move(error), std::move(report)};
 }

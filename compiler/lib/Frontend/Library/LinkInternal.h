@@ -1,5 +1,6 @@
 #ifndef ZKC_FRONTEND_LIBRARY_LINK_INTERNAL_H
 #define ZKC_FRONTEND_LIBRARY_LINK_INTERNAL_H
+#include "../Work.h"
 #include "Internal.h"
 
 namespace zkc::frontend::library::detail {
@@ -18,6 +19,9 @@ struct Selection {
   std::vector<std::string> paths;
 };
 struct World {
+  WorkBudget &budget;
+  explicit World(WorkBudget &budget) : budget(budget) {}
+  std::map<std::string, uint64_t> helperCosts;
   Environment environment;
   std::vector<std::unique_ptr<Selection>> selections;
   std::map<std::string, Selection *> byKey;

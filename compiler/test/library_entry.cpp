@@ -7,7 +7,7 @@ using namespace zkc;
 using namespace zkc::frontend;
 
 int main() {
-  lowering::LibraryEntry entry;
+  LibraryEntry entry;
   entry.header.name = "Alias";
   auto &forwarding = entry.forwarding;
   forwarding.name = "Alias";
@@ -25,7 +25,7 @@ int main() {
   target.name = "Internal";
   target.arguments[0].name = "arg0";
   target.arguments[1].name = "arg1";
-  auto check = [&](const lowering::LibraryEntry &candidate) {
+  auto check = [&](const LibraryEntry &candidate) {
     return semantics::checkLibraryEntry(candidate, formed, entry.resultPaths,
                                         target);
   };
@@ -35,7 +35,7 @@ int main() {
   }
   // Identical leaf counts do not establish a correspondence: paths, types,
   // target, order and single-use forwarding must all agree independently.
-  using Change = std::function<void(lowering::LibraryEntry &)>;
+  using Change = std::function<void(LibraryEntry &)>;
   const std::pair<llvm::StringRef, Change> invalid[] = {
       {"argument path",
        [](auto &e) { e.forwarding.arguments[0].name = "pair.other"; }},

@@ -15,8 +15,9 @@ struct ConstructionResult {
 };
 
 /// Requires loaded built-in dialects (registerDialects then
-/// loadAllAvailableDialects); an uninitialized context returns an error without
-/// mutation. Construct from the original source and descriptor snapshots.
+/// loadAllAvailableDialects); an uninitialized context returns
+/// DialectRegistrationError (Dialect/Registry.h) without mutation.
+/// Construct from the original source and descriptor snapshots.
 /// Structural and semantic admission, source-relative dependency/resource
 /// analysis, and MLIR verification remain mandatory for programmatically built
 /// records. The JSON certificate includes the common source. The owned module

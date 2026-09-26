@@ -1,6 +1,5 @@
 #include "../../Support/Input.h"
-#include "../Syntax/Tree.h"
-#include "Paths.h"
+#include "Requests.h"
 #include "zkc/Frontend/Loading.h"
 #include "zkc/Support/Json.h"
 #include <algorithm>
@@ -13,11 +12,6 @@ namespace zkc::frontend {
 namespace {
 namespace fs = std::filesystem;
 
-bool moduleName(StringRef name) {
-  return !name.empty() && name.size() <= 128 && name != "." && name != ".." &&
-         !name.contains('/') && !name.contains('\\') && !name.contains('\0');
-}
-
 struct Capture {
   // Cache physical reads project-wide, including explicitly supplied roots.
   // Limits also count each owned logical source/asset, even if bytes are
@@ -25,7 +19,8 @@ struct Capture {
   std::map<fs::path, std::string> bytes;
   std::vector<ProjectLibrary> libraries;
   std::vector<ProjectAsset> assets;
-  size_t sourceCount = 0, sourceBytes = 0, assetCount = 0, assetBytes = 0;
+  size_t sourceCount = 0, sourceBytes = 0;
+  loading::RequestBudget assetBudget;
 
   Expected<fs::path> regular(const fs::path &path, const fs::path &base,
                              bool asset) {
@@ -72,66 +67,42 @@ struct Capture {
 
     // Retain incomplete spelling for the pure analyzer's recovery diagnostics.
     // Any recovered declarations are still parsed syntax, never text scanning.
-    auto parsed =
-        syntax::parseRecoverable(input.text(), input.filename(), file);
-    if (!parsed.content) {
-      auto failed = syntax::parse(input.text(), input.filename(), file);
-      if (!failed)
-        return failed.takeError();
-      return zkc::error("source-syntax");
-    }
-    auto *module = std::get_if<syntax::Module>(&*parsed.content);
-    if (!module) {
+    auto declarations = inspectDependencies(input, file);
+    if (!declarations.recoverable)
+      return loading::dependencyError(input, declarations);
+    if (declarations.form == SourceForm::Construction) {
       if (!logical.empty())
         return zkc::error("project-module-root");
       ancestors.erase(physical);
       return Error::success();
     }
-    if (!logical.empty() &&
-        (!module->libraryIdentities.empty() || !module->dependencies.empty()))
+    if (!logical.empty() && (!declarations.libraryIdentities.empty() ||
+                             !declarations.libraries.empty()))
       return zkc::error("project-library-root");
 
-    if (module->imports.size() > relation::DependencyLimits::count - assetCount)
-      return zkc::error("relation-dependency-limit");
-    assetCount += module->imports.size();
-    std::set<std::string> names;
-    for (const auto &import : module->imports) {
-      if (!names.insert(import.name).second)
-        return zkc::error("relation-duplicate-alias");
-      if (import.family != "r1cs" && import.family != "air")
-        return zkc::error("relation-import-family");
-      if (!loading::relativeAsset(import.path))
-        return zkc::error("relation-asset-path");
-    }
-    std::set<std::string> children;
-    for (const auto &child : module->modules) {
-      if (!moduleName(child.name))
-        return zkc::error("project-module-name");
-      if (!children.insert(child.name).second)
-        return zkc::error("project-module-duplicate");
-    }
+    if (auto error = assetBudget.preflight(declarations.relations))
+      return error;
     std::set<std::string> paths;
-    for (const auto &import : module->imports) {
+    for (const auto &import : declarations.relations) {
+      auto maximum = assetBudget.maximum(import, "byte-limit");
+      if (!maximum)
+        return maximum.takeError();
       auto path = regular(physical.parent_path() / import.path, base, true);
       if (!path)
         return path.takeError();
-      const auto familyMaximum = import.family == "air"
-                                     ? relation::AIRLimits::bytes
-                                     : relation::Limits::bytes;
       // Each (file, reference) is stored once. Charge every import against the
       // total decoding budget, as the callback loader does for several aliases.
       bool first = paths.insert(import.path).second;
-      size_t maximum = std::min(familyMaximum,
-                                relation::DependencyLimits::bytes - assetBytes);
-      auto content = read(*path, maximum);
+      auto content = read(*path, *maximum);
       if (!content)
         return content.takeError();
-      assetBytes += content->size();
+      if (auto error = assetBudget.charge(content->size(), *maximum))
+        return error;
       if (first)
         assets.push_back({file, import.path, content->str()});
     }
 
-    for (const auto &child : module->modules) {
+    for (const auto &child : declarations.modules) {
       auto childLogical = logical;
       childLogical.push_back(child.name);
       if (childLogical.size() > 64)

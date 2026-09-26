@@ -4,6 +4,7 @@
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Module.h"
+#include "zkc/Frontend/Work.h"
 #include <map>
 
 namespace zkc::frontend::resolution {
@@ -23,11 +24,12 @@ struct DefinitionBody {
   std::vector<source::Dependency> dependencies;
 };
 struct Module {
-  std::optional<ProjectInput> project;
+  WorkUsage workUsage{};
+  /// Owns the captured input for analyzed source, including partial analyses.
+  /// Raw standalone model utilities may leave resolution absent.
   std::shared_ptr<const resolution::Context> resolution;
   bool resolutionComplete = false;
   std::string text, filename;
-  bool complete = false;
   bool syntaxPartial = false;
   std::vector<Scope> scopes;
   std::vector<Declaration> declarations;
@@ -45,9 +47,6 @@ struct Module {
   /// typed declarations/plans, never recovered from these records.
   source::Module metadata;
   std::optional<source::Construction> construction;
-  /// Derived, structurally checked emission prepared once before publication.
-  /// This is not common admission or a construction/security judgment.
-  std::optional<source::Content> finalized;
   std::map<std::pair<ScopeId, std::string>, DeclId> names;
   std::map<std::string, DomainId> domainKeys;
   std::map<std::string, TypeId> typeKeys;

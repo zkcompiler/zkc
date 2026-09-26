@@ -1,20 +1,23 @@
 #include "zkc/Frontend/Analysis.h"
 #include "../Model/Access.h"
 #include "../Model/Module.h"
+#include "../Resolution/Project.h"
 #include "zkc/Frontend/Compile.h"
 
 using namespace llvm;
 namespace zkc::frontend {
 Analysis::Analysis(std::shared_ptr<const model::Module> model)
     : model(std::move(model)) {}
+Analysis::Analysis(std::shared_ptr<const model::CompletedAnalysis> value)
+    : model(value, &value->model), completed(std::move(value)) {}
 StringRef Analysis::sourceText() const { return model->text; }
 StringRef Analysis::filename() const { return model->filename; }
 const ProjectInput *Analysis::project() const {
-  return model->project ? &*model->project : nullptr;
+  assert(model->resolution && "analysis retains resolved project input");
+  return &model->resolution->input;
 }
-bool Analysis::complete() const {
-  return model->complete && model->diagnostics.empty();
-}
+bool Analysis::complete() const { return bool(completed); }
+WorkUsage Analysis::workUsage() const { return model->workUsage; }
 AnalysisState Analysis::state() const {
   for (const auto &d : model->diagnostics)
     if (isResourceLimitDiagnostic(d.code))
@@ -95,15 +98,12 @@ Expected<CheckedModule> Analysis::checkedModule() const {
   if (!complete()) {
     if (!model->diagnostics.empty()) {
       const auto &d = model->diagnostics.front();
-      if (model->project)
-        return diagnostic(*model->project, d);
-      return diagnostic(model->text, model->filename,
-                        d.location ? d.location->offset : 0, d.code, d.message);
+      return diagnostic(*project(), d);
     }
     // Analysis marks a model incomplete only while recording why.
     report_fatal_error("an incomplete analysis carries no diagnostic");
   }
-  return CheckedModule(model);
+  return CheckedModule(completed);
 }
 Expected<source::Content> Analysis::lower() const {
   auto checked = checkedModule();

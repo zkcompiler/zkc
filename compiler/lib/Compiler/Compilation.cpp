@@ -11,7 +11,7 @@
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Protocol/Instantiation.h"
-#include "zkc/Support/Json.h"
+#include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Protocol.h"
 #include "zkc/Translation/Table.h"
 
@@ -51,6 +51,7 @@ namespace {
 void collectError(const Error &error,
                   std::vector<diagnostics::RefusalInfo> &refusals,
                   std::vector<DiagnosticLocation> &locations,
+                  std::vector<InvocationPrecondition> &preconditions,
                   const frontend::ProjectInput *project = nullptr) {
   visitErrors(error, [&](const ErrorInfoBase &info) {
     if (info.isA<Refusal>()) {
@@ -60,6 +61,10 @@ void collectError(const Error &error,
       const auto &compilation = static_cast<const CompilationError &>(info);
       llvm::append_range(refusals, compilation.refusals);
       llvm::append_range(locations, compilation.locations);
+      llvm::append_range(preconditions, compilation.invocationPreconditions);
+    } else if (info.isA<DialectRegistrationError>()) {
+      preconditions.push_back(
+          static_cast<const DialectRegistrationError &>(info).precondition);
     } else if (info.isA<frontend::SourceDiagnostic>()) {
       const auto &source =
           static_cast<const frontend::SourceDiagnostic &>(info);
@@ -86,9 +91,11 @@ Error compilationError(Error error,
                        const frontend::ProjectInput *project = nullptr) {
   std::vector<diagnostics::RefusalInfo> refusals;
   std::vector<DiagnosticLocation> locations;
-  collectError(error, refusals, locations, project);
-  return make_error<CompilationError>(
-      toString(std::move(error)), std::move(refusals), std::move(locations));
+  std::vector<InvocationPrecondition> preconditions;
+  collectError(error, refusals, locations, preconditions, project);
+  return make_error<CompilationError>(toString(std::move(error)),
+                                      std::move(refusals), std::move(locations),
+                                      std::move(preconditions));
 }
 /// Collect diagnostics while their context lives. Do not recover codes from
 /// prose. A module-level pass refusal keeps the CLI's unlocated rendering.
@@ -96,6 +103,7 @@ class Diagnostics {
   std::string message;
   std::vector<diagnostics::RefusalInfo> refusals;
   std::vector<DiagnosticLocation> locations;
+  std::vector<InvocationPrecondition> preconditions;
   std::optional<Location> root;
   bool sawError = false;
   ScopedDiagnosticHandler handler;
@@ -144,7 +152,7 @@ public:
   bool hasErrors() const { return sawError; }
   Error failure(Error fallback = Error::success()) {
     if (fallback) {
-      collectError(fallback, refusals, locations);
+      collectError(fallback, refusals, locations, preconditions);
       if (!message.empty())
         message += '\n';
       message += toString(std::move(fallback));
@@ -152,7 +160,8 @@ public:
     if (message.empty())
       message = "pass pipeline failed without an error diagnostic";
     return make_error<CompilationError>(std::move(message), std::move(refusals),
-                                        std::move(locations));
+                                        std::move(locations),
+                                        std::move(preconditions));
   }
 };
 } // namespace

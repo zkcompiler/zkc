@@ -6,7 +6,10 @@ the lower-level responsibilities inside that architecture. The
 [transformation specification](../spec/verification/refinement.md) owns meaning; the
 [compiler guide](README.md) explains it. The compiler is
 a set of [C++ components](../../compiler/README.md#components): MLIR-free common
-services, coordinated IR/translation/verification, and upper compiler workflows.
+services, coordinated IR/translation/verification, optional claim translation,
+and upper compiler workflows. `Zkc::ClaimTranslation` depends on Claims and IR;
+ordinary IR retains structural claim definitions and mandatory protocol checks
+without linking the claim checker.
 Graph algorithms, cost models, search, rewrites, planning and emission remain
 in the native compiler rather than crossing a per-operation language boundary. Rust
 submits complete jobs and consumes completed artifacts.

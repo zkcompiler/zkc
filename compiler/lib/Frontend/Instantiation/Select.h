@@ -2,6 +2,11 @@
 #define ZKC_FRONTEND_INSTANTIATION_SELECT_H
 
 #include "../Syntax/Tree.h"
+#include "zkc/Frontend/Work.h"
+
+namespace zkc::frontend::resolution {
+struct Context;
+}
 
 namespace zkc::frontend::instantiation {
 struct DomainArgument {
@@ -23,8 +28,10 @@ struct Selection {
 /// Pure bounded static construction on a copied syntax snapshot. This performs
 /// no dependency loading and does not replace subsequent type/PIR admission.
 /// Reserve entry headers supplied separately by prior library elaboration.
-llvm::Expected<Selection> select(const syntax::Content &, llvm::StringRef text,
-                                 llvm::StringRef filename,
-                                 llvm::ArrayRef<std::string> reservedNames);
+llvm::Expected<Selection> select(const syntax::Content &,
+                                 const resolution::Context &,
+                                 llvm::StringRef text, llvm::StringRef filename,
+                                 llvm::ArrayRef<std::string> reservedNames,
+                                 WorkBudget &);
 } // namespace zkc::frontend::instantiation
 #endif

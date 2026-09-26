@@ -1,6 +1,6 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "mlir/IR/BuiltinAttributes.h"
-#include "zkc/Support/Json.h"
+#include "zkc/Support/Refusal.h"
 
 namespace zkc::diagnostics {
 namespace {

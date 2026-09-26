@@ -17,6 +17,27 @@ int main() {
   zkc::registerTableLibrary(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  // Claim dialect structure is ordinary IR, even without the optional checker
+  // or translation libraries. A law declaration is structurally valid without
+  // establishing any source-relative claim.
+  mlir::OpBuilder claimBuilder(&context);
+  mlir::OwningOpRef<mlir::ModuleOp> claims(
+      mlir::ModuleOp::create(claimBuilder.getUnknownLoc()));
+  claimBuilder.setInsertionPointToEnd(claims->getBody());
+  mlir::OperationState law(claimBuilder.getUnknownLoc(), "claim.law");
+  law.addAttribute("sym_name", claimBuilder.getStringAttr("law"));
+  law.addAttribute("premise",
+                   claimBuilder.getStringAttr("Explicit caller premise"));
+  auto *declaration = claimBuilder.create(law);
+  if (mlir::failed(mlir::verify(*claims)))
+    return 13;
+  declaration->removeAttr("premise");
+  {
+    mlir::ScopedDiagnosticHandler handler(
+        &context, [](mlir::Diagnostic &) { return mlir::success(); });
+    if (mlir::succeeded(mlir::verify(*claims)))
+      return 14;
+  }
   zkc::relation::Constraint row{{{{2, "1"}}, {{3, "1"}}, {{1, "1"}}}};
   auto relation = zkc::relation::R1CS::create("bls12-381.fr", 4, 1, 1, {row});
   if (!relation) {

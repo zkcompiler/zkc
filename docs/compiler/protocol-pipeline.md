@@ -294,7 +294,11 @@ and installed contract facts. `Frontend`, `Source` and `Protocol` own source and
 interaction; source `Analysis` belongs to the MLIR-free Protocol component.
 `Dialect` and `Interfaces` own IR; `Compiler`, `Transforms` and `Target` own
 compiler mechanisms; `Relation` and `Claims` own
-their respective consumers. Conversion implementations live in `lib/Conversion/`.
+their respective consumers. The optional `ClaimTranslation` component bridges
+Claims and IR for claim import and independent candidate checking. IR retains
+the claim dialect's structure and mandatory protocol verification without a
+Claims dependency. CompilerCore links ClaimTranslation for its claim workflows.
+Conversion implementations live in `lib/Conversion/`.
 The [component map](../../compiler/README.md#components) records enforced build
 ownership, which need not be one library per directory. Tools and tests sit
 alongside these libraries.

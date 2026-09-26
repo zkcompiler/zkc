@@ -14,12 +14,9 @@ lowerSource(const frontend::Analysis &analysis) {
   if (auto e = source::checkStructure(*content))
     return std::move(e);
   std::vector<source::File> files;
-  if (const auto *project = analysis.project())
-    for (const auto &library : project->libraries())
-      for (const auto &file : library.sources)
-        files.push_back({file.input.text().str(), file.input.filename().str()});
-  if (files.empty())
-    files.push_back({analysis.sourceText().str(), analysis.filename().str()});
+  for (const auto &library : analysis.project()->libraries())
+    for (const auto &file : library.sources)
+      files.push_back({file.input.text().str(), file.input.filename().str()});
   return source::Document(std::move(*content), std::move(files));
 }
 llvm::Expected<source::Content> prepareSource(const source::Document &document,

@@ -2,7 +2,9 @@
 
 [`Zkc::IR`](../../compiler/README.md#components) contains dialects, operation
 interfaces, translation and mandatory root verification. It links common source
-services and MLIR IR facilities, without frontend, passes or driver services.
+services and MLIR IR facilities, without Claims, frontend, passes or driver services.
+The optional `Zkc::ClaimTranslation` component links Claims and IR for claim
+import and independent candidate checking; claim dialect structure stays in IR.
 This page maps native checks to their owners; the
 [refinement specification](../spec/verification/refinement.md) owns their meaning.
 

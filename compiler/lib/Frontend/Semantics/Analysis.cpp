@@ -1,7 +1,5 @@
 #include "Analysis.h"
 #include "../Instantiation/Select.h"
-#include "../Lowering/PIR.h"
-#include "../Model/Access.h"
 #include "../Resolution/Project.h"
 #include "Check.h"
 #include "Provenance.h"
@@ -9,23 +7,26 @@
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::frontend::semantics {
-Analysis analyzeStaged(const syntax::Content &original,
-                       const instantiation::Selection &staged,
-                       const lowering::LibraryEmission &linked,
-                       std::shared_ptr<const model::LibraryReport> libraries,
-                       StringRef text, StringRef filename,
-                       bool resolutionComplete) {
+struct SourceAnalysisBuilder {
+  static model::CheckedSource finish(std::unique_ptr<model::Module> model) {
+    return model::CheckedSource(std::move(model));
+  }
+};
+SourceCheck checkStaged(const syntax::Content &original,
+                        const instantiation::Selection &staged,
+                        const LibraryEmission &linked,
+                        std::shared_ptr<const model::LibraryReport> libraries,
+                        std::shared_ptr<const resolution::Context> context,
+                        StringRef text, StringRef filename,
+                        bool resolutionComplete) {
   auto model = std::make_unique<model::Module>();
   model->text = text.str();
   model->filename = filename.str();
-  if (const auto *module = std::get_if<syntax::Module>(&original))
-    if (module->project) {
-      model->project = module->project->input;
-      model->resolution = module->project;
-    }
+  assert(context && "semantic checking requires resolved project input");
+  model->resolution = std::move(context);
   model->resolutionComplete = resolutionComplete;
   model->libraries = std::move(libraries);
-  check(*model, staged.content, original, linked);
+  const bool checked = check(*model, staged.content, original, linked);
   for (const auto &[name, value] : staged.constants) {
     auto id = model->lookup({0}, name);
     if (id.valid() &&
@@ -47,7 +48,7 @@ Analysis analyzeStaged(const syntax::Content &original,
     for (const auto &argument : specialization.arguments)
       origin.bindings.push_back({model->lookup(scope, argument.name),
                                  model->internDomain(argument.domain, {0})});
-    if (model->complete) {
+    if (checked) {
       const auto definition = model->declarations[origin.definition.index];
       const auto emitted = model->declarations[origin.emitted.index];
       std::map<DeclId, DomainId> substitution;
@@ -80,51 +81,8 @@ Analysis analyzeStaged(const syntax::Content &original,
     }
     model->instantiations.push_back(std::move(origin));
   }
-  if (model->complete) {
-    auto emitted = lowering::lower(*model);
-    if (!emitted) {
-      handleAllErrors(
-          emitted.takeError(),
-          [&](const SourceDiagnostic &d) {
-            model->diagnostics.push_back(
-                {d.code, d.message, d.location, d.related, d.causes});
-          },
-          [&](const Refusal &e) {
-            model->diagnostics.push_back({e.code, e.detail, {}});
-          });
-      model->complete = false;
-    } else {
-      if (const auto *emittedModule = std::get_if<source::Module>(&*emitted)) {
-        for (const auto &plan : model->bodies) {
-          if (!plan.emit)
-            continue;
-          auto &d = model->declarations.at(plan.declaration.index);
-          auto name = d.name;
-          const bool genericFunction =
-              d.generic && d.kind != Declaration::Kind::Protocol;
-          if (genericFunction && model->resolution)
-            if (const auto *origin = model->resolution->lookup(d.name))
-              name = model->resolution->origin(origin->identity);
-          auto hasName = [&](const auto &declarations) {
-            return llvm::any_of(declarations, [&](const auto &out) {
-              return out.name == name;
-            });
-          };
-          if (d.kind == Declaration::Kind::Protocol
-                  ? hasName(emittedModule->protocols)
-              : genericFunction ? hasName(emittedModule->definitions)
-                                : hasName(emittedModule->functions))
-            d.loweredName = std::move(name);
-        }
-      }
-      if (resolutionComplete)
-        model->finalized = std::move(*emitted);
-    }
-  }
-  // Retain structural diagnostics from the safe recovered subset, as before,
-  // but only complete resolution can publish finalized output.
-  model->complete &= resolutionComplete;
-  retainQueryMetadata(*model);
-  return model::AnalysisAccess::freeze(std::move(model));
+  if (checked)
+    return SourceAnalysisBuilder::finish(std::move(model));
+  return model;
 }
 } // namespace zkc::frontend::semantics

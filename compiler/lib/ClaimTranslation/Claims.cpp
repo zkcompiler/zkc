@@ -1,5 +1,8 @@
-#include "zkc/Translation/Claims.h"
-#include "../Claims/Analysis.h"
+#include "zkc/ClaimTranslation/Claims.h"
+// Audited same-version bridge: only Claims admission establishes the private
+// indexes consumed here. ClaimTranslation links Claims directly; this header
+// and the rest of the checker implementation are not installed SDK interfaces.
+#include "../Claims/Admission.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"

@@ -1,6 +1,6 @@
 #ifndef ZKC_CLAIMS_INTERNAL_H
 #define ZKC_CLAIMS_INTERNAL_H
-#include "Analysis.h"
+#include "Admission.h"
 namespace zkc::claims {
 llvm::Expected<Trace> trace(const source::Module &, llvm::StringRef entry);
 std::string digest(llvm::StringRef domain, const llvm::json::Value &);

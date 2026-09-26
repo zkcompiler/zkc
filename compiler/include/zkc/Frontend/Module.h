@@ -10,13 +10,14 @@
 namespace zkc::frontend {
 namespace model {
 struct Module;
-}
+class CompletedAnalysis;
+} // namespace model
 class Analysis;
 /// A successful source check is the only way to obtain this immutable handle.
 class CheckedModule {
-  std::shared_ptr<const model::Module> model;
-  explicit CheckedModule(std::shared_ptr<const model::Module> value)
-      : model(std::move(value)) {}
+  std::shared_ptr<const model::CompletedAnalysis> completed;
+  explicit CheckedModule(std::shared_ptr<const model::CompletedAnalysis> value)
+      : completed(std::move(value)) {}
   friend class Analysis;
   friend llvm::Expected<source::Content> lower(const CheckedModule &);
   friend llvm::Expected<source::Construction>

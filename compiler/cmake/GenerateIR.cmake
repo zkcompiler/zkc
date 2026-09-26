@@ -48,6 +48,7 @@ foreach(dialect owner IN ZIP_LISTS zkc_dialects zkc_dialect_owners)
     # a backslash would not.
     "-op-include-regex=^${dialect}[.]" EXTRA_INCLUDES ${zkc_tablegen_includes})
 endforeach()
+include(cmake/ContractMappings.cmake)
 # Record only outputs declared by these TableGen invocations. Reused build
 # trees may contain obsolete generated files, which are not valid dependencies.
 set(zkc_ir_generated_files ${TABLEGEN_OUTPUT})

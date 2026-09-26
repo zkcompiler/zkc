@@ -3,8 +3,8 @@
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Builders.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
@@ -71,7 +71,7 @@ LogicalResult releaseLocalStorage(ModuleOp module) {
       auto emit = [&](ArrayRef<Value> dead) {
         while (!dead.empty()) {
           auto chunk = dead.take_front(1024);
-          operation(builder, "plan.release", chunk);
+          ReleaseOp::create(builder, builder.getUnknownLoc(), chunk);
           dead = dead.drop_front(chunk.size());
         }
       };

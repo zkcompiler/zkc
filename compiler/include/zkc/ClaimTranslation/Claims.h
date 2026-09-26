@@ -1,8 +1,9 @@
-#ifndef ZKC_TRANSLATION_CLAIMS_H
-#define ZKC_TRANSLATION_CLAIMS_H
+#ifndef ZKC_CLAIM_TRANSLATION_CLAIMS_H
+#define ZKC_CLAIM_TRANSLATION_CLAIMS_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Claims/Claims.h"
 namespace zkc::claims {
+/// Link Zkc::ClaimTranslation for these optional claim/IR adapters.
 /// Registered, inspectable analysis IR, separate from executable PIR. Context
 /// must outlive result. No API here erases or transforms executable checks.
 /// Loads only the dialects used by the claim representation. Before reusing

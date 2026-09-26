@@ -1,8 +1,8 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
-#include "zkc/Dialect/Builders.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -70,11 +70,9 @@ class Projector {
         SmallVector<Type> types;
         for (auto v : op->getResults())
           types.push_back(v.getType());
-        auto *copy =
-            operation(b, "pir.local_call", inputs(op->getOperands()), types,
-                      {named(b, "site", local.getSite()),
-                       named(b, "callee", local.getCalleeAttr())},
-                      0, op->getLoc());
+        auto copy = LocalCallOp::create(
+            b, op->getLoc(), types, inputs(op->getOperands()),
+            local.getCalleeAttr(), local.getSiteAttr(), StringAttr());
         for (auto [old, value] : zip(op->getResults(), copy->getResults()))
           values.map(old, value);
       } else if (auto message = dyn_cast<MessageOp>(op)) {
@@ -84,18 +82,12 @@ class Projector {
         if (!sender || !receiver)
           return missingBinding(op);
         if (message.getSender() == role)
-          operation(b, "pir.emit", values.lookup(message.getInput()), {},
-                    {named(b, "site", message.getSite()),
-                     named(b, "schema", message.getSchema()),
-                     named(b, "peer", *receiver)},
-                    0, op->getLoc());
+          EmitOp::create(b, op->getLoc(), values.lookup(message.getInput()),
+                         message.getSite(), message.getSchema(), *receiver);
         else if (message.getReceiver() == role) {
-          auto *copy =
-              operation(b, "pir.await", {}, message.getOutput().getType(),
-                        {named(b, "site", message.getSite()),
-                         named(b, "schema", message.getSchema()),
-                         named(b, "peer", *sender)},
-                        0, op->getLoc());
+          auto copy =
+              AwaitOp::create(b, op->getLoc(), message.getOutput().getType(),
+                              message.getSite(), message.getSchema(), *sender);
           values.map(message.getOutput(), copy->getResult(0));
         }
       } else if (auto call = dyn_cast<ProtocolCallOp>(op)) {
@@ -121,12 +113,9 @@ class Projector {
             lookup(symbols, {child.getSymName().str(), actual.str()});
         if (!callee)
           return missingBinding(op);
-        auto *copy = operation(
-            b, "pir.participant_call", inputs(op->getOperands()), outputTypes,
-            {named(b, "site", call.getSite()),
-             named(b, "callee",
-                   FlatSymbolRefAttr::get(b.getContext(), *callee))},
-            0, op->getLoc());
+        auto copy = ParticipantCallOp::create(b, op->getLoc(), outputTypes,
+                                              inputs(op->getOperands()),
+                                              call.getSite(), *callee);
         unsigned i = 0;
         for (auto v : op->getResults())
           if (owned(v))
@@ -149,13 +138,9 @@ class Projector {
           if (!symbolic)
             count = cast<StringAttr>(*bound).getValue();
         }
-        auto *copy =
-            operation(b, "pir.loop", inputs(op->getOperands()), types,
-                      {named(b, "site", loop.getSite()),
-                       named(b, "carried", b.getI64IntegerAttr(types.size())),
-                       named(b, "count", count),
-                       named(b, "parameter", b.getBoolAttr(symbolic))},
-                      1, op->getLoc());
+        auto copy = ProtocolLoopOp::create(
+            b, op->getLoc(), types, inputs(op->getOperands()), loop.getSite(),
+            types.size(), count, symbolic);
         auto *target = new Block();
         copy->getRegion(0).push_back(target);
         Owners innerOwners;
@@ -178,18 +163,16 @@ class Projector {
         for (auto v : op->getResults())
           if (owned(v))
             values.map(v, copy->getResult(i++));
-      } else if (isa<FinishOp, ProtocolYieldOp>(op)) {
-        operation(b, op->getName().getStringRef(), inputs(op->getOperands()),
-                  {}, {}, 0, op->getLoc());
+      } else if (isa<FinishOp>(op)) {
+        FinishOp::create(b, op->getLoc(), inputs(op->getOperands()));
+      } else if (isa<ProtocolYieldOp>(op)) {
+        ProtocolYieldOp::create(b, op->getLoc(), inputs(op->getOperands()));
       } else if (auto halt = dyn_cast<HaltOp>(op)) {
         if (halt.getRoleAttr().getValue() == role)
-          operation(b, "pir.halt", {}, {},
-                    {named(b, "site", halt.getSite()),
-                     named(b, "reason", halt.getReason())},
-                    0, op->getLoc());
+          HaltOp::create(b, op->getLoc(), halt.getSite(), halt.getReason(),
+                         StringAttr());
         else
-          operation(b, "pir.incomplete", {}, {},
-                    {named(b, "site", halt.getSite())}, 0, op->getLoc());
+          IncompleteOp::create(b, op->getLoc(), halt.getSite());
       }
     }
     return Error::success();
@@ -201,8 +184,7 @@ public:
   Expected<OwningOpRef<ModuleOp>> run() {
     OwningOpRef<ModuleOp> module(ModuleOp::create(source.getLoc()));
     b.setInsertionPointToEnd(module->getBody());
-    SmallVector<NamedAttribute> attrs{named(b, "stage", "logical")};
-    auto *root = operation(b, "pir.module", {}, {}, attrs, 1, source.getLoc());
+    auto root = ProtocolModuleOp::create(b, source.getLoc(), "logical");
     auto *block = new Block();
     root->getRegion(0).push_back(block);
     b.setInsertionPointToEnd(block);
@@ -287,19 +269,13 @@ public:
         for (auto [type, r] : zip(ft.getResults(), definition.getOutputRoles()))
           if (cast<StringAttr>(r).getValue() == role)
             outputs.push_back(type);
-        auto *op = operation(
-            b, "pir.participant", {}, {},
-            {named(b, "sym_name", *symbol),
-             named(b, "function_type",
-                   TypeAttr::get(b.getFunctionType(inputs, outputs))),
-             named(b, "instance", name), named(b, "role", actual),
-             named(b, "parameters", instance.getParameters()),
-             named(b, "argument_names", b.getArrayAttr(argumentNames))},
-            1,
+        auto op = ParticipantOp::create(
+            b,
             FusedLoc::get(b.getContext(),
-                          {definition.getLoc(), instance.getLoc()}));
-        if (!sourceNames)
-          op->removeAttr("argument_names");
+                          {definition.getLoc(), instance.getLoc()}),
+            *symbol, b.getFunctionType(inputs, outputs), name, actual,
+            instance.getParameters(),
+            sourceNames ? b.getArrayAttr(argumentNames) : ArrayAttr());
         auto *bodyBlock = new Block();
         op->getRegion(0).push_back(bodyBlock);
         Owners owners;
@@ -340,10 +316,8 @@ public:
               {text(b, *actual),
                FlatSymbolRefAttr::get(b.getContext(), *symbol)}));
         }
-        operation(b, "pir.entry", {}, {},
-                  {named(b, "sym_name", e.getSymName()),
-                   named(b, "targets", b.getArrayAttr(targets))},
-                  0, e.getLoc());
+        ProtocolEntryOp::create(b, e.getLoc(), e.getSymName(),
+                                b.getArrayAttr(targets));
       }
     return module;
   }

@@ -3,15 +3,6 @@
 
 using namespace llvm;
 namespace zkc {
-char Refusal::ID = 0;
-void Refusal::log(raw_ostream &out) const {
-  out << code;
-  if (!detail.empty())
-    out << ": " << detail;
-}
-Error error(StringRef code, const Twine &detail) {
-  return make_error<Refusal>(code.str(), detail.str());
-}
 json::Value naturalValue(StringRef digits) {
   return json::Object{{"natural", digits.str()}};
 }

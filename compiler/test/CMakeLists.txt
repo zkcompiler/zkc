@@ -22,8 +22,19 @@ add_zkc_test(json Support json-carrier)
 add_zkc_test(requirements Contracts)
 add_zkc_test(generic Contracts generic-signatures)
 add_zkc_test(bindings IR operation-bindings)
+add_zkc_test(contract_mappings IR operation-contract-mappings)
+add_test(NAME contract-mapping-generation
+  COMMAND ${CMAKE_COMMAND}
+    "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
+    "-DZKC_TABLEGEN_INCLUDES=${zkc_tablegen_includes}"
+    "-DZKC_MAPPING_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-mapping-generation"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_mapping_generation.cmake")
+set_tests_properties(contract-mapping-generation PROPERTIES LABELS native)
+add_zkc_test(frontend_dependencies Frontend frontend-dependencies)
+add_zkc_test(frontend_loading FrontendLoading frontend-loading)
 add_zkc_test(source CompilerCore source-document)
 add_zkc_test(frontend_analysis FrontendLoading frontend-analysis)
+add_zkc_test(frontend_budgets Frontend frontend-work-budgets)
 add_zkc_test(checked_library Frontend checked-library)
 add_zkc_test(library_entry Frontend library-entry-layout)
 add_zkc_test(frontend_provenance Frontend frontend-provenance)
@@ -45,6 +56,7 @@ target_compile_definitions(zkc-operation_contracts-test PRIVATE
   ZKC_HISTORY_FIXTURE="${PROJECT_SOURCE_DIR}/../tests/fixtures/variants/history-contracts.txt")
 add_zkc_test(polynomial_domain_contracts Protocol polynomial-domain-contracts)
 add_zkc_test(linear_interfaces Transforms linear-interfaces)
+add_zkc_test(target_decisions Transforms target-decisions)
 add_zkc_test(obligations Protocol obligation-closure)
 add_zkc_test(domains IR nominal-domains)
 add_zkc_test(representations Contracts representation-domains)

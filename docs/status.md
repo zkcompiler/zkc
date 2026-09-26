@@ -83,6 +83,11 @@ native elaboration remain future work. The
 [frontend guide](compiler/frontend.md) and
 [project guide](language/projects.md) describe the implementation.
 
+Successful frontend publication pairs a checked model with its emitted common
+content. Pure dependency inspection is separate from loading, and callers can
+set per-invocation [formation and expansion budgets](compiler/frontend-budgets.md).
+These budgets cover selected logical work; they are not whole-process quotas.
+
 Checked libraries construct runtime-dependent alternatives using isolated Boolean
 conditionals, in generic clients and component members. Linking propagates selected
 terminal calls and removes unreachable join results without recovering a stop.

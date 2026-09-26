@@ -3,7 +3,7 @@
 #include <set>
 
 namespace zkc::frontend::semantics {
-llvm::Error checkLibraryEntry(const lowering::LibraryEntry &entry,
+llvm::Error checkLibraryEntry(const LibraryEntry &entry,
                               const source::Function &formed,
                               llvm::ArrayRef<source::Names> resultPaths,
                               const source::Function &target) {

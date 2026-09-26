@@ -165,9 +165,9 @@ class Checker {
   StringRef text, filename;
   source::Module module;
   source::Module generated;
-  const lowering::LibraryEmission &linked;
+  const LibraryEmission &linked;
   std::vector<const syntax::Function *> functions;
-  std::map<std::string, const lowering::LibraryEntry *> entries;
+  std::map<std::string, const LibraryEntry *> entries;
 
   std::string code, message;
   std::optional<source::Span> failure;
@@ -184,10 +184,9 @@ class Checker {
   // A convenience profile belongs to its authored root. Imported and child
   // definitions keep explicit domains and implementations regardless of caller.
   bool usesProfile(const source::Node &node) const {
-    return syntax.profile &&
-           (!syntax.project ||
-            (node.location && !syntax.project->owners.empty() &&
-             node.location->file == syntax.project->owners.front().root));
+    const auto &project = *model.resolution;
+    return syntax.profile && node.location && !project.owners.empty() &&
+           node.location->file == project.owners.front().root;
   }
 
   void predeclare() {
@@ -1147,14 +1146,18 @@ class Checker {
     if (inserted)
       return true;
     size_t offset = previous->second ? previous->second->offset : 0;
-    auto prefix = text.take_front(offset);
+    const auto *file =
+        previous->second ? model.resolution->input.file(previous->second->file)
+                         : nullptr;
+    auto prefix = (file ? file->text() : text).take_front(offset);
     size_t line = prefix.count('\n') + 1;
     size_t last = prefix.rfind('\n');
     size_t column = last == StringRef::npos ? offset + 1 : offset - last;
     return fail(node, "source-duplicate-symbol",
                 "duplicate declaration '" + name +
-                    "'; previous declaration at " + filename + ":" +
-                    Twine(line) + ":" + Twine(column));
+                    "'; previous declaration at " +
+                    (file ? file->filename() : filename) + ":" + Twine(line) +
+                    ":" + Twine(column));
   }
   Sorts sorts(const std::vector<source::StaticParameter> &parameters) {
     Sorts result;
@@ -2658,8 +2661,7 @@ class Checker {
     }
     return true;
   }
-  void checkEntry(const lowering::LibraryEntry &entry,
-                  source::Function &formed) {
+  void checkEntry(const LibraryEntry &entry, source::Function &formed) {
     const auto owner = id(formed.name);
     std::vector<source::Names> paths;
     for (const auto &port : model.declarations[owner.index].outputs) {
@@ -3037,9 +3039,10 @@ class Checker {
 
 public:
   Checker(model::Module &model, const Module &syntax, const Module *original,
-          const lowering::LibraryEmission &linked)
+          const LibraryEmission &linked)
       : model(model), syntax(syntax), original(original), text(model.text),
         filename(model.filename), linked(linked) {
+    assert(model.resolution && "semantic checking requires resolved input");
     for (const auto &f : syntax.functions)
       functions.push_back(&f);
     for (const auto &entry : linked.entries) {
@@ -3047,10 +3050,10 @@ public:
       entries.emplace(entry.header.name, &entry);
     }
   }
-  void run() {
+  bool run() {
     predeclare();
     if (!good())
-      return;
+      return false;
     headers();
     if (good())
       profiles();
@@ -3084,7 +3087,7 @@ public:
           return placement(owner, block, site, ports, emit);
         };
         if (!checkProtocolBody(model, p, resolve, local))
-          return;
+          return false;
       }
     size_t gi = 0, fi = 0;
     for (const auto *header : functions) {
@@ -3129,28 +3132,28 @@ public:
           return placement(owner, block, site, ports, emit);
         };
         if (!checkProtocolBody(model, p, resolve, local, &out))
-          return;
+          return false;
       }
     if (!good())
-      return;
+      return false;
     retainPlans();
     for (const auto &plan : model.bodies)
       if (plan.body)
         model.declarations[plan.declaration.index].bodyState =
             Declaration::BodyState::Checked;
-    model.complete = good();
+    return good();
   }
 };
 } // namespace
-void check(model::Module &model, const syntax::Content &content,
-           const syntax::Content &original,
-           const lowering::LibraryEmission &linked) {
+bool check(model::Module &model, const syntax::Content &content,
+           const syntax::Content &original, const LibraryEmission &linked) {
   if (const auto *module = std::get_if<syntax::Module>(&content))
-    Checker(model, *module, std::get_if<syntax::Module>(&original), linked)
+    return Checker(model, *module, std::get_if<syntax::Module>(&original),
+                   linked)
         .run();
   else {
     model.construction = std::get<source::Construction>(content);
-    model.complete = true;
+    return true;
   }
 }
 } // namespace zkc::frontend::semantics

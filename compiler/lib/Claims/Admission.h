@@ -1,5 +1,5 @@
-#ifndef ZKC_CLAIMS_INTERNAL_ANALYSIS_H
-#define ZKC_CLAIMS_INTERNAL_ANALYSIS_H
+#ifndef ZKC_CLAIMS_INTERNAL_ADMISSION_H
+#define ZKC_CLAIMS_INTERNAL_ADMISSION_H
 #include "zkc/Analysis/Obligations.h"
 #include "zkc/Claims/Claims.h"
 #include "zkc/Source/Execution.h"

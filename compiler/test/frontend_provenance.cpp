@@ -1,3 +1,4 @@
+#include "../lib/Frontend/Lowering/LibrarySource.h"
 #include "../lib/Frontend/Resolution/Project.h"
 #include "../lib/Frontend/Semantics/Libraries.h"
 #include "../lib/Frontend/Semantics/Provenance.h"
@@ -46,13 +47,24 @@ int main() {
   auto resolved = resolution::resolve(project);
   if (!resolved.diagnostics.empty())
     return 3;
-  auto library = semantics::elaborateLibraries(
-      std::get<syntax::Module>(resolved.content), text, "<input>");
+  WorkBudget budget;
+  auto library =
+      semantics::elaborateLibraries(std::get<syntax::Module>(resolved.content),
+                                    *resolved.context, text, "<input>", budget);
   if (!library.content) {
     llvm::consumeError(library.content.takeError());
     return 4;
   }
-  const auto &entries = library.content->generated.entries;
+  auto &formed = *library.content;
+  auto collisionSyntax = formed.ordinary;
+  auto prepared = lowering::emitLibrarySource(
+      std::move(formed.ordinary), formed.environment, formed.programs,
+      formed.entryAliases, formed.reservedNames, *resolved.context, budget);
+  if (!prepared) {
+    llvm::consumeError(prepared.takeError());
+    return 4;
+  }
+  const auto &entries = prepared->generated.entries;
   if (entries.size() != 2)
     return 5;
   for (const auto &entry : entries) {
@@ -76,4 +88,35 @@ int main() {
       if (!located(located, result))
         return 8;
   }
+
+  // Public resolution reserves generated prefixes. Exercise the emitter's
+  // defensive collision check directly with the captured offending declaration,
+  // without weakening that earlier admission boundary.
+  const auto symbol = formed.programs.front().entry();
+  std::string collisionText = text;
+  collisionText.insert(collisionText.rfind('}'),
+                       "fn " + symbol + "(x: bool) -> bool { return x; }\n");
+  auto collisionProject =
+      ProjectInput::single(Input::withoutFile(collisionText, "collision.pir"));
+  auto collisionContext = resolution::resolve(collisionProject);
+  bool reserved = false;
+  for (const auto &diagnostic : collisionContext.diagnostics)
+    reserved |= diagnostic.code == "source-name-reserved";
+  if (!reserved)
+    return 9;
+  formed.reservedNames.insert(symbol);
+  WorkBudget collisionBudget;
+  auto collision = lowering::emitLibrarySource(
+      std::move(collisionSyntax), formed.environment, formed.programs,
+      formed.entryAliases, formed.reservedNames, *collisionContext.context,
+      collisionBudget);
+  if (collision)
+    return 10;
+  bool located = false;
+  llvm::handleAllErrors(collision.takeError(), [&](const SourceDiagnostic &d) {
+    located = d.code == "library-source-collision" && d.location.file == 0 &&
+              d.location.offset == collisionText.find("fn " + symbol);
+  });
+  if (!located)
+    return 11;
 }

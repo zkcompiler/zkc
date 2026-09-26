@@ -1521,7 +1521,6 @@ public:
         m.syntax.entries.clear(); // Imports never introduce execution roots.
       append(out, std::move(m.syntax));
     }
-    out.project = context;
     syntax::inferCaptures(out);
     auto recovered = recover(out);
     return {std::move(out), context, std::move(diagnostics), syntaxPartial,

@@ -1,4 +1,5 @@
 #include "Library.h"
+#include "../Work.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Source/Codec.h"
@@ -15,6 +16,7 @@ Error fail(StringRef detail) { return zkc::error("library-lowering", detail); }
 class Lowerer {
   ArrayRef<LinkedProgram> programs;
   OriginResolver resolveOrigin;
+  WorkBudget &budget;
   const Environment *environment = nullptr;
   source::Module result;
   std::map<std::string, std::string> resourceSlots;
@@ -28,6 +30,8 @@ class Lowerer {
   }
 
   Expected<std::string> type(const LayoutLeaf &leaf) const {
+    if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+      return error;
     if (leaf.kind == LayoutLeaf::Kind::Variant) {
       auto nominal = parseJson(leaf.variantIdentity);
       if (!nominal)
@@ -72,6 +76,9 @@ class Lowerer {
   }
 
   Expected<std::string> binding(StringRef operation, source::Names actuals) {
+    // A logical request costs the same whether the binding is interned or new.
+    if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+      return error;
     auto key = std::make_pair(operation.str(), actuals);
     if (auto found = bindings.find(key); found != bindings.end())
       return found->second;
@@ -101,6 +108,9 @@ class Lowerer {
     const auto &value = found->second;
     if (value.names.size() != value.layout->leaves.size())
       return fail("value layout does not match emitted names");
+    if (auto error = work::charge(budget, WorkAccount::GeneratedSource,
+                                  value.names.size()))
+      return error;
     source::Names names;
     for (size_t i = 0; i < value.names.size(); ++i) {
       const auto &path = value.layout->leaves[i].path;
@@ -137,6 +147,8 @@ class Lowerer {
   }
 
   Expected<source::Function> function(const LinkedFunction &linked) {
+    if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+      return error;
     // This carrier is a role-free local algorithm. Fixed roles need a located
     // function carrier; assigning it to an arbitrary caller would erase a
     // checked obligation rather than implement participant projection.
@@ -188,6 +200,11 @@ class Lowerer {
       auto layout = linked.values.find(value.id.index);
       if (layout == linked.values.end())
         return fail("typed value has no linked representation");
+      if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+        return error;
+      if (auto error = work::charge(budget, WorkAccount::GeneratedSource,
+                                    layout->second.leaves.size()))
+        return error;
       source::Names names;
       if (aliases) {
         names = std::move(*aliases);
@@ -260,6 +277,8 @@ class Lowerer {
     emit = [&](const std::vector<Instruction> &instructions,
                std::vector<size_t> prefix) -> Error {
       for (size_t index = 0; index < instructions.size(); ++index) {
+        if (auto error = work::charge(budget, WorkAccount::GeneratedSource))
+          return error;
         const auto &instruction = instructions[index];
         auto path = prefix;
         path.push_back(index);
@@ -556,8 +575,9 @@ class Lowerer {
   }
 
 public:
-  explicit Lowerer(ArrayRef<LinkedProgram> programs, OriginResolver origin = {})
-      : programs(programs), resolveOrigin(std::move(origin)) {}
+  explicit Lowerer(ArrayRef<LinkedProgram> programs, WorkBudget &budget,
+                   OriginResolver origin = {})
+      : programs(programs), resolveOrigin(std::move(origin)), budget(budget) {}
   Expected<source::Module> run() {
     std::set<std::string> slots;
     std::map<std::string, const DependencyRecord *> world;
@@ -642,14 +662,8 @@ public:
   }
 };
 } // namespace
-Expected<source::Module> lower(const LinkedProgram &program) {
-  return Lowerer(program).run();
-}
-Expected<source::Module> lower(ArrayRef<LinkedProgram> programs) {
-  return Lowerer(programs).run();
-}
 Expected<source::Module> lower(ArrayRef<LinkedProgram> programs,
-                               OriginResolver origin) {
-  return Lowerer(programs, std::move(origin)).run();
+                               OriginResolver origin, WorkBudget &budget) {
+  return Lowerer(programs, budget, std::move(origin)).run();
 }
 } // namespace zkc::frontend::library

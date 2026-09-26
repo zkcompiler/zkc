@@ -1,7 +1,7 @@
 #ifndef ZKC_FRONTEND_MODEL_ACCESS_H
 #define ZKC_FRONTEND_MODEL_ACCESS_H
 
-#include "Module.h"
+#include "Checked.h"
 #include "zkc/Frontend/Analysis.h"
 
 namespace zkc::frontend::model {
@@ -15,6 +15,7 @@ struct AnalysisAccess {
   }
   /// Consume the only mutable owner. Published queries cannot retain a mutable
   /// alias to the model they observe.
+  static Analysis finish(EmittedSource, WorkUsage);
   static Analysis freeze(std::unique_ptr<model::Module> model) {
     return Analysis(std::shared_ptr<const model::Module>(std::move(model)));
   }

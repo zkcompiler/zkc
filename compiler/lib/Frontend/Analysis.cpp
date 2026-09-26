@@ -1,5 +1,8 @@
 #include "zkc/Frontend/Analysis.h"
 #include "Instantiation/Select.h"
+#include "Library/Diagnostic.h"
+#include "Lowering/LibrarySource.h"
+#include "Lowering/PIR.h"
 #include "Model/Access.h"
 #include "Resolution/Declarations.h"
 #include "Resolution/Project.h"
@@ -7,12 +10,28 @@
 #include "Semantics/Libraries.h"
 #include "Semantics/Provenance.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::frontend {
+Analysis model::AnalysisAccess::finish(model::EmittedSource emitted,
+                                       WorkUsage usage) {
+  auto model = std::move(emitted.model);
+  model->workUsage = usage;
+  semantics::retainQueryMetadata(*model);
+  return Analysis(std::shared_ptr<const CompletedAnalysis>(
+      new CompletedAnalysis(std::move(*model), std::move(emitted.content))));
+}
 Analysis analyzeProtocol(const Input &input) {
-  return analyzeProject(ProjectInput::single(input));
+  return analyzeProtocol(input, {});
+}
+Analysis analyzeProtocol(const Input &input, WorkLimits limits) {
+  return analyzeProject(ProjectInput::single(input), limits);
 }
 Analysis analyzeProject(const ProjectInput &input) {
+  return analyzeProject(input, {});
+}
+Analysis analyzeProject(const ProjectInput &input, WorkLimits limits) {
+  WorkBudget budget(limits);
   auto resolved = resolution::resolve(input);
   const auto *root = input.file(
       resolved.context->owners.empty() ? 0 : resolved.context->owners[0].root);
@@ -23,7 +42,7 @@ Analysis analyzeProject(const ProjectInput &input) {
   auto failure = [&](std::unique_ptr<model::Module> model = nullptr) {
     if (!model)
       model = std::make_unique<model::Module>();
-    model->project = input;
+    model->workUsage = budget.usage();
     model->resolution = resolved.context;
     model->resolutionComplete = resolutionComplete;
     model->text = text.str();
@@ -32,8 +51,6 @@ Analysis analyzeProject(const ProjectInput &input) {
                               resolved.diagnostics.begin(),
                               resolved.diagnostics.end());
     model->syntaxPartial = resolved.syntaxPartial;
-    model->complete = false;
-    model->finalized.reset();
     for (auto &d : model->declarations)
       d.loweredName.reset();
     if (!model->libraries)
@@ -85,42 +102,75 @@ Analysis analyzeProject(const ProjectInput &input) {
         },
         [&](const Refusal &e) {
           resolved.diagnostics.push_back({e.code, e.detail, {}});
+        },
+        [&](const library::Diagnostic &e) {
+          resolved.diagnostics.push_back({e.code, e.message, {}});
+        },
+        [&](const ErrorInfoBase &e) {
+          std::string message;
+          raw_string_ostream out(message);
+          e.log(out);
+          report_fatal_error(Twine("unexpected frontend phase error: ") +
+                             message);
         });
   };
   // Library formation/linking is explicit and precedes static specialization.
   // A failed phase retains its partial judgments without a mutable out
   // parameter.
   std::optional<syntax::Content> elaborated;
-  lowering::LibraryEmission linked;
+  LibraryEmission linked;
   source::Names linkedNames;
   if (const auto *module = std::get_if<syntax::Module>(&content)) {
-    auto libraries = semantics::elaborateLibraries(*module, text, filename);
+    auto libraries = semantics::elaborateLibraries(*module, *resolved.context,
+                                                   text, filename, budget);
     retainedLibraries = std::move(libraries.report);
     if (!libraries.content) {
       recordFailure(libraries.content.takeError());
       return failure();
     }
-    elaborated = std::move(libraries.content->ordinary);
-    linked = std::move(libraries.content->generated);
-    for (const auto &entry : linked.entries)
-      linkedNames.push_back(entry.header.name);
+    auto &formed = *libraries.content;
+    auto prepared = lowering::emitLibrarySource(
+        std::move(formed.ordinary), formed.environment, formed.programs,
+        formed.entryAliases, formed.reservedNames, *resolved.context, budget);
+    if (!prepared) {
+      recordFailure(prepared.takeError());
+      return failure();
+    }
+    elaborated = std::move(prepared->ordinary);
+    linked = std::move(prepared->generated);
+    // Every authored alias reserves its name, regardless of whether its
+    // layout needs a generated aggregate entry adapter.
+    for (const auto &[entry, aliases] : formed.entryAliases)
+      llvm::append_range(linkedNames, aliases);
   }
-  auto staged = instantiation::select(elaborated ? *elaborated : content, text,
-                                      filename, linkedNames);
+  auto staged = instantiation::select(elaborated ? *elaborated : content,
+                                      *resolved.context, text, filename,
+                                      linkedNames, budget);
   if (!staged) {
     recordFailure(staged.takeError());
     return failure();
   }
-  auto analysis =
-      semantics::analyzeStaged(content, *staged, linked, retainedLibraries,
-                               text, filename, resolutionComplete);
-  if (!resolutionComplete)
-    return failure(
-        std::make_unique<model::Module>(model::AnalysisAccess::get(analysis)));
-  return analysis;
+  auto checked = semantics::checkStaged(content, *staged, linked,
+                                        retainedLibraries, resolved.context,
+                                        text, filename, resolutionComplete);
+  if (auto *partial = std::get_if<std::unique_ptr<model::Module>>(&checked))
+    return failure(std::move(*partial));
+  auto source = std::get<model::CheckedSource>(std::move(checked));
+  if (!resolutionComplete || resolved.syntaxPartial)
+    return failure(std::move(source).takeModel());
+  auto emitted = lowering::lower(std::move(source), budget);
+  if (!emitted) {
+    recordFailure(emitted.takeError());
+    return failure(std::move(source).takeModel());
+  }
+  return model::AnalysisAccess::finish(std::move(*emitted), budget.usage());
 }
 Analysis analyzeProtocol(StringRef text, StringRef filename) {
-  return analyzeProtocol(Input(text.str(), filename.str()));
+  return analyzeProtocol(text, filename, {});
+}
+Analysis analyzeProtocol(StringRef text, StringRef filename,
+                         WorkLimits limits) {
+  return analyzeProtocol(Input(text.str(), filename.str()), limits);
 }
 
 } // namespace zkc::frontend

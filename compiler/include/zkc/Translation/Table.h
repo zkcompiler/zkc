@@ -12,6 +12,8 @@ resolveProgramLibrary(mlir::Operation *program);
 /// Load the registered dialects and source library models before import.
 /// For the built-in table model, use registerTableLibrary(registry) alongside
 /// registerDialects(registry), then context.loadAllAvailableDialects().
+/// Missing PIR registration/loading returns DialectRegistrationError
+/// (Dialect/Registry.h), independently of source admission.
 llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>>
 importSource(const llvm::json::Value &request, mlir::MLIRContext &context);
 llvm::Expected<llvm::json::Value> exportPlan(mlir::ModuleOp module);

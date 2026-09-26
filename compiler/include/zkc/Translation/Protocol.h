@@ -11,7 +11,8 @@
 namespace zkc::protocol {
 /// Import requires loaded dialects: registerDialects(registry), construct the
 /// context from that registry, then context.loadAllAvailableDialects(). A
-/// missing built-in dialect returns a context setup error; import never loads
+/// missing built-in dialect returns DialectRegistrationError
+/// (Dialect/Registry.h), an invocation precondition failure; import never loads
 /// dialects. Locations are diagnostic metadata, never evidence of source
 /// correspondence.
 llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>> importModule(

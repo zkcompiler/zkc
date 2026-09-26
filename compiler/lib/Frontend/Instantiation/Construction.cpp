@@ -1,4 +1,4 @@
-#include "../Model/Module.h"
+#include "../Model/Checked.h"
 #include "../Resolution/Project.h"
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Support/Json.h"
@@ -10,15 +10,13 @@ bindConstruction(const CheckedModule &checked,
                  source::Construction descriptor) {
   if (descriptor.draws.size() > 32768)
     return zkc::error("construction-descriptor-limit");
-  const auto &model = *checked.model;
-  if (!model.finalized)
-    return zkc::error("construction-input-kind");
-  const auto *sourceModule = std::get_if<source::Module>(&*model.finalized);
+  const auto &model = checked.completed->model;
+  const auto *sourceModule =
+      std::get_if<source::Module>(&checked.completed->content);
   if (!sourceModule)
     return zkc::error("construction-input-kind");
   const auto &source = *sourceModule;
-  if (!model.resolution)
-    return zkc::error("construction-input-kind");
+  assert(model.resolution && "checked source retains resolved project input");
   if (model.resolution->carrier)
     return descriptor;
   const auto &context = *model.resolution;
