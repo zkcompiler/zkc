@@ -131,7 +131,7 @@ swapped = folds.replace("= fold_left(", "= TEMP(").replace(
 assert swapped != folds
 run("protocol-compile", swapped, option, refuses="binding-stale-selection")
 selection.write_text(json.dumps(chosen))
-# Legacy unqualified selection remains supported, with no freshness claim.
+# A bare selection list has no source snapshot to establish freshness.
 run("protocol-compile", swapped, option)
 selection.write_text(json.dumps([["fold_left", "arkworks/field.add"]]))
 error = run("protocol-compile", folds, option, refuses="binding-implementation")

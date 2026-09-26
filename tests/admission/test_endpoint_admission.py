@@ -337,7 +337,7 @@ def main(tools=None, layout=None):
         response.returncode == 1
         and json.loads(response.stdout)["code"] == "invalid-endpoint-phase",
     )
-    # Legacy mode cannot consume the endpoint state envelope by accident.
+    # Execution without an endpoint cannot consume its state envelope.
     result = journal.attempt([runtime, "run", s, p, i, checker])
     journal.check(
         "state-envelope-not-silently-erased",

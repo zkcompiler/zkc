@@ -167,7 +167,7 @@ def main():
         wrong = ir.replace('matrix<' + json.dumps(field) + '>', 'matrix<' + json.dumps(other) + '>', 1)
         assert wrong != ir
         journal.run([optimizer, '--verify-each'], wrong, 'binding')
-        # Unknown matrix storage and legacy profile matrix typing fail closed.
+        # Unknown storage and a missing public field requirement are refused.
         wrong = ir.replace('sparse-coo/1', 'invented-coo/1')
         journal.run([optimizer, '--verify-each'], wrong, 'binding')
         journal.run([compiler, 'protocol-import', '-'], source(field, 2, 3).replace('requires (Field(F))', ''), 'generic-public-requirement')

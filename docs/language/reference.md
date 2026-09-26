@@ -619,8 +619,9 @@ can use the `selection_template` returned by `protocol-inspect`:
 
 Selection keys name concrete operation bindings. The compiler checks the snapshot
 against the elaborated original common record before specialization;
-whitespace/comments do not change it, but changes to that record do. Legacy unqualified lists remain supported
-without a freshness guarantee. Generic `configure … using (…)` clauses instead
+whitespace/comments do not change it, but changes to that record do. Bare
+selection lists are also supported, without a source snapshot or freshness
+guarantee. Generic `configure … using (…)` clauses instead
 select labelled operations within their target definition. Neither mechanism
 performs implementation search, and these compiler snapshots do not enter the
 protocol transcript.

@@ -27,7 +27,7 @@ def test_same_label_different_identity_and_repeated_calls_never_overwrite(tmp_pa
     assert [(path / "record").read_text() for path in paths] == list(map(str, range(len(paths))))
 
 
-def test_legacy_records_share_only_the_same_caller_and_case(monkeypatch, tmp_path):
+def test_toolchain_records_share_only_the_same_caller_and_case(monkeypatch, tmp_path):
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path))
     def invoke(origin, case):
         namespace = {"__file__": str(origin), "records": toolchain.records, "case": case}

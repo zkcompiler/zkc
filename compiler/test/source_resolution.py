@@ -126,8 +126,9 @@ for name in ("dleq", "committed-two-factor"):
         run("protocol-check-construction", source, descriptor_path,
             candidate_path, refuses="source-string")
 
-legacy_source = json.loads((examples / "dleq.json").read_text())
+# Selectors from the generic fixture must not resolve in an unrelated source.
+concrete_source = json.loads((examples / "dleq.json").read_text())
 descriptor_path.write_text(json.dumps(descriptor))
-run("protocol-construct", legacy_source, descriptor_path, refuses="source-site-selection")
+run("protocol-construct", concrete_source, descriptor_path, refuses="source-site-selection")
 
 print(f"source resolution: {commands.save()} command checks, group and polynomial/PCS custody controls")
