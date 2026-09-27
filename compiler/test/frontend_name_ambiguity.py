@@ -21,7 +21,8 @@ def library(body, name="a"):
 
 
 def app(body):
-    return f"module {{ dependency a = {identity('a')}; {body} }}"
+    imports = "use zkc::algebra::Vector;" if "Vector<" in body else ""
+    return f"module {{ {imports} dependency a = {identity('a')}; {body} }}"
 
 
 def run(source, body="", *, libraries=None, files=None, refuses=None, analyze=False, emit=False):
@@ -60,7 +61,7 @@ CATEGORIES = (
     ("value", "const a.N: index = 1;",
      "fn Main() -> index { return a.N; }", "pub const N: index = 2;"),
     ("static", "const a.N: index = 1;",
-     "fn Main() -> index { let n = index::constant() attributes(a.N); return n; }",
+     "fn Main() -> index { let n = zkc::algebra::index_constant() attributes(a.N); return n; }",
      "pub const N: index = 2;"),
     ("predicate", "interface a.I { type Value drop; }",
      "fn Main<C: a.I>(x: C::Value) -> C::Value { return x; }",
@@ -101,7 +102,7 @@ for exact, use, body in (
     ("struct a.Keep { flag: bool }", "fn Main(x: bool) -> bool { return a.Keep(x); }",
      "pub fn Keep(x: bool) -> bool { return x; }"),
     ("fn a.N(x: bool) -> bool { return x; }",
-     "fn Main() -> index { let n = index::constant() attributes(a.N); return n; }",
+     "fn Main() -> index { let n = zkc::algebra::index_constant() attributes(a.N); return n; }",
      "pub const N: index = 2;"),
     ("const a.I: index = 1;", "fn Main<C: a.I>(x: C::Value) -> C::Value { return x; }",
      "pub interface I { type Value drop; }"),
@@ -157,7 +158,7 @@ for setup, target in (("", "a.Identity.extra"), ("use a as m;", "m.Identity.extr
     for quoted in (False, True):
         with case(f"ordinary function is not a suffix namespace: {target}, quoted={quoted}"):
             call = json.dumps(target) if quoted else target
-            run(app(f"""{setup} fn {target}(x: bool) -> bool {{ return bool::not(x); }}
+            run(app(f"""{setup} fn {target}(x: bool) -> bool {{ return zkc::core::not(x); }}
               fn Main(x: bool) -> bool {{ return {call}(x); }}"""),
                 "pub fn Identity(x: bool) -> bool { return x; }")
     with case(f"ordinary function suffix alone refuses: {target}"):
@@ -348,9 +349,10 @@ with case("alternative module readings still consume a bounded resolution budget
 # different protocols, with observably different bodies. Compare the entire
 # emitted carrier against an explicit selection, as well as admitting it.
 PROJECTED_PROTOCOLS = """
+  use zkc::core;
   protocol Good { roles(A); inputs(A x: bool); outputs(A bool); return x; }
   protocol Bad { roles(A); inputs(A x: bool); outputs(A bool);
-    let y = local A { bool::not(x) }; return y; }
+    let y = local A { zkc::core::not(x) }; return y; }
   protocol Mid { roles(A); dependencies(part: Bad()); return; }
   protocol Root { roles(A); dependencies(child.part: Good(), child: Mid()); return; }
 """

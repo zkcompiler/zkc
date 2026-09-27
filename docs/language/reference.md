@@ -118,7 +118,7 @@ Both retain the same nominal source type before common lowering.
 
 ## Static source construction
 
-Named natural constants and whole-protocol domain parameters are part of the
+Named natural constants and whole-protocol static parameters are part of the
 [language foundation](families.md#protocol-families):
 
 ```text
@@ -142,8 +142,9 @@ This complete module admits and compiles with `protocol-source` and
 <!-- executable: source -->
 ```text
 module {
-  fn Twice<F: Field>(x: F::Element) -> F::Element {
-    [sum] let y = field::add(x, x);
+  use zkc::algebra;
+  fn Twice<F: algebra::Field>(x: F::Element) -> F::Element {
+    [sum] let y = algebra::add(x, x);
     return y;
   }
   fn Four<F: Field>(x: F::Element) -> F::Element {
@@ -177,14 +178,17 @@ Primitive operations and helper calls use ordinary call syntax but retain distin
 common records and effects. The acyclic helper graph is retained in native MLIR
 before checked expansion; see [local composition](../compiler/local-composition.md).
 
+The installed calls below assume `use zkc::{algebra, core};` in the enclosing
+module.
+
 | Form | Meaning |
 |---|---|
 | `[site] let y = Twice(x);` | One result, with an optional occurrence label |
 | `let (a, b) = Helper(x);` | Two ordered results, flat destructuring |
-| `control::require(ok);` | Zero-result call; the guard is retained |
+| `core::require(ok);` | Zero-result call; the guard is retained |
 | `let y = Twice::<F>(x);` | Explicit static argument |
-| `let first = vector::at::<F>(xs) attributes (0);` | Static domain and separate ordered operation attributes |
-| `let one: F::Element = field::constant() attributes (1);` | Result annotation constrains a nullary producer |
+| `let first = algebra::vector_at::<F>(xs) attributes (0);` | Static domain and separate ordered operation attributes |
+| `let one: F::Element = algebra::constant() attributes (1);` | Result annotation constrains a nullary producer |
 | `return x;` / `return (x, y);` / `return;` | One, multiple or zero results |
 
 Bindings are immutable unless declared `let mut`. Mutable source bindings
@@ -198,16 +202,21 @@ or a tail expression. See [products and local blocks](values.md#products-local-b
 `::<...>` supplies static arguments; `attributes (...)` supplies existing ordered
 attribute strings. A natural attribute token abbreviates its decimal string.
 
-Qualified calls such as `field::add` select installed operation contracts.
-Exact names such as `Twice` or `"bool.and"` prefer the declared helper or
-configuration. With no such declaration, an exact installed operation name can
-still be used in a generic body. Named-call resolution happens before argument
-type checking, with no overload search. Operators use the separate fixed table
-keyed by operand types. Ordinary bodies may use explicit operation
-bindings, a selected module profile, or qualified contracts. A qualified contract
-with concrete inferred domains creates a shared default binding in the module;
-explicit bindings remain the way to select an implementation.
-Thus a helper named `"bool.and"` remains callable even beside `bool::and`.
+Imported calls such as `algebra::add` select the declaration resolved through
+`use zkc::algebra;`. Module aliases, individual imports and reexports preserve
+that declaration's identity. There is no fallback from an unresolved name to an
+installed primitive or type. A helper named `"bool.and"` remains an ordinary
+helper, distinct from an imported `core::and`.
+
+Named-call resolution happens before argument checking, without overload search.
+Installed intrinsics accept named arguments using their generated export labels;
+`algebra::add(field0: x, field1: y)` names the same ports as its positional form.
+Operands evaluate in written order before port arrangement. Operators use
+[coherent constructor tuples](data.md#4-operators), including checked source
+functions on records owned by their defining package. An imported intrinsic
+with concrete inferred domains creates a shared default binding; an explicit
+binding remains the way to select a particular implementation.
+
 Names that conflict with grammar keywords can be quoted at use sites; the common
 printer quotes them automatically. Cross-file declarations use the separate
 [project lookup rules](projects.md).
@@ -229,23 +238,39 @@ when no such installed identity exists. Quoting it does not turn it into a
 projection. Concrete associated terms such as `"bls12-381.g1"::Scalar` normalize
 to the installed associated identity.
 
-Explicit `bind add = field::add("bls12-381.fr");` declarations select operation
-bindings for ordinary functions. The two existing BLS profile headings retain
-their documented closed-module defaults and bare-type shorthand. They are a
-supported convenience feature, not a decoder for replaced call/type syntax.
-Generic definitions require an explicit module. A profile does not supply
-omitted domains for arbitrary types, and an explicitly authored origin is kept.
+Explicit `bind add = field::add("bls12-381.fr");` applies the installed logical
+contract directly; later `add(x, y)` calls that binding. The contract key in a
+`bind` is a low-level contract identifier, separate from an imported source API.
+In authored modules the contract must permit the `Source` stage. Construction-only
+transcript contracts cannot be reached through `bind` or imports. The readable
+common `carrier module` is a separate representation, whose admission alone does
+not establish a checked transcript construction.
+
+Use `module { ... }` with explicit imports and domain choices. Historical BLS
+profile headings and their default domains are removed. The source installation
+exports `zkc::algebra`, `poly`, `curve`, `random`, `pcs`, `oracle`, `external`,
+`core` and `transcript`; the last exports vocabulary but no source operations.
+See [installed modules](projects.md#installed-domain-modules) for project rules.
+
+The public names need not repeat logical contract keys. For example,
+`poly::evaluate` applies `poly.univariate_evaluate`, while
+`poly::evaluate_multilinear` applies `poly.evaluate`. Field calls use
+`algebra::add`/`mul`; vector and matrix calls use `algebra::vector_*` and
+`algebra::matrix_*`. `core::and` and `core::require` name Boolean and guard
+operations. Each requires the corresponding module or individual export import.
 
 ## Collections and structured local control
 
 ```text
+use zkc::algebra;
+use zkc::algebra::Vector;
 fn Evaluate<F: Field>(coefficients: Vector<F::Element>, point: F::Element,
                       negate: bool) -> F::Element {
-  let mut result = field::constant::<F>() attributes (0);
+  let mut result = algebra::constant::<F>() attributes (0);
   for i in 0..coefficients.len() {
-    result = field::add(field::mul(result, point), coefficients[i]);
+    result = algebra::add(algebra::mul(result, point), coefficients[i]);
   }
-  if negate { result = field::neg(result); } else { }
+  if negate { result = algebra::neg(result); } else { }
   return result;
 }
 ```
@@ -268,9 +293,9 @@ These forms are legal only inside `fn`; protocol `loop` retains its public stati
 count and role-owned ports. Runtime limits, affine-state rules and supported
 construction paths are specified by the [local-control profile](../spec/profiles/compiler/local-control.md).
 Neither secret-dependent control nor this syntax establishes constant-time or
-zero-knowledge behavior. There are no source-defined operator overloads,
-break/continue, unbounded `while`, or protocol-level dynamic
-branches. Infix operators are [spellings of installed operations](#bundles-structs-operators-and-checked-structs).
+zero-knowledge behavior. There is no break/continue, unbounded `while`, or
+protocol-level dynamic branching. Infix operators select installed bindings or
+checked functions on package-owned records; see the [operator rules](data.md#4-operators).
 
 Printing portable source displays explicit `capture`, `carry`, result bindings
 and `yield` so it can preserve and check the exact region structure. Explicit
@@ -287,8 +312,13 @@ them into the common notation above; they add no record kinds to the
 source written out by hand produce the same encoded common records. The
 [design](data.md) gives the reasons and every refusal code.
 
+This excerpt omits the `BindAssignment` constructor body; the complete Groth16
+source linked below supplies it.
+
 ```text
 module {
+  use zkc::algebra::Vector;
+  use zkc::curve;
   bundle PairingScalars(F) = (
     ScalarAction(F::PairingG1), ScalarAction(F::PairingG2),
     "="(F::PairingG1::Scalar, F), "="(F::PairingG2::Scalar, F)
@@ -319,7 +349,7 @@ module {
 | `p: Struct<F>` as a parameter, input or result | One parameter, input or result per leaf, in declaration order with nested structs depth first, named `p.field` |
 | `Struct(field = expr, ...)` | No operation. Initializers run once in written order; the leaves are arranged in declaration order |
 | `binding.field` | The leaf value of that name. The lexer reads `binding.field` as one name |
-| `a + b`, `a * b`, `a - b`, `-a` | The installed operation spelled by that symbol for those operand constructors, with operands evaluated once, left to right as written |
+| `a + b`, `a * b`, `a - b`, `-a` | The installed operation or checked record function selected by the hook and operand heads, with operands evaluated once, left to right as written |
 
 A bundle is a name for a requirement list. It adds no assumption, and a header
 bound cannot name one because a bound also fixes a parameter's sort.
@@ -338,10 +368,12 @@ calls do; a parameter that occurs only under an associated domain, such as
 protocol with a struct input receives host values under the leaf names, such as
 `vk.alpha`.
 
-Operators resolve to installed operation contracts, with operands evaluated once
-in written order. The [operator reference](data.md#4-operators) owns the spelling
-table, precedence and domain restrictions; notation supplies no additional
-algebraic laws or reassociation permission.
+Operators resolve to imported installed bindings or ordinary checked functions
+annotated with `#[operator(add)]`, `#[operator(sub)]`, `#[operator(mul)]` or
+`#[operator(neg)]`.
+The [operator reference](data.md#4-operators) owns precedence, nominal ownership
+and coherence. Operands evaluate once in written order; notation supplies no
+additional algebraic laws or reassociation permission.
 
 A checked struct is constructed only inside its named constructor functions and
 is otherwise an ordinary struct, readable by field. A consumer that declares it
@@ -365,18 +397,38 @@ the same module without them.
 | `E::BaseField::Element` | `field:E.BaseField` |
 | `Vector<F::Element>` / `Vector<G::Element>` | `vector:F` / `groups:G` |
 | `Matrix<F::Element>` | `matrix:F` |
+| `FixedVector<T, N>` | One bulk value with element type `T` and exact natural length `N` |
 | `Polynomial<F>`, `Table<F>`, `Point<F>`, `Round<F>` | Existing polynomial, multilinear table, point and round constructors |
 | `Rng<F>`, `Nonce<F>`, `Transcript<T>` | Existing resource constructors |
 | `Commitment<C>`, `Commitments<C>`, `OpeningState<C>`, `OpeningStates<C>`, `Proof<C>`, `ProverKey<C>`, `VerifierKey<C>` | Existing commitment-sorted constructors |
-| `bool`, `index`, `Indices` | Domain-independent constructors |
+| `bool`, `index` | Core domain-independent constructors |
+| `Indices` | Imported domain-independent index collection |
+| `Array<T, N>`, `ResourceUnit` | Core structural array and resource unit |
+
+The named installed types require imports. `Vector`, `Matrix` and `Indices`
+come from `zkc::algebra`, as does `FixedVector`; polynomial types from `zkc::poly`; randomness types
+from `zkc::random`; `Transcript` from `zkc::transcript`. `Commitment`,
+`OpeningState`, `Proof`, `ProverKey` and `VerifierKey` come from `zkc::pcs`;
+`Commitments` and `OpeningStates` come from `zkc::oracle`. Qualified names such as
+`poly::Polynomial<F>` work after importing the module. Associated `Element`
+projections use installed sort metadata. Core forms need no import.
 
 Nominal domains remain distinct even when physical representations agree.
-These are finite logical constructors, not arbitrary generic types:
+`Vector<Element>` and `Matrix<Element>` use finite declared family cases,
+resolved during generic checking. These are not arbitrary generic types:
 `Vector<Vector<F::Element>>` is unsupported. Physical representations remain
-selected later; the JSON `constructor:domain@representation` carrier is unchanged.
+selected later. Atomic types retain `constructor:domain@representation` spelling;
+structural applications retain all arguments, for example
+`fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/1`.
 
-`<F: Field>` declares a field-sorted parameter and emits exactly `Field(F)`.
+Domain identities, raw sorts and capability predicates remain globally accepted.
+After `use zkc::algebra;`, `<F: algebra::Field>` names the imported capability;
+`use zkc::algebra::Field as ScalarField;` also permits `<F: ScalarField>`.
+`<F: Field>` still declares a field-sorted parameter and emits exactly `Field(F)`.
 `<F: domain Field>` declares only the sort, with no capability assumption.
+`<T: Type>` and `<N: nat>` declare a type and a bounded compile-time natural,
+respectively. They retain their kinds through function and protocol selection.
+These static naturals are separate from a protocol's runtime `parameters (...)`.
 `<F: TwoAdicField>` emits that capability; the installed implication supplies
 `Field(F)` without adding a stored assumption. Do not strengthen a kind-only
 interface during printing or migration.
@@ -419,20 +471,23 @@ not invent configurations or change source identity.
 
 ## Roles and interaction
 
-This profile-scoped opening child illustrates the two-factor interaction; its
-functions and enclosing module are in the linked complete source:
+This opening child illustrates the two-factor interaction. Its functions and
+enclosing module are in the [complete source](../../examples/protocols/committed-two-factor.pir).
+The excerpt includes the imports for its port types:
 
 ```text
+use zkc::poly::Point;
+use zkc::pcs::{OpeningState, VerifierKey, Commitment};
 protocol FactorOpening {
   roles (P, V);
   inputs (
-    P state: opening_state,
-    P p_point: point,
-    V vk: verifier_key,
-    V root: commitment,
-    V v_point: point
+    P state: OpeningState<"multilinear.kzg.bls12-381/1">,
+    P p_point: Point<"bls12-381.fr">,
+    V vk: VerifierKey<"multilinear.kzg.bls12-381/1">,
+    V root: Commitment<"multilinear.kzg.bls12-381/1">,
+    V v_point: Point<"bls12-381.fr">
   );
-  outputs (V field);
+  outputs (V "bls12-381.fr"::Element);
   local [make_opening] P: let (evaluation, proof) = OpenFactor(state, p_point);
   message [evaluation_message] evaluation: P(evaluation) -> V(received_value);
   message [proof_message] opening: P(proof) -> V(received_proof);
@@ -575,7 +630,7 @@ These are source references, not globally stable identifiers or proof evidence.
 
 - Bare names start with an ASCII letter or `_`, followed by letters, digits,
   `_`, `.` or `-`. `->` is always an arrow. Double-quoted JSON strings can be used
-  for names, labels, profiles, attributes and types; escapes decode exactly once.
+  for names, labels, attributes and types; escapes decode exactly once.
   Text strings require valid UTF-8 and paired Unicode surrogate escapes; malformed
   encodings are rejected instead of replaced in public labels.
 - Natural numbers use decimal digits without leading zeroes. Operation attributes

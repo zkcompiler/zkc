@@ -45,7 +45,9 @@ for group in ('bls12-381.g1', 'ristretto255.group'):
         for contract, dialect in (('curve.get', 'algebra.curve_get'),
                                   ('curve.length', 'algebra.curve_length'),
                                   ('bool.not', 'pir.not'), ('bool.or', 'pir.or')):
-            line = next(line for line in source.splitlines() if '= '+contract.replace('.', '::') in line)
+            module, name = contract.split('.')
+            public = 'zkc::' + ('core' if module == 'bool' else module) + '::' + name
+            line = next(line for line in source.splitlines() if '= ' + public in line)
             unused = re.sub(r'\[\w+\] let \w+', '[unused] let unused', line)
             dead = compile('protocol-import', source.replace(line, unused+'\n'+line))
             optimized = run([optimizer, '--canonicalize', '--cse'], dead)
@@ -61,9 +63,9 @@ for group in ('bls12-381.g1', 'ristretto255.group'):
             op = next(op for fn in bad[3] for op in fn[4] if op[0] == 'op' and op[2] == name)
             op[3] = ['0']
             compile('protocol-import', json.dumps(bad), 'interactive-kernel-parameters')
-        compile('protocol-source', source.replace('bool::not(enabled)', 'bool::not(query)'), 'source-type-mismatch')
-        compile('protocol-source', source.replace('curve::get::<G>(batch, query)', 'curve::get::<G>(batch, enabled)'), 'source-type-mismatch')
-        compile('protocol-source', source.replace('bool::or(disabled, equation)', 'bool::or(disabled)'), 'source-call-arity')
+        compile('protocol-source', source.replace('zkc::core::not(enabled)', 'zkc::core::not(query)'), 'source-type-mismatch')
+        compile('protocol-source', source.replace('zkc::curve::get::<G>(batch, query)', 'zkc::curve::get::<G>(batch, enabled)'), 'source-type-mismatch')
+        compile('protocol-source', source.replace('zkc::core::or(disabled, equation)', 'zkc::core::or(disabled)'), 'source-call-arity')
         # Mutated real MLIR cannot substitute another registered operation at a binding.
         run([optimizer, '--verify-each'], logical.replace('"pir.not"', '"pir.or"'), 'binding-operation')
         other = 'ristretto255.group' if group == 'bls12-381.g1' else 'bls12-381.g1'

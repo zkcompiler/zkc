@@ -4,7 +4,7 @@ use crate::{Policy, Result, Value, ark, exhausted, refused};
 use crate::{resource::Resources, setups::Setups};
 use zkc_arkworks::VerifierKey;
 use zkc_runtime::interactive::{
-    AttributeRule, Frame, FrameKind, Invocation, Value as RuntimeValue,
+    AttributeRule, Frame, FrameKind, Invocation, Type, Value as RuntimeValue,
 };
 
 pub(super) struct Core {
@@ -29,14 +29,19 @@ impl Core {
         if let Some(t) = v.capability() {
             self.resources.validate(t, v.ty())?;
         }
-        if let Value::Variant(variant) = v {
-            variant.validate()?;
-            for payload in variant.payload() {
-                self.validate(payload)?;
-            }
-            return Ok(());
-        }
         let metadata = match v {
+            Value::Variant(variant) => {
+                variant.validate()?;
+                for payload in variant.payload() {
+                    self.validate(payload)?;
+                }
+                return Ok(());
+            }
+            Value::FixedVector(value) => {
+                value.validate()?;
+                self.policy.vector_width(value.elements().len(), 4)?;
+                None
+            }
             Value::Bn254Matrix(m) => {
                 m.policy(&self.policy)?;
                 None
@@ -158,7 +163,41 @@ impl Core {
             Value::Proof(p) => Some(p.metadata()),
             Value::ProverKey(k) => Some(k.metadata()),
             Value::VerifierKey(k) => Some(k.metadata()),
-            _ => None,
+            Value::OracleRoots(_, roots) => {
+                crate::oracle::validate_hash_count(Type::Commitments, roots.len(), &self.policy)?;
+                None
+            }
+            Value::OraclePath(_, path) => {
+                crate::oracle::validate_hash_count(Type::Proof, path.len(), &self.policy)?;
+                None
+            }
+            Value::OracleStates(_, states) => {
+                self.policy
+                    .vector_width(states.len(), std::mem::size_of::<crate::oracle::State>())?;
+                None
+            }
+            Value::ResourceUnit(..)
+            | Value::Bn254Field(..)
+            | Value::Bn254Round(..)
+            | Value::Bn254G1(..)
+            | Value::Bn254G2(..)
+            | Value::OracleRoot(..)
+            | Value::OracleState(..)
+            | Value::Index(..)
+            | Value::KoalaBearExt8Field(..)
+            | Value::KoalaBearExt8Round(..)
+            | Value::KoalaBearField(..)
+            | Value::KoalaBearRound(..)
+            | Value::RistrettoField(..)
+            | Value::RistrettoRound(..)
+            | Value::RistrettoGroup(..)
+            | Value::Field(..)
+            | Value::Round(..)
+            | Value::Bool(..)
+            | Value::Rng(..)
+            | Value::Nonce(..)
+            | Value::Transcript(..)
+            | Value::Curve(..) => None,
         };
         if let Some(m) = metadata {
             self.policy.table_len(m.arity())?;
@@ -255,12 +294,13 @@ impl Core {
         }
         self.resources.enter(frame, args)
     }
-    pub(super) fn invoke(&self, i: &Invocation<'_>, args: &[Value]) -> Result<String> {
-        self.resources.active(i.frame)?;
-        let signature = crate::external_kernels::signature(i.binding.declaration())
-            .or_else(|| crate::bindings::signature(i.binding.declaration()))
-            .ok_or_else(|| refused("kernel-binding"))?;
-        if i.binding.signature() != &signature
+    pub(super) fn invoke(
+        &self,
+        i: &Invocation<'_>,
+        args: &[Value],
+        signature: &zkc_runtime::interactive::BoundSignature,
+    ) -> Result<()> {
+        if i.binding.signature() != signature
             || i.binding.implementation() != i.kernel
             || args.len() != signature.inputs.len()
             || args
@@ -348,7 +388,7 @@ impl Core {
         for v in args {
             self.validate(v)?;
         }
-        Ok(i.binding.declaration().contract.clone())
+        Ok(())
     }
 
     pub(super) fn outputs(&self, i: &Invocation<'_>, values: Vec<Value>) -> Result<Vec<Value>> {

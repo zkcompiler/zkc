@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/TypeAdapters/Support.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringSet.h"
 #include <array>
@@ -16,7 +17,6 @@ namespace {
 struct ContractAssociation {
   StringLiteral key;
   StringLiteral value;
-  bool family;
 };
 
 #include "zkc/Dialect/ContractMappings.cpp.inc"
@@ -39,27 +39,18 @@ auto associationBegin(ArrayRef<ContractAssociation> rows, StringRef key) {
   });
 }
 
-const ContractAssociation *contractAssociation(StringRef key, bool family) {
+const ContractAssociation *contractAssociation(StringRef key) {
   ArrayRef<ContractAssociation> rows = contractAssociations;
   auto found = associationBegin(rows, key);
-  return found != rows.end() && found->key == key && found->family == family
-             ? found
-             : nullptr;
+  return found != rows.end() && found->key == key ? found : nullptr;
 }
 } // namespace
 
 StringRef boundOperationName(StringRef contract) {
   if (!installedContract(contract))
     return {};
-  if (const auto *exact = contractAssociation(contract, false))
+  if (const auto *exact = contractAssociation(contract))
     return exact->value;
-  // Families are explicit dotted prefixes, not guessed mnemonic rewrites.
-  // Each candidate uses the generated index; overlapping rules fail generation.
-  for (size_t dot = contract.rfind('.'); dot != StringRef::npos;
-       dot = contract.take_front(dot).rfind('.'))
-    if (const auto *family =
-            contractAssociation(contract.take_front(dot + 1), true))
-      return family->value;
   return {};
 }
 
@@ -69,69 +60,36 @@ bool operationSupportsContract(StringRef operationName, StringRef contract) {
   ArrayRef<ContractAssociation> rows = operationAssociations;
   for (auto found = associationBegin(rows, operationName);
        found != rows.end() && found->key == operationName; ++found)
-    if (found->family ? contract.starts_with(found->value)
-                      : contract == found->value)
+    if (contract == found->value)
       return true;
   return false;
 }
 
-namespace {
-// Decoding must not initialize a caller's context. Missing dialects are an
-// ordinary translation failure, not a fatal call into an unregistered type.
-template <typename T, typename... Args>
-Type loadedType(MLIRContext *ctx, Args &&...args) {
-  if (!ctx->getLoadedDialect(T::dialectName))
-    return {};
-  return T::get(ctx, std::forward<Args>(args)...);
-}
-} // namespace
 Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
-  Type result;
-  if (t.kind == "variant")
-    result = loadedType<VariantType>(ctx, "variant:" + t.identity);
-  else if (t.kind == "bool")
-    result = IntegerType::get(ctx, 1);
-  else if (t.kind == "index")
-    result = IntegerType::get(ctx, 64, IntegerType::Unsigned);
-  else if (t.kind == "indices")
-    result =
-        RankedTensorType::get({ShapedType::kDynamic},
-                              IntegerType::get(ctx, 64, IntegerType::Unsigned));
-  else if (t.kind == "field")
-    result = loadedType<FieldType>(ctx, t.identity);
-  else if (t.kind == "matrix")
-    result = loadedType<MatrixType>(ctx, t.identity);
-  else if (t.kind == "table")
-    result = loadedType<MultilinearType>(ctx, t.identity);
-  else if (t.kind == "point")
-    result = loadedType<PointType>(ctx, t.identity);
-  else if (t.kind == "round")
-    result = loadedType<QuadraticType>(ctx, t.identity);
-  else if (t.kind == "group")
-    result = loadedType<GroupType>(ctx, t.identity);
-  else if (t.kind == "vector" || t.kind == "groups") {
-    Type element = t.kind == "vector" ? loadedType<FieldType>(ctx, t.identity)
-                                      : loadedType<GroupType>(ctx, t.identity);
-    if (!element)
-      return {};
-    result = RankedTensorType::get({ShapedType::kDynamic}, element);
-  } else if (t.kind == "polynomial")
-    result = loadedType<UnivariateType>(ctx, t.identity);
-  else if (t.kind == "resource_unit" || t.kind == "rng" || t.kind == "nonce" ||
-           t.kind == "transcript")
-    result = loadedType<CapabilityType>(ctx, t.kind + ":" + t.identity);
-  else if (installedDomains().hasFact("VectorCommitment", {t.identity}))
-    result = loadedType<OracleObjectType>(ctx, t.identity, t.kind);
-  else
-    result = loadedType<ObjectType>(ctx, t.identity, t.kind);
+  if (!ctx)
+    return {};
+  auto checked = parseBoundType(t.spelling(), !t.representation.empty());
+  if (!checked) {
+    consumeError(checked.takeError());
+    return {};
+  }
+  if (!(*checked == t))
+    return {};
+  const auto *adapter = type_adapters::findAdapter(t.kind);
+  if (!adapter)
+    return {};
+  Type result = adapter->decode(ctx, t);
   if (!result)
     return {};
-  return t.representation.empty()
-             ? result
-             : loadedType<DataType>(ctx, result, t.representation);
+  if (t.representation.empty())
+    return result;
+  return type_adapters::loadedType<DataType>(ctx, result, t.representation);
 }
 
 Expected<BoundType> encodeBoundType(Type type, bool physical) {
+  if (!type)
+    return error("binding-type");
+  Type original = type;
   std::string rep;
   if (auto data = dyn_cast<DataType>(type)) {
     if (!physical)
@@ -140,55 +98,15 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
     type = data.getLogical();
   } else if (physical)
     return error("binding-logical-type-at-physical-stage");
-  BoundType result;
-  if (auto t = dyn_cast<VariantType>(type))
-    result = {"variant", t.getDescriptor().drop_front(8).str(), {}};
-  else if (type.isSignlessInteger(1))
-    result.kind = "bool";
-  else if (type.isUnsignedInteger(64))
-    result.kind = "index";
-  else if (auto t = dyn_cast<FieldType>(type))
-    result = {"field", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<MatrixType>(type))
-    result = {"matrix", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<MultilinearType>(type))
-    result = {"table", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<PointType>(type))
-    result = {"point", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<QuadraticType>(type))
-    result = {"round", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<GroupType>(type))
-    result = {"group", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<UnivariateType>(type))
-    result = {"polynomial", t.getDomain().str(), {}};
-  else if (auto t = dyn_cast<RankedTensorType>(type)) {
-    if (t.getRank() != 1 || !t.isDynamicDim(0) || t.getEncoding())
-      return error("binding-type");
-    if (t.getElementType().isUnsignedInteger(64))
-      result.kind = "indices";
-    else if (auto f = dyn_cast<FieldType>(t.getElementType()))
-      result = {"vector", f.getDomain().str(), {}};
-    else if (auto g = dyn_cast<GroupType>(t.getElementType()))
-      result = {"groups", g.getDomain().str(), {}};
-    else
-      return error("binding-type");
-  } else if (auto t = dyn_cast<OracleObjectType>(type))
-    result = {t.getKind().str(), t.getScheme().str(), {}};
-  else if (auto t = dyn_cast<ObjectType>(type))
-    result = {t.getKind().str(), t.getScheme().str(), {}};
-  else if (auto t = dyn_cast<CapabilityType>(type)) {
-    auto [kind, identity] = t.getKind().split(':');
-    result = {kind.str(), identity.str(), {}};
-  } else
-    return error("binding-type");
-  result.representation = std::move(rep);
-  auto checked = parseBoundType(result.spelling(), physical);
+  auto result = type_adapters::encodeLogicalType(type);
+  if (!result)
+    return result.takeError();
+  result->representation = std::move(rep);
+  auto checked = parseBoundType(result->spelling(), physical);
   if (!checked)
     return checked.takeError();
-  if (decodeBoundType(type.getContext(), *checked) !=
-      (physical ? Type(DataType::get(type.getContext(), type,
-                                     checked->representation))
-                : type))
+  // Compare the original carrier, including its exact physical wrapper.
+  if (decodeBoundType(original.getContext(), *checked) != original)
     return error("binding-type-identity");
   return checked;
 }
@@ -273,12 +191,7 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
       return diagnostics::emit(op->emitOpError(), "binding-parameters");
     values.push_back(value.getValue().str());
   }
-  if (auto e =
-          checkParameters(selected->application.contract, values,
-                          (selected->application.contract == "field.constant" ||
-                           selected->application.contract == "vector.constant")
-                              ? signature->outputs[0].identity
-                              : ""))
+  if (auto e = checkParameters(selected->application, values))
     return diagnostics::emit(op->emitOpError(), std::move(e));
   return success();
 }

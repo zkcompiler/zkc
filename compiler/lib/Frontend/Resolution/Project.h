@@ -26,7 +26,10 @@ struct Declaration {
     View,
     Configuration,
     Instance,
-    Entry
+    Entry,
+    LogicalType,
+    Operation,
+    Capability
   };
   library::QualifiedDecl identity;
   Kind kind;
@@ -34,6 +37,9 @@ struct Declaration {
   bool exported;
   std::string symbol, origin;
   std::optional<source::Span> location;
+  // Only installed declarations carry a logical contract. A source spelling
+  // or an alias cannot confer this authority.
+  std::string contract = {};
 };
 struct Owner {
   library::LibraryId identity;
@@ -71,6 +77,11 @@ struct Context {
   std::set<std::string> ambiguousOrigins;
   std::vector<uint32_t> order;
   std::vector<Reference> references;
+  // Modules explicitly imported or named in each source file. Installed
+  // operators use this scope; merely installing a package grants no lookup.
+  std::map<uint32_t, std::set<std::string>> installedModules;
+  // Ordinary source operator targets retain the resolver's visibility rules.
+  std::map<uint32_t, std::set<std::string>> sourceOperators;
   std::set<std::string> unavailable;
   explicit Context(ProjectInput input) : input(std::move(input)) {}
   const Declaration *lookup(llvm::StringRef) const;
@@ -81,6 +92,9 @@ struct Context {
   library::QualifiedDecl qualify(llvm::StringRef name,
                                  llvm::ArrayRef<std::string> module = {}) const;
   std::string origin(const library::QualifiedDecl &) const;
+  bool operationAvailable(const source::Node &, llvm::StringRef contract) const;
+  bool sourceOperatorAvailable(const source::Node &,
+                               llvm::StringRef symbol) const;
 };
 struct Result {
   syntax::Content content;

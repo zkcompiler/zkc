@@ -218,7 +218,8 @@ fn public_codecs_are_exact_and_nominally_typed() {
         b.decode_typed_value(
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
-            ),
+            )
+            .unwrap(),
             &enormous
         )
         .unwrap_err()
@@ -233,7 +234,8 @@ fn public_codecs_are_exact_and_nominally_typed() {
         b.decode_typed_value(
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
-            ),
+            )
+            .unwrap(),
             &invalid
         )
         .is_err()
@@ -244,7 +246,8 @@ fn public_codecs_are_exact_and_nominally_typed() {
         b.decode_typed_value(
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
-            ),
+            )
+            .unwrap(),
             &nonexistent
         )
         .unwrap_err()
@@ -414,7 +417,8 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
             .decode_typed_value(
                 zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("nonce:bls12-381.fr").unwrap()
-                ),
+                )
+                .unwrap(),
                 &[]
             )
             .unwrap_err()

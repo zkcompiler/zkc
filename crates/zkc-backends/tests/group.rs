@@ -107,7 +107,8 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
             .decode_typed_value(
                 zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("group:bls12-381.g1").unwrap(),
-                ),
+                )
+                .unwrap(),
                 &p.encode_value(&out[0]).unwrap(),
             )
             .unwrap(),
@@ -115,7 +116,8 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
             .decode_typed_value(
                 zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("group:bls12-381.g1").unwrap(),
-                ),
+                )
+                .unwrap(),
                 &p.encode_value(&out[1]).unwrap(),
             )
             .unwrap(),
@@ -124,7 +126,8 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
             .decode_typed_value(
                 zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
-                ),
+                )
+                .unwrap(),
                 &p.encode_value(&out[2]).unwrap(),
             )
             .unwrap(),

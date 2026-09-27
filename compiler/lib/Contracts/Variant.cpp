@@ -134,10 +134,10 @@ std::optional<json::Value> unpack(StringRef spelling) {
     return std::nullopt;
   return std::move(values.back());
 }
-std::optional<VariantDescriptor> descriptor(const json::Value &tree,
-                                            unsigned depth) {
+std::optional<VariantDescriptor>
+descriptor(const json::Value &tree, unsigned depth, TypeParseBudget &budget) {
   auto *root = tree.getAsArray();
-  if (depth >= 8 || !root || root->size() != 2)
+  if (depth >= 8 || !budget.consume() || !root || root->size() != 2)
     return std::nullopt;
   const auto &nominal = (*root)[0];
   if (auto s = nominal.getAsString(); s && s->empty())
@@ -161,14 +161,14 @@ std::optional<VariantDescriptor> descriptor(const json::Value &tree,
       if (auto leaf = entry.getAsString()) {
         if (leaf->contains('@') || leaf->starts_with("variant:"))
           return std::nullopt;
-        auto parsed = parseBoundType(*leaf, false);
+        auto parsed = parseBoundType(*leaf, false, depth + 1, &budget);
         if (!parsed) {
           consumeError(parsed.takeError());
           return std::nullopt;
         }
         alternative.payload.push_back(leaf->str());
       } else {
-        if (!descriptor(entry, depth + 1))
+        if (!descriptor(entry, depth + 1, budget))
           return std::nullopt;
         auto encoded = pack(entry);
         if (!encoded)
@@ -181,9 +181,15 @@ std::optional<VariantDescriptor> descriptor(const json::Value &tree,
   return result;
 }
 } // namespace
-std::optional<VariantDescriptor> decodeVariant(std::string_view type) {
+std::optional<VariantDescriptor>
+decodeVariant(std::string_view type, unsigned depth, TypeParseBudget *budget) {
+  TypeParseBudget localBudget;
+  if (!budget)
+    budget = &localBudget;
+  if (depth >= 8)
+    return std::nullopt;
   auto tree = unpack(StringRef(type.data(), type.size()));
-  return tree ? descriptor(*tree, 0) : std::nullopt;
+  return tree ? descriptor(*tree, depth, *budget) : std::nullopt;
 }
 std::optional<std::string> encodeVariant(const VariantDescriptor &d) {
   if (d.alternatives.size() > 32)

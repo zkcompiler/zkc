@@ -773,6 +773,262 @@ impl Value {
     }
 }
 
+/// Independent native port facts, also used for exact implementation assembly.
+pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::{field, poly};
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        field::operation("field.constant", &[], &[Field], AttributeRule::FieldDecimal),
+        field::operation("field.add", &[Field, Field], &[Field], AttributeRule::None),
+        field::operation("field.mul", &[Field, Field], &[Field], AttributeRule::None),
+        field::operation("field.equal", &[Field, Field], &[Bool], AttributeRule::None),
+        poly::operation("poly.boundary", &[Round], &[Field], AttributeRule::None),
+        poly::operation(
+            "poly.round_evaluate",
+            &[Round, Field],
+            &[Field],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.get",
+            &[Vector, Index],
+            &[Field],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.slice",
+            &[Vector, Index, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation("vector.length", &[Vector], &[Index], AttributeRule::None),
+        field::operation(
+            "vector.rotate",
+            &[Vector, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.interleave",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.prefix_product",
+            &[Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.prefix_sum",
+            &[Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation("vector.inverse", &[Vector], &[Vector], AttributeRule::None),
+        field::embedding("vector.embed", &[Vector], &[Vector], AttributeRule::None),
+        field::operation(
+            "vector.fill",
+            &[Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.geometric",
+            &[Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation("field.from_index", &[Index], &[Field], AttributeRule::None),
+        poly::operation(
+            "poly.coefficient_count",
+            &[Polynomial],
+            &[Index],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.divide_opening",
+            &[Polynomial, Field, Field],
+            &[Polynomial],
+            AttributeRule::None,
+        ),
+        field::operation("field.sub", &[Field, Field], &[Field], AttributeRule::None),
+        field::operation("field.neg", &[Field], &[Field], AttributeRule::None),
+        field::operation("field.inverse", &[Field], &[Field], AttributeRule::None),
+        field::operation(
+            "matrix.mul_vector",
+            &[Matrix, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "matrix.transpose_mul_vector",
+            &[Matrix, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "matrix.bilinear",
+            &[Matrix, Vector, Vector],
+            &[Field],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "matrix.shape_check",
+            &[Matrix],
+            &[Bool],
+            AttributeRule::MatrixDimensions,
+        ),
+        field::operation(
+            "matrix.identity_check",
+            &[Matrix],
+            &[Bool],
+            AttributeRule::MatrixIdentity,
+        ),
+        field::operation(
+            "vector.constant",
+            &[],
+            &[Vector],
+            AttributeRule::FieldDecimals,
+        ),
+        field::operation(
+            "vector.scatter_sum",
+            &[Vector],
+            &[Vector],
+            AttributeRule::ScatterShape,
+        ),
+        field::operation("vector.empty", &[], &[Vector], AttributeRule::None),
+        field::operation(
+            "vector.append",
+            &[Vector, Field],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.splat",
+            &[Field],
+            &[Vector],
+            AttributeRule::NaturalIndex,
+        ),
+        field::operation(
+            "vector.powers",
+            &[Field],
+            &[Vector],
+            AttributeRule::NaturalIndex,
+        ),
+        field::operation(
+            "vector.add",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.sub",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.mul",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.scale",
+            &[Vector, Field],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation("vector.sum", &[Vector], &[Field], AttributeRule::None),
+        field::operation(
+            "vector.dot",
+            &[Vector, Vector],
+            &[Field],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.split",
+            &[Vector],
+            &[Vector, Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.concat",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.at",
+            &[Vector],
+            &[Field],
+            AttributeRule::NaturalIndex,
+        ),
+        field::operation(
+            "vector.length_check",
+            &[Vector],
+            &[Bool],
+            AttributeRule::NaturalIndex,
+        ),
+        field::operation(
+            "vector.gather",
+            &[Vector],
+            &[Vector],
+            AttributeRule::NaturalIndices,
+        ),
+        field::operation(
+            "vector.kronecker",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation(
+            "vector.matvec",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::MatrixShape,
+        ),
+        poly::operation(
+            "poly.from_coefficients",
+            &[Vector],
+            &[Polynomial],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.coefficients",
+            &[Polynomial],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.degree_check",
+            &[Polynomial],
+            &[Bool],
+            AttributeRule::NaturalIndex,
+        ),
+        poly::operation(
+            "poly.univariate_evaluate",
+            &[Polynomial, Field],
+            &[Field],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.univariate_boundary",
+            &[Polynomial],
+            &[Field],
+            AttributeRule::None,
+        ),
+    ]
+};
+pub(crate) const EMBEDDINGS: &[crate::bindings::Contract] = &[crate::bindings::field::embedding(
+    "field.embed",
+    &[zkc_runtime::interactive::Type::Field],
+    &[zkc_runtime::interactive::Type::Field],
+    zkc_runtime::interactive::AttributeRule::None,
+)];
+
 #[cfg(test)]
 mod batch_inversion_tests {
     use super::*;

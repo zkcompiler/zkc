@@ -78,10 +78,11 @@ with case("quoted foreign private symbols cannot be called"), project() as folde
             refuses="source-name-unresolved")
 
 with case("a quoted private unchecked constructor cannot bypass its wrapper"), project() as folder:
-    library = f'''module {{ {identity("bits")};
+    library = f'''module {{
+  use zkc::core; {identity("bits")};
       pub checked struct Token(ok: bool) constructors(MintRaw);
       fn MintRaw(ok: bool) -> Token {{ return Token(ok = ok); }}
-      pub fn Mint(ok: bool) -> Token {{ control::require(ok); return MintRaw(ok); }}
+      pub fn Mint(ok: bool) -> Token {{ zkc::core::require(ok); return MintRaw(ok); }}
     }}'''
     app = f'''module {{ dependency bits = {identity("bits")}; use bits::{{Token, Mint}};
       fn Main(ok: bool) -> Token {{ return Mint(ok); }}
@@ -129,26 +130,26 @@ with case("foreign raw protocol names cannot bind application protocols"), proje
         {"bits/lib.pir": library}, refuses="source-name-unresolved")
 
 with case("quoted nominal types do not import private declarations"), project() as folder:
-    library = BITS.replace("fn Raw", "struct Hidden { bit: bool }\nfn Raw")
+    library = BITS.replace("module {", "module { use zkc::core;", 1).replace("fn Raw", "struct Hidden { bit: bool }\nfn Raw")
     report = run(folder, APP, {"bits/lib.pir": library}, mode="protocol-analyze")
     symbol = next(d["symbol"] for d in report["resolved_declarations"] if d["display_name"] == "Hidden")
     run(folder, APP.replace("fn Main(x: bool) -> bool", f'fn Main(x: "{symbol}") -> bool'),
         {"bits/lib.pir": library}, refuses="source-name-unresolved")
 
-with case("installed operation modules refuse ambiguity before renaming"), project() as folder:
-    run(folder, "module { mod field; fn F(x: koala-bear::Element) -> koala-bear::Element { return field::add(x, x); } }",
+with case("installed module aliases reject duplicate authored names"), project() as folder:
+    run(folder, "module { use zkc::algebra as field; mod field; fn F(x: koala-bear::Element) -> koala-bear::Element { return zkc::algebra::add(x, x); } }",
         files={"field.pir": "module { pub fn add(x: koala-bear::Element, y: koala-bear::Element) -> koala-bear::Element { return x; } }"},
-        refuses="library-source-call-ambiguity")
+        refuses="source-name-duplicate")
 
-with case("installed operation dependency aliases refuse ambiguity"), project() as folder:
-    run(folder, APP.replace("bits =", "bool =").replace("bits::Keep(x: x)", "bool::not(x)"),
-        {"bits/lib.pir": BITS}, refuses="library-source-call-ambiguity")
+with case("installed module aliases reject duplicate dependency names"), project() as folder:
+    run(folder, APP.replace("module {", "module { use zkc::core as bits;", 1),
+        {"bits/lib.pir": BITS}, refuses="source-name-duplicate")
 
 with case("explicit installed paths and exact dotted helper names retain their target kinds"), project() as folder:
-    library = BITS.replace("fn Raw", 'fn "bool.not"(x: bool) -> bool { return x; }\nfn Raw').replace("return Raw(x)", "return bool::not(x)")
+    library = BITS.replace("fn Raw", 'fn "bool.not"(x: bool) -> bool { return x; }\nfn Raw').replace("return Raw(x)", "return zkc::core::not(x)")
     primitive = run(folder, APP, {"bits/lib.pir": library})
     assert any(binding[1] == "bool.not" for binding in primitive[1]), primitive
-    exact = run(folder, APP, {"bits/lib.pir": library.replace("bool::not(x)", '\"bool.not\"(x)')})
+    exact = run(folder, APP, {"bits/lib.pir": library.replace("zkc::core::not(x)", '\"bool.not\"(x)')})
     assert not any(binding[1] == "bool.not" for binding in exact[1]), exact
 
 with case("opaque installed dotted roots survive similarly named modules"), project() as folder:
@@ -158,7 +159,8 @@ with case("opaque installed dotted roots survive similarly named modules"), proj
         mode="protocol-admit")
 
 with case("application type names do not capture installed vocabulary in libraries"), project() as folder:
-    library = f'''module {{ {identity("bits")};
+    library = f'''module {{
+  use zkc::algebra::{{Vector}}; {identity("bits")};
       pub fn Keep(x: Vector<koala-bear::Element>) -> Vector<koala-bear::Element> {{ return x; }}
     }}'''
     app = f'''module {{ dependency bits = {identity("bits")}; struct Vector {{ bit: bool }}
@@ -173,11 +175,11 @@ for prefix, files in (
     with case(f"{prefix} profiles refuse explicitly"), project() as folder:
         run(folder, "module { mod child; }" if prefix == "child" else "module {}",
             libraries=files if prefix == "imported" else {},
-            files=files if prefix == "child" else {}, refuses="source-profile-owner")
+            files=files if prefix == "child" else {}, refuses="source-syntax")
 
-with case("application root profile remains allowed"), project() as folder:
+with case("application root profiles refuse explicitly"), project() as folder:
     run(folder, 'module "arkworks.bls12-381/1" { fn Id(x: field) -> field { return x; } }',
-        mode="protocol-admit")
+        mode="protocol-admit", refuses="source-syntax")
 
 with case("explicit anonymous owner claims refuse but synthetic applications work"), project() as folder:
     run(folder, "module { fn Id(x: bool) -> bool { return x; } }", mode="protocol-admit")
@@ -264,7 +266,8 @@ with case("relation helpers require an accessible view target"), project() as fo
     for helper in (view + "_Products", json.dumps(view + "_Products"), view + "_op_0"):
         run(folder, depending(f"module {{ fn Main(x: bool) -> bool {{ return {helper}(x); }} }}"),
             {"bits/lib.pir": library}, files, refuses="source-name-unresolved")
-    app = f'''module {{ dependency bits = {identity("bits")}; use bits::Core as Named;
+    app = f'''module {{
+  use zkc::algebra::{{Vector}}; dependency bits = {identity("bits")}; use bits::Core as Named;
       fn Main(statement: Vector<bls12-381.fr::Element>, witness: Vector<bls12-381.fr::Element>)
           -> Vector<bls12-381.fr::Element> {{ return Named_Assemble(statement, witness); }}
     }}'''
@@ -279,8 +282,9 @@ with case("explicit capture names cannot resolve through application globals"), 
 
 with case("operation attribute strings remain literal data"), project() as folder:
     run(folder, '''module {
+  use zkc::algebra;
       fn Main() -> koala-bear::Element {
-        let value: koala-bear::Element = field::constant() attributes ("7");
+        let value: koala-bear::Element = zkc::algebra::constant() attributes ("7");
         return value;
       }
     }''', mode="protocol-admit")
@@ -300,14 +304,16 @@ with case("exact quoted authored helpers and protocol names remain resolvable"),
     }''', mode="protocol-admit")
 
 with case("opaque bare operation attributes are not identifier references"), project() as folder:
-    source = '''module {
+    source = '''carrier module {
       fn Observe<T: domain Transcript, E: domain Codec>(s: Transcript<T>, x: bool)
           -> Transcript<T> requires (Transcript(T), Encodes.bool(E)) {
         return transcript::observe::bool::<T,E>(s,x) attributes(N,message,schema,P,V);
       }
     }'''
     before = run(folder, source)
-    assert before == run(folder, source.replace("module {", "module { const N: index=8;", 1))
+    assert before == run(folder, source.replace("attributes(N,", 'attributes("N",'))
+    run(folder, source.replace("module {", "module { const N: index=8;", 1),
+        refuses="source-carrier-authoring")
 
 with case("installed contract binding names preserve owner-specific binding selection"), project() as folder:
     library = f'''module {{ {identity("bits")};
@@ -370,10 +376,11 @@ with case("anonymous origin qualifiers stay stable after captured comment edits"
     assert origin(before)["identity"] != origin(after)["identity"]
 
 with case("closed checked-record leaf functions cannot be called to forge a token"), project() as folder:
-    library = f'''module {{ {identity("bits")};
+    library = f'''module {{
+  use zkc::core; {identity("bits")};
       pub checked struct Token(ok: bool) constructors(MintRaw);
       fn MintRaw(ok: bool) -> Token {{ return Token(ok = ok); }}
-      pub fn Mint(ok: bool) -> Token {{ control::require(ok); return MintRaw(ok); }}
+      pub fn Mint(ok: bool) -> Token {{ zkc::core::require(ok); return MintRaw(ok); }}
       pub interface I {{ local accept(token: Token) -> bool; }}
       component C: I {{ local accept(token: Token) -> bool {{ return token.ok; }} }}
       fn Use<X: I>(token: Token) -> bool {{ return X::accept(token); }}
@@ -450,7 +457,7 @@ for category in ("callee", "value"):
         symbol = next(d["symbol"] for d in report["resolved_declarations"] if d["display_name"] == "Keep")
         if category == "callee":
             library = BITS.replace("fn Raw", "pub fn Bounce(x: bool) -> bool { return Keep::extra(x); }\nfn Raw")
-            forged = f'fn "{symbol}.extra"(x: bool) -> bool {{ return bool::not(x); }}'
+            forged = f'fn "{symbol}.extra"(x: bool) -> bool {{ return zkc::core::not(x); }}'
         else:
             library = BITS.replace("fn Raw", "pub fn Count() -> index { return Keep.extra; }\nfn Raw")
             forged = f"const {symbol}.extra: index = 7;"
@@ -480,14 +487,18 @@ with case("native entry declarations do not consume the draw selector cap"), pro
     run(folder, "module { protocol P { roles(A); return (); } "
         "instance run: P { roles(A=A); } " + entries + " }", mode="protocol-admit")
 
-DRAW_LIBRARY = f'''module {{ {identity("draws")};
+DRAW_LIBRARY = f'''module {{
+  use zkc::random::{{Rng}};
+  use zkc::random; {identity("draws")};
   pub fn Keep(coins: Rng<"bls12-381.fr">)
       -> (bls12-381.fr::Element, Rng<"bls12-381.fr">) {{
-    [draw] let (x, after) = random::draw(coins); return (x, after);
+    [draw] let (x, after) = zkc::random::draw(coins); return (x, after);
   }}
 }}'''
-DRAW_APP = f'''module {{ dependency a = {identity("draws")};
-  fn Accept(x: bls12-381.fr::Element) -> bool {{ return field::equal(x, x); }}
+DRAW_APP = f'''module {{
+  use zkc::algebra;
+  use zkc::random::{{Rng}}; dependency a = {identity("draws")};
+  fn Accept(x: bls12-381.fr::Element) -> bool {{ return zkc::algebra::equal(x, x); }}
   protocol Round {{ roles(P,V); inputs(V coins: Rng<"bls12-381.fr">); outputs(V bool);
     local [sample] V: let (x, after) = a::Keep(coins);
     local [accept] V: let ok = Accept(x); return ok;

@@ -15,6 +15,11 @@
 
 #include "zkc/Interfaces/LinearContraction.h"
 #include "zkc/Interfaces/SourceOpInterface.h.inc"
+namespace zkc::detail {
+// Shared logical kernel policy used by ODS-generated standard verifiers.
+::llvm::LogicalResult verifyLogicalKernel(::mlir::Operation *operation);
+} // namespace zkc::detail
+
 // Cross-dialect parent traits require the shared forward declarations.
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Operations.h.inc"

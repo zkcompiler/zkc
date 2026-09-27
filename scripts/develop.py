@@ -17,6 +17,7 @@ import sys
 from workspace import ROOT, clear_report_directory, compiler_directory, native_configuration, reports_root, validate_environment
 from processes import Interrupted, run as run_process
 from reporting import new_directory
+from install_domain import install_domain
 
 
 def run(arguments, *, cwd=ROOT, stdout=None):
@@ -41,17 +42,25 @@ def fetch_lean(deps):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=["setup", "configure", "compiler", "rust", "lean",
-                                             "fetch-lean", "lean-integration", "lean-fresh", "install", "bench", "clean-reports"])
+                                             "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain", "bench", "clean-reports"])
     parser.add_argument("--profile", default="release")
     parser.add_argument("--deps", choices=["main", "arklib"], default="main")
     parser.add_argument("--output")
+    parser.add_argument("--base-build", help="install-domain: explicit base CMake build directory")
+    parser.add_argument("--domain-build", help="install-domain: explicit envelope CMake build directory")
+    parser.add_argument("--skip-build", action="store_true",
+                        help="install-domain: install already built, cache-checked directories without rebuilding")
+    parser.add_argument("--runtime", help="install-domain: zkc executable for independent execution checks")
+    parser.add_argument("--checker", help="install-domain: Lean interactive-protocol executable")
     args = parser.parse_args()
+    if args.operation != "install-domain" and (args.base_build or args.domain_build or args.skip_build or args.runtime or args.checker):
+        parser.error("--base-build, --domain-build, --skip-build, --runtime and --checker require install-domain")
     validate_environment()
     # Native Cargo paths keep Cargo's cwd-relative meaning even though the
     # commands below consistently run at the repository root.
     if os.environ.get("CARGO_TARGET_DIR"):
         os.environ["CARGO_TARGET_DIR"] = str(Path(os.environ["CARGO_TARGET_DIR"]).resolve())
-    if args.operation not in {"setup", "fetch-lean", "lean-integration", "lean-fresh", "install"}:
+    if args.operation not in {"setup", "fetch-lean", "lean-integration", "lean-fresh", "install", "install-domain"}:
         execute(args)
         return
     # Each operation owns a new root; children that require an absent target
@@ -101,6 +110,8 @@ def execute(args):
         run(["lake", "build"], cwd=ROOT / "formal")
     elif args.operation == "rust":
         run(["cargo", "build", "--release", "--locked", "--workspace", "--bins", "--examples"])
+    elif args.operation == "install-domain":
+        install_domain(args, run)
     elif args.operation == "install":
         selected = native_configuration()
         prefix = Path(args.output).resolve() if args.output else reports_root() / "installed"

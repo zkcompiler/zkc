@@ -220,9 +220,7 @@ impl VariantDescriptor {
             for arm in &self.alternatives {
                 bytes = bytes.checked_add(arm.payload.len().checked_mul(256)?)?;
                 for ty in &arm.payload {
-                    if let Some(nested) = ty.variant_descriptor() {
-                        bytes = bytes.checked_add(nested.retained_bytes())?;
-                    }
+                    bytes = bytes.checked_add(ty.descriptor_bytes())?;
                 }
             }
             Some(bytes)
@@ -241,12 +239,26 @@ impl VariantDescriptor {
             .flat_map(|a| &a.payload)
             .all(LogicalType::is_discardable)
     }
-    pub(super) fn parse(spelling: &str, depth: usize) -> Result<Arc<Self>> {
+    pub(super) fn parse(
+        spelling: &str,
+        depth: usize,
+        budget: &mut super::structural::ParseBudget,
+    ) -> Result<Arc<Self>> {
+        // Refuse a ninth constructor before expanding its descriptor graph.
+        if depth >= super::TYPE_DEPTH_LIMIT {
+            return Err(invalid("limit"));
+        }
         let json = unpack(spelling)?;
-        Self::from_tree(&json, spelling, depth)
+        Self::from_tree(&json, spelling, depth, budget)
     }
-    fn from_tree(json: &Value, spelling: &str, depth: usize) -> Result<Arc<Self>> {
-        if depth >= 8 {
+    fn from_tree(
+        json: &Value,
+        spelling: &str,
+        depth: usize,
+        budget: &mut super::structural::ParseBudget,
+    ) -> Result<Arc<Self>> {
+        budget.node(depth)?;
+        if depth >= super::TYPE_DEPTH_LIMIT {
             return Err(invalid("limit"));
         }
         let root = json
@@ -284,10 +296,10 @@ impl VariantDescriptor {
                     if leaf.starts_with("variant:") || leaf.contains('@') {
                         return Err(invalid("payload"));
                     }
-                    LogicalType::parse_nested(leaf, depth + 1)?
+                    LogicalType::parse_nested(leaf, depth + 1, budget)?
                 } else {
                     let spelling = pack(ty)?;
-                    LogicalType::variant(Self::from_tree(ty, &spelling, depth + 1)?)
+                    LogicalType::variant(Self::from_tree(ty, &spelling, depth + 1, budget)?)
                 };
                 payload.push(ty);
             }

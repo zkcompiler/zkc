@@ -79,7 +79,7 @@ int main() {
       DomainCatalog::create({{f, "Field", {}, {"Field"}, modulus},
                              {g, "Group", {{"Scalar", f}}, {"ScalarAction"}},
                              {raw, "Group", {{"Scalar", f}}, {"ScalarAction"}}},
-                            {},
+                            {{"group", g}, {"group", raw}}, {},
                             {{r, "group", g, false, {}},
                              {"dalek.edwards-raw/1", "group", raw, false, {}}});
   check(bool(catalogue), "catalogue admits");
@@ -96,18 +96,18 @@ int main() {
           "representation.unsupported-scalar-module");
   auto missing = DomainCatalog::create(
       {{f, "Field", {}, {"Field"}, modulus}, {g, "Group", {{"Scalar", f}}, {}}},
-      {}, {{r, "group", g, false, {}}});
+      {{"group", g}}, {}, {{r, "group", g, false, {}}});
   check(bool(missing), "missing law catalogue");
   rejects(EdwardsScalarModule::admit(*missing, g, r, f),
           "representation.missing-module-domain");
   auto wrongModulus =
       DomainCatalog::create({{f, "Field", {}, {"Field"}, "5"},
                              {g, "Group", {{"Scalar", f}}, {"ScalarAction"}}},
-                            {}, {{r, "group", g, false, {}}});
+                            {{"group", g}}, {}, {{r, "group", g, false, {}}});
   check(bool(wrongModulus), "wrong modulus catalogue");
   rejects(EdwardsScalarModule::admit(*wrongModulus, g, r, f),
           "representation.missing-module-domain");
-  auto empty = DomainCatalog::create({}, {}, {});
+  auto empty = DomainCatalog::create({}, {}, {}, {});
   check(bool(empty), "empty catalogue");
   rejects(EdwardsScalarModule::admit(*empty, g, r, f),
           "representation.missing-module-domain");

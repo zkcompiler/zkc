@@ -1,8 +1,9 @@
 // Independent concrete specification of the externally visible return/stop.
 // Resource observations belong to the selected implementations, not this model.
 module {
+  use zkc::core;
   fn Expected(ready: bool, ok: bool) -> bool {
-    control::require(ok);
+    zkc::core::require(ok);
     return ready;
   }
   protocol Direct {

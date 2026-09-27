@@ -70,6 +70,7 @@ relation = [
 ]
 asset.write_text(json.dumps(relation))
 spelling = f'''module {{
+  use zkc::algebra::{{Vector}};
       relation Circuit = r1cs("multiply.json");
       derive Rows = multilinear(Circuit, specialized);
       fn Assemble(s: Vector<"{FIELD}"::Element>, w: Vector<"{FIELD}"::Element>) -> (Vector<"{FIELD}"::Element>) {{
@@ -220,6 +221,7 @@ air = {
 }
 (directory / "trace.json").write_text(json.dumps(air))
 source.write_text(f'''module {{
+  use zkc::algebra::{{Vector}};
       relation Trace = air("trace.json");
       derive Steps = arithmetic(Trace, specialized, 3);
       protocol Evaluate {{
@@ -272,6 +274,7 @@ embedded.mkdir()
 (embedded / "multiply.json").write_text(json.dumps(relation))
 mixed = embedded / "mixed.pir"
 mixed.write_text(f'''module {{
+  use zkc::algebra::{{Vector}};
   library(namespace="test", name="mixed", version="1", resolution="exact");
   relation Circuit = r1cs("multiply.json");
   derive Rows = multilinear(Circuit, specialized);

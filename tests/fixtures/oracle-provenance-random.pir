@@ -1,9 +1,27 @@
 module {
+  use zkc::oracle::{
+    VectorCommitment
+  };
+  use zkc::algebra::{
+    Vector
+  };
+  use zkc::core;
+  use zkc::oracle;
+  use zkc::pcs::{
+    Commitment,
+    OpeningState,
+    Proof
+  };
+  use zkc::random::{
+    IndexRandomness,
+    Rng
+  };
+  use zkc::random;
   fn Commit<C: domain Commitment>(
     values: Vector<C::ValueField::Element>,
     width: index
   ) -> (Commitment<C>, OpeningState<C>) requires (VectorCommitment(C)) {
-    [__site_0] let (root, state) = oracle::commit::<C>(values, width);
+    [__site_0] let (root, state) = zkc::oracle::commit::<C>(values, width);
     return (root, state);
   }
 
@@ -11,7 +29,7 @@ module {
     state: OpeningState<C>,
     query: index
   ) -> (Vector<C::ValueField::Element>, Proof<C>) requires (VectorCommitment(C)) {
-    [__site_0] let (row, path) = oracle::open::<C>(state, query);
+    [__site_0] let (row, path) = zkc::oracle::open::<C>(state, query);
     return (row, path);
   }
 
@@ -23,15 +41,15 @@ module {
     row: Vector<C::ValueField::Element>,
     path: Proof<C>
   ) -> bool requires (VectorCommitment(C)) {
-    [__site_0] let ok = oracle::check::<C>(root, width, height, query, row, path);
-    [__site_1] control::require(ok);
+    [__site_0] let ok = zkc::oracle::check::<C>(root, width, height, query, row, path);
+    [__site_1] zkc::core::require(ok);
     return ok;
   }
 
   fn Draw<E: domain Field>(coins: Rng<E>, bound: index) -> (index, Rng<E>) requires (
     IndexRandomness(E)
   ) {
-    [draw] let (value, after) = random::index::<E>(coins, bound);
+    [draw] let (value, after) = zkc::random::index::<E>(coins, bound);
     return (value, after);
   }
 

@@ -8,8 +8,8 @@ the source-to-participant path and its assurance boundaries. The
 [finite table path](table-execution.md) remains a separate tested implementation.
 
 Under the [carrier decision](carrier-consolidation.md) execution uses explicit
-`/1` carriers with explicit operation bindings, and BLS profile text is
-normalized at the frontend.
+`/1` carriers with explicit operation bindings. The frontend resolves installed
+source imports and explicit domains before emitting that carrier.
 
 ## Source, participants and physical execution
 

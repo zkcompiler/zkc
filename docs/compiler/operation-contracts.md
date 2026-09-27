@@ -6,6 +6,15 @@ meanings remain with the [domain specifications](../spec/README.md), and a
 physical binding still selects an implementation of a contract rather than
 changing its meaning.
 
+Neutral typed records in
+[`Contracts/Declarations`](../../compiler/include/zkc/Contracts/Declarations)
+generate the immutable descriptor inventory. They own logical signatures,
+requirements, parameter-schema selection, type permissions and installed facets.
+Curated source exports refer to those same contracts and add public names and
+argument labels; IR adapters add their representation mapping. Semantic validators,
+implementations and independent Rust/Lean interpretations retain their own work.
+See the [extension procedure](../development/extensions.md#logical-contracts-and-source-exports).
+
 Polynomial interpretation conversions belong to `poly`: `point_to_vector`,
 `point_from_vector`, `table_to_vector` and `table_from_vector`. The logical
 catalog keys `vector.from_point`, `vector.to_point`, `vector.from_table` and
@@ -21,6 +30,7 @@ polynomial-domain obligations, even when a backend shares the sequence storage.
 | Sampling | Provider kind, sample domain, provider input, sample/successor outputs, optional bound input | Oracle dependency analysis; construction resource and availability analysis |
 | Derived counterpart | Registered transcript operation with matching sample and parameter ports, if construction supports it | Public-coin construction and emission |
 | Observation | Provider input, payload input and provider successor | Exact transcript-chain absorption and historical dependency analysis |
+| History transition | Explicit state input and successor output | Historical dependency and motion restrictions, including external schedule adapters |
 | Public replay | An explicitly installed construction recipe | Availability analysis and participant mirroring |
 | Acceptance guard | An operation whose completing execution requires its Boolean input | Execution view and oracle acceptance analysis |
 | Conjunction | An output whose truth entails its Boolean inputs | Acceptance-sink closure |
@@ -57,9 +67,12 @@ having a public-challenge construction counterpart.
 
 ## Custody is independent of transport
 
-`Contracts/TypeProperties.h` classifies admitted logical kinds as public-codec
-values, private immutable custody, affine resources or unknown. A public-codec
-classification describes representability, not permission to disclose a secret.
+`Contracts/TypeProperties.h` reads the neutral type owners' copy/drop/custody
+permissions and classifies admitted logical kinds as public-codec values,
+private immutable custody, affine resources or unknown. Checked source
+environments use these permissions rather than assuming every type is droppable.
+A public-codec classification describes representability, not permission to
+disclose a secret.
 
 - Serialization requires a registered public codec kind and all ordinary
   domain, representation and ownership checks.
@@ -69,6 +82,10 @@ classification describes representability, not permission to disclose a secret.
   storage release does not discharge them.
 - Unknown abstract kinds acquire no positive duplication, discard or transport
   permission. Absence of `affine` is not a proof of any of those permissions.
+
+History and copyability are independent: an external schedule snapshot may be
+copyable while its operation still records a history transition. Neither fact
+licenses moving the operation across its history dependencies.
 
 Construction can preserve a whole immutable local computation without making
 its private inputs public or mirroring it to another participant. Operations

@@ -136,11 +136,9 @@ int main() {
     diagnosticIs(result, "source-library-identity");
     require(!result.recoverable, "multiple root identities are not loadable");
   });
-  cases.run("module profile classification", [] {
+  cases.run("retired module profile", [] {
     auto result = inspect("module example {}");
-    require(result.complete && result.form == SourceForm::Module &&
-                result.profile == "example",
-            "profile spelling is retained without semantic profile lookup");
+    require(!result.complete, "module profiles are not source declarations");
   });
   cases.run("carrier classification", [] {
     auto result = inspect("carrier module {}");

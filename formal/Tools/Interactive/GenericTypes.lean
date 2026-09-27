@@ -16,46 +16,116 @@ def termName : Term → String
   | .project base member => termName base ++ "." ++ member
   | .apply name arguments => reprStr (Term.apply name arguments)
 
-def termSort (parameters : Parameters) : Term → Result StaticSort
-  | .root name => lookup name parameters
-  | .project base member => do associatedSort (← termSort parameters base) member
-  -- Static components are linked by the frontend. The portable generic-domain
-  -- profile has no application constructor and must not invent its sort.
-  | .apply _ _ => throw "generic-application"
+def parameterSort : Logical.ParameterKind → Result StaticSort
+  | .type => .ok .type
+  | .natural => .ok .natural
+  | .domain sort => StaticSort.parse sort
 
-def parseTerm (parameters : Parameters) (text : String) : Result Term := do
+/-- The existing constant-root namespace carries kind-interpreted strings. -/
+def constantSort (text : String) : Result StaticSort := do
+  if (Logical.natural text).isOk then return .natural
+  if (Logical.parse text).isOk then return .type
+  let some sort := [StaticSort.field, .group, .commitment, .transcript, .codec].find? (·.accepts text)
+    | throw "generic-constant-sort"
+  return sort
+
+def termSort (parameters : Parameters) : Term → Result StaticSort
+  | .root name =>
+      if name.startsWith "$" then constantSort (name.drop 1).toString else lookup name parameters
+  | .project base member => do associatedSort (← termSort parameters base) member
+  | .apply head arguments => do
+      let expected ← (← Logical.parameterKinds head).mapM parameterSort
+      ensure ((← arguments.mapM (termSort parameters)) == expected) "generic-type-sort"
+      return .type
+
+private def parseRoot (parameters : Parameters) (text : String) : Result Term := do
+  if (Logical.natural text).isOk then return .root ("$" ++ text)
   ensure (Decode.validName text && text.utf8ByteSize ≤ 128) "generic-term"
   let root :: members := text.splitOn "." | throw "generic-term"
   let term := members.foldl Term.project (.root root)
   let _ ← termSort parameters term
   return term
 
-def kindSort : String → Result (Option StaticSort)
-  | "bool" | "index" | "indices" => .ok none
-  | "matrix" | "vector" | "polynomial" | "field" | "table" | "point" | "round" | "rng" | "nonce" => .ok (some .field)
-  | "group" | "groups" => .ok (some .group)
-  | "prover_key" | "verifier_key" | "commitment" | "commitments" | "proof" | "opening_state" | "opening_states" => .ok (some .commitment)
-  | "transcript" => .ok (some .transcript)
-  | _ => .error "generic-type-constructor"
+private def parseTermAt (parameters : Parameters) (depth : Nat) (text : String) : Result Term := do
+  ensure (!text.isEmpty && text.utf8ByteSize ≤ Logical.byteLimit && !text.contains '@') "generic-term"
+  if text.contains '<' then
+    let depth + 1 := depth | throw "binding-type-depth"
+    let (head, arguments) ← Logical.applicationParts text
+    let kinds ← Logical.parameterKinds head
+    ensure (!(kinds matches [.domain _]) && !kinds.isEmpty && kinds.length == arguments.length) "generic-type-arity"
+    let terms ← arguments.mapM (parseTermAt parameters depth)
+    let term := Term.apply head terms
+    let _ ← termSort parameters term
+    return term
+  if text.contains ':' then
+    let [head, argument] := text.splitOn ":" | throw "generic-type"
+    let [.domain _] ← Logical.parameterKinds head | throw "generic-type-arity"
+    let term := Term.apply head [← parseRoot parameters argument]
+    let _ ← termSort parameters term
+    return term
+  if Bindings.domainIndependent text then return .apply text []
+  parseRoot parameters text
+termination_by depth
 
+def parseTerm (parameters : Parameters) (text : String) : Result Term :=
+  parseTermAt parameters Logical.depthLimit text
+
+def kindSort (kind : String) : Result (Option StaticSort) := do
+  match ← Logical.parameterKinds kind with
+  | [] => return none
+  | [.domain sort] => return some (← StaticSort.parse sort)
+  | _ => throw "generic-type-arity"
+
+/-- Existing shallow aggregates remain valid. A structured signature stores its
+complete Type-valued application term in `body`; its children are ordinary scope
+terms, not encoded domain identities. This uses the existing requirement DAG. -/
 structure ValueType where
   kind : String
-  domain : Option Term
+  body : Option Term
   deriving DecidableEq, Repr
 
-def ValueType.affine (ty : ValueType) : Bool := ["rng", "nonce", "transcript"].contains ty.kind
+/-- Atomic compatibility view; structured types have no single domain. -/
+def ValueType.domain (ty : ValueType) : Option Term :=
+  if (((kindSort ty.kind).toOption.bind id)).isSome then ty.body else none
+
+def ValueType.ofArguments (kind : String) (arguments : List Term) : ValueType :=
+  match arguments with
+  | [] => ⟨kind, none⟩
+  | [argument] =>
+      if (((kindSort kind).toOption.bind id)).isSome then ⟨kind, some argument⟩
+      else ⟨kind, some (.apply kind arguments)⟩
+  | _ => ⟨kind, some (.apply kind arguments)⟩
+
+def ValueType.term (ty : ValueType) : Term :=
+  if ty.kind.isEmpty then ty.body.getD (.root "")
+  else match ty.body with
+    | some (.apply head args) =>
+        if head == ty.kind then .apply head args else .apply ty.kind ty.body.toList
+    | _ => .apply ty.kind ty.body.toList
+
+def ValueType.arguments (ty : ValueType) : List Term :=
+  match ty.term with | .apply _ args => args | term => [term]
+
+/-- A Type parameter without a copy promise is conservatively affine. No solver
+relation or default permission is invented for such a parameter. -/
+private def copyableTerm : Term → Bool
+  | .apply head arguments =>
+      if head == "fixed_vector" then match arguments with
+        | [element, _] => copyableTerm element
+        | _ => false
+      else Logical.publicKind head || ["opening_state", "opening_states", "prover_key", "verifier_key"].contains head
+  | .root name =>
+      name.startsWith "$" && (Logical.permissions (name.drop 1).toString).copy
+  | _ => false
+
+def ValueType.affine (ty : ValueType) : Bool := !copyableTerm ty.term
 
 def valueType (parameters : Parameters) (text : String) : Result ValueType := do
-  match text.splitOn ":" with
-  | [kind] =>
-      ensure (Bindings.domainIndependent kind) "generic-type-arity"
-      return ⟨kind, none⟩
-  | [kind, term] =>
-      let some sort ← kindSort kind | throw "generic-type-arity"
-      let term ← parseTerm parameters term
-      ensure ((← termSort parameters term) == sort) "generic-type-sort"
-      return ⟨kind, some term⟩
-  | _ => throw "generic-type"
+  let term ← parseTerm parameters text
+  ensure ((← termSort parameters term) == .type) "generic-type-sort"
+  match term with
+  | .apply head arguments => return ValueType.ofArguments head arguments
+  | _ => return ⟨"", some term⟩
 
 def relationSorts (name : String) : Result (List StaticSort) := do
   match name with
@@ -93,7 +163,14 @@ def constantIdentity : Term → Option String
   | .root name => if name.startsWith "$" then some (name.drop 1).toString else none
   | .project base member => do
       (Bindings.associatedIdentity (← constantIdentity base) member).toOption
-  | .apply _ _ => none
+  | .apply head arguments => do
+      let values ← arguments.mapM constantIdentity
+      let kinds ← (Logical.parameterKinds head).toOption
+      if values.length != kinds.length then none else do
+        let text := if kinds.isEmpty then head else if kinds matches [.domain _] then
+            head ++ ":" ++ values.headD ""
+          else head ++ "<" ++ String.intercalate "," values ++ ">"
+        return (← (Logical.parse text).toOption).spelling
 
 def groundRequirement (predicate : Predicate) : Result Bool := do
   match predicate with
@@ -125,6 +202,17 @@ structure Signature where
   deriving Repr
 
 def signature (parameters : Parameters) (contract : String) (arguments : List Term) : Result Signature := do
+  if ["fixed_vector.from_vector", "fixed_vector.to_vector", "fixed_vector.dot"].contains contract then
+    let [field, length] := arguments | throw "generic-static-arity"
+    ensure ((← termSort parameters field) == .field && (← termSort parameters length) == .natural) "generic-static-sort"
+    let fixed := ValueType.ofArguments "fixed_vector" [.apply "field" [field], length]
+    let vector : ValueType := ⟨"vector", some field⟩
+    let scalar : ValueType := ⟨"field", some field⟩
+    let needs := [Predicate.relation "Field" [field]]
+    return match contract with
+      | "fixed_vector.from_vector" => ⟨[vector], [fixed], needs⟩
+      | "fixed_vector.to_vector" => ⟨[fixed], [vector], needs⟩
+      | _ => ⟨[fixed, fixed], [scalar], needs⟩
   if contract == "pairing.check" then
     let [f] := arguments | throw "generic-static-arity"
     ensure ((← termSort parameters f) == .field) "generic-static-sort"
@@ -195,10 +283,8 @@ def signature (parameters : Parameters) (contract : String) (arguments : List Te
   return ⟨← inputs.mapM makeType, ← outputs.mapM makeType, needs⟩
 
 def typeEqualities (actual expected : ValueType) : Result (List Predicate) := do
-  ensure (actual.kind == expected.kind) "generic-value-type"
-  match actual.domain, expected.domain with
-  | none, none => return []
-  | some a, some b => return [.equal a b]
-  | _, _ => throw "generic-value-type"
+  if actual.kind.isEmpty || expected.kind.isEmpty then return [.equal actual.term expected.term]
+  ensure (actual.kind == expected.kind && actual.arguments.length == expected.arguments.length) "generic-value-type"
+  return (actual.arguments.zip expected.arguments).map fun (a, b) => .equal a b
 
 end Tools.Interactive.Generic

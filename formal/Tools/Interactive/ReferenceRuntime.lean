@@ -25,7 +25,26 @@ def compute (location : Location) (request : TypedLocal.Request)
   require location (inputs.map Value.ty == request.signature.inputs) "runtime-kernel-types"
   if request.contract.startsWith "transcript." then
     require location (Bindings.validTranscriptAttributes request.attributes) "kernel-attributes"
-  let outputs ← if Bindings.resourceUnitContract request.contract then do
+  let outputs ← if ["fixed_vector.from_vector", "fixed_vector.to_vector", "fixed_vector.dot"].contains request.contract then do
+      require location request.attributes.isEmpty "kernel-attributes"
+      let [field, length] := request.arguments | failAt location "refused" "binding-static-arity"
+      let n ← checked location (Logical.natural length)
+      require location (field == Bindings.koalaBear) "reference-fixed-vector-not-supported"
+      match request.contract, inputs with
+      | "fixed_vector.from_vector", [value] => do
+          let .vector values ← checked location (value.toArithmetic .koalaBear)
+            | failAt location "refused" "runtime-kernel-types"
+          let fixed ← checked location (FixedVectorReference.admit (.atom "field" field) n values)
+          pure [.fixedVector fixed]
+      | "fixed_vector.to_vector", [.fixedVector value] => do
+          checked location value.validate
+          require location (value.length == n) "reference-value-type"
+          pure [Value.fromArithmetic .koalaBear (.vector value.values)]
+      | "fixed_vector.dot", [.fixedVector left, .fixedVector right] => do
+          require location (left.length == n && right.length == n) "reference-value-type"
+          pure [Value.fromArithmetic .koalaBear (.field (← checked location (FixedVectorReference.dot left right)))]
+      | _, _ => failAt location "refused" "runtime-kernel-types"
+    else if Bindings.resourceUnitContract request.contract then do
       require location request.attributes.isEmpty "kernel-attributes"
       -- Resolution admits a unit contract only with one valid domain argument,
       -- and the type check above fixes each operand's domain and arity, so the

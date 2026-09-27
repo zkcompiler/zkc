@@ -10,7 +10,9 @@ use zkc_runtime::interactive::{
 fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
     fn physical(s: &str) -> String {
         use zkc_runtime::interactive::{LogicalType, PhysicalType};
-        PhysicalType::default_for(LogicalType::parse(s).unwrap()).spelling()
+        PhysicalType::default_for(LogicalType::parse(s).unwrap())
+            .unwrap()
+            .spelling()
     }
     let ports: Vec<_> = ports
         .as_array()

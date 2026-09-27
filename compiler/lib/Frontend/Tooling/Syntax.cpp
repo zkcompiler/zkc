@@ -496,6 +496,8 @@ json::Object inspectModule(const syntax::Module &module) {
         {"arguments", std::move(arguments)},
         {"results", inspectTypes(function.results)},
         {"effects", inspectNames(function.effects)},
+        {"operator", function.operatorHook ? json::Value(*function.operatorHook)
+                                           : json::Value(nullptr)},
         {"body", function.body ? json::Value(inspectBody(*function.body))
                                : json::Value(nullptr)}};
     object["origin"] =
@@ -598,8 +600,6 @@ json::Object inspectModule(const syntax::Module &module) {
                    {"libraryLinks", std::move(libraryLinks)},
                    {"librarySelections", std::move(librarySelections)},
                    {"constants", std::move(constants)},
-                   {"profile", module.profile ? json::Value(*module.profile)
-                                              : json::Value(nullptr)},
                    {"bindings", std::move(bindings)},
                    {"relations", std::move(imports)},
                    {"relationViews", std::move(views)},

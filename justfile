@@ -89,6 +89,10 @@ test-lean-fresh:
 test-install prefix="" profile="release": (build-compiler profile)
     python3 scripts/develop.py install --output "$1" --profile "$2"
 
+# Check a fresh domain installation and base refusal; opt in to one linkage per run.
+test-install-domain profile="release" *args:
+    python3 scripts/develop.py install-domain --profile "$@"
+
 # Verify the retained Groth16 evidence.
 test-evidence:
     python3 tests/run.py evidence

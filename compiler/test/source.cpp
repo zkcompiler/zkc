@@ -87,6 +87,7 @@ void builderProbe() {
   // Independent hand-written text and C++ authoring of the same open generic
   // module, ordinary local body and multi-role protocol. No JSON builder.
   const char *text = R"pir(module {
+    use zkc::curve;
     bind both = bool.and();
     fn Both(a: bool, b: bool) -> (bool) {
       [join] let c = both(a, b);
@@ -183,6 +184,7 @@ void builderProbe() {
 }
 void locations() {
   std::string text = R"pir(/* prefix */ module {
+  use zkc::curve;
   configure Open = Scale(); // config before its definition
   fn Plain() -> () { return (); }
   fn Scale<G: domain Group>(g: G::Element, k: G::Scalar::Element) -> (G::Element)
@@ -240,7 +242,7 @@ void locations() {
       ->callee = "Open";
   Document invalidDocument(std::move(invalid), text, "locations.pir");
   auto error = toString(checkProtocolDocument(invalidDocument));
-  require(StringRef(error).contains("locations.pir:15:9:") &&
+  require(StringRef(error).contains("locations.pir:16:9:") &&
               StringRef(error).contains("generic-open-instance"),
           "nested generic location");
   for (const auto &[source, needle, code] :
@@ -466,10 +468,10 @@ void syntaxBoundary() {
   rejects(formatProtocol(json), "generic-operation");
   for (StringRef argument : {"F-", "F--", "F_long-"}) {
     auto text =
-        (Twine("module { fn f<") + argument + ": domain Field>(x: " + argument +
-         "::Element) -> (" + argument + "::Element) requires (Field(" +
-         argument + ")) { let y = field::add::<" + argument +
-         " >(x, x); return (y); } }")
+        (Twine("module { use zkc::algebra as field; fn f<") + argument +
+         ": domain Field>(x: " + argument + "::Element) -> (" + argument +
+         "::Element) requires (Field(" + argument +
+         ")) { let y = field::add::<" + argument + " >(x, x); return (y); } }")
             .str();
     auto original = take(parseProtocolDocument(text));
     success(checkProtocolDocument(original));
@@ -588,7 +590,8 @@ int main() {
   parserLimitsAndLocations();
   // A compact unused library must not allocate configurations x operation
   // maps. Each configuration references a shared declaration's coordinates.
-  std::string many = "module { fn Many<>(x: bool) -> () {\n";
+  std::string many =
+      "module { use zkc::core as control; fn Many<>(x: bool) -> () {\n";
   for (unsigned i = 0; i < 1024; ++i)
     many += "[guard" + std::to_string(i) + "] control::require(x);\n";
   many += "return (); }\n";

@@ -48,6 +48,7 @@ int main() {
     return asset;
   };
   const char *text = R"pir(module {
+    use zkc::algebra::Vector;
     relation Circuit = r1cs("circuit.r1cs");
     derive Rows = multilinear(Circuit, specialized);
     fn Use(s: Vector<"bls12-381.fr"::Element>, w: Vector<"bls12-381.fr"::Element>)
@@ -175,6 +176,7 @@ int main() {
   };
   auto airDocument =
       take(frontend::loadProtocolDocument(R"pir(module {
+    use zkc::algebra::Vector;
     relation Trace = air("trace.json");
     derive Steps = arithmetic(Trace, specialized, 3);
     fn Use(s: Vector<"bls12-381.fr"::Element>, t: Vector<"bls12-381.fr"::Element>)

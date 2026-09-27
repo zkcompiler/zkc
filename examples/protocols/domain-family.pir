@@ -1,11 +1,13 @@
 // Source families specialize into ordinary named protocols. No runtime
 // protocol polymorphism or cryptographic security claim is implied.
 module {
+  use zkc::algebra::{CommRing, Field};
+  use zkc::algebra;
   const ROUNDS: index = BASE * 2;
   const BASE: index = 2;
 
   fn Double<F: Field>(x: F::Element) -> F::Element {
-    let y = field::add::<F>(x, x);
+    let y = zkc::algebra::add::<F>(x, x);
     return y;
   }
 

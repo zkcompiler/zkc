@@ -155,10 +155,11 @@ relations supply the target obligations; these are not discharged by this theore
 The readable development frontend retains generic source before specialization:
 
 ```text
-fn Fold<F: Field>(table: table:F, r: field:F) -> (table:F)
+use zkc::poly;
+fn Fold<F: domain Field>(table: poly::Table<F>, r: F::Element) -> poly::Table<F>
     requires (CommRing(F)) {
-  [fold] (result) = poly.fold<F>(table, r);
-  return (result);
+  [fold] let result = poly::fold::<F>(table, r);
+  return result;
 }
 configure Partial = Fold();
 configure Direct = Partial(F = bls12-381.fr);
@@ -166,8 +167,8 @@ configure OtherLayout = Partial(F = bls12-381.fr)
     using (fold = "arkworks-msb/poly.fold");
 ```
 
-`F: Field` declares the sort of a static identity. `CommRing(F)` is an algebraic
-requirement, not a runtime field object. An operation has explicit static term
+`F: domain Field` declares only the sort of a static identity. `CommRing(F)` is an
+algebraic requirement, not a runtime field object. An operation has explicit static term
 arguments and ordinary SSA operands. Empty static argument lists support helpers
 such as `Both<>` with no cryptographic dependencies. Associated members retain
 their own sorts: `G.Scalar`, `C.ValueField`, `C.PointField`,
@@ -180,6 +181,24 @@ operand use and `Q entails R`. The current executable body fragment is a sequenc
 of installed operations and acyclic local `apply` applications followed by a
 return. Symbolic control regions and arbitrary user-declared capability predicates
 are outside this authoring fragment; the typed theorem covers a richer language.
+
+Installed constructor and operation parameters distinguish nominal domain sorts,
+`Type` and `Nat`. `Type` and `Nat` are reserved kind tokens, not domain identities
+or capability predicates. Native scopes represent constructor applications in
+the same ordered term DAG as the requirement checker: every child precedes its
+parent, and derived applications are not configuration roots. Canonical natural
+constants and closed logical type constants retain their kinds. A type application
+substitutes all arguments recursively; its identity cannot be reduced to its
+first domain parameter. For example, `FixedVector<F::Element, N>` retains both
+the field-element type and the length after configuration and participant
+projection. [Logical type formation](operation-bindings.md#carrier) owns its
+closed spelling and bounds.
+
+The existing congruence rules compare these applications. They do not infer
+constructor injectivity, compute natural arithmetic, or solve type equations
+backwards. Unknown Type parameters conservatively withhold copy/drop permissions.
+This executable kinded instantiation support does not add a theorem equating
+the native frontend with the Lean source model.
 
 A generic application `apply [site] (outputs) = Helper<F>(inputs);` substitutes
 ordered static terms into the target generic signature. A configuration target

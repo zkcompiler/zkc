@@ -1,21 +1,33 @@
 module {
+  use zkc::curve::{
+    ScalarAction
+  };
+  use zkc::algebra::{
+    Field,
+    Vector
+  };
+  use zkc::core;
+  use zkc::curve;
+  use zkc::random::{
+    Nonce
+  };
   fn Commit<G: domain Group>(
     bases: Vector<G::Element>,
     nonce: Nonce<G::Scalar>
   ) -> (Vector<G::Element>, Nonce<G::Scalar>) requires (ScalarAction(G)) {
-    [commit] let (commitments, ready) = curve::commit::<G>(bases, nonce);
+    [commit] let (commitments, ready) = zkc::curve::commit::<G>(bases, nonce);
     return (commitments, ready);
   }
 
   fn Respond<F: domain Field>(secret: F::Element, challenge: F::Element, ready: Nonce<F>) -> F::Element requires (
     Field(F)
   ) {
-    [respond] let response = curve::response::<F>(secret, challenge, ready);
+    [respond] let response = zkc::curve::response::<F>(secret, challenge, ready);
     return response;
   }
 
   fn Guard<>(allowed: bool) -> () {
-    [guard] control::require(allowed);
+    [guard] zkc::core::require(allowed);
     return;
   }
 

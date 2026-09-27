@@ -1,4 +1,5 @@
-module {
+// Explicit transcript provenance is checked in the admitted carrier lane.
+carrier module {
   fn Commit<C: domain Commitment>(
     values: Vector<C::ValueField::Element>,
     width: index

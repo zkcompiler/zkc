@@ -191,3 +191,48 @@ fn execute<E: Family>(
     };
     Ok(vec![output])
 }
+
+/// Independent native port facts, also used for exact implementation assembly.
+pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::poly;
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        poly::operation(
+            "poly.coset_evaluate",
+            &[Polynomial, Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.coset_interpolate",
+            &[Vector, Field],
+            &[Polynomial],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.domain_point",
+            &[Field, Index, Index],
+            &[Field],
+            AttributeRule::None,
+        ),
+        poly::operation("poly.domain_root", &[Index], &[Field], AttributeRule::None),
+        poly::operation(
+            "poly.domain_points",
+            &[Field, Index],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.even_odd_fold",
+            &[Vector, Field, Field],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.opening_quotient",
+            &[Vector, Field, Field, Field],
+            &[Vector],
+            AttributeRule::None,
+        ),
+    ]
+};

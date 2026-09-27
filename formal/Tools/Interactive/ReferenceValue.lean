@@ -1,4 +1,4 @@
-import Tools.Interactive.Bindings
+import Tools.Interactive.FixedVectorReference
 import Tools.Interactive.OracleReference
 import Tools.Artifact.Codec
 import Tools.Interactive.CommitmentCodec
@@ -23,6 +23,7 @@ structure OpeningState where
   commitment : ByteArray
 
 inductive Value where
+  | fixedVector (value : FixedVectorReference.Data)
   | variant (descriptor : Variant.Descriptor) (alternative : Name) (payload : List Value)
   | resourceUnit (domain identity : String) (generation : Nat)
   | oracle (value : OracleReference.Data)
@@ -52,35 +53,37 @@ inductive Value where
   | transcript (suite : String) (identity : Name) (generation : Nat)
 
 def Value.ty : Value → Bindings.ValueType
-  | .variant descriptor .. => ⟨"variant", descriptor.identity, ""⟩
-  | .resourceUnit domain .. => ⟨"resource_unit", domain, ""⟩
-  | .oracle v => ⟨v.kind, v.domain.identity, ""⟩
-  | .extension value => ⟨value.kind, if Bindings.domainIndependent value.kind then "" else Bindings.koalaBearExt8, ""⟩
-  | .arithmetic d value => ⟨value.kind, if Bindings.domainIndependent value.kind then "" else d.identity, ""⟩
-  | .bnGroup g2 many _ => ⟨if many then "groups" else "group", if g2 then Bindings.bn254G2 else Bindings.bn254G1, ""⟩
-  | .brng .. => ⟨"rng", Bindings.bn254Fr, ""⟩
-  | .rgroup _ => ⟨"group", Bindings.ristrettoGroup, ""⟩
-  | .rgroups _ => ⟨"groups", Bindings.ristrettoGroup, ""⟩
-  | .erng .. => ⟨"rng", Bindings.koalaBearExt8, ""⟩
-  | .rrng .. => ⟨"rng", Bindings.ristrettoScalar, ""⟩
-  | .rnonce .. => ⟨"nonce", Bindings.ristrettoScalar, ""⟩
-  | .field _ => ⟨"field", "bls12-381.fr", ""⟩
-  | .table _ => ⟨"table", "bls12-381.fr", ""⟩
-  | .point _ => ⟨"point", "bls12-381.fr", ""⟩
-  | .round _ => ⟨"round", "bls12-381.fr", ""⟩
-  | .boolean _ => ⟨"bool", "", ""⟩
-  | .group _ => ⟨"group", "bls12-381.g1", ""⟩
-  | .groups _ => ⟨"groups", "bls12-381.g1", ""⟩
-  | .commitment _ => ⟨"commitment", "multilinear.kzg.bls12-381/1", ""⟩
-  | .proof _ => ⟨"proof", "multilinear.kzg.bls12-381/1", ""⟩
-  | .proverKey _ => ⟨"prover_key", "multilinear.kzg.bls12-381/1", ""⟩
-  | .verifierKey _ => ⟨"verifier_key", "multilinear.kzg.bls12-381/1", ""⟩
-  | .opening _ => ⟨"opening_state", "multilinear.kzg.bls12-381/1", ""⟩
-  | .rng .. => ⟨"rng", "bls12-381.fr", ""⟩
-  | .nonce .. => ⟨"nonce", "bls12-381.fr", ""⟩
-  | .transcript suite .. => ⟨"transcript", suite, ""⟩
+  | .fixedVector value => value.ty
+  | .variant descriptor .. => ⟨"variant", descriptor.identity, "", []⟩
+  | .resourceUnit domain .. => ⟨"resource_unit", domain, "", []⟩
+  | .oracle v => ⟨v.kind, v.domain.identity, "", []⟩
+  | .extension value => ⟨value.kind, if Bindings.domainIndependent value.kind then "" else Bindings.koalaBearExt8, "", []⟩
+  | .arithmetic d value => ⟨value.kind, if Bindings.domainIndependent value.kind then "" else d.identity, "", []⟩
+  | .bnGroup g2 many _ => ⟨if many then "groups" else "group", if g2 then Bindings.bn254G2 else Bindings.bn254G1, "", []⟩
+  | .brng .. => ⟨"rng", Bindings.bn254Fr, "", []⟩
+  | .rgroup _ => ⟨"group", Bindings.ristrettoGroup, "", []⟩
+  | .rgroups _ => ⟨"groups", Bindings.ristrettoGroup, "", []⟩
+  | .erng .. => ⟨"rng", Bindings.koalaBearExt8, "", []⟩
+  | .rrng .. => ⟨"rng", Bindings.ristrettoScalar, "", []⟩
+  | .rnonce .. => ⟨"nonce", Bindings.ristrettoScalar, "", []⟩
+  | .field _ => ⟨"field", "bls12-381.fr", "", []⟩
+  | .table _ => ⟨"table", "bls12-381.fr", "", []⟩
+  | .point _ => ⟨"point", "bls12-381.fr", "", []⟩
+  | .round _ => ⟨"round", "bls12-381.fr", "", []⟩
+  | .boolean _ => ⟨"bool", "", "", []⟩
+  | .group _ => ⟨"group", "bls12-381.g1", "", []⟩
+  | .groups _ => ⟨"groups", "bls12-381.g1", "", []⟩
+  | .commitment _ => ⟨"commitment", "multilinear.kzg.bls12-381/1", "", []⟩
+  | .proof _ => ⟨"proof", "multilinear.kzg.bls12-381/1", "", []⟩
+  | .proverKey _ => ⟨"prover_key", "multilinear.kzg.bls12-381/1", "", []⟩
+  | .verifierKey _ => ⟨"verifier_key", "multilinear.kzg.bls12-381/1", "", []⟩
+  | .opening _ => ⟨"opening_state", "multilinear.kzg.bls12-381/1", "", []⟩
+  | .rng .. => ⟨"rng", "bls12-381.fr", "", []⟩
+  | .nonce .. => ⟨"nonce", "bls12-381.fr", "", []⟩
+  | .transcript suite .. => ⟨"transcript", suite, "", []⟩
 
 def Value.public : Value → Bool
+  | .fixedVector _ => false
   | .variant .. => false
   | .resourceUnit .. => false
   | .oracle v => v.public
@@ -88,6 +91,7 @@ def Value.public : Value → Bool
   | _ => true
 
 def Value.size : Value → Nat
+  | .fixedVector value => 1 + value.values.length
   | .variant descriptor alternative payload => descriptor.spelling.utf8ByteSize + alternative.utf8ByteSize + (payload.map Value.size).sum
   | .resourceUnit .. => 0
   | .oracle v => v.size
@@ -108,6 +112,7 @@ private def fields (fs : List Math.Fr) : Json := .arr (fs.map scalarJson).toArra
 
 def Value.json (value : Value) : Json :=
   let payload := match value with
+    | .fixedVector value => .arr (value.values.map fun x => natural x.val).toArray
     | .variant _ alternative payload => .arr #[.str alternative, .arr (payload.map Value.json).toArray]
     | .resourceUnit _ identity generation => .arr #[.str identity, natural generation]
     | .oracle v => match v.wire with
@@ -139,6 +144,7 @@ def Value.validateAt : Nat → Value → Result Unit
       let expected ← lookup alternative descriptor.alternatives
       ensure (payload.map (fun v => v.ty.spelling) == expected) "variant-payload-types"
       payload.forM (Value.validateAt depth)
+  | _, .fixedVector value => value.validate
   | _, _ => pure ()
 
 def Value.validate (value : Value) : Result Unit := value.validateAt 9

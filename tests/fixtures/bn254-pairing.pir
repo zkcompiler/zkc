@@ -1,5 +1,7 @@
 // Pairing is an algebraic predicate over separately typed source groups.
 module {
+  use zkc::curve;
+  use zkc::algebra::{PairingField, Vector};
   bind neg = curve.neg(bn254.g1);
   bind empty1 = curve.empty(bn254.g1);
   bind append1 = curve.append(bn254.g1);
@@ -11,7 +13,7 @@ module {
     left: Vector<F::PairingG1::Element>,
     right: Vector<F::PairingG2::Element>
   ) -> bool requires (PairingField(F)) {
-    [pair] let accepted = pairing::check::<F>(left, right);
+    [pair] let accepted = zkc::curve::pairing_check::<F>(left, right);
     return accepted;
   }
 

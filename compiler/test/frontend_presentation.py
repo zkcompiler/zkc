@@ -84,7 +84,7 @@ class PresentationTests(unittest.TestCase):
     def test_midstatement_keyword_lists(self):
         formatted = self.roundtrip(
             "module { fn X<F: Field>(x: F::Element) -> F::Element "
-            "requires (Field(F)) { let y = field::constant::<F>() "
+            "requires (Field(F)) { let y = zkc::algebra::constant::<F>() "
             "attributes (1); return (y); } "
             "configure C = X(F = F) using (site = impl); }")
         for keyword in ("requires", "attributes", "using", "return"):

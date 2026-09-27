@@ -21,6 +21,25 @@ target_link_libraries(zkc-construction-test PRIVATE ZkcFrontendLoading)
 add_zkc_test(json Support json-carrier)
 add_zkc_test(requirements Contracts)
 add_zkc_test(generic Contracts generic-signatures)
+add_zkc_test(contract_declarations Contracts contract-declarations)
+add_zkc_test(structural_types Contracts structural-types)
+add_zkc_test(implementation_policy Transforms implementation-policy)
+add_zkc_test(type_adapters IR type-adapters)
+add_zkc_test(type_adapter_ambiguity Contracts type-adapter-ambiguity)
+target_sources(zkc-type_adapter_ambiguity-test PRIVATE
+  "${PROJECT_SOURCE_DIR}/lib/Dialect/TypeAdapters/Registry.cpp")
+target_include_directories(zkc-type_adapter_ambiguity-test SYSTEM PRIVATE ${MLIR_INCLUDE_DIRS})
+mlir_target_link_libraries(zkc-type_adapter_ambiguity-test PRIVATE MLIRIR)
+add_zkc_test(contract_inventory Contracts)
+add_zkc_test(contract_conformance Contracts)
+add_test(NAME contract-declarations-generation
+  COMMAND ${CMAKE_COMMAND}
+    "-DZKC_TABLEGEN=$<TARGET_FILE:zkc-tblgen>"
+    "-DZKC_DECLARATION_INCLUDE=${PROJECT_SOURCE_DIR}/include"
+    "-DZKC_DECLARATION_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/contract_declarations"
+    "-DZKC_DECLARATION_TEST_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/contract-declarations-generation"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/contract_declarations_generation.cmake")
+set_tests_properties(contract-declarations-generation PROPERTIES LABELS native)
 add_zkc_test(bindings IR operation-bindings)
 add_zkc_test(contract_mappings IR operation-contract-mappings)
 add_test(NAME contract-mapping-generation
@@ -34,7 +53,10 @@ add_zkc_test(frontend_dependencies Frontend frontend-dependencies)
 add_zkc_test(frontend_loading FrontendLoading frontend-loading)
 add_zkc_test(source CompilerCore source-document)
 add_zkc_test(frontend_analysis FrontendLoading frontend-analysis)
+add_zkc_test(frontend_structural_types Frontend frontend-structural-types)
+add_zkc_test(frontend_static_arguments Frontend frontend-static-arguments)
 add_zkc_test(frontend_budgets Frontend frontend-work-budgets)
+add_zkc_test(operator_recovery Frontend operator-recovery)
 add_zkc_test(checked_library Frontend checked-library)
 add_zkc_test(library_entry Frontend library-entry-layout)
 add_zkc_test(frontend_provenance Frontend frontend-provenance)
@@ -63,6 +85,7 @@ add_zkc_test(representations Contracts representation-domains)
 add_zkc_test(properties IR registered-properties)
 
 add_zkc_test(diagnostics IR ir-diagnostics)
+add_zkc_test(dialect_registration IR dialect-registration)
 add_zkc_test(ir_verification IR ir-verification)
 mlir_target_link_libraries(zkc-symbols-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-variants-test PRIVATE MLIRParser)
@@ -70,6 +93,13 @@ mlir_target_link_libraries(zkc-family_symbols-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-claims-test PRIVATE MLIRParser)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_program(zkc_record_tablegen NAMES llvm-tblgen HINTS "${LLVM_TOOLS_BINARY_DIR}" REQUIRED)
+set(zkc_generation_includes ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
+list(REMOVE_DUPLICATES zkc_generation_includes)
+list(JOIN zkc_generation_includes "\", \"" zkc_generation_include_json)
+file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/generation-settings.json"
+  CONTENT "{\"mlir_tablegen\": \"${MLIR_TABLEGEN_EXE}\", \"llvm_tablegen\": \"${zkc_record_tablegen}\", \"cxx\": \"${CMAKE_CXX_COMPILER}\", \"source_include\": \"${PROJECT_SOURCE_DIR}/include\", \"generated_include\": \"${PROJECT_BINARY_DIR}/include\", \"dependency_include\": [\"${zkc_generation_include_json}\"]}\n")
+
 
 # The tests below drive this build's own tools as separate processes, and no
 # other build's. Each takes no arguments: it names the tool it needs and
@@ -78,6 +108,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # path, so no test can be handed the wrong one. To run one by hand, run it from
 # here: ctest --test-dir BUILD -R NAME -V.
 set(zkc_script_environment
+  ZKC_CTEST_TABLEGEN=$<TARGET_FILE:zkc-tblgen>
   ZKC_CTEST_COMPONENTS=${PROJECT_BINARY_DIR}/component-dependencies.txt
   ZKC_CTEST_COMPILER=$<TARGET_FILE:zkc-compile>
   ZKC_CTEST_OPTIMIZER=$<TARGET_FILE:zkc-opt>

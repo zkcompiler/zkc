@@ -152,6 +152,52 @@ Installed compiler tools retain runtime search paths to their selected LLVM/MLIR
 libraries. Keep that dependency installation available; the SDK does not bundle
 LLVM. Its shared component libraries are found relative to the tool prefix.
 
+The separately authored envelope domain has an **opt-in** installation check:
+
+```sh
+just test-install-domain             # release/static, fresh compiler builds
+just test-install-domain shared      # shared, fresh compiler builds
+```
+
+Each invocation builds base and envelope installations, installs them into
+separate fresh prefixes, and builds the same
+[domain consumer](../../compiler/examples/domain/consumer/CMakeLists.txt) against
+both. CTest must register and pass exactly two base cases (`EXPECT_ENVELOPE=OFF`)
+and three envelope cases (`EXPECT_ENVELOPE=ON`). The extra envelope case checks
+specialization. This is installed-package smoke coverage, not independent
+Rust/Lean execution or a semantic equivalence claim. Neither `just test` nor
+`just test-install` runs these additional builds.
+The source-build path also checks component ownership on both actual build trees;
+the prefix-only Nix consumer path has no source/build ownership manifest to check.
+
+The operation accepts `release`, `dev` and `shared` profiles. Fresh builds use
+the selected CMake preset with `BUILD_TESTING=OFF` and build only installed tools
+and their library dependencies. They do not run the compiler's full test suite.
+To reuse compiler outputs explicitly:
+
+```sh
+python3 scripts/develop.py install-domain --profile release \
+  --base-build build/compiler --domain-build build/compiler-domain \
+  --skip-build --output /tmp/zkc-domain-static-check
+python3 scripts/develop.py install-domain --profile shared \
+  --base-build build/compiler-shared --domain-build build/compiler-domain-shared \
+  --skip-build --output /tmp/zkc-domain-shared-check
+```
+
+`--skip-build` requires both build directories. It validates their cached source,
+toolchain, profile, linkage and contribution selection before installation; it
+does not configure or rebuild them. The caller must first build current sources
+and serialize access to shared build directories. Without `--skip-build`, named
+directories are configured and built incrementally after cache validation;
+absent ones are created exclusively. Reused base builds keep their existing
+`BUILD_TESTING` setting, while domain builds require it off. Incompatible caches
+are refused, not rewritten. `ZKC_COMPILER_BIN` does not select these builds.
+Build arguments are checkout-relative; `--output` is relative to the caller and
+must be absent, including symlinks. It contains both prefixes, fresh consumer
+builds, CTest inventories, JUnit files and a command record. Omitting it allocates
+these beneath the new report run; `run.json` records the operation result.
+Outputs are retained on failure and never cleaned by this operation.
+
 The shell supplies clangd, clang-format and rust-analyzer. Point clangd at
 `build/compiler/compile_commands.json`, or at the selected development build's
 database. Editor settings stay local. `cargo fmt` remains Rust's formatter;
@@ -168,6 +214,7 @@ style configuration; broad formatting changes should remain separate.
 | Command/output | Meaning |
 |---|---|
 | `nix build .#compiler` | Installed compiler tools and CMake SDK; all compiler CTest cases run |
+| `nix build .#compiler-domain-checks .#compiler-domain-shared-checks` | Opt-in static/shared envelope and base installed-consumer checks (five CTest cases per linkage); no full compiler suite |
 | `nix build .#tools` | Native Rust host/runtime tools; Rust and cross-language checks are separate |
 | `nix build .#formal` | Compiled independent Lean checker executables |
 | `nix build '.#formal^library'` | Lean sources, pinned dependencies and compiled library objects |
@@ -180,6 +227,11 @@ style configuration; broad formatting changes should remain separate.
 Compiler and Rust `testSupport` outputs retain example/test executables for the
 test harness. Ordinary consumers use their main outputs. Lean's `library`
 output is separate from the runtime checker executables.
+
+The domain checks are explicit packages, excluded from `nix flake check` and the
+default package. They use the same consumer runner as `install-domain`, retain
+CTest inventories/JUnit and command records in their outputs, and may require
+substantial compiler builds. Nix's temporary consumer build trees are not retained.
 
 LLZK and Circom use separate revisions already selected by the integration
 manifests. The Circom pin includes an LLZK backend even when generating ordinary

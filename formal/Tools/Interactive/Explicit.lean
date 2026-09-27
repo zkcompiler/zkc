@@ -36,7 +36,8 @@ def decodeOrigin (json : Json) : Result (Option Origin) := do
   let [name, arguments] := items | throw "function-origin"
   let arguments ← Decode.pairs (fun j => Decode.name j) Decode.string arguments
   ensure (arguments.length ≤ 128 && unique (arguments.map Prod.fst) &&
-    arguments.all (fun p => Bindings.staticIdentity p.2)) "function-origin"
+    arguments.all (fun p => Bindings.staticIdentity p.2 ||
+      (Logical.parse p.2).isOk || (Logical.natural p.2).isOk)) "function-origin"
   return some ⟨← Decode.name name, arguments⟩
 
 def function (physical : Bool) (json : Json) (sourceLocal : Bool := false) : Result Function := do

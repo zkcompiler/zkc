@@ -7,7 +7,7 @@ construction and compiler lowering. Its selected source judgments are defined in
 [resolved authoring](../spec/profiles/source/authoring.md).
 
 ```text
-captured project sources and relation assets
+captured project sources, relation assets and installed declarations
                 │
        syntax and diagnostics
                 │
@@ -172,7 +172,7 @@ defines charged work, omitted work and artifact monotonicity under larger limits
 | `Model/` | Owned analysis and phase products, typed body plans, immutable reports and paired final content; no retained parser tree or MLIR pointers |
 | `Resolution/` | Exact project names, public exports, captured dependencies and lexical lookup |
 | `Library/` | Checked interface/component formation, conformance and static linking |
-| `Static/` | Pure bounded natural evaluation and domain-term formation rules |
+| `Static/` | Pure bounded natural evaluation, domain-term formation and structural spelling helpers shared by the typed model, checking and printing |
 | `Semantics/` | Source typing, requirements, nominal construction, local SSA/control and participant ownership |
 | `Instantiation/` | Closed selection, substitution, child/helper generation, provenance and authored construction-selector binding |
 | `Lowering/` | Library emission/entry adapters and common headers/bodies from checked types and resolved declaration references |
@@ -195,9 +195,28 @@ layer dependencies are checked alongside the component DAG. Mutable builders are
 consumed when publishing a snapshot, so consumers cannot retain a mutable alias
 to the analysis they query.
 
-For the two supported closed module profiles, default domains are resolved while
-forming types, including nested logical types. There is no later string rewrite
-that can change emitted headers independently of the retained types.
+Generated installed declarations enter ordinary project resolution and typed
+checking. `Contracts/Declarations/*.td` owns neutral logical contracts, curated
+exports, finite type-family cases and operator bindings. `Zkc::Contracts` exposes
+immutable descriptors; Frontend consumes them without an MLIR runtime dependency.
+Associated `Element` projections use sort metadata; `Vector` and `Matrix` resolve
+finite declared element cases before common emission. Module profile headings and
+global operation/type fallbacks are removed. Core forms and globally accepted
+domain identities, sorts and predicates keep their existing scope.
+
+Both ordinary and component bodies use the same operator binding matcher before
+record erasure. Installed exports supply named-argument labels and source-stage
+permissions. Explicit `bind` checks the same stage boundary; the carrier reader
+remains a separate representation route. Imported source cannot install semantic
+facts or bypass common admission. Checked libraries retain whole-installation
+identity, and copy/drop/custody facts come from the installed type owners.
+
+When an operator targets a generic checked helper, its caller needs the checked
+library path just as a named call does. Library elaboration discovers selected
+targets using its existing typed body elaborator in an isolated environment,
+then includes those dependencies in callable routing. The discovery neither
+publishes checked bodies nor changes resolution/provenance. The chosen path
+still checks the complete body, requirements, effects and resource use.
 
 The frontend remains C++ beside its compiler consumers. No per-analysis C++/Rust
 exchange is introduced. Rust continues to own artifact/runtime/backend work; Lean
@@ -211,9 +230,14 @@ They do not verify this native frontend implementation. Differential tests compa
 emission with explicitly authored expansions and send concrete source/participants
 to the independent reference and native runtime.
 
-The remaining syntax study also proposes ordinary type parameters, clean
-identifier/operator lexing, domain aliases, site attributes and richer loop/result
-sugar. These are not claimed implemented by the present foundation.
+Type constructors retain kinded Domain, Type and Nat arguments in the checked
+model and through recursive specialization. Common spelling and the installed
+signature DAG preserve the full application; native MLIR adapters belong to the
+owning domains. FixedVector supplies an executable multi-argument case with
+independent Rust/Lean admission and reference arithmetic. Declaration generation
+does not supply the new type's interpretation, native kernel or codec: those
+remain explicit extension work. Runtime plugin loading and a stable plugin ABI
+do not follow from generated imports.
 
 Package distribution, separately serialized abstract interface artifacts, generic runtime protocol
 carriers, generic runtime preparation packages, general dependent inference, macros and
@@ -226,3 +250,13 @@ retains the name graph; selector paths and their additional work limits are
 computed only for construction. Ordinary source analysis neither traverses that
 selector graph nor acquires its limits. No project is reloaded or re-resolved
 when binding a descriptor.
+
+After a recoverable name error, resolution also records operator dependencies
+whose nominal operand heads are known. This diagnostic analysis does not check
+or authorize calls; unknown heads remain unknown. It runs only on incomplete
+input, with a separate bounded work allowance and depth limit. Its edges stay
+local to unavailability propagation; they never change checker routing or
+retained provenance. Exhaustion discards them and disables partial
+recovery, preserving the original errors.
+The ordinary semantic checker remains the owner of operator coherence, exact
+types, requirements and resources.

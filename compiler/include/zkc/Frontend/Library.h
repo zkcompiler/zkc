@@ -461,6 +461,19 @@ llvm::Expected<LinkedProgram> link(LinkRequest, WorkBudget &);
 llvm::Expected<std::string> resolvedDomain(const StaticTerm &,
                                            const Environment &);
 llvm::Expected<Sort> sortOf(const StaticTerm &, const Environment &);
+/// Decode the injective common scope token (Domain sort, Type, or Nat).
+Sort staticSort(llvm::StringRef);
+/// Installed logical constructors have canonical nominal static declarations.
+QualifiedDecl logicalConstructorDeclaration(llvm::StringRef);
+llvm::Expected<StaticTerm> logicalTypeTerm(const Type &);
+llvm::Expected<Type> logicalTypeValue(const StaticTerm &, const Environment &);
+llvm::Expected<StaticTerm> staticConstant(llvm::StringRef sort,
+                                          llvm::StringRef value,
+                                          const Environment &);
+llvm::Expected<std::string> resolvedStatic(const StaticTerm &,
+                                           const Environment &);
+llvm::Expected<std::string> resolvedLogicalType(const Type &,
+                                                const Environment &);
 llvm::Expected<std::string> selectionIdentity(const StaticTerm &,
                                               const Environment &);
 // True when this instruction sequence ends in an explicit terminal stop.

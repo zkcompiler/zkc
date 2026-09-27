@@ -531,7 +531,7 @@ fn local_body(
                     .iter()
                     .cloned()
                     .map(PhysicalType::default_for)
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>>>()?;
                 operands(&mut env, payload, &types)?;
                 define(&mut env, &mut seen, output, ty.clone())?;
             }
@@ -591,7 +591,8 @@ fn local_body(
                                 .payload()
                                 .iter()
                                 .cloned()
-                                .map(PhysicalType::default_for),
+                                .map(PhysicalType::default_for)
+                                .collect::<Result<Vec<_>>>()?,
                         )
                         .collect::<Ports>();
                     ports.extend(capture_ports.clone());

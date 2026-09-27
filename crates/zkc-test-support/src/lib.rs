@@ -569,3 +569,6 @@ mod tests {
 
 /// Hand-built portable local-sum fixtures.
 pub mod variants;
+
+/// Bounded transport for independent conformance probes.
+pub mod json_lines;

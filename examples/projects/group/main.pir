@@ -1,5 +1,6 @@
 // A random scalar and its group multiple; no zero-knowledge claim.
 module {
+  use zkc::random::{Rng};
   dependency group = library(namespace="zkc.examples", name="group", version="1", resolution="source-v1");
   use group::{BlsGroup, Draw, Public, Check};
   // The library stays generic over GroupAPI; the client selects the component.

@@ -35,7 +35,7 @@ strategy is selected with the remaining allowance.
 | Account | Covered logical charges |
 |---|---|
 | `AuthoredStatic` | Syntax snapshot/specialization declarations, nested type and body/expression nodes, copied call operand/attribute/static-argument/atom slots and static-term member slots, invocation input/output/result-name slots; existing static substitution visits and specialized protocol header slots; natural declarations and each written expression occurrence |
-| `LibraryFormation` | Captured declarations, interface members and signatures, library root/type/expression visits, each requested link/binding/helper, checked body copies, traversal instructions/iterations and transfer generation, type/layout visits and repeated child copies, resource adapter visits, copied leaf slots, and fresh values |
+| `LibraryFormation` | Captured declarations, interface members and signatures, library root/type/expression visits, each requested link/binding/helper, typed operator-dependency discovery attempts, checked body copies, traversal instructions/iterations and transfer generation, type/layout visits and repeated child copies, resource adapter visits, copied leaf slots, and fresh values |
 | `GeneratedSource` | Linked function emission, logical binding requests, generated type spellings, value/operand leaf slots, linked instruction visits, aggregate entry headers and shapes, forwarding slots, each scalar or internal function alias copy |
 | `Output` | Common module/construction root, carrier metadata declarations and vector slots, emitted declarations and selected header/flattened port slots, nested body instructions and vector operands, construction public bindings and draws |
 
@@ -46,6 +46,11 @@ entry forwarding does not spend authored constant-evaluation work; its generatio
 and its final output are charged in their respective accounts. Imported module
 declarations are selected in the invocation's resolved source snapshot without
 resetting the budget.
+
+Operator-dependency discovery uses the checked expression elaborator in an
+isolated environment. Its signature and expression work shares the invocation's
+library account, including failed probes. Discarding an exploratory diagnostic
+cannot hide account exhaustion or authorize a callable.
 
 Natural evaluation charges its written declaration/expression graph before
 evaluation, so memoized dependency values and declaration ordering do not change

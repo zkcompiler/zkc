@@ -31,7 +31,6 @@ DependencyDeclarations inspectDependencies(const Input &input, uint32_t file) {
     result.form =
         module->carrier ? SourceForm::CarrierModule : SourceForm::Module;
     result.location = module->location;
-    result.profile = module->profile;
     std::set<std::string> modules, relations, libraries;
     for (const auto &child : module->modules) {
       result.modules.push_back({child.name, child.location});
@@ -55,6 +54,9 @@ DependencyDeclarations inspectDependencies(const Input &input, uint32_t file) {
       fail(module->libraryIdentities[1], "source-library-identity",
            "a library root requires one identity");
     for (const auto &dependency : module->dependencies) {
+      if (dependency.name == "zkc")
+        fail(dependency, "source-name-reserved",
+             "the zkc namespace belongs to installed source modules");
       result.libraries.push_back({dependency.name,
                                   identity(dependency.identity),
                                   dependency.location});

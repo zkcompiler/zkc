@@ -43,6 +43,9 @@ field.inverse 0
 field.mul 0
 field.neg 0
 field.sub 0
+fixed_vector.dot 0
+fixed_vector.from_vector 0
+fixed_vector.to_vector 0
 index.add 0
 index.constant 0
 index.div 0

@@ -120,3 +120,13 @@ for owner in ("protocol", "binding", "instance", "entry"):
         text = directory / f"origin-{owner}.pir"
         text.write_text(printed)
         assert json.loads(run("protocol-source", text)) == encoded
+
+with case("construction contracts require the common carrier stage"):
+    declaration = ('bind challenge = transcript.challenge('
+                   '"merlin3.bls12-381.fr64be/1");')
+    text = directory / "construction-stage.pir"
+    text.write_text("module { " + declaration + " }")
+    run("protocol-source", text, refuses="source-operation-stage")
+    text.write_text("carrier module { " + declaration + " }")
+    encoded = json.loads(run("protocol-source", text))
+    assert encoded[1][0][1] == "transcript.challenge"

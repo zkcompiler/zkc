@@ -69,7 +69,8 @@ module {
   require(left.parameters.size() == 1 && right.parameters.size() == 1 &&
               left.parameters[0] != right.parameters[0],
           "same-spelled generic parameters belong to different binders");
-  require(saved.domain(leftType->arguments[0])->parameter == left.parameters[0],
+  require(saved.domain(leftType->arguments[0].domain)->parameter ==
+              left.parameters[0],
           "record argument resolves to enclosing function parameter");
   require(!saved.lookup(left.members, "KeepRight"), "lookup is scope-specific");
   require(!saved.type(TypeId{}) && !saved.declaration(DeclId{}),

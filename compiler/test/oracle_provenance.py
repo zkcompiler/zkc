@@ -155,6 +155,7 @@ expect(separate_height, (SAMPLED,), (BOUND,))
 
 # Ordinary returns are not acceptance sinks; the selected result must be bool.
 returned = source.replace('    control::require(ok);', '')
+assert returned != source
 unguarded = (UNGUARDED, 'oracle-response-unauthenticated')
 expect(returned, (ORDER,), unguarded)
 selected = expect(returned, (ORDER, '--accept-result=0', SAMPLED, RESPONSES))
@@ -253,7 +254,7 @@ assert 'root_reception' not in collection_report['accesses'][0]
 
 # Construction indexes only V ports. The identical index 0 below selects P for
 # oracle acceptance, but V for construction; descriptor index 1 is out of range.
-mixed_random = random_source.replace('    control::require(ok);', '')
+mixed_random = random_source.replace('    zkc::core::require(ok);', '')
 mixed_random = mixed_random.replace('inputs (P values:', 'inputs (P claimed:bool,P values:')
 mixed_random = mixed_random.replace('outputs (V bool);', 'outputs (P bool,V bool);')
 mixed_random = mixed_random.replace('    return ok;\n  }\n\n  instance', '    return (claimed,ok);\n  }\n\n  instance')

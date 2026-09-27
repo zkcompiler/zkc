@@ -9,6 +9,9 @@ from commands import Commands
 from source_text import COLLISION
 from tools import compiler, examples, records
 
+COLLISION = COLLISION.replace("module {", "module { use zkc::core;", 1).replace(
+    "bool::and(x, x)", "zkc::core::and(x, x)")
+
 
 root = Path(__file__).resolve().parents[2]
 
@@ -75,12 +78,12 @@ for stem in ("two-factor", "committed-two-factor", "dleq"):
 
 # Roles are explicit declarations, including more than two roles. Names
 # containing '-' and zero-result calls exercise token boundaries.
-relay = '''module "arkworks.multilinear.bls12-381/1" {
-      fn Identity(a: field) -> (field) { return (a); }
+relay = '''module {
+      fn Identity(a: bls12-381.fr::Element) -> (bls12-381.fr::Element) { return (a); }
       protocol Relay {
         roles (Alice, Bob, Checker);
-        inputs (Alice input-value: field);
-        outputs (Checker field);
+        inputs (Alice input-value: bls12-381.fr::Element);
+        outputs (Checker bls12-381.fr::Element);
         local [copy] Alice: let owned = Identity(input-value);
         message [first] scalar: Alice(owned)->Bob(received);
         message [second] scalar: Bob(received)->Checker(result);
@@ -112,8 +115,8 @@ assert json.loads(run("protocol-source", text=formatted).stdout) == parsed
 # protocol implementations. Unknown role ownership uses existing admission.
 run("protocol-source", text='module {}')
 external = relay.replace(
-    "fn Identity(a: field) -> (field) { return (a); }",
-    "fn Identity(a: field) -> (field) external;",
+    "fn Identity(a: bls12-381.fr::Element) -> (bls12-381.fr::Element) { return (a); }",
+    "fn Identity(a: bls12-381.fr::Element) -> (bls12-381.fr::Element) external;",
 )
 run("protocol-source", text=external)
 run("protocol-compile", text=external, refuses="interactive-external-body")
@@ -172,11 +175,13 @@ edits = [
      "source-name-unresolved"),
     (relay.replace("Identity(input-value)", "Identity(absent)"),
      "source-name-unresolved"),
-    (relay.replace("outputs (Checker field);", "outputs (Checker unknown);"),
+    (relay.replace("outputs (Checker bls12-381.fr::Element);", "outputs (Checker unknown);"),
      "source-name-unresolved"),
     ('''module {
+  use zkc::poly::{Table};
+  use zkc::poly;
           fn Fold<F: domain Field>(a: Table<F>, r: F::Element) -> (Table<F>) {
-            let b = poly::fold::<F>(a, r); // missing public requirement
+            let b = zkc::poly::fold::<F>(a, r); // missing public requirement
             return (b);
           }
         }''', "generic-public-requirement"),
@@ -200,6 +205,8 @@ run("protocol-format", text=encode(bad_json), refuses="interactive-local-symbol"
 # production, zero/multiple outputs and declared roles beyond P/V. Reserve
 # labels even in future nested blocks, decoded from quoted spellings.
 anonymous = r'''module {
+  use zkc::algebra::{Vector};
+  use zkc::random::{Nonce};
       bind guard = control.require();
       bind commit = curve.commit(bls12-381.g1);
       fn Guard(x: bool) -> () { guard(x); return (); }
@@ -286,10 +293,14 @@ run("protocol-format", text=duplicate)
 # Names outside the site namespace (including a later selector) cannot cause
 # the site they refer to to be renamed during parsing.
 generic_effects = '''module {
-      fn Guard<>(x: bool) -> () { control::require::<>(x); return (); }
+  use zkc::algebra::{Vector};
+  use zkc::core;
+  use zkc::curve;
+  use zkc::random::{Nonce};
+      fn Guard<>(x: bool) -> () { zkc::core::require::<>(x); return (); }
       fn Commit<G: domain Group>(bases: Vector<G::Element>, nonce: Nonce<G::Scalar>)
           -> (Vector<G::Element>, Nonce<G::Scalar>) requires (ScalarAction(G)) {
-        let (points, ready) = curve::commit::<G>(bases, nonce);
+        let (points, ready) = zkc::curve::commit::<G>(bases, nonce);
         return (points, ready);
       }
     }'''
@@ -299,9 +310,11 @@ assert effects[1][1][6][0] == ["op", "__site_0", "curve.commit", ["G"], [],
                              ["bases", "nonce"], ["points", "ready"]]
 assert json.loads(run("protocol-source", text=run("protocol-format", text=encode(effects)).stdout).stdout) == effects
 generic_anonymous = '''module {
+  use zkc::poly::{Table};
+  use zkc::poly;
       fn Fold<F: domain Field>(a: Table<F>, r: F::Element) -> (Table<F>)
           requires (CommRing(F)) {
-        let b = poly::fold::<F>(a, r); return (b);
+        let b = zkc::poly::fold::<F>(a, r); return (b);
       }
       configure Partial = Fold();
       configure Fast = Partial(F = bls12-381.fr) using (__site_0 = "arkworks-msb/poly.fold");
@@ -349,7 +362,7 @@ negatives = [
     (relay.replace("roles (Alice, Bob, Checker);", ""), "source-syntax"),
     (relay.replace("roles (Alice=Alice, Bob=Bob, Checker=Checker);", ""),
      "source-syntax"),
-    (relay.replace("outputs (Checker field);", "outputs (Checker unknown);"),
+    (relay.replace("outputs (Checker bls12-381.fr::Element);", "outputs (Checker unknown);"),
      "source-name-unresolved"),
     ('construction main { producer P; producer V; }', "source-duplicate"),
     ('construction main {}', "source-syntax"),
@@ -462,23 +475,25 @@ def equivalent(inferred, explicit):
 
 
 inferred = '''module {
+  use zkc::algebra;
   fn Four<F: Field>(x: F::Element) -> F::Element {
     [first] let y = Twice(x);
     [second] let z = Twice(y);
     return z;
   }
   fn Twice<F: Field>(x: F::Element) -> F::Element {
-    [sum] let y = field::add(x, x); return y;
+    [sum] let y = zkc::algebra::add(x, x); return y;
   }
 }'''
 explicit = '''module {
+  use zkc::algebra;
   fn Four<F: domain Field>(x: F::Element) -> F::Element requires (Field(F)) {
     [first] let y = Twice::<F>(x);
     [second] let z = Twice::<F>(y);
     return z;
   }
   fn Twice<F: domain Field>(x: F::Element) -> F::Element requires (Field(F)) {
-    [sum] let y = field::add::<F>(x, x); return y;
+    [sum] let y = zkc::algebra::add::<F>(x, x); return y;
   }
 }'''
 record = equivalent(inferred, explicit)
@@ -499,13 +514,15 @@ explicit_syntax = json.loads(run("protocol-parse", text=explicit).stdout)
 assert explicit_syntax["content"]["functions"][0]["body"][0]["staticArguments"] == ["F"]
 
 constant = '''module {
+  use zkc::algebra;
   fn One<F: Field>() -> F::Element {
-    let one: F::Element = field::constant() attributes (1); return one;
+    let one: F::Element = zkc::algebra::constant() attributes (1); return one;
   }
 }'''
 equivalent(constant, '''module {
+  use zkc::algebra;
   fn One<F: Field>() -> F::Element {
-    let one = field::constant::<F>() attributes (1); return one;
+    let one = zkc::algebra::constant::<F>() attributes (1); return one;
   }
 }''')
 run("protocol-source", text=constant.replace(": F::Element =", " ="),
@@ -555,12 +572,13 @@ common(associated)
 run("protocol-source", text=associated.replace("Scalar::<G>(x)", "Scalar(x)"),
     refuses="source-static-unresolved")
 associated_add = '''module {
+  use zkc::algebra;
   fn Add<G: ScalarAction>(x: G::Scalar::Element) -> G::Scalar::Element
       where G::Scalar: Field {
-    let y = field::add(x, x); return y;
+    let y = zkc::algebra::add(x, x); return y;
   }
 }'''
-equivalent(associated_add, associated_add.replace("field::add(x", "field::add::<G::Scalar>(x"))
+equivalent(associated_add, associated_add.replace("zkc::algebra::add(x", "zkc::algebra::add::<G::Scalar>(x"))
 
 partial = '''module {
   fn Id<F: domain Field, G: domain Group>(x: F::Element) -> F::Element { return x; }
@@ -576,10 +594,11 @@ run("protocol-source", text=partial.replace("Partial(x)", 'Partial::<F, "bls12-3
 # Ordinary functions, bound operations, generic operations, helpers and empty
 # generic definitions retain their categories, including zero-result guards.
 closed = '''module {
+  use zkc::core;
   bind both = bool::and();
   fn Use(x: bool) -> bool { let y = Identity(x); let z = both(x, y); return z; }
   fn Identity(x: bool) -> bool { return x; }
-  fn Guard<>(x: bool) -> () { control::require(x); return; }
+  fn Guard<>(x: bool) -> () { zkc::core::require(x); return; }
 }'''
 categories = common(closed)
 assert categories[3][2][0][4][0][0] == "apply"
@@ -588,7 +607,7 @@ assert categories[1][0][6][0] == ["op", "__site_0", "control.require", [], [], [
 run("protocol-source", text=closed.replace("let y = Identity(x);", "Identity(x);").replace("both(x, y)", "both(x, x)"),
     refuses="source-call-arity")
 # Unit is a source value, even when its PIR layout has no leaves.
-assert common(closed.replace("control::require(x);", "let y = control::require(x);")) == categories
+assert common(closed.replace("zkc::core::require(x);", "let y = zkc::core::require(x);")) == categories
 run("protocol-source", text=closed.replace("let y = Identity(x);", "let x = Identity(x);").replace("both(x, y)", "both(x, x)"),
     refuses="source-value-duplicate")
 run("protocol-source", text=inferred.replace("let z = Twice(y)", "let y = Twice(y)").replace("return z", "return y"),
@@ -600,29 +619,32 @@ run("protocol-source", text=closed.replace("fn Identity(x", "fn Use(x"),
 # over the quoted spellings.
 primitive = common(COLLISION)
 assert primitive[1][1][6][0][0] == "op"
-helper = common(COLLISION.replace("bool::and(x, x)", '\"bool.and\"(x, x)'))
+helper = common(COLLISION.replace("zkc::core::and(x, x)", '\"bool.and\"(x, x)'))
 assert helper[1][1][6][0][0] == "apply"
 
 conflict = '''module {
+  use zkc::algebra;
   fn Bad<F: Field, E: Field>(x: F::Element, y: E::Element) -> F::Element {
-    let z = field::add(x, y); return z;
+    let z = zkc::algebra::add(x, y); return z;
   }
 }'''
 run("protocol-source", text=conflict, refuses="source-static-conflict")
-run("protocol-source", text=conflict.replace("field::add(x, y)", "field::add::<F>(x, y)"),
+run("protocol-source", text=conflict.replace("zkc::algebra::add(x, y)", "zkc::algebra::add::<F>(x, y)"),
     refuses="source-static-conflict")
 
 # Inference cannot copy consumed resources or insert implicit cleanup.
 affine = '''module {
+  use zkc::random::{Rng};
+  use zkc::random;
   fn Draw<F: Field>(rng: Rng<F>) -> (F::Element, Rng<F>) {
-    let (n, next) = random::draw(rng); return (n, next);
+    let (n, next) = zkc::random::draw(rng); return (n, next);
   }
 }'''
-equivalent(affine, affine.replace("random::draw(rng)", "random::draw::<F>(rng)"))
+equivalent(affine, affine.replace("zkc::random::draw(rng)", "zkc::random::draw::<F>(rng)"))
 run("protocol-source", text=affine.replace("return (n, next);",
-    "let (again, last) = random::draw(rng); return (again, last);"),
+    "let (again, last) = zkc::random::draw(rng); return (again, last);"),
     refuses="generic-resource-reuse")
-run("protocol-source", text=affine.replace("let (n, next) = random::draw(rng);", "random::draw(rng);").replace("return (n, next);", "return;"),
+run("protocol-source", text=affine.replace("let (n, next) = zkc::random::draw(rng);", "zkc::random::draw(rng);").replace("return (n, next);", "return;"),
     refuses="source-call-arity")
 
 # Obsolete syntax is refused, while nested types and unsupported tuple forms
@@ -633,21 +655,24 @@ for old in [
     'module { fn F<>() -> () { let x = apply Helper<>(); return; } }',
 ]:
     run("protocol-format", text=old, refuses="source-syntax")
-run("protocol-source", text='module { fn F<F: Field>(x: Vector<Vector<F::Element>>) -> () { return; } }',
+run("protocol-source", text='module { use zkc::algebra::{Vector}; fn F<F: Field>(x: Vector<Vector<F::Element>>) -> () { return; } }',
     refuses="source-type")
 
 # An annotation supplies the extension itself; the base projection alone must
 # never be inverted, nor may an extension conversion appear implicitly.
 embedding = '''module {
+  use zkc::algebra::{Vector};
+  use zkc::algebra;
   fn Embed<E: ExtensionField>(x: Vector<E::BaseField::Element>) -> Vector<E::Element> {
-    let y: Vector<E::Element> = vector::embed(x); return y;
+    let y: Vector<E::Element> = zkc::algebra::vector_embed(x); return y;
   }
 }'''
-equivalent(embedding, embedding.replace("let y: Vector<E::Element> = vector::embed(x)",
-                                      "let y = vector::embed::<E>(x)"))
+equivalent(embedding, embedding.replace("let y: Vector<E::Element> = zkc::algebra::vector_embed(x)",
+                                      "let y = zkc::algebra::vector_embed::<E>(x)"))
 run("protocol-source", text=embedding.replace("let y: Vector<E::Element>", "let y"),
     refuses="source-static-unresolved")
 no_conversion = '''module {
+  use zkc::algebra::{Vector};
   fn Id<E: ExtensionField>(x: Vector<E::Element>) -> Vector<E::Element> { return x; }
   fn Use<E: ExtensionField>(x: Vector<E::BaseField::Element>) -> Vector<E::Element> {
     let y = Id::<E>(x); return y;
@@ -657,12 +682,13 @@ run("protocol-source", text=no_conversion, refuses="source-static-conflict")
 
 # Tuple expected types solve two independent holes in a forward helper call.
 tuple_expected = '''module {
+  use zkc::algebra;
   fn Use<F: Field, G: Field>() -> (F::Element, G::Element) {
     let (a, b): (F::Element, G::Element) = Pair(); return (a, b);
   }
   fn Pair<F: Field, G: Field>() -> (F::Element, G::Element) {
-    let a = field::constant::<F>() attributes (1);
-    let b = field::constant::<G>() attributes (2); return (a, b);
+    let a = zkc::algebra::constant::<F>() attributes (1);
+    let b = zkc::algebra::constant::<G>() attributes (2); return (a, b);
   }
 }'''
 equivalent(tuple_expected, tuple_expected.replace(
@@ -682,17 +708,19 @@ equivalent(strong_helper.replace("Weak<F: Field>", "Weak<F: PrimeField>"),
 
 # A result cannot be used to infer a previous unannotated nullary call.
 run("protocol-source", text=constant.replace("let one: F::Element", "let one").replace(
-    "return one;", "let two: F::Element = field::add(one, one); return two;"),
+    "return one;", "let two: F::Element = zkc::algebra::add(one, one); return two;"),
     refuses="source-static-unresolved")
 
 nonce = '''module {
+  use zkc::curve;
+  use zkc::random::{Nonce};
   fn Respond<F: Field>(x: F::Element, c: F::Element, n: Nonce<F>) -> F::Element {
-    let y = curve::response(x, c, n); return y;
+    let y = zkc::curve::response(x, c, n); return y;
   }
 }'''
-equivalent(nonce, nonce.replace("curve::response(x", "curve::response::<F>(x"))
+equivalent(nonce, nonce.replace("zkc::curve::response(x", "zkc::curve::response::<F>(x"))
 run("protocol-source", text=nonce.replace("return y;",
-    "let z = curve::response(x, c, n); return z;"), refuses="generic-resource-reuse")
+    "let z = zkc::curve::response(x, c, n); return z;"), refuses="generic-resource-reuse")
 # Affine permits an unused value; retaining a binding is different from silently
 # discarding a call's results or synthesizing a cleanup operation.
 unused = common(affine.replace("-> (F::Element, Rng<F>)", "-> ()").replace("return (n, next);", "return;"))
@@ -723,7 +751,8 @@ run("protocol-source", text=closed.replace("Identity(x);", 'Identity::<"koala-be
 # Source locations point to the failing call, not the enclosing declaration.
 conflicting = inferred.replace("[first] let y = Twice(x);", "[first] let y: bool = Twice(x);")
 error = run("protocol-source", text=conflicting, refuses="source-type-mismatch")
-assert "-:3:" in error.stderr and "let y: bool" in error.stderr
+call_line = next(i for i, line in enumerate(conflicting.splitlines(), 1) if "let y: bool" in line)
+assert f"-:{call_line}:" in error.stderr and "let y: bool" in error.stderr
 
 # Common JSON inspection is tagged too; it is never confused with admission.
 json_inspection = json.loads(run("protocol-parse", text=encode(record)).stdout)
@@ -764,7 +793,7 @@ run("protocol-source", text=noncanonical_attribute, refuses="noncanonical-natura
 # Formatting uses the syntax budget even for semantically unsupported nesting.
 for depth in (64, 65):
     nested_type = "Vector<" * depth + "F::Element" + ">" * depth
-    nested_source = f"module {{ fn Deep<F: Field>(x: {nested_type}) -> () {{ return; }} }}"
+    nested_source = f"module {{ use zkc::algebra::Vector; fn Deep<F: Field>(x: {nested_type}) -> () {{ return; }} }}"
     if depth == 64:
         formatted = run("protocol-format", text=nested_source).stdout
         assert run("protocol-format", text=formatted).stdout == formatted

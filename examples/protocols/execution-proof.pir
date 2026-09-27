@@ -3,22 +3,49 @@
 // Layout: word_bits=8, RAM=2, transitions=8.
 // Program is verifier-owned sparse matrix configuration; see execution/README.md.
 module {
+  use zkc::algebra::{
+    Field,
+    Matrix,
+    Vector
+  };
+  use zkc::algebra;
+  use zkc::core;
+  use zkc::pcs::{
+    Commitment,
+    MultilinearOpening,
+    OpeningState,
+    Proof,
+    ProverKey,
+    VerifierKey
+  };
+  use zkc::pcs;
+  use zkc::poly::{
+    Point,
+    Polynomial,
+    Round,
+    Table
+  };
+  use zkc::poly;
+  use zkc::random::{
+    Rng
+  };
+  use zkc::random;
   fn DrawChallengeAlgorithm<F: domain Field>(coins: Rng<F>) -> (F::Element, Rng<F>) requires (
     Field(F)
   ) {
-    [draw] let (value, after) = random::draw::<F>(coins);
+    [draw] let (value, after) = zkc::random::draw::<F>(coins);
     return (value, after);
   }
 
   fn EmptyPointAlgorithm<F: domain Field>() -> Point<F> requires (Field(F)) {
-    [__site_0] let p = poly::empty_point::<F>();
+    [__site_0] let p = zkc::poly::empty_point::<F>();
     return p;
   }
 
   fn AppendPointAlgorithm<F: domain Field>(p: Point<F>, r: F::Element) -> Point<F> requires (
     Field(F)
   ) {
-    [__site_0] let next = poly::append_point::<F>(p, r);
+    [__site_0] let next = zkc::poly::append_point::<F>(p, r);
     return next;
   }
 
@@ -26,7 +53,7 @@ module {
     key: ProverKey<C>,
     z: Table<C::ValueField>
   ) -> (Commitment<C>, OpeningState<C>) requires (MultilinearOpening(C)) {
-    [__site_0] let (root, original) = pcs::commit::<C>(key, z);
+    [__site_0] let (root, original) = zkc::pcs::commit::<C>(key, z);
     return (root, original);
   }
 
@@ -35,7 +62,7 @@ module {
     point: Point<C::PointField>
   ) -> (C::EvaluationField::Element, Proof<C>) requires (MultilinearOpening(C)) {
     // pcs.open borrows immutable original custody; it never opens fold scratch.
-    [__site_0] let (value, proof) = pcs::open::<C>(original, point);
+    [__site_0] let (value, proof) = zkc::pcs::open::<C>(original, point);
     return (value, proof);
   }
 
@@ -46,20 +73,20 @@ module {
     value: C::EvaluationField::Element,
     proof: Proof<C>
   ) -> C::EvaluationField::Element requires (MultilinearOpening(C)) {
-    [__site_0] let ok = pcs::check::<C>(key, root, point, value, proof);
-    [__site_1] control::require(ok);
+    [__site_0] let ok = zkc::pcs::check::<C>(key, root, point, value, proof);
+    [__site_1] zkc::core::require(ok);
     return value;
   }
 
   fn OuterEqualityAlgorithm<F: domain Field>(tau: Point<F>) -> Vector<F::Element> requires (
     Field(F)
   ) {
-    [__site_0] let equality = poly::equality_weights::<F>(tau);
+    [__site_0] let equality = zkc::poly::equality_weights::<F>(tau);
     return equality;
   }
 
   fn ZeroClaimAlgorithm<F: domain Field>() -> F::Element requires (Field(F)) {
-    [__site_0] let zero = field::constant::<F>() attributes ("0");
+    [__site_0] let zero = zkc::algebra::constant::<F>() attributes ("0");
     return zero;
   }
 
@@ -70,36 +97,36 @@ module {
     c: Vector<F::Element>
   ) -> Polynomial<F> requires (Field(F)) {
     // Sum the coefficients of (eL+X*de)*((aL+X*da)*(bL+X*db)-(cL+X*dc)).
-    [__site_0] let (el, er) = vector::split::<F>(e);
-    [__site_1] let (al, ar) = vector::split::<F>(a);
-    [__site_2] let (bl, br) = vector::split::<F>(b);
-    [__site_3] let (cl, cr) = vector::split::<F>(c);
-    [__site_4] let de = vector::sub::<F>(er, el);
-    [__site_5] let da = vector::sub::<F>(ar, al);
-    [__site_6] let db = vector::sub::<F>(br, bl);
-    [__site_7] let dc = vector::sub::<F>(cr, cl);
-    [__site_8] let ab = vector::mul::<F>(al, bl);
-    [__site_9] let p0 = vector::sub::<F>(ab, cl);
-    [__site_10] let adb = vector::mul::<F>(al, db);
-    [__site_11] let dab = vector::mul::<F>(da, bl);
-    [__site_12] let cross = vector::add::<F>(adb, dab);
-    [__site_13] let p1 = vector::sub::<F>(cross, dc);
-    [__site_14] let q0 = vector::dot::<F>(el, p0);
-    [__site_15] let q1_left = vector::dot::<F>(el, p1);
-    [__site_16] let q1_right = vector::dot::<F>(de, p0);
-    [__site_17] let q1 = field::add::<F>(q1_left, q1_right);
+    [__site_0] let (el, er) = zkc::algebra::vector_split::<F>(e);
+    [__site_1] let (al, ar) = zkc::algebra::vector_split::<F>(a);
+    [__site_2] let (bl, br) = zkc::algebra::vector_split::<F>(b);
+    [__site_3] let (cl, cr) = zkc::algebra::vector_split::<F>(c);
+    [__site_4] let de = zkc::algebra::vector_sub::<F>(er, el);
+    [__site_5] let da = zkc::algebra::vector_sub::<F>(ar, al);
+    [__site_6] let db = zkc::algebra::vector_sub::<F>(br, bl);
+    [__site_7] let dc = zkc::algebra::vector_sub::<F>(cr, cl);
+    [__site_8] let ab = zkc::algebra::vector_mul::<F>(al, bl);
+    [__site_9] let p0 = zkc::algebra::vector_sub::<F>(ab, cl);
+    [__site_10] let adb = zkc::algebra::vector_mul::<F>(al, db);
+    [__site_11] let dab = zkc::algebra::vector_mul::<F>(da, bl);
+    [__site_12] let cross = zkc::algebra::vector_add::<F>(adb, dab);
+    [__site_13] let p1 = zkc::algebra::vector_sub::<F>(cross, dc);
+    [__site_14] let q0 = zkc::algebra::vector_dot::<F>(el, p0);
+    [__site_15] let q1_left = zkc::algebra::vector_dot::<F>(el, p1);
+    [__site_16] let q1_right = zkc::algebra::vector_dot::<F>(de, p0);
+    [__site_17] let q1 = zkc::algebra::add::<F>(q1_left, q1_right);
     // Reuse the quadratic product in both highest coefficients.
-    [__site_18] let dadb = vector::mul::<F>(da, db);
-    [__site_19] let q2_left = vector::dot::<F>(el, dadb);
-    [__site_20] let q2_right = vector::dot::<F>(de, p1);
-    [__site_21] let q2 = field::add::<F>(q2_left, q2_right);
-    [__site_22] let q3 = vector::dot::<F>(de, dadb);
-    [__site_23] let coefficients_empty = vector::empty::<F>();
-    [__site_24] let coefficients_0 = vector::append::<F>(coefficients_empty, q0);
-    [__site_25] let coefficients_1 = vector::append::<F>(coefficients_0, q1);
-    [__site_26] let coefficients_2 = vector::append::<F>(coefficients_1, q2);
-    [__site_27] let coefficients = vector::append::<F>(coefficients_2, q3);
-    [__site_28] let q = poly::from_coefficients::<F>(coefficients);
+    [__site_18] let dadb = zkc::algebra::vector_mul::<F>(da, db);
+    [__site_19] let q2_left = zkc::algebra::vector_dot::<F>(el, dadb);
+    [__site_20] let q2_right = zkc::algebra::vector_dot::<F>(de, p1);
+    [__site_21] let q2 = zkc::algebra::add::<F>(q2_left, q2_right);
+    [__site_22] let q3 = zkc::algebra::vector_dot::<F>(de, dadb);
+    [__site_23] let coefficients_empty = zkc::algebra::vector_empty::<F>();
+    [__site_24] let coefficients_0 = zkc::algebra::vector_append::<F>(coefficients_empty, q0);
+    [__site_25] let coefficients_1 = zkc::algebra::vector_append::<F>(coefficients_0, q1);
+    [__site_26] let coefficients_2 = zkc::algebra::vector_append::<F>(coefficients_1, q2);
+    [__site_27] let coefficients = zkc::algebra::vector_append::<F>(coefficients_2, q3);
+    [__site_28] let q = zkc::poly::from_coefficients::<F>(coefficients);
     return q;
   }
 
@@ -107,18 +134,18 @@ module {
     Field(F)
   ) {
     // A received polynomial is not degree bounded by its type. Check before drawing.
-    [__site_0] let degree_ok = poly::degree_check::<F>(q) attributes ("3");
-    [__site_1] control::require(degree_ok);
-    [__site_2] let sum = poly::univariate_boundary::<F>(q);
-    [__site_3] let claim_ok = field::equal::<F>(sum, claim);
-    [__site_4] control::require(claim_ok);
+    [__site_0] let degree_ok = zkc::poly::degree_check::<F>(q) attributes ("3");
+    [__site_1] zkc::core::require(degree_ok);
+    [__site_2] let sum = zkc::poly::univariate_boundary::<F>(q);
+    [__site_3] let claim_ok = zkc::algebra::equal::<F>(sum, claim);
+    [__site_4] zkc::core::require(claim_ok);
     return;
   }
 
   fn EvaluateCubicAlgorithm<F: domain Field>(q: Polynomial<F>, r: F::Element) -> F::Element requires (
     Field(F)
   ) {
-    [__site_0] let value = poly::univariate_evaluate::<F>(q, r);
+    [__site_0] let value = zkc::poly::evaluate::<F>(q, r);
     return value;
   }
 
@@ -131,22 +158,22 @@ module {
   ) -> (Vector<F::Element>, Vector<F::Element>, Vector<F::Element>, Vector<F::Element>) requires (
     Field(F)
   ) {
-    [__site_0] let (el, er) = vector::split::<F>(e);
-    [__site_1] let ed = vector::sub::<F>(er, el);
-    [__site_2] let escaled = vector::scale::<F>(ed, r);
-    [__site_3] let enext = vector::add::<F>(el, escaled);
-    [__site_4] let (al, ar) = vector::split::<F>(a);
-    [__site_5] let ad = vector::sub::<F>(ar, al);
-    [__site_6] let ascaled = vector::scale::<F>(ad, r);
-    [__site_7] let anext = vector::add::<F>(al, ascaled);
-    [__site_8] let (bl, br) = vector::split::<F>(b);
-    [__site_9] let bd = vector::sub::<F>(br, bl);
-    [__site_10] let bscaled = vector::scale::<F>(bd, r);
-    [__site_11] let bnext = vector::add::<F>(bl, bscaled);
-    [__site_12] let (cl, cr) = vector::split::<F>(c);
-    [__site_13] let cd = vector::sub::<F>(cr, cl);
-    [__site_14] let cscaled = vector::scale::<F>(cd, r);
-    [__site_15] let cnext = vector::add::<F>(cl, cscaled);
+    [__site_0] let (el, er) = zkc::algebra::vector_split::<F>(e);
+    [__site_1] let ed = zkc::algebra::vector_sub::<F>(er, el);
+    [__site_2] let escaled = zkc::algebra::vector_scale::<F>(ed, r);
+    [__site_3] let enext = zkc::algebra::vector_add::<F>(el, escaled);
+    [__site_4] let (al, ar) = zkc::algebra::vector_split::<F>(a);
+    [__site_5] let ad = zkc::algebra::vector_sub::<F>(ar, al);
+    [__site_6] let ascaled = zkc::algebra::vector_scale::<F>(ad, r);
+    [__site_7] let anext = zkc::algebra::vector_add::<F>(al, ascaled);
+    [__site_8] let (bl, br) = zkc::algebra::vector_split::<F>(b);
+    [__site_9] let bd = zkc::algebra::vector_sub::<F>(br, bl);
+    [__site_10] let bscaled = zkc::algebra::vector_scale::<F>(bd, r);
+    [__site_11] let bnext = zkc::algebra::vector_add::<F>(bl, bscaled);
+    [__site_12] let (cl, cr) = zkc::algebra::vector_split::<F>(c);
+    [__site_13] let cd = zkc::algebra::vector_sub::<F>(cr, cl);
+    [__site_14] let cscaled = zkc::algebra::vector_scale::<F>(cd, r);
+    [__site_15] let cnext = zkc::algebra::vector_add::<F>(cl, cscaled);
     return (enext, anext, bnext, cnext);
   }
 
@@ -155,15 +182,15 @@ module {
     b: Vector<F::Element>,
     c: Vector<F::Element>
   ) -> (F::Element, F::Element, F::Element) requires (Field(F)) {
-    [__site_0] let a_shape = vector::length_check::<F>(a) attributes ("1");
-    [__site_1] control::require(a_shape);
-    [__site_2] let ar = vector::at::<F>(a) attributes ("0");
-    [__site_3] let b_shape = vector::length_check::<F>(b) attributes ("1");
-    [__site_4] control::require(b_shape);
-    [__site_5] let br = vector::at::<F>(b) attributes ("0");
-    [__site_6] let c_shape = vector::length_check::<F>(c) attributes ("1");
-    [__site_7] control::require(c_shape);
-    [__site_8] let cr = vector::at::<F>(c) attributes ("0");
+    [__site_0] let a_shape = zkc::algebra::vector_length_check::<F>(a) attributes ("1");
+    [__site_1] zkc::core::require(a_shape);
+    [__site_2] let ar = zkc::algebra::vector_at::<F>(a) attributes ("0");
+    [__site_3] let b_shape = zkc::algebra::vector_length_check::<F>(b) attributes ("1");
+    [__site_4] zkc::core::require(b_shape);
+    [__site_5] let br = zkc::algebra::vector_at::<F>(b) attributes ("0");
+    [__site_6] let c_shape = zkc::algebra::vector_length_check::<F>(c) attributes ("1");
+    [__site_7] zkc::core::require(c_shape);
+    [__site_8] let cr = zkc::algebra::vector_at::<F>(c) attributes ("0");
     return (ar, br, cr);
   }
 
@@ -175,14 +202,14 @@ module {
     c: F::Element,
     claim: F::Element
   ) -> () requires (Field(F)) {
-    [__site_0] let tau_weights = poly::equality_weights::<F>(tau);
-    [__site_1] let r_weights = poly::equality_weights::<F>(r);
-    [__site_2] let equality = vector::dot::<F>(tau_weights, r_weights);
-    [__site_3] let ab = field::mul::<F>(a, b);
-    [__site_4] let residual = field::sub::<F>(ab, c);
-    [__site_5] let expected = field::mul::<F>(equality, residual);
-    [__site_6] let ok = field::equal::<F>(claim, expected);
-    [__site_7] control::require(ok);
+    [__site_0] let tau_weights = zkc::poly::equality_weights::<F>(tau);
+    [__site_1] let r_weights = zkc::poly::equality_weights::<F>(r);
+    [__site_2] let equality = zkc::algebra::vector_dot::<F>(tau_weights, r_weights);
+    [__site_3] let ab = zkc::algebra::mul::<F>(a, b);
+    [__site_4] let residual = zkc::algebra::sub::<F>(ab, c);
+    [__site_5] let expected = zkc::algebra::mul::<F>(equality, residual);
+    [__site_6] let ok = zkc::algebra::equal::<F>(claim, expected);
+    [__site_7] zkc::core::require(ok);
     return;
   }
 
@@ -194,11 +221,11 @@ module {
     beta: F::Element,
     gamma: F::Element
   ) -> F::Element requires (Field(F)) {
-    [__site_0] let aa = field::mul::<F>(alpha, a);
-    [__site_1] let bb = field::mul::<F>(beta, b);
-    [__site_2] let cc = field::mul::<F>(gamma, c);
-    [__site_3] let ab = field::add::<F>(aa, bb);
-    [__site_4] let claim = field::add::<F>(ab, cc);
+    [__site_0] let aa = zkc::algebra::mul::<F>(alpha, a);
+    [__site_1] let bb = zkc::algebra::mul::<F>(beta, b);
+    [__site_2] let cc = zkc::algebra::mul::<F>(gamma, c);
+    [__site_3] let ab = zkc::algebra::add::<F>(aa, bb);
+    [__site_4] let claim = zkc::algebra::add::<F>(ab, cc);
     return claim;
   }
 
@@ -206,23 +233,23 @@ module {
     Field(F)
   ) {
     // The existing round type carries the bound two, unlike polynomial.
-    [__site_0] let q = poly::product_round::<F>(a, b);
+    [__site_0] let q = zkc::poly::product_round::<F>(a, b);
     return q;
   }
 
   fn CheckQuadraticBoundaryAlgorithm<F: domain Field>(q: Round<F>, claim: F::Element) -> () requires (
     Field(F)
   ) {
-    [__site_0] let sum = poly::boundary::<F>(q);
-    [__site_1] let ok = field::equal::<F>(sum, claim);
-    [__site_2] control::require(ok);
+    [__site_0] let sum = zkc::poly::boundary::<F>(q);
+    [__site_1] let ok = zkc::algebra::equal::<F>(sum, claim);
+    [__site_2] zkc::core::require(ok);
     return;
   }
 
   fn EvaluateQuadraticAlgorithm<F: domain Field>(q: Round<F>, r: F::Element) -> F::Element requires (
     Field(F)
   ) {
-    [__site_0] let value = poly::round_evaluate::<F>(q, r);
+    [__site_0] let value = zkc::poly::round_evaluate::<F>(q, r);
     return value;
   }
 
@@ -232,18 +259,18 @@ module {
     r: F::Element
   ) -> (Table<F>, Table<F>) requires (Field(F)) {
     // Use the existing table abstraction for logical MSB folding.
-    [__site_0] let at = poly::fold::<F>(a, r);
-    [__site_1] let bt = poly::fold::<F>(b, r);
+    [__site_0] let at = zkc::poly::fold::<F>(a, r);
+    [__site_1] let bt = zkc::poly::fold::<F>(b, r);
     return (at, bt);
   }
 
   fn PackOriginalAlgorithm<F: domain Field>(z: Vector<F::Element>) -> Table<F> requires (Field(F)) {
-    [__site_0] let shape = vector::length_check::<F>(z) attributes ("863");
-    [__site_1] control::require(shape);
-    [__site_2] let zero = field::constant::<F>() attributes ("0");
-    [__site_3] let zeros = vector::splat::<F>(zero) attributes ("161");
-    [__site_4] let padded = vector::concat::<F>(z, zeros);
-    [__site_5] let table = vector::to_table::<F>(padded);
+    [__site_0] let shape = zkc::algebra::vector_length_check::<F>(z) attributes ("863");
+    [__site_1] zkc::core::require(shape);
+    [__site_2] let zero = zkc::algebra::constant::<F>() attributes ("0");
+    [__site_3] let zeros = zkc::algebra::vector_splat::<F>(zero) attributes ("161");
+    [__site_4] let padded = zkc::algebra::vector_concat::<F>(z, zeros);
+    [__site_5] let table = zkc::algebra::vector_to_table::<F>(padded);
     return table;
   }
 
@@ -292,15 +319,15 @@ module {
     link_value: F::Element,
     link_claim: F::Element
   ) -> bool requires (Field(F)) {
-    [__site_0] let cpu_expected = field::mul::<F>(cpu_matrix, cpu_value);
-    [__site_1] let cpu_ok = field::equal::<F>(cpu_expected, cpu_claim);
-    [guard_cpu_connection] control::require(cpu_ok);
-    [__site_2] let memory_expected = field::mul::<F>(memory_matrix, memory_value);
-    [__site_3] let memory_ok = field::equal::<F>(memory_expected, memory_claim);
-    [guard_memory_connection] control::require(memory_ok);
-    [__site_4] let link_expected = field::mul::<F>(link_matrix, link_value);
-    [__site_5] let link_ok = field::equal::<F>(link_expected, link_claim);
-    [guard_link_connection] control::require(link_ok);
+    [__site_0] let cpu_expected = zkc::algebra::mul::<F>(cpu_matrix, cpu_value);
+    [__site_1] let cpu_ok = zkc::algebra::equal::<F>(cpu_expected, cpu_claim);
+    [guard_cpu_connection] zkc::core::require(cpu_ok);
+    [__site_2] let memory_expected = zkc::algebra::mul::<F>(memory_matrix, memory_value);
+    [__site_3] let memory_ok = zkc::algebra::equal::<F>(memory_expected, memory_claim);
+    [guard_memory_connection] zkc::core::require(memory_ok);
+    [__site_4] let link_expected = zkc::algebra::mul::<F>(link_matrix, link_value);
+    [__site_5] let link_ok = zkc::algebra::equal::<F>(link_expected, link_claim);
+    [guard_link_connection] zkc::core::require(link_ok);
     return link_ok;
   }
 

@@ -23,6 +23,13 @@ struct SamplingContract {
   llvm::StringRef derivedCounterpart;
 };
 
+/// A declared state successor, including copyable external snapshots. This
+/// does not grant replay, entropy or transcript sampling authority.
+struct HistoryContract {
+  unsigned stateInput = 0;
+  unsigned stateOutput = 0;
+};
+
 struct ObservationContract {
   unsigned stateInput = 0;
   unsigned payloadInput = 1;
@@ -68,6 +75,7 @@ const CosetConvention *cosetConvention(llvm::StringRef field);
 /// Independently consumed semantic facets of a registered operation. Absence
 /// of a facet never grants purity, speculation, replay, or sampling authority.
 struct OperationContracts {
+  std::optional<HistoryContract> history;
   std::optional<SamplingContract> sampling;
   std::optional<ObservationContract> observation;
   std::optional<DiagonalMapContract> diagonalMap;

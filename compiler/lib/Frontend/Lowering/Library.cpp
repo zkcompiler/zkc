@@ -23,10 +23,10 @@ class Lowerer {
   std::map<std::pair<std::string, source::Names>, std::string> bindings;
   std::map<std::string, std::string> originDeclarations;
 
-  Expected<std::string> domain(const StaticTerm &term) const {
+  Expected<std::string> staticArgument(const StaticTerm &term) const {
     if (!environment)
       return fail("linked program has no captured domain environment");
-    return resolvedDomain(term, *environment);
+    return resolvedStatic(term, *environment);
   }
 
   Expected<std::string> type(const LayoutLeaf &leaf) const {
@@ -60,19 +60,9 @@ class Lowerer {
         return fail("missing or duplicable resource-unit slot");
       return "resource_unit:" + found->second;
     }
-    if (leaf.type.kind != Type::Kind::Logical || leaf.type.arguments.size() > 1)
-      return fail("a layout leaf is not a closed installed logical type");
-    std::string spelling = leaf.type.name;
-    if (!leaf.type.arguments.empty()) {
-      auto actual = domain(leaf.type.arguments.front());
-      if (!actual)
-        return actual.takeError();
-      spelling += ":" + *actual;
-    }
-    auto checked = protocol::parseBoundType(spelling, false);
-    if (!checked)
-      return checked.takeError();
-    return spelling;
+    if (!environment)
+      return fail("linked program has no captured static environment");
+    return resolvedLogicalType(leaf.type, *environment);
   }
 
   Expected<std::string> binding(StringRef operation, source::Names actuals) {
@@ -311,7 +301,7 @@ class Lowerer {
               return fail("linked logical target disagrees with typed call");
             source::Names actuals;
             for (const auto &argument : logical->arguments) {
-              auto actual = domain(argument);
+              auto actual = staticArgument(argument);
               if (!actual)
                 return actual.takeError();
               actuals.push_back(*actual);

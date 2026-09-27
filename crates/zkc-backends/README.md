@@ -9,8 +9,9 @@ prover/verifier protocol callback or own compiler/source correspondence.
 ## Implementation layout
 
 `backend/` separates explicit host policy, common validation and native dispatch.
-`bindings/` owns independently installed signatures; `domains.rs` owns nominal
-associations. `kernels/` contains scalar/vector/curve and resource operations,
+`bindings/` contains family-owned admission callbacks. Kernel tables author each
+native port shape once and attach the appropriate family callback through a
+typed constructor; `domains.rs` owns nominal associations. `kernels/` contains scalar/vector/curve and resource operations,
 with Plonky3 helpers in `plonky3/`. `codec/` holds wire and host-input encoding
 and decoding; `value.rs` retains the concrete carrier enum. `resource.rs`,
 `setups.rs` and `transcript.rs` retain authority and state ownership.
@@ -19,6 +20,44 @@ The crate root keeps its public types and constructors. Every successful
 operation returns through the common output validator after dispatch, including
 external operations and resource units. `external/` and `external_kernels.rs`
 retain the pinned construction adapters and persistent external-work budget.
+
+## Finite implementation assembly
+
+`backend/registry.rs` assembles one immutable exact implementation map when a
+backend is constructed. Each entry binds the logical contract, an independently
+authored signature resolver, its public-operand requirement, and its invocation
+handler. Duplicate implementation identities refuse initialization; registration
+order never selects an implementation. The full closed binding is checked on
+invocation, including equality with `Invocation.kernel`, before dispatch.
+Common operand, attribute, resource and public-operand checks precede every
+handler, including FixedVector and logical resource units. All results pass the
+common output validator. Artifact text cannot install a handler or waive a
+security requirement.
+
+An ordinary operation adds its native port row beside its kernel and participates
+in explicit assembly. A provider with the same physical ports may register a
+different handler. `arkworks-pairwise/vector.dot` is an explicit two-accumulator
+BLS vector dot product; `arkworks/vector.dot` remains the default. Its independent
+Rust physical admission, compiler selection and Lean admission are independently
+installed and compared by the provider-authoring tests. No performance claim is
+made for this alternative.
+
+Shaped rows explicitly opt into alternative implementations; the default is
+fixed. An alternative inherits its original family resolver, handler unless
+overridden, and restrictive public-operand requirements. Alternatives of
+alternatives refuse. Transcript observations are selectable shaped rows and keep
+their suite/payload/codec checks. Registry dispatch matches the alternative's
+exact primary domain argument before entering the family resolver; sharing a
+scalar field does not make two groups or transcript suites interchangeable.
+Representation transforms also cover observation payloads. Pairing and embeddings are fixed shaped rows;
+table relayout is a physical-only custom adapter. Independent runtime admission
+is never called to advertise a backend signature.
+
+`Value` remains a flat typed enum. Its leaf kind and nominal identity are declared
+together, and retained-byte classification is exhaustive. FixedVector, variant,
+oracle, matrix and diagonal payloads own their structural facts or charges.
+Shared backing is charged in full. New resource operations must use the existing
+`Core::resources`; an implementation registry owns no resource state.
 
 ## Plonky3 numerical domain
 

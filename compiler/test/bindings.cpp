@@ -7,6 +7,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
+#include <utility>
 
 using namespace llvm;
 using namespace zkc;
@@ -74,6 +75,11 @@ int main() {
   refuse(parseBoundType("field:bls12-381.fr@", false),
          "binding-representation");
   refuse(parseBoundType("bool@", true), "binding-representation");
+  for (StringRef spelling :
+       {"table:koala-bear", "point:koala-bear",
+        "table:koala-bear.ext8-binomial3", "table:bn254.fr", "nonce:bn254.fr",
+        "rng:koala-bear"})
+    refuse(parseBoundType(spelling, false), "binding-type-identity");
   source::OperationBinding empty{
       {}, "empty", {"poly.empty_point", {"bls12-381.fr"}, ""}};
   auto signature = accept(resolveBinding(empty.application, false));
@@ -156,7 +162,8 @@ int main() {
     body.signature = op.signature;
     generic::Call call{"site", op.name, {}, {}};
     for (auto [i, term] : enumerate(op.signature.scope.terms))
-      if (!term.parent)
+      if (!term.parent && !term.arguments &&
+          !op.signature.scope.constants.count(i))
         call.staticArguments.push_back(i);
     for (unsigned i = 0; i < op.signature.inputs.size(); ++i)
       call.inputs.push_back(i);
@@ -188,6 +195,29 @@ int main() {
   require(toString(std::move(malformed)) == "binding-static-arity",
           "binding-static-arity");
   const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/1";
+  // Explicit policy preserves the selected provider for all installed suites,
+  // including suites whose physical state is named host.resource/1.
+  for (const auto &[suite, provider] :
+       {std::pair{"merlin3.bls12-381.fr64be/1", "arkworks"},
+        std::pair{"merlin3.ristretto255.scalar64le/1", "dalek"},
+        std::pair{"merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+                  "plonky3"},
+        std::pair{"spongefish0.7.4.keccak.bls12-381.fr64be/1", "spongefish"}}) {
+    BindingApplication application{"transcript.challenge", {suite}, ""};
+    const std::string implementation =
+        std::string(provider) + "/transcript.challenge";
+    require(accept(defaultImplementation(application)) == implementation,
+            "nominal transcript policy preserves the selected provider");
+    application.implementation = implementation;
+    accept(resolveBinding(application, true));
+  }
+  // Policy never installs an arbitrary operation on the selected provider.
+  source::OperationBinding unsupported{
+      {},
+      "unsupported",
+      {"field.add", {"bls12-381.fr"}, "spongefish/field.add"}};
+  refuse(resolveBinding(unsupported.application, true),
+         "binding-implementation");
   require(associatedIdentity(spongefish, "ChallengeField") == "bls12-381.fr",
           "second-suite-associated-field");
   for (const auto &contract :

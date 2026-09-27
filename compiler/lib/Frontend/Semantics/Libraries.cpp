@@ -1,11 +1,16 @@
 #include "Libraries.h"
 #include "../Library/Callable.h"
 #include "../Library/Diagnostic.h"
+#include "../Library/Internal.h"
 #include "../Resolution/Project.h"
+#include "../Static/Naturals.h"
+#include "../Static/Types.h"
 #include "../Syntax/Captures.h"
 #include "../Work.h"
+#include "Operators.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Library.h"
 #include "zkc/Source/Relations.h"
@@ -73,6 +78,7 @@ class Author {
   lib::Environment environment;
   model::LibraryReport &report;
   Terms capturedAssociations;
+  std::optional<std::map<std::string, uint64_t>> naturalConstants;
   std::map<std::string, std::string> componentBounds;
   std::map<std::string, lib::Interface> interfaces;
   std::map<std::string, const syntax::LibraryComponent *> components;
@@ -87,6 +93,7 @@ class Author {
   std::set<std::string> active;
   WorkBudget &budget;
   std::map<std::string, uint64_t> selectionCosts;
+  OperatorBindings operators;
 
 public:
   Author(const syntax::Module &s, const resolution::Context &p, StringRef t,
@@ -208,8 +215,13 @@ public:
     if (p.sort)
       return lib::Sort::domainOf(domainSort(*p.sort));
     if (p.bounds.size() == 1) {
-      if (p.bounds[0] == "nat")
+      if (p.bounds[0] == "nat" || p.bounds[0] == "Nat")
         return lib::Sort::natural();
+      if (p.bounds[0] == "Type")
+        return lib::Sort::type();
+      auto sorts = capabilityDomainSorts(p.bounds[0]);
+      if (sorts.size() == 1)
+        return lib::Sort::domainOf(sorts.front());
       if (p.bounds[0] == "association")
         return lib::Sort::association();
       for (const auto &interface : source.libraryInterfaces)
@@ -254,6 +266,19 @@ public:
       auto captured = capturedAssociations.find(a.value);
       if (captured != capturedAssociations.end())
         return captured->second;
+    }
+    if (a.kind == syntax::Atom::Kind::Name &&
+        llvm::any_of(source.constants, [&](const auto &constant) {
+          return constant.name == a.value;
+        })) {
+      if (!naturalConstants) {
+        auto evaluated = static_eval::evaluateNaturals(
+            source.constants, text, filename, &project.input, budget);
+        if (!evaluated)
+          return evaluated.takeError();
+        naturalConstants = std::move(*evaluated);
+      }
+      return lib::StaticTerm::natural(naturalConstants->at(a.value));
     }
     auto sort = protocol::installedIdentitySort(a.value);
     if (sort.empty())
@@ -349,6 +374,12 @@ public:
   }
   Expected<lib::StaticTerm> term(const syntax::StaticTerm &s,
                                  const Terms &terms) {
+    if (typeArgumentSyntax(s)) {
+      auto value = type(syntax::typeExpression(s), terms, {});
+      if (!value)
+        return value.takeError();
+      return lib::logicalTypeTerm(*value);
+    }
     syntax::LibraryTerm t;
     t.root = s.root;
     t.members = s.members;
@@ -390,6 +421,15 @@ public:
       auto local = types.find(s.name);
       if (local != types.end())
         return local->second;
+      auto parameter = terms.find(s.name);
+      if (parameter != terms.end()) {
+        auto sort = lib::sortOf(parameter->second, environment);
+        if (!sort)
+          return sort.takeError();
+        if (sort->kind == lib::Sort::Kind::Type &&
+            parameter->second.kind == lib::StaticTerm::Kind::Root)
+          return lib::Type::parameter(parameter->second.declaration);
+      }
     }
     if (!s.quoted && s.name == "Array" && s.members.empty() &&
         s.arguments.size() == 2) {
@@ -424,11 +464,10 @@ public:
                       "component member is not a type");
         return lib::Type::abstract(*subject, member);
       }
-      if (sort->kind == lib::Sort::Kind::Domain && member == "Element") {
-        if (sort->domain == "Field")
-          return lib::Type::logical("field", {*subject});
-        if (sort->domain == "Group")
-          return lib::Type::logical("group", {*subject});
+      if (sort->kind == lib::Sort::Kind::Domain) {
+        auto constructor = associatedTypeConstructor(sort->domain, member);
+        if (!constructor.empty())
+          return lib::Type::logical(constructor.str(), {*subject});
       }
       return fail(s, "library-source-type", "unknown domain type member");
     }
@@ -515,20 +554,45 @@ public:
           return lib::Type::record(id(record.name), std::move(fields),
                                    std::move(elements));
         }
+    if (elementTypeFamily(s.name) && !s.quoted && !s.natural) {
+      if (s.arguments.size() != 1)
+        return fail(s, "library-source-type",
+                    "type family requires one element type");
+      auto element = type(s.arguments.front(), terms, types, depth + 1);
+      if (!element)
+        return element.takeError();
+      auto constructor = element->kind == lib::Type::Kind::Logical
+                             ? familyResultConstructor(s.name, element->name)
+                             : StringRef{};
+      if (constructor.empty())
+        return fail(s, "library-source-type",
+                    "no installed type-family case for this element type");
+      return lib::Type::logical(constructor.str(), element->arguments);
+    }
     for (const auto &installed : protocol::boundTypeConstructors()) {
-      if (installed.name != s.name || s.quoted || s.natural)
+      if (installed.name != logicalConstructor(s.name) || s.quoted || s.natural)
         continue;
       if (s.arguments.size() != installed.parameters.size())
         return fail(s, "library-source-type",
                     "logical type has wrong static arity");
       std::vector<lib::StaticTerm> args;
-      for (const auto &a : s.arguments) {
-        auto t = typeTerm(a, terms);
-        if (!t)
-          return t.takeError();
-        args.push_back(*t);
+      for (size_t i = 0; i < s.arguments.size(); ++i) {
+        if (installed.parameters[i] == "Type") {
+          auto nested = type(s.arguments[i], terms, types, depth + 1);
+          if (!nested)
+            return nested.takeError();
+          auto term = lib::logicalTypeTerm(*nested);
+          if (!term)
+            return term.takeError();
+          args.push_back(*term);
+        } else {
+          auto t = typeTerm(s.arguments[i], terms);
+          if (!t)
+            return t.takeError();
+          args.push_back(*t);
+        }
       }
-      return lib::Type::logical(s.name, std::move(args));
+      return lib::Type::logical(installed.name, std::move(args));
     }
     return fail(s, "library-source-type",
                 "unknown checked library type '" + s.name + "'");
@@ -592,6 +656,7 @@ public:
     std::map<uint32_t, lib::Type> values;
     uint32_t next = 0;
     bool returned = false;
+    std::set<std::string> *operatorTargets = nullptr;
     lib::Value value(lib::Type t) {
       lib::Value v{{next++}, {std::move(t), {}}};
       values.emplace(v.id.index, v.port.type);
@@ -650,50 +715,16 @@ public:
     }
     Expected<lib::Signature> logical(const generic::Operation &op,
                                      const std::vector<lib::StaticTerm> &args) {
-      std::vector<lib::StaticTerm> scope;
-      size_t rootIndex = 0;
-      for (unsigned n = 0; n < op.signature.scope.terms.size(); ++n) {
-        const auto &t = op.signature.scope.terms[n];
-        if (t.arguments)
-          return a.fail(function, "library-source-operation",
-                        "installed constructor applications require a "
-                        "supported typed adapter");
-        if (t.parent) {
-          if (*t.parent >= scope.size())
-            return a.fail(function, "library-source-operation",
-                          "invalid installed static scope");
-          scope.push_back(lib::StaticTerm::project(scope[*t.parent], t.name));
-        } else if (auto fixed = op.signature.scope.constants.find(n);
-                   fixed != op.signature.scope.constants.end()) {
-          syntax::Atom atom;
-          atom.kind = syntax::Atom::Kind::String;
-          atom.value = fixed->second;
-          auto r = a.root(atom, {});
-          if (!r)
-            return r.takeError();
-          scope.push_back(*r);
-        } else {
-          if (rootIndex >= args.size())
-            return a.fail(function, "library-source-operation",
-                          "operation requires explicit static actuals");
-          scope.push_back(args[rootIndex++]);
+      auto signature =
+          lib::detail::logicalSignature({op.name, args}, a.environment);
+      if (!signature)
+        return signature.takeError();
+      auto s = std::move(*signature);
+      for (const auto &exported : protocol::sourceOperationExports())
+        if (exported.contract == op.name) {
+          s.inputLabels = exported.inputLabels;
+          break;
         }
-      }
-      if (rootIndex != args.size())
-        return a.fail(function, "library-source-operation",
-                      "operation has extra static actuals");
-      lib::Signature s;
-      s.effects.insert("local");
-      auto port = [&](const generic::Type &t) {
-        std::vector<lib::StaticTerm> ts;
-        for (auto i : t.arguments)
-          ts.push_back(scope.at(i));
-        return lib::Port{lib::Type::logical(t.constructor, std::move(ts)), {}};
-      };
-      for (const auto &t : op.signature.inputs)
-        s.inputs.push_back(port(t));
-      for (const auto &t : op.signature.outputs)
-        s.outputs.push_back(port(t));
       return s;
     }
     Expected<std::vector<unsigned>> argumentOrder(const syntax::Expression &e,
@@ -704,7 +735,9 @@ public:
       return order;
     }
     Expected<std::vector<lib::Place>>
-    call(const syntax::Expression &e, const lib::Type *expected = nullptr) {
+    call(const syntax::Expression &e, const lib::Type *expected = nullptr,
+         const std::vector<lib::StaticTerm> *inferredStatics = nullptr,
+         const std::vector<lib::Place> *materializedInputs = nullptr) {
       lib::Call c;
       lib::Signature signature;
       auto [owner, member] = StringRef(e.name).rsplit('.');
@@ -822,6 +855,21 @@ public:
                 {lib::StaticTerm::root(p), value->second});
           }
         }
+        for (auto it = arguments.statics.begin();
+             it != arguments.statics.end();) {
+          auto sort = lib::sortOf(it->first, a.environment);
+          if (!sort)
+            return sort.takeError();
+          if (sort->kind != lib::Sort::Kind::Type) {
+            ++it;
+            continue;
+          }
+          auto type = lib::logicalTypeValue(it->second, a.environment);
+          if (!type)
+            return type.takeError();
+          arguments.types.emplace_back(it->first.declaration, *type);
+          it = arguments.statics.erase(it);
+        }
         lib::SourceCall target{contract, std::move(arguments)};
         const std::vector<lib::TypeBound> noBounds;
         auto formed = lib::detail::sourceSignature(
@@ -832,7 +880,8 @@ public:
         c.target = std::move(target);
       } else {
         std::string operation = e.name;
-        std::vector<lib::StaticTerm> args;
+        std::vector<lib::StaticTerm> args =
+            inferredStatics ? *inferredStatics : std::vector<lib::StaticTerm>{};
         for (const auto &t : e.staticTerms) {
           auto v = a.term(t, terms);
           if (!v)
@@ -846,15 +895,42 @@ public:
                   e, "library-source-call",
                   "bound operation cannot receive extra static arguments");
             operation = binding.application.contract;
-            for (const auto &s : binding.application.arguments) {
-              syntax::Atom atom;
-              atom.kind = syntax::Atom::Kind::String;
-              atom.value = s;
-              auto t = a.root(atom, {});
-              if (!t)
-                return t.takeError();
-              args.push_back(*t);
+            auto declaration =
+                llvm::find_if(protocol::boundOperationContracts(),
+                              [&](const auto &candidate) {
+                                return candidate.name == operation;
+                              });
+            if (declaration == protocol::boundOperationContracts().end())
+              return a.fail(e, "library-source-call",
+                            "unknown bound operation");
+            size_t argument = 0;
+            for (size_t i = 0; i < declaration->signature.scope.terms.size();
+                 ++i) {
+              const auto &scope = declaration->signature.scope;
+              const auto &formal = scope.terms[i];
+              if (formal.parent || formal.arguments || scope.constants.count(i))
+                continue;
+              if (argument == binding.application.arguments.size())
+                return a.fail(e, "library-operation-arity",
+                              "missing bound static argument");
+              const auto &value = binding.application.arguments[argument++];
+              if (scope.sorts[i] != "Type" && scope.sorts[i] != "Nat") {
+                syntax::Atom atom;
+                atom.kind = syntax::Atom::Kind::String;
+                atom.value = value;
+                auto root = a.root(atom, {});
+                if (!root)
+                  return root.takeError();
+              }
+              auto actual =
+                  lib::staticConstant(scope.sorts[i], value, a.environment);
+              if (!actual)
+                return actual.takeError();
+              args.push_back(*actual);
             }
+            if (argument != binding.application.arguments.size())
+              return a.fail(e, "library-operation-arity",
+                            "extra bound static argument");
             if (!binding.application.implementation.empty())
               return a.fail(e, "library-source-implementation",
                             "checked logical calls cannot discard an explicit "
@@ -867,6 +943,10 @@ public:
           return a.fail(
               e, "library-source-call",
               "call is not an installed operation or interface member");
+        if (!a.source.carrier && protocol::authoringStage(operation) !=
+                                     protocol::AuthoringStage::Source)
+          return a.fail(e, "source-operation-stage",
+                        "operation is not available to ordinary source calls");
         auto s = logical(*op, args);
         if (!s)
           return s.takeError();
@@ -880,6 +960,10 @@ public:
       c.inputs.resize(e.operands.size());
       for (unsigned n = 0; n < e.operands.size(); ++n) {
         const auto formal = (*order)[n];
+        if (materializedInputs) {
+          c.inputs[formal] = (*materializedInputs)[n];
+          continue;
+        }
         auto p = expression(e.operands[n], &signature.inputs[formal].type);
         if (!p)
           return p.takeError();
@@ -897,6 +981,105 @@ public:
       }
       body.instructions.push_back(std::move(c));
       return outputs;
+    }
+    Expected<lib::Place> operatorExpression(const syntax::Expression &e,
+                                            const lib::Type *expected) {
+      std::vector<lib::Type> operandTypes;
+      std::vector<std::string> heads, names;
+      for (const auto &operand : e.operands) {
+        auto place = expression(operand);
+        if (!place)
+          return place.takeError();
+        auto type = placeType(*place);
+        if (!type)
+          return type.takeError();
+        operandTypes.push_back(*type);
+        heads.push_back(type->kind == lib::Type::Kind::Record
+                            ? nominalOperatorHead(type->declaration)
+                        : type->kind == lib::Type::Kind::Logical
+                            ? logicalOperatorHead(type->name)
+                            : std::string{});
+        // Materialize each operand before evaluating the next one. Permuting
+        // the target's ports must not permute evaluation or affine use.
+        auto temporary = value(*type);
+        body.instructions.push_back(lib::Project{*place, temporary});
+        names.push_back("\x1foperator" + std::to_string(temporary.id.index));
+        locals.emplace(names.back(), lib::Place{temporary.id, {}});
+      }
+      auto cleanup = scope_exit([&] {
+        for (const auto &name : names)
+          locals.erase(name);
+      });
+      Error failure = Error::success();
+      auto target = a.operators.resolve(
+          e, e.name, heads, a.project,
+          [&](const source::Node &node, StringRef code, const Twine &message) {
+            failure = a.fail(node, code, message);
+          });
+      if (!target)
+        return std::move(failure);
+      if (operatorTargets && !target->qualified)
+        operatorTargets->insert(target->callee);
+      syntax::Expression use;
+      use.location = e.location;
+      use.kind = syntax::Expression::Kind::Call;
+      use.name = target->callee;
+      use.qualified = target->qualified;
+      std::vector<lib::Place> inputs;
+      for (auto index : target->order) {
+        syntax::Expression operand;
+        operand.location = e.operands[index].location;
+        operand.name = names[index];
+        use.operands.push_back(std::move(operand));
+        inputs.push_back(locals.at(names[index]));
+      }
+      std::vector<lib::StaticTerm> statics;
+      if (target->qualified) {
+        const auto &signature =
+            llvm::find_if(protocol::boundOperationContracts(),
+                          [&](const auto &operation) {
+                            return operation.name == target->callee;
+                          })
+                ->signature;
+        std::map<unsigned, lib::StaticTerm> solved;
+        for (unsigned i = 0; i < signature.inputs.size(); ++i) {
+          const auto &formal = signature.inputs[i];
+          const auto &actual = operandTypes[target->order[i]];
+          if (formal.arguments.size() != actual.arguments.size())
+            return a.fail(e, "source-operator-head",
+                          "operator operand has an invalid logical type");
+          for (unsigned j = 0; j < formal.arguments.size(); ++j) {
+            auto term = formal.arguments[j];
+            if (!signature.scope.terms[term].parent &&
+                !signature.scope.constants.count(term)) {
+              auto [old, fresh] = solved.emplace(term, actual.arguments[j]);
+              if (!fresh && lib::identity(old->second) !=
+                                lib::identity(actual.arguments[j]))
+                return a.fail(e, "source-static-conflict",
+                              "operator operand domains disagree");
+            }
+          }
+        }
+        for (unsigned i = 0; i < signature.scope.terms.size(); ++i) {
+          if (signature.scope.terms[i].parent ||
+              signature.scope.constants.count(i))
+            continue;
+          auto found = solved.find(i);
+          if (found == solved.end())
+            return a.fail(e, "source-static-unresolved",
+                          "operator static arguments cannot be inferred "
+                          "from its operands");
+          statics.push_back(found->second);
+        }
+      }
+      auto results =
+          call(use, expected, target->qualified ? &statics : nullptr, &inputs);
+      if (!results)
+        return results.takeError();
+      if (results->size() != 1)
+        return a.fail(e, "source-operator-result",
+                      "operator function must return exactly one value");
+      return results->front();
     }
     Expected<lib::Place> product(std::vector<lib::Place> ps,
                                  const source::Node &n, bool array = false) {
@@ -929,6 +1112,8 @@ public:
         return a.fail(e, "library-source-limit",
                       "compiler work budget exhausted: library-formation");
       using K = syntax::Expression::Kind;
+      if (e.kind == K::Operator)
+        return operatorExpression(e, expected);
       if (e.kind == K::Map || e.kind == K::Fold)
         return lexicalTraversal(e, expected);
       if (e.kind == K::Index || e.kind == K::Boolean) {
@@ -1547,13 +1732,13 @@ public:
             return err;
         } else if (const auto *c =
                        std::get_if<syntax::Call>(&instruction.value)) {
-          if (c->isOperator || c->role)
+          if (c->role)
             return a.fail(instruction, "library-source-call",
-                          "operator inference and role-local calls require "
-                          "explicit supported nodes");
+                          "role-local calls require explicit supported nodes");
           syntax::Expression e;
           e.location = c->location;
-          e.kind = syntax::Expression::Kind::Call;
+          e.kind = c->isOperator ? syntax::Expression::Kind::Operator
+                                 : syntax::Expression::Kind::Call;
           e.name = c->callee;
           e.quoted = c->quoted;
           e.qualified = c->qualified;
@@ -1624,9 +1809,10 @@ public:
   public:
     BodyBuilder(Author &a, const syntax::Function &f, const Terms &terms,
                 const Types &types, lib::QualifiedDecl id, lib::Signature sig,
-                std::vector<lib::Import> imports)
+                std::vector<lib::Import> imports,
+                std::set<std::string> *operatorTargets = nullptr)
         : a(a), function(f), terms(terms), types(types),
-          imports(std::move(imports)) {
+          imports(std::move(imports)), operatorTargets(operatorTargets) {
       body.id = std::move(id);
       body.signature = std::move(sig);
     }
@@ -1977,15 +2163,53 @@ public:
         return error;
     return Error::success();
   }
+  Expected<std::map<std::string, std::set<std::string>>>
+  operatorReferences() const {
+    std::map<std::string, std::set<std::string>> references;
+    if (llvm::none_of(source.functions,
+                      [](const auto &f) {
+                        return f.operatorHook && !f.parameters.empty();
+                      }) ||
+        llvm::none_of(callables, [&](const auto &entry) {
+          return !clientParameters.at(entry.first).empty();
+        }))
+      return references;
+    // Reuse checked expression elaboration to discover known operand heads.
+    // Preparing signatures here must not move unrelated functions onto the
+    // checked path. Only the selected targets escape this private copy; no
+    // checked bodies or resolver references are published by the probe.
+    Author probe = *this;
+    for (const auto &f : source.functions) {
+      if (!f.body || callables.count(f.name))
+        continue;
+      if (auto error = probe.prepareClient(f)) {
+        consumeError(std::move(error));
+      } else {
+        const auto &d = probe.callables.at(f.name).declaration();
+        const Types types;
+        auto checked =
+            BodyBuilder(probe, f, probe.callableTerms.at(f.name), types, d.id,
+                        d.signature, d.imports, &references[f.name])
+                .run();
+        // A probe is not admission. Unsupported ordinary syntax stays with its
+        // checker; callers of checked targets receive the full checked judgment
+        // below, including any failure after target selection.
+        if (!checked)
+          consumeError(checked.takeError());
+      }
+      // Count discovery attempts, including failed ones. A depleted shared
+      // budget cannot be hidden by discarding an exploratory diagnostic.
+      if (auto error = work::charge(budget, WorkAccount::LibraryFormation))
+        return probe.locate(std::move(error), f);
+    }
+    return references;
+  }
   Expected<LinkedLibrarySource> run();
 };
 
 // This bridge is deliberately after core checking, linking and representation
 // selection. It does not reparse text or specialize an unchecked generic body.
 Expected<LinkedLibrarySource> Author::run() {
-  if (source.profile)
-    return fail(source, "library-source-profile",
-                "checked libraries require an explicit-binding module");
   identity = project.owners.front().identity;
   for (const auto &owner : project.owners)
     environment.libraries.push_back({owner.identity, {}});
@@ -2010,9 +2234,10 @@ Expected<LinkedLibrarySource> Author::run() {
     if (auto error = captureInstalled(c.identity))
       return error;
   for (const auto &t : protocol::boundTypeConstructors())
-    environment.logicalTypes.push_back({t, true});
+    environment.logicalTypes.push_back({t, protocol::discardable(t.name)});
   for (const auto &op : protocol::boundOperationContracts())
-    environment.operations.push_back({op, {"local"}});
+    environment.operations.push_back(
+        {op, {protocol::operationEffect(op.name).str()}});
   for (const auto &rule : protocol::boundCapabilityRules())
     environment.implications.push_back(rule);
   std::set<std::string> names;
@@ -2183,6 +2408,31 @@ Expected<LinkedLibrarySource> Author::run() {
   for (const auto &s : source.libraryInterfaces)
     if (auto e = form(s))
       return e;
+  Error operatorFailure = Error::success();
+  if (!operators.form(
+          source, project,
+          [&](const syntax::Function &function, const syntax::Type &operand) {
+            if (operand.product || operand.name == "Array")
+              return std::string{};
+            Terms terms;
+            for (const auto &parameter : function.parameters)
+              terms.emplace(
+                  parameter.name,
+                  lib::StaticTerm::root(id(parameter.name, {function.name})));
+            auto resolved = type(operand, terms, {});
+            if (!resolved) {
+              operatorFailure = resolved.takeError();
+              return std::string{};
+            }
+            return resolved->kind == lib::Type::Kind::Logical
+                       ? logicalOperatorHead(resolved->name)
+                       : std::string{};
+          },
+          [&](const source::Node &node, StringRef code, const Twine &message) {
+            if (!operatorFailure)
+              operatorFailure = fail(node, code, message);
+          }))
+    return std::move(operatorFailure);
   // Interface-generic clients and explicit link roots take the checked path.
   // Other helpers enter on demand; unrelated ordinary generics keep their
   // route.
@@ -2244,6 +2494,9 @@ Expected<LinkedLibrarySource> Author::run() {
   }
   if (auto error = checkHelpers())
     return std::move(error);
+  auto operatorUses = operatorReferences();
+  if (!operatorUses)
+    return operatorUses.takeError();
   // A caller of an abstract checked helper needs the same checked call path.
   // Closed helpers keep ordinary aliases below, so they do not force unrelated
   // ordinary functions onto that path.
@@ -2259,6 +2512,11 @@ Expected<LinkedLibrarySource> Author::run() {
                  callables.count(edge.target) &&
                  !clientParameters.at(edge.target).empty();
         });
+        if (auto uses = operatorUses->find(f.name); uses != operatorUses->end())
+          required |= llvm::any_of(uses->second, [&](const auto &target) {
+            return callables.count(target) &&
+                   !clientParameters.at(target).empty();
+          });
         if (required) {
           if (auto error = checkClient(f))
             return error;

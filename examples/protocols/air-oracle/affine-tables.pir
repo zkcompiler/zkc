@@ -1,10 +1,31 @@
 // Sampled affine-table consistency, without FRI or AIR.
 module {
+  use zkc::oracle::{
+    VectorCommitment
+  };
+  use zkc::algebra::{
+    ExtensionField,
+    Field,
+    Vector
+  };
+  use zkc::algebra;
+  use zkc::core;
+  use zkc::oracle;
+  use zkc::pcs::{
+    Commitment,
+    OpeningState,
+    Proof
+  };
+  use zkc::random::{
+    IndexRandomness,
+    Rng
+  };
+  use zkc::random;
   fn CommitBaseAlgorithm<C: domain Commitment>(
     values: Vector<C::ValueField::Element>,
     width: index
   ) -> (Commitment<C>, OpeningState<C>) requires (VectorCommitment(C)) {
-    let (value00, value01) = oracle.commit::<C>(values, width);
+    let (value00, value01) = zkc::oracle::commit::<C>(values, width);
     return (value00, value01);
   }
 
@@ -13,7 +34,7 @@ module {
     values: Vector<C::ValueField::Element>,
     width: index
   ) -> (Commitment<C>, OpeningState<C>) requires (VectorCommitment(C)) {
-    let (value00, value01) = oracle.commit::<C>(values, width);
+    let (value00, value01) = zkc::oracle::commit::<C>(values, width);
     return (value00, value01);
   }
 
@@ -24,7 +45,7 @@ module {
     state: OpeningState<C>,
     index: index
   ) -> (Vector<C::ValueField::Element>, Proof<C>) requires (VectorCommitment(C)) {
-    let (value00, value01) = oracle.open::<C>(state, index);
+    let (value00, value01) = zkc::oracle::open::<C>(state, index);
     return (value00, value01);
   }
 
@@ -33,7 +54,7 @@ module {
     state: OpeningState<C>,
     index: index
   ) -> (Vector<C::ValueField::Element>, Proof<C>) requires (VectorCommitment(C)) {
-    let (value00, value01) = oracle.open::<C>(state, index);
+    let (value00, value01) = zkc::oracle::open::<C>(state, index);
     return (value00, value01);
   }
 
@@ -48,8 +69,8 @@ module {
     row: Vector<C::ValueField::Element>,
     path: Proof<C>
   ) -> (bool) requires (VectorCommitment(C)) {
-    let (value0) = oracle.check::<C>(root, width, height, index, row, path);
-    control.require(value0);
+    let (value0) = zkc::oracle::check::<C>(root, width, height, index, row, path);
+    zkc::core::require(value0);
     return (value0);
   }
 
@@ -62,8 +83,8 @@ module {
     row: Vector<C::ValueField::Element>,
     path: Proof<C>
   ) -> (bool) requires (VectorCommitment(C)) {
-    let (value0) = oracle.check::<C>(root, width, height, index, row, path);
-    control.require(value0);
+    let (value0) = zkc::oracle::check::<C>(root, width, height, index, row, path);
+    zkc::core::require(value0);
     return (value0);
   }
 
@@ -71,7 +92,7 @@ module {
     C = "rows.merkle-keccak256.koala-bear.ext8-binomial3/1"
   );
   fn DrawAlgorithm<F: domain Field>(coins: Rng<F>) -> (F::Element, Rng<F>) requires (Field(F)) {
-    [draw] let (value00, value01) = random.draw::<F>(coins);
+    [draw] let (value00, value01) = zkc::random::draw::<F>(coins);
     return (value00, value01);
   }
 
@@ -79,7 +100,7 @@ module {
   fn QueryAlgorithm<F: domain Field>(coins: Rng<F>, bound: index) -> (index, Rng<F>) requires (
     IndexRandomness(F)
   ) {
-    [draw] let (value00, value01) = random.index::<F>(coins, bound);
+    [draw] let (value00, value01) = zkc::random::index::<F>(coins, bound);
     return (value00, value01);
   }
 
@@ -89,10 +110,10 @@ module {
     y: Vector<F::BaseField::Element>,
     alpha: F::Element
   ) -> (Vector<F::Element>) requires (ExtensionField(F)) {
-    let (value0) = vector.embed::<F>(x);
-    let (value1) = vector.embed::<F>(y);
-    let (value2) = vector.scale::<F>(value0, alpha);
-    let (value3) = vector.add::<F>(value2, value1);
+    let (value0) = zkc::algebra::vector_embed::<F>(x);
+    let (value1) = zkc::algebra::vector_embed::<F>(y);
+    let (value2) = zkc::algebra::vector_scale::<F>(value0, alpha);
+    let (value3) = zkc::algebra::vector_add::<F>(value2, value1);
     return (value3);
   }
 
@@ -103,23 +124,23 @@ module {
     z: Vector<F::Element>,
     alpha: F::Element
   ) -> (bool) requires (ExtensionField(F), Field(F::BaseField)) {
-    let (value0) = index.constant() attributes ("0");
-    let (value1) = vector.get::<F::BaseField>(x, value0);
-    let (value2) = field.embed::<F>(value1);
-    let (value3) = vector.get::<F::BaseField>(y, value0);
-    let (value4) = field.embed::<F>(value3);
-    let (value5) = vector.get::<F>(z, value0);
-    let (value6) = field.mul::<F>(value2, alpha);
-    let (value7) = field.add::<F>(value6, value4);
-    let (value8) = field.equal::<F>(value7, value5);
-    control.require(value8);
+    let (value0) = zkc::algebra::index_constant() attributes ("0");
+    let (value1) = zkc::algebra::vector_get::<F::BaseField>(x, value0);
+    let (value2) = zkc::algebra::embed::<F>(value1);
+    let (value3) = zkc::algebra::vector_get::<F::BaseField>(y, value0);
+    let (value4) = zkc::algebra::embed::<F>(value3);
+    let (value5) = zkc::algebra::vector_get::<F>(z, value0);
+    let (value6) = zkc::algebra::mul::<F>(value2, alpha);
+    let (value7) = zkc::algebra::add::<F>(value6, value4);
+    let (value8) = zkc::algebra::equal::<F>(value7, value5);
+    zkc::core::require(value8);
     return (value8);
   }
 
   configure CheckAffine = CheckAffineAlgorithm(F = "koala-bear.ext8-binomial3");
   fn ShapeAlgorithm<F: domain Field>() -> (index, index) requires (Field(F)) {
-    let (value0) = index.constant() attributes ("1");
-    let (value1) = index.constant() attributes ("8");
+    let (value0) = zkc::algebra::index_constant() attributes ("1");
+    let (value1) = zkc::algebra::index_constant() attributes ("8");
     return (value0, value1);
   }
 

@@ -1,4 +1,10 @@
 module {
+  use zkc::poly::{
+    Table
+  };
+  use zkc::random::{
+    Rng
+  };
   bind draw = random::draw(bls12-381.fr);
   bind require = control::require();
   bind fold = poly::fold(bls12-381.fr);

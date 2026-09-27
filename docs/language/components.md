@@ -66,8 +66,9 @@ retains an unavailable result without inventing evidence. These are not
 cryptographic-security claims.
 
 Checked component bodies support typed calls, products, fixed arrays, static
-projections, finite nominal variants, exhaustive local matching, isolated Boolean
-conditionals, bounded array traversal and terminal stops. Existing concrete local functions also retain their
+projections, installed and package-owned record operators, finite nominal
+variants, exhaustive local matching, isolated Boolean conditionals, bounded array
+traversal and terminal stops. Existing concrete local functions also retain their
 bounded conditional and numeric-loop constructs. Unsupported control flow refuses;
 interface checking does not bypass common PIR admission.
 The core API also supports ordinary type parameters with permission bounds and

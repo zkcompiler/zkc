@@ -33,6 +33,9 @@ struct ExpectedMapping {
 // boundOperationName, operationSupportsContract, or C++ operation classes.
 // Contract spelling and IR mnemonic intentionally differ in several families.
 constexpr ExpectedMapping expected[] = {
+    {"fixed_vector.from_vector", "algebra.fixed_vector_from_vector"},
+    {"fixed_vector.to_vector", "algebra.fixed_vector_to_vector"},
+    {"fixed_vector.dot", "algebra.fixed_vector_dot"},
     {"resource_unit.create", "pir.resource_unit_create"},
     {"resource_unit.pass", "pir.resource_unit_pass"},
     {"resource_unit.consume", "pir.resource_unit_consume"},

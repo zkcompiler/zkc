@@ -8,98 +8,14 @@ use std::sync::Arc;
 use zkc_runtime::interactive::Invocation;
 
 impl NativeBackend {
-    pub(super) fn execute(
+    pub(super) fn execute_basic(
         &mut self,
         name: &str,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
         use Value::*;
-        if name.starts_with("resource_unit.") {
-            let values = match (name, args) {
-                ("resource_unit.create", []) => {
-                    self.core.policy.output(512, i.max_output_bytes)?;
-                    vec![
-                        self.core.resources.create_unit(
-                            i.frame,
-                            i.binding.signature().outputs[0]
-                                .logical()
-                                .resource_domain()
-                                .expect("an admitted unit creation names its domain"),
-                        )?,
-                    ]
-                }
-                ("resource_unit.pass", [ResourceUnit(token)]) => {
-                    self.core.policy.output(512, i.max_output_bytes)?;
-                    vec![self.core.resources.pass_unit(i.frame, token.capability())?]
-                }
-                ("resource_unit.consume", [ResourceUnit(token)]) => {
-                    self.core
-                        .resources
-                        .consume_unit(i.frame, token.capability())?;
-                    vec![]
-                }
-                _ => unreachable!("invoke checked the operands against the signature"),
-            };
-            return Ok(values);
-        }
-        if crate::requires_public_operands(i.binding.implementation())
-            && !self.public_roles.permits(i.frame.role())
-        {
-            return Err(refused("public-operands-required"));
-        }
-        // Cheap output bound checks happen before allocating polynomial/PCS results.
         let p = self.core.policy;
-        let field = i
-            .binding
-            .signature()
-            .inputs
-            .iter()
-            .chain(&i.binding.signature().outputs)
-            .find_map(|t| t.logical().identity().scalar_field());
-        if let Some(result) = crate::external_kernels::apply(
-            name,
-            args,
-            i.attributes,
-            &p,
-            i.max_output_bytes,
-            &mut self.external_work,
-        ) {
-            return result;
-        }
-        if let Some(result) =
-            crate::kernels::indices::apply(name, args, i.attributes, &p, i.max_output_bytes)
-        {
-            return result;
-        }
-        if let Some(result) = crate::oracle::apply(name, args, i, &p) {
-            return result;
-        }
-        if let Some(result) = crate::diagonal::apply(i, args, &p) {
-            return result;
-        }
-        if let Some(result) = crate::kernels::conversions::apply(name, args, i, &p) {
-            return result;
-        }
-        if let Some(result) = crate::kernels::bn254::apply(name, field, args, i, &p) {
-            return result;
-        }
-        if let Some(result) =
-            crate::plonky3::numerical::apply(name, field, args, i, &p, &self.core.polynomial)
-        {
-            return result;
-        }
-        if let Some(result) = crate::kernels::arithmetic::apply(name, field, args, i, &p) {
-            return result;
-        }
-        if let Some(result) = crate::kernels::curve::apply(name, field, args, i, &p) {
-            return result;
-        }
-        if let Some(result) =
-            crate::kernels::resources::apply(name, args, i, &p, &mut self.core.resources)
-        {
-            return result;
-        }
         let result = match (name, args) {
             ("pcs.equal", [Commitment(a), Commitment(b)]) => vec![Bool(
                 a.to_bytes(&p.ark_bounds()).map_err(ark)?
@@ -208,3 +124,133 @@ impl NativeBackend {
         Ok(result)
     }
 }
+
+/// Independent native port facts, also used for exact implementation assembly.
+pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::{control, pcs, poly};
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        control::operation("bool.and", &[Bool, Bool], &[Bool], AttributeRule::None),
+        control::operation("bool.not", &[Bool], &[Bool], AttributeRule::None),
+        control::operation("bool.or", &[Bool, Bool], &[Bool], AttributeRule::None),
+        control::operation("control.require", &[Bool], &[], AttributeRule::None),
+        poly::operation(
+            "poly.product_sum",
+            &[Table, Table],
+            &[Field],
+            AttributeRule::None,
+        ),
+        poly::operation(
+            "poly.product_round",
+            &[Table, Table],
+            &[Round],
+            AttributeRule::None,
+        ),
+        poly::operation("poly.fold", &[Table, Field], &[Table], AttributeRule::None),
+        poly::operation(
+            "poly.evaluate",
+            &[Table, Point],
+            &[Field],
+            AttributeRule::None,
+        ),
+        poly::operation("poly.empty_point", &[], &[Point], AttributeRule::None),
+        poly::operation(
+            "poly.append_point",
+            &[Point, Field],
+            &[Point],
+            AttributeRule::None,
+        ),
+        pcs::operation(
+            "pcs.commit",
+            &[ProverKey, Table],
+            &[Commitment, OpeningState],
+            AttributeRule::None,
+        ),
+        pcs::operation(
+            "pcs.open",
+            &[OpeningState, Point],
+            &[Field, Proof],
+            AttributeRule::None,
+        ),
+        pcs::operation(
+            "pcs.check",
+            &[VerifierKey, Commitment, Point, Field, Proof],
+            &[Bool],
+            AttributeRule::None,
+        ),
+        pcs::operation(
+            "pcs.equal",
+            &[Commitment, Commitment],
+            &[Bool],
+            AttributeRule::None,
+        ),
+    ]
+};
+pub(crate) const SPECIAL_OPERATIONS: &[&str] = &["table.relayout"];
+
+pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.product_sum",
+        original: "arkworks/poly.product_sum",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.product_round",
+        original: "arkworks/poly.product_round",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.fold",
+        original: "arkworks/poly.fold",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.evaluate",
+        original: "arkworks/poly.evaluate",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.empty_point",
+        original: "arkworks/poly.empty_point",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.append_point",
+        original: "arkworks/poly.append_point",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.boundary",
+        original: "arkworks/poly.boundary",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/poly.round_evaluate",
+        original: "arkworks/poly.round_evaluate",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+];

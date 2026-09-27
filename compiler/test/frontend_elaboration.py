@@ -4,6 +4,9 @@ from commands import Commands
 from source_text import COLLISION
 from tools import records
 
+COLLISION = COLLISION.replace("module {", "module { use zkc::core;", 1).replace(
+    "bool::and(x, x)", "zkc::core::and(x, x)")
+
 
 
 commands = Commands(records())
@@ -36,7 +39,7 @@ assert common(run("protocol-format", json.dumps(weak_record))) == weak_record
 # The elaboration report's view of the choice; frontend_pipeline.py checks the
 # same choice as the encoded record's node tag, which is the other surface.
 assert report(COLLISION)["elaborated_calls"][0]["kind"] == "operation"
-helper = COLLISION.replace("bool::and(x, x)", '"bool.and"(x, x)')
+helper = COLLISION.replace("zkc::core::and(x, x)", '"bool.and"(x, x)')
 assert report(helper)["elaborated_calls"][0]["kind"] == "algorithm"
 helper_record = common(helper)
 assert common(run("protocol-format", json.dumps(helper_record))) == helper_record
@@ -49,12 +52,13 @@ for name in ("let", "return", "yield", "attributes", "local"):
 # class. Swapping input order still changes the authored operation; it must not
 # change the selected nominal argument. No artifact-equality claim is made.
 equality = '''module {
+  use zkc::algebra;
   fn Add<F: Field, E: Field>(x: F::Element, y: E::Element) -> F::Element
-    requires ("="(F, E)) { let z = field::add(x, y); return z; }
+    requires ("="(F, E)) { let z = zkc::algebra::add(x, y); return z; }
 }'''
 for text in (equality, equality.replace("add(x, y)", "add(y, x)")):
     assert report(text)["elaborated_calls"][0]["static_arguments"] == ["E"]
-written = equality.replace("field::add(x, y)", "field::add::<F>(x, y)")
+written = equality.replace("zkc::algebra::add(x, y)", "zkc::algebra::add::<F>(x, y)")
 assert report(written)["elaborated_calls"][0]["static_arguments"] == ["F"]
 
 # Malformed equality is rejected at its own declaration, before a later call
@@ -97,13 +101,14 @@ local = '''module {
 common(local)
 run("protocol-source", local.replace("Closed(x)", "Id(x)"), "source-local-configuration")
 
-# Convenience profiles are a supported closed-module shorthand. They neither
-# introduce generic scope nor provide arbitrary omitted type parameters.
-profile = '''module "arkworks.bls12-381/1" {
-  fn Identity(x: field) -> field origin Chosen() { return x; }
+# Explicit concrete domains preserve origins. Retired profile headers refuse
+# structurally, and generic declarations cannot capture a concrete domain.
+concrete = '''module {
+  fn Identity(x: bls12-381.fr::Element) -> bls12-381.fr::Element origin Chosen() { return x; }
 }'''
-assert common(profile)[2][0][-1] == ["Chosen", []]
-run("protocol-source", profile.replace("Identity(x", "Identity<>(x"), "source-profile-generic")
-run("protocol-source", profile.replace("field", "vector"), "source-type")
+assert common(concrete)[2][0][-1] == ["Chosen", []]
+run("protocol-source", concrete.replace(" origin Chosen()", "").replace("Identity(x", "Identity<>(x"), "source-generic-term")
+run("protocol-source", concrete.replace("bls12-381.fr::Element", "Vector"), "source-name-unresolved")
+run("protocol-source", 'module "arkworks.bls12-381/1" {}', "source-syntax")
 
 print(f"frontend elaboration: {commands.save()} review regression checks passed")

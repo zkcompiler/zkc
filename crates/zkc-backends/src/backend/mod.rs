@@ -1,6 +1,8 @@
 //! Native backend composition and explicit host-issued capabilities.
 mod execute;
 mod policy;
+pub(crate) mod registry;
+mod resource_unit;
 mod validation;
 use crate::setups::Setups;
 use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
@@ -17,8 +19,15 @@ pub struct NativeBackend {
     external_work: crate::external_kernels::Budget,
     public_roles: crate::PublicRolePolicy,
     core: Core,
+    implementations: &'static registry::Registry,
 }
 impl NativeBackend {
+    /// Independently installed execution owners. A registration does not imply
+    /// support for every nominal argument; `Backend::binding_signature` checks it.
+    pub fn installed_implementations(&self) -> Vec<(String, &'static str)> {
+        self.implementations.implementations()
+    }
+
     /// Set a total primitive-work cap before external construction execution.
     /// Work already consumed is retained; lowering a cap never refunds it.
     pub fn with_external_work_limit(mut self, limit: u64) -> Self {
@@ -43,6 +52,7 @@ impl NativeBackend {
     pub fn new(policy: Policy, entry: EntryPolicy, verifier: Option<VerifierKey>) -> Result<Self> {
         let mut backend = Self {
             external_work: crate::external_kernels::Budget::default(),
+            implementations: registry::installed()?,
             public_roles: crate::PublicRolePolicy::default(),
             core: Core::new(policy, entry),
         };
@@ -65,6 +75,7 @@ impl NativeBackend {
         core.setups = Setups::Registered(setups);
         Ok(Self {
             external_work: crate::external_kernels::Budget::default(),
+            implementations: registry::installed()?,
             public_roles: crate::PublicRolePolicy::default(),
             core,
         })
@@ -217,7 +228,9 @@ impl Backend for NativeBackend {
         &self,
         binding: &zkc_runtime::interactive::OperationBinding,
     ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        crate::external_kernels::signature(binding).or_else(|| crate::bindings::signature(binding))
+        self.implementations
+            .get(&binding.implementation)?
+            .signature(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<()> {
         self.core.validate(v)
@@ -232,8 +245,32 @@ impl Backend for NativeBackend {
         validation.and(cleanup)
     }
     fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-        let name = self.core.invoke(i, args)?;
-        let outputs = self.execute(&name, i, args)?;
+        self.core.resources.active(i.frame)?;
+        let implementation = self
+            .implementations
+            .get(i.binding.implementation())
+            .ok_or_else(|| crate::refused("kernel-binding"))?;
+        let signature = implementation
+            .signature(i.binding.declaration())
+            .ok_or_else(|| crate::refused("kernel-binding"))?;
+        self.core.invoke(i, args, &signature)?;
+        // Every family, including zero-input and early-return kernels, passes
+        // the installed security gate before any handler or state mutation.
+        if implementation.public_operands && !self.public_roles.permits(i.frame.role()) {
+            return Err(crate::refused("public-operands-required"));
+        }
+        let outputs = (implementation.handler)(self, i, args)?;
         self.core.outputs(i, outputs)
     }
+}
+
+// Constructors propagate installation errors before admitting or executing anything.
+// This legacy bool query conservatively requires public operands on installation
+// failure; it cannot authorize execution or replace constructor validation.
+pub(crate) fn requires_public_operands(identity: &str) -> bool {
+    registry::installed().map_or(true, |registry| {
+        registry
+            .get(identity)
+            .is_some_and(|entry| entry.public_operands)
+    })
 }

@@ -1,6 +1,21 @@
 // Product Sumcheck with openings of two prover-selected committed tables.
 // Use committed-two-factor.pir when the validator must pin expected roots.
 module {
+  use zkc::pcs::{
+    Commitment,
+    OpeningState,
+    Proof,
+    ProverKey,
+    VerifierKey
+  };
+  use zkc::poly::{
+    Point,
+    Round,
+    Table
+  };
+  use zkc::random::{
+    Rng
+  };
   bind pcs.commit = pcs::commit("multilinear.kzg.bls12-381/1") using "arkworks/pcs.commit";
   bind poly.empty_point = poly::empty_point(bls12-381.fr) using "arkworks/poly.empty_point";
   bind poly.product_round = poly::product_round(bls12-381.fr) using "arkworks/poly.product_round";

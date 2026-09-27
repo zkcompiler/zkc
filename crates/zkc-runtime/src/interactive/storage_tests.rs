@@ -26,7 +26,7 @@ impl Value for Stored {
         "field"
     }
     fn physical_type(&self) -> PhysicalType {
-        PhysicalType::default_for(LogicalType::parse("field:bls12-381.fr").unwrap())
+        PhysicalType::default_for(LogicalType::parse("field:bls12-381.fr").unwrap()).unwrap()
     }
     fn validate_serializable(&self) -> Result<(), BackendError> {
         Ok(())

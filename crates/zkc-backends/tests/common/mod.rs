@@ -109,7 +109,9 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
             "transcript" => "transcript:merlin3.bls12-381.fr64be/1".into(),
             _ => format!("{kind}:bls12-381.fr"),
         };
-        PhysicalType::default_for(LogicalType::parse(&nominal).unwrap()).spelling()
+        PhysicalType::default_for(LogicalType::parse(&nominal).unwrap())
+            .unwrap()
+            .spelling()
     }
     fn ports(inputs: &mut Json, index: usize) {
         for p in inputs.as_array_mut().unwrap() {

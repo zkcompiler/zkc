@@ -56,6 +56,42 @@ let
       ctest --output-on-failure --no-tests=error --parallel "$NIX_BUILD_CORES" -L native
     '';
   });
+  # Optional installation checks build only the installed compiler graph.
+  # Keep both linkage variants out of `checks` and the default package.
+  domainCompiler =
+    shared: envelope:
+    compiler.overrideAttrs (old: {
+      pname = "zkc-compiler-${if envelope then "envelope" else "base"}-${
+        if shared then "shared" else "static"
+      }";
+      outputs = [ "out" ];
+      doCheck = false;
+      postInstall = "";
+      cmakeFlags = old.cmakeFlags ++ [
+        "-DBUILD_TESTING=OFF"
+        "-DBUILD_SHARED_LIBS=${if shared then "ON" else "OFF"}"
+      ];
+      preConfigure =
+        old.preConfigure
+        + lib.optionalString envelope ''
+          cmakeFlagsArray+=("-DZKC_CONTRIBUTION_FILES=$PWD/compiler/examples/domain/contribution.cmake")
+        '';
+      buildPhase = ''
+        runHook preBuild
+        cmake --build . --target zkc-compile zkc-opt zkc-tblgen --parallel "$NIX_BUILD_CORES"
+        runHook postBuild
+      '';
+    });
+  domainCheck =
+    shared:
+    pkgs.callPackage ./checks/compiler-domain.nix {
+      inherit llvm shared;
+      stdenv = llvm.stdenv;
+      python3 = python;
+      source = compiler.src;
+      base = domainCompiler shared false;
+      domain = domainCompiler shared true;
+    };
   tools = pkgs.callPackage ./rust.nix {
     rustPlatform = pkgs.makeRustPlatform {
       cargo = rust;
@@ -140,6 +176,8 @@ in
     rust-toolchain = rust;
     python-tools = pythonTools;
     compiler-sanitize = compilerSanitize;
+    compiler-domain-checks = domainCheck false;
+    compiler-domain-shared-checks = domainCheck true;
     groth16-checks = pkgs.callPackage ./checks/groth16.nix {
       inherit
         compiler

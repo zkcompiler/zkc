@@ -1,12 +1,15 @@
 // Shape gate only: original encoded 32-byte commitments and L/R point arrays.
 // Scalar/point decoding and complete BP+ verification belong to the adapter.
 module {
+  use zkc::algebra::{Indices};
+  use zkc::algebra;
+  use zkc::core;
   fn ByteLength(values: Indices) -> index {
     let length = values.len();
     for i in 0..length {
       let byte = values[i];
-      let valid = index::less(byte, 256);
-      control::require(valid);
+      let valid = zkc::algebra::index_less(byte, 256);
+      zkc::core::require(valid);
     }
     return length;
   }
@@ -15,26 +18,26 @@ module {
     let leftBytes = ByteLength(left);
     let rightBytes = ByteLength(right);
     let width = 32;
-    let count = index::div(bytes, width);
-    let exact = index::equal(index::mod(bytes, width), 0);
-    control::require(exact);
-    let nonempty = index::less(0, count);
-    control::require(nonempty);
-    let bounded = index::less(count, 17);
-    control::require(bounded);
+    let count = zkc::algebra::index_div(bytes, width);
+    let exact = zkc::algebra::index_equal(zkc::algebra::index_mod(bytes, width), 0);
+    zkc::core::require(exact);
+    let nonempty = zkc::algebra::index_less(0, count);
+    zkc::core::require(nonempty);
+    let bounded = zkc::algebra::index_less(count, 17);
+    zkc::core::require(bounded);
     let mut capacity = 1;
     let mut rounds = 6;
     for i in 0..4 {
-      if index::less(capacity, count) {
+      if zkc::algebra::index_less(capacity, count) {
         capacity = capacity * 2;
         rounds = rounds + 1;
       }
     }
     let roundBytes = rounds * width;
-    let leftOK = index::equal(leftBytes, roundBytes);
-    control::require(leftOK);
-    let rightOK = index::equal(rightBytes, roundBytes);
-    control::require(rightOK);
+    let leftOK = zkc::algebra::index_equal(leftBytes, roundBytes);
+    zkc::core::require(leftOK);
+    let rightOK = zkc::algebra::index_equal(rightBytes, roundBytes);
+    zkc::core::require(rightOK);
     return rounds;
   }
   fn Zero() -> index { return 0; }

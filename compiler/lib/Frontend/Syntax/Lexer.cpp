@@ -98,7 +98,7 @@ Expected<std::vector<Token>> lex(StringRef text, StringRef filename) {
                text.substr(i).starts_with("=>") ||
                text.substr(i).starts_with(".."))
       i += 2;
-    else if (StringRef("{}()[]<>,:;=+*-/%|").contains(text[i]))
+    else if (StringRef("{}()[]<>,:;=+*-/%|#").contains(text[i]))
       ++i;
     else
       return diagnostic(text, filename, i, "source-character",

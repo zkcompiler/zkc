@@ -1,10 +1,10 @@
 #include "LibrarySource.h"
 #include "../Library/Diagnostic.h"
 #include "../Resolution/Project.h"
-#include "../Syntax/Types.h"
 #include "../Work.h"
 #include "Library.h"
 #include "OutputWork.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
@@ -44,35 +44,38 @@ public:
     auto &forwarding = entry.forwarding;
     forwarding.name = result.name;
     forwarding.origin = result.origin;
+    std::function<syntax::Type(const protocol::BoundType &)> fromBound =
+        [&](const protocol::BoundType &bound) {
+          syntax::Type t;
+          t.location = result.location;
+          t.name = bound.kind == "resource_unit"
+                       ? "ResourceUnit"
+                       : "__installed_type_" + bound.kind;
+          if (!bound.identity.empty()) {
+            syntax::Type argument;
+            argument.name = bound.identity;
+            argument.quoted = true;
+            t.arguments.push_back(std::move(argument));
+          }
+          for (const auto &argument : bound.arguments) {
+            if (argument.kind == protocol::TypeArgument::Kind::Type)
+              t.arguments.push_back(fromBound(*argument.type));
+            else {
+              syntax::Type value;
+              value.name = argument.spelling();
+              value.natural =
+                  argument.kind == protocol::TypeArgument::Kind::Nat;
+              value.quoted = !value.natural;
+              t.arguments.push_back(std::move(value));
+            }
+          }
+          return t;
+        };
     auto leafType = [&](StringRef spelling) -> Expected<syntax::Type> {
-      auto [kind, domain] = spelling.split(':');
-      syntax::Type t, argument;
-      t.location = argument.location = result.location;
-      argument.name = domain.str();
-      argument.quoted = true;
-      if (kind == "field" || kind == "group") {
-        t = argument;
-        t.members = {"Element"};
-      } else if (kind == "vector" || kind == "groups" || kind == "matrix") {
-        syntax::Type element = argument;
-        element.members = {"Element"};
-        t.name = kind == "matrix" ? "Matrix" : "Vector";
-        t.arguments.push_back(std::move(element));
-      } else if (kind == "resource_unit") {
-        t.name = "ResourceUnit";
-        t.arguments.push_back(std::move(argument));
-      } else {
-        for (const auto &name : typeSpellings)
-          if (name.constructor == kind)
-            t.name = name.surface.str();
-        // Lowering admitted every leaf as a bound type, and every bound
-        // constructor has a source spelling.
-        if (t.name.empty())
-          report_fatal_error("linked leaf type has no source spelling");
-        if (!domain.empty())
-          t.arguments.push_back(std::move(argument));
-      }
-      return t;
+      auto bound = protocol::parseBoundType(spelling, false);
+      if (!bound)
+        return bound.takeError();
+      return fromBound(*bound);
     };
     std::function<Expected<syntax::Type>(const lib::Type &, const lib::Layout &,
                                          const source::Names &,
@@ -100,15 +103,10 @@ public:
       // Zero-length arrays still retain their element type even though no
       // physical leaf supplies its spelling.
       if (type.kind == lib::Type::Kind::Logical) {
-        std::string spelling = type.name;
-        if (!type.arguments.empty()) {
-          auto domain =
-              lib::resolvedDomain(type.arguments.front(), environment);
-          if (!domain)
-            return domain.takeError();
-          spelling += ":" + *domain;
-        }
-        return leafType(spelling);
+        auto spelling = lib::resolvedLogicalType(type, environment);
+        if (!spelling)
+          return spelling.takeError();
+        return leafType(*spelling);
       }
       // Linking closes parameters and abstract members, and entries with a
       // variant port keep their flat boundary.

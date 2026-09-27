@@ -2,24 +2,28 @@
 // know proof fields or automatically observe serialization. Zero denotes an
 // observation; one a sample, and all other event tags are rejected.
 module {
+  use zkc::external;
+  use zkc::algebra::{Indices};
+  use zkc::algebra;
+  use zkc::core;
   fn Schedule(tags: Indices, values: Indices) -> (Indices, Indices) {
-    let same = index::equal(tags.len(), values.len());
-    control::require(same);
-    let mut state = external::openvm::init();
-    let mut challenges = indices::empty();
+    let same = zkc::algebra::index_equal(tags.len(), values.len());
+    zkc::core::require(same);
+    let mut state = zkc::external::openvm_init();
+    let mut challenges = zkc::algebra::indices_empty();
     for i in 0..tags.len() {
       let tag = tags[i];
-      let observing = index::equal(tag, 0);
+      let observing = zkc::algebra::index_equal(tag, 0);
       if observing {
-        let empty = indices::empty();
-        let input = indices::append(empty, values[i]);
-        state = external::openvm::observe(state, input);
+        let empty = zkc::algebra::indices_empty();
+        let input = zkc::algebra::indices_append(empty, values[i]);
+        state = zkc::external::openvm_observe(state, input);
       } else {
-        let sampling = index::equal(tag, 1);
-        control::require(sampling);
-        let (next, value) = external::openvm::sample(state);
+        let sampling = zkc::algebra::index_equal(tag, 1);
+        zkc::core::require(sampling);
+        let (next, value) = zkc::external::openvm_sample(state);
         state = next;
-        challenges = indices::append(challenges, value);
+        challenges = zkc::algebra::indices_append(challenges, value);
       }
     }
     return (state, challenges);

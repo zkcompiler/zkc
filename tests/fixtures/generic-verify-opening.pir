@@ -1,4 +1,14 @@
 module {
+  use zkc::pcs::{
+    Commitment,
+    MultilinearOpening,
+    Proof,
+    VerifierKey
+  };
+  use zkc::pcs;
+  use zkc::poly::{
+    Point
+  };
   fn Verify<C: domain Commitment>(
     key: VerifierKey<C>,
     commitment: Commitment<C>,
@@ -6,7 +16,7 @@ module {
     value: C::EvaluationField::Element,
     proof: Proof<C>
   ) -> bool requires (MultilinearOpening(C)) {
-    [check] let accepted = pcs::check::<C>(key, commitment, point, value, proof);
+    [check] let accepted = zkc::pcs::check::<C>(key, commitment, point, value, proof);
     return accepted;
   }
 

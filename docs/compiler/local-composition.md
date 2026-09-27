@@ -9,8 +9,9 @@ is `canonical-expanded-locals/1`.
 
 ```text
 module {
+  use zkc::algebra;
   fn Twice<F: Field>(x: F::Element) -> F::Element {
-    [sum] let y = field::add(x, x);
+    [sum] let y = algebra::add(x, x);
     return y;
   }
   configure Selected = Twice();

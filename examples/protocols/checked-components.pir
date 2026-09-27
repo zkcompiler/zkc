@@ -1,6 +1,7 @@
 // One interface-checked client, two private representations. These components
 // exercise ownership and fallible calls; they are not cryptographic validators.
 module {
+  use zkc::core;
   library(namespace="zkc.examples", name="checked-components", version="1",
           resolution="source-example");
 
@@ -14,7 +15,7 @@ module {
   component EmptyCell: Cell {
     type State = ();
     local start(ok: bool) -> State effects (local) {
-      control::require(ok);
+      zkc::core::require(ok);
       return ();
     }
     local step(state: State) -> State { return state; }
@@ -24,7 +25,7 @@ module {
   component StoredCell: Cell {
     type State = bool;
     local start(ok: bool) -> State effects (local) {
-      control::require(ok);
+      zkc::core::require(ok);
       return ok;
     }
     local step(state: State) -> State { return state; }

@@ -532,7 +532,11 @@ impl Invocation {
                 .map_err(|e| Error::detail("groth16-framing", e))?;
             values.push(
                 backend
-                    .decode(PhysicalType::default_for(ty), payload)
+                    .decode(
+                        PhysicalType::default_for(ty)
+                            .map_err(|e| Error::detail("groth16-point-type", e))?,
+                        payload,
+                    )
                     .map_err(backend_error)?,
             );
         }

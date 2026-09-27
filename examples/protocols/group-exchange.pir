@@ -1,6 +1,9 @@
 // A BLS G1 exchange using the installed affine nonce contract.
 // The verifier supplies the challenge; this example makes no security claim.
 module {
+  use zkc::random::{
+    Nonce
+  };
   bind curve.generator = curve::generator(bls12-381.g1) using "arkworks/curve.generator";
   bind curve.scale = curve::scale(bls12-381.g1) using "arkworks/curve.scale";
   bind curve.empty = curve::empty(bls12-381.g1) using "arkworks/curve.empty";

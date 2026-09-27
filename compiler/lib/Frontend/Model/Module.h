@@ -59,6 +59,13 @@ struct Module {
   DeclId lookup(ScopeId, llvm::StringRef) const;
   DomainId internDomain(llvm::StringRef, ScopeId, llvm::StringRef sort = {});
   TypeId logical(llvm::StringRef, ScopeId);
+  StaticArgument argument(llvm::StringRef, llvm::StringRef sort, ScopeId);
+  // Failed substitutions retain the original node and record a diagnostic;
+  // an argument of another kind must never supply an invalid model ID.
+  bool checkArgument(DeclId parameter, const StaticArgument &);
+  std::string spelling(const StaticArgument &) const;
+  StaticArgument substitute(const StaticArgument &,
+                            const std::map<DeclId, StaticArgument> &);
   TypeId record(DeclId, llvm::ArrayRef<std::string>, ScopeId);
   TypeId product(llvm::ArrayRef<TypeId>);
   TypeId array(TypeId element, uint64_t count);
@@ -66,8 +73,8 @@ struct Module {
   std::string spelling(DomainId) const;
   std::string spelling(TypeId) const;
   std::vector<Port> leaves(const Port &) const;
-  DomainId substitute(DomainId, const std::map<DeclId, DomainId> &);
-  TypeId substitute(TypeId, const std::map<DeclId, DomainId> &);
+  DomainId substitute(DomainId, const std::map<DeclId, StaticArgument> &);
+  TypeId substitute(TypeId, const std::map<DeclId, StaticArgument> &);
   bool containsChecked(TypeId) const;
 };
 } // namespace zkc::frontend::model

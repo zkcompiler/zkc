@@ -13,9 +13,11 @@ source = Path(directory) / "slice.pir"
 for field in fields:
     with case(f"vector slice over {field}"):
         source.write_text('''module {
+  use zkc::algebra::{Vector};
+  use zkc::algebra;
           fn Slice<F: domain Field>(a: Vector<F::Element>, start: index, length: index)
               -> Vector<F::Element> requires (Field(F)) {
-            let result = vector::slice::<F>(a, start, length);
+            let result = zkc::algebra::vector_slice::<F>(a, start, length);
             return result;
           }
           configure Concrete = Slice(F = FIELD);

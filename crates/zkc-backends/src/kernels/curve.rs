@@ -229,6 +229,7 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
+    public: bool,
 ) -> Option<Result<Vec<Value>>> {
     if name == "pairing.check" {
         return Some((|| {
@@ -259,16 +260,16 @@ pub(crate) fn apply(
                 .first()
                 .map(String::as_str)
             {
-                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p),
-                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p),
+                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p, public),
+                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p, public),
                 _ => Err(refused("kernel-operands")),
             }
         }
         Some(zkc_runtime::interactive::Identity::Ristretto255Scalar) => {
-            dense::<RistrettoPoint>(name, args, i, p)
+            dense::<RistrettoPoint>(name, args, i, p, public)
         }
         Some(zkc_runtime::interactive::Identity::Bls12381Fr) => {
-            dense::<GroupPoint>(name, args, i, p)
+            dense::<GroupPoint>(name, args, i, p, public)
         }
         _ => Err(refused("kernel-operands")),
     })
@@ -278,6 +279,7 @@ fn dense<G: Group>(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
+    public: bool,
 ) -> Result<Vec<Value>> {
     let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
     let point = |j| G::point(arg(j)?);
@@ -348,11 +350,7 @@ fn dense<G: Group>(
                     usize::MAX,
                 )?;
             }
-            G::value(G::msm(
-                s,
-                b,
-                crate::requires_public_operands(i.binding.implementation()),
-            )?)
+            G::value(G::msm(s, b, public)?)
         }
         "curve.scale_each" => {
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
@@ -418,3 +416,87 @@ fn dense<G: Group>(
     };
     Ok(vec![result])
 }
+
+/// Independent native port facts, also used for exact implementation assembly.
+pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::curve;
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        curve::operation("curve.generator", &[], &[Group], AttributeRule::None),
+        curve::operation("curve.add", &[Group, Group], &[Group], AttributeRule::None),
+        curve::operation(
+            "curve.scale",
+            &[Group, Field],
+            &[Group],
+            AttributeRule::None,
+        ),
+        curve::operation("curve.equal", &[Group, Group], &[Bool], AttributeRule::None),
+        curve::operation("curve.empty", &[], &[Groups], AttributeRule::None),
+        curve::operation(
+            "curve.append",
+            &[Groups, Group],
+            &[Groups],
+            AttributeRule::None,
+        ),
+        curve::operation("curve.at", &[Groups], &[Group], AttributeRule::NaturalIndex),
+        curve::operation("curve.get", &[Groups, Index], &[Group], AttributeRule::None),
+        curve::operation("curve.length", &[Groups], &[Index], AttributeRule::None),
+        curve::operation("curve.neg", &[Group], &[Group], AttributeRule::None),
+        curve::operation("curve.nonidentity", &[Group], &[Bool], AttributeRule::None),
+        curve::operation(
+            "curve.msm",
+            &[Vector, Groups],
+            &[Group],
+            AttributeRule::None,
+        ),
+        curve::operation(
+            "curve.scale_each",
+            &[Vector, Groups],
+            &[Groups],
+            AttributeRule::None,
+        ),
+        curve::operation(
+            "curve.vector_add",
+            &[Groups, Groups],
+            &[Groups],
+            AttributeRule::None,
+        ),
+        curve::operation(
+            "curve.vector_scale",
+            &[Groups, Field],
+            &[Groups],
+            AttributeRule::None,
+        ),
+        curve::operation(
+            "curve.split",
+            &[Groups],
+            &[Groups, Groups],
+            AttributeRule::None,
+        ),
+        curve::operation(
+            "curve.concat",
+            &[Groups, Groups],
+            &[Groups],
+            AttributeRule::None,
+        ),
+    ]
+};
+pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[crate::bindings::curve::pairing(
+    "pairing.check",
+    &[
+        zkc_runtime::interactive::Type::Groups,
+        zkc_runtime::interactive::Type::Groups,
+    ],
+    &[zkc_runtime::interactive::Type::Bool],
+    zkc_runtime::interactive::AttributeRule::None,
+)];
+
+pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
+    &[crate::backend::registry::Alternative {
+        identity: "dalek-vartime/curve.msm",
+        original: "dalek/curve.msm",
+        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
+        ports: crate::bindings::PortTransform::Default,
+        handler: Some(crate::backend::registry::public_msm),
+        public_operands: true,
+    }];

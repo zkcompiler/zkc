@@ -319,8 +319,17 @@ class LocalElaborator {
       std::vector<Operand> operands;
       std::vector<std::string> types;
       for (const auto &argument : expr.operands) {
-        operands.push_back({{scalar(argument, env, out)}, std::nullopt});
-        types.push_back(type(env, operands.back().values.front()));
+        operands.push_back(operand(argument, env, out));
+        if (!cb.good())
+          return {};
+        const auto &value = operands.back();
+        if (value.shape && (value.shape->product || value.shape->array)) {
+          cb.fail(argument, "source-struct-value",
+                  "operator requires a logical value or nominal record");
+          return {};
+        }
+        types.push_back(value.shape ? "record:" + value.shape->name
+                                    : type(env, value.values.front()));
       }
       if (!cb.good())
         return {};
@@ -740,12 +749,14 @@ class LocalElaborator {
           use.name = call->callee;
           std::vector<std::string> types;
           for (const auto &operand : operands) {
-            if (operand.shape) {
+            if (operand.shape &&
+                (operand.shape->product || operand.shape->array)) {
               cb.fail(ins, "source-struct-value",
-                      "a single value is required here, not a struct");
+                      "operator requires a logical value or nominal record");
               break;
             }
-            types.push_back(type(env, operand.values.front()));
+            types.push_back(operand.shape ? "record:" + operand.shape->name
+                                          : type(env, operand.values.front()));
           }
           auto target =
               cb.good() ? cb.resolveOperator(use, types) : std::nullopt;

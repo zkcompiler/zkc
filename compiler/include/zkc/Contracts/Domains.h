@@ -29,6 +29,20 @@ struct CodecIdentity {
   std::string identity, kind, domain;
 };
 
+/// An admitted instance of a declared nullary or unary logical constructor.
+/// An empty domain denotes no argument. This inventory neither supplies nor
+/// requires a codec, physical representation, capability or implementation.
+/// Structural variants and resource units have separate formation paths.
+struct LogicalTypeInstance {
+  std::string kind, domain;
+};
+
+/// Explicit installation policy for a nominal domain. A provider name selects
+/// a candidate; it does not register an implementation or establish any law.
+struct DefaultProvider {
+  std::string domain, provider;
+};
+
 /// Applicability is the complete (kind, domain, identity) tuple. A
 /// representation identity may be shared by several tuples. An optional layout
 /// names an explicit selection, such as "msb"; it does not select an
@@ -49,8 +63,11 @@ struct DomainRepresentation {
 class DomainCatalog {
 public:
   static llvm::Expected<DomainCatalog>
-  create(std::vector<NominalDomain> domains, std::vector<CodecIdentity> codecs,
-         std::vector<DomainRepresentation> representations);
+  create(std::vector<NominalDomain> domains,
+         std::vector<LogicalTypeInstance> logicalTypes,
+         std::vector<CodecIdentity> codecs,
+         std::vector<DomainRepresentation> representations,
+         std::vector<DefaultProvider> defaultProviders = {});
 
   DomainCatalog(const DomainCatalog &) = default;
   DomainCatalog(DomainCatalog &&) = default;
@@ -61,6 +78,16 @@ public:
   const CodecIdentity *codec(llvm::StringRef identity) const;
   llvm::ArrayRef<NominalDomain> allDomains() const { return domains; }
   llvm::ArrayRef<CodecIdentity> allCodecs() const { return codecs; }
+  llvm::ArrayRef<LogicalTypeInstance> allLogicalTypes() const {
+    return logicalTypes;
+  }
+  llvm::ArrayRef<DomainRepresentation> allRepresentations() const {
+    return representations;
+  }
+  bool admitsLogicalType(llvm::StringRef kind, llvm::StringRef domain) const;
+  /// No fallback through representations or associated identities. Execution
+  /// must independently validate the selected implementation and its ports.
+  llvm::StringRef defaultProvider(llvm::StringRef domain) const;
   llvm::StringRef identitySort(llvm::StringRef identity) const;
   llvm::StringRef associatedIdentity(llvm::StringRef identity,
                                      llvm::StringRef member) const;
@@ -83,11 +110,15 @@ public:
 
 private:
   DomainCatalog(std::vector<NominalDomain> domains,
+                std::vector<LogicalTypeInstance> logicalTypes,
                 std::vector<CodecIdentity> codecs,
-                std::vector<DomainRepresentation> representations);
+                std::vector<DomainRepresentation> representations,
+                std::vector<DefaultProvider> defaultProviders);
   std::vector<NominalDomain> domains;
+  std::vector<LogicalTypeInstance> logicalTypes;
   std::vector<CodecIdentity> codecs;
   std::vector<DomainRepresentation> representations;
+  std::vector<DefaultProvider> defaultProviders;
 };
 
 /// The current BLS/PCS and Ristretto/Merlin installation. Invalid built-in data

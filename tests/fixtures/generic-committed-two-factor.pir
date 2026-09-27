@@ -1,5 +1,29 @@
 // Generic PCS and polynomial algorithms with explicit MSB folding.
 module {
+  use zkc::algebra::{
+    Field
+  };
+  use zkc::algebra;
+  use zkc::core;
+  use zkc::pcs::{
+    Commitment,
+    MultilinearOpening,
+    OpeningState,
+    Proof,
+    ProverKey,
+    VerifierKey
+  };
+  use zkc::pcs;
+  use zkc::poly::{
+    Point,
+    Round,
+    Table
+  };
+  use zkc::poly;
+  use zkc::random::{
+    Rng
+  };
+  use zkc::random;
   fn CommitFactorsAlgorithm<C: domain Commitment>(
     key: ProverKey<C>,
     f: Table<C::ValueField>,
@@ -7,20 +31,20 @@ module {
   ) -> (Commitment<C>, Commitment<C>, OpeningState<C>, OpeningState<C>) requires (
     MultilinearOpening(C)
   ) {
-    [commit_f] let (cf, sf) = pcs::commit::<C>(key, f);
-    [commit_g] let (cg, sg) = pcs::commit::<C>(key, g);
+    [commit_f] let (cf, sf) = zkc::pcs::commit::<C>(key, f);
+    [commit_g] let (cg, sg) = zkc::pcs::commit::<C>(key, g);
     return (cf, cg, sf, sg);
   }
 
   fn EmptyPointAlgorithm<F: domain Field>() -> Point<F> requires (Field(F)) {
-    [point] let p = poly::empty_point::<F>();
+    [point] let p = zkc::poly::empty_point::<F>();
     return p;
   }
 
   fn ProductRoundAlgorithm<F: domain Field>(f: Table<F>, g: Table<F>) -> Round<F> requires (
     Field(F)
   ) {
-    [round] let q = poly::product_round::<F>(f, g);
+    [round] let q = zkc::poly::product_round::<F>(f, g);
     return q;
   }
 
@@ -29,11 +53,11 @@ module {
     claim: F::Element,
     coins: Rng<F>
   ) -> (F::Element, F::Element, Rng<F>) requires (Field(F)) {
-    [boundary] let sum = poly::boundary::<F>(q);
-    [equal] let valid = field::equal::<F>(sum, claim);
-    [require] control::require(valid);
-    [draw] let (r, next_coins) = random::draw::<F>(coins);
-    [evaluate] let next_claim = poly::round_evaluate::<F>(q, r);
+    [boundary] let sum = zkc::poly::boundary::<F>(q);
+    [equal] let valid = zkc::algebra::equal::<F>(sum, claim);
+    [require] zkc::core::require(valid);
+    [draw] let (r, next_coins) = zkc::random::draw::<F>(coins);
+    [evaluate] let next_claim = zkc::poly::round_evaluate::<F>(q, r);
     return (r, next_claim, next_coins);
   }
 
@@ -42,15 +66,15 @@ module {
     g: Table<F>,
     r: F::Element
   ) -> (Table<F>, Table<F>) requires (Field(F)) {
-    [fold_f] let ff = poly::fold::<F>(f, r);
-    [fold_g] let gg = poly::fold::<F>(g, r);
+    [fold_f] let ff = zkc::poly::fold::<F>(f, r);
+    [fold_g] let gg = zkc::poly::fold::<F>(g, r);
     return (ff, gg);
   }
 
   fn AppendPointAlgorithm<F: domain Field>(p: Point<F>, r: F::Element) -> Point<F> requires (
     Field(F)
   ) {
-    [append] let next = poly::append_point::<F>(p, r);
+    [append] let next = zkc::poly::append_point::<F>(p, r);
     return next;
   }
 
@@ -58,7 +82,7 @@ module {
     state: OpeningState<C>,
     p: Point<C::PointField>
   ) -> (C::EvaluationField::Element, Proof<C>) requires (MultilinearOpening(C)) {
-    [open] let (value, proof) = pcs::open::<C>(state, p);
+    [open] let (value, proof) = zkc::pcs::open::<C>(state, p);
     return (value, proof);
   }
 
@@ -69,16 +93,16 @@ module {
     value: C::EvaluationField::Element,
     proof: Proof<C>
   ) -> C::EvaluationField::Element requires (MultilinearOpening(C)) {
-    [check] let valid = pcs::check::<C>(key, commitment, p, value, proof);
-    [require] control::require(valid);
+    [check] let valid = zkc::pcs::check::<C>(key, commitment, p, value, proof);
+    [require] zkc::core::require(valid);
     return value;
   }
 
   fn CheckTerminalAlgorithm<F: domain Field>(f: F::Element, g: F::Element, claim: F::Element) -> bool requires (
     Field(F)
   ) {
-    [product] let product = field::mul::<F>(f, g);
-    [equal] let accepted = field::equal::<F>(product, claim);
+    [product] let product = zkc::algebra::mul::<F>(f, g);
+    [equal] let accepted = zkc::algebra::equal::<F>(product, claim);
     return accepted;
   }
 
@@ -88,10 +112,10 @@ module {
     expected_f: Commitment<C>,
     expected_g: Commitment<C>
   ) -> () requires (MultilinearOpening(C)) {
-    [equal_f] let f_ok = pcs::equal::<C>(actual_f, expected_f);
-    [require_f] control::require(f_ok);
-    [equal_g] let g_ok = pcs::equal::<C>(actual_g, expected_g);
-    [require_g] control::require(g_ok);
+    [equal_f] let f_ok = zkc::pcs::equal::<C>(actual_f, expected_f);
+    [require_f] zkc::core::require(f_ok);
+    [equal_g] let g_ok = zkc::pcs::equal::<C>(actual_g, expected_g);
+    [require_g] zkc::core::require(g_ok);
     return;
   }
 

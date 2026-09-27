@@ -1,7 +1,19 @@
 module {
+  use zkc::curve::{
+    ScalarAction
+  };
+  use zkc::algebra::{
+    CommRing
+  };
+  use zkc::core;
+  use zkc::curve;
+  use zkc::poly::{
+    Table
+  };
+  use zkc::poly;
   // A reusable mathematical algorithm, independent of field and table storage.
   fn Fold<F: domain Field>(a: Table<F>, r: F::Element) -> Table<F> requires (CommRing(F)) {
-    [fold] let result = poly::fold::<F>(a, r);
+    [fold] let result = zkc::poly::fold::<F>(a, r);
     return result;
   }
 
@@ -9,12 +21,12 @@ module {
   fn Scale<G: domain Group>(g: G::Element, r: G::Scalar::Element) -> G::Element requires (
     ScalarAction(G)
   ) {
-    [scale] let result = curve::scale::<G>(g, r);
+    [scale] let result = zkc::curve::scale::<G>(g, r);
     return result;
   }
 
   fn Both<>(a: bool, b: bool) -> bool {
-    [and] let result = bool::and(a, b);
+    [and] let result = zkc::core::and(a, b);
     return result;
   }
 

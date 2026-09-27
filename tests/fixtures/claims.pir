@@ -1,14 +1,19 @@
 module {
+  use zkc::algebra::{
+    Field
+  };
+  use zkc::algebra;
+  use zkc::core;
   fn Equation<F: domain Field>(
     subject: F::Element,
     expected: F::Element,
     context: F::Element,
     admitted: F::Element
   ) -> bool requires (Field(F)) {
-    [__site_0] let ok = field::equal::<F>(subject, expected);
-    [equation_guard] control::require(ok);
-    [__site_1] let bound = field::equal::<F>(context, admitted);
-    [context_guard] control::require(bound);
+    [__site_0] let ok = zkc::algebra::equal::<F>(subject, expected);
+    [equation_guard] zkc::core::require(ok);
+    [__site_1] let bound = zkc::algebra::equal::<F>(context, admitted);
+    [context_guard] zkc::core::require(bound);
     return ok;
   }
 
@@ -18,7 +23,7 @@ module {
     context: F::Element,
     admitted: F::Element
   ) -> bool requires (Field(F)) {
-    [__site_0] let ok = field::equal::<F>(subject, expected);
+    [__site_0] let ok = zkc::algebra::equal::<F>(subject, expected);
     return ok;
   }
 

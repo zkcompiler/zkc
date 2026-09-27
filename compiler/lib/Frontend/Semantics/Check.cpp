@@ -2,9 +2,10 @@
 #include "../Model/Libraries.h"
 #include "../Resolution/Project.h"
 #include "../Static/Domains.h"
+#include "../Static/Structural.h"
+#include "../Static/Types.h"
 #include "../Syntax/Lexer.h"
 #include "../Syntax/Tree.h"
-#include "../Syntax/Types.h"
 #include "LibraryEntries.h"
 #include "Local.h"
 #include "Operators.h"
@@ -25,110 +26,6 @@ using namespace llvm;
 namespace zkc::frontend::semantics {
 using namespace syntax;
 namespace {
-/// Resolve the two explicit convenience profiles while forming source types.
-/// There is no later signature rewrite: records and their leaves see the same
-/// selected domains as ordinary logical ports and expression annotations.
-StringRef profileIdentity(StringRef profile, StringRef kind) {
-  if (profile != "arkworks.multilinear.bls12-381/1" &&
-      profile != "arkworks.bls12-381/1")
-    return {};
-  if (kind == "group" || kind == "groups")
-    return profile == "arkworks.bls12-381/1" ? "bls12-381.g1" : "";
-  if (kind == "nonce")
-    return profile == "arkworks.bls12-381/1" ? "bls12-381.fr" : "";
-  if (kind == "transcript")
-    return "merlin3.bls12-381.fr64be/1";
-  if (is_contained(ArrayRef<StringRef>{"commitment", "proof", "opening_state",
-                                       "prover_key", "verifier_key"},
-                   kind))
-    return "multilinear.kzg.bls12-381/1";
-  return is_contained(
-             ArrayRef<StringRef>{"field", "table", "point", "round", "rng"},
-             kind)
-             ? "bls12-381.fr"
-             : "";
-}
-bool knownProfile(StringRef profile) {
-  return profile == "arkworks.multilinear.bls12-381/1" ||
-         profile == "arkworks.bls12-381/1";
-}
-/// A convenience profile is source notation only: it becomes the explicit
-/// declarations the carrier always holds
-/// (docs/compiler/carrier-consolidation.md).
-void elaborateProfile(source::Module &module, StringRef profile) {
-  std::set<std::string> names;
-  for (const auto &b : module.bindings)
-    names.insert(b.name);
-  for (const auto &f : module.functions)
-    names.insert(f.name);
-  for (const auto &p : module.protocols)
-    names.insert(p.name);
-  for (const auto &i : module.instances)
-    names.insert(i.name);
-  for (const auto &e : module.entries)
-    names.insert(e.name);
-  std::map<std::string, std::string> operations;
-  for (auto &f : module.functions) {
-    if (!f.origin)
-      f.origin = source::LogicalOrigin{f.name, {}};
-    if (!f.body)
-      continue;
-    for (auto &instruction : *f.body) {
-      auto *op = instruction.get<source::Operation>();
-      if (!op)
-        continue;
-      auto existing = operations.find(op->callee);
-      if (existing != operations.end()) {
-        op->callee = existing->second;
-        continue;
-      }
-      // Formation belongs to admission, not parsing: incomplete/unknown
-      // contracts must remain editable and formatable as structural source.
-      source::OperationBinding binding;
-      binding.location = instruction.location;
-      binding.name = op->callee;
-      while (!names.insert(binding.name).second)
-        binding.name += "_";
-      binding.application.contract = op->callee;
-      StringRef key = binding.application.contract;
-      if (key.starts_with("pcs."))
-        binding.application.arguments = {"multilinear.kzg.bls12-381/1"};
-      else if (key.starts_with("curve.") && key != "curve.response")
-        binding.application.arguments = {"bls12-381.g1"};
-      else if (key.starts_with("transcript.")) {
-        binding.application.arguments = {"merlin3.bls12-381.fr64be/1"};
-        if (key.starts_with("transcript.observe.")) {
-          std::string payload = key.drop_front(19).str();
-          auto identity = profileIdentity(profile, payload);
-          if (!identity.empty())
-            payload += ":" + identity.str();
-          auto parsed = protocol::parseBoundType(payload, false);
-          if (parsed) {
-            if (!parsed->identity.empty())
-              binding.application.arguments.push_back(parsed->identity);
-            binding.application.arguments.push_back(
-                protocol::defaultCodec(*parsed).str());
-          } else {
-            consumeError(parsed.takeError());
-          }
-        }
-      } else if (key != "bool.and" && key != "control.require" &&
-                 !key.starts_with("index.") && !key.starts_with("indices."))
-        binding.application.arguments = {"bls12-381.fr"};
-      // Select the actual profile backend; never infer the PCS scheme from its
-      // old module name or silently substitute a different representation.
-      binding.application.implementation =
-          (key.starts_with("index.") || key.starts_with("indices.")
-               ? "native/"
-               : "arkworks/") +
-          binding.application.contract;
-      operations.emplace(op->callee, binding.name);
-      op->callee = binding.name;
-      module.bindings.push_back(std::move(binding));
-    }
-  }
-}
-
 // A signature pattern contains nominal terms, never physical representations.
 struct Signature {
   std::vector<source::StaticParameter> parameters;
@@ -167,6 +64,7 @@ class Checker {
   source::Module generated;
   const LibraryEmission &linked;
   std::vector<const syntax::Function *> functions;
+  OperatorBindings operators;
   std::map<std::string, const LibraryEntry *> entries;
 
   std::string code, message;
@@ -179,16 +77,6 @@ class Checker {
   std::map<std::string, StructInfo> structs;
   std::map<std::string, LocalAggregates> structParameters;
   std::set<std::string> resolving;
-  std::map<std::pair<std::string, std::string>, std::string> profileCalls;
-
-  // A convenience profile belongs to its authored root. Imported and child
-  // definitions keep explicit domains and implementations regardless of caller.
-  bool usesProfile(const source::Node &node) const {
-    const auto &project = *model.resolution;
-    return syntax.profile && node.location && !project.owners.empty() &&
-           node.location->file == project.owners.front().root;
-  }
-
   void predeclare() {
     auto add = [&](const auto &node, Declaration::Kind kind) {
       if (id(node.name).valid()) {
@@ -325,10 +213,51 @@ class Checker {
       model.declarations[id(d.name).index].target = id(d.protocol);
     for (const auto &d : syntax.entries)
       model.declarations[id(d.name).index].target = id(d.instance);
+    operators.form(
+        original ? *original : syntax, *model.resolution,
+        [&](const syntax::Function &function, const syntax::Type &operand) {
+          if (operand.product || operand.name == "Array")
+            return std::string{};
+          if (!id(function.name).valid()) {
+            // Abstract checked helpers have no ordinary entry, but their
+            // checked signatures still own the operator's operand heads.
+            if (model.libraries)
+              for (const auto &[name, body] : model.libraries->clients)
+                if (name == function.name)
+                  for (auto [index, argument] : enumerate(function.arguments))
+                    if (&argument.type == &operand) {
+                      const auto &type =
+                          body.body().signature.inputs[index].type;
+                      return type.kind == library::Type::Kind::Logical
+                                 ? logicalOperatorHead(type.name)
+                                 : std::string{};
+                    }
+            return std::string{};
+          }
+          auto previousScope = activeScope;
+          auto restore = scope_exit([&] { activeScope = previousScope; });
+          activeScope = model.declarations[id(function.name).index].members;
+          Sorts scope;
+          for (const auto &parameter : function.parameters) {
+            auto sort = parameter.sort.value_or("");
+            if (sort.empty() && !parameter.bounds.empty())
+              sort = boundSort(parameter.bounds.front(), parameter);
+            scope.emplace(parameter.name, sort);
+            model.declarations[model.lookup(activeScope, parameter.name).index]
+                .sort = sort;
+          }
+          auto parsed = splitLogical(type(operand, scope, function.generic));
+          return parsed ? logicalOperatorHead(parsed->constructor)
+                        : std::string{};
+        },
+        [&](const source::Node &node, StringRef code, const Twine &message) {
+          fail(node, code, message);
+        });
   }
   std::optional<AggregateShape> shapeOf(TypeId type) {
     const auto t = model.types.at(type.index);
-    if (t.kind == frontend::Type::Kind::Logical)
+    if (t.kind == frontend::Type::Kind::Logical ||
+        t.kind == frontend::Type::Kind::Parameter)
       return {};
     if (t.kind == frontend::Type::Kind::Product ||
         t.kind == frontend::Type::Kind::Array) {
@@ -357,7 +286,7 @@ class Checker {
     shape.name = d.name;
     shape.declaration = d.id;
     shape.type = type;
-    std::map<DeclId, DomainId> sub;
+    std::map<DeclId, StaticArgument> sub;
     for (auto [parameter, argument] : zip(d.parameters, t.arguments)) {
       sub.emplace(parameter, argument);
       shape.arguments.push_back(model.spelling(argument));
@@ -527,8 +456,9 @@ class Checker {
     use.writtenArguments = bool(call.staticArguments);
     auto parameterScope = model.declarations[target.index].members;
     for (auto [parameter, argument] : zip(signature.parameters, statics))
-      use.bindings.push_back({model.lookup(parameterScope, parameter.name),
-                              model.internDomain(argument, activeScope)});
+      use.bindings.push_back(
+          {model.lookup(parameterScope, parameter.name),
+           model.argument(argument, parameter.sort, activeScope)});
     size_t flat = 0;
     for (auto [name, shape] : zip(call.outputs, shapes.results)) {
       TypeId type;
@@ -559,6 +489,14 @@ class Checker {
       for (const auto &parameter : p.staticParameters) {
         std::string sort = parameter.sort.value_or("");
         for (const auto &bound : parameter.bounds) {
+          if (bound == "nat" || bound == "Nat" || bound == "Type") {
+            auto candidate = bound == "Type" ? "Type" : "Nat";
+            if (!sort.empty() && sort != candidate)
+              fail(parameter, "source-bound-sort",
+                   "incompatible static parameter kinds");
+            sort = candidate;
+            continue;
+          }
           auto candidate = boundSort(bound, parameter);
           if (!sort.empty() && sort != candidate)
             fail(parameter, "source-bound-sort",
@@ -570,8 +508,8 @@ class Checker {
           r.arguments = {parameter.name};
           contract.requirements.push_back(std::move(r));
         }
-        if (sort != "Field" && sort != "Group" && sort != "Commitment" &&
-            sort != "Transcript" && sort != "Codec")
+        if (sort != "Type" && sort != "Nat" &&
+            !llvm::is_contained(protocol::domainSorts(), sort))
           fail(parameter, "generic-declared-sort", "unknown domain sort");
         scope.emplace(parameter.name, sort);
         model.declarations[model.lookup(activeScope, parameter.name).index]
@@ -758,12 +696,21 @@ class Checker {
     }
     return false;
   }
-  bool good() const { return code.empty(); }
+  bool good() const { return code.empty() && model.diagnostics.empty(); }
   std::string sortOf(StringRef term, const Sorts &scope, unsigned depth = 0) {
     if (depth > 64)
       return {};
     if (auto it = scope.find(term.str()); it != scope.end())
       return it->second;
+    uint64_t number;
+    if (!term.getAsInteger(10, number) && number <= 1048576)
+      return "Nat";
+    const auto *declaration = protocol::typeDeclaration(term);
+    if (term.contains(':') || term.contains('<') ||
+        (declaration && declaration->parameters.empty())) {
+      if (splitLogical(term))
+        return "Type";
+    }
     auto installed = protocol::installedIdentitySort(term);
     if (!installed.empty())
       return installed.str();
@@ -776,6 +723,9 @@ class Checker {
   }
   std::string normalize(StringRef term, const Sorts &scope,
                         unsigned depth = 0) {
+    uint64_t number;
+    if (!term.getAsInteger(10, number) && number <= 1048576)
+      return std::to_string(number);
     if (depth > 64 || scope.count(term.str()) ||
         !protocol::installedIdentitySort(term).empty())
       return term.str();
@@ -901,53 +851,44 @@ class Checker {
       }
       return model.spelling(model.logical(spelling, activeScope));
     }
+    if (t.arguments.empty() && t.members.empty() && !t.quoted &&
+        scope.count(t.name) && scope.at(t.name) == "Type")
+      return t.name;
     std::string kind, identity;
     if (!t.members.empty()) {
-      if (t.members.back() != "Element" || !t.arguments.empty()) {
-        fail(t, "source-type", "an element type must end in ::Element");
+      if (!t.arguments.empty()) {
+        fail(t, "source-type", "an associated type cannot have arguments");
         return {};
       }
       syntax::Type root = t;
       root.members.pop_back();
       identity = domain(root, scope);
       auto sort = sortOf(identity, scope);
-      if (sort == "Field")
-        kind = "field";
-      else if (sort == "Group")
-        kind = "group";
-      else {
+      kind = associatedTypeConstructor(sort, t.members.back()).str();
+      if (kind.empty()) {
         fail(t, "source-type-domain",
              "unknown or non-element domain '" + identity +
-                 "'; ::Element requires a field or group domain");
+                 "'; no installed associated type with this name");
         return {};
       }
-    } else if (t.name == "Vector" || t.name == "Matrix") {
+    } else if (elementTypeFamily(t.name)) {
       if (t.arguments.size() != 1) {
         fail(t, "source-type-arity", "expected one element type");
         return {};
       }
       auto element = type(t.arguments[0], scope, generic);
-      auto [base, value] = StringRef(element).split(':');
-      if (base != "field" && !(t.name == "Vector" && base == "group")) {
+      auto parsed = splitLogical(element);
+      kind = parsed ? familyResultConstructor(t.name, parsed->constructor).str()
+                    : std::string{};
+      if (kind.empty()) {
         fail(t, "source-type",
-             "expected a field element (or group element for Vector)");
+             "no installed type-family case for element type '" + element +
+                 "'");
         return {};
       }
-      kind = t.name == "Matrix" ? "matrix"
-             : base == "group"  ? "groups"
-                                : "vector";
-      identity = value.str();
+      identity = parsed->arguments.front();
     } else {
-      for (const auto &spelling : typeSpellings)
-        if (spelling.surface == t.name)
-          kind = spelling.constructor.str();
-      const auto defaultIdentity =
-          usesProfile(t) ? profileIdentity(*syntax.profile, t.name)
-                         : StringRef{};
-      const bool profileShorthand =
-          t.arguments.empty() && !defaultIdentity.empty();
-      if (kind.empty() && profileShorthand)
-        kind = t.name;
+      kind = logicalConstructor(t.name).str();
       if (kind.empty()) {
         fail(t, "source-type", "unknown logical type '" + t.name + "'");
         return {};
@@ -956,20 +897,54 @@ class Checker {
       for (const auto &candidate : protocol::boundTypeConstructors())
         if (candidate.name == kind)
           ctor = &candidate;
-      if (!ctor || (t.arguments.size() != ctor->parameters.size() &&
-                    !profileShorthand)) {
-        fail(t, "source-type-arity", "wrong number of nominal type arguments");
+      if (!ctor || t.arguments.size() != ctor->parameters.size()) {
+        fail(t, "source-type-arity",
+             "wrong number of arguments for logical type '" + kind + "': got " +
+                 std::to_string(t.arguments.size()));
         return {};
       }
-      if (!t.arguments.empty()) {
-        identity = domain(t.arguments[0], scope);
-        if (sortOf(identity, scope) != ctor->parameters[0]) {
-          fail(t, "source-type-domain",
-               "domain has the wrong sort for " + t.name);
-          return {};
+      source::Names arguments;
+      for (size_t i = 0; i < t.arguments.size(); ++i) {
+        const auto &argument = t.arguments[i];
+        const auto &sort = ctor->parameters[i];
+        std::string value;
+        if (sort == "Type")
+          value = type(argument, scope, generic);
+        else if (sort == "Nat") {
+          if (argument.quoted || !argument.arguments.empty() ||
+              !argument.members.empty() ||
+              sortOf(argument.name, scope) != "Nat") {
+            fail(argument, "source-type-natural",
+                 "expected a bounded natural or Nat parameter");
+            return {};
+          }
+          uint64_t number;
+          value = !StringRef(argument.name).getAsInteger(10, number)
+                      ? std::to_string(number)
+                      : argument.name;
+        } else {
+          value = domain(argument, scope);
+          if (sortOf(value, scope) != sort) {
+            fail(argument, "source-type-domain",
+                 "domain has the wrong sort for " + t.name);
+            return {};
+          }
+          if (generic && !genericTerm(value, scope)) {
+            fail(argument, "source-generic-term",
+                 "generic type domain must be a scoped parameter");
+            return {};
+          }
         }
-      } else if (profileShorthand)
-        identity = defaultIdentity.str();
+        if (!good())
+          return {};
+        arguments.push_back(std::move(value));
+      }
+      auto spelling = logicalSpelling(kind, arguments);
+      if (!splitLogical(spelling)) {
+        fail(t, "source-type", "logical type exceeds structural bounds");
+        return {};
+      }
+      return model.spelling(model.logical(spelling, activeScope));
     }
     if (generic && !identity.empty() && !genericTerm(identity, scope)) {
       fail(t, "source-generic-term",
@@ -982,31 +957,15 @@ class Checker {
         identity.empty() ? kind : kind + ":" + identity, activeScope));
   }
   std::string boundSort(StringRef bound, const source::Node &node) {
-    // Ask the installed vocabulary, rather than maintaining another trait
-    // registry. Only the five nominal sorts are candidates, not backend
-    // domains.
-    std::string selected;
-    for (StringRef sort :
-         {"Field", "Group", "Commitment", "Transcript", "Codec"}) {
-      generic::Signature signature;
-      signature.scope.terms.push_back({"D", {}});
-      signature.scope.sorts.push_back(sort.str());
-      signature.requirements.push_back(
-          requirements::Predicate::holds(bound.str(), {0}));
-      if (auto e = protocol::checkStaticVocabulary(signature))
-        consumeError(std::move(e));
-      else {
-        if (!selected.empty()) {
-          fail(node, "source-bound-sort",
-               "capability is valid at multiple sorts; use a domain sort and "
-               "an explicit requires clause");
-          return {};
-        }
-        selected = sort.str();
-      }
+    const auto candidates = capabilityDomainSorts(bound);
+    if (candidates.size() > 1) {
+      fail(node, "source-bound-sort",
+           "capability is valid at multiple sorts; use a domain sort and "
+           "an explicit requires clause");
+      return {};
     }
-    if (!selected.empty())
-      return selected;
+    if (!candidates.empty())
+      return candidates.front();
     fail(node, "source-bound",
          bundles.count(bound.str())
              ? "a bundle is not a capability; use it in requires or where"
@@ -1404,49 +1363,17 @@ class Checker {
       if (left.first == right.first && !StringRef(left.first).contains('.'))
         arrayConstraints(left.second, right.second, constraints);
   }
-  /// A use selects the one spelling whose symbol and operand constructors it
-  /// has. The table names installed operations only, and each entry is checked
-  /// against the installed signature, so it cannot say anything the
-  /// operation's contract does not.
+  /// Select by nominal operand heads before ordinary call instantiation.
   std::optional<OperatorTarget> resolveOperator(const Expression &expression,
                                                 ArrayRef<std::string> types) {
-    for (const auto &spelling : operatorSpellings) {
-      if (spelling.symbol != expression.name ||
-          spelling.arity() != types.size())
-        continue;
-      bool matches = true;
-      for (auto [index, type] : enumerate(types))
-        matches &= StringRef(type).split(':').first == spelling.operands[index];
-      if (!matches)
-        continue;
-      const generic::Operation *operation = nullptr;
-      for (const auto &candidate : protocol::boundOperationContracts())
-        if (candidate.name == spelling.operation)
-          operation = &candidate;
-      auto inputs = operation ? operationSignature(operation->signature).inputs
-                              : source::Names{};
-      bool installed = inputs.size() == types.size();
-      for (unsigned k = 0; installed && k < inputs.size(); ++k)
-        installed = StringRef(inputs[k]).split(':').first ==
-                    spelling.operands[spelling.order[k]];
-      if (!installed) {
-        fail(expression, "source-operator-table",
-             "operator '" + expression.name + "' names '" + spelling.operation +
-                 "', whose installed signature differs");
-        return {};
-      }
-      OperatorTarget target{spelling.operation.str(), true, {}};
-      for (unsigned k = 0; k < types.size(); ++k)
-        target.order.push_back(spelling.order[k]);
-      return target;
-    }
-    std::string operands;
+    std::vector<std::string> heads;
     for (const auto &type : types)
-      operands += (operands.empty() ? "" : ", ") + type;
-    fail(expression, "source-operator-unresolved",
-         "'" + expression.name + "' is not an operator of (" + operands +
-             "); call the operation by name");
-    return {};
+      heads.push_back(operatorHead(type, *model.resolution));
+    return operators.resolve(
+        expression, expression.name, heads, *model.resolution,
+        [&](const source::Node &node, StringRef code, const Twine &message) {
+          fail(node, code, message);
+        });
   }
   bool containsChecked(const AggregateShape &shape) {
     return model.containsChecked(shape.type);
@@ -1511,10 +1438,7 @@ class Checker {
       if (!declare(declaration.name, declaration))
         return;
       // A struct named like a logical type would silently replace it.
-      bool logical =
-          declaration.name == "Vector" || declaration.name == "Matrix";
-      for (const auto &spelling : typeSpellings)
-        logical |= spelling.surface == declaration.name;
+      bool logical = !logicalConstructor(declaration.name).empty();
       if (logical) {
         fail(declaration, "source-struct-name",
              "'" + declaration.name + "' is a logical type");
@@ -1617,10 +1541,6 @@ class Checker {
       activeScope = model.declarations[id(f.name).index].members;
       declare(f.name, f);
       algorithms.insert(f.name);
-      if (f.generic && usesProfile(f))
-        fail(f, "source-profile-generic",
-             "generic definitions require an explicit module; configure them "
-             "to select concrete domains");
       if (!f.generic && !f.requirements.empty())
         fail(f, "source-function-contract",
              "where/requires clauses require an explicit generic function (use "
@@ -1635,6 +1555,14 @@ class Checker {
       for (const auto &p : f.parameters) {
         std::string sort = p.sort.value_or("");
         for (const auto &bound : p.bounds) {
+          if (bound == "nat" || bound == "Nat" || bound == "Type") {
+            auto candidate = bound == "Type" ? "Type" : "Nat";
+            if (!sort.empty() && sort != candidate)
+              fail(p, "source-bound-sort",
+                   "incompatible static parameter kinds");
+            sort = candidate;
+            continue;
+          }
           auto candidate = boundSort(bound, p);
           if (!sort.empty() && candidate != sort)
             fail(p, "source-bound-sort",
@@ -1646,8 +1574,8 @@ class Checker {
           req.arguments = {p.name};
           generic.requirements.push_back(std::move(req));
         }
-        if (sort != "Field" && sort != "Group" && sort != "Commitment" &&
-            sort != "Transcript" && sort != "Codec")
+        if (sort != "Type" && sort != "Nat" &&
+            !llvm::is_contained(protocol::domainSorts(), sort))
           fail(p, "generic-declared-sort", "unknown domain sort");
         if (!scope.emplace(p.name, sort).second)
           fail(p, "generic-duplicate-parameter", "duplicate static parameter");
@@ -1780,9 +1708,21 @@ class Checker {
   std::string substituteType(StringRef t,
                              const std::map<std::string, std::string> &sub,
                              const Sorts &scope) {
-    auto [kind, term] = t.split(':');
-    return term.empty() ? t.str()
-                        : kind.str() + ":" + substitute(term, sub, scope);
+    if (auto it = sub.find(t.str()); it != sub.end())
+      return it->second;
+    auto parsed = splitLogical(t);
+    if (!parsed)
+      return t.str();
+    const auto *declaration = protocol::typeDeclaration(parsed->constructor);
+    for (size_t i = 0; i < parsed->arguments.size(); ++i) {
+      auto &argument = parsed->arguments[i];
+      if (declaration &&
+          declaration->parameters[i].kind == protocol::StaticKind::Type)
+        argument = substituteType(argument, sub, scope);
+      else
+        argument = substitute(argument, sub, scope);
+    }
+    return logicalSpelling(parsed->constructor, parsed->arguments);
   }
   const Signature *configuration(StringRef name, const source::Node &node,
                                  unsigned depth = 0) {
@@ -1810,22 +1750,34 @@ class Checker {
       return nullptr;
     }
     std::map<std::string, std::string> sub;
-    for (const auto &[key, value] : c.arguments) {
+    auto metadata = syntax.configurationTerms.find(c.name);
+    for (size_t i = 0; i < c.arguments.size(); ++i) {
+      const auto &key = c.arguments[i].first;
+      auto value = c.arguments[i].second;
       auto p = llvm::find_if(base->parameters, [key = key](const auto &p) {
         return p.name == key;
       });
-      if (p == base->parameters.end() ||
-          !sub.emplace(key, normalize(value, {})).second) {
+      if (p == base->parameters.end() || sub.count(key)) {
         fail(c, "generic-configuration-binding",
              "duplicate or unknown configuration parameter");
         return nullptr;
       }
+      if (p->sort == "Type" && metadata != syntax.configurationTerms.end() &&
+          i < metadata->second.size())
+        value = type(syntax::typeExpression(metadata->second[i]), {}, false);
+      if (!good())
+        return nullptr;
       if (sortOf(value, {}) != p->sort) {
         fail(c, "generic-configuration-binding",
-             "configuration argument has wrong domain sort");
+             "configuration argument has wrong static kind");
         return nullptr;
       }
+      sub.emplace(key, normalize(value, {}));
     }
+    for (auto &emitted : module.configurations)
+      if (emitted.name == c.name)
+        for (auto &argument : emitted.arguments)
+          argument.second = sub.at(argument.first);
     auto previousScope = activeScope;
     activeScope = model.declarations[id(name).index].members;
     auto restoreScope = scope_exit([&] { activeScope = previousScope; });
@@ -1852,19 +1804,19 @@ class Checker {
     }
     retainSignature(id(name), sig);
     auto baseId = id(c.base);
-    std::map<DeclId, DomainId> bindings;
+    std::map<DeclId, StaticArgument> bindings;
     Instantiation instantiation;
     instantiation.definition = baseId;
     instantiation.emitted = id(name);
     instantiation.location = c.location;
     for (DeclId parameter : model.declarations[baseId.index].parameters) {
       const auto p = model.declarations[parameter.index];
-      DomainId term;
+      StaticArgument term;
       if (auto it = sub.find(p.name); it != sub.end()) {
-        term = model.internDomain(it->second, activeScope);
+        term = model.argument(it->second, p.sort, activeScope);
         instantiation.bindings.push_back({parameter, term});
       } else
-        term = model.internDomain(p.name, activeScope);
+        term = model.argument(p.name, p.sort, activeScope);
       bindings.emplace(parameter, term);
     }
     auto baseDeclaration = model.declarations[baseId.index];
@@ -1890,7 +1842,12 @@ class Checker {
     Signature out;
     source::Names terms;
     for (auto [i, term] : enumerate(signature.scope.terms)) {
-      if (term.parent)
+      if (term.arguments) {
+        source::Names arguments;
+        for (unsigned index : *term.arguments)
+          arguments.push_back(terms.at(index));
+        terms.push_back(logicalSpelling(term.name, arguments));
+      } else if (term.parent)
         terms.push_back(terms[*term.parent] + "." + term.name);
       else if (auto fixed = signature.scope.constants.find(i);
                fixed != signature.scope.constants.end())
@@ -1901,8 +1858,10 @@ class Checker {
       }
     }
     auto convert = [&](const generic::Type &t) {
-      return t.arguments.empty() ? t.constructor
-                                 : t.constructor + ":" + terms[t.arguments[0]];
+      source::Names arguments;
+      for (unsigned index : t.arguments)
+        arguments.push_back(terms.at(index));
+      return logicalSpelling(t.constructor, arguments);
     };
     for (const auto &t : signature.inputs)
       out.inputs.push_back(convert(t));
@@ -1986,9 +1945,23 @@ class Checker {
   bool sameType(StringRef a, StringRef b, const Sorts &scope,
                 ArrayRef<source::Requirement> assumptions,
                 const source::Node &node) {
-    auto [ak, at] = a.split(':');
-    auto [bk, bt] = b.split(':');
-    return ak == bk && equivalent(at, bt, scope, assumptions, node);
+    if (a == b)
+      return true;
+    auto left = splitLogical(a), right = splitLogical(b);
+    if (!left || !right || left->constructor != right->constructor ||
+        left->arguments.size() != right->arguments.size())
+      return false;
+    const auto *declaration = protocol::typeDeclaration(left->constructor);
+    for (size_t i = 0; i < left->arguments.size(); ++i) {
+      bool nested = declaration && declaration->parameters[i].kind ==
+                                       protocol::StaticKind::Type;
+      if (!(nested ? sameType(left->arguments[i], right->arguments[i], scope,
+                              assumptions, node)
+                   : equivalent(left->arguments[i], right->arguments[i], scope,
+                                assumptions, node)))
+        return false;
+    }
+    return true;
   }
   /// Record written static arguments. Inference fills the rest.
   bool writtenStatics(ArrayRef<source::StaticParameter> parameters,
@@ -2003,14 +1976,25 @@ class Checker {
                   "supply every static argument, or omit the complete list "
                   "for inference");
     size_t position = 0;
-    for (auto [p, t] : zip(parameters, *written)) {
-      if (position < terms.size() &&
+    for (auto [p, writtenTerm] : zip(parameters, *written)) {
+      std::string t = writtenTerm;
+      if (p.sort == "Type" && position < terms.size()) {
+        t = type(syntax::typeExpression(terms[position]), scope, generic);
+        if (!good())
+          return false;
+      }
+      if (p.sort == "Nat" && position < terms.size() &&
+          terms[position].root.kind == Atom::Kind::String)
+        return fail(node, "source-static-sort",
+                    "a quoted identity is not a natural argument");
+      if (p.sort != "Type" && p.sort != "Nat" && position < terms.size() &&
           !isDomainRoot(terms[position].root.value,
                         terms[position].root.kind == Atom::Kind::String))
         return fail(node, "source-static-sort",
                     "unknown domain root; use :: for associated members");
       ++position;
-      if (generic && !genericTerm(t, scope))
+      if (generic && p.sort != "Nat" && p.sort != "Type" &&
+          !genericTerm(t, scope))
         return fail(node, "source-generic-term",
                     "generic call arguments must be parameters or associated "
                     "domains: '" +
@@ -2034,15 +2018,38 @@ class Checker {
                     const source::Node &node, StringRef callee,
                     std::map<std::string, std::string> &sub,
                     source::Names &statics) {
-    for (const auto &[pattern, actual] : constraints) {
-      auto [pk, pt] = StringRef(pattern).split(':');
-      auto [ak, at] = StringRef(actual).split(':');
-      if (pk != ak) {
+    std::vector<std::pair<std::string, std::string>> leaves;
+    std::function<bool(StringRef, StringRef)> decompose =
+        [&](StringRef pattern, StringRef actual) {
+          if (llvm::any_of(parameters,
+                           [&](const auto &p) { return p.name == pattern; })) {
+            leaves.emplace_back(pattern.str(), actual.str());
+            return true;
+          }
+          auto left = splitLogical(pattern), right = splitLogical(actual);
+          if (!left || !right || left->constructor != right->constructor ||
+              left->arguments.size() != right->arguments.size())
+            return false;
+          const auto *declaration =
+              protocol::typeDeclaration(left->constructor);
+          for (size_t i = 0; i < left->arguments.size(); ++i) {
+            if (declaration &&
+                declaration->parameters[i].kind == protocol::StaticKind::Type) {
+              if (!decompose(left->arguments[i], right->arguments[i]))
+                return false;
+            } else
+              leaves.emplace_back(left->arguments[i], right->arguments[i]);
+          }
+          return true;
+        };
+    for (const auto &[pattern, actual] : constraints)
+      if (!decompose(pattern, actual)) {
         fail(
             node, "source-type-mismatch",
             "operand or result annotation has a different logical constructor");
         return false;
       }
+    for (const auto &[pt, at] : leaves) {
       auto p = llvm::find_if(parameters,
                              [pt = pt](const auto &p) { return p.name == pt; });
       if (p == parameters.end())
@@ -2071,8 +2078,16 @@ class Checker {
             arguments += ", ";
           arguments += parameter.name;
         }
+        auto containsParameter = [&](auto &&self, StringRef term) -> bool {
+          if (term == p.name || term.starts_with(p.name + "."))
+            return true;
+          auto parsed = splitLogical(term);
+          return parsed &&
+                 llvm::any_of(parsed->arguments,
+                              [&](const auto &arg) { return self(self, arg); });
+        };
         bool inResult = llvm::any_of(resultTypes, [&](const auto &type) {
-          return StringRef(type).split(':').second == p.name;
+          return containsParameter(containsParameter, type);
         });
         fail(node, "source-static-unresolved",
              "cannot determine '" + p.name + "' for '" + callee +
@@ -2114,9 +2129,16 @@ class Checker {
       if (op.name == call.callee)
         operation = &op;
     if (call.qualified && !operation) {
-      fail(call, usesProfile(call) ? "binding-contract" : "source-call-target",
+      fail(call, "source-call-target",
            "qualified calls name installed operation contracts; use the exact "
            "declaration name for helpers");
+      return {};
+    }
+    if (!algorithm && operation && !model.resolution->carrier &&
+        protocol::authoringStage(operation->name) !=
+            protocol::AuthoringStage::Source) {
+      fail(call, "source-operation-stage",
+           "operation is not available to ordinary source calls");
       return {};
     }
     if (algorithm) {
@@ -2140,6 +2162,13 @@ class Checker {
       if (it == module.bindings.end()) {
         fail(call, "binding-reference",
              "unknown bound operation or helper '" + call.callee + "'");
+        return {};
+      }
+      if (!model.resolution->carrier &&
+          protocol::authoringStage(it->application.contract) !=
+              protocol::AuthoringStage::Source) {
+        fail(call, "source-operation-stage",
+             "operation is not available to ordinary source bindings");
         return {};
       }
       auto resolved = protocol::resolveBinding(it->application, false);
@@ -2173,15 +2202,28 @@ class Checker {
         outputShapes.push_back(shapeOf(element));
     } else if (!call.destructure && call.outputs.size() == 1 &&
                outputShapes.size() != 1) {
-      std::vector<TypeId> elements;
+      // Keep a signature pattern until static arguments have been solved.
+      // Callee Type/Nat names do not belong to the caller's model scope.
+      AggregateShape product;
+      product.product = true;
+      product.arity = outputShapes.size();
+      product.name = "product";
       size_t next = 0;
-      for (const auto &shape : outputShapes) {
-        elements.push_back(
-            shape ? shape->type
-                  : model.logical(signature.outputs.at(next), activeScope));
+      for (auto [index, shape] : enumerate(outputShapes)) {
+        auto prefix = std::to_string(index);
+        if (shape) {
+          product.nested.emplace_back(prefix, *shape);
+          for (const auto &[path, inner] : shape->nested)
+            product.nested.emplace_back(prefix + "." + path, inner);
+          for (const auto &path : shape->paths)
+            product.paths.push_back(prefix + "." + path);
+        } else
+          product.paths.push_back(prefix);
         next += shape ? shape->paths.size() : 1;
       }
-      outputShapes = {*shapeOf(model.product(elements))};
+      product.types.assign(signature.outputs.begin(),
+                           signature.outputs.begin() + next);
+      outputShapes = {std::move(product)};
     }
     if (shapes.operands.size() != inputShapes.size()) {
       fail(call, "source-call-arity",
@@ -2317,26 +2359,13 @@ class Checker {
     std::string target = call.callee;
     if (!generic && call.qualified && operation) {
       std::string implementation;
-      if (usesProfile(call)) {
-        source::OperationBinding requested;
-        requested.application.contract = call.callee;
-        requested.application.arguments = statics;
-        auto selected = protocol::defaultImplementation(requested.application);
-        if (!selected) {
-          fail(call, "source-profile", toString(selected.takeError()));
-          return {};
-        }
-        implementation = *selected;
-      }
       auto binding = llvm::find_if(module.bindings, [&](const auto &b) {
         return b.application.contract == call.callee &&
                b.application.arguments == statics &&
                b.application.implementation == implementation;
       });
       if (binding == module.bindings.end()) {
-        target = usesProfile(call)
-                     ? call.callee
-                     : "__binding_" + std::to_string(module.bindings.size());
+        target = "__binding_" + std::to_string(module.bindings.size());
         while (declared.count(target) ||
                llvm::any_of(module.bindings,
                             [&](const auto &b) { return b.name == target; }))
@@ -2374,6 +2403,15 @@ class Checker {
         [&](const Call &call) -> std::optional<std::vector<unsigned>> {
       std::vector<unsigned> order;
       auto target = id(call.callee);
+      library::Signature signature;
+      if (call.qualified) {
+        for (const auto &exported : protocol::sourceOperationExports())
+          if (exported.contract == call.callee) {
+            signature.inputLabels = exported.inputLabels;
+            signature.inputs.resize(exported.inputLabels.size());
+            break;
+          }
+      }
       if (call.qualified || !target.valid() ||
           (model.declarations[target.index].kind !=
                Declaration::Kind::Function &&
@@ -2381,15 +2419,17 @@ class Checker {
                Declaration::Kind::Configuration)) {
         if (call.argumentNames.empty())
           return order;
-        fail(call, "source-argument-name",
-             "named arguments require a declared function signature");
-        return {};
+        if (signature.inputLabels.empty()) {
+          fail(call, "source-argument-name",
+               "named arguments require a declared function signature");
+          return {};
+        }
+      } else {
+        const auto &ports = model.declarations[target.index].inputs;
+        signature.inputs.resize(ports.size());
+        for (const auto &port : ports)
+          signature.inputLabels.push_back(port.name);
       }
-      const auto &ports = model.declarations[target.index].inputs;
-      library::Signature signature;
-      signature.inputs.resize(ports.size());
-      for (const auto &port : ports)
-        signature.inputLabels.push_back(port.name);
       auto binding = library::bindArguments(signature, call.inputs.size(),
                                             call.argumentNames);
       if (!binding) {
@@ -2408,13 +2448,20 @@ class Checker {
     // domains remain absent until a rigid operand/result or explicit actual
     // determines them; this never searches for a component or inverts a type.
     std::function<std::optional<syntax::Type>(
-        TypeId, const std::map<DeclId, DomainId> &, const std::set<DeclId> &)>
+        TypeId, const std::map<DeclId, StaticArgument> &,
+        const std::set<DeclId> &)>
         expectation;
     expectation =
-        [&](TypeId id, const std::map<DeclId, DomainId> &sub,
+        [&](TypeId id, const std::map<DeclId, StaticArgument> &sub,
             const std::set<DeclId> &unknown) -> std::optional<syntax::Type> {
       const auto t = model.types.at(model.substitute(id, sub).index);
       syntax::Type result;
+      if (t.kind == frontend::Type::Kind::Parameter) {
+        if (unknown.count(t.declaration))
+          return {};
+        result.name = model.declarations.at(t.declaration.index).name;
+        return result;
+      }
       if (t.kind == frontend::Type::Kind::Array) {
         auto element = expectation(t.elements.front(), sub, unknown);
         if (!element)
@@ -2438,8 +2485,24 @@ class Checker {
           result.arguments.push_back(*expected);
         }
       } else
-        for (auto argument : t.arguments) {
-          auto root = argument;
+        for (const auto &argument : t.arguments) {
+          if (argument.kind == StaticArgument::Kind::Type) {
+            auto nested = expectation(argument.type, sub, unknown);
+            if (!nested)
+              return {};
+            result.arguments.push_back(*nested);
+            continue;
+          }
+          if (argument.kind == StaticArgument::Kind::Natural) {
+            if (unknown.count(argument.parameter))
+              return {};
+            syntax::Type natural;
+            natural.name = model.spelling(argument);
+            natural.natural = !argument.parameter.valid();
+            result.arguments.push_back(std::move(natural));
+            continue;
+          }
+          auto root = argument.domain;
           while (model.domains.at(root.index).kind == Domain::Kind::Projection)
             root = model.domains.at(root.index).parent;
           if (unknown.count(model.domains.at(root.index).parameter))
@@ -2448,27 +2511,15 @@ class Checker {
           domain.name = model.spelling(root);
           domain.quoted =
               model.domains.at(root.index).kind == Domain::Kind::Identity;
-          for (auto member = argument; member != root;
+          for (auto member = argument.domain; member != root;
                member = model.domains.at(member.index).parent)
             domain.members.insert(domain.members.begin(),
                                   model.domains.at(member.index).name);
           result.arguments.push_back(std::move(domain));
         }
       if (t.kind == frontend::Type::Kind::Logical) {
-        for (const auto &spelling : typeSpellings)
-          if (spelling.constructor == t.constructor)
-            result.name = spelling.surface.str();
-        if ((t.constructor == "field" || t.constructor == "group") &&
-            result.arguments.size() == 1) {
-          auto element = std::move(result.arguments.front());
-          result = std::move(element);
-          result.members.push_back("Element");
-        } else if ((t.constructor == "vector" || t.constructor == "groups" ||
-                    t.constructor == "matrix") &&
-                   result.arguments.size() == 1) {
-          result.name = t.constructor == "matrix" ? "Matrix" : "Vector";
-          result.arguments.front().members.push_back("Element");
-        } else if (t.constructor == "resource_unit")
+        result.name = "__installed_type_" + t.constructor;
+        if (t.constructor == "resource_unit")
           result.name = "ResourceUnit";
       }
       return result;
@@ -2483,50 +2534,68 @@ class Checker {
       if (d.kind != Declaration::Kind::Function &&
           d.kind != Declaration::Kind::Configuration)
         return result;
-      std::map<DeclId, DomainId> sub;
+      std::map<DeclId, StaticArgument> sub;
       std::set<DeclId> unknown(d.parameters.begin(), d.parameters.end());
       if (call.staticArguments &&
           call.staticArguments->size() == d.parameters.size())
-        for (auto [parameter, argument] :
-             zip(d.parameters, *call.staticArguments)) {
-          sub.emplace(parameter, model.internDomain(argument, activeScope));
+        for (size_t i = 0; i < d.parameters.size(); ++i) {
+          auto parameter = d.parameters[i];
+          const auto &sort = model.declarations[parameter.index].sort;
+          auto argument = (*call.staticArguments)[i];
+          if (sort == "Type" && i < call.staticTerms.size())
+            argument = type(syntax::typeExpression(call.staticTerms[i]), scope,
+                            generic);
+          if (!good())
+            return result;
+          if (sortOf(argument, scope) != sort) {
+            fail(call, "source-static-sort",
+                 "explicit argument has the wrong static kind");
+            return result;
+          }
+          sub.emplace(parameter, model.argument(argument, sort, activeScope));
           unknown.erase(parameter);
         }
       auto order = callbacks.argumentOrder(call);
       if (!order)
         return result;
-      auto constrain = [&](TypeId pattern, StringRef actual) {
-        const auto &t = model.types.at(pattern.index);
-        auto [constructor, domain] = actual.split(':');
-        if (t.kind != frontend::Type::Kind::Logical ||
-            t.constructor != constructor || t.arguments.size() != 1 ||
-            domain.empty())
-          return;
-        const auto &p = model.domains.at(t.arguments.front().index);
-        if (p.kind == Domain::Kind::Parameter && unknown.count(p.parameter)) {
-          sub.emplace(p.parameter, model.internDomain(domain, activeScope));
-          unknown.erase(p.parameter);
-        }
-      };
       auto constrainShape = [&](auto &&self, TypeId pattern,
                                 TypeId actual) -> void {
         const auto x = model.types.at(pattern.index),
                    y = model.types.at(actual.index);
+        if (x.kind == frontend::Type::Kind::Parameter &&
+            unknown.count(x.declaration)) {
+          sub.emplace(x.declaration, StaticArgument::typeOf(actual));
+          unknown.erase(x.declaration);
+          return;
+        }
         if (x.kind != y.kind || x.constructor != y.constructor ||
             x.declaration != y.declaration || x.count != y.count ||
             x.arguments.size() != y.arguments.size() ||
             x.elements.size() != y.elements.size())
           return;
         for (auto [formal, value] : zip(x.arguments, y.arguments)) {
-          const auto &parameter = model.domains.at(formal.index);
-          if (parameter.kind == Domain::Kind::Parameter &&
-              unknown.count(parameter.parameter)) {
-            sub.emplace(parameter.parameter, value);
-            unknown.erase(parameter.parameter);
+          if (formal.kind != value.kind)
+            continue;
+          if (formal.kind == StaticArgument::Kind::Type) {
+            self(self, formal.type, value.type);
+            continue;
+          }
+          DeclId parameter =
+              formal.kind == StaticArgument::Kind::Natural
+                  ? formal.parameter
+                  : model.domains.at(formal.domain.index).parameter;
+          if (unknown.count(parameter)) {
+            sub.emplace(parameter, value);
+            unknown.erase(parameter);
           }
         }
         for (auto [formal, value] : zip(x.elements, y.elements))
           self(self, formal, value);
+      };
+      auto constrain = [&](TypeId pattern, StringRef actual) {
+        auto resolved = model.logical(actual, activeScope);
+        if (resolved.valid())
+          constrainShape(constrainShape, pattern, resolved);
       };
       for (unsigned i = 0; i < d.inputs.size() && i < order->size(); ++i) {
         auto found = types.find(call.inputs[(*order)[i]]);
@@ -2558,7 +2627,7 @@ class Checker {
                                      Declaration::Kind::Record)
             return result;
           const auto d = model.declarations.at(target.index);
-          std::map<DeclId, DomainId> sub;
+          std::map<DeclId, StaticArgument> sub;
           std::set<DeclId> unknown(d.parameters.begin(), d.parameters.end());
           if (annotation && annotation->size() == 1) {
             auto expected = aggregateType(annotation->front(), scope, generic);
@@ -2572,9 +2641,22 @@ class Checker {
           }
           if (expression.staticArguments &&
               expression.staticArguments->size() == d.parameters.size())
-            for (auto [parameter, argument] :
-                 zip(d.parameters, *expression.staticArguments)) {
-              sub[parameter] = model.internDomain(argument, activeScope);
+            for (size_t i = 0; i < d.parameters.size(); ++i) {
+              auto parameter = d.parameters[i];
+              const auto &sort = model.declarations[parameter.index].sort;
+              auto argument = (*expression.staticArguments)[i];
+              if (sort == "Type" && i < expression.staticTerms.size())
+                argument =
+                    type(syntax::typeExpression(expression.staticTerms[i]),
+                         scope, generic);
+              if (!good())
+                return result;
+              if (sortOf(argument, scope) != sort) {
+                fail(expression, "source-static-sort",
+                     "explicit argument has the wrong static kind");
+                return result;
+              }
+              sub[parameter] = model.argument(argument, sort, activeScope);
               unknown.erase(parameter);
             }
           for (const auto &name : expression.fields) {
@@ -2611,13 +2693,7 @@ class Checker {
     };
     callbacks.call = [&](const Call &callSyntax, LocalTypes &types,
                          StringRef site, CallShapes &shapes) {
-      auto adjusted = callSyntax;
-      if (auto it = profileCalls.find({owner.str(), adjusted.callee});
-          !adjusted.qualified && it != profileCalls.end()) {
-        adjusted.callee = it->second;
-        adjusted.qualified = false;
-      }
-      return call(adjusted, scope, assumptions, types, generic, owner, site,
+      return call(callSyntax, scope, assumptions, types, generic, owner, site,
                   shapes);
     };
     callbacks.product = [&](ArrayRef<ConstructedField> fields,
@@ -2703,7 +2779,7 @@ class Checker {
       if (t.kind != frontend::Type::Kind::Record)
         return true;
       const auto declaration = model.declarations[t.declaration.index];
-      std::map<DeclId, DomainId> substitution;
+      std::map<DeclId, StaticArgument> substitution;
       for (auto [parameter, argument] :
            zip(declaration.parameters, t.arguments))
         substitution.emplace(parameter, argument);
@@ -2844,82 +2920,6 @@ class Checker {
     model.uses.push_back(std::move(use));
     return result;
   }
-  void profiles() {
-    if (!syntax.profile)
-      return;
-    for (auto &f : module.functions) {
-      auto sf = llvm::find_if(syntax.functions, [&](const auto &candidate) {
-        return candidate.name == f.name;
-      });
-      if (sf == syntax.functions.end() || !sf->body || !usesProfile(*sf))
-        continue;
-      f.body = source::Body{};
-      std::set<std::string> operations;
-      auto collect = [&](const source::Node &node, StringRef callee,
-                         bool qualified) {
-        // Qualified calls infer their actual domains through the ordinary
-        // resolver. Only the profile's unqualified shorthand needs defaults.
-        if (qualified || algorithms.count(callee.str()) ||
-            !operations.insert(callee.str()).second)
-          return;
-        source::Instruction op;
-        op.site = callee.str();
-        op.location = node.location;
-        op.value = source::Operation{callee.str(), {}, {}, {}, {}};
-        f.body->push_back(std::move(op));
-      };
-      auto expression = [&](auto &&self, const Expression &expr) -> void {
-        for (const auto &operand : expr.operands)
-          self(self, operand);
-        if (expr.kind == Expression::Kind::Call)
-          collect(expr, expr.name, expr.qualified);
-      };
-      auto visit = [&](auto &&self, const Body &body) -> void {
-        for (const auto &ins : body) {
-          if (auto *call = std::get_if<Call>(&ins.value);
-              call && !call->isOperator)
-            collect(*call, call->callee, call->qualified);
-          else if (auto *binding = std::get_if<Binding>(&ins.value))
-            expression(expression, binding->expression);
-          else if (auto *exit = std::get_if<Exit>(&ins.value))
-            expression(expression, exit->expression);
-          else if (auto *branch = std::get_if<Conditional>(&ins.value)) {
-            expression(expression, branch->condition);
-            self(self, branch->thenBody);
-            self(self, branch->elseBody);
-          } else if (auto *loop = std::get_if<For>(&ins.value)) {
-            expression(expression, loop->lower);
-            expression(expression, loop->upper);
-            self(self, loop->body);
-          }
-        }
-      };
-      visit(visit, *sf->body);
-    }
-    // Only the installed convenience profiles have defaults to expand; any
-    // other module header names nothing the carrier could hold.
-    if (!knownProfile(*syntax.profile)) {
-      fail(syntax, "source-profile",
-           "unknown convenience profile '" + *syntax.profile + "'");
-      return;
-    }
-    elaborateProfile(module, *syntax.profile);
-    for (const auto &binding : module.bindings)
-      if (!id(binding.name).valid())
-        model.add(Declaration::Kind::Binding, {0}, binding.name,
-                  binding.location);
-    for (auto &f : module.functions) {
-      if (f.body)
-        for (const auto &ins : *f.body)
-          if (!profileCalls
-                   .emplace(std::make_pair(f.name, ins.site),
-                            ins.get<source::Operation>()->callee)
-                   .second)
-            fail(ins, "interactive-site", "duplicate operation site");
-      f.body.reset();
-    }
-  }
-
   std::optional<CheckedPlacement> placement(DeclId protocolOwner,
                                             const syntax::Placement &placement,
                                             const source::Instruction &site,
@@ -2935,7 +2935,7 @@ class Checker {
     auto previous = activeScope;
     activeScope = model.declarations[helper.index].members;
     auto restore = scope_exit([&] { activeScope = previous; });
-    std::map<DeclId, DomainId> substitution;
+    std::map<DeclId, StaticArgument> substitution;
     Sorts scope;
     Signature signature;
     for (auto parameter : parent.parameters) {
@@ -2944,7 +2944,8 @@ class Checker {
                              p.location);
       model.declarations[fresh.index].sort = p.sort;
       model.declarations[helper.index].parameters.push_back(fresh);
-      substitution.emplace(parameter, model.internDomain(p.name, activeScope));
+      substitution.emplace(parameter,
+                           model.argument(p.name, p.sort, activeScope));
       scope.emplace(p.name, p.sort);
       signature.parameters.push_back({p.name, p.sort});
     }
@@ -3055,8 +3056,6 @@ public:
     if (!good())
       return false;
     headers();
-    if (good())
-      profiles();
     if (good())
       for (const auto &c : syntax.configurations) {
         configuration(c.name, c);

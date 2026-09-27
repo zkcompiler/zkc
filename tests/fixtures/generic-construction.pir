@@ -1,6 +1,15 @@
 module {
+  use zkc::algebra::{
+    Field
+  };
+  use zkc::algebra;
+  use zkc::core;
+  use zkc::random::{
+    Rng
+  };
+  use zkc::random;
   fn Draw<F: domain Field>(r: Rng<F>) -> (F::Element, Rng<F>) requires (Field(F)) {
-    [sample] let (x, next) = random::draw::<F>(r);
+    [sample] let (x, next) = zkc::random::draw::<F>(r);
     return (x, next);
   }
 
@@ -11,8 +20,8 @@ module {
   }
 
   fn Check<F: domain Field>(x: F::Element) -> bool requires (Field(F)) {
-    [equal] let ok = field::equal::<F>(x, x);
-    [guard] control::require(ok);
+    [equal] let ok = zkc::algebra::equal::<F>(x, x);
+    [guard] zkc::core::require(ok);
     return ok;
   }
 

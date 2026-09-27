@@ -77,3 +77,54 @@ pub(crate) fn apply(
         Ok(vec![result])
     })())
 }
+
+pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
+    crate::backend::registry::Alternative {
+        identity: "arkworks-diagonal/vector.mul",
+        original: "arkworks/vector.mul",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: true,
+            port: 0,
+            representation: zkc_runtime::interactive::Representation::FrDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-diagonal/vector.dot",
+        original: "arkworks/vector.dot",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: false,
+            port: 1,
+            representation: zkc_runtime::interactive::Representation::FrDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "dalek-diagonal/curve.scale_each",
+        original: "dalek/curve.scale_each",
+        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: true,
+            port: 0,
+            representation: zkc_runtime::interactive::Representation::RistrettoDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "dalek-diagonal/curve.msm",
+        original: "dalek/curve.msm",
+        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
+        ports: crate::bindings::PortTransform::Diagonal {
+            output: false,
+            port: 1,
+            representation: zkc_runtime::interactive::Representation::RistrettoDiagonal,
+        },
+        handler: Some(crate::backend::registry::diagonal),
+        public_operands: false,
+    },
+];

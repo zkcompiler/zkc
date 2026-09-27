@@ -1,4 +1,7 @@
 module {
+  use zkc::algebra::{
+    Vector
+  };
   bind mul = vector::mul(bls12-381.fr);
   bind dot = vector::dot(bls12-381.fr);
   bind scale = curve::scale_each(ristretto255.group);

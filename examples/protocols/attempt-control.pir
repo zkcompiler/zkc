@@ -1,9 +1,11 @@
 // Lifecycle control fixture, not a cryptographic proof protocol. `retry` is an
 // explicit fault-injection input; production code derives it from its guard.
 module {
+  use zkc::random::{Rng};
+  use zkc::random;
   fn Draw(coins: Rng<"bls12-381.fr">)
       -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) {
-    let (value, after) = random::draw::<"bls12-381.fr">(coins);
+    let (value, after) = zkc::random::draw::<"bls12-381.fr">(coins);
     return (value, after);
   }
 

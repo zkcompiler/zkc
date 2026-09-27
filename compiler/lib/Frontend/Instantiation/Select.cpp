@@ -1,8 +1,11 @@
 #include "Select.h"
 #include "../Resolution/Declarations.h"
 #include "../Resolution/Project.h"
+#include "../Static/Attributes.h"
 #include "../Static/Domains.h"
 #include "../Static/Naturals.h"
+#include "../Static/Structural.h"
+#include "../Static/Types.h"
 #include "../Syntax/Lexer.h"
 #include "../Work.h"
 #include "Work.h"
@@ -27,6 +30,7 @@ class Selector {
   StringRef text, filename;
   Error error = Error::success();
   std::map<std::string, uint64_t> values;
+  std::map<std::string, syntax::Type> selectedTypes;
   Names names;
   Names generatedOwners;
   std::map<std::string, size_t> nameCounts;
@@ -66,6 +70,11 @@ class Selector {
       value = std::to_string(values.at(atom.value));
   }
   std::string term(const StaticTerm &term, const Substitution &sub) {
+    if (typeArgumentSyntax(term)) {
+      auto expression = syntax::typeExpression(term);
+      type(expression, sub);
+      return syntax::staticSpelling(syntax::staticExpression(expression));
+    }
     if (!isDomainRoot(term.root.value, term.root.kind == Atom::Kind::String)) {
       fail(term.root, "source-static-sort",
            "unknown domain root; use :: for associated members");
@@ -77,9 +86,12 @@ class Selector {
       return {};
     }
     std::string value = term.root.value;
-    if (term.root.kind == Atom::Kind::Name)
+    if (term.root.kind == Atom::Kind::Name) {
       if (auto it = sub.find(value); it != sub.end())
         value = it->second;
+      else if (term.members.empty() && isConstant(term.root))
+        return std::to_string(values.at(value));
+    }
     for (const auto &member : term.members) {
       auto associated = protocol::associatedIdentity(value, member);
       value = associated.empty() ? value + "." + member : associated.str();
@@ -115,15 +127,114 @@ class Selector {
            "unknown domain root; use :: for associated members");
       return;
     }
+    if (!t.quoted && !domainPosition && t.members.empty() &&
+        t.arguments.empty())
+      if (auto actual = sub.find(t.name); actual != sub.end())
+        if (auto selected = selectedTypes.find(actual->second);
+            selected != selectedTypes.end()) {
+          auto location = t.location;
+          t = selected->second;
+          t.location = location;
+          return;
+        }
     // A bare type head names a logical constructor or a nominal record, even
     // if a domain parameter has the same spelling. Substitute only a domain
     // argument or the root of an associated element type.
     if (!t.quoted && (domainPosition || !t.members.empty()))
       if (auto found = sub.find(t.name); found != sub.end())
         t.name = found->second;
-    const bool elementArgument = t.name == "Vector" || t.name == "Matrix";
-    for (auto &arg : t.arguments)
-      type(arg, sub, !elementArgument && !t.product);
+    const bool elementArgument = elementTypeFamily(t.name);
+    const auto *declaration =
+        protocol::typeDeclaration(logicalConstructor(t.name));
+    for (size_t i = 0; i < t.arguments.size(); ++i) {
+      auto &arg = t.arguments[i];
+      bool domainArgument = !elementArgument && !t.product;
+      if (declaration && i < declaration->parameters.size()) {
+        auto kind = declaration->parameters[i].kind;
+        domainArgument = kind == protocol::StaticKind::Domain;
+        if (kind == protocol::StaticKind::Nat && !arg.quoted &&
+            arg.members.empty() && arg.arguments.empty()) {
+          if (auto found = sub.find(arg.name); found != sub.end())
+            arg.name = found->second;
+          if (auto found = values.find(arg.name); found != values.end())
+            arg.name = std::to_string(found->second);
+          uint64_t number;
+          arg.natural = !StringRef(arg.name).getAsInteger(10, number);
+        }
+      }
+      type(arg, sub, domainArgument);
+    }
+  }
+  std::string typeIdentity(const syntax::Type &t, unsigned depth = 0) {
+    if (depth > 8 || !tick(t)) {
+      fail(t, "source-static-sort",
+           "Type argument exceeds the structural depth bound");
+      return {};
+    }
+    std::string kind;
+    source::Names arguments;
+    if (!t.members.empty() && t.arguments.empty()) {
+      auto root = syntax::staticExpression(t);
+      auto member = root.members.back();
+      root.members.pop_back();
+      auto domain = term(root, {});
+      kind = associatedTypeConstructor(protocol::installedIdentitySort(domain),
+                                       member)
+                 .str();
+      arguments.push_back(domain);
+    } else if (elementTypeFamily(t.name) && t.arguments.size() == 1) {
+      auto element = typeIdentity(t.arguments.front(), depth + 1);
+      if (!good())
+        return {};
+      auto parsed = protocol::parseBoundType(element, false);
+      if (!parsed) {
+        consumeError(parsed.takeError());
+        fail(t, "source-static-sort", "invalid type-family element");
+        return {};
+      }
+      kind = familyResultConstructor(t.name, parsed->kind).str();
+      arguments.push_back(parsed->identity);
+    } else {
+      kind = logicalConstructor(t.name).str();
+      const auto *declaration = protocol::typeDeclaration(kind);
+      if (!declaration || !declaration->common || t.product || t.quoted ||
+          t.natural || t.arguments.size() != declaration->parameters.size()) {
+        fail(t, "source-static-sort",
+             "expected a closed logical Type argument");
+        return {};
+      }
+      for (auto [parameter, child] :
+           zip(declaration->parameters, t.arguments)) {
+        if (parameter.kind == protocol::StaticKind::Type)
+          arguments.push_back(typeIdentity(child, depth + 1));
+        else {
+          auto value = term(syntax::staticExpression(child), {});
+          if (parameter.kind == protocol::StaticKind::Nat &&
+              (child.quoted || !child.members.empty() ||
+               !child.arguments.empty())) {
+            fail(child, "source-static-sort",
+                 "expected a natural Type argument");
+            return {};
+          }
+          arguments.push_back(value);
+        }
+        if (!good())
+          return {};
+      }
+    }
+    if (kind.empty()) {
+      fail(t, "source-static-sort",
+           "unknown Type constructor or associated type");
+      return {};
+    }
+    auto checked =
+        protocol::parseBoundType(logicalSpelling(kind, arguments), false);
+    if (!checked) {
+      consumeError(checked.takeError());
+      fail(t, "source-static-sort", "invalid closed logical Type argument");
+      return {};
+    }
+    return checked->spelling();
   }
   std::string symbolicSort(StringRef value, unsigned depth = 0) {
     if (depth > maxDepth) {
@@ -131,39 +242,32 @@ class Selector {
            "domain sort projection depth exceeds 64");
       return {};
     }
-    if (value == "Field" || value == "Group" || value == "Commitment" ||
-        value == "Transcript" || value == "Codec")
+    if (value == "Type" || value == "Nat")
+      return value.str();
+    if (llvm::is_contained(protocol::domainSorts(), value))
       return value.str();
     auto split = value.rsplit('.');
     if (split.first == value || split.first.empty())
       return {};
-    return protocol::associatedMemberSort(symbolicSort(split.first),
+    return protocol::associatedMemberSort(symbolicSort(split.first, depth + 1),
                                           split.second)
         .str();
   }
   std::string boundSort(StringRef bound, const source::Node &node) {
-    std::string result;
-    for (StringRef sort :
-         {"Field", "Group", "Commitment", "Transcript", "Codec"}) {
-      generic::Signature signature;
-      signature.scope.terms.push_back({"D", {}});
-      signature.scope.sorts.push_back(sort.str());
-      signature.requirements.push_back(
-          requirements::Predicate::holds(bound.str(), {0}));
-      if (auto e = protocol::checkStaticVocabulary(signature))
-        consumeError(std::move(e));
-      else {
-        if (!result.empty()) {
-          fail(node, "source-bound-sort", "ambiguous capability sort");
-          return {};
-        }
-        result = sort.str();
-      }
+    if (bound == "Type" || bound == "Nat" || bound == "nat")
+      return bound == "Type" ? "Type" : "Nat";
+    auto candidates = capabilityDomainSorts(bound);
+    if (candidates.size() > 1) {
+      fail(node, "source-bound-sort", "ambiguous capability sort");
+      return {};
     }
-    if (result.empty())
+    if (candidates.empty()) {
       fail(node, "source-bound", "unknown unary capability '" + bound + "'");
-    return result;
+      return {};
+    }
+    return candidates.front();
   }
+
   bool requirements(ArrayRef<source::Requirement> reqs, const Substitution &sub,
                     const source::Node &node, unsigned depth = 0,
                     bool closed = true,
@@ -255,9 +359,6 @@ class Selector {
   bool declaration(const Protocol &p) {
     if (!p.generic)
       return true;
-    if (source.profile)
-      return fail(p, "source-profile-generic",
-                  "protocol families require an explicit module");
     if (p.staticParameters.size() > 128 || p.requirements.size() > 1024)
       return fail(p, "source-staging-limit",
                   "protocol static contract exceeds budget");
@@ -315,6 +416,8 @@ class Selector {
           return fail(param, "source-bound-sort",
                       "incompatible capability sorts");
         sort = candidate;
+        if (sort == "Type" || sort == "Nat")
+          continue;
         source::Requirement req;
         req.location = param.location;
         req.predicate = bound;
@@ -323,6 +426,36 @@ class Selector {
       }
       if (!good())
         return false;
+      size_t index = llvm::find_if(actuals,
+                                   [&](const auto &entry) {
+                                     return entry.first == param.name;
+                                   }) -
+                     actuals.begin();
+      if (sort == "Type") {
+        if (index >= terms.size())
+          return fail(node, "source-static-sort",
+                      "Type argument requires source type syntax");
+        auto selected = syntax::typeExpression(terms[index]);
+        type(selected, outer);
+        actual->second = typeIdentity(selected);
+        if (!good())
+          return false;
+        selectedTypes.emplace(actual->second, std::move(selected));
+        continue;
+      }
+      if (sort == "Nat") {
+        uint64_t number;
+        if (StringRef(actual->second).getAsInteger(10, number) ||
+            number > 1048576 ||
+            (index < terms.size() &&
+             (terms[index].root.kind == Atom::Kind::String ||
+              !terms[index].members.empty() ||
+              !terms[index].arguments.empty())))
+          return fail(node, "source-static-sort",
+                      "expected a bounded natural argument");
+        actual->second = std::to_string(number);
+        continue;
+      }
       if (sort.empty() ||
           protocol::installedIdentitySort(actual->second) != sort)
         return fail(node, "source-static-sort",
@@ -372,24 +505,35 @@ class Selector {
       op = selected->second->application.contract;
     }
     for (size_t i = 0; i < attrs.size() && i < atoms.size(); ++i) {
-      bool numeric =
-          ((op == "index.constant" || op == "vector.splat" ||
-            op == "vector.powers" || op == "vector.at" ||
-            op == "vector.length_check" || op == "poly.degree_check" ||
-            op == "random.vector" || op == "curve.at") &&
-           i == 0) ||
-          (op == "matrix.shape_check" && i < 2) ||
-          (op == "vector.matvec" && i < 3);
-      if (numeric)
+      if (naturalAttribute(op, i))
         replaceNatural(attrs[i], atoms[i], locals);
     }
   }
   void statics(std::optional<source::Names> &args,
-               const std::vector<StaticTerm> &terms, const Substitution &sub) {
+               std::vector<StaticTerm> &terms, const Substitution &sub) {
     if (!args)
       return;
-    for (size_t i = 0; i < args->size() && i < terms.size(); ++i)
+    for (size_t i = 0; i < args->size() && i < terms.size(); ++i) {
+      if (terms[i].root.kind == Atom::Kind::Name && terms[i].members.empty() &&
+          terms[i].arguments.empty())
+        if (auto actual = sub.find(terms[i].root.value); actual != sub.end()) {
+          if (auto selected = selectedTypes.find(actual->second);
+              selected != selectedTypes.end())
+            terms[i] = syntax::staticExpression(selected->second);
+          else {
+            terms[i].root.value = actual->second;
+            uint64_t number;
+            if (!StringRef(actual->second).getAsInteger(10, number))
+              terms[i].root.kind = Atom::Kind::Number;
+          }
+        }
+      if (typeArgumentSyntax(terms[i])) {
+        auto expression = syntax::typeExpression(terms[i]);
+        type(expression, sub);
+        terms[i] = syntax::staticExpression(expression);
+      }
       (*args)[i] = term(terms[i], sub);
+    }
   }
   void expression(Expression &e, const Substitution &sub, const Names &locals) {
     if (!tick(e))
@@ -449,6 +593,7 @@ class Selector {
     for (auto [param, actual] : zip(f.parameters, *call.staticArguments))
       config.arguments.emplace_back(param.name, actual);
     out.configurations.push_back(config);
+    out.configurationTerms[config.name] = call.staticTerms;
     call.callee = config.name;
     call.staticArguments.reset();
     call.staticTerms.clear();
@@ -757,7 +902,21 @@ public:
         break;
       auto target = protocols.find(config.base);
       if (target == protocols.end()) {
-        out.configurations.push_back(config);
+        auto selected = config;
+        if (metadata != source.configurationTerms.end()) {
+          auto terms = metadata->second;
+          for (size_t i = 0; i < selected.arguments.size() && i < terms.size();
+               ++i) {
+            if (typeArgumentSyntax(terms[i])) {
+              auto expression = syntax::typeExpression(terms[i]);
+              type(expression, {});
+              terms[i] = syntax::staticExpression(expression);
+            }
+            selected.arguments[i].second = term(terms[i], {});
+          }
+          out.configurationTerms[config.name] = std::move(terms);
+        }
+        out.configurations.push_back(std::move(selected));
         continue;
       }
       if (!target->second->generic || !config.implementations.empty()) {
@@ -902,7 +1061,7 @@ public:
     out.instanceParameterAtoms.clear();
     out.instanceProtocolTerms.clear();
     out.relationViewHeights.clear();
-    out.configurationTerms.clear();
+    // Configuration Type actuals still need declaration-directed elaboration.
     out.entryArguments.clear();
     out.quotedBases.clear();
     out.quotedRelations.clear();

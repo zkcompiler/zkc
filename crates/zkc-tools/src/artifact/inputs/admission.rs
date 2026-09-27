@@ -65,7 +65,7 @@ impl<'a> Input<'a> {
     fn estimate(&self, policy: &Policy) -> Result<usize> {
         match self {
             Self::Wire { ty, hex, .. } => Value::typed_wire_retained_bytes_bound(
-                PhysicalType::default_for(ty.clone()),
+                PhysicalType::default_for(ty.clone()).map_err(|e| e.to_string())?,
                 text(hex)?.len() / 2,
                 policy,
             )
@@ -197,7 +197,7 @@ impl<'a> Admission<'a> {
                         Value::clone(value)
                     } else {
                         let bytes = unhex(hex)?;
-                        let physical = PhysicalType::default_for(ty);
+                        let physical = PhysicalType::default_for(ty).map_err(|e| e.to_string())?;
                         let value = match setup {
                             Some(setup) => backend.decode_for_setup(physical, setup, &bytes),
                             None => backend.decode_typed_value(physical, &bytes),

@@ -80,7 +80,8 @@ with case("named arguments evaluate in written order, once"):
 
 with case("unit is one source value and no PIR leaves"):
     text = '''module {
-      fn Guard<>(condition: bool) -> () { control::require(condition); () }
+  use zkc::core;
+      fn Guard<>(condition: bool) -> () { zkc::core::require(condition); () }
       fn Check<>(condition: bool) -> () { let done = Guard(condition); done }
     }'''
     module = stable(text)
@@ -88,6 +89,8 @@ with case("unit is one source value and no PIR leaves"):
     assert module[1][1][6][-1] == ["return", []]
 
 PLACEMENT = '''module {
+  use zkc::algebra;
+  use zkc::core;
   fn Twice<F: Field>(x: F::Element) -> F::Element { x + x }
   protocol SendTwice<F: Field> {
     roles (Worker, Checker);
@@ -99,8 +102,8 @@ PLACEMENT = '''module {
     };
     message result_message: Worker(result) -> Checker(received);
     let accepted = local Checker {
-      let valid = field::equal(received, expected);
-      control::require(valid);
+      let valid = zkc::algebra::equal(received, expected);
+      zkc::core::require(valid);
       valid
     };
     finish { result, accepted };
@@ -191,10 +194,12 @@ with case("closed composition maps named child outputs independently of written 
 
 with case("products preserve affine leaf usage"):
     text = '''module {
+  use zkc::random::{Rng};
+  use zkc::random;
       fn Twice<F: Field>(coins: Rng<F>) -> F::Element {
         let tuple = (coins, ());
-        let (first, rest) = random::draw(tuple.0);
-        let (second, last) = random::draw(tuple.0);
+        let (first, rest) = zkc::random::draw(tuple.0);
+        let (second, last) = zkc::random::draw(tuple.0);
         first
       }
     }'''
@@ -202,12 +207,15 @@ with case("products preserve affine leaf usage"):
 
 with case("placement captures used leaves and does not consume unrelated resources"):
     text = '''module {
+  use zkc::algebra;
+  use zkc::random::{Rng};
+  use zkc::random;
       protocol Draw<F: Field> {
         roles(Worker);
         inputs(Worker coins: Rng<F>, Worker x: F::Element);
         outputs(Worker value: F::Element);
         let doubled = local Worker { x + x };
-        let value = local Worker { let (random, remaining) = random::draw(coins); random };
+        let value = local Worker { let (random, remaining) = zkc::random::draw(coins); random };
         finish { value };
       }
       entry main = Draw::<F="bls12-381.fr">;
@@ -252,11 +260,11 @@ with case("result annotations preserve phantom domain parameters"):
     }'''
     run("protocol-source", text, refuses="source-annotation-type")
 
-with case("profile operation binding visits return and tail expressions"):
-    for body in ("field.add(x, x)", "return field.add(x, x);",
-                 "field.add(x, field.add(x, x))"):
-        text = ('module "arkworks.bls12-381/1" { '
-                'fn Twice(x: field) -> field { ' + body + ' } }')
+with case("installed operation binding visits return and tail expressions"):
+    for body in ("zkc::algebra::add(x, x)", "return zkc::algebra::add(x, x);",
+                 "zkc::algebra::add(x, zkc::algebra::add(x, x))"):
+        text = ('module { use zkc::algebra; '
+                'fn Twice(x: bls12-381.fr::Element) -> bls12-381.fr::Element { ' + body + ' } }')
         module = stable(text)
         assert any(b[1] == "field.add" for b in module[1])
 

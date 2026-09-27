@@ -36,8 +36,10 @@ def digest(field, matrix):
 
 def source(field, attrs, requirements="requires (Field(F))"):
     return f'''module {{
+  use zkc::algebra::{{Matrix}};
+  use zkc::algebra;
       fn Check<F: domain Field>(m:Matrix<F::Element>) -> (bool) {requirements} {{
-        [check] let ok = matrix::identity_check::<F>(m) attributes ({attrs});
+        [check] let ok = zkc::algebra::matrix_identity_check::<F>(m) attributes ({attrs});
         return (ok);
       }}
       configure Concrete = Check(F="{field}");

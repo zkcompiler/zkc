@@ -11,6 +11,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 #include "zkc/Translation/Relations.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <type_traits>
 
@@ -18,6 +19,121 @@ using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
 namespace {
+// Admission establishes source semantics. Check the complete set of native
+// carriers before constructing any IR, including payloads whose types only
+// become block arguments when a variant is matched.
+class ImportPreflight {
+  MLIRContext &context;
+  bool physical;
+  const source::Node **failureLocation;
+  llvm::StringSet<> checkedTypes;
+
+  Error fail(Error e, const source::Node &node) {
+    if (failureLocation)
+      *failureLocation = &node;
+    return e;
+  }
+  Error type(const BoundType &bound, const source::Node &node) {
+    if (!checkedTypes.insert(bound.spelling()).second)
+      return Error::success();
+    if (!decodeBoundType(&context, bound))
+      return fail(error("binding-type"), node);
+    for (const auto &argument : bound.arguments)
+      if (argument.kind == TypeArgument::Kind::Type)
+        if (auto e = type(*argument.type, node))
+          return e;
+    if (bound.kind == "variant") {
+      auto descriptor = decodeVariant("variant:" + bound.identity);
+      if (!descriptor)
+        return fail(error("binding-type"), node);
+      for (const auto &arm : descriptor->alternatives)
+        for (const auto &leaf : arm.payload) {
+          auto parsed = parseBoundType(leaf, false);
+          if (!parsed)
+            return fail(parsed.takeError(), node);
+          if (!bound.representation.empty())
+            parsed = defaultRepresentation(*parsed);
+          if (!parsed)
+            return fail(parsed.takeError(), node);
+          if (auto e = type(*parsed, node))
+            return e;
+        }
+    }
+    return Error::success();
+  }
+  Error type(StringRef spelling, const source::Node &node) {
+    auto parsed = parseBoundType(spelling, physical);
+    if (!parsed)
+      return fail(parsed.takeError(), node);
+    return type(*parsed, node);
+  }
+  Error body(const source::Body &instructions) {
+    Error result = Error::success();
+    source::walk(instructions, [&](const source::Instruction &instruction) {
+      if (result)
+        return;
+      if (const auto *receive = instruction.get<source::Receive>())
+        result = type(receive->type, instruction);
+      else if (const auto *pack = instruction.get<source::VariantConstruct>())
+        result = type(pack->type, instruction);
+    });
+    return result;
+  }
+  template <typename Definition> Error definition(const Definition &value) {
+    for (const auto &argument : value.arguments)
+      if (auto e = type(argument.type, value))
+        return e;
+    for (const auto &result : value.results) {
+      if constexpr (std::is_same_v<Definition, source::Protocol>) {
+        if (auto e = type(result.type, value))
+          return e;
+      } else if (auto e = type(result, value))
+        return e;
+    }
+    if constexpr (std::is_same_v<Definition, source::Participant>)
+      return body(value.body);
+    else
+      return value.body ? body(*value.body) : Error::success();
+  }
+
+public:
+  ImportPreflight(MLIRContext &context, bool physical,
+                  const source::Node **failureLocation)
+      : context(context), physical(physical), failureLocation(failureLocation) {
+  }
+
+  template <typename Root> Error run(const Root &root) {
+    for (const auto &binding : root.bindings) {
+      auto name = physical ? ExecuteKernelOp::getOperationName()
+                           : boundOperationName(binding.application.contract);
+      if (name.empty() || !context.isOperationRegistered(name))
+        return fail(error("binding-operation"), binding);
+      auto selected = resolveBinding(binding.application, physical);
+      if (!selected)
+        return fail(selected.takeError(), binding);
+      for (const auto &input : selected->inputs)
+        if (auto e = type(input, binding))
+          return e;
+      for (const auto &output : selected->outputs)
+        if (auto e = type(output, binding))
+          return e;
+    }
+    for (const auto &function : root.functions)
+      if (auto e = definition(function))
+        return e;
+    if constexpr (std::is_same_v<Root, source::Module>) {
+      for (const auto &protocol : root.protocols)
+        if (auto e = definition(protocol))
+          return e;
+    } else {
+      for (const auto &participant : root.participants)
+        if (auto e = definition(participant))
+          return e;
+    }
+    return Error::success();
+  }
+};
+
 class Importer {
   OpBuilder b;
   bool target, physical;
@@ -521,6 +637,8 @@ import(const Root &root, MLIRContext &ctx,
   bool physical = false;
   if constexpr (std::is_same_v<Root, source::Participants>)
     physical = root.stage == source::Participants::Stage::Physical;
+  if (auto e = ImportPreflight(ctx, physical, failureLocation).run(root))
+    return e;
   auto module = Importer(ctx, std::is_same_v<Root, source::Participants>,
                          physical, locations)
                     .run(root);

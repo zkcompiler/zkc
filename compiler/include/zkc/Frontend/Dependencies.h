@@ -31,7 +31,6 @@ struct LibraryDependency {
 struct DependencyDeclarations {
   SourceForm form = SourceForm::Unknown;
   std::optional<source::Span> location;
-  std::optional<std::string> profile;
   std::vector<ModuleReference> modules;
   std::vector<RelationReference> relations;
   std::vector<LibraryIdentityDeclaration> libraryIdentities;

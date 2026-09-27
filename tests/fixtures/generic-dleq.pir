@@ -1,28 +1,41 @@
 // Generic local algorithms in the repeated DLEQ interaction.
 module {
+  use zkc::curve::{
+    ScalarAction
+  };
+  use zkc::algebra::{
+    Field
+  };
+  use zkc::core;
+  use zkc::curve;
+  use zkc::random::{
+    Nonce,
+    Rng
+  };
+  use zkc::random;
   fn DLEQCommitAlgorithm<G: domain Group>(
     base_0: G::Element,
     base_1: G::Element,
     nonce: Nonce<G::Scalar>
   ) -> (G::Element, G::Element, Nonce<G::Scalar>) requires (ScalarAction(G)) {
-    [empty] let empty = curve::empty::<G>();
-    [append_0] let one = curve::append::<G>(empty, base_0);
-    [append_1] let bases = curve::append::<G>(one, base_1);
-    [commit] let (points, ready) = curve::commit::<G>(bases, nonce);
-    [at_0] let a_0 = curve::at::<G>(points) attributes ("0");
-    [at_1] let a_1 = curve::at::<G>(points) attributes ("1");
+    [empty] let empty = zkc::curve::empty::<G>();
+    [append_0] let one = zkc::curve::append::<G>(empty, base_0);
+    [append_1] let bases = zkc::curve::append::<G>(one, base_1);
+    [commit] let (points, ready) = zkc::curve::commit::<G>(bases, nonce);
+    [at_0] let a_0 = zkc::curve::at::<G>(points) attributes ("0");
+    [at_1] let a_1 = zkc::curve::at::<G>(points) attributes ("1");
     return (a_0, a_1, ready);
   }
 
   fn DLEQDrawAlgorithm<F: domain Field>(coins: Rng<F>) -> (F::Element, Rng<F>) requires (Field(F)) {
-    [draw] let (c, after) = random::draw::<F>(coins);
+    [draw] let (c, after) = zkc::random::draw::<F>(coins);
     return (c, after);
   }
 
   fn DLEQRespondAlgorithm<F: domain Field>(x: F::Element, c: F::Element, ready: Nonce<F>) -> F::Element requires (
     Field(F)
   ) {
-    [respond] let z = curve::response::<F>(x, c, ready);
+    [respond] let z = zkc::curve::response::<F>(x, c, ready);
     return z;
   }
 
@@ -36,22 +49,22 @@ module {
     c: G::Scalar::Element,
     z: G::Scalar::Element
   ) -> bool requires (ScalarAction(G)) {
-    [left_0] let left_0 = curve::scale::<G>(base_0, z);
-    [image_0] let cx_0 = curve::scale::<G>(image_0, c);
-    [right_0] let right_0 = curve::add::<G>(a_0, cx_0);
-    [equal_0] let ok_0 = curve::equal::<G>(left_0, right_0);
-    [require_0] control::require(ok_0);
-    [left_1] let left_1 = curve::scale::<G>(base_1, z);
-    [image_1] let cx_1 = curve::scale::<G>(image_1, c);
-    [right_1] let right_1 = curve::add::<G>(a_1, cx_1);
-    [equal_1] let ok_1 = curve::equal::<G>(left_1, right_1);
-    [require_1] control::require(ok_1);
-    [both] let ok = bool::and(ok_0, ok_1);
+    [left_0] let left_0 = zkc::curve::scale::<G>(base_0, z);
+    [image_0] let cx_0 = zkc::curve::scale::<G>(image_0, c);
+    [right_0] let right_0 = zkc::curve::add::<G>(a_0, cx_0);
+    [equal_0] let ok_0 = zkc::curve::equal::<G>(left_0, right_0);
+    [require_0] zkc::core::require(ok_0);
+    [left_1] let left_1 = zkc::curve::scale::<G>(base_1, z);
+    [image_1] let cx_1 = zkc::curve::scale::<G>(image_1, c);
+    [right_1] let right_1 = zkc::curve::add::<G>(a_1, cx_1);
+    [equal_1] let ok_1 = zkc::curve::equal::<G>(left_1, right_1);
+    [require_1] zkc::core::require(ok_1);
+    [both] let ok = zkc::core::and(ok_0, ok_1);
     return ok;
   }
 
   fn DLEQBothAlgorithm<>(first: bool, second: bool) -> bool {
-    [both] let ok = bool::and(first, second);
+    [both] let ok = zkc::core::and(first, second);
     return ok;
   }
 

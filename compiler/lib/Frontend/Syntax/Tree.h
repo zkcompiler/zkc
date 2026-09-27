@@ -21,6 +21,7 @@ struct Atom : source::Node {
 struct StaticTerm {
   Atom root;
   source::Names members;
+  std::vector<StaticTerm> arguments = {};
 };
 struct Type : source::Node {
   bool product = false;
@@ -30,6 +31,44 @@ struct Type : source::Node {
   std::vector<Type> arguments;
   source::Names members;
 };
+inline Type typeExpression(const StaticTerm &term) {
+  Type result;
+  result.location = term.root.location;
+  result.name = term.root.value;
+  result.members = term.members;
+  result.natural = term.root.kind == Atom::Kind::Number;
+  result.quoted = term.root.kind == Atom::Kind::String;
+  for (const auto &argument : term.arguments)
+    result.arguments.push_back(typeExpression(argument));
+  return result;
+}
+inline StaticTerm staticExpression(const Type &type) {
+  StaticTerm result;
+  result.root.location = type.location;
+  result.root.value = type.name;
+  result.root.kind = type.natural  ? Atom::Kind::Number
+                     : type.quoted ? Atom::Kind::String
+                                   : Atom::Kind::Name;
+  result.members = type.members;
+  for (const auto &argument : type.arguments)
+    result.arguments.push_back(staticExpression(argument));
+  return result;
+}
+inline std::string staticSpelling(const StaticTerm &term) {
+  std::string result = term.root.value;
+  for (const auto &member : term.members)
+    result += "." + member;
+  if (!term.arguments.empty()) {
+    result += "<";
+    for (const auto &argument : term.arguments) {
+      if (result.back() != '<')
+        result += ",";
+      result += staticSpelling(argument);
+    }
+    result += ">";
+  }
+  return result;
+}
 struct Parameter {
   std::string name;
   Type type;
@@ -59,7 +98,7 @@ struct Call : source::Node {
   std::optional<std::vector<Type>> annotation;
   std::optional<std::string> role; // Explicit protocol-local call.
   // The callee is an operator symbol over named operands. It is resolved from
-  // the operands' types and then is the installed call, written flat.
+  // the operands' nominal types and then elaborated as the selected call.
   bool isOperator = false;
   bool destructure = false;
 };
@@ -189,6 +228,8 @@ struct Function : source::Node {
   std::vector<Type> results;
   std::optional<Body> body;
   std::optional<source::LogicalOrigin> origin;
+  // Fixed language hook; the signature supplies nominal operand heads.
+  std::optional<std::string> operatorHook = {};
 };
 struct Protocol : source::Node {
   std::string name;
@@ -333,7 +374,6 @@ struct Module : source::Node {
   std::vector<RelationImport> imports;
   std::vector<source::RelationDeclaration> relations;
   std::vector<source::RelationView> relationViews;
-  std::optional<std::string> profile;
   std::vector<source::OperationBinding> bindings;
   std::vector<Bundle> bundles;
   std::vector<Struct> structs;

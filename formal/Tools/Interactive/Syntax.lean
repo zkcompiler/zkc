@@ -1,4 +1,4 @@
-import Tools.Interactive.VariantDescriptor
+import Tools.Interactive.LogicalTypes
 
 /-! Portable interchange syntax. This is deliberately independent of the typed
 protocol language: successful raw admission is not a typed elaboration theorem. -/
@@ -197,22 +197,34 @@ def Instance.projectCount (binding : Instance) (count : Count) : Result Count :=
       | .constant n => pure (.constant n)
       | .ingress .. => pure count
 
-def typeKind (ty : Ty) : String := ((ty.splitOn "@").head!).splitOn ":" |>.head!
+def typeKind (ty : Ty) : String :=
+  String.ofList (ty.toList.takeWhile fun c => c != ':' && c != '<' && c != '@')
+
+/-- Legacy local-checker callers also carry uninstantiated leaf names. Preserve
+their installed base flags; common ground-domain admission is Bindings' job.
+Applications and variants must instead derive permissions from all children. -/
+private def structural (ty : Ty) : Bool := ty.contains '<' || typeKind ty == "variant"
 
 def serializable (ty : Ty) : Bool :=
-  ["index", "indices", "matrix", "vector", "polynomial", "field", "table", "point", "round", "bool", "commitment", "commitments", "proof", "scalar", "group", "groups"].contains (typeKind ty)
+  if structural ty then (Logical.permissions ty).isPublic
+  else ["index", "indices", "matrix", "vector", "polynomial", "field", "table", "point", "round", "bool",
+    "commitment", "commitments", "proof", "scalar", "group", "groups"].contains (typeKind ty)
 
 /-- Checked local discard is independent of public serialization. -/
 def discardable (ty : Ty) : Bool :=
-  Variant.allLeaves (fun ty => typeKind ty == "resource_unit" || serializable ty || ["opening_state", "opening_states", "prover_key", "verifier_key"].contains (typeKind ty)) 8 ty
+  if structural ty then (Logical.permissions ty).drop
+  else typeKind ty == "resource_unit" || serializable ty ||
+    ["opening_state", "opening_states", "prover_key", "verifier_key"].contains (typeKind ty)
 
 /-- Positive local aliasing permission; unknown abstract types do not gain it
 merely by lacking an affine annotation. -/
 def duplicable (ty : Ty) : Bool :=
-  Variant.allLeaves (fun ty => serializable ty || ["opening_state", "opening_states", "prover_key", "verifier_key"].contains (typeKind ty)) 8 ty
+  if structural ty then (Logical.permissions ty).copy
+  else serializable ty || ["opening_state", "opening_states", "prover_key", "verifier_key"].contains (typeKind ty)
 
 def affine (ty : Ty) : Bool :=
-  (typeKind ty == "variant" && !duplicable ty) || ["resource_unit", "rng", "nonce", "transcript"].contains (typeKind ty) || ty.startsWith "capability:"
+  (["variant", "fixed_vector"].contains (typeKind ty) && !duplicable ty) ||
+    ["resource_unit", "rng", "nonce", "transcript"].contains (typeKind ty) || ty.startsWith "capability:"
 
 
 def abstractType (ty : Ty) : Bool := ty.startsWith "opaque:" || ty.startsWith "capability:"

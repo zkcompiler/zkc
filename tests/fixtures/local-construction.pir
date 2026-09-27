@@ -1,4 +1,7 @@
 module {
+  use zkc::random::{
+    Rng
+  };
   bind draw = random::draw(bls12-381.fr);
   bind equal = field::equal(bls12-381.fr);
   bind require = control::require();

@@ -215,10 +215,11 @@ with case("concrete protocols get the same source type check as families"):
     portable[3][0][4][0][2] = "field:bls12-381.fr"
     commands.source("protocol-admit", json.dumps(portable), refuses="interactive-local-signature")
 
-with case("profile defaults are resolved before source type retention"):
-    text = '''module "arkworks.bls12-381/1" {
-      fn Id(x:field)->field {return x;}
-      fn VectorId(x:Vector<field>)->Vector<field> {return x;}
+with case("explicit installed types survive source type retention"):
+    text = '''module {
+      use zkc::algebra::{Vector};
+      fn Id(x:bls12-381.fr::Element)->bls12-381.fr::Element {return x;}
+      fn VectorId(x:Vector<bls12-381.fr::Element>)->Vector<bls12-381.fr::Element> {return x;}
     }'''
     report = analyze(text)
     assert report["phase"] == "source_checked", report

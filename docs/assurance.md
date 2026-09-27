@@ -87,6 +87,18 @@ explain the contrasting boundaries; [status](status.md) and maintained example
 and [benchmark guides](../bench/README.md) identify native evidence and comparison
 conditions. Reorganizing documentation does not rerun those measurements.
 
+The [domain-extension case](../tests/protocol/test_domain_extension.py) compares
+source specialization and participant lowering with native Plonky3 execution and
+an independently written [Lean fixed-vector reference](../formal/Tools/Interactive/FixedVectorReference.lean).
+Its checked data retains the exact length; its arithmetic does not call the native
+kernel. [Contract conformance](../tests/protocol/test_contract_conformance.py)
+compares three independently installed logical readers and four physical readers,
+including the executing backend's signature resolver. Separate native tests run
+each installed alternative against its original implementation. Generated declarations
+provide test cases, never executable authority for Rust or Lean. These checks
+cover the declared finite profile and supplied cases; they do not prove native
+elaboration, kernel refinement or cryptographic security for arbitrary extensions.
+
 ## 4. Trust and unmechanized boundaries
 
 | Boundary | Current assurance |

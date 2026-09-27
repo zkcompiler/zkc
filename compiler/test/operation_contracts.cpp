@@ -19,6 +19,21 @@ void require(bool condition, llvm::StringRef message) {
 }
 } // namespace
 int main() {
+  for (const auto &attributes :
+       {std::vector<std::string>{"0"}, std::vector<std::string>{"1"}}) {
+    auto error = checkGenericParameters("field.constant", attributes);
+    require(!error, "generic zero/one literal needs no selected field");
+  }
+  for (const auto &attributes :
+       {std::vector<std::string>{}, std::vector<std::string>{"0", "1"},
+        std::vector<std::string>{"2"}, std::vector<std::string>{"01"}}) {
+    auto error = checkGenericParameters("field.constant", attributes);
+    require(bool(error), "generic literal retains arity and canonical bounds");
+    llvm::consumeError(std::move(error));
+  }
+  auto unselected = checkParameters("field.constant", {"1"});
+  require(bool(unselected), "closed literal still requires an admitted field");
+  llvm::consumeError(std::move(unselected));
   std::set<std::string> keys;
   std::ifstream fixture(ZKC_HISTORY_FIXTURE);
   require(fixture.is_open(), "history inventory fixture missing");

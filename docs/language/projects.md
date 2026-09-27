@@ -50,17 +50,46 @@ filenames. Dependency aliases, file paths and file ordering are not declaration
 identity.
 
 Authored references must resolve to a local binding, a visible declaration or
-installed vocabulary. Generated implementation symbols cannot be called by
+permitted core vocabulary. Generated implementation symbols cannot be called by
 spelling them, including quoted names. A relation helper is reached through its
-visible view declaration. Convenience `module <profile>` declarations belong
-only to the application root; imported and child code uses explicit domains and
-does not inherit that root's profile defaults.
+visible view declaration. All authored files use explicit domains and imports;
+`module <profile>` headings are no longer accepted.
 
 Relation references are relative to their declaring file, remain within the
 library root, and are read into the same snapshot. `protocol-resolve` produces a
 portable frozen relation snapshot. Later source analysis and compilation consume
 those captured bytes. No frontend query implicitly installs packages or fetches
 relation files from a network.
+
+## Installed domain modules
+
+The compiler supplies curated modules under `zkc`: `algebra`, `poly`, `curve`,
+`random`, `pcs`, `oracle`, `external`, `core` and `transcript`. These use ordinary
+resolution, aliases and reexports, without a captured `--library` file:
+
+```text
+module {
+  use zkc::algebra;
+  use zkc::algebra::Field as ScalarField;
+  pub fn Double<F: ScalarField>(x: F::Element) -> F::Element {
+    return algebra::add(x, x);
+  }
+}
+```
+
+An import exposes installed declarations; it cannot add semantic contracts or
+backend code. Installed calls and types have no global spelling fallback.
+Domain identities, raw sorts and capability predicates remain globally accepted;
+imported capability aliases are an additional way to name the same requirements.
+Core `bool`, `index`, structural `Array` and `ResourceUnit` remain available.
+The `transcript` module exports its type and capability vocabulary, with no
+source-callable transcript operations. Explicit low-level `bind` declarations
+also enforce authoring-stage restrictions.
+
+The checked environment keeps the existing whole-installation identity. Imports
+do not switch to an identity based only on the selected exports. The generated
+inventory and the [extension guide](../development/extensions.md#logical-contracts-and-source-exports)
+describe compiler installation; source project loading does not perform it.
 
 ## Checking and selection
 

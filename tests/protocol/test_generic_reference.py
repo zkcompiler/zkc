@@ -233,8 +233,9 @@ def main():
     rng = random.Random(418920)
     for value in [0, 1, modulus - 1, modulus, modulus + 1, 10**1023] + [rng.randrange(10**180) for _ in range(20)]:
         literal = f"""module {{
+  use zkc::algebra;
               fn Literal<F: domain Field>() -> (F::Element) requires (Field(F)) {{
-                [constant] let result = field::constant::<F>() attributes (\"{value}\"); return (result);
+                [constant] let result = zkc::algebra::constant::<F>() attributes (\"{value}\"); return (result);
               }}
               configure Number = Literal(F = bls12-381.fr);
               protocol P {{ roles (A); inputs (); outputs (A "bls12-381.fr"::Element);

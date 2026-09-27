@@ -358,7 +358,7 @@ impl Decoder {
                     }
                     let parameter = name(&pair[0])?;
                     let identity = string(&pair[1])?;
-                    if !super::bindings::valid_static_identity(identity) {
+                    if !super::bindings::valid_static_argument(identity) {
                         return Err(err(ErrorCode::Type, "logical origin static identity"));
                     }
                     insert(&mut seen, parameter.clone(), (), ErrorCode::Name)?;

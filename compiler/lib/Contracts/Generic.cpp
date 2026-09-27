@@ -1,5 +1,6 @@
 #include "zkc/Contracts/Generic.h"
 #include "RequirementChecks.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include <functional>
@@ -14,20 +15,40 @@ Error invalid(StringRef code) { return zkc::error(code); }
 Error scope(const Scope &scope) {
   if (scope.terms.size() != scope.sorts.size())
     return invalid("generic-sort-count");
-  // Pure applications belong to checked frontend selections. This older
-  // portable domain-signature profile has no application sort declaration.
-  if (any_of(scope.terms,
-             [](const auto &term) { return term.arguments.has_value(); }))
-    return invalid("generic-application");
-  for (const auto &[index, identity] : scope.constants)
-    if (index >= scope.terms.size() || scope.terms[index].parent ||
-        identity.empty() || identity.size() > 255)
-      return invalid("generic-constant-scope");
   if (any_of(scope.sorts, [](const auto &sort) {
         return sort.empty() || sort.size() > 256;
       }))
     return invalid("generic-sort");
+  for (auto [index, term] : enumerate(scope.terms))
+    if (term.arguments && (term.parent || scope.sorts[index] != "Type"))
+      return invalid("generic-application");
+  std::set<std::pair<std::string, std::string>> constants;
+  for (const auto &[index, identity] : scope.constants) {
+    if (index >= scope.terms.size() || scope.terms[index].parent ||
+        scope.terms[index].arguments || identity.empty() ||
+        (scope.sorts[index] != "Type" && identity.size() > 255) ||
+        !constants.emplace(scope.sorts[index], identity).second)
+      return invalid("generic-constant-scope");
+    if (scope.sorts[index] == "Type" &&
+        !protocol::staticIdentityMatches("Type", identity))
+      return invalid("generic-constant-type");
+    if (scope.sorts[index] == "Nat" &&
+        !protocol::staticIdentityMatches("Nat", identity))
+      return invalid("generic-constant-nat");
+  }
   return requirements::checkFormation(scope.terms, {}, {}, {});
+}
+
+const TypeConstructor *constructor(StringRef name,
+                                   ArrayRef<TypeConstructor> constructors) {
+  const TypeConstructor *selected = nullptr;
+  for (const auto &candidate : constructors)
+    if (candidate.name == name) {
+      if (selected)
+        return nullptr;
+      selected = &candidate;
+    }
+  return selected;
 }
 
 Error signature(const Signature &sig, ArrayRef<TypeConstructor> constructors) {
@@ -35,23 +56,23 @@ Error signature(const Signature &sig, ArrayRef<TypeConstructor> constructors) {
     return e;
   if (sig.inputs.size() > 1024 || sig.outputs.size() > 1024)
     return invalid("generic-port-limit");
-  auto valid = [&](const Type &type) {
-    const TypeConstructor *selected = nullptr;
-    for (const auto &constructor : constructors)
-      if (constructor.name == type.constructor) {
-        if (selected)
-          return false;
-        selected = &constructor;
-      }
-    if (!selected || selected->parameters.size() != type.arguments.size())
+  auto valid = [&](StringRef head, ArrayRef<unsigned> arguments) {
+    const auto *selected = constructor(head, constructors);
+    if (!selected || selected->parameters.size() != arguments.size())
       return false;
-    for (auto [parameter, sort] : zip(type.arguments, selected->parameters))
+    for (auto [parameter, sort] : zip(arguments, selected->parameters))
       if (parameter >= sig.scope.sorts.size() ||
           sig.scope.sorts[parameter] != sort)
         return false;
     return true;
   };
-  if (!all_of(sig.inputs, valid) || !all_of(sig.outputs, valid))
+  for (const auto &term : sig.scope.terms)
+    if (term.arguments && !valid(term.name, *term.arguments))
+      return invalid("generic-application");
+  auto validType = [&](const Type &type) {
+    return valid(type.constructor, type.arguments);
+  };
+  if (!all_of(sig.inputs, validType) || !all_of(sig.outputs, validType))
     return invalid("generic-type");
   for (const auto &p : sig.requirements)
     if (p.kind == requirements::Predicate::Kind::Equal &&
@@ -90,8 +111,8 @@ Expected<Signature> instantiate(const Signature &sig,
   if (auto e = scope(caller))
     return e;
   if (arguments.size() + sig.scope.constants.size() !=
-      size_t(
-          count_if(sig.scope.terms, [](const auto &t) { return !t.parent; })))
+      size_t(count_if(sig.scope.terms,
+                      [](const auto &t) { return !t.parent && !t.arguments; })))
     return invalid("generic-static-arity");
   Signature result;
   result.scope = caller;
@@ -108,10 +129,43 @@ Expected<Signature> instantiate(const Signature &sig,
       if (found == result.scope.terms.size()) {
         if (found >= 128)
           return invalid("requirements-limit");
-        result.scope.terms.push_back({"$" + constant->second, {}});
+        // Labels do not encode identity. Generate a fresh root label so equal
+        // spellings of different kinds, and caller-chosen labels, cannot alias.
+        unsigned suffix = found;
+        std::string name;
+        do {
+          name = "$constant" + std::to_string(suffix++);
+        } while (any_of(result.scope.terms, [&](const auto &candidate) {
+          return !candidate.parent && !candidate.arguments &&
+                 candidate.name == name;
+        }));
+        result.scope.terms.push_back({std::move(name), {}});
         result.scope.sorts.push_back(sort);
         result.scope.constants.emplace(found, constant->second);
       }
+      mapping.push_back(found);
+      continue;
+    }
+    if (term.arguments) {
+      std::vector<unsigned> mappedArguments;
+      for (unsigned argument : *term.arguments)
+        mappedArguments.push_back(mapping[argument]);
+      unsigned found = result.scope.terms.size();
+      for (auto [i, candidate] : enumerate(result.scope.terms))
+        if (!candidate.parent && candidate.arguments &&
+            candidate.name == term.name &&
+            *candidate.arguments == mappedArguments) {
+          found = i;
+          break;
+        }
+      if (found == result.scope.terms.size()) {
+        if (found >= 128)
+          return invalid("requirements-limit");
+        result.scope.terms.push_back(
+            {term.name, std::nullopt, std::move(mappedArguments)});
+        result.scope.sorts.push_back(sort);
+      } else if (result.scope.sorts[found] != sort)
+        return invalid("generic-application");
       mapping.push_back(found);
       continue;
     }
@@ -180,10 +234,31 @@ Expected<Inference> infer(const Function &function,
   Inference result{function.signature.scope, {}, {}};
   std::set<std::string> sites;
   size_t work = 0, valueCount = 0;
+  // Instantiation only extends the scope. Cache permission propagation in DAG
+  // order, including newly interned applications, without expanding a DAG into
+  // an exponentially repeated tree. No equality assumption grants copy bounds.
+  std::vector<bool> affineTerms;
   auto affine = [&](const Type &type) {
-    return any_of(constructors, [&](const auto &c) {
-      return c.name == type.constructor && c.affine;
-    });
+    while (affineTerms.size() < result.scope.terms.size()) {
+      unsigned index = affineTerms.size();
+      const auto &term = result.scope.terms[index];
+      bool isAffine = result.scope.sorts[index] == "Type";
+      if (isAffine && term.arguments) {
+        const auto *selected = constructor(term.name, constructors);
+        isAffine = !selected || selected->affine ||
+                   any_of(*term.arguments, [&](unsigned argument) {
+                     return result.scope.sorts[argument] == "Type" &&
+                            affineTerms[argument];
+                   });
+      }
+      affineTerms.push_back(isAffine);
+    }
+    const auto *selected = constructor(type.constructor, constructors);
+    return !selected || selected->affine ||
+           any_of(type.arguments, [&](unsigned argument) {
+             return result.scope.sorts[argument] == "Type" &&
+                    affineTerms[argument];
+           });
   };
   std::function<Expected<std::vector<Type>>(ArrayRef<Call>, ArrayRef<unsigned>,
                                             std::vector<Type>, unsigned)>

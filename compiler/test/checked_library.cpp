@@ -1,6 +1,7 @@
 #include "../lib/Frontend/Lowering/Library.h"
 #include "Names.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Frontend/Library.h"
 #include "zkc/Protocol/Admission.h"
 #include "llvm/Support/raw_ostream.h"
@@ -124,7 +125,7 @@ struct Fixture {
                            {},
                            {root("A")}});
     for (const auto &t : zkc::protocol::boundTypeConstructors())
-      env.logicalTypes.push_back({t, true});
+      env.logicalTypes.push_back({t, zkc::protocol::discardable(t.name)});
     for (const auto &o : zkc::protocol::boundOperationContracts())
       env.operations.push_back(
           {o, o.name == "control.require"
@@ -132,11 +133,12 @@ struct Fixture {
                   : std::set<std::string>{"local"}});
   }
   Type field() const { return Type::logical("field", {root("F")}); }
-  Interface interface(bool copy = false, std::vector<Facet> facets = {}) const {
+  Interface interface(bool copy = false, std::vector<Facet> facets = {},
+                      bool drop = true) const {
     InterfaceDecl d;
     d.id = id("Cell");
     d.self = root("self");
-    d.types.push_back({"Value", {copy, true}});
+    d.types.push_back({"Value", {copy, drop}});
     d.facets = std::move(facets);
     Type a = Type::abstract(d.self, "Value");
     d.functions.emplace("step", Signature{{{a, ""}}, {{a, ""}}, {}, {}, {}});
@@ -267,16 +269,17 @@ void abstractClientsAndLayouts() {
                   "affine"}},
                 {}}),
           "library-permission-bound");
-  expect(
-      bool(
-          must(link({client,
-                     {{f.root("C"),
-                       f.implementation(i, Type::logical("rng", {f.root("F")})),
-                       "threaded"}},
-                     {}}))
-              .functions()
-              .size()),
-      "state threading does not need copy");
+  auto linear = f.interface(false, {}, false);
+  auto linearClient = f.client(linear);
+  expect(bool(must(link({linearClient,
+                         {{f.root("C"),
+                           f.implementation(
+                               linear, Type::logical("rng", {f.root("F")})),
+                           "threaded"}},
+                         {}}))
+                  .functions()
+                  .size()),
+         "state threading does not need copy");
   auto counterfeit = f.implementation(i, f.field());
   refusal(link({copyClient, {{f.root("C"), counterfeit, "stale"}}, {}}),
           "library-interface-drift");
@@ -2400,7 +2403,7 @@ void installedTableRefusals() {
   zkc::generic::Scope applied{{{"F", std::nullopt, std::vector<unsigned>{}}},
                               {"Field"}};
   refusedWith(zkc::protocol::resolveStaticArguments(applied, {"bls12-381.fr"}),
-              "binding-static-application");
+              "binding-static-scope");
   // A bound type spelling longer than any installed type can be.
   refusedWith(zkc::protocol::parseBoundType(std::string(5000, 'a'), false),
               "binding-type-limit");

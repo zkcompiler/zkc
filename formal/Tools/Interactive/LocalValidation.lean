@@ -11,7 +11,7 @@ set_option autoImplicit false
 namespace Tools.Interactive.Generic
 
 private def boundaryType (physical : Bool) (ty : Bindings.ValueType) : Bindings.ValueType :=
-  if physical then { ty with representation := Bindings.defaultRepresentation ty.kind ty.identity } else ty
+  if physical then { ty with representation := ty.defaultRepresentation } else ty
 
 private abbrev Environment := List (Name × (Name × Bindings.ValueType))
 

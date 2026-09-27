@@ -4,10 +4,44 @@ Products group source values without changing their participant ownership. Local
 blocks place computation at a role; returned products connect its results to the
 surrounding protocol. [Data forms](data.md) covers nominal records and operators.
 
+## Installed types and bulk values
+
+Imports expose the installation's domain vocabulary. Its constructors declare
+whether each static argument is a nominal domain, a type or a natural. For
+example:
+
+<!-- executable: module-body -->
+```text
+use zkc::algebra::{Field, Vector, FixedVector};
+use zkc::algebra;
+
+fn Dot<F: Field, N: nat>(left: Vector<F::Element>, right: Vector<F::Element>)
+    -> F::Element {
+  let x: FixedVector<F::Element, N> = algebra::fixed_vector_from_vector(left);
+  let y: FixedVector<F::Element, N> = algebra::fixed_vector_from_vector(right);
+  algebra::fixed_vector_dot(x, y)
+}
+configure DotFour = Dot(F = koala-bear, N = 4);
+```
+
+`F::Element` denotes the selected field's element type. `Vector<T>` uses the
+installed element-family cases; `FixedVector<T, N>` retains both its element type
+and length as one nominal bulk value. Conversion from a vector checks its actual
+length. In contrast, `[T; N]` is a source aggregate that lowers to N leaf ports.
+Neither annotation expands a fixed vector into source array elements.
+
+Types do not select implementations. This example's KoalaBear operations have
+Plonky3 implementations; other well-formed type applications can lack a backend
+and refuse during physical selection. Copy/drop permissions propagate through
+type arguments, while serialization requires separate installed support. See
+[the complete protocol](../../examples/protocols/fixed-vector.pir) and
+[extension installation](../development/extensions.md#add-a-logical-type-and-operations).
+
 ## Products, local blocks and distributed outputs
 
 <!-- executable: module-body -->
 ```text
+use zkc::{algebra, core};
 struct Pair<F: domain Field> { left: F::Element, right: F::Element }
 
 fn PairUp<F: Field>(left: F::Element, right: F::Element)
@@ -25,8 +59,8 @@ protocol Exchange<F: Field> {
   };
   message value: Worker(result) -> Checker(received);
   let accepted = local Checker {
-    let same = field::equal(received, expected);
-    control::require(same);
+    let same = algebra::equal(received, expected);
+    core::require(same);
     same
   };
   finish { accepted, result };
@@ -72,12 +106,15 @@ The existing positional invocation form remains useful for explicit common-PIR
 notation. A direct entry into a closed protocol or concrete family selection
 creates the finite child-instance tree with identity role mappings. A protocol
 with unresolved natural parameters requires explicit instance wiring. This
-shorthand does not search profiles or supply undeclared defaults.
+shorthand requires the declared static arguments and supplies no domain defaults.
 
 Named function arguments use `name: expression`. All inputs must be named exactly
 once when using that form. Operands execute left to right as written, then map to
-signature order. Qualified primitive calls keep positional operands because their
-installed contracts do not provide source parameter names.
+signature order. Imported intrinsic calls also accept named operands using their
+generated public labels. For example, after `use zkc::algebra;`,
+`algebra::add(field1: right, field0: left)` evaluates `right` before `left`, then
+supplies the values to the installed `field.add` ports. These labels are part of
+the export; they are not guessed from local variable names.
 
 Predicate/equality requirements can use a single `where` clause:
 

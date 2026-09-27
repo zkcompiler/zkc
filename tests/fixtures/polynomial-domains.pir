@@ -1,22 +1,26 @@
 module {
+  use zkc::algebra::{TwoAdicField, CharacteristicNotTwo};
+  use zkc::poly::{Polynomial};
+  use zkc::algebra;
+  use zkc::poly;
   fn Work<F: domain Field>(p:Polynomial<F>,s:F::Element,t:F::Element,beta:F::Element,n:index)
     -> () requires (TwoAdicField(F),CharacteristicNotTwo(F)) {
-    let v = poly::coset_evaluate::<F>(p,s,n);
-    let back = poly::coset_interpolate::<F>(v,s);
-    let points = poly::domain_points::<F>(s,n);
-    let two = index::constant() attributes ("2");
-    let zero = index::constant() attributes ("0");
-    let point = poly::domain_point::<F>(s,n,zero);
-    let length = vector::length::<F>(v);
-    let length_points = poly::domain_points::<F>(s,length);
-    let folded = poly::even_odd_fold::<F>(v,s,beta);
-    let half = index::div(n,two);
-    let square = field::mul::<F>(s,s);
-    let next = poly::domain_points::<F>(square,half);
-    let fold_back = poly::coset_interpolate::<F>(folded,square);
-    let other = poly::coset_interpolate::<F>(v,t);
-    let coefficients = poly::coefficients::<F>(back);
-    let scalar = poly::univariate_evaluate::<F>(back,s);
+    let v = zkc::poly::coset_evaluate::<F>(p,s,n);
+    let back = zkc::poly::coset_interpolate::<F>(v,s);
+    let points = zkc::poly::domain_points::<F>(s,n);
+    let two = zkc::algebra::index_constant() attributes ("2");
+    let zero = zkc::algebra::index_constant() attributes ("0");
+    let point = zkc::poly::domain_point::<F>(s,n,zero);
+    let length = zkc::algebra::vector_length::<F>(v);
+    let length_points = zkc::poly::domain_points::<F>(s,length);
+    let folded = zkc::poly::even_odd_fold::<F>(v,s,beta);
+    let half = zkc::algebra::index_div(n,two);
+    let square = zkc::algebra::mul::<F>(s,s);
+    let next = zkc::poly::domain_points::<F>(square,half);
+    let fold_back = zkc::poly::coset_interpolate::<F>(folded,square);
+    let other = zkc::poly::coset_interpolate::<F>(v,t);
+    let coefficients = zkc::poly::coefficients::<F>(back);
+    let scalar = zkc::poly::evaluate::<F>(back,s);
     return ();
   }
   configure Concrete = Work(F=koala-bear);

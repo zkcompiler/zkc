@@ -31,25 +31,31 @@ def decodeConfiguration (json : Json) : Result ConfigurationDeclaration := do
     ← Decode.pairs (fun j => Decode.name j) Decode.string implementations⟩
 
 def termIdentity (arguments : List (Name × String)) : Term → Result String
-  | .root name => lookup name arguments
+  | .root name => if name.startsWith "$" then pure (name.drop 1).toString else lookup name arguments
   | .project base member => do Bindings.associatedIdentity (← termIdentity arguments base) member
-  | .apply _ _ => throw "generic-application"
+  | .apply head children => do
+      let values ← children.mapM (termIdentity arguments)
+      let kinds ← Logical.parameterKinds head
+      ensure (values.length == kinds.length) "generic-type-arity"
+      let text := if kinds.isEmpty then head else if kinds matches [.domain _] then
+          head ++ ":" ++ values.headD ""
+        else head ++ "<" ++ String.intercalate "," values ++ ">"
+      return (← Logical.parse text).spelling
 
 def specializeType (arguments : List (Name × String)) (ty : ValueType) : Result Bindings.ValueType := do
-  let identity ← match ty.domain with
-    | none => pure ""
-    | some term => termIdentity arguments term
-  let result := Bindings.ValueType.mk ty.kind identity ""
-  ensure (result.valid false) "generic-specialized-type"
-  return result
+  Bindings.valueType false (← termIdentity arguments ty.term)
 
 private def knownIdentity (known : List (Term × String)) : Term → Option String
-  | .root name => (known.find? fun p => decide (p.1 = .root name)).map Prod.snd
+  | .root name => if name.startsWith "$" then some (name.drop 1).toString
+      else (known.find? fun p => decide (p.1 = .root name)).map Prod.snd
   | .project base member =>
       match known.find? (fun p => decide (p.1 = .project base member)) with
       | some p => some p.2
       | none => do (Bindings.associatedIdentity (← knownIdentity known base) member).toOption
-  | .apply _ _ => none
+  | .apply head children => do
+      if let some (_, value) := known.find? (fun p => decide (p.1 = .apply head children)) then return value
+      let values ← children.mapM (knownIdentity known)
+      constantIdentity (.apply head (values.map fun v => .root ("$" ++ v)))
 
 private def addKnown (known : List (Term × String)) (term : Term) (value : String) : Result (List (Term × String)) := do
   if let some existing := knownIdentity known term then
@@ -80,6 +86,11 @@ def consistent (checked : CheckedDefinition) (arguments : List (Name × String))
       if let .project base member := term then
         if let some root := knownIdentity known base then
           ensure ((← Bindings.associatedIdentity root member) == value) "binding-requirement"
+      if let .apply head children := term then
+        if let some values := children.mapM (knownIdentity known) then
+          let some actual := constantIdentity (.apply head (values.map fun v => .root ("$" ++ v)))
+            | throw "generic-specialized-type"
+          ensure (actual == value) "binding-requirement"
     if known.length == before then break
   for p in facts do
     if let .relation name terms := p then
@@ -138,13 +149,13 @@ def applicationArguments (definition : Definition) (fixed : List (Name × String
     (remaining.map Prod.fst).zip actual
 
 def substituteTerm (arguments : List (Name × Term)) : Term → Result Term
-  | .root name => lookup name arguments
+  | .root name => if name.startsWith "$" then pure (.root name) else lookup name arguments
   | .project parent member => return .project (← substituteTerm arguments parent) member
-  | .apply _ _ => throw "generic-application"
+  | .apply head children => return .apply head (← children.mapM (substituteTerm arguments))
 
 def applicationSignature (definition : Definition) (arguments : List (Name × Term)) : Result Signature := do
   let ty := fun (value : ValueType) => do
-    return { value with domain := ← value.domain.mapM (substituteTerm arguments) }
+    return { value with body := ← value.body.mapM (substituteTerm arguments) }
   let needs ← definition.requirements.mapM fun p => do
     match p with
     | .equal a b => return .equal (← substituteTerm arguments a) (← substituteTerm arguments b)
@@ -183,7 +194,7 @@ def library (json : Json) : Result Library := do
   let definitions ← (← Decode.array declarations limits.definitions).mapM decodeDefinition
   let configurations ← (← Decode.array configurations limits.definitions).mapM decodeConfiguration
   let names := definitions.map Definition.name ++ configurations.map ConfigurationDeclaration.name
-  ensure (unique names && names.all (fun n => !(n.contains '.'))) "generic-duplicate-name"
+  ensure (unique names) "generic-duplicate-name"
   -- Provisional records check configurations against public signatures only;
   -- every body is checked below before any record escapes formation.
   let signatures ← definitions.mapM fun d => do

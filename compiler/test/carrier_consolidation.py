@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Profile syntax elaborates once; current consumers only execute bindings."""
+"""Installed source imports elaborate to exact common operation bindings."""
 import copy
 import json
 from pathlib import Path
@@ -20,12 +20,14 @@ def run(command, path, refuses=None):
 directory = records()
 directory = Path(directory)
 text = directory / "source.pir"
-text.write_text('''module "arkworks.bls12-381/1" {
-      fn Add(x: field, y: field) -> (field) {
-        [sum] let z = field::add(x, y); return(z);
+text.write_text('''module {
+      use zkc::algebra;
+      bind "field.add" = field.add(bls12-381.fr) using "arkworks/field.add";
+      fn Add(x: bls12-381.fr::Element, y: bls12-381.fr::Element) -> (bls12-381.fr::Element) {
+        [sum] let z = "field.add"(x, y); return(z);
       }
       protocol Main {
-        roles(P); inputs(P x: field, P y: field); outputs(P field);
+        roles(P); inputs(P x: bls12-381.fr::Element, P y: bls12-381.fr::Element); outputs(P bls12-381.fr::Element);
         local [step] P: let z = Add(x, y); return(z);
       }
       instance root: Main { roles(P=P); } entry main=root;
@@ -50,8 +52,8 @@ assert json.loads(run("protocol-compile", text)) == json.loads(
     run("protocol-compile", explicit))
 
 # Parsing/formatting stays structural, including unknown future contracts.
-profile_text = text.read_text()
-text.write_text(profile_text.replace("field::add(x, y)", "transcript::observe::future(x, y)"))
+imported_text = text.read_text()
+text.write_text(imported_text.replace('"field.add"(x, y)', "transcript::observe::future(x, y)"))
 run("protocol-format", text)
 run("protocol-source", text, "source-name-unresolved")
 
@@ -78,12 +80,15 @@ for name in ("two-factor", "committed-two-factor", "dleq", "group-exchange"):
         if contract.startswith("curve.") and contract != "curve.response":
             assert args == ["bls12-381.g1"]
 
-# Binding generation cannot capture a top-level declaration's symbol.
-text.write_text(profile_text.replace("Add", "field.add"))
+# Automatic binding generation cannot capture a declaration's symbol.
+automatic = imported_text.replace(
+    '      bind "field.add" = field.add(bls12-381.fr) using "arkworks/field.add";\n', "")
+automatic = automatic.replace('"field.add"(x, y)', 'zkc::algebra::add(x, y)')
+text.write_text(automatic.replace("Add", "__binding_0"))
 collision = json.loads(run("protocol-source", text))
-assert collision[1][0][0] == "field.add_"
-assert collision[2][0][4][0][2] == "field.add_"
-assert collision[2][0][5] == ["field.add", []]
+assert collision[1][0][0] != "__binding_0"
+assert collision[2][0][4][0][2] == collision[1][0][0]
+assert collision[2][0][5] == ["__binding_0", []]
 
 
 print(f"carrier consolidation: {commands.save()} tool checks passed")

@@ -41,14 +41,14 @@ previously chosen by the same profile string.
 ## Generic definitions and closed selections
 
 Ordinary `module { ... }` authoring supports generic definitions and explicit
-semantic and implementation bindings. The two supported BLS module headings
-are notation conveniences: [interactive carrier admission](../compiler/carrier-consolidation.md#authoring-and-admission)
-resolves their defaults before common admission. They are not a second runtime
-profile interpreter. The same common carrier holds their explicit selected
-contracts and fully qualified logical and physical ports.
+semantic and implementation bindings. Source APIs resolve through explicit
+imports from the installed modules. Historical BLS module headings and their
+defaults are removed. [Interactive carrier admission](../compiler/carrier-consolidation.md#authoring-and-admission)
+still checks explicit selected contracts and fully qualified logical and physical
+ports independently of authoring imports.
 
 The [frontend checker](../../compiler/lib/Frontend/Semantics/Check.cpp) resolves
-source profiles and static requirements. The
+imported declarations and static requirements. The
 [installed kernel catalog](../../compiler/lib/Contracts/Kernels.cpp) supplies
 operation implementation selection. Rust checks original-source maps and actual
 bindings; the independent source reference executes its supported typed regions.

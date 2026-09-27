@@ -224,9 +224,9 @@ save_contract(c)
 save_candidate(proof)
 for changed in [
     original.replace(
-        "field::equal::<F>(subject, expected)", "field::equal::<F>(subject, subject)", 1
+        "zkc::algebra::equal::<F>(subject, expected)", "zkc::algebra::equal::<F>(subject, subject)", 1
     ),
-    original.replace("[equation_guard] control::require(ok);", ""),
+    original.replace("[equation_guard] zkc::core::require(ok);", ""),
     original.replace(
         "Verify(x, y, ctx, admitted)", "IgnoreCheck(x, y, ctx, admitted)"
     ),
@@ -245,7 +245,7 @@ for changed in [
 
 # Even an explicitly re-admitted digest cannot turn a computation into a guard.
 source.write_text(
-    original.replace("[equation_guard] control::require(ok);", "")
+    original.replace("[equation_guard] zkc::core::require(ok);", "")
 )
 current = json.loads(call(compiler, "claim-inspect", source, "main"))
 stale_guard = copy.deepcopy(c)

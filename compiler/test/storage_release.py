@@ -98,15 +98,15 @@ for ty in ["rng", "transcript", "nonce", "opening_state", "prover_key", "verifie
     else:
         run("protocol-import", json.dumps(resource_plan))
 
-# Readable profile convenience reaches the identical storage-only pass.
-profile_text = source.replace('module {\n  bind both = bool.and();',
-                              'module "arkworks.multilinear.bls12-381/1" {').replace('= both(', '= bool.and(')
-profile_source = json.loads(run("protocol-source", profile_text))
-profile_dense = json.loads(run("protocol-compile", json.dumps(profile_source)))
-profile_released = json.loads(
-    run("protocol-compile", json.dumps(profile_source), "--release-storage")
+# Installed source imports reach the identical storage-only pass.
+imported_text = source.replace('module {\n  bind both = bool.and();',
+                              'module { use zkc::core;').replace('= both(', '= zkc::core::and(')
+imported_source = json.loads(run("protocol-source", imported_text))
+imported_dense = json.loads(run("protocol-compile", json.dumps(imported_source)))
+imported_released = json.loads(
+    run("protocol-compile", json.dumps(imported_source), "--release-storage")
 )
-assert erase(profile_released) == profile_dense
+assert erase(imported_released) == imported_dense
 
 # Independently supplied MLIR must reject a release before the later use.
 lines = ir.splitlines()

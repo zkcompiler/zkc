@@ -27,211 +27,6 @@ impl Limits {
     pub const TOTAL_VALUE_BYTES: usize = 256 * 1024 * 1024;
 }
 
-/// Operation port shapes. Nominal instantiation is a separate check;
-/// this table does not authorize a physical implementation.
-pub(crate) fn operation_shape(name: &str) -> Option<KernelSignature> {
-    use Type::*;
-    if let Some(kind) = name.strip_prefix("transcript.observe.") {
-        let ty = Type::parse_kind(kind).ok()?;
-        return ty.is_serializable().then(|| KernelSignature {
-            inputs: vec![Transcript, ty],
-            outputs: vec![Transcript],
-            attributes: AttributeRule::MessageOrigin,
-        });
-    }
-    let (inputs, outputs, attributes): (&[Type], &[Type], AttributeRule) = match name {
-        "oracle.commit" => (
-            &[Vector, Index],
-            &[Commitment, OpeningState],
-            AttributeRule::None,
-        ),
-        "oracle.open" => (
-            &[OpeningState, Index],
-            &[Vector, Proof],
-            AttributeRule::None,
-        ),
-        "oracle.check" => (
-            &[Commitment, Index, Index, Index, Vector, Proof],
-            &[Bool],
-            AttributeRule::None,
-        ),
-        "commitments.empty" => (&[], &[Commitments], AttributeRule::None),
-        "commitments.append" => (
-            &[Commitments, Commitment],
-            &[Commitments],
-            AttributeRule::None,
-        ),
-        "commitments.at" => (&[Commitments, Index], &[Commitment], AttributeRule::None),
-        "commitments.length" => (&[Commitments], &[Index], AttributeRule::None),
-        "opening_states.empty" => (&[], &[OpeningStates], AttributeRule::None),
-        "opening_states.append" => (
-            &[OpeningStates, OpeningState],
-            &[OpeningStates],
-            AttributeRule::None,
-        ),
-        "opening_states.at" => (
-            &[OpeningStates, Index],
-            &[OpeningState],
-            AttributeRule::None,
-        ),
-        "opening_states.length" => (&[OpeningStates], &[Index], AttributeRule::None),
-        "index.constant" => (&[], &[Index], AttributeRule::Unsigned64),
-        "index.add" | "index.sub" | "index.mul" | "index.div" | "index.mod" => {
-            (&[Index, Index], &[Index], AttributeRule::None)
-        }
-        "index.equal" | "index.less" => (&[Index, Index], &[Bool], AttributeRule::None),
-        "external.monero.init" => (&[Indices], &[Indices], AttributeRule::None),
-        "external.monero.hash" => (&[Indices], &[Indices], AttributeRule::None),
-        "external.monero.update" => (
-            &[Indices, Indices],
-            &[Indices, Indices],
-            AttributeRule::None,
-        ),
-        "external.openvm.init" => (&[], &[Indices], AttributeRule::None),
-        "external.openvm.observe" => (&[Indices, Indices], &[Indices], AttributeRule::None),
-        "external.openvm.sample" => (&[Indices], &[Indices, Index], AttributeRule::None),
-        "external.openvm.sample_ext" => (&[Indices], &[Indices, Indices], AttributeRule::None),
-        "external.openvm.sample_bits" => {
-            (&[Indices, Index], &[Indices, Index], AttributeRule::None)
-        }
-        "external.openvm.check_witness" => (
-            &[Indices, Index, Index],
-            &[Indices, Bool],
-            AttributeRule::None,
-        ),
-        "indices.empty" => (&[], &[Indices], AttributeRule::None),
-        "indices.append" => (&[Indices, Index], &[Indices], AttributeRule::None),
-        "indices.at" => (&[Indices, Index], &[Index], AttributeRule::None),
-        "indices.length" => (&[Indices], &[Index], AttributeRule::None),
-        "vector.get" => (&[Vector, Index], &[Field], AttributeRule::None),
-        "vector.slice" => (&[Vector, Index, Index], &[Vector], AttributeRule::None),
-        "vector.length" => (&[Vector], &[Index], AttributeRule::None),
-        "vector.rotate" => (&[Vector, Index], &[Vector], AttributeRule::None),
-        "vector.interleave" => (&[Vector, Vector], &[Vector], AttributeRule::None),
-        "vector.prefix_product" => (&[Vector], &[Vector], AttributeRule::None),
-        "vector.prefix_sum" => (&[Vector], &[Vector], AttributeRule::None),
-        "vector.inverse" => (&[Vector], &[Vector], AttributeRule::None),
-        "vector.embed" => (&[Vector], &[Vector], AttributeRule::None),
-        "vector.fill" => (&[Field, Index], &[Vector], AttributeRule::None),
-        "vector.geometric" => (&[Field, Index], &[Vector], AttributeRule::None),
-        "field.from_index" => (&[Index], &[Field], AttributeRule::None),
-        "poly.coefficient_count" => (&[Polynomial], &[Index], AttributeRule::None),
-        "poly.coset_evaluate" => (&[Polynomial, Field, Index], &[Vector], AttributeRule::None),
-        "poly.coset_interpolate" => (&[Vector, Field], &[Polynomial], AttributeRule::None),
-        "poly.domain_point" => (&[Field, Index, Index], &[Field], AttributeRule::None),
-        "poly.domain_root" => (&[Index], &[Field], AttributeRule::None),
-        "poly.domain_points" => (&[Field, Index], &[Vector], AttributeRule::None),
-        "poly.even_odd_fold" => (&[Vector, Field, Field], &[Vector], AttributeRule::None),
-        "poly.divide_opening" => (
-            &[Polynomial, Field, Field],
-            &[Polynomial],
-            AttributeRule::None,
-        ),
-        "poly.opening_quotient" => (
-            &[Vector, Field, Field, Field],
-            &[Vector],
-            AttributeRule::None,
-        ),
-        "field.sub" => (&[Field, Field], &[Field], AttributeRule::None),
-        "field.neg" | "field.inverse" | "field.embed" => (&[Field], &[Field], AttributeRule::None),
-        "matrix.mul_vector" | "matrix.transpose_mul_vector" => {
-            (&[Matrix, Vector], &[Vector], AttributeRule::None)
-        }
-        "matrix.bilinear" => (&[Matrix, Vector, Vector], &[Field], AttributeRule::None),
-        "matrix.identity_check" => (&[Matrix], &[Bool], AttributeRule::MatrixIdentity),
-        "matrix.shape_check" => (&[Matrix], &[Bool], AttributeRule::MatrixDimensions),
-        "vector.constant" => (&[], &[Vector], AttributeRule::FieldDecimals),
-        "vector.scatter_sum" => (&[Vector], &[Vector], AttributeRule::ScatterShape),
-        "vector.empty" => (&[], &[Vector], AttributeRule::None),
-        "vector.append" => (&[Vector, Field], &[Vector], AttributeRule::None),
-        "vector.splat" | "vector.powers" => (&[Field], &[Vector], AttributeRule::NaturalIndex),
-        "vector.add" | "vector.sub" | "vector.mul" | "vector.concat" | "vector.kronecker" => {
-            (&[Vector, Vector], &[Vector], AttributeRule::None)
-        }
-        "vector.scale" => (&[Vector, Field], &[Vector], AttributeRule::None),
-        "vector.sum" => (&[Vector], &[Field], AttributeRule::None),
-        "vector.dot" => (&[Vector, Vector], &[Field], AttributeRule::None),
-        "vector.split" => (&[Vector], &[Vector, Vector], AttributeRule::None),
-        "vector.at" => (&[Vector], &[Field], AttributeRule::NaturalIndex),
-        "vector.length_check" => (&[Vector], &[Bool], AttributeRule::NaturalIndex),
-        "vector.gather" => (&[Vector], &[Vector], AttributeRule::NaturalIndices),
-        "vector.matvec" => (&[Vector, Vector], &[Vector], AttributeRule::MatrixShape),
-        "vector.from_point" | "poly.equality_weights" => (&[Point], &[Vector], AttributeRule::None),
-        "vector.to_point" => (&[Vector], &[Point], AttributeRule::None),
-        "vector.from_table" => (&[Table], &[Vector], AttributeRule::None),
-        "vector.to_table" => (&[Vector], &[Table], AttributeRule::None),
-        "poly.from_coefficients" => (&[Vector], &[Polynomial], AttributeRule::None),
-        "poly.coefficients" => (&[Polynomial], &[Vector], AttributeRule::None),
-        "poly.degree_check" => (&[Polynomial], &[Bool], AttributeRule::NaturalIndex),
-        "poly.univariate_evaluate" => (&[Polynomial, Field], &[Field], AttributeRule::None),
-        "poly.univariate_boundary" => (&[Polynomial], &[Field], AttributeRule::None),
-        "random.vector" => (&[Rng], &[Vector, Rng], AttributeRule::NaturalIndex),
-        "curve.neg" => (&[Group], &[Group], AttributeRule::None),
-        "curve.nonidentity" => (&[Group], &[Bool], AttributeRule::None),
-        "curve.msm" => (&[Vector, Groups], &[Group], AttributeRule::None),
-        "curve.scale_each" => (&[Vector, Groups], &[Groups], AttributeRule::None),
-        "curve.vector_add" | "curve.concat" => (&[Groups, Groups], &[Groups], AttributeRule::None),
-        "curve.vector_scale" => (&[Groups, Field], &[Groups], AttributeRule::None),
-        "curve.split" => (&[Groups], &[Groups, Groups], AttributeRule::None),
-        "pairing.check" => (&[Groups, Groups], &[Bool], AttributeRule::None),
-        "field.constant" => (&[], &[Field], AttributeRule::FieldDecimal),
-        "field.add" | "field.mul" => (&[Field, Field], &[Field], AttributeRule::None),
-        "field.equal" => (&[Field, Field], &[Bool], AttributeRule::None),
-        "bool.and" | "bool.or" => (&[Bool, Bool], &[Bool], AttributeRule::None),
-        "bool.not" => (&[Bool], &[Bool], AttributeRule::None),
-        "control.require" => (&[Bool], &[], AttributeRule::None),
-        "poly.product_sum" => (&[Table, Table], &[Field], AttributeRule::None),
-        "poly.product_round" => (&[Table, Table], &[Round], AttributeRule::None),
-        "poly.boundary" => (&[Round], &[Field], AttributeRule::None),
-        "poly.round_evaluate" => (&[Round, Field], &[Field], AttributeRule::None),
-        "poly.fold" => (&[Table, Field], &[Table], AttributeRule::None),
-        "poly.evaluate" => (&[Table, Point], &[Field], AttributeRule::None),
-        "poly.empty_point" => (&[], &[Point], AttributeRule::None),
-        "poly.append_point" => (&[Point, Field], &[Point], AttributeRule::None),
-        "pcs.commit" => (
-            &[ProverKey, Table],
-            &[Commitment, OpeningState],
-            AttributeRule::None,
-        ),
-        "pcs.open" => (&[OpeningState, Point], &[Field, Proof], AttributeRule::None),
-        "pcs.check" => (
-            &[VerifierKey, Commitment, Point, Field, Proof],
-            &[Bool],
-            AttributeRule::None,
-        ),
-        "pcs.equal" => (&[Commitment, Commitment], &[Bool], AttributeRule::None),
-        "curve.generator" => (&[], &[Group], AttributeRule::None),
-        "curve.add" => (&[Group, Group], &[Group], AttributeRule::None),
-        "curve.scale" => (&[Group, Field], &[Group], AttributeRule::None),
-        "curve.equal" => (&[Group, Group], &[Bool], AttributeRule::None),
-        "curve.empty" => (&[], &[Groups], AttributeRule::None),
-        "curve.append" => (&[Groups, Group], &[Groups], AttributeRule::None),
-        "curve.at" => (&[Groups], &[Group], AttributeRule::NaturalIndex),
-        "curve.get" => (&[Groups, Index], &[Group], AttributeRule::None),
-        "curve.length" => (&[Groups], &[Index], AttributeRule::None),
-        "curve.commit" => (&[Groups, Nonce], &[Groups, Nonce], AttributeRule::None),
-        "curve.response" => (&[Field, Field, Nonce], &[Field], AttributeRule::None),
-        "transcript.challenge" => (
-            &[Transcript],
-            &[Field, Transcript],
-            AttributeRule::ChallengeOrigin,
-        ),
-        "random.index" => (&[Rng, Index], &[Index, Rng], AttributeRule::None),
-        "transcript.draw_index" => (
-            &[Transcript, Index],
-            &[Index, Transcript],
-            AttributeRule::ChallengeOrigin,
-        ),
-        "random.draw" => (&[Rng], &[Field, Rng], AttributeRule::None),
-        _ => return None,
-    };
-    Some(KernelSignature {
-        inputs: inputs.to_vec(),
-        outputs: outputs.to_vec(),
-        attributes,
-    })
-}
-
 /// History transitions forbidden under private-tag local matching. External
 /// transcript states are ordinary checked data, so their attribute rules do not
 /// identify this scheduling effect. Construction and stateless hashing remain
@@ -251,6 +46,7 @@ pub(crate) fn observes_or_samples_history(contract: &str) -> bool {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
+    FixedVector,
     Variant,
     ResourceUnit,
     Index,
@@ -279,6 +75,7 @@ pub enum Type {
 impl Type {
     pub fn name(self) -> &'static str {
         match self {
+            Self::FixedVector => "fixed_vector",
             Self::Variant => "variant",
             Self::ResourceUnit => "resource_unit",
             Self::Index => "index",
@@ -305,9 +102,18 @@ impl Type {
             Self::Groups => "groups",
         }
     }
+    /// Conservative treatment when only the constructor head is known.
+    /// `FixedVector` and `Variant` return true because their arguments are absent;
+    /// ground values must use `PhysicalType::is_affine` or
+    /// `LogicalType::is_duplicable` to check their actual permissions.
     pub fn is_affine(self) -> bool {
         match self {
-            Self::Variant | Self::ResourceUnit | Self::Rng | Self::Nonce | Self::Transcript => true,
+            Self::FixedVector
+            | Self::Variant
+            | Self::ResourceUnit
+            | Self::Rng
+            | Self::Nonce
+            | Self::Transcript => true,
             Self::Index
             | Self::Indices
             | Self::Matrix
@@ -331,7 +137,8 @@ impl Type {
     }
     pub fn is_serializable(self) -> bool {
         match self {
-            Self::Variant
+            Self::FixedVector
+            | Self::Variant
             | Self::ResourceUnit
             | Self::Rng
             | Self::Nonce
@@ -357,19 +164,22 @@ impl Type {
             | Self::Groups => true,
         }
     }
-    /// Local storage may be dropped independently of whether it has a wire
-    /// representation. Provider state remains affine and is not releasable.
-    /// Logical resource units are droppable but never duplicable.
-    /// Positive permission to alias immutable local custody. Duplication and
-    /// discard are independent permissions, explicitly checked here.
-    /// Unknown/abstract types are rejected before a Type can be constructed.
+    /// Copy permission guaranteed by the constructor head alone.
+    /// `FixedVector` and `Variant` conservatively return false; their complete
+    /// arguments may permit copying. Use `LogicalType::is_duplicable` or
+    /// `PhysicalType::is_duplicable` for ground values.
     pub fn is_duplicable(self) -> bool {
         self != Self::ResourceUnit && self.is_discardable()
     }
+    /// Drop permission guaranteed by the constructor head alone.
+    /// `FixedVector` and `Variant` conservatively return false; use
+    /// `LogicalType::is_discardable` or `PhysicalType::is_discardable` for ground
+    /// values. Local storage can be droppable without a wire codec, and logical
+    /// resource units are droppable but never duplicable.
     pub fn is_discardable(self) -> bool {
         match self {
             Self::ResourceUnit => true,
-            Self::Variant | Self::Rng | Self::Nonce | Self::Transcript => false,
+            Self::FixedVector | Self::Variant | Self::Rng | Self::Nonce | Self::Transcript => false,
             Self::Index
             | Self::Indices
             | Self::Matrix
@@ -393,6 +203,7 @@ impl Type {
     }
     pub(crate) fn parse_kind(name: &str) -> Result<Self, AdmissionError> {
         let ty = match name {
+            "fixed_vector" => Self::FixedVector,
             "resource_unit" => Self::ResourceUnit,
             "index" => Self::Index,
             "indices" => Self::Indices,
@@ -464,6 +275,8 @@ pub enum ErrorCode {
     Natural,
     Stage,
     Type,
+    /// A logical type has no installed or compatible physical representation.
+    Representation,
     Symbol,
     Signature,
     Ssa,
@@ -476,6 +289,38 @@ pub enum ErrorCode {
     Terminal,
     Backend,
     Correspondence,
+}
+impl ErrorCode {
+    /// Stable admission category name, independent of diagnostic prose.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "Json",
+            Self::Limit => "Limit",
+            Self::Record => "Record",
+            Self::Name => "Name",
+            Self::Natural => "Natural",
+            Self::Stage => "Stage",
+            Self::Type => "Type",
+            Self::Representation => "Representation",
+            Self::Symbol => "Symbol",
+            Self::Signature => "Signature",
+            Self::Ssa => "Ssa",
+            Self::Site => "Site",
+            Self::Attributes => "Attributes",
+            Self::Capture => "Capture",
+            Self::Cycle => "Cycle",
+            Self::Role => "Role",
+            Self::Parameters => "Parameters",
+            Self::Terminal => "Terminal",
+            Self::Backend => "Backend",
+            Self::Correspondence => "Correspondence",
+        }
+    }
+}
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AdmissionError {
@@ -492,7 +337,7 @@ impl AdmissionError {
 }
 impl fmt::Display for AdmissionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}: {}", self.code, self.detail)
+        write!(f, "{}: {}", self.code, self.detail)
     }
 }
 impl std::error::Error for AdmissionError {}

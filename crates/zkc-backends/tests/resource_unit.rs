@@ -82,7 +82,11 @@ fn exact_nominal_formation_and_no_wire_permission() {
     assert!(!a.kind().is_duplicable());
     assert!(a.kind().is_discardable());
     assert!(a.codec().is_none());
-    assert!(!PhysicalType::default_for(a.clone()).is_serializable());
+    assert!(
+        !PhysicalType::default_for(a.clone())
+            .unwrap()
+            .is_serializable()
+    );
     assert_eq!(a.kind(), Type::ResourceUnit);
     for (bad, detail) in [
         ("resource_unit", "explicit nominal identity required"),
@@ -101,7 +105,7 @@ fn exact_nominal_formation_and_no_wire_permission() {
     }
     refused_as(
         PhysicalType::parse("resource_unit:Slot.A@host.resource/1"),
-        ErrorCode::Type,
+        ErrorCode::Representation,
         "representation does not implement logical type",
     );
     let domain = format!("A{}", "b".repeat(127));

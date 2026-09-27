@@ -1,6 +1,11 @@
 module {
+  use zkc::algebra::{
+    Field,
+    PrimeField
+  };
+  use zkc::algebra;
   fn Twice<F: domain Field>(x: F::Element) -> F::Element requires (Field(F)) {
-    [sum] let y = field::add::<F>(x, x);
+    [sum] let y = zkc::algebra::add::<F>(x, x);
     return y;
   }
 

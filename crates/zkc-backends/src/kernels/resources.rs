@@ -110,3 +110,144 @@ pub(crate) fn apply(
         }
     })())
 }
+
+/// Independent native port facts, also used for exact implementation assembly.
+pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::{curve, random, transcript};
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        curve::operation(
+            "curve.commit",
+            &[Groups, Nonce],
+            &[Groups, Nonce],
+            AttributeRule::None,
+        ),
+        curve::operation(
+            "curve.response",
+            &[Field, Field, Nonce],
+            &[Field],
+            AttributeRule::None,
+        ),
+        transcript::challenge(
+            "transcript.challenge",
+            &[Transcript],
+            &[Field, Transcript],
+            AttributeRule::ChallengeOrigin,
+        ),
+        random::operation(
+            "random.index",
+            &[Rng, Index],
+            &[Index, Rng],
+            AttributeRule::None,
+        ),
+        transcript::challenge(
+            "transcript.draw_index",
+            &[Transcript, Index],
+            &[Index, Transcript],
+            AttributeRule::ChallengeOrigin,
+        ),
+        random::operation("random.draw", &[Rng], &[Field, Rng], AttributeRule::None),
+        random::operation(
+            "random.vector",
+            &[Rng],
+            &[Vector, Rng],
+            AttributeRule::NaturalIndex,
+        ),
+    ]
+};
+pub(crate) const OBSERVATIONS: &[crate::bindings::Contract] = {
+    use crate::bindings::transcript;
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        transcript::observation(
+            "transcript.observe.index",
+            &[Transcript, Index],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.indices",
+            &[Transcript, Indices],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.commitments",
+            &[Transcript, Commitments],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.bool",
+            &[Transcript, Bool],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.field",
+            &[Transcript, Field],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.matrix",
+            &[Transcript, Matrix],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.vector",
+            &[Transcript, Vector],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.polynomial",
+            &[Transcript, Polynomial],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.round",
+            &[Transcript, Round],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.table",
+            &[Transcript, Table],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.point",
+            &[Transcript, Point],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.group",
+            &[Transcript, Group],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.groups",
+            &[Transcript, Groups],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.commitment",
+            &[Transcript, Commitment],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.observe.proof",
+            &[Transcript, Proof],
+            &[Transcript],
+            AttributeRule::MessageOrigin,
+        ),
+    ]
+};

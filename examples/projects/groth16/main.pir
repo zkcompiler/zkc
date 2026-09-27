@@ -1,5 +1,7 @@
 // Protocol schedule using separately resolved implementation helpers.
 module {
+  use zkc::algebra::{Vector};
+  use zkc::random::{Rng};
   dependency helpers = library(namespace="zkc.examples", name="groth16", version="1", resolution="source-v1");
   use helpers::{
     RelationMatrices,

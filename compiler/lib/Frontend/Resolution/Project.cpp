@@ -1,7 +1,9 @@
 #include "Project.h"
 #include "../Syntax/Captures.h"
 #include "Declarations.h"
+#include "Installed.h"
 #include "Names.h"
+#include "OperatorRecovery.h"
 #include "Vocabulary.h"
 #include "zkc/Source/Relations.h"
 #include "zkc/Support/Json.h"
@@ -12,6 +14,24 @@
 
 using namespace llvm;
 namespace zkc::frontend::resolution {
+bool Context::operationAvailable(const source::Node &node,
+                                 StringRef contract) const {
+  if (!node.location)
+    return false;
+  const auto found = installedModules.find(node.location->file);
+  if (found == installedModules.end())
+    return false;
+  return llvm::any_of(protocol::sourceOperationExports(), [&](const auto &op) {
+    return op.contract == contract && found->second.count(op.module);
+  });
+}
+bool Context::sourceOperatorAvailable(const source::Node &node,
+                                      StringRef symbol) const {
+  if (!node.location)
+    return false;
+  auto found = sourceOperators.find(node.location->file);
+  return found != sourceOperators.end() && found->second.count(symbol.str());
+}
 const Declaration *Context::lookup(StringRef symbol) const {
   auto it = symbols.find(symbol.str());
   return it == symbols.end() ? nullptr : &declarations[it->second];
@@ -115,7 +135,8 @@ std::string digest(StringRef value) {
 // prefixes would collide only when one happened to match, and whether a project
 // is accepted would depend on content unrelated to that name.
 std::optional<StringRef> reservedPrefix(StringRef name) {
-  for (StringRef prefix : {"src_", "lib_", "client_", "__library_operation_"})
+  for (StringRef prefix :
+       {"src_", "lib_", "client_", "__library_operation_", "__installed_"})
     if (name.starts_with(prefix))
       return prefix;
   return std::nullopt;
@@ -221,6 +242,7 @@ class Resolver {
   size_t work = 0;
   size_t assetCount = 0, assetBytes = 0;
   bool syntaxPartial = false;
+  std::optional<uint32_t> installedRoot;
   static constexpr size_t maxWork = 262144;
 
   std::optional<uint32_t> enclosing(const source::Node &n) const {
@@ -254,6 +276,14 @@ class Resolver {
   }
   void insert(uint32_t module, StringRef name, Binding value,
               const source::Node &node) {
+    if (name == "zkc") {
+      fail(node, "source-name-reserved",
+           "zkc names the installed library namespace");
+      // Keep the rejected declaration's locator for later diagnostics and
+      // collection. Binding/component bookkeeping still visits this syntax.
+      if (value.kind == Binding::Kind::Declaration)
+        context->unavailable.insert(context->declarations[value.index].symbol);
+    }
     if (!modules[module].names.emplace(name.str(), value).second)
       fail(node, "source-name-duplicate", "duplicate name '" + name + "'");
   }
@@ -470,15 +500,16 @@ class Resolver {
       case ReferenceKind::Call:
       case ReferenceKind::QualifiedCall:
         return k == K::Function || k == K::Configuration || k == K::Link ||
-               k == K::Binding;
+               k == K::Binding || k == K::Operation;
       case ReferenceKind::Type:
         return k == K::Record || k == K::Enum || k == K::Interface ||
-               k == K::Component || k == K::Selection;
+               k == K::Component || k == K::Selection || k == K::LogicalType;
       case ReferenceKind::Static:
         return k == K::Constant || k == K::Association || k == K::Relation ||
-               k == K::Interface || k == K::Component || k == K::Selection;
+               k == K::Interface || k == K::Component || k == K::Selection ||
+               k == K::LogicalType;
       case ReferenceKind::Predicate:
-        return k == K::Interface || k == K::Bundle;
+        return k == K::Interface || k == K::Bundle || k == K::Capability;
       case ReferenceKind::Declaration:
         return true;
       }
@@ -558,8 +589,8 @@ class Resolver {
         if (!spend(node))
           return false;
         auto [part, rest] = memberStep(tail);
-        if (rest.empty() && kind == ReferenceKind::Type && part == "Element")
-          return sort == "Field" || sort == "Group";
+        if (rest.empty() && kind == ReferenceKind::Type)
+          return !associatedTypeConstructor(sort, part).empty();
         sort = protocol::associatedMemberSort(sort, part);
         tail = rest;
       }
@@ -639,6 +670,8 @@ class Resolver {
           target = owner.root;
         else if (head == "self")
           target = module;
+        else if (head == "zkc" && installedRoot)
+          target = *installedRoot;
         else if (head == "super") {
           auto p = modules[module].path;
           if (!p.empty()) {
@@ -703,6 +736,8 @@ class Resolver {
     if (parts.front() == "crate")
       b = Binding{Binding::Kind::Module,
                   context->owners[modules[module].owner].root, true};
+    else if (parts.front() == "zkc" && installedRoot)
+      b = Binding{Binding::Kind::Module, *installedRoot, true};
     else if (parts.front() == "self")
       b = Binding{Binding::Kind::Module, module, exportedModule(module)};
     else if (parts.front() == "super") {
@@ -754,7 +789,8 @@ class Resolver {
       return nullptr;
     const bool exactCall =
         kind == ReferenceKind::Call && modules[module].names.count(name);
-    if ((kind == ReferenceKind::Call || kind == ReferenceKind::QualifiedCall) &&
+    if (modules[module].syntax.carrier &&
+        (kind == ReferenceKind::Call || kind == ReferenceKind::QualifiedCall) &&
         !(kind == ReferenceKind::Call && quoted) && !exactCall &&
         installedOperation(name)) {
       auto head = StringRef(name).split('.').first;
@@ -798,7 +834,8 @@ class Resolver {
                               ? targetKind == Declaration::Kind::Record ||
                                     targetKind == Declaration::Kind::Enum
                               : targetKind == Declaration::Kind::Interface ||
-                                    targetKind == Declaration::Kind::Bundle;
+                                    targetKind == Declaration::Kind::Bundle ||
+                                    targetKind == Declaration::Kind::Capability;
         }
       }
       if (!sameNamespace)
@@ -868,7 +905,7 @@ class Resolver {
                   .syntax.dependencies,
               [&](const auto &d) { return d.name == parts.front(); }) ||
           parts.front() == "crate" || parts.front() == "self" ||
-          parts.front() == "super";
+          parts.front() == "super" || parts.front() == "zkc";
       if (!starts) {
         // Generated relation helper names are lexically owned by their view.
         b = lookup(module, name, module, node, false);
@@ -930,7 +967,13 @@ class Resolver {
       if (signature)
         signatureReferences[*origin].insert(b->index);
     }
-    name = d.symbol + b->suffix;
+    if (d.kind == Declaration::Kind::LogicalType ||
+        d.kind == Declaration::Kind::Operation ||
+        d.kind == Declaration::Kind::Capability)
+      context->installedModules[modules[module].file].insert(
+          "zkc::" + llvm::join(d.identity.module, "::"));
+    name = (d.kind == Declaration::Kind::Capability ? d.contract : d.symbol) +
+           b->suffix;
     return &d;
   }
   void ownerOrder(uint32_t owner, std::vector<unsigned> &states) {
@@ -946,6 +989,85 @@ class Resolver {
       ownerOrder(target, states);
     states[owner] = 2;
     context->order.push_back(owner);
+  }
+  void installDeclarations() {
+    // Installed modules are typed declarations, not synthesized source files.
+    // They use the same path, alias, visibility and reference machinery as
+    // captured libraries, with an owner that source cannot impersonate.
+    const uint32_t owner = context->owners.size();
+    const uint32_t root = modules.size();
+    installedRoot = root;
+    context->owners.push_back(
+        {{"zkc", "installed-contracts", "1", "builtin"}, root, {}});
+    modules.push_back({owner, UINT32_MAX, {}, {}, {}});
+    std::map<std::string, uint32_t> installedModules{{"zkc", root}};
+    auto module = [&](StringRef path) {
+      uint32_t parent = root;
+      std::string prefix = "zkc";
+      SmallVector<StringRef> parts;
+      path.split(parts, "::");
+      source::Names names;
+      for (auto part : ArrayRef(parts).drop_front()) {
+        names.push_back(part.str());
+        prefix += "::" + part.str();
+        auto found = installedModules.find(prefix);
+        if (found == installedModules.end()) {
+          const uint32_t child = modules.size();
+          modules.push_back({owner, UINT32_MAX, names, {}, {}});
+          modules[parent].names.emplace(
+              part.str(), Binding{Binding::Kind::Module, child, true});
+          installedModules.emplace(prefix, child);
+          parent = child;
+        } else
+          parent = found->second;
+      }
+      return parent;
+    };
+    auto add = [&](StringRef path, StringRef name, StringRef contract,
+                   Declaration::Kind kind, std::string symbol) {
+      const uint32_t target = module(path);
+      uint32_t index;
+      if (auto existing = context->symbols.find(symbol);
+          existing != context->symbols.end()) {
+        index = existing->second;
+        const auto &d = context->declarations[index];
+        if (d.kind != kind || d.contract != contract || d.owner != owner)
+          report_fatal_error("conflicting installed source declarations");
+      } else {
+        index = context->declarations.size();
+        library::QualifiedDecl id{context->owners[owner].identity,
+                                  modules[target].path, name.str()};
+        context->nominalDeclarations.emplace(library::identity(id), index);
+        context->symbols.emplace(symbol, index);
+        context->declarations.push_back({std::move(id),
+                                         kind,
+                                         owner,
+                                         UINT32_MAX,
+                                         true,
+                                         std::move(symbol),
+                                         path.str() + "::" + name.str(),
+                                         {},
+                                         contract.str()});
+      }
+      if (!modules[target]
+               .names
+               .emplace(name.str(),
+                        Binding{Binding::Kind::Declaration, index, true})
+               .second)
+        report_fatal_error("duplicate installed source export");
+    };
+    for (const auto &type : protocol::sourceTypeExports())
+      add(type.module, type.name, type.constructor,
+          Declaration::Kind::LogicalType,
+          installedTypeSymbol(type.constructor));
+    for (const auto &operation : protocol::sourceOperationExports())
+      add(operation.module, operation.name, operation.contract,
+          Declaration::Kind::Operation,
+          installedOperationSymbol(operation.contract));
+    for (const auto &capability : protocol::sourceCapabilityExports())
+      add(capability.module, capability.name, capability.predicate,
+          Declaration::Kind::Capability,
+          "__installed_capability_" + capability.predicate);
   }
   bool collect() {
     std::map<std::string, uint32_t> identities;
@@ -1015,9 +1137,6 @@ class Resolver {
           fail(syntax, "source-carrier-project",
                "a carrier module is a self-contained representation, not a "
                "project dependency or child module");
-        if (syntax.profile && (owner != 0 || !source.module.empty()))
-          fail(syntax, "source-profile-owner",
-               "profiles may be declared only on the application root");
         uint32_t index = modules.size();
         if (!paths.emplace(std::make_pair(owner, source.module), index).second)
           fail(syntax, "project-module-duplicate",
@@ -1059,6 +1178,9 @@ class Resolver {
     for (auto [owner, record] : enumerate(context->owners)) {
       auto &root = modules[record.root];
       for (const auto &dep : root.syntax.dependencies) {
+        if (dep.name == "zkc")
+          fail(dep, "source-name-reserved",
+               "the zkc namespace belongs to installed source modules");
         auto it = identities.find(ownerIdentity(identity(dep.identity)));
         if (it == identities.end()) {
           fail(dep, "source-dependency-missing",
@@ -1146,6 +1268,10 @@ class Resolver {
                    "', which names only what the compiler generates");
           // Nothing encloses a declaration while declarations are collected,
           // so the refusal marks this one itself.
+          // Retain ordinary invalid names for diagnostics. The installed
+          // namespace alone also needs an internal noncolliding locator.
+          if (*prefix == "__installed_")
+            symbol = "src_" + digest(library::identity(q)).substr(0, 40);
           context->unavailable.insert(symbol);
         }
         auto origin = llvm::join(m.path, ".");
@@ -1173,6 +1299,12 @@ class Resolver {
                node);
       });
       for (const auto &binding : m.syntax.bindings)
+        if (!m.syntax.carrier &&
+            protocol::authoringStage(binding.application.contract) !=
+                protocol::AuthoringStage::Source)
+          fail(binding, "source-operation-stage",
+               "operation is not available to ordinary source bindings");
+      for (const auto &binding : m.syntax.bindings)
         context->bindingContracts.emplace(
             context->declarations[m.names.at(binding.name).index].symbol,
             binding.application.contract);
@@ -1184,7 +1316,10 @@ class Resolver {
             fail(m.syntax, "source-name-duplicate",
                  "dependency alias conflicts with a declaration");
     }
-    context->intervals.resize(modules.size());
+    context->carrier = modules[context->owners[0].root].syntax.carrier;
+    if (!context->carrier)
+      installDeclarations();
+    context->intervals.resize(file);
     for (uint32_t i = 0; i < context->declarations.size(); ++i) {
       const auto &d = context->declarations[i];
       if (d.location)
@@ -1220,7 +1355,8 @@ class Resolver {
     // They participate in qualification, but reserve only their explicit
     // origin.
     for (uint32_t i = 0; i < context->declarations.size(); ++i)
-      claims[context->declarations[i].origin].push_back({i, {}});
+      if (context->declarations[i].file != UINT32_MAX)
+        claims[context->declarations[i].origin].push_back({i, {}});
     for (const auto &m : modules)
       for (const auto &component : m.syntax.libraryComponents) {
         auto i = m.names.at(component.name).index;
@@ -1391,6 +1527,55 @@ class Resolver {
           if (available.insert(dependency).second)
             queue.push_back(dependency);
     }
+    std::vector<uint32_t> operators;
+    for (const auto &m : modules)
+      for (const auto &f : m.syntax.functions)
+        if (f.operatorHook)
+          if (const auto *d = context->lookup(f.name))
+            operators.push_back(d - context->declarations.data());
+    for (uint32_t request = 0; request < modules.size(); ++request) {
+      const auto &m = modules[request];
+      if (m.file == UINT32_MAX)
+        continue;
+      auto visible = publicNames[m.owner];
+      for (const auto &[alias, dependency] :
+           context->owners[m.owner].dependencies)
+        visible.insert(publicNames[dependency].begin(),
+                       publicNames[dependency].end());
+      // Walk callable paths using the resolved module graph. Internal operator
+      // discovery must not spend the authored name-resolution budget, report
+      // module-level lookup errors, or reinterpret opaque module names.
+      std::set<uint32_t> visited;
+      std::vector<uint32_t> pending{context->owners[m.owner].root};
+      while (!pending.empty()) {
+        auto module = pending.back();
+        pending.pop_back();
+        if (!visited.insert(module).second)
+          continue;
+        for (const auto &[name, binding] : modules[module].names) {
+          if (!binding.exported && !inside(request, module))
+            continue;
+          auto target = binding;
+          if (binding.kind == Binding::Kind::Use) {
+            auto alias = aliases.find({module, binding.index});
+            if (alias == aliases.end())
+              continue;
+            target = alias->second;
+          }
+          if (target.kind == Binding::Kind::Declaration &&
+              target.suffix.empty())
+            visible.insert(target.index);
+          else if (target.kind == Binding::Kind::Module &&
+                   modules[target.index].owner == m.owner)
+            pending.push_back(target.index);
+        }
+      }
+      for (auto index : operators) {
+        const auto &d = context->declarations[index];
+        if (visible.count(index))
+          context->sourceOperators[m.file].insert(d.symbol);
+      }
+    }
   }
 
   std::optional<syntax::Content> recover(const syntax::Module &out) {
@@ -1409,11 +1594,19 @@ class Resolver {
           code != "source-private-reexport" && code != "source-import-cycle")
         return {};
     }
+    // Operators have no authored callee reference. Recover their dependencies
+    // from known operand heads before removing the failed declarations.
+    auto operatorReferences = OperatorRecovery(out, *context, maxWork).record();
+    if (!operatorReferences)
+      return {};
     // Every transitive referrer of an unavailable declaration is unavailable.
     // Walk the reverse references once so the work is linear in the
     // references whatever order the declarations appear in.
     std::map<StringRef, std::vector<StringRef>> referrers;
     for (const auto &r : context->references)
+      referrers[r.target].push_back(r.source);
+    // Diagnostic-only edges must not escape into checking or provenance.
+    for (const auto &r : *operatorReferences)
       referrers[r.target].push_back(r.source);
     std::vector<std::string> pending(context->unavailable.begin(),
                                      context->unavailable.end());
@@ -1462,6 +1655,25 @@ public:
     for (uint32_t i = 0; i < modules.size(); ++i)
       for (uint32_t j = 0; j < modules[i].syntax.uses.size(); ++j)
         use(i, j);
+    for (const auto &[site, binding] : aliases) {
+      auto &visible = context->installedModules[modules[site.first].file];
+      if (binding.kind == Binding::Kind::Declaration) {
+        const auto &d = context->declarations[binding.index];
+        if (d.kind == Declaration::Kind::LogicalType ||
+            d.kind == Declaration::Kind::Operation ||
+            d.kind == Declaration::Kind::Capability)
+          visible.insert("zkc::" + llvm::join(d.identity.module, "::"));
+      } else if (binding.kind == Binding::Kind::Module && installedRoot &&
+                 modules[binding.index].owner ==
+                     modules[*installedRoot].owner) {
+        const auto &prefix = modules[binding.index].path;
+        for (const auto &m : modules)
+          if (m.owner == modules[*installedRoot].owner &&
+              m.path.size() >= prefix.size() &&
+              std::equal(prefix.begin(), prefix.end(), m.path.begin()))
+            visible.insert("zkc::" + llvm::join(m.path, "::"));
+      }
+    }
     memberSurfaces();
     for (auto [key, binding] : aliases)
       if (!binding.suffix.empty() &&
@@ -1512,7 +1724,6 @@ public:
       auto kb = ownerIdentity(context->owners[modules[b].owner].identity);
       return std::tie(ka, modules[a].path) < std::tie(kb, modules[b].path);
     });
-    out.profile = modules[context->owners[0].root].syntax.profile;
     out.carrier = modules[context->owners[0].root].syntax.carrier;
     out.location = modules[context->owners[0].root].syntax.location;
     for (auto i : ordered) {
