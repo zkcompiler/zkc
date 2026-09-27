@@ -94,6 +94,9 @@ std::string Analysis::display(TypeId id) const {
 std::string Analysis::display(DomainId id) const {
   return domain(id) ? model->spelling(id) : "<unresolved>";
 }
+std::string Analysis::display(const StaticArgument &argument) const {
+  return model->spelling(argument);
+}
 Expected<CheckedModule> Analysis::checkedModule() const {
   if (!complete()) {
     if (!model->diagnostics.empty()) {

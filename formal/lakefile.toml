@@ -16,6 +16,7 @@ defaultTargets = [
   "vector-service",
   "table-physical-reference",
   "interactive-protocol",
+  "contract-conformance",
   "artifact-reference",
   "relation-reference",
   "iteration-reference",
@@ -90,6 +91,10 @@ root = "Tools.TablePhysical"
 [[lean_exe]]
 name = "interactive-protocol"
 root = "Tools.Interactive"
+
+[[lean_exe]]
+name = "contract-conformance"
+root = "Tools.ContractConformance"
 
 [[lean_exe]]
 name = "artifact-reference"

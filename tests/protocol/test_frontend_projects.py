@@ -262,7 +262,7 @@ def test_family_source_mutations_refuse_exact_boundaries(toolchain, directory, f
         text = replaced(text, ('domain F: field = "bls12-381.fr";', 'domain F: field = "bn254.fr";'))
     elif mutation == "rng-reuse":
         text = replaced(text, ('return (scalar, after);',
-            'let (again, reused) = random::draw::<"bls12-381.fr">(coins); return (again, reused);'))
+            'let (again, reused) = zkc::random::draw::<"bls12-381.fr">(coins); return (again, reused);'))
     elif mutation == "reuse-view":
         text = replaced(text, ('let previous = C::finish(state, ok);',
                                'let previous = C::finish(state, ok); let twice = C::finish(state, ok);'))

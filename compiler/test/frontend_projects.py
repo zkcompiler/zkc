@@ -103,8 +103,9 @@ run(deep.replace(f"{long}::{long}", f"{long}::{long[:3]}"),
 # declaration, an unquoted use of it could mean either, so it refuses; quoting
 # names the declaration here. With no path reading it stays an exact name.
 dotted = f"""module {{
+  use zkc::core;
   dependency bits = {identity('bits')};
-  fn bits.Identity(value: bool) -> bool {{ let out: bool = bool::not(value); return out; }}
+  fn bits.Identity(value: bool) -> bool {{ let out: bool = zkc::core::not(value); return out; }}
   fn Main(value: bool) -> bool {{ return CALL(value); }}
 }}"""
 
@@ -135,7 +136,7 @@ assert callee(run(nested.replace("CALL", "inner.Keep"), {"inner.pir": "module { 
 # is a second reading too, whether it reaches the view directly or through an
 # import.
 field = "Vector<bls12-381.fr::Element>"
-helper = f"""module {{ mod shapes;
+helper = f"""module {{ use zkc::algebra::Vector; mod shapes;
   dependency bits = {identity('bits')};
   fn "HELPER"(statement: {field}, witness: {field}) -> {field} {{ return statement; }}
   fn Main(statement: {field}, witness: {field}) -> {field} {{ return CALL(statement, witness); }}
@@ -155,7 +156,8 @@ for spelling in ("bits.Core_Assemble", "shapes.View_Assemble"):
 # A declaration clause keeps the same rule, although its common record keeps
 # only the spelling. Each clause here names a dotted declaration in this module
 # that is also a path into `bits`; quoted, the project compiles.
-clause_library = f"""module {{ {identity('bits')};
+clause_library = f"""module {{
+  use zkc::algebra::{{Indices}}; {identity('bits')};
   pub protocol P {{ roles(A); return; }}
   pub instance I: P {{ roles(A=A); }}
   pub fn Make(value: bool) -> bool {{ return value; }}
@@ -166,6 +168,7 @@ clause_library = f"""module {{ {identity('bits')};
   pub mod shapes;
 }}"""
 clauses = f"""module {{
+  use zkc::algebra::{{Indices}};
   dependency bits = {identity('bits')};
   protocol "bits.P" {{ roles(A); return; }}
   protocol Q {{ roles(A); dependencies(c: "bits.P"()); invoke c() -> (); return; }}

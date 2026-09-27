@@ -36,6 +36,13 @@ and loop-carried state; it does not turn a participant-local branch into a globa
 protocol choice. Public protocol counts and local runtime bounds remain distinct.
 These features do not imply an unrestricted dependent shape system.
 
+Implementation ownership is independent of the logical vocabulary. Exact
+physical entries may select different algorithms over identical ports without
+changing the source contract or its default implementation. The
+[extension guide](../development/extensions.md) describes build contributions,
+generated native bindings and separately authored runtime/Lean admission.
+Registration supplies neither a preservation theorem nor an observation codec.
+
 ## Separately checked component interfaces
 
 A reusable component interface needs its actual definition/dependency subject,
@@ -102,22 +109,23 @@ registration and build/test commands.
 1. Define the mathematical inputs, results, associated domains, attribute
    meanings and failure conditions. Include shape checks, canonical encodings,
    resource transitions and evidence/assumption boundaries where applicable.
-2. Install the source binding signature and typed MLIR operation. The
+2. Declare the neutral logical signature in
+   [`Contracts/Declarations`](../../compiler/include/zkc/Contracts/Declarations),
+   then connect its typed MLIR operation. The
    [kernel declarations](../../compiler/include/zkc/Dialect/Kernels.td) supply ODS
    structure; the binding/verifier layer checks resolved contracts. A same-named
    operation or same-width representation does not establish compatibility.
 3. Install nominal facts, codecs and applicable representations in the immutable
    [domain catalog](../../compiler/include/zkc/Contracts/Domains.h). Catalog
    membership is separate from a kernel implementation and its semantics.
-4. If the operation or a new logical type has authoring notation, add its
-   operator spelling to
-   [`Operators.h`](../../compiler/lib/Frontend/Semantics/Operators.h) and its type name to
-   [`Types.h`](../../compiler/lib/Frontend/Syntax/Types.h). Notation belongs to the
-   domain's definition; these frontend tables are its temporary home until the
-   catalog is grouped by domain. A spelling is compared with the installed
-   signature where it is used, and
-   [`frontend_data.py`](../../compiler/test/frontend_data.py) compares every
-   entry with its named call.
+4. Add curated type/operation exports and any operator bindings in the owning
+   neutral records. Source labels refer to the same logical signature. Generated
+   descriptors enter ordinary source resolution; there is no central frontend
+   spelling table to extend. Preserve stage restrictions, finite family cases and
+   coherent operand tuples. See the
+   [declaration procedure](../development/extensions.md#logical-contracts-and-source-exports)
+   and [operator rules](../language/data.md#4-operators). An ordinary source
+   record operator needs only its checked, package-owned function.
 5. Implement Rust admission, native advertisement, checked operands/results and
    external-library execution. Bound sizes before allocation and reject length
    mismatch instead of silently truncating iteration. Private resource handles

@@ -8,6 +8,7 @@
 #include "zkc/Frontend/Compile.h"
 #include "zkc/Source/Codec.h"
 #include <limits>
+#include <set>
 
 using namespace llvm;
 using namespace zkc;
@@ -94,6 +95,57 @@ library::CheckedBody directBody(unsigned emptyFields) {
 
 int main() {
   Cases cases;
+  cases.run(
+      "operator discovery cannot hide work exhaustion or publish clients", [&] {
+        auto source = [](unsigned count) {
+          std::string text = R"(module {
+        use zkc::algebra::Field;
+        struct Number(value: index);
+        #[operator(mul)]
+        fn Scale<F: domain Field>(a: Number, b: F::Element) -> F::Element
+            effects (local) {
+          let ignored = map [true] |item| { item };
+          return b;
+        }
+        fn Unrelated(x: bool) -> bool {
+      )";
+          for (unsigned i = 0; i < count; ++i)
+            text += "let x" + std::to_string(i) + " = x;\n";
+          return text + R"(return x; }
+        fn Main<F: domain Field>(a: Number, b: F::Element) -> F::Element
+            effects (local) { return a * b; }
+        configure Closed = Main(F = "koala-bear");
+      })";
+        };
+        auto small = analyze(source(0));
+        auto large = analyze(source(200));
+        complete(small);
+        complete(large);
+        auto account = static_cast<size_t>(WorkAccount::LibraryFormation);
+        require(large.workUsage()[account] > small.workUsage()[account],
+                "discovery work is counted even for an ordinary function");
+        const auto report = model::AnalysisAccess::libraries(large);
+        require(report != nullptr, "retained checked library report");
+        std::set<std::string> clients;
+        for (const auto &client : report->clients)
+          clients.insert(client.first);
+        require(clients == std::set<std::string>{"Scale", "Main"} &&
+                    report->components.empty() && report->interfaces.empty() &&
+                    report->componentBodies.empty(),
+                "probe declarations are not published as checked judgments");
+        WorkLimits limits;
+        limits.libraryFormation = large.workUsage()[account];
+        complete(analyze(source(200), limits));
+        // Spend the extra allowance while examining Unrelated, before Main is
+        // routed. A discarded exploratory diagnostic must still stop admission.
+        limits.libraryFormation = small.workUsage()[account] + 20;
+        auto limited = analyze(source(200), limits);
+        stopped(limited, WorkAccount::LibraryFormation);
+        const auto prefix = model::AnalysisAccess::libraries(limited);
+        require(prefix && prefix->clients.size() == 1 &&
+                    prefix->clients.front().first == "Scale",
+                "only completed judgments survive probe exhaustion");
+      });
   cases.run("overflow-safe atomic counters", [&] {
     const auto max = std::numeric_limits<uint64_t>::max();
     WorkBudget budget({max, max, max, max});

@@ -189,7 +189,7 @@ mod tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     fn ty(name: &str) -> PhysicalType {
-        PhysicalType::default_for(LogicalType::parse(name).unwrap())
+        PhysicalType::default_for(LogicalType::parse(name).unwrap()).unwrap()
     }
 
     fn participant(role: &str, body: Vec<Instruction>) -> Arc<Participant> {

@@ -1,8 +1,12 @@
 module {
+  use zkc::algebra::{Field};
+  use zkc::algebra;
+  use zkc::random::{Rng};
+  use zkc::random;
   fn Select(n: index) -> index { return n; }
   fn Work<F: domain Field>(x: F::Element, coins: Rng<F>) -> (F::Element, Rng<F>) requires (Field(F)) {
-    [draw] let (sample, next_coins) = random::draw::<F>(coins);
-    [double] let next = field::add::<F>(x, x);
+    [draw] let (sample, next_coins) = zkc::random::draw::<F>(coins);
+    [double] let next = zkc::algebra::add::<F>(x, x);
     return (next, next_coins);
   }
   configure WorkField = Work(F = bls12-381.fr);

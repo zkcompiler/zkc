@@ -1,13 +1,17 @@
 // Authoring-layer example: inferred calls remain explicit in common source.
 // The exchange illustrates composition, not a cryptographic proof.
 module {
+  use zkc::algebra::{
+    Field
+  };
+  use zkc::algebra;
   fn One<F: Field>() -> F::Element {
-    let one: F::Element = field::constant() attributes (1);
+    let one: F::Element = zkc::algebra::constant() attributes (1);
     return one;
   }
 
   fn Twice<F: Field>(x: F::Element) -> F::Element {
-    let y = field::add(x, x);
+    let y = zkc::algebra::add(x, x);
     return y;
   }
 

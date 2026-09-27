@@ -148,9 +148,9 @@ for corrupt_attributes in (False, True):
 
 # The potential length failure prevents removal of unused pairing checks.
 duplicate = pairing_source.replace(
-    "[pair] let accepted = pairing::check::<F>(left, right);",
-    "[unused] let unused = pairing::check::<F>(left, right);\n"
-    "    [pair] let accepted = pairing::check::<F>(left, right);")
+    "[pair] let accepted = zkc::curve::pairing_check::<F>(left, right);",
+    "[unused] let unused = zkc::curve::pairing_check::<F>(left, right);\n"
+    "    [pair] let accepted = zkc::curve::pairing_check::<F>(left, right);")
 optimized = verify_pairing(run("protocol-import", duplicate), None, "--canonicalize", "--cse")
 assert optimized.count('"algebra.pairing_check"(') == 2
 

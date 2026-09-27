@@ -65,7 +65,7 @@ impl Value for V {
                 .payload()
                 .iter()
                 .zip(&payload)
-                .any(|(t, v)| PhysicalType::default_for(t.clone()) != v.physical_type())
+                .any(|(t, v)| PhysicalType::default_for(t.clone()).unwrap() != v.physical_type())
         {
             return Err(BackendError::new("variant-payload"));
         }
@@ -91,14 +91,14 @@ impl Value for V {
 
     fn physical_type(&self) -> PhysicalType {
         if let Self::Variant(d, _, _) = self {
-            return PhysicalType::default_for(LogicalType::variant(d.clone()));
+            return PhysicalType::default_for(LogicalType::variant(d.clone())).unwrap();
         }
         let logical = match self {
             Self::Bool(_) => "bool",
             Self::Cap { .. } => "rng:bls12-381.fr",
             _ => "field:bls12-381.fr",
         };
-        PhysicalType::default_for(LogicalType::parse(logical).unwrap())
+        PhysicalType::default_for(LogicalType::parse(logical).unwrap()).unwrap()
     }
     fn type_name(&self) -> &str {
         match self {
@@ -342,7 +342,11 @@ fn fixture_type(kind: &str) -> String {
         return kind.into();
     }
     let identity = match kind {
-        "bool" => return PhysicalType::default_for(LogicalType::parse("bool").unwrap()).spelling(),
+        "bool" => {
+            return PhysicalType::default_for(LogicalType::parse("bool").unwrap())
+                .unwrap()
+                .spelling();
+        }
         "field" | "scalar" => "bls12-381.fr",
         "group" | "groups" => "bls12-381.g1",
         "transcript" => "merlin3.bls12-381.fr64be/1",
@@ -352,7 +356,9 @@ fn fixture_type(kind: &str) -> String {
         _ => "bls12-381.fr",
     };
     let kind = if kind == "scalar" { "field" } else { kind };
-    PhysicalType::default_for(LogicalType::parse(&format!("{kind}:{identity}")).unwrap()).spelling()
+    PhysicalType::default_for(LogicalType::parse(&format!("{kind}:{identity}")).unwrap())
+        .unwrap()
+        .spelling()
 }
 fn fixture_body(body: &mut Json) {
     if let Some(body) = body.as_array_mut() {
@@ -939,7 +945,7 @@ fn send_receive_pending_delivery_and_type_checks() {
     let cut = p.poll().cut().unwrap();
     let packet = p.take_send(&cut).unwrap();
     let mut wrong = packet.clone();
-    wrong.ty = PhysicalType::default_for(LogicalType::parse("bool").unwrap());
+    wrong.ty = PhysicalType::default_for(LogicalType::parse("bool").unwrap()).unwrap();
     assert_eq!(v.deliver(wrong), Err(RuntimeError::Payload));
     let mut wrong = packet.clone();
     wrong.payload = V::Bool(false);
@@ -1010,7 +1016,7 @@ fn malicious_private_public_disguise_rejected_at_both_message_edges() {
     };
     let packet = Packet {
         envelope: request.envelope,
-        ty: PhysicalType::default_for(LogicalType::parse("field:bls12-381.fr").unwrap()),
+        ty: PhysicalType::default_for(LogicalType::parse("field:bls12-381.fr").unwrap()).unwrap(),
         payload: V::PrivateAsField,
     };
     assert!(matches!(v.deliver(packet), Err(RuntimeError::Backend(_))));

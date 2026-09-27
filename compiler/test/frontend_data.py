@@ -35,12 +35,13 @@ def same(authored, expanded):
 
 # --- Constraint bundles -----------------------------------------------------
 BODY = '''{
-    let q = curve::scale(p, k);
+    let q = zkc::curve::scale(p, k);
     return q;
   }'''
 HEAD = ("fn Scale<F: PairingField>(p: F::PairingG1::Element, k: F::Element)"
         " -> F::PairingG1::Element")
 bundled = f'''module {{
+  use zkc::curve;
   bundle Scalars(G) = (ScalarAction(G), Field(G::Scalar));
   bundle PairingArithmetic(F) = (
     Scalars(F::PairingG1), Scalars(F::PairingG2), "="(F::PairingG1::Scalar, F)
@@ -48,6 +49,7 @@ bundled = f'''module {{
   {HEAD} requires (PairingArithmetic(F)) {BODY}
 }}'''
 expanded = f'''module {{
+  use zkc::curve;
   {HEAD} requires (
     ScalarAction(F::PairingG1), Field(F::PairingG1::Scalar),
     ScalarAction(F::PairingG2), Field(F::PairingG2::Scalar),
@@ -129,21 +131,21 @@ TAIL = """
   instance concrete: Demo { roles (P = P, V = V); }
   entry main = concrete;
 """
-struct_source = "module {" + STRUCTS + """
+struct_source = "module { use zkc::algebra;" + STRUCTS + """
   fn MakePair<F: Field>(a: F::Element, b: F::Element) -> Pair<F> {
-    let doubled = field::add(b, b);
+    let doubled = zkc::algebra::add(b, b);
     let p = Pair(y = doubled, x = a);
     return p;
   }
   fn Sum<F: Field>(p: Pair<F>) -> Sums<F> {
-    let total = field::add(p.x, p.y);
+    let total = zkc::algebra::add(p.x, p.y);
     let s = Sums(input = p, sum = total);
     return s;
   }
   fn First<F: Field>(p: Pair<F>) -> F::Element { return p.x; }
   fn Total<F: Field>(s: Sums<F>) -> F::Element {
     let first = First(s.input);
-    let again = field::add(first, s.sum);
+    let again = zkc::algebra::add(first, s.sum);
     return again;
   }
 """ + TAIL.replace("SEED", 'seed: Pair<"koala-bear">').replace("LOCALS", """
@@ -151,20 +153,21 @@ struct_source = "module {" + STRUCTS + """
     local P: let s = Add(p);
     local P: let t = Final(s);""") + "}"
 struct_expanded = """module {
+  use zkc::algebra;
   fn MakePair<F: Field>(a: F::Element, b: F::Element) -> (F::Element, F::Element) {
-    let doubled = field::add(b, b);
+    let doubled = zkc::algebra::add(b, b);
     return (a, doubled);
   }
   fn Sum<F: Field>(p.x: F::Element, p.y: F::Element)
       -> (F::Element, F::Element, F::Element) {
-    let total = field::add(p.x, p.y);
+    let total = zkc::algebra::add(p.x, p.y);
     return (p.x, p.y, total);
   }
   fn First<F: Field>(p.x: F::Element, p.y: F::Element) -> F::Element { return p.x; }
   fn Total<F: Field>(s.input.x: F::Element, s.input.y: F::Element, s.sum: F::Element)
       -> F::Element {
     let first = First(s.input.x, s.input.y);
-    let again = field::add(first, s.sum);
+    let again = zkc::algebra::add(first, s.sum);
     return again;
   }
 """ + TAIL.replace("SEED", 'seed.x: "koala-bear"::Element, P seed.y: "koala-bear"::Element'
@@ -179,7 +182,7 @@ run("protocol-compile", struct_source)
 
 
 def struct_module(body, structs=STRUCTS):
-    return "module {" + structs + body + "}"
+    return "module { use zkc::algebra;" + structs + body + "}"
 
 
 # Written and inferred static arguments, and a struct result annotation, agree.
@@ -199,22 +202,23 @@ assert common(closed) == common(
 
 # An affine leaf keeps its own rule: one read, or one whole-struct use.
 draws = """
+  use zkc::random::{Rng};
   struct Draws<F: domain Field>(coins: Rng<F>, scale: F::Element);
-  fn Spend<F: Field>(d: Draws<F>) -> F::Element { let (r, rest) = random::draw(d.coins); return r; }
+  fn Spend<F: Field>(d: Draws<F>) -> F::Element { let (r, rest) = zkc::random::draw(d.coins); return r; }
   fn Twice<F: Field>(d: Draws<F>) -> F::Element { BODY }
 """
 run("protocol-source", struct_module(draws.replace(
-    "BODY", "let (r, a) = random::draw(d.coins); let (s, b) = random::draw(d.coins); return r;"), ""),
+    "BODY", "let (r, a) = zkc::random::draw(d.coins); let (s, b) = zkc::random::draw(d.coins); return r;"), ""),
     "generic-resource-reuse")
 run("protocol-source", struct_module(draws.replace(
-    "BODY", "let (r, a) = random::draw(d.coins); let s = Spend(d); return r;"), ""),
+    "BODY", "let (r, a) = zkc::random::draw(d.coins); let s = Spend(d); return r;"), ""),
     "generic-resource-reuse")
 common(struct_module(draws.replace("BODY", "let s = Spend(d); return s;"), ""))
 
 # Loops carry and yield structs leaf by leaf, and an invoke passes them whole.
 looped = struct_module("""
   fn Step<F: Field>(p: Pair<F>) -> Pair<F> {
-    let q = Pair(x = p.y, y = field::add(p.x, p.y));
+    let q = Pair(x = p.y, y = zkc::algebra::add(p.x, p.y));
     return q;
   }
   configure Advance = Step(F = "koala-bear");
@@ -277,7 +281,7 @@ for name in ("Proof", "Vector", "Rng"):
 wide = "struct Wide<F: domain Field>(" + ", ".join(f"f{i}: F::Element" for i in range(4097)) + ");"
 refuse("", "source-struct-limit", wide)
 # A struct is not a single value, and a single value is not a struct.
-refuse(USE.replace("BODY", "let b = field::add(p, a); return b;"), "source-struct-value")
+refuse(USE.replace("BODY", "let b = zkc::algebra::add(p, a); return b;"), "source-struct-value")
 refuse(USE.replace("BODY", "let b = Use(a, a); return b;"), "source-struct-value")
 refuse(USE.replace("BODY", "return p;"), "source-annotation-type")
 refuse("fn Bad<F: Field>(a: F::Element) -> Pair<F> { return a; }", "source-struct-value")
@@ -321,7 +325,7 @@ assert [d["name"] for d in inspected["structs"]] == ["Pair", "Sums"]
 
 # --- Operators --------------------------------------------------------------
 # An operator spells an installed operation. The frontend owns the spelling and
-# the installed contract owns the meaning, so no source declares one.
+# the installed contract owns the meaning; these cases use its fixed bindings.
 COMBINE = """
   fn Combine<G: ScalarAction>(alpha: G::Element, base: G::Element, delta: G::Element,
       r: G::Scalar::Element, s: G::Scalar::Element) -> G::Element
@@ -333,7 +337,7 @@ COMBINE = """
 
 
 def operators(body):
-    return "module {" + COMBINE.replace("BODY", body) + "}"
+    return "module { use zkc::algebra; use zkc::curve;" + COMBINE.replace("BODY", body) + "}"
 
 
 with_operators = operators("""
@@ -341,23 +345,25 @@ with_operators = operators("""
     let c = a + -(delta * (r * s - r));
     let d = s * c;""")
 with_calls = operators("""
-    let a = curve::add(curve::add(alpha, base), curve::scale(delta, r));
-    let c = curve::add(a, curve::neg(curve::scale(delta, field::sub(field::mul(r, s), r))));
-    let d = curve::scale(c, s);""")
+    let a = zkc::curve::add(zkc::curve::add(alpha, base), zkc::curve::scale(delta, r));
+    let c = zkc::curve::add(a, zkc::curve::neg(zkc::curve::scale(delta, zkc::algebra::sub(zkc::algebra::mul(r, s), r))));
+    let d = zkc::curve::scale(c, s);""")
 same(with_operators, with_calls)
 
 # Every spelling is the named call over the same operands.
 SPELLINGS = [
-    ("+", "field::add(x, y)", "x", "y"), ("-", "field::sub(x, y)", "x", "y"),
-    ("*", "field::mul(x, y)", "x", "y"), ("+", "curve::add(p, q)", "p", "q"),
-    ("*", "curve::scale(p, x)", "p", "x"), ("*", "curve::scale(p, x)", "x", "p"),
-    ("+", "vector::add(v, w)", "v", "w"), ("-", "vector::sub(v, w)", "v", "w"),
-    ("*", "vector::scale(v, x)", "v", "x"), ("*", "vector::scale(v, x)", "x", "v"),
-    ("+", "index::add(i, j)", "i", "j"), ("-", "index::sub(i, j)", "i", "j"),
-    ("*", "index::mul(i, j)", "i", "j"),
+    ("+", "zkc::algebra::add(x, y)", "x", "y"), ("-", "zkc::algebra::sub(x, y)", "x", "y"),
+    ("*", "zkc::algebra::mul(x, y)", "x", "y"), ("+", "zkc::curve::add(p, q)", "p", "q"),
+    ("*", "zkc::curve::scale(p, x)", "p", "x"), ("*", "zkc::curve::scale(p, x)", "x", "p"),
+    ("+", "zkc::algebra::vector_add(v, w)", "v", "w"), ("-", "zkc::algebra::vector_sub(v, w)", "v", "w"),
+    ("*", "zkc::algebra::vector_scale(v, x)", "v", "x"), ("*", "zkc::algebra::vector_scale(v, x)", "x", "v"),
+    ("+", "zkc::algebra::index_add(i, j)", "i", "j"), ("-", "zkc::algebra::index_sub(i, j)", "i", "j"),
+    ("*", "zkc::algebra::index_mul(i, j)", "i", "j"),
 ]
-UNARY = [("field::neg(x)", "x"), ("curve::neg(p)", "p")]
+UNARY = [("zkc::algebra::neg(x)", "x"), ("zkc::curve::neg(p)", "p")]
 EVERY = """module {
+  use zkc::curve;
+  use zkc::algebra::{Vector};
   fn Every<G: ScalarAction>(x: G::Scalar::Element, y: G::Scalar::Element, p: G::Element,
       q: G::Element, v: Vector<G::Scalar::Element>, w: Vector<G::Scalar::Element>,
       i: index, j: index) -> index where G::Scalar: Field {
@@ -374,13 +380,13 @@ same(EVERY.replace("BODY", infix), EVERY.replace("BODY", named))
 
 # Precedence is fixed and binary operators associate to the left.
 assert common(operators("let d = alpha + base * r + delta;")) == common(
-    operators("let d = curve::add(curve::add(alpha, curve::scale(base, r)), delta);"))
+    operators("let d = zkc::curve::add(zkc::curve::add(alpha, zkc::curve::scale(base, r)), delta);"))
 assert common(operators("let d = (alpha + base) * r;")) == common(
-    operators("let d = curve::scale(curve::add(alpha, base), r);"))
+    operators("let d = zkc::curve::scale(zkc::curve::add(alpha, base), r);"))
 assert common(operators("let d = alpha * (r - s - r);")) == common(
-    operators("let d = curve::scale(alpha, field::sub(field::sub(r, s), r));"))
+    operators("let d = zkc::curve::scale(alpha, zkc::algebra::sub(zkc::algebra::sub(r, s), r));"))
 assert common(operators("let d = -alpha * r;")) == common(
-    operators("let d = curve::scale(curve::neg(alpha), r);"))
+    operators("let d = zkc::curve::scale(zkc::curve::neg(alpha), r);"))
 # Operands run in written order, whatever order the operation takes them in.
 written = common(operators("let d = (r * s) * (alpha + base);"))
 calls = [i for i in written[1][-1][-1] if i[0] == "op"]
@@ -391,6 +397,8 @@ run("protocol-source", operators("let d = alpha - base;"), "source-operator-unre
 hadamard = EVERY.replace("BODY", "let r = v * w;")
 run("protocol-source", hadamard, "source-operator-unresolved")
 mixed = """module {
+  use zkc::curve;
+  use zkc::algebra;
   fn Mixed<G: ScalarAction, H: ScalarAction>(p: G::Element, k: H::Scalar::Element)
       -> G::Element { let d = p * k; return d; }
 }"""
@@ -398,14 +406,15 @@ run("protocol-source", mixed, "source-type-mismatch")
 error = run("protocol-source", operators("let d = alpha-base;"), "source-name-unresolved")
 assert "alpha - base" in error, error
 # No source declares an operator, and none reaches portable source.
-run("protocol-source", "module { operator + (a, b) = field::add(a, b); }", "source-syntax")
+run("protocol-source", "module { use zkc::algebra; operator + (a, b) = zkc::algebra::add(a, b); }", "source-syntax")
 assert "operator" not in json.dumps(common(with_operators))
-run("protocol-source", "module {" + STRUCTS + """
+run("protocol-source", "module { use zkc::algebra;" + STRUCTS + """
   fn Bad<F: Field>(p: Pair<F>, a: F::Element) -> F::Element { let d = a + p; return d; }
-}""", "source-struct-value")
+}""", "source-operator-unresolved")
 
 # In a closed module an operator is the qualified call, with its default binding.
 CLOSED = """module {
+  use zkc::curve;
   fn Check(base: "bls12-381.g1"::Element, image: "bls12-381.g1"::Element,
       c: "bls12-381.fr"::Element, z: "bls12-381.fr"::Element) -> "bls12-381.g1"::Element {
     [left] let left = LEFT;
@@ -414,8 +423,8 @@ CLOSED = """module {
   }
 }"""
 same(CLOSED.replace("LEFT", "base * z").replace("SUM", "left + image * c"),
-     CLOSED.replace("LEFT", "curve::scale(base, z)").replace(
-         "SUM", "curve::add(left, curve::scale(image, c))"))
+     CLOSED.replace("LEFT", "zkc::curve::scale(base, z)").replace(
+         "SUM", "zkc::curve::add(left, zkc::curve::scale(image, c))"))
 
 # --- Checked structs --------------------------------------------------------
 CHECKED = """
@@ -424,12 +433,12 @@ CHECKED = """
   ) constructors (Bind);
   fn Bind<F: Field>(assignment: Vector<F::Element>, statement: Vector<F::Element>)
       -> Bound<F> {
-    control::require(index::equal(assignment.len(), statement.len()));
+    zkc::core::require(zkc::algebra::index_equal(assignment.len(), statement.len()));
     let bound = Bound(assignment = assignment, statement = statement);
     return bound;
   }
   fn Prove<F: Field>(bound: Bound<F>) -> Vector<F::Element> {
-    let sum = vector::add(bound.assignment, bound.statement);
+    let sum = zkc::algebra::vector_add(bound.assignment, bound.statement);
     return sum;
   }
 """
@@ -448,16 +457,19 @@ PROTOCOL = """
   instance run: Run { roles (P = P, V = V); }
   entry main = run;
 """
-checked_source = "module {" + CHECKED + PROTOCOL + "}"
+checked_source = "module { use zkc::algebra::{Vector}; use zkc::core;" + CHECKED + PROTOCOL + "}"
 checked_expanded = """module {
+  use zkc::algebra::{Vector};
+  use zkc::algebra;
+  use zkc::core;
   fn Bind<F: Field>(assignment: Vector<F::Element>, statement: Vector<F::Element>)
       -> (Vector<F::Element>, Vector<F::Element>) {
-    control::require(index::equal(assignment.len(), statement.len()));
+    zkc::core::require(zkc::algebra::index_equal(assignment.len(), statement.len()));
     return (assignment, statement);
   }
   fn Prove<F: Field>(bound.assignment: Vector<F::Element>, bound.statement: Vector<F::Element>)
       -> Vector<F::Element> {
-    let sum = vector::add(bound.assignment, bound.statement);
+    let sum = zkc::algebra::vector_add(bound.assignment, bound.statement);
     return sum;
   }
 """ + PROTOCOL.replace("let bound = Binding", "let (bound.assignment, bound.statement) = Binding"
@@ -467,7 +479,7 @@ run("protocol-compile", checked_source)
 
 
 def checked(extra, base=CHECKED):
-    return "module {" + base + extra + "}"
+    return "module { use zkc::algebra::{Vector}; use zkc::core;" + base + extra + "}"
 
 
 # The value is built only where its checks are written.

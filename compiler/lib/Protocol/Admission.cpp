@@ -229,7 +229,9 @@ class Admission {
       std::set<std::string> parameters;
       for (const auto &[key, value] : f.origin->arguments)
         if (!name(key) || !parameters.insert(key).second ||
-            installedIdentitySort(value).empty())
+            (installedIdentitySort(value).empty() &&
+             !staticIdentityMatches("Nat", value) &&
+             !staticIdentityMatches("Type", value)))
           return fail("binding-logical-origin");
     }
     if (!localPorts(f.arguments, f.results, d))
@@ -425,12 +427,8 @@ class Admission {
           consumeError(selected.takeError());
           return fail("binding-contract");
         }
-        if (auto e = checkParameters(
-                binding->second.application.contract, op->attributes,
-                (binding->second.application.contract == "field.constant" ||
-                 binding->second.application.contract == "vector.constant")
-                    ? selected->outputs[0].identity
-                    : ""))
+        if (auto e =
+                checkParameters(binding->second.application, op->attributes))
           return fail(toString(std::move(e)));
         for (const auto &t : selected->inputs)
           expected.push_back({"", t.spelling()});

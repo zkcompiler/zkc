@@ -169,7 +169,8 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
                             "transcript:merlin3.bls12-381.fr64be/1"
                         )
                         .unwrap()
-                    ),
+                    )
+                    .unwrap(),
                     &[]
                 )
                 .unwrap_err()

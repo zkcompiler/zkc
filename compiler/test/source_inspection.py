@@ -118,13 +118,13 @@ option = f"--implementations={selection}"
 run("protocol-compile", folds, option)
 located_folds = run("protocol-physical-ir", folds, option, "--locations").stdout
 assert operation_locations(located_folds, '"pir.operation_binding"',
-                           'sym_name = "fold_left"') == [(2, 3)]
+                           'sym_name = "fold_left"') == [(6, 3)]
 assert operation_locations(located_folds, '"plan.kernel"',
-                           'binding = @fold_left') == [(7, 5)]
+                           'binding = @fold_left') == [(11, 5)]
 assert set(operation_locations(located_folds, '"plan.kernel"',
-                               'kernel = "arkworks/table.relayout"')) == {(7, 5), (8, 5)}
+                               'kernel = "arkworks/table.relayout"')) == {(11, 5), (12, 5)}
 assert operation_locations(located_folds, '"pir.local_call"',
-                           'site = "left"') == [(36, 5)]
+                           'site = "left"') == [(40, 5)]
 swapped = folds.replace("= fold_left(", "= TEMP(").replace(
     "= fold_right(", "= fold_left("
 ).replace("= TEMP(", "= fold_right(")
@@ -135,7 +135,7 @@ selection.write_text(json.dumps(chosen))
 run("protocol-compile", swapped, option)
 selection.write_text(json.dumps([["fold_left", "arkworks/field.add"]]))
 error = run("protocol-compile", folds, option, refuses="binding-implementation")
-assert "-\":2:3" in error.stderr or "-:2:3" in error.stderr, error.stderr
+assert "-\":6:3" in error.stderr or "-:6:3" in error.stderr, error.stderr
 
 binding_error = """module {
   bind bad = unknown.operation();
@@ -146,7 +146,7 @@ binding_error = """module {
   entry main = concrete;
 }
 """
-error = run("protocol-source", binding_error, refuses="binding-contract")
+error = run("protocol-source", binding_error, refuses="source-operation-stage")
 assert "-:2:3:" in error.stderr, error.stderr
 
 # Recursion must retain an inner failure, but a successful body must not steal
@@ -215,6 +215,6 @@ for stem in ("generic-dleq", "generic-committed-two-factor", "generic-openings")
     if stem == "generic-dleq":
         ir = run("protocol-import", text, "--locations").stdout
         assert operation_locations(ir, '"pir.operation_binding"',
-                                   'contract = "curve.empty"') == [(8, 5)]
+                                   'contract = "curve.empty"') == [(21, 5)]
 
 print(f"{commands.save()} source inspection and provenance checks passed")

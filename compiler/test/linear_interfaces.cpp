@@ -152,16 +152,16 @@ void catalogAndCarriers(MLIRContext &ctx) {
   refuse(parseBoundType("groups:bls12-381.g1@dalek.ristretto-diagonal/1", true),
          "binding-representation");
   refuse(DomainCatalog::create({{"bad.g", "Group", {{"Scalar", "bad.g"}}, {}}},
-                               {}, {}),
+                               {}, {}, {}),
          "invalid associated identity");
-  refuse(DomainCatalog::create({{"bad.f", "Field", {}, {}, "01"}}, {}, {}),
+  refuse(DomainCatalog::create({{"bad.f", "Field", {}, {}, "01"}}, {}, {}, {}),
          "invalid field modulus");
-  refuse(DomainCatalog::create({{"bad.g", "Group", {}, {}, "7"}}, {}, {}),
+  refuse(DomainCatalog::create({{"bad.g", "Group", {}, {}, "7"}}, {}, {}, {}),
          "invalid field modulus");
-  refuse(DomainCatalog::create({{"bad.f", "Field", {}, {}}},
+  refuse(DomainCatalog::create({{"bad.f", "Field", {}, {}}}, {},
                                {{"bad.codec", "groups", "bad.f"}}, {}),
          "invalid codec payload domain");
-  refuse(DomainCatalog::create({{"bad.f", "Field", {}, {}}}, {},
+  refuse(DomainCatalog::create({{"bad.f", "Field", {}, {}}}, {}, {},
                                {{"bad.rep", "groups", "bad.f", true, ""}}),
          "invalid representation domain");
 

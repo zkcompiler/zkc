@@ -27,10 +27,14 @@ add_zkc_component(Support
   lib/Support/Json.cpp
 )
 add_zkc_component(Contracts
+  lib/Contracts/Declarations.cpp
   lib/Contracts/Generic.cpp
   lib/Contracts/Requirements.cpp
   lib/Contracts/Variant.cpp
   lib/Contracts/Bindings.cpp
+  lib/Contracts/Types.cpp
+  lib/Contracts/TypeRepresentations.cpp
+  lib/Contracts/Implementations.cpp
   lib/Contracts/Operations.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
@@ -88,6 +92,14 @@ add_zkc_component(IR
   lib/Dialect/Registry.cpp
   lib/Dialect/Relation/IR/RelationDialect.cpp
   lib/Dialect/TableLibrary.cpp
+  lib/Dialect/TypeAdapters/Algebra.cpp
+  lib/Dialect/TypeAdapters/Commitment.cpp
+  lib/Dialect/TypeAdapters/Core.cpp
+  lib/Dialect/TypeAdapters/Curve.cpp
+  lib/Dialect/TypeAdapters/Polynomial.cpp
+  lib/Dialect/TypeAdapters/Registry.cpp
+  lib/Dialect/TypeAdapters/Installed.cpp
+  lib/Dialect/TypeAdapters/Resources.cpp
   lib/Interfaces/SourceLibrary.cpp
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp
@@ -190,6 +202,8 @@ if(LLVM_LINK_LLVM_DYLIB)
 else()
   target_link_libraries(ZkcSupport PUBLIC LLVMSupport)
 endif()
+add_dependencies(ZkcContracts ZkcContractDeclarationsGen)
+target_include_directories(ZkcContracts PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 target_link_libraries(ZkcContracts PUBLIC ZkcSupport)
 target_link_libraries(ZkcRelation PUBLIC ZkcContracts)
 target_link_libraries(ZkcProtocol PUBLIC ZkcRelation)
@@ -232,3 +246,32 @@ foreach(component ${zkc_components} ZkcCompiler)
 endforeach()
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/component-dependencies.txt"
   CONTENT "${zkc_component_manifest}")
+
+# Contributions are selected before generation and linked into one installation.
+if(ZKC_CONTRIBUTION_SOURCES)
+  target_sources(ZkcIR PRIVATE ${ZKC_CONTRIBUTION_SOURCES})
+endif()
+
+
+if(ZKC_CONTRIBUTION_INCLUDES)
+  foreach(directory IN LISTS ZKC_CONTRIBUTION_INCLUDES)
+    target_include_directories(ZkcIR PUBLIC $<BUILD_INTERFACE:${directory}>)
+  endforeach()
+endif()
+if(ZKC_CONTRIBUTION_TRANSFORM_SOURCES)
+  target_sources(ZkcTransforms PRIVATE ${ZKC_CONTRIBUTION_TRANSFORM_SOURCES})
+endif()
+if(ZKC_CONTRIBUTION_GENERATION_TARGETS)
+  add_dependencies(ZkcIR ${ZKC_CONTRIBUTION_GENERATION_TARGETS})
+  add_dependencies(ZkcTransforms ${ZKC_CONTRIBUTION_GENERATION_TARGETS})
+endif()
+# Install exactly the admitted public inventory; generated headers are known
+# before they exist, and later unregistered outputs cannot enter via a glob.
+foreach(header installed_path IN ZIP_LISTS ZKC_CONTRIBUTION_PUBLIC_HEADER_FILES ZKC_CONTRIBUTION_PUBLIC_HEADER_PATHS)
+  get_filename_component(directory "${installed_path}" DIRECTORY)
+  get_filename_component(basename "${installed_path}" NAME)
+  install(FILES "${header}" DESTINATION "include/${directory}" RENAME "${basename}")
+endforeach()
+
+# Forward references and aliases now resolve against every core component.
+zkc_link_contribution_libraries()

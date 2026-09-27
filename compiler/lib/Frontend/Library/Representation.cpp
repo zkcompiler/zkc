@@ -80,6 +80,21 @@ llvm::Expected<Type> World::type(const Type &t, const LinkScope &scope,
     if (!v)
       return v.takeError();
     a = *v;
+    auto sort = sortOf(a, environment);
+    if (!sort)
+      return sort.takeError();
+    if (sort->kind == Sort::Kind::Type) {
+      auto logical = logicalTypeValue(a, environment);
+      if (!logical)
+        return logical.takeError();
+      auto selected = type(*logical, scope, depth + 1);
+      if (!selected)
+        return selected.takeError();
+      auto argument = logicalTypeTerm(*selected);
+      if (!argument)
+        return argument.takeError();
+      a = *argument;
+    }
   }
   for (auto &a : out.elements) {
     auto v = type(a, scope, depth + 1);
@@ -93,13 +108,12 @@ llvm::Expected<Type> World::type(const Type &t, const LinkScope &scope,
   auto p = permissions(out, ctx);
   if (!p)
     return p.takeError();
-  if (out.kind == Type::Kind::Logical) {
-    for (const auto &a : out.arguments) {
-      auto domain = resolvedDomain(a, environment);
-      if (!domain)
-        return domain.takeError();
+  if (out.kind == Type::Kind::Logical)
+    for (const auto &argument : out.arguments) {
+      auto closed = resolvedStatic(argument, environment);
+      if (!closed)
+        return closed.takeError();
     }
-  }
   return out;
 }
 llvm::Expected<std::vector<Requirement>>

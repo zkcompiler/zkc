@@ -92,8 +92,8 @@ therefore cannot silently strengthen the public algorithm's requirements.
 
 ## Preservation obligations
 
-- Operation lookup uses explicit declarations and selected environments. BLS
-  profile spellings elaborate to exact defaults before common admission.
+- Operation lookup uses imported declarations and selected environments. Explicit
+  domains and bindings reach common admission; profile headings supply no defaults.
 - Physical assignments belong to values and interfaces. A crossing between
   representations requires an executed, checked conversion.
 - Logical operation contracts and installed physical kernels have independently

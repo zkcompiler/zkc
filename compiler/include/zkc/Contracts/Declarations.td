@@ -1,0 +1,17 @@
+#ifndef ZKC_CONTRACT_DECLARATIONS
+#define ZKC_CONTRACT_DECLARATIONS
+include "zkc/Contracts/Declarations/Schema.td"
+include "zkc/Contracts/Declarations/Vocabulary.td"
+include "zkc/Contracts/Declarations/Types.td"
+include "zkc/Contracts/Declarations/Core.td"
+include "zkc/Contracts/Declarations/Algebra.td"
+include "zkc/Contracts/Declarations/FixedVector.td"
+include "zkc/Contracts/Declarations/Polynomial.td"
+include "zkc/Contracts/Declarations/Curve.td"
+include "zkc/Contracts/Declarations/PCS.td"
+include "zkc/Contracts/Declarations/Oracle.td"
+include "zkc/Contracts/Declarations/Transcript.td"
+include "zkc/Contracts/Declarations/Randomness.td"
+include "zkc/Contracts/Declarations/External.td"
+include "zkc/Contracts/Declarations/Resources.td"
+#endif

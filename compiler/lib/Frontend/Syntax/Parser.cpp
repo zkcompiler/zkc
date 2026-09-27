@@ -13,7 +13,6 @@ class Parser {
   ArrayRef<Token> tokens;
   size_t cursor = 0, errorOffset = 0, lastEnd = 0;
   std::string errorCode, message;
-  bool explicitBindings = false;
   bool recovering = false;
   bool recordLiteral = true;
   std::vector<syntax::ParseDiagnostic> diagnostics;
@@ -106,21 +105,8 @@ class Parser {
     result.value = token().kind == TokenKind::Number ? number() : name();
     return record(std::move(result), start);
   }
-  syntax::StaticTerm staticTerm() {
-    syntax::StaticTerm result;
-    result.root = atom();
-    while (eat("::")) {
-      result.members.push_back(name());
-      if (result.members.size() > 32768)
-        fail("source-limit", "static path exceeds 32768 members");
-    }
-    return result;
-  }
   std::string termSpelling(const syntax::StaticTerm &term) {
-    std::string out = term.root.value;
-    for (const auto &member : term.members)
-      out += "." + member;
-    return out;
+    return syntax::staticSpelling(term);
   }
   std::string number() {
     if (failed())
@@ -134,8 +120,8 @@ class Parser {
     return result;
   }
   // Only authored :: separators become dots; dotted/quoted roots are opaque.
-  std::string path(bool *qualified = nullptr,
-                   bool *trailingSeparator = nullptr) {
+  std::string path(bool *qualified = nullptr, bool *trailingSeparator = nullptr,
+                   StringRef separator = ".") {
     if (trailingSeparator)
       *trailingSeparator = false;
     std::string result = name();
@@ -151,7 +137,7 @@ class Parser {
       }
       if (qualified)
         *qualified = true;
-      result += "." + name();
+      result += separator.str() + name();
     }
     return result;
   }
@@ -177,6 +163,24 @@ class Parser {
       if (eat(close))
         break;
     }
+    return result;
+  }
+  syntax::StaticTerm staticTerm(unsigned depth = 0) {
+    syntax::StaticTerm result;
+    if (depth > 64) {
+      fail("source-depth", "static term nesting exceeds 64");
+      return result;
+    }
+    result.root = atom();
+    if (token().is("<"))
+      result.arguments = list("<", ">", [&] { return staticTerm(depth + 1); });
+    while (eat("::")) {
+      result.members.push_back(name());
+      if (result.members.size() > 32768)
+        fail("source-limit", "static path exceeds 32768 members");
+    }
+    if (token().is("<") && result.arguments.empty())
+      result.arguments = list("<", ">", [&] { return staticTerm(depth + 1); });
     return result;
   }
   source::Names staticTerms(std::vector<syntax::StaticTerm> &terms) {
@@ -231,6 +235,8 @@ class Parser {
       if (result.members.size() > 32768)
         fail("source-limit", "type path exceeds 32768 members");
     }
+    if (token().is("<") && result.arguments.empty())
+      result.arguments = list("<", ">", [&] { return type(depth + 1); });
     return record(std::move(result), start);
   }
   source::Names names() {
@@ -901,7 +907,7 @@ class Parser {
         parameter.sort = name();
       else {
         do {
-          parameter.bounds.push_back(name());
+          parameter.bounds.push_back(path(nullptr, nullptr, "::"));
         } while (eat("+"));
       }
       return record(std::move(parameter), offset);
@@ -950,7 +956,7 @@ class Parser {
     return list("(", ")", [&] {
       size_t offset = token().offset;
       source::Requirement requirement;
-      requirement.predicate = name();
+      requirement.predicate = path(nullptr, nullptr, "::");
       std::vector<syntax::StaticTerm> terms;
       requirement.arguments = list("(", ")", [&] {
         terms.push_back(staticTerm());
@@ -975,11 +981,10 @@ class Parser {
         requirements.push_back(record(std::move(r), offset));
         metadata.push_back({subject, right});
       } else if (token().is("(")) {
-        if (!subject.members.empty())
-          fail("source-syntax",
-               "a predicate has a declared name, not a domain projection");
         source::Requirement r;
         r.predicate = subject.root.value;
+        for (const auto &member : subject.members)
+          r.predicate += "::" + member;
         std::vector<syntax::StaticTerm> terms;
         r.arguments = list("(", ")", [&] {
           terms.push_back(staticTerm());
@@ -991,7 +996,7 @@ class Parser {
         expect(":");
         do {
           source::Requirement r;
-          r.predicate = name();
+          r.predicate = path(nullptr, nullptr, "::");
           r.arguments = {termSpelling(subject)};
           requirements.push_back(record(std::move(r), offset));
           metadata.push_back({subject});
@@ -1028,7 +1033,7 @@ class Parser {
     }
     if (eat("effects"))
       result.effects = names();
-    if (explicitBindings && !result.generic)
+    if (!result.generic)
       result.origin = source::LogicalOrigin{result.name, {}};
     if (eat("origin")) {
       result.explicitOrigin = true;
@@ -1301,16 +1306,31 @@ class Parser {
   syntax::Module module(bool carrier = false) {
     syntax::Module result;
     result.carrier = carrier;
-    explicitBindings = token().is("{");
-    if (!explicitBindings)
-      result.profile = name();
     expect("{");
     while (!failed() && !eat("}")) {
       size_t start = token().offset;
       syntax::Module declaration;
       size_t declarationCursor = cursor;
+      std::optional<std::string> operatorHook;
+      while (eat("#")) {
+        expect("[");
+        if (!eat("operator"))
+          fail("source-operator-attribute", "expected operator attribute");
+        expect("(");
+        auto hook = keyword();
+        if (hook != "add" && hook != "sub" && hook != "mul" && hook != "neg")
+          fail("source-operator-attribute", "unknown operator hook");
+        expect(")");
+        expect("]");
+        if (operatorHook)
+          fail("source-operator-attribute", "duplicate operator attribute");
+        operatorHook = std::move(hook);
+      }
       bool exported = eat("pub");
       auto tag = keyword();
+      if (operatorHook && (carrier || tag != "fn"))
+        fail("source-operator-attribute",
+             "operator attributes require an ordinary source function");
       // This closed list cannot allocate authored-project generated symbols;
       // it is what makes the carrier exception to reservedPrefix safe.
       if (carrier && (exported || (tag != "fn" && tag != "bind" &&
@@ -1319,16 +1339,16 @@ class Parser {
         fail("source-carrier-authoring",
              "carrier modules contain only common-carrier declarations; "
              "use an ordinary module for source authoring");
-      } else if (tag == "library" && explicitBindings) {
+      } else if (tag == "library") {
         auto identity = libraryIdentity(start);
         expect(";");
         declaration.libraryIdentities.push_back(std::move(identity));
-      } else if (tag == "mod" && explicitBindings) {
+      } else if (tag == "mod") {
         syntax::ModuleDeclaration child;
         child.name = keyword();
         expect(";");
         declaration.modules.push_back(record(std::move(child), start));
-      } else if (tag == "dependency" && explicitBindings) {
+      } else if (tag == "dependency") {
         syntax::LibraryDependency dependency;
         dependency.name = keyword();
         expect("=");
@@ -1337,10 +1357,10 @@ class Parser {
         expect(";");
         declaration.dependencies.push_back(
             record(std::move(dependency), start));
-      } else if (tag == "use" && explicitBindings) {
+      } else if (tag == "use") {
         use(declaration, exported, start);
         expect(";");
-      } else if (tag == "association" && explicitBindings) {
+      } else if (tag == "association") {
         syntax::LibraryAssociation association;
         association.name = name();
         expect("=");
@@ -1354,13 +1374,13 @@ class Parser {
                "captured subject must not be empty");
         declaration.libraryAssociations.push_back(
             record(std::move(association), start));
-      } else if (tag == "interface" && explicitBindings) {
+      } else if (tag == "interface") {
         syntax::LibraryInterface interface;
         interface.name = name();
         libraryMembers(interface, false);
         declaration.libraryInterfaces.push_back(
             record(std::move(interface), start));
-      } else if (tag == "component" && explicitBindings) {
+      } else if (tag == "component") {
         syntax::LibraryComponent component;
         component.name = name();
         if (token().is("<"))
@@ -1371,7 +1391,7 @@ class Parser {
         libraryMembers(component, true);
         declaration.libraryComponents.push_back(
             record(std::move(component), start));
-      } else if ((tag == "select" || tag == "seal") && explicitBindings) {
+      } else if ((tag == "select" || tag == "seal")) {
         syntax::LibrarySelection selection;
         selection.name = name();
         selection.sealed = tag == "seal";
@@ -1380,7 +1400,7 @@ class Parser {
         expect(";");
         declaration.librarySelections.push_back(
             record(std::move(selection), start));
-      } else if (tag == "link" && explicitBindings) {
+      } else if (tag == "link") {
         syntax::LibraryLink link;
         link.name = name();
         expect("=");
@@ -1389,7 +1409,7 @@ class Parser {
         link.arguments = list("<", ">", [&] { return libraryTerm(); });
         expect(";");
         declaration.libraryLinks.push_back(record(std::move(link), start));
-      } else if (tag == "const" && explicitBindings) {
+      } else if (tag == "const") {
         syntax::Constant constant;
         constant.name = keyword();
         expect(":");
@@ -1398,7 +1418,7 @@ class Parser {
         constant.expression = expression();
         expect(";");
         declaration.constants.push_back(record(std::move(constant), start));
-      } else if (tag == "bind" && explicitBindings) {
+      } else if (tag == "bind") {
         source::OperationBinding binding;
         binding.name = name();
         expect("=");
@@ -1408,7 +1428,7 @@ class Parser {
           binding.application.implementation = name();
         expect(";");
         declaration.bindings.push_back(record(std::move(binding), start));
-      } else if (tag == "relation" && explicitBindings) {
+      } else if (tag == "relation") {
         syntax::RelationImport relation;
         relation.name = name();
         expect("=");
@@ -1421,7 +1441,7 @@ class Parser {
         expect(")");
         expect(";");
         declaration.imports.push_back(record(std::move(relation), start));
-      } else if (tag == "derive" && explicitBindings) {
+      } else if (tag == "derive") {
         source::RelationView view;
         view.name = name();
         expect("=");
@@ -1442,7 +1462,7 @@ class Parser {
         expect(")");
         expect(";");
         declaration.relationViews.push_back(record(std::move(view), start));
-      } else if (tag == "configure" && explicitBindings) {
+      } else if (tag == "configure") {
         source::Configuration configuration;
         configuration.name = name();
         expect("=");
@@ -1461,7 +1481,7 @@ class Parser {
         expect(";");
         declaration.configurations.push_back(
             record(std::move(configuration), start));
-      } else if (tag == "enum" && explicitBindings) {
+      } else if (tag == "enum") {
         syntax::Enum enumeration;
         enumeration.name = name();
         if (token().is("<"))
@@ -1480,12 +1500,12 @@ class Parser {
           return syntax::Parameter{label, std::move(payload)};
         });
         declaration.enums.push_back(record(std::move(enumeration), start));
-      } else if (tag == "struct" && explicitBindings) {
+      } else if (tag == "struct") {
         structure(declaration, start, false);
-      } else if (tag == "checked" && explicitBindings) {
+      } else if (tag == "checked") {
         expect("struct");
         structure(declaration, start, true);
-      } else if (tag == "bundle" && explicitBindings) {
+      } else if (tag == "bundle") {
         syntax::Bundle bundle;
         bundle.name = name();
         bundle.parameters = names();
@@ -1493,9 +1513,10 @@ class Parser {
         bundle.requirements = requirementList(&bundle.requirementTerms);
         expect(";");
         declaration.bundles.push_back(record(std::move(bundle), start));
-      } else if (tag == "fn")
+      } else if (tag == "fn") {
         function(declaration, start);
-      else if (tag == "protocol")
+        declaration.functions.back().operatorHook = std::move(operatorHook);
+      } else if (tag == "protocol")
         declaration.protocols.push_back(protocol(start));
       else if (tag == "instance")
         declaration.instances.push_back(instance(start, declaration));
@@ -1707,7 +1728,8 @@ public:
     if (eat("carrier")) {
       expect("module");
       if (!token().is("{"))
-        fail("source-carrier-authoring", "carrier modules use explicit bindings");
+        fail("source-carrier-authoring",
+             "carrier modules use explicit bindings");
       out.content = record(module(true), start);
     } else if (eat("module"))
       out.content = record(module(), start);

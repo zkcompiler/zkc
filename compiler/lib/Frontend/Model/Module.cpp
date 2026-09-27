@@ -1,4 +1,5 @@
 #include "Module.h"
+#include "../Static/Structural.h"
 #include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -73,8 +74,11 @@ TypeId Module::intern(Type t) {
   std::string key = std::to_string(unsigned(t.kind)) + ":" + t.constructor +
                     ":" + std::to_string(t.declaration.index) +
                     ":count:" + std::to_string(t.count);
-  for (DomainId id : t.arguments)
-    key += ":" + std::to_string(id.index);
+  for (const auto &a : t.arguments)
+    key += ":argument:" + std::to_string(unsigned(a.kind)) + ":" +
+           std::to_string(a.domain.index) + ":" + std::to_string(a.type.index) +
+           ":" + std::to_string(a.parameter.index) + ":" +
+           std::to_string(a.number);
   for (TypeId id : t.elements)
     key += ":element:" + std::to_string(id.index);
   auto it = typeKeys.find(key);
@@ -86,12 +90,119 @@ TypeId Module::intern(Type t) {
   return id;
 }
 TypeId Module::logical(StringRef spelling, ScopeId scope) {
-  auto [kind, term] = spelling.split(':');
   Type t;
-  t.constructor = kind.str();
-  if (!term.empty())
-    t.arguments.push_back(internDomain(term, scope));
+  auto parameter = lookup(scope, spelling);
+  if (parameter.valid() && declarations[parameter.index].sort == "Type") {
+    t.kind = Type::Kind::Parameter;
+    t.declaration = parameter;
+    return intern(std::move(t));
+  }
+  auto parsed = splitLogical(spelling);
+  if (!parsed)
+    return {};
+  t.constructor = parsed->constructor;
+  const auto *declaration = protocol::typeDeclaration(t.constructor);
+  if (!declaration) {
+    // Core carriers such as variants have their own common reader.
+    auto carrier = protocol::parseBoundType(spelling, false);
+    if (!carrier) {
+      consumeError(carrier.takeError());
+      diagnostics.push_back(
+          {"source-type",
+           "unknown logical constructor '" + t.constructor + "'",
+           {}});
+      return {};
+    }
+  } else if (declaration->common &&
+             parsed->arguments.size() != declaration->parameters.size()) {
+    diagnostics.push_back(
+        {"source-type-arity", "wrong number of logical type arguments", {}});
+    return {};
+  }
+  for (size_t i = 0; i < parsed->arguments.size(); ++i) {
+    std::string sort;
+    if (declaration && i < declaration->parameters.size()) {
+      const auto &p = declaration->parameters[i];
+      sort = p.kind == protocol::StaticKind::Type  ? "Type"
+             : p.kind == protocol::StaticKind::Nat ? "Nat"
+                                                   : p.sort;
+    }
+    auto actual = argument(parsed->arguments[i], sort, scope);
+    if ((actual.kind == StaticArgument::Kind::Type && !actual.type.valid()) ||
+        (actual.kind == StaticArgument::Kind::Domain && !actual.domain.valid()))
+      return {};
+    t.arguments.push_back(actual);
+  }
   return intern(std::move(t));
+}
+StaticArgument Module::argument(StringRef value, StringRef sort,
+                                ScopeId scope) {
+  if (sort == "Type")
+    return StaticArgument::typeOf(logical(value, scope));
+  if (sort == "Nat") {
+    auto parameter = lookup(scope, value);
+    if (parameter.valid() && declarations[parameter.index].sort == "Nat")
+      return StaticArgument::natural(0, parameter);
+    uint64_t number = 0;
+    if (value.getAsInteger(10, number) || number > 1048576) {
+      diagnostics.push_back(
+          {"source-static-sort",
+           "expected a bounded natural or a scoped Nat parameter",
+           {}});
+      return {};
+    }
+    return StaticArgument::natural(number);
+  }
+  return internDomain(value, scope, sort);
+}
+bool Module::checkArgument(DeclId parameter, const StaticArgument &argument) {
+  const auto &p = declarations.at(parameter.index);
+  bool valid = false;
+  if (p.sort == "Type")
+    valid = argument.kind == StaticArgument::Kind::Type &&
+            argument.type.index < types.size();
+  else if (p.sort == "Nat")
+    valid = argument.kind == StaticArgument::Kind::Natural &&
+            (argument.parameter.valid()
+                 ? argument.parameter.index < declarations.size() &&
+                       declarations[argument.parameter.index].sort == "Nat"
+                 : argument.number <= 1048576);
+  else
+    valid = argument.kind == StaticArgument::Kind::Domain &&
+            argument.domain.index < domains.size() &&
+            domains[argument.domain.index].sort == p.sort;
+  if (!valid)
+    diagnostics.push_back(
+        {"source-static-sort",
+         "substitution has the wrong kind or sort for '" + p.name + "'",
+         p.location});
+  return valid;
+}
+std::string Module::spelling(const StaticArgument &a) const {
+  switch (a.kind) {
+  case StaticArgument::Kind::Domain:
+    return spelling(a.domain);
+  case StaticArgument::Kind::Type:
+    return spelling(a.type);
+  case StaticArgument::Kind::Natural:
+    return a.parameter.valid() ? declarations.at(a.parameter.index).name
+                               : std::to_string(a.number);
+  }
+  llvm_unreachable("unknown static argument kind");
+}
+StaticArgument Module::substitute(const StaticArgument &a,
+                                  const std::map<DeclId, StaticArgument> &sub) {
+  switch (a.kind) {
+  case StaticArgument::Kind::Domain:
+    return substitute(a.domain, sub);
+  case StaticArgument::Kind::Type:
+    return StaticArgument::typeOf(substitute(a.type, sub));
+  case StaticArgument::Kind::Natural:
+    if (auto it = sub.find(a.parameter); a.parameter.valid() && it != sub.end())
+      return checkArgument(a.parameter, it->second) ? it->second : a;
+    return a;
+  }
+  llvm_unreachable("unknown static argument kind");
 }
 TypeId Module::record(DeclId declaration, ArrayRef<std::string> arguments,
                       ScopeId scope) {
@@ -137,9 +248,14 @@ std::string Module::spelling(DomainId id) const {
 }
 std::string Module::spelling(TypeId id) const {
   const auto &t = types.at(id.index);
-  if (t.kind == Type::Kind::Logical)
-    return t.constructor +
-           (t.arguments.empty() ? "" : ":" + spelling(t.arguments[0]));
+  if (t.kind == Type::Kind::Parameter)
+    return declarations.at(t.declaration.index).name;
+  if (t.kind == Type::Kind::Logical) {
+    std::vector<std::string> arguments;
+    for (const auto &argument : t.arguments)
+      arguments.push_back(spelling(argument));
+    return logicalSpelling(t.constructor, arguments);
+  }
   if (t.kind == Type::Kind::Array)
     return "Array<" + spelling(t.elements.front()) + ", " +
            std::to_string(t.count) + ">";
@@ -167,11 +283,13 @@ std::string Module::spelling(TypeId id) const {
   return result;
 }
 DomainId Module::substitute(DomainId id,
-                            const std::map<DeclId, DomainId> &sub) {
+                            const std::map<DeclId, StaticArgument> &sub) {
   auto d = domains.at(id.index);
   if (d.kind == Domain::Kind::Parameter) {
     auto it = sub.find(d.parameter);
-    return it == sub.end() ? id : it->second;
+    return it == sub.end() || !checkArgument(d.parameter, it->second)
+               ? id
+               : it->second.domain;
   }
   if (d.kind != Domain::Kind::Projection)
     return id;
@@ -194,8 +312,15 @@ DomainId Module::substitute(DomainId id,
   domainKeys.emplace(std::move(key), result);
   return result;
 }
-TypeId Module::substitute(TypeId id, const std::map<DeclId, DomainId> &sub) {
+TypeId Module::substitute(TypeId id,
+                          const std::map<DeclId, StaticArgument> &sub) {
   auto t = types.at(id.index);
+  if (t.kind == Type::Kind::Parameter) {
+    auto it = sub.find(t.declaration);
+    return it == sub.end() || !checkArgument(t.declaration, it->second)
+               ? id
+               : it->second.type;
+  }
   if (t.kind == Type::Kind::Array)
     return array(substitute(t.elements.front(), sub), t.count);
   if (t.kind == Type::Kind::Product) {
@@ -215,7 +340,8 @@ TypeId Module::substitute(TypeId id, const std::map<DeclId, DomainId> &sub) {
   return result;
 }
 std::vector<Port> Module::leaves(const Port &port) const {
-  if (types.at(port.type.index).kind == Type::Kind::Logical)
+  if (types.at(port.type.index).kind == Type::Kind::Logical ||
+      types.at(port.type.index).kind == Type::Kind::Parameter)
     return {port};
   auto result = layouts.at(port.type);
   for (auto &leaf : result) {

@@ -2,6 +2,8 @@
 // for the independently selected relation, layout, encoding and dimensions.
 // This protocol checks only an ordinary KZG opening, not that host premise.
 module {
+  use zkc::pcs::{Commitment, Proof, VerifierKey};
+  use zkc::poly::{Point};
   dependency pcs = library(namespace="zkc.examples", name="pcs", version="1", resolution="source-v1");
   use pcs::CheckIndexOpening;
   protocol IndexOpening {

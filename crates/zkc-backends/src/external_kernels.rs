@@ -55,12 +55,10 @@ pub(crate) fn signature(b: &OperationBinding) -> Option<BoundSignature> {
         "external.openvm.check_witness" => (&[Indices, Index, Index], &[Indices, Bool]),
         _ => return None,
     };
-    let port = |kind| {
-        PhysicalType::default_for(LogicalType::new(kind, Identity::None).expect("data state port"))
-    };
+    let port = |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
     Some(KernelSignature {
-        inputs: ins.iter().copied().map(port).collect(),
-        outputs: outs.iter().copied().map(port).collect(),
+        inputs: ins.iter().copied().map(port).collect::<Option<_>>()?,
+        outputs: outs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,
     })
 }
@@ -273,6 +271,18 @@ pub(crate) fn apply(
         }
     })())
 }
+
+pub(crate) const OPERATIONS: &[&str] = &[
+    "external.monero.init",
+    "external.monero.hash",
+    "external.monero.update",
+    "external.openvm.init",
+    "external.openvm.observe",
+    "external.openvm.sample",
+    "external.openvm.sample_ext",
+    "external.openvm.sample_bits",
+    "external.openvm.check_witness",
+];
 
 #[cfg(test)]
 mod tests {

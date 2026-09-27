@@ -6,6 +6,7 @@ use zkc_runtime::interactive::{PhysicalType, Value as RuntimeValue, VariantDescr
 
 #[derive(Clone, Debug)]
 pub struct Variant {
+    physical_type: PhysicalType,
     descriptor: Arc<VariantDescriptor>,
     alternative: usize,
     payload: Arc<[Value]>,
@@ -16,13 +17,21 @@ impl Variant {
         alternative: usize,
         payload: Vec<Value>,
     ) -> Result<Self> {
+        let physical_type = PhysicalType::default_for(
+            zkc_runtime::interactive::LogicalType::variant(descriptor.clone()),
+        )
+        .map_err(|_| refused("variant-payload-representation"))?;
         let value = Self {
+            physical_type,
             descriptor,
             alternative,
             payload: payload.into(),
         };
         value.validate()?;
         Ok(value)
+    }
+    pub(crate) fn physical_type(&self) -> &PhysicalType {
+        &self.physical_type
     }
     pub fn descriptor(&self) -> &Arc<VariantDescriptor> {
         &self.descriptor
@@ -40,11 +49,9 @@ impl Variant {
             .get(self.alternative)
             .ok_or_else(|| refused("variant-alternative"))?;
         if self.payload.len() != arm.payload().len()
-            || self
-                .payload
-                .iter()
-                .zip(arm.payload())
-                .any(|(v, t)| v.physical_type() != PhysicalType::default_for(t.clone()))
+            || self.payload.iter().zip(arm.payload()).any(|(v, t)| {
+                !PhysicalType::default_for(t.clone()).is_ok_and(|ty| v.physical_type() == ty)
+            })
         {
             return Err(refused("variant-payload"));
         }
@@ -57,7 +64,7 @@ impl Variant {
             assert!(std::mem::size_of::<Value>() <= 512);
         }
         const {
-            assert!(std::mem::size_of::<Self>() <= 128);
+            assert!(std::mem::size_of::<Self>() <= 256);
         }
         let bytes = (|| {
             let mut bytes = self.descriptor.retained_bytes().checked_add(256)?;

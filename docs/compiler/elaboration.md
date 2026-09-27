@@ -20,11 +20,13 @@ followed by `::` is zkc notation; it does not imply a domain-import mechanism.
 
 ### Calls and result bindings
 
+The guard example assumes `use zkc::core;` in the enclosing module.
+
 | Surface | Common result |
 |---|---|
 | `let y = Helper(x);` | One `AlgorithmCall` with one output. |
 | `let (a, b) = Operation(x);` | One operation with two ordered outputs. |
-| `control::require(ok);` | Zero-result operation; do not erase the guard. |
+| `core::require(ok);` | Zero-result operation; do not erase the guard. |
 | `return x;` / `return (x, y);` / `return;` | One, two, or zero returned values. |
 | `local P: let y = Helper(x);` | Same role-owned `LocalCall`, with explicit owner. |
 | `local P: Check(x);` | Zero-result role-owned call. |
@@ -33,7 +35,8 @@ followed by `::` is zkc notation; it does not imply a domain-import mechanism.
 Resolve names against a complete declaration index, including forward references.
 Do not select targets by trying a function and then silently falling back to an
 operation after a type error. Reject duplicate declarations with both
-locations; qualified primitive and exact helper names disambiguate call categories. Keep primitive and helper effects/call boundaries intact.
+locations; resolved declaration categories distinguish installed intrinsics from
+ordinary helpers. Keep their effects and call boundaries intact.
 No frontend inlining is introduced.
 
 Bare call statements are allowed only when the declared result arity is zero.
@@ -52,9 +55,10 @@ No implicit resource copies or reference semantics are introduced.
 ### Static arguments, attributes and paths
 
 ```text
+// With use zkc::algebra; in the enclosing module.
 let y = Twice::<F>(x);                       // explicit static argument
-let first = vector::at::<F>(xs) attributes (0);
-let one: F::Element = field::constant() attributes (1);
+let first = algebra::vector_at::<F>(xs) attributes (0);
+let one: F::Element = algebra::constant() attributes (1);
 ```
 
 `::<...>` always supplies static parameters. `attributes (...)` always supplies
@@ -66,16 +70,20 @@ expressions and the bounded static evaluator are described in the
 Natural tokens in the example above elaborate to the existing attribute strings;
 existing field literal checking/reduction rules remain authoritative.
 
-Map registered operation paths such as `field::add` to the existing exact
-contract key `field.add` through a checked frontend mapping. Do not replace dots
-globally: `bls12-381.fr`, schema names, user symbols and implementation identities
-are opaque identities. Installed operation paths and project imports have distinct resolution rules. Preserve
-quoted exact names for low-level records. Qualified calls select installed operations; exact names prefer declared
-helpers/configurations before an installed operation fallback in generic bodies.
-Named-call resolution is independent of argument types. Operators select from
-the [fixed operand-type table](../language/data.md#4-operators). Quoting a nominal term escapes its
-lexical spelling; it does not create a new nominal-term grammar. See the
-[source reference](../language/reference.md) for lookup and projection rules.
+Resolve imported operation paths such as `algebra::add` through ordinary project
+lookup to their installed declaration, which supplies the exact contract key
+`field.add`. Do not replace dots globally: `bls12-381.fr`, schema names, user
+symbols and implementation identities are opaque identities. Quoted helper names
+still require lexical visibility. Unresolved exact names have no installed
+operation fallback, including in generic bodies. A low-level `bind` names the
+logical contract separately and checks its authored-source stage permission.
+
+Named-call resolution is independent of argument types. Installed intrinsics use
+the export's generated argument labels for named calls. Operators select from
+[coherent constructor tuples](../language/data.md#4-operators) before flattening
+records. Quoting a nominal term escapes its lexical spelling; it does not create
+a new nominal-term grammar. See the [source reference](../language/reference.md)
+for lookup and projection rules.
 
 ## 2. Logical types and bounds
 
@@ -95,8 +103,10 @@ representations are still selected later.
 | `Polynomial<F>` | `polynomial:F`, the current univariate polynomial type |
 | `Rng<F>` / `Nonce<F>` | Existing affine randomness/nonce types |
 
-The finite constructor table covers ordinary logical constructors; element,
-vector and matrix forms are resolved centrally by the elaborator and printer.
+Imported declarations supply logical constructors. Associated `Element`
+projections use sort metadata, and `Vector`/`Matrix` use generated finite family
+cases. The typed checker resolves these cases before emission without inverting
+family equations. Core types and globally accepted domain sorts remain separate.
 Unsupported nesting such as `Vector<Vector<F::Element>>` is refused. These are
 not arbitrary Rust generic types or backend associated types. `F::Element`
 preserves nominal `F`; sharing machine representation never makes fields equal.
@@ -110,8 +120,10 @@ sort determined from the existing vocabulary. It emits exactly the explicit
 the existing implication for `Field(F)`; it does not add another assumption.
 
 ```text
+use zkc::algebra::Vector;
 fn Transform<F: TwoAdicField>(xs: Vector<F::Element>) -> Vector<F::Element> {
   // Body obligations must follow from TwoAdicField(F).
+  return xs;
 }
 
 fn Respond<G: ScalarAction>(x: G::Scalar::Element) -> G::Scalar::Element
@@ -186,18 +198,18 @@ Inference is deliberately bounded:
 - Preserve current resource/size limits and bound inference work. Reject
   unresolved and contradictory constraints with actionable diagnostics.
 
-Examples:
+Examples, with `use zkc::algebra;` in the enclosing module:
 
 ```text
-let y = field::add(x, x);                       // F follows from x
+let y = algebra::add(x, x);                       // F follows from x
 let z = Twice(y);                              // residual F follows from y
-let one: F::Element = field::constant() attributes (1);
-let other = field::constant::<F>() attributes (1);
+let one: F::Element = algebra::constant() attributes (1);
+let other = algebra::constant::<F>() attributes (1);
 ```
 
 In contrast, do not infer a group for a helper whose only input is an element of
 `G::Scalar`; require `Helper::<G>(scalar)`. Do not convert a base-field vector to
-an extension-field vector to make a call typecheck; preserve `vector::embed`.
+an extension-field vector to make a call typecheck; preserve `algebra::vector_embed`.
 Missing `PrimeField(F)` is a requirement failure, not permission to add it to the
 caller or choose a prime-field backend.
 
@@ -308,9 +320,9 @@ Required checks for the implementation:
    artifact-identity comparisons where claimed. Existing consumer proofs are not
    a proof of the native elaborator.
 6. Source consumers: maintained examples, tests, documentation and generators
-   use the accepted notation. The BLS convenience profiles are current syntax;
-   their defaults resolve before common admission, with no profile interpreter
-   in the executable carrier.
+   use imports, explicit domains and the installed source APIs. Historical BLS
+   profile headings and global primitive/type fallback are removed; the common
+   carrier still contains explicit logical bindings.
 
 These controls cover the implemented elaboration boundaries. They do not prove
 the compiler or establish unrestricted inference, dynamic dispatch or a general

@@ -131,13 +131,14 @@ with case("warnings retain their declaring source file"):
     assert report["files"][1]["filename"] == str(child), report
 
 OBLIGATION = '''module {
+  use zkc::algebra::{Element};
   interface FieldAPI { domain F: field = "koala-bear";
-    local step(x: field<F>) -> field<F>;
+    local step(x: Element<F>) -> Element<F>;
   }
   component Impl: FieldAPI { domain F: field = "bls12-381.fr";
-    local step(x: field<F>) -> field<F> { return x; }
+    local step(x: Element<F>) -> Element<F> { return x; }
   }
-  fn Client<C: FieldAPI>(x: field<C::F>) -> field<C::F> { return C::step(x); }
+  fn Client<C: FieldAPI>(x: Element<C::F>) -> Element<C::F> { return C::step(x); }
   link Closed = Client<Impl>;
 }'''
 
@@ -168,8 +169,9 @@ with case("obligation context points to the exact imported interface file"):
     library = root / "library.pir"
     app = root / "app.pir"
     interface = OBLIGATION[OBLIGATION.index("  interface"):OBLIGATION.index("  component")]
-    library.write_text(f'module {{ {identity("fields")}; {interface.replace("interface", "pub interface", 1)} }}')
+    library.write_text(f'module {{ use zkc::algebra::Element; {identity("fields")}; {interface.replace("interface", "pub interface", 1)} }}')
     app.write_text(f'''module {{
+      use zkc::algebra::Element;
       dependency fields = {identity("fields")}; use fields::FieldAPI;
       {OBLIGATION[OBLIGATION.index("  component"):]}
     ''')

@@ -1,6 +1,10 @@
 // Two DLEQ invocations over the same bases and images, with distinct nonces.
 // Group arithmetic and affine nonce state are explicit local operations.
 module {
+  use zkc::random::{
+    Nonce,
+    Rng
+  };
   bind curve.empty = curve::empty(bls12-381.g1) using "arkworks/curve.empty";
   bind curve.append = curve::append(bls12-381.g1) using "arkworks/curve.append";
   bind curve.commit = curve::commit(bls12-381.g1) using "arkworks/curve.commit";

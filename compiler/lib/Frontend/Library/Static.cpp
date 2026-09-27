@@ -1,7 +1,9 @@
 #include "Diagnostic.h"
 #include "Internal.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Support/Json.h"
 #include <algorithm>
 
@@ -17,7 +19,7 @@ bool sameSort(const Sort &a, const Sort &b) {
 llvm::Error validateSort(const Sort &s) {
   switch (s.kind) {
   case Sort::Kind::Domain:
-    if (!s.domain.empty())
+    if (!s.domain.empty() && s.domain != "Type" && s.domain != "Nat")
       return llvm::Error::success();
     break;
   case Sort::Kind::Type:
@@ -152,7 +154,7 @@ llvm::Error validateEnvironment(const Environment &e) {
       installed |= owner.name == t.contract.name &&
                    owner.parameters == t.contract.parameters &&
                    owner.affine == t.contract.affine;
-    if (!installed || !t.droppable)
+    if (!installed || t.droppable != protocol::discardable(t.contract.name))
       return fail(
           "library-logical-type",
           "constructor permissions/signature differ from installed owner");
@@ -220,8 +222,7 @@ llvm::Expected<Sort> termSort(const StaticTerm &t, const Environment &e,
     return fail("library-static", "inactive projection member");
   switch (t.kind) {
   case StaticTerm::Kind::Natural:
-    if (!emptyDecl(t.declaration) || !t.arguments.empty() ||
-        t.number > e.expansionLimit)
+    if (!emptyDecl(t.declaration) || !t.arguments.empty() || t.number > 1048576)
       return fail("library-limit", "malformed or excessive static natural");
     return Sort::natural();
   case StaticTerm::Kind::Project: {
@@ -236,7 +237,7 @@ llvm::Expected<Sort> termSort(const StaticTerm &t, const Environment &e,
       if (associated.empty())
         return fail("library-member", "unknown associated domain member " +
                                           p->domain + "::" + t.member);
-      return Sort::domainOf(associated.str());
+      return staticSort(associated);
     }
     const auto &base = t.arguments[0];
     // Associated-member signatures belong to the explicitly captured head.
@@ -253,6 +254,28 @@ llvm::Expected<Sort> termSort(const StaticTerm &t, const Environment &e,
   case StaticTerm::Kind::Root:
   case StaticTerm::Kind::Apply:
   case StaticTerm::Kind::Seal: {
+    if (identity(t.declaration) ==
+        identity(logicalConstructorDeclaration(t.declaration.name))) {
+      const auto *owner = protocol::typeDeclaration(t.declaration.name);
+      if (!owner || t.kind != StaticTerm::Kind::Apply ||
+          t.arguments.size() != owner->parameters.size())
+        return fail("library-static",
+                    "invalid installed logical type application");
+      for (size_t i = 0; i < t.arguments.size(); ++i) {
+        auto actual = termSort(t.arguments[i], e, depth + 1);
+        if (!actual)
+          return actual.takeError();
+        const auto &p = owner->parameters[i];
+        auto expected = p.kind == protocol::StaticKind::Type ? Sort::type()
+                        : p.kind == protocol::StaticKind::Nat
+                            ? Sort::natural()
+                            : Sort::domainOf(p.sort);
+        if (!sameSort(*actual, expected))
+          return fail("library-static-sort",
+                      "logical type application argument kind mismatch");
+      }
+      return Sort::type();
+    }
     const auto *d = findStatic(t.declaration, e);
     if (!d)
       return fail("library-static",
@@ -347,6 +370,157 @@ llvm::Expected<std::string> resolvedDomain(const StaticTerm &t,
     return detail::fail("library-logical-domain",
                         "term has no captured installed domain interpretation");
   return *domain;
+}
+Sort staticSort(llvm::StringRef token) {
+  return token == "Type"  ? Sort::type()
+         : token == "Nat" ? Sort::natural()
+                          : Sort::domainOf(token.str());
+}
+QualifiedDecl logicalConstructorDeclaration(llvm::StringRef name) {
+  return {{"zkc", "installed-contracts", "1", "builtin"},
+          {"logical-types"},
+          name.str()};
+}
+llvm::Expected<StaticTerm> logicalTypeTerm(const Type &type) {
+  if (type.kind == Type::Kind::Logical)
+    return StaticTerm::apply(logicalConstructorDeclaration(type.name),
+                             type.arguments);
+  if (type.kind == Type::Kind::Parameter)
+    return StaticTerm::root(type.declaration);
+  if (type.kind == Type::Kind::Abstract && type.arguments.size() == 1)
+    return StaticTerm::project(type.arguments.front(), type.name);
+  return detail::fail("library-static-sort",
+                      "logical Type argument requires a nominal value type");
+}
+llvm::Expected<Type> logicalTypeValue(const StaticTerm &term,
+                                      const Environment &environment) {
+  auto sort = sortOf(term, environment);
+  if (!sort)
+    return sort.takeError();
+  if (sort->kind != Sort::Kind::Type)
+    return detail::fail("library-static-sort",
+                        "static argument is not Type-valued");
+  if (term.kind == StaticTerm::Kind::Apply &&
+      identity(term.declaration) ==
+          identity(logicalConstructorDeclaration(term.declaration.name)))
+    return Type::logical(term.declaration.name, term.arguments);
+  if (term.kind == StaticTerm::Kind::Project && term.arguments.size() == 1)
+    return Type::abstract(term.arguments.front(), term.member);
+  if (term.kind == StaticTerm::Kind::Root) {
+    const auto *declaration = detail::findStatic(term.declaration, environment);
+    if (declaration && declaration->parameter)
+      return Type::parameter(term.declaration);
+    if (declaration && declaration->capturedDependencies.empty()) {
+      auto selected =
+          staticConstant("Type", declaration->capturedSubject, environment);
+      if (!selected)
+        return selected.takeError();
+      return logicalTypeValue(*selected, environment);
+    }
+  }
+  return detail::fail("library-static-unresolved",
+                      "type term has no logical interpretation");
+}
+llvm::Expected<StaticTerm> staticConstant(llvm::StringRef token,
+                                          llvm::StringRef value,
+                                          const Environment &environment) {
+  if (token == "Nat") {
+    uint64_t number;
+    if (value.getAsInteger(10, number) || number > 1048576 ||
+        value != std::to_string(number))
+      return detail::fail("library-static-sort",
+                          "invalid canonical natural constant");
+    return StaticTerm::natural(number);
+  }
+  if (token == "Type") {
+    auto type = protocol::parseBoundType(value, false);
+    if (!type)
+      return type.takeError();
+    const auto *declaration = protocol::typeDeclaration(type->kind);
+    if (!declaration || !declaration->common)
+      return detail::fail(
+          "library-static-sort",
+          "type constant requires a common logical constructor");
+    if (!type->identity.empty() &&
+        (!type->arguments.empty() || declaration->parameters.size() != 1))
+      return detail::fail("library-static-sort",
+                          "type constant has an unconsumed atomic identity");
+    std::vector<StaticTerm> arguments;
+    for (size_t i = 0; i < declaration->parameters.size(); ++i) {
+      const auto &p = declaration->parameters[i];
+      auto argument = staticConstant(
+          p.kind == protocol::StaticKind::Type  ? "Type"
+          : p.kind == protocol::StaticKind::Nat ? "Nat"
+                                                : p.sort,
+          type->arguments.empty() ? type->identity
+                                  : type->arguments[i].spelling(),
+          environment);
+      if (!argument)
+        return argument.takeError();
+      arguments.push_back(*argument);
+    }
+    return StaticTerm::apply(logicalConstructorDeclaration(type->kind),
+                             std::move(arguments));
+  }
+  const StaticDeclaration *found = nullptr;
+  for (const auto &declaration : environment.statics)
+    if (!declaration.parameter && declaration.parameters.empty() &&
+        (identity(declaration.id) == value ||
+         declaration.capturedSubject == value) &&
+        detail::sameSort(declaration.result, staticSort(token))) {
+      if (found)
+        return detail::fail("library-operation",
+                            "ambiguous installed fixed root");
+      found = &declaration;
+    }
+  if (!found)
+    return detail::fail("library-operation", "uncaptured installed fixed root");
+  return StaticTerm::root(found->id);
+}
+llvm::Expected<std::string>
+resolvedLogicalType(const Type &type, const Environment &environment) {
+  if (type.kind != Type::Kind::Logical)
+    return detail::fail("library-logical-type",
+                        "logical type remains abstract");
+  std::vector<std::string> arguments;
+  for (const auto &argument : type.arguments) {
+    auto value = resolvedStatic(argument, environment);
+    if (!value)
+      return value.takeError();
+    arguments.push_back(*value);
+  }
+  auto bound = protocol::applyBoundType(type.name, arguments);
+  if (!bound)
+    return bound.takeError();
+  return bound->spelling();
+}
+llvm::Expected<std::string> resolvedStatic(const StaticTerm &term,
+                                           const Environment &environment) {
+  auto sort = sortOf(term, environment);
+  if (!sort)
+    return sort.takeError();
+  if (sort->kind == Sort::Kind::Domain)
+    return resolvedDomain(term, environment);
+  if (sort->kind == Sort::Kind::Natural &&
+      term.kind == StaticTerm::Kind::Natural)
+    return std::to_string(term.number);
+  if (sort->kind == Sort::Kind::Type && term.kind == StaticTerm::Kind::Apply &&
+      identity(term.declaration) ==
+          identity(logicalConstructorDeclaration(term.declaration.name)))
+    return resolvedLogicalType(
+        Type::logical(term.declaration.name, term.arguments), environment);
+  if (sort->kind == Sort::Kind::Type && term.kind == StaticTerm::Kind::Root) {
+    const auto *declaration = detail::findStatic(term.declaration, environment);
+    if (declaration && !declaration->parameter &&
+        declaration->capturedDependencies.empty()) {
+      auto type = protocol::parseBoundType(declaration->capturedSubject, false);
+      if (type)
+        return type->spelling();
+      llvm::consumeError(type.takeError());
+    }
+  }
+  return detail::fail("library-static-unresolved",
+                      "static argument has no closed installed interpretation");
 }
 llvm::Expected<std::string> selectionIdentity(const StaticTerm &t,
                                               const Environment &e) {

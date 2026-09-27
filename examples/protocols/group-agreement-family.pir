@@ -1,15 +1,20 @@
 // A group-valued interaction family, separate from polynomial protocols.
 // This checks the generator contract and message typing, not a proof system.
 module {
+  use zkc::curve::{
+    ScalarAction
+  };
+  use zkc::core;
+  use zkc::curve;
   fn Generator<G: ScalarAction>() -> G::Element {
-    let point = curve::generator::<G>();
+    let point = zkc::curve::generator::<G>();
     return point;
   }
 
   fn CheckGenerator<G: ScalarAction>(point: G::Element) -> bool {
-    let expected = curve::generator::<G>();
-    let same = curve::equal::<G>(point, expected);
-    control::require(same);
+    let expected = zkc::curve::generator::<G>();
+    let same = zkc::curve::equal::<G>(point, expected);
+    zkc::core::require(same);
     return same;
   }
 

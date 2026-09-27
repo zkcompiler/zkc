@@ -5,7 +5,7 @@ A release says the participant no longer holds a value. The compiler's own test
 states where it places them and which malformed ones it refuses. This one states
 that a second implementation agrees: it accepts the candidate the compiler
 released storage in and the one it did not, accepts the same source written in
-the readable profile, and refuses each of the ten malformed candidates, which
+with library imports, and refuses each of the ten malformed candidates, which
 both tests build from one place.
 """
 import json
@@ -40,12 +40,12 @@ def main():
         journal.run([optimizer, "--zkc-project-participants"],
             journal.run([compiler, "protocol-import", "-"], source))))
 
-    # The same source in the readable profile reaches the identical pass.
-    profile = source.replace('module {\n  bind both = bool.and();',
-                             'module "arkworks.multilinear.bls12-381/1" {')
-    profile = profile.replace('= both(', '= bool.and(')
-    profile_source = compile("protocol-source", profile)
-    profile_released = compile("protocol-compile", json.dumps(profile_source),
+    # The same source using an installed operation reaches the identical pass.
+    imported = source.replace('module {\n  bind both = bool.and();',
+                             'module { use zkc::core;')
+    imported = imported.replace('= both(', '= zkc::core::and(')
+    imported_source = compile("protocol-source", imported)
+    imported_released = compile("protocol-compile", json.dumps(imported_source),
                                "--release-storage")
 
     directory = journal.directory
@@ -63,7 +63,7 @@ def main():
     check(original, dense, True)
     for _, candidate in malformed(released, projected):
         check(original, candidate, False)
-    check(profile_source, profile_released, True)
+    check(imported_source, imported_released, True)
 
     print(f"{journal.save()} storage release reference checks passed")
 

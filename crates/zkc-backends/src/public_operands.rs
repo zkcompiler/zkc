@@ -2,13 +2,11 @@
 use crate::{Result, refused};
 use std::collections::BTreeSet;
 
-pub(crate) const MSM_IMPLEMENTATION: &str = "dalek-vartime/curve.msm";
-
 /// Installed implementation contract, additional to its mathematical signature.
 /// Call only after ordinary binding admission; unknown implementations are not
 /// installed by this predicate. No role name implicitly satisfies the premise.
 pub fn requires_public_operands(implementation: &str) -> bool {
-    implementation == MSM_IMPLEMENTATION
+    super::backend::requires_public_operands(implementation)
 }
 
 /// Caller assertion that every operand visible to each named execution role is

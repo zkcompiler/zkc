@@ -131,7 +131,8 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
                     "commitment:multilinear.kzg.bls12-381/1",
                 )
                 .unwrap(),
-            ),
+            )
+            .unwrap(),
             &prover.encode_value(&out[0]).unwrap(),
         )
         .unwrap();
@@ -139,7 +140,8 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .decode_typed_value(
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
-            ),
+            )
+            .unwrap(),
             &prover.encode_value(&out[1]).unwrap(),
         )
         .unwrap();
@@ -148,7 +150,8 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("proof:multilinear.kzg.bls12-381/1")
                     .unwrap(),
-            ),
+            )
+            .unwrap(),
             &prover.encode_value(&out[2]).unwrap(),
         )
         .unwrap();
@@ -299,7 +302,8 @@ fn hostile_key_aware_codec_and_exact_length() {
         recv.decode_typed_value(
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap()
-            ),
+            )
+            .unwrap(),
             &noncanonical
         )
         .is_err()
@@ -331,7 +335,8 @@ fn hostile_key_aware_codec_and_exact_length() {
             .decode_typed_value(
                 zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap()
-                ),
+                )
+                .unwrap(),
                 &recv.encode_value(&f(1)).unwrap()
             )
             .unwrap_err()
@@ -510,7 +515,8 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
             .decode_typed_value(
                 zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("bool").unwrap()
-                ),
+                )
+                .unwrap(),
                 &boolean
             )
             .is_err()

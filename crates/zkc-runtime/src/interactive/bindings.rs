@@ -1,11 +1,14 @@
 //! Closed nominal contracts shared by admission and execution. Installed
 //! backends independently advertise implementations of these contracts.
 
-use super::{AdmissionError, AttributeRule, ErrorCode, KernelSignature, Type};
+use super::{AdmissionError, ErrorCode, KernelSignature, Type};
 
 type Result<T> = std::result::Result<T, AdmissionError>;
 fn error(detail: &str) -> AdmissionError {
     AdmissionError::new(ErrorCode::Type, detail)
+}
+fn representation_error(detail: &str) -> AdmissionError {
+    AdmissionError::new(ErrorCode::Representation, detail)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -61,7 +64,7 @@ impl Identity {
             Self::KoalaBearExt8 | Self::MerkleKoalaBearExt8 | Self::Merlin3KoalaBearExt8 => {
                 Some(Self::KoalaBearExt8)
             }
-            _ => None,
+            Self::None => None,
         }
     }
     /// A row commitment has no polynomial opening capability.
@@ -154,7 +157,13 @@ impl Identity {
     }
 }
 
-pub(crate) fn valid_static_identity(name: &str) -> bool {
+/// Ground origin arguments retain canonical Domain, Type, Nat, and existing
+/// codec identities. Origins record construction identity; they install no
+/// declarations and grant no executable permission.
+pub(crate) fn valid_static_argument(name: &str) -> bool {
+    if super::structural::natural(name).is_ok() || LogicalType::parse(name).is_ok() {
+        return true;
+    }
     if matches!(Identity::parse(name), Ok(i) if i != Identity::None) {
         return true;
     }
@@ -188,6 +197,7 @@ pub struct LogicalType {
     identity: Identity,
     resource_domain: Option<super::ResourceDomain>,
     variant: Option<std::sync::Arc<super::VariantDescriptor>>,
+    structural: Option<std::sync::Arc<super::StructuralType>>,
 }
 impl LogicalType {
     pub fn resource_unit(domain: super::ResourceDomain) -> Self {
@@ -196,6 +206,7 @@ impl LogicalType {
             identity: Identity::None,
             resource_domain: Some(domain),
             variant: None,
+            structural: None,
         }
     }
     pub fn resource_domain(&self) -> Option<super::ResourceDomain> {
@@ -204,7 +215,7 @@ impl LogicalType {
     pub fn new(kind: Type, identity: Identity) -> Result<Self> {
         use Identity::*;
         let valid = match kind {
-            Type::ResourceUnit | Type::Variant => false,
+            Type::FixedVector | Type::ResourceUnit | Type::Variant => false,
             Type::Bool | Type::Index | Type::Indices => identity == None,
             Type::Field | Type::Matrix | Type::Vector | Type::Polynomial | Type::Round => {
                 matches!(
@@ -241,6 +252,7 @@ impl LogicalType {
             identity,
             resource_domain: std::option::Option::None,
             variant: std::option::Option::None,
+            structural: std::option::Option::None,
         })
     }
     pub fn kind(&self) -> Type {
@@ -265,6 +277,9 @@ impl LogicalType {
         Some(format!("zkcv.{}{suffix}/1", self.kind.name()))
     }
     pub fn spelling(&self) -> String {
+        if let Some(t) = &self.structural {
+            return t.spelling();
+        }
         if let Some(d) = &self.variant {
             return d.spelling().to_owned();
         }
@@ -282,29 +297,67 @@ impl LogicalType {
             identity: Identity::None,
             resource_domain: None,
             variant: Some(descriptor),
+            structural: None,
         }
     }
     pub fn variant_descriptor(&self) -> Option<&std::sync::Arc<super::VariantDescriptor>> {
         self.variant.as_ref()
     }
+    /// Copy permission for the complete type, including structural arguments and
+    /// every variant payload. The constructor head alone cannot grant it.
     pub fn is_duplicable(&self) -> bool {
+        if let Some(t) = &self.structural {
+            return t.is_duplicable();
+        }
         self.variant
             .as_ref()
             .map_or_else(|| self.kind.is_duplicable(), |d| d.is_duplicable())
     }
+    /// Drop permission for the complete type, including structural arguments and
+    /// every variant payload, independently of codec or representation support.
     pub fn is_discardable(&self) -> bool {
+        if let Some(t) = &self.structural {
+            return t.is_discardable();
+        }
         self.variant
             .as_ref()
             .map_or_else(|| self.kind.is_discardable(), |d| d.is_discardable())
     }
     pub fn parse(spelling: &str) -> Result<Self> {
-        Self::parse_nested(spelling, 0)
+        Self::parse_nested(spelling, 0, &mut super::structural::ParseBudget::new())
     }
-    pub(super) fn parse_nested(spelling: &str, depth: usize) -> Result<Self> {
+    pub fn structural(&self) -> Option<&super::StructuralType> {
+        self.structural.as_deref()
+    }
+    pub(super) fn descriptor_bytes(&self) -> usize {
+        self.variant
+            .as_ref()
+            .map_or(0, |v| v.retained_bytes())
+            .saturating_add(self.structural.as_ref().map_or(0, |s| s.retained_bytes()))
+    }
+    pub(super) fn parse_nested(
+        spelling: &str,
+        depth: usize,
+        budget: &mut super::structural::ParseBudget,
+    ) -> Result<Self> {
         if spelling.starts_with("variant:") {
             return Ok(Self::variant(super::VariantDescriptor::parse(
-                spelling, depth,
+                spelling, depth, budget,
             )?));
+        }
+        budget.node(depth)?;
+        if spelling.len() > super::STRUCTURAL_SPELLING_LIMIT {
+            return Err(error("logical-type-limit"));
+        }
+        if spelling.contains('<') {
+            let structural = super::structural::parse(spelling, depth, budget)?;
+            return Ok(Self {
+                kind: structural.kind(),
+                identity: Identity::None,
+                resource_domain: None,
+                variant: None,
+                structural: Some(structural),
+            });
         }
         let (kind, identity) = spelling.split_once(':').unwrap_or((spelling, ""));
         if matches!(kind, "bool" | "index" | "indices") != identity.is_empty() {
@@ -331,6 +384,7 @@ impl LogicalType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Representation {
+    FixedVector,
     Variant,
     ResourceUnit,
     Bn254Fr,
@@ -387,6 +441,7 @@ pub enum Representation {
 impl Representation {
     pub fn name(self) -> &'static str {
         match self {
+            Self::FixedVector => "plonky3.fixed-vector/1",
             Self::Variant => "logical.variant/1",
             Self::Bn254Fr => "arkworks.bn254-fr/1",
             Self::Bn254FrVector => "arkworks.bn254-fr-vector/1",
@@ -440,8 +495,12 @@ impl Representation {
             Self::MerkleStates => "plonky3.merkle-states/1",
         }
     }
-    fn parse(name: &str) -> Result<Self> {
+    pub(super) fn parse(name: &str) -> Result<Self> {
+        if name.is_empty() || name.contains('@') {
+            return Err(error("uninstalled representation"));
+        }
         [
+            Self::FixedVector,
             Self::Variant,
             Self::Bn254Fr,
             Self::Bn254FrVector,
@@ -495,7 +554,7 @@ impl Representation {
         ]
         .into_iter()
         .find(|r| r.name() == name)
-        .ok_or_else(|| error("uninstalled representation"))
+        .ok_or_else(|| representation_error("uninstalled representation"))
     }
 }
 
@@ -506,7 +565,7 @@ pub struct PhysicalType {
 }
 impl PhysicalType {
     pub fn new(logical: LogicalType, representation: Representation) -> Result<Self> {
-        let default = Self::default_for(logical.clone());
+        let default = Self::default_for(logical.clone())?;
         if representation != default.representation
             && !matches!(
                 (logical.kind, logical.identity, representation),
@@ -523,20 +582,42 @@ impl PhysicalType {
                     )
             )
         {
-            return Err(error("representation does not implement logical type"));
+            return Err(representation_error(
+                "representation does not implement logical type",
+            ));
         }
         Ok(Self {
             logical,
             representation,
         })
     }
-    pub fn default_for(logical: LogicalType) -> Self {
+    pub fn default_for(logical: LogicalType) -> Result<Self> {
         use Identity as I;
         use Representation as R;
         use Type as T;
         // LogicalType construction has already checked the finite sort/identity pairs.
         let representation = match (logical.kind, logical.identity) {
-            (T::Variant, I::None) => R::Variant,
+            (T::FixedVector, I::None) => {
+                let (element, _) = logical
+                    .fixed_vector_parts()
+                    .ok_or_else(|| representation_error("unrepresented logical type"))?;
+                if element.kind() != T::Field || element.identity() != I::KoalaBear {
+                    return Err(representation_error("unrepresented logical type"));
+                }
+                R::FixedVector
+            }
+            (T::Variant, I::None) => {
+                for ty in logical
+                    .variant_descriptor()
+                    .ok_or_else(|| error("variant-descriptor"))?
+                    .alternatives()
+                    .iter()
+                    .flat_map(|a| a.payload())
+                {
+                    Self::default_for(ty.clone())?;
+                }
+                R::Variant
+            }
             (T::ResourceUnit, I::None) => R::ResourceUnit,
             (T::Field, I::Bn254Fr) => R::Bn254Fr,
             (T::Vector, I::Bn254Fr) => R::Bn254FrVector,
@@ -584,14 +665,14 @@ impl PhysicalType {
                 T::OpeningState => R::MerkleState,
                 T::Commitments => R::MerkleRoots,
                 T::OpeningStates => R::MerkleStates,
-                _ => unreachable!("validated row commitment kind"),
+                _ => return Err(representation_error("unrepresented logical type")),
             },
-            _ => unreachable!("validated logical sort and identity"),
+            _ => return Err(representation_error("unrepresented logical type")),
         };
-        Self {
+        Ok(Self {
             logical,
             representation,
-        }
+        })
     }
     pub fn logical(&self) -> LogicalType {
         self.logical.clone()
@@ -622,18 +703,22 @@ impl PhysicalType {
         format!("{}@{}", self.logical.spelling(), self.representation.name())
     }
     pub fn parse(spelling: &str) -> Result<Self> {
-        if spelling.len()
-            > if spelling.starts_with("variant:") {
-                256 * 1024 + 18
-            } else {
-                super::Limits::STRING_BYTES
-            }
+        // Preserve the variant transport ceiling. Ordinary logical spellings
+        // have their own bound; an outer representation does not count toward it.
+        if spelling.starts_with("variant:") && spelling.len() > 256 * 1024 + 18 {
+            return Err(error("physical type spelling limit"));
+        }
+        if !spelling.starts_with("variant:")
+            && spelling.len() > super::STRUCTURAL_SPELLING_LIMIT + 1 + super::Limits::STRING_BYTES
         {
             return Err(error("physical type spelling limit"));
         }
         let (logical, representation) = spelling
             .split_once('@')
             .ok_or_else(|| error("physical representation required"))?;
+        if representation.len() > super::Limits::STRING_BYTES {
+            return Err(error("physical type spelling limit"));
+        }
         Self::new(
             LogicalType::parse(logical)?,
             Representation::parse(representation)?,
@@ -680,63 +765,35 @@ impl ResolvedBinding {
 }
 
 impl OperationBinding {
+    /// Discover exact implementation and contract identities from the installed
+    /// registry. Rows may still refuse particular static arguments; discovery
+    /// does not replace logical or physical signature admission.
+    pub fn installed_implementations() -> Result<Vec<(String, &'static str)>> {
+        super::operations::installed_implementations()
+    }
+
+    /// Instantiate logical ports without choosing a representation. A supplied
+    /// implementation still constrains selection and must be independently valid.
+    pub fn logical_signature(&self) -> Result<KernelSignature<LogicalType>> {
+        let logical = self.instantiate_logical_signature()?;
+        if !self.implementation.is_empty() {
+            self.select_signature(&logical)?;
+        }
+        Ok(logical)
+    }
+
+    // Shared by logical admission and the production physical decoder. Formation
+    // must not depend on the current installation's realization coverage.
+    fn instantiate_logical_signature(&self) -> Result<KernelSignature<LogicalType>> {
+        super::operations::logical_signature(self)
+    }
+
     /// Resolve the finite source contract independently of backend advertisement.
     pub fn signature(&self) -> Result<BoundSignature> {
-        let fail = || AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding");
-        if matches!(
-            self.contract.as_str(),
-            "resource_unit.create" | "resource_unit.pass" | "resource_unit.consume"
-        ) {
-            if self.arguments.len() != 1 {
-                return Err(AdmissionError::new(
-                    ErrorCode::Signature,
-                    "binding-resource-unit-domain",
-                ));
-            }
-            let domain = super::ResourceDomain::parse(&self.arguments[0]).map_err(|_| {
-                AdmissionError::new(ErrorCode::Type, "binding-resource-unit-domain")
-            })?;
-            if self.implementation != format!("logical/{}", self.contract) {
-                return Err(AdmissionError::new(
-                    ErrorCode::Signature,
-                    "binding-implementation",
-                ));
-            }
-            let ty = PhysicalType::default_for(LogicalType::resource_unit(domain));
-            return Ok(KernelSignature {
-                inputs: if self.contract == "resource_unit.create" {
-                    vec![]
-                } else {
-                    vec![ty.clone()]
-                },
-                outputs: if self.contract == "resource_unit.consume" {
-                    vec![]
-                } else {
-                    vec![ty.clone()]
-                },
-                attributes: AttributeRule::None,
-            });
-        }
-        if self.contract == "table.relayout" {
-            if self.implementation != "arkworks/table.relayout"
-                || self.arguments.len() != 3
-                || self.arguments[0] != Identity::Bls12381Fr.name()
-            {
-                return Err(fail());
-            }
-            let logical = LogicalType::new(Type::Table, Identity::Bls12381Fr)?;
-            let from =
-                PhysicalType::new(logical.clone(), Representation::parse(&self.arguments[1])?)?;
-            let to = PhysicalType::new(logical, Representation::parse(&self.arguments[2])?)?;
-            if from == to {
-                return Err(fail());
-            }
-            return Ok(KernelSignature {
-                inputs: vec![from],
-                outputs: vec![to],
-                attributes: AttributeRule::None,
-            });
-        }
-        super::domain_bindings::signature(self)
+        super::operations::signature(self)
+    }
+
+    fn select_signature(&self, logical: &KernelSignature<LogicalType>) -> Result<BoundSignature> {
+        super::operations::select_signature(self, logical)
     }
 }

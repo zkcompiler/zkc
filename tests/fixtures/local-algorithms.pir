@@ -1,4 +1,10 @@
 module {
+  use zkc::algebra::{
+    Vector
+  };
+  use zkc::random::{
+    Nonce
+  };
   bind add = field::add(bls12-381.fr);
   bind scale = curve::scale(bls12-381.g1);
   bind sum = curve::add(bls12-381.g1);

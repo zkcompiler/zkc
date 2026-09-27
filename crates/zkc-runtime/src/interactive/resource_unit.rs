@@ -28,3 +28,48 @@ impl ResourceDomain {
         std::str::from_utf8(&self.bytes[..usize::from(self.len)]).expect("validated ASCII slot")
     }
 }
+
+use super::operations::{Contract, Contribution};
+use super::{AttributeRule, KernelSignature, LogicalType, OperationBinding};
+fn signature(
+    binding: &OperationBinding,
+    _: &Contract,
+) -> Result<KernelSignature<LogicalType>, AdmissionError> {
+    if binding.arguments.len() != 1 {
+        return Err(AdmissionError::new(
+            ErrorCode::Signature,
+            "binding-resource-unit-domain",
+        ));
+    }
+    let domain = ResourceDomain::parse(&binding.arguments[0])
+        .map_err(|_| AdmissionError::new(ErrorCode::Type, "binding-resource-unit-domain"))?;
+    let ty = LogicalType::resource_unit(domain);
+    Ok(KernelSignature {
+        inputs: if binding.contract == "resource_unit.create" {
+            vec![]
+        } else {
+            vec![ty.clone()]
+        },
+        outputs: if binding.contract == "resource_unit.consume" {
+            vec![]
+        } else {
+            vec![ty]
+        },
+        attributes: AttributeRule::None,
+    })
+}
+pub(super) const CONTRIBUTION: Contribution = Contribution {
+    alternatives: &[],
+    logical_refusals: &[],
+    physical_error: "binding-implementation",
+    physical_only: false,
+
+    contracts: &[
+        Contract::custom("resource_unit.create"),
+        Contract::custom("resource_unit.pass"),
+        Contract::custom("resource_unit.consume"),
+    ],
+    resolve: signature,
+    providers: &["logical"],
+    select: super::operations::default_ports,
+};

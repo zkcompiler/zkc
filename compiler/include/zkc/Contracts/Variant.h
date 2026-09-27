@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 namespace zkc::protocol {
+struct TypeParseBudget;
 struct VariantAlternative {
   std::string label;
   std::vector<std::string> payload;
@@ -18,7 +19,9 @@ inline constexpr size_t VariantSpellingBytes = 256 * 1024;
 /// Logical, self-contained nominal identity. Both directions check formation,
 /// canonical spelling and bounded recursive payloads; physical types are
 /// refused.
-std::optional<VariantDescriptor> decodeVariant(std::string_view);
+std::optional<VariantDescriptor>
+decodeVariant(std::string_view, unsigned depth = 0,
+              TypeParseBudget *budget = nullptr);
 std::optional<std::string> encodeVariant(const VariantDescriptor &);
 } // namespace zkc::protocol
 #endif

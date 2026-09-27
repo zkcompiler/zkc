@@ -1,18 +1,22 @@
 // Independent concrete authoring, preserving explicit protocol/local sites.
 module {
+  use zkc::core;
+  use zkc::curve;
+  use zkc::random::{Rng};
+  use zkc::random;
   fn Sample(coins: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) {
-    [draw] let (secret, after) = random::draw(coins);
+    [draw] let (secret, after) = zkc::random::draw(coins);
     return (secret, after);
   }
   fn Multiply(secret: "bls12-381.fr"::Element) -> "bls12-381.g1"::Element {
-    let base = curve::generator::<"bls12-381.g1">();
-    return curve::scale(base, secret);
+    let base = zkc::curve::generator::<"bls12-381.g1">();
+    return zkc::curve::scale(base, secret);
   }
   fn Verify(point: "bls12-381.g1"::Element, secret: "bls12-381.fr"::Element) -> bool {
-    let base = curve::generator::<"bls12-381.g1">();
-    let expected = curve::scale(base, secret);
-    let same = curve::equal(point, expected);
-    control::require(same);
+    let base = zkc::curve::generator::<"bls12-381.g1">();
+    let expected = zkc::curve::scale(base, secret);
+    let same = zkc::curve::equal(point, expected);
+    zkc::core::require(same);
     return same;
   }
   protocol Agreement {

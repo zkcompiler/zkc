@@ -1,0 +1,22 @@
+{
+  "profile": "zkc.contract-facet-comparison/1",
+  "consumer_fields": {
+    "cpp": ["history", "publicReplay", "sampling", "observation", "acceptanceGuard", "conjunction", "unclassifiedProviderEffect"],
+    "rust": ["history"],
+    "lean": ["history"]
+  },
+  "declared_fields": {
+    "History": "history",
+    "PublicReplay": "publicReplay",
+    "Sampling": "sampling",
+    "Observation": "observation",
+    "AcceptanceGuard": "acceptanceGuard",
+    "Conjunction": "conjunction"
+  },
+  "uncompared_declarations": {
+    "Diagonal": "Compiler-only operand roles; no equivalent runtime or Lean classification API.",
+    "Contraction": "Compiler-only operand roles; no equivalent runtime or Lean classification API.",
+    "Coset": "Compiler analysis equation/port facts; not the reference numerical interpretation.",
+    "DomainValue": "Compiler congruence facts; not a cross-consumer replay or purity claim."
+  }
+}

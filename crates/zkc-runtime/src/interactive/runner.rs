@@ -957,7 +957,13 @@ impl<B: Backend> Runner<B> {
                             return Err(BackendError::new("variant-payload").into());
                         }
                         for (v, ty) in args.iter().zip(declared.payload()) {
-                            self.validate(v, PhysicalType::default_for(ty.clone()), false)?;
+                            self.validate(
+                                v,
+                                PhysicalType::default_for(ty.clone()).map_err(|_| {
+                                    BackendError::new("variant-payload-representation")
+                                })?,
+                                false,
+                            )?;
                         }
                         args.extend(captures.iter().map(|n| env[n].clone()));
                         let ports = arm

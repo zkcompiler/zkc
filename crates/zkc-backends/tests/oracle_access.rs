@@ -162,7 +162,8 @@ fn wire_nominality_canonicality_and_preimport_accounting() {
                 Domain::Base
             };
             let other_ty =
-                PhysicalType::default_for(LogicalType::new(ty.kind(), other.identity()).unwrap());
+                PhysicalType::default_for(LogicalType::new(ty.kind(), other.identity()).unwrap())
+                    .unwrap();
             assert!(b.decode_typed_value(other_ty, &bytes).is_err());
         }
     }

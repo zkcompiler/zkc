@@ -1,6 +1,7 @@
 #include "Verification.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Plan/IR/Physical.h"
@@ -27,6 +28,22 @@ static bool digits(StringRef n) {
 LogicalResult FieldType::verify(llvm::function_ref<InFlightDiagnostic()> e,
                                 StringRef d) {
   return field(e, d);
+}
+LogicalResult
+FixedVectorType::verify(llvm::function_ref<InFlightDiagnostic()> emit,
+                        Type element, uint64_t length) {
+  auto logical = protocol::encodeBoundType(element, false);
+  if (!logical) {
+    consumeError(logical.takeError());
+    return emit() << "fixed vector requires an admitted logical element type";
+  }
+  auto type = protocol::applyBoundType(
+      "fixed_vector", {logical->spelling(), std::to_string(length)});
+  if (!type) {
+    consumeError(type.takeError());
+    return emit() << "fixed vector exceeds logical type limits";
+  }
+  return success();
 }
 LogicalResult ScalarType::verify(llvm::function_ref<InFlightDiagnostic()> e,
                                  StringRef d) {

@@ -83,6 +83,42 @@ native elaboration remain future work. The
 [frontend guide](compiler/frontend.md) and
 [project guide](language/projects.md) describe the implementation.
 
+Installed domain vocabulary is declared in MLIR-independent typed contract
+records. Generated modules expose types, capabilities and operations through
+ordinary `use` paths, aliases and reexports; implicit primitive namespaces and
+profile module headings have been removed. Finite `Vector`/`Matrix` families
+reduce to the existing logical types. Library-owned operators select by known
+nominal operand constructors and elaborate to checked calls, including in
+component bodies. Source functions may define hooks for records owned by their
+package. Duplicate bindings and private or unavailable targets are refused.
+Contract metadata owns copy/drop permissions, history transitions, source
+availability and the conservative local effect envelope. Kinded Domain/Type/Nat
+applications now survive source specialization, common admission and domain-owned
+MLIR type adapters. Logical admission is independent of physical availability;
+exact installation data owns provider and representation selection. C++, Rust
+and Lean independently admit the structural profile. The fixed-vector example
+executes an exact-length KoalaBear dot product through Plonky3 and compares it
+with an independent Lean reference. Its BLS instance is logically admitted but
+has no physical implementation, and fixed-vector codecs are not installed.
+New domain meanings, native kernels and Lean interpretations still require
+explicit implementations; declarations generate neither execution nor proofs.
+
+Domain authoring now has generated direct/custom/unavailable native-binding
+coverage and standard ODS verifier forwarding. Explicit build contributions
+assemble one declaration inventory and native registry per installation;
+installed base/extended consumers cover static and shared linkage. Rust and Lean
+admission is independently authored in operation-family modules. Native dispatch
+uses exact implementation owners after common security checks, and flat typed
+values require exhaustive classification and accounting. A same-port alternate
+BLS dot-product implementation preserves the default selection. Layout aliases
+inherit dispatch and security constraints. Four independent physical registry
+readers compare signatures; native tests execute every installed alternative.
+Lean implementation selection uses explicit domain-owned registrations. Tests detect
+deliberately different reader signatures; they are not equivalence proofs.
+The [extension guide](development/extensions.md) describes these boundaries and
+an IR-only specialization example. Full external nominal/runtime-value SDKs and
+portable decomposition certificates remain outside this support.
+
 Successful frontend publication pairs a checked model with its emitted common
 content. Pure dependency inspection is separate from loading, and callers can
 set per-invocation [formation and expansion budgets](compiler/frontend-budgets.md).

@@ -1,17 +1,25 @@
 // Check one selected equation from a runtime commitment batch. The flag changes
 // only the resulting predicate: selection and equality have already executed.
 module {
+  use zkc::curve::{
+    ScalarAction
+  };
+  use zkc::algebra::{
+    Vector
+  };
+  use zkc::core;
+  use zkc::curve;
   fn BatchCheck<G: domain Group>(
     batch: Vector<G::Element>,
     query: index,
     expected: G::Element,
     enabled: bool
   ) -> (bool, index) requires (ScalarAction(G)) {
-    [length] let length = curve::length::<G>(batch);
-    [selected] let selected = curve::get::<G>(batch, query);
-    [equation] let equation = curve::equal::<G>(selected, expected);
-    [disabled] let disabled = bool::not(enabled);
-    [accepted] let accepted = bool::or(disabled, equation);
+    [length] let length = zkc::curve::length::<G>(batch);
+    [selected] let selected = zkc::curve::get::<G>(batch, query);
+    [equation] let equation = zkc::curve::equal::<G>(selected, expected);
+    [disabled] let disabled = zkc::core::not(enabled);
+    [accepted] let accepted = zkc::core::or(disabled, equation);
     return (accepted, length);
   }
 

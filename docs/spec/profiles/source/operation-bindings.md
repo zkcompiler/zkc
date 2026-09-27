@@ -1,9 +1,9 @@
 # Closed operation bindings
 
 This profile makes nominal domains and operation applications explicit in the
-common-protocol carrier. Profile names are authoring defaults elaborated
-into explicit bindings; the portable carrier does not accept a profile
-string in place of those bindings.
+common-protocol carrier. Authored source imports curated installed APIs or names
+logical contracts in explicit bindings. Module profile headings are not accepted,
+and the portable carrier does not accept a profile string in place of bindings.
 
 ## Meaning and ownership
 
@@ -53,16 +53,46 @@ an ordering rule within attribute admission, not a global priority rule for
 unrelated defects elsewhere in a carrier. Input-size limits still precede
 decoding.
 
-Logical value types have the spelling `kind:identity`, except `bool`, which has
-no domain argument. Examples are `table:bls12-381.fr`, `group:bls12-381.g1` and
-`proof:multilinear.kzg.bls12-381/1`. A physical type adds `@representation`.
-The spelling is a transport: MLIR retains separate logical type and
-representation parameters in `!plan.data<logical, representation>`.
+Logical types apply an installed constructor to ordered static arguments. Each
+parameter has kind `Domain(sort)`, `Type` or `Nat`. A domain argument names an
+installed nominal identity of the declared sort; a type argument is another
+logical type; a natural argument is a canonical decimal in `0..1048576`.
+Formation is independent of representation and implementation availability.
+
+Zero-argument constructors retain their bare spelling (`bool`, `index`,
+`indices`); one-domain constructors retain `kind:identity`, such as
+`table:bls12-381.fr` or `group:bls12-381.g1`. Other applications use
+`constructor<argument,...>`, for example `fixed_vector<field:koala-bear,4>`.
+These forms are canonical: `field<koala-bear>`, whitespace, empty arguments,
+leading zeros in naturals and physical types nested as arguments refuse.
+Neither a matching sort nor an invented constructor installs a type. Existing
+atomic constructors check their explicit admitted identity sets.
+
+A physical type adds one outer `@representation`. That representation must
+support the complete logical application, including every nested type and natural
+argument. Missing support is a physical-selection refusal, not a malformed
+logical type. MLIR retains both parts in `!plan.data<logical, representation>`;
+domain-owned logical MLIR types preserve their static arguments before planning.
+
+The bounded reader admits at most 4096 bytes per nonvariant logical spelling,
+eight combined structural/variant nesting levels and 200000 nodes per type
+parse. The node budget counts constructor and atomic type nodes, structural
+Domain/Nat arguments, and the existing variant descriptor nodes; nesting cannot
+reset it. The existing variant spelling and payload bounds also apply.
+The outer representation name is checked separately. These are admission limits,
+not mathematical restrictions on the type theory.
+
+Copy and drop each require the constructor's declared permission and that
+permission for every Type argument. A container of an affine element cannot
+acquire copying through a wrapper. A public or serializable element does not
+give the container a codec: codec, observation and implementation support remain
+explicit installation facts.
 
 The text form omits a module-wide profile:
 
 ```text
 module {
+  use zkc::poly::Point;
   bind empty = poly::empty_point(bls12-381.fr);
   fn Empty() -> Point<"bls12-381.fr"> {
     let point = empty();
@@ -70,6 +100,12 @@ module {
   }
 }
 ```
+
+In an authored module a `bind` target must permit the `Source` authoring stage;
+spelling an installed contract directly cannot expose construction-only
+transcript operations. The separate common carrier can contain those operations
+without establishing construction provenance. [Resolved authoring](authoring.md)
+owns this source boundary.
 
 In MLIR, `pir.operation_binding` is a symbol declaration. Mathematical dialect
 operations reference it with a `binding` symbol attribute. This includes

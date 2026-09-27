@@ -87,7 +87,8 @@ fn actual_supplied_participant_waits_and_retains_nonce_after_wrong_session() {
         .decode_typed_value(
             zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
-            ),
+            )
+            .unwrap(),
             &bytes,
         )
         .unwrap();

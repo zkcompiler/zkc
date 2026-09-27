@@ -1,4 +1,5 @@
 #include "Internal.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
 #include <algorithm>
@@ -70,15 +71,53 @@ llvm::Expected<Permissions> permissions(const Type &t, const TypeContext &ctx,
       if (c.contract.name == t.name) {
         if (c.contract.parameters.size() != t.arguments.size())
           return fail("library-type-arity", "logical type argument count");
+        Permissions result{!c.contract.affine, c.droppable};
         for (size_t i = 0; i < t.arguments.size(); ++i) {
           auto s = sortOf(t.arguments[i], ctx.environment);
           if (!s)
             return s.takeError();
-          if (!sameSort(*s, Sort::domainOf(c.contract.parameters[i])))
+          if (!sameSort(*s, staticSort(c.contract.parameters[i])))
             return fail("library-type-sort",
-                        "logical domain argument mismatch");
+                        "logical static argument kind mismatch");
+          if (s->kind == Sort::Kind::Type) {
+            const auto &argument = t.arguments[i];
+            llvm::Expected<Permissions> nested = Permissions{false, false};
+            if (argument.kind == StaticTerm::Kind::Apply &&
+                identity(argument.declaration) ==
+                    identity(logicalConstructorDeclaration(
+                        argument.declaration.name)))
+              nested = permissions(
+                  Type::logical(argument.declaration.name, argument.arguments),
+                  ctx, depth + 1);
+            else if (argument.kind == StaticTerm::Kind::Root) {
+              for (const auto &bound : ctx.bounds)
+                if (identity(bound.parameter) == identity(argument.declaration))
+                  nested = bound.permissions;
+              const auto *declaration =
+                  findStatic(argument.declaration, ctx.environment);
+              if (declaration && !declaration->parameter &&
+                  declaration->capturedDependencies.empty() &&
+                  !declaration->capturedSubject.empty()) {
+                auto concrete = staticConstant(
+                    "Type", declaration->capturedSubject, ctx.environment);
+                if (!concrete)
+                  return concrete.takeError();
+                nested = permissions(Type::logical(concrete->declaration.name,
+                                                   concrete->arguments),
+                                     ctx, depth + 1);
+              }
+            } else if (argument.kind == StaticTerm::Kind::Project &&
+                       argument.arguments.size() == 1)
+              nested = permissions(
+                  Type::abstract(argument.arguments.front(), argument.member),
+                  ctx, depth + 1);
+            if (!nested)
+              return nested.takeError();
+            result.copy &= nested->copy;
+            result.drop &= nested->drop;
+          }
         }
-        return Permissions{!c.contract.affine, c.droppable};
+        return result;
       }
     return fail("library-logical-type",
                 "uninstalled logical constructor " + t.name);
@@ -262,35 +301,9 @@ llvm::Error equalTypes(const Type &a, const Type &b,
       return err;
   return llvm::Error::success();
 }
-llvm::Error checkAttributes(const LogicalCall &call,
-                            const std::vector<std::string> &attributes,
-                            const Environment &e) {
-  std::string field = "bls12-381.fr";
-  if (call.operation == "field.constant" ||
-      call.operation == "vector.constant") {
-    field.clear();
-    if (!call.arguments.empty()) {
-      auto domain = installedDomain(call.arguments[0], e);
-      if (!domain)
-        return domain.takeError();
-      field = *domain;
-    }
-    if (field.empty()) {
-      // 0 and 1 are canonical in every field. Other literals require a
-      // selected characteristic or a future owner-supported bound judgment.
-      for (const auto &a : attributes)
-        if (a != "0" && a != "1")
-          return fail("library-attribute-bound",
-                      "generic field literal needs a selected characteristic");
-      field = "bls12-381.fr";
-    }
-  }
-  if (auto err = protocol::checkParameters(call.operation, attributes, field))
-    return fail("library-operation-attributes", llvm::toString(std::move(err)));
-  return llvm::Error::success();
-}
-llvm::Expected<Signature> logicalSignature(const LogicalCall &call,
-                                           const Environment &e) {
+namespace {
+llvm::Expected<std::vector<StaticTerm>>
+logicalArguments(const LogicalCall &call, const Environment &e) {
   const LogicalOperation *op = nullptr;
   for (const auto &o : e.operations)
     if (o.contract.name == call.operation)
@@ -312,35 +325,30 @@ llvm::Expected<Signature> logicalSignature(const LogicalCall &call,
         return fail("library-operation", "non-topological projection");
       actuals.push_back(StaticTerm::project(actuals[*t.parent], t.name));
     } else if (t.arguments) {
-      // Installed application heads must resolve to captured declarations;
-      // names alone do not resolve across library namespaces.
-      const StaticDeclaration *head = nullptr;
-      for (const auto &d : e.statics)
-        if (identity(d.id) == t.name)
-          head = &d;
-      if (!head)
-        return fail("library-operation",
-                    "uncaptured installed application head");
+      QualifiedDecl head = logicalConstructorDeclaration(t.name);
+      if (!protocol::typeDeclaration(t.name)) {
+        const StaticDeclaration *capturedHead = nullptr;
+        for (const auto &d : e.statics)
+          if (identity(d.id) == t.name)
+            capturedHead = &d;
+        if (!capturedHead)
+          return fail("library-operation",
+                      "uncaptured installed application head");
+        head = capturedHead->id;
+      }
       std::vector<StaticTerm> args;
       for (unsigned a : *t.arguments) {
         if (a >= actuals.size())
           return fail("library-operation", "non-topological application");
         args.push_back(actuals[a]);
       }
-      actuals.push_back(StaticTerm::apply(head->id, std::move(args)));
+      actuals.push_back(StaticTerm::apply(head, std::move(args)));
     } else if (auto fixed = s.scope.constants.find(i);
                fixed != s.scope.constants.end()) {
-      const StaticDeclaration *root = nullptr;
-      for (const auto &d : e.statics)
-        if (identity(d.id) == fixed->second ||
-            d.capturedSubject == fixed->second) {
-          if (root)
-            return fail("library-operation", "ambiguous installed fixed root");
-          root = &d;
-        }
-      if (!root)
-        return fail("library-operation", "uncaptured installed fixed root");
-      actuals.push_back(StaticTerm::root(root->id));
+      auto constant = staticConstant(s.scope.sorts[i], fixed->second, e);
+      if (!constant)
+        return constant.takeError();
+      actuals.push_back(*constant);
     } else {
       if (formal == call.arguments.size())
         return fail("library-operation-arity", "missing static argument");
@@ -349,12 +357,64 @@ llvm::Expected<Signature> logicalSignature(const LogicalCall &call,
     auto sort = sortOf(actuals.back(), e);
     if (!sort)
       return sort.takeError();
-    if (!sameSort(*sort, Sort::domainOf(s.scope.sorts[i])))
+    if (!sameSort(*sort, staticSort(s.scope.sorts[i])))
       return fail("library-static-sort",
-                  "installed operation domain sort mismatch");
+                  "installed operation static argument kind mismatch");
   }
   if (formal != call.arguments.size())
     return fail("library-operation-arity", "extra static arguments");
+  return actuals;
+}
+} // namespace
+llvm::Error checkAttributes(const LogicalCall &call,
+                            const std::vector<std::string> &attributes,
+                            const Environment &e) {
+  std::string field;
+  const auto *parameters = protocol::parameterContract(call.operation);
+  if (parameters && parameters->fieldTerm) {
+    auto terms = logicalArguments(call, e);
+    if (!terms)
+      return terms.takeError();
+    if (*parameters->fieldTerm >= terms->size())
+      return fail("library-operation", "invalid declared parameter field");
+    {
+      auto domain = installedDomain((*terms)[*parameters->fieldTerm], e);
+      if (!domain)
+        return domain.takeError();
+      field = *domain;
+    }
+    if (field.empty()) {
+      // 0 and 1 are canonical in every field. Other literals require a
+      // selected characteristic or a future owner-supported bound judgment.
+      for (const auto &a : attributes)
+        if (a != "0" && a != "1")
+          return fail("library-attribute-bound",
+                      "generic field literal needs a selected characteristic");
+    }
+  }
+  auto checked =
+      field.empty() && parameters && parameters->fieldTerm
+          ? protocol::checkGenericParameters(call.operation, attributes)
+          : protocol::checkParameters(call.operation, attributes, field);
+  if (checked)
+    return fail("library-operation-attributes",
+                llvm::toString(std::move(checked)));
+  return llvm::Error::success();
+}
+llvm::Expected<Signature> logicalSignature(const LogicalCall &call,
+                                           const Environment &e) {
+  const LogicalOperation *op = nullptr;
+  for (const auto &o : e.operations)
+    if (o.contract.name == call.operation)
+      op = &o;
+  if (!op)
+    return fail("library-operation",
+                "uninstalled logical operation " + call.operation);
+  auto resolved = logicalArguments(call, e);
+  if (!resolved)
+    return resolved.takeError();
+  const auto &actuals = *resolved;
+  const auto &s = op->contract.signature;
   Signature out;
   out.effects = op->effects;
   auto ports = [&](const std::vector<generic::Type> &ts,

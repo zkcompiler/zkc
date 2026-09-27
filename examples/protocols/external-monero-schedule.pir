@@ -1,27 +1,31 @@
 // A caller-authored grouped hash schedule. The proof-container mapping stays
 // outside this function: lengths explicitly delimit each hash-chain call.
 module {
+  use zkc::external;
+  use zkc::algebra::{Indices};
+  use zkc::algebra;
+  use zkc::core;
   fn Schedule(initial: Indices, commitments: Indices, messages: Indices, lengths: Indices) -> (Indices, Indices) {
-    let first = external::monero::init(initial);
-    let digest = external::monero::hash(commitments);
-    let (bound, _) = external::monero::update(first, digest);
+    let first = zkc::external::monero_init(initial);
+    let digest = zkc::external::monero_hash(commitments);
+    let (bound, _) = zkc::external::monero_update(first, digest);
     let mut state = bound;
-    let mut checkpoints = indices::empty();
+    let mut checkpoints = zkc::algebra::indices_empty();
     let mut cursor: index = 0;
     for group in 0..lengths.len() {
-      let mut items = indices::empty();
+      let mut items = zkc::algebra::indices_empty();
       for j in 0..lengths[group] {
-        items = indices::append(items, messages[cursor]);
-        cursor = index::add(cursor, 1);
+        items = zkc::algebra::indices_append(items, messages[cursor]);
+        cursor = zkc::algebra::index_add(cursor, 1);
       }
-      let (next, challenge) = external::monero::update(state, items);
+      let (next, challenge) = zkc::external::monero_update(state, items);
       state = next;
       for byte in 0..challenge.len() {
-        checkpoints = indices::append(checkpoints, challenge[byte]);
+        checkpoints = zkc::algebra::indices_append(checkpoints, challenge[byte]);
       }
     }
-    let complete = index::equal(cursor, messages.len());
-    control::require(complete);
+    let complete = zkc::algebra::index_equal(cursor, messages.len());
+    zkc::core::require(complete);
     return (state, checkpoints);
   }
   protocol Replay {

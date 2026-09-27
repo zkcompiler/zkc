@@ -83,7 +83,7 @@ fn response_bounds_cover_actual_maximum_public_vectors_and_mixed_outputs() {
         "opening_state:multilinear.kzg.bls12-381/1",
         "prover_key:multilinear.kzg.bls12-381/1",
     ] {
-        let ty = PhysicalType::default_for(LogicalType::parse(nominal).unwrap());
+        let ty = PhysicalType::default_for(LogicalType::parse(nominal).unwrap()).unwrap();
         assert!(response_bound(&req, &[ty], observed.format).is_err());
     }
     assert_eq!(

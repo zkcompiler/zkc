@@ -5,6 +5,7 @@ from commands import Commands
 from tools import records
 
 source = '''module {
+  use zkc::algebra::{Vector};
   bind msm = curve::msm(ristretto255.group);
   fn Fold(w: Vector<"ristretto255.scalar"::Element>, p: Vector<"ristretto255.group"::Element>)
       -> ("ristretto255.group"::Element) {

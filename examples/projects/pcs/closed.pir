@@ -1,11 +1,15 @@
 // Independently authored concrete opening checker; no importer or generic API.
 module {
+  use zkc::core;
+  use zkc::pcs::{Commitment, Proof, VerifierKey};
+  use zkc::pcs;
+  use zkc::poly::{Point};
   fn Verify(key: VerifierKey<"multilinear.kzg.bls12-381/1">,
       root: Commitment<"multilinear.kzg.bls12-381/1">,
       point: Point<"bls12-381.fr">, value: "bls12-381.fr"::Element,
       proof: Proof<"multilinear.kzg.bls12-381/1">) -> bool {
-    [opening] let accepted = pcs::check::<"multilinear.kzg.bls12-381/1">(key, root, point, value, proof);
-    [require] control::require(accepted);
+    [opening] let accepted = zkc::pcs::check::<"multilinear.kzg.bls12-381/1">(key, root, point, value, proof);
+    [require] zkc::core::require(accepted);
     return accepted;
   }
   protocol Direct {

@@ -19,6 +19,8 @@ bool spaceBetween(const Token *previous, const Token &next,
   if (!previous)
     return false;
   StringRef a = previous->spelling, b = next.spelling;
+  if (a == "#" && b == "[")
+    return false;
   // Joining a trailing '-' to '>' would change a name plus delimiter into
   // an arrow token (for example the static argument F- in <F- >).
   if (b == ">" && previous->kind == TokenKind::Name && a.ends_with("-"))
@@ -72,6 +74,7 @@ Expected<std::string> formatTokens(ArrayRef<Token> tokens) {
     unsigned indent;
   };
   std::vector<Group> groups;
+  std::optional<size_t> attributeEnd;
   std::vector<size_t> braceGroups;
   std::string output;
   unsigned indent = 0, braces = 0;
@@ -103,6 +106,8 @@ Expected<std::string> formatTokens(ArrayRef<Token> tokens) {
     const Token &token = tokens[i];
     if (token.kind == TokenKind::End)
       break;
+    if (token.is("#") && i + 1 < tokens.size() && tokens[i + 1].is("["))
+      attributeEnd = close[i + 1];
     if (token.kind == TokenKind::Comment) {
       newline();
       emit(token.spelling, false);
@@ -155,6 +160,10 @@ Expected<std::string> formatTokens(ArrayRef<Token> tokens) {
              spaceBetween(previous, token,
                           previous && pathMember[previous - tokens.data()]));
     previous = &token;
+    if (attributeEnd && *attributeEnd == i) {
+      attributeEnd.reset();
+      newline();
+    }
     if (token.is("{")) {
       braceGroups.push_back(groups.size());
       ++braces;

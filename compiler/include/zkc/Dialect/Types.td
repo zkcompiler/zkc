@@ -1,6 +1,7 @@
 #ifndef ZKC_DIALECT_TYPES_TD
 #define ZKC_DIALECT_TYPES_TD
 include "zkc/Dialect/Base.td"
+include "zkc/Dialect/TypeBindings.td"
 // Interactive value types; core finite types remain in IR.td.
 def PCSDialect : ZKCDialect {
   let name = "pcs";
@@ -12,6 +13,7 @@ def Capability : TypeDef<PIRDialect, "Capability"> {
   let parameters = (ins StringRefParameter<"Installed capability kind">:$kind);
   let assemblyFormat = "`<` $kind `>`";
 }
+def VariantSyntax : ZKC_SpecialType<"variant">;
 def Variant : TypeDef<PIRDialect, "Variant"> {
   let mnemonic = "variant";
   let parameters = (ins StringRefParameter<"Canonical complete logical descriptor">:$descriptor);
@@ -37,6 +39,13 @@ def Matrix : TypeDef<AlgebraDialect, "Matrix"> {
   let summary = "finite logical matrix over a field, independent of storage";
   let parameters = (ins StringRefParameter<"Field domain">:$domain);
   let assemblyFormat = "`<` $domain `>`";
+}
+def FixedVector : TypeDef<AlgebraDialect, "FixedVector"> {
+  let mnemonic = "fixed_vector";
+  let summary = "one logical bulk value with an exact element type and length";
+  let parameters = (ins "::mlir::Type":$elementType, "uint64_t":$length);
+  let assemblyFormat = "`<` $elementType `,` $length `>`";
+  let genVerifyDecl = 1;
 }
 def Group : TypeDef<AlgebraDialect, "Group"> {
   let mnemonic = "group";

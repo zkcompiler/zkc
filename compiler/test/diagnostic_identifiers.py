@@ -68,7 +68,7 @@ MARKER = "interface Marker { }"
 CLIENT = "fn Client<C: Cell>(x: C::Value) -> C::Value { return C::step(x); }"
 EMPTY = "component EmptyCell: Cell { type Value = (); local step(x: Value) -> Value { return x; } }"
 BOOL = "component BoolCell: Cell { type Value = bool; local step(x: Value) -> Value { return x; } }"
-SCALAR = ("component ScalarCell<F: domain field>: Cell { type Value = field<F>; "
+SCALAR = ("component ScalarCell<F: domain field>: Cell { type Value = Element<F>; "
           "local step(x: Value) -> Value { return x; } }")
 ENUM = "enum Outcome<C: Cell> { Ready(C::Value), Invalid(bool) }"
 BOX = "struct Box { value: bool }"
@@ -85,7 +85,8 @@ REGION = """fn Client<C: Cell>(value: C::Value, ok: bool) -> bool {
 
 def library(*declarations):
     """A checked-library module holding these declarations."""
-    return " ".join(["module {", IDENTITY, *declarations, "}"])
+    imports = "use zkc::algebra::Element;" if any("Element<" in d for d in declarations) else ""
+    return " ".join(["module {", imports, IDENTITY, *declarations, "}"])
 
 
 def region(old, new):
@@ -141,8 +142,8 @@ SOURCES = [
     # An installed operation called without the static actuals it requires.
     ("library-source-operation",
      library("interface Cell { type Value copy drop; local step(x: Value) -> Value; }",
-             "component ScalarCell<F: domain field>: Cell { type Value = field<F>; "
-             "local step(x: Value) -> Value { let y = field::add(x, x); return y; } }")),
+             "component ScalarCell<F: domain field>: Cell { type Value = Element<F>; "
+             "local step(x: Value) -> Value { let y = zkc::algebra::add(x, x); return y; } }")),
     # A helper's static parameter that nothing in the call determines.
     ("library-source-inference",
      library(CELL, "fn Helper<D: Cell>(ok: bool) -> bool { return ok; }",
@@ -184,13 +185,12 @@ SOURCES = [
     # A component whose interface names a component.
     ("library-source-interface",
      library(CELL, "component EmptyCell: EmptyCell { type Value = (); local step(x: Value) -> Value { return x; } }")),
-    # A module header naming a convenience profile the compiler does not have;
-    # the carrier holds explicit bindings only, so nothing could stand for it.
-    ("source-profile", "module standard { fn F(x: bool) -> bool { return x; } }"),
-    # A profile module whose map traversal is checked by the library layer.
-    ("library-source-profile",
+    # Retired profile headers refuse before semantic elaboration.
+    ("source-syntax", "module standard { fn F(x: bool) -> bool { return x; } }"),
+    # The same retired header refuses before checking a component map.
+    ("source-syntax",
      "module standard { fn F(items: Array<bool, 2>) -> Array<bool, 2> "
-     "{ return map items |item| { bool::not(item) }; } }"),
+     "{ return map items |item| { zkc::core::not(item) }; } }"),
     # An association whose subject is a name rather than a quoted string.
     ("library-source-association", library("association A = B;")),
     # A facet without `required` or `optional`.
@@ -202,8 +202,8 @@ SOURCES = [
      library(MARKER, 'fn Client<C: Marker>(x: Array<bool, "koala-bear">) -> bool { return true; }')),
     # A field constant other than 0 or 1 over a domain parameter.
     ("library-attribute-bound",
-     library(MARKER, "fn Client<C: Marker, F: domain field>(x: bool) -> field<F> "
-                     "{ return field::constant::<F>() attributes(2); }")),
+     library(MARKER, "fn Client<C: Marker, F: domain field>(x: bool) -> Element<F> "
+                     "{ return zkc::algebra::constant::<F>() attributes(2); }")),
     # A member call with more operands than the function declares.
     ("library-call-arity",
      library(CELL, "fn Client<C: Cell>(x: C::Value) -> C::Value { return C::step(x, x); }")),
@@ -224,7 +224,7 @@ SOURCES = [
     ("library-static-arity",
      library(CELL, CLIENT, SCALAR, 'link Scalar = Client<ScalarCell<"koala-bear", 2>>;')),
     # A field type over a group domain.
-    ("library-type-sort", library("interface I { domain G: group; local f(x: field<G>) -> field<G>; }")),
+    ("library-type-sort", library("interface I { domain G: group; local f(x: Element<G>) -> Element<G>; }")),
     # A component that leaves an interface type undefined.
     ("library-representation",
      library("interface Marker { type Value copy drop; }", "component M: Marker { type Other = bool; }")),

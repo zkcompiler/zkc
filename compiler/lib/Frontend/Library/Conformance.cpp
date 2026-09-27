@@ -15,6 +15,13 @@ struct TemplateScope {
     if (t.kind == StaticTerm::Kind::Project && t.arguments.size() == 1 &&
         identity(t.arguments[0]) ==
             identity(component.interface.declaration().self)) {
+      auto representation = component.representations.find(t.member);
+      if (representation != component.representations.end()) {
+        auto selected = type(representation->second, depth + 1);
+        if (!selected)
+          return selected.takeError();
+        return logicalTypeTerm(*selected);
+      }
       auto found = component.statics.find(t.member);
       if (found != component.statics.end())
         return term(found->second, depth + 1);

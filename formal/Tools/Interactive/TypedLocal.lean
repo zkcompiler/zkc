@@ -31,7 +31,7 @@ abbrev signature : ResultBundle.Signature where
   Op := Request
   arguments request := request.signature.inputs
   results request := request.signature.outputs
-  condition := ⟨"bool", "", ""⟩
+  condition := Bindings.ValueType.mk "bool" "" ""
 
 abbrev language := ResultBundle.language signature
 

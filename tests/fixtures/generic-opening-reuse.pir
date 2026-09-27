@@ -1,9 +1,26 @@
 module {
+  use zkc::pcs::Commitment as CommitmentValue;
+  use zkc::algebra::{
+    CommRing
+  };
+  use zkc::pcs::{
+    MultilinearOpening,
+    OpeningState,
+    Proof,
+    ProverKey,
+    VerifierKey
+  };
+  use zkc::pcs;
+  use zkc::poly::{
+    Point,
+    Table
+  };
+  use zkc::poly;
   fn Commit<C: domain Commitment>(
     key: ProverKey<C>,
     table: Table<C::ValueField>
-  ) -> (Commitment<C>, OpeningState<C>) requires (MultilinearOpening(C)) {
-    [commit] let (public, original) = pcs::commit::<C>(key, table);
+  ) -> (CommitmentValue<C>, OpeningState<C>) requires (MultilinearOpening(C)) {
+    [commit] let (public, original) = zkc::pcs::commit::<C>(key, table);
     return (public, original);
   }
 
@@ -11,23 +28,23 @@ module {
     original: OpeningState<C>,
     point: Point<C::PointField>
   ) -> (C::EvaluationField::Element, Proof<C>) requires (MultilinearOpening(C)) {
-    [open] let (value, proof) = pcs::open::<C>(original, point);
+    [open] let (value, proof) = zkc::pcs::open::<C>(original, point);
     return (value, proof);
   }
 
   fn Verify<C: domain Commitment>(
     key: VerifierKey<C>,
-    commitment: Commitment<C>,
+    commitment: CommitmentValue<C>,
     point: Point<C::PointField>,
     value: C::EvaluationField::Element,
     proof: Proof<C>
   ) -> bool requires (MultilinearOpening(C)) {
-    [check] let accepted = pcs::check::<C>(key, commitment, point, value, proof);
+    [check] let accepted = zkc::pcs::check::<C>(key, commitment, point, value, proof);
     return accepted;
   }
 
   fn Fold<F: domain Field>(table: Table<F>, point: F::Element) -> Table<F> requires (CommRing(F)) {
-    [fold] let scratch = poly::fold::<F>(table, point);
+    [fold] let scratch = zkc::poly::fold::<F>(table, point);
     return scratch;
   }
 

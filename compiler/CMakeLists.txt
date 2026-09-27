@@ -41,6 +41,16 @@ list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}" "${LLVM_CMAKE_DIR}")
 include(TableGen)
 include(AddLLVM)
 include(AddMLIR)
+include(cmake/ZkcContributions.cmake)
+set(ZKC_CONTRIBUTION_FILES "" CACHE STRING
+  "Explicit CMake files declaring additional compiler contributions")
+foreach(contribution_file IN LISTS ZKC_CONTRIBUTION_FILES)
+  if(NOT IS_ABSOLUTE "${contribution_file}" OR NOT EXISTS "${contribution_file}" OR IS_DIRECTORY "${contribution_file}")
+    message(FATAL_ERROR "ZKC_CONTRIBUTION_FILES requires existing absolute file paths: ${contribution_file}")
+  endif()
+  include("${contribution_file}")
+endforeach()
+zkc_assemble_contributions("${CMAKE_CURRENT_BINARY_DIR}/include")
 include(cmake/GenerateIR.cmake)
 include(cmake/Components.cmake)
 add_executable(zkc-compile tools/zkc-compile.cpp)
@@ -61,12 +71,18 @@ target_compile_options(zkc-opt PRIVATE -Wall -Wextra -Werror)
 
 include(CMakePackageConfigHelpers)
 # Keep installed tools usable with the selected external LLVM/MLIR package.
-set_target_properties(zkc-compile zkc-opt PROPERTIES
+set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES
   INSTALL_RPATH_USE_LINK_PATH TRUE INSTALL_RPATH "$ORIGIN/../lib")
-install(TARGETS ${zkc_components} ZkcCompiler zkc-compile zkc-opt
+install(TARGETS ${zkc_components} ZkcCompiler zkc-compile zkc-opt zkc-tblgen
   EXPORT ZkcCompilerTargets
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(DIRECTORY include/zkc DESTINATION include FILES_MATCHING PATTERN "*.h" PATTERN "*.td")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/Installation.td"
+  DESTINATION include/zkc/Contracts)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Installation.td"
+  DESTINATION include/zkc/Dialect)
+# Contribution assembly is a source-build facility. The installed SDK provides
+# schemas and tools for validation, not a second way to rebuild catalog owners.
 # Install current generated declarations only. A reused build tree can contain
 # obsolete output paths after TableGen inputs move.
 foreach(header ${zkc_generated_headers})

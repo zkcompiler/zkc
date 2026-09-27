@@ -117,7 +117,7 @@ product = roundtrip('module { fn X(x: bool) -> (bool,) { let (y,): (bool,) = Y(x
 assert product != baseline
 assert product["functions"][0]["results"][0]["kind"] == "product-type"
 singleton = ('module { fn X<F: Field>(x: F::Element) -> F::Element '
-             '{ let y: F::Element = field::add(x, x); return y; } }')
+             '{ let y: F::Element = zkc::algebra::add(x, x); return y; } }')
 assert run("protocol-source", singleton) == run(
     "protocol-source", singleton.replace("-> F::Element", "-> (F::Element,)")
     .replace("let y: F::Element", "let (y,): (F::Element,)")

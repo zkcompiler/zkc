@@ -83,3 +83,50 @@ pub(crate) fn apply(
         Ok(vec![value])
     })())
 }
+
+/// Independent native port facts, also used for exact implementation assembly.
+pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::{field, poly};
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
+        field::operation(
+            "vector.from_point",
+            &[Point],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation("vector.to_point", &[Vector], &[Point], AttributeRule::None),
+        field::operation(
+            "vector.from_table",
+            &[Table],
+            &[Vector],
+            AttributeRule::None,
+        ),
+        field::operation("vector.to_table", &[Vector], &[Table], AttributeRule::None),
+        poly::operation(
+            "poly.equality_weights",
+            &[Point],
+            &[Vector],
+            AttributeRule::None,
+        ),
+    ]
+};
+
+pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/vector.from_table",
+        original: "arkworks/vector.from_table",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+    crate::backend::registry::Alternative {
+        identity: "arkworks-msb/vector.to_table",
+        original: "arkworks/vector.to_table",
+        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        ports: crate::bindings::PortTransform::Msb,
+        handler: None,
+        public_operands: false,
+    },
+];

@@ -2,6 +2,14 @@
 // ordered leaves, every operator as its declared call, the bundle as its
 // requirements. Both sources must produce the same common records.
 module {
+  use zkc::curve::{ScalarAction};
+  use zkc::algebra::{Field, Matrix, PairingField, TwoAdicField, Vector};
+  use zkc::algebra;
+  use zkc::core;
+  use zkc::curve;
+  use zkc::poly;
+  use zkc::random::{Rng};
+  use zkc::random;
   relation Circuit = r1cs("circuit.r1cs");
   derive Core = rank_one(Circuit, public_matrices);
 
@@ -12,17 +20,17 @@ module {
     qap.coset: F::Element,
     qap.domain_size: index
   ) -> Vector<F::Element> {
-    let a = matrix::mul_vector(qap.matrix_a, assignment);
-    let b = matrix::mul_vector(qap.matrix_b, assignment);
-    let c = vector::mul(a, b);
-    let one = field::constant::<F>() attributes ("1");
-    let ap = poly::coset_interpolate(a, one);
-    let bp = poly::coset_interpolate(b, one);
-    let cp = poly::coset_interpolate(c, one);
-    let ao = poly::coset_evaluate(ap, qap.coset, qap.domain_size);
-    let bo = poly::coset_evaluate(bp, qap.coset, qap.domain_size);
-    let co = poly::coset_evaluate(cp, qap.coset, qap.domain_size);
-    let numerator = vector::sub(vector::mul(ao, bo), co);
+    let a = zkc::algebra::matrix_mul_vector(qap.matrix_a, assignment);
+    let b = zkc::algebra::matrix_mul_vector(qap.matrix_b, assignment);
+    let c = zkc::algebra::vector_mul(a, b);
+    let one = zkc::algebra::constant::<F>() attributes ("1");
+    let ap = zkc::poly::coset_interpolate(a, one);
+    let bp = zkc::poly::coset_interpolate(b, one);
+    let cp = zkc::poly::coset_interpolate(c, one);
+    let ao = zkc::poly::coset_evaluate(ap, qap.coset, qap.domain_size);
+    let bo = zkc::poly::coset_evaluate(bp, qap.coset, qap.domain_size);
+    let co = zkc::poly::coset_evaluate(cp, qap.coset, qap.domain_size);
+    let numerator = zkc::algebra::vector_sub(zkc::algebra::vector_mul(ao, bo), co);
     return numerator;
   }
 
@@ -57,20 +65,20 @@ module {
     let numerator = CosetNumerator::<F>(
       assignment, qap.matrix_a, qap.matrix_b, qap.coset, qap.domain_size
     );
-    let linear_a = curve::msm(assignment, key.a_query);
-    let linear_b1 = curve::msm(assignment, key.b_g1_query);
-    let linear_b2 = curve::msm(assignment, key.b_g2_query);
-    let linear_private = curve::msm(satisfied.bound.private_assignment, key.private_query);
-    let h = curve::msm(numerator, key.h_query);
-    let a = curve::add(curve::add(key.alpha, linear_a), curve::scale(key.delta_g1, r));
-    let b1 = curve::add(curve::add(key.beta_g1, linear_b1), curve::scale(key.delta_g1, s));
-    let b2 = curve::add(curve::add(key.beta_g2, linear_b2), curve::scale(key.delta_g2, s));
-    let c = curve::add(
-      curve::add(
-        curve::add(curve::add(linear_private, h), curve::scale(a, s)),
-        curve::scale(b1, r)
+    let linear_a = zkc::curve::msm(assignment, key.a_query);
+    let linear_b1 = zkc::curve::msm(assignment, key.b_g1_query);
+    let linear_b2 = zkc::curve::msm(assignment, key.b_g2_query);
+    let linear_private = zkc::curve::msm(satisfied.bound.private_assignment, key.private_query);
+    let h = zkc::curve::msm(numerator, key.h_query);
+    let a = zkc::curve::add(zkc::curve::add(key.alpha, linear_a), zkc::curve::scale(key.delta_g1, r));
+    let b1 = zkc::curve::add(zkc::curve::add(key.beta_g1, linear_b1), zkc::curve::scale(key.delta_g1, s));
+    let b2 = zkc::curve::add(zkc::curve::add(key.beta_g2, linear_b2), zkc::curve::scale(key.delta_g2, s));
+    let c = zkc::curve::add(
+      zkc::curve::add(
+        zkc::curve::add(zkc::curve::add(linear_private, h), zkc::curve::scale(a, s)),
+        zkc::curve::scale(b1, r)
       ),
-      curve::neg(curve::scale(key.delta_g1, field::mul(r, s)))
+      zkc::curve::neg(zkc::curve::scale(key.delta_g1, zkc::algebra::mul(r, s)))
     );
     return (a, b2, c);
   }
@@ -91,24 +99,24 @@ module {
     "="(F::PairingG1::Scalar, F),
     "="(F::PairingG2::Scalar, F)
   ) {
-    let one = field::constant::<F>() attributes ("1");
-    let public_assignment = vector::concat([one], statement);
-    let public_point = curve::msm(public_assignment, vk.input_query);
-    let left = [curve::neg(a), public_point, c, vk.alpha];
+    let one = zkc::algebra::constant::<F>() attributes ("1");
+    let public_assignment = zkc::algebra::vector_concat([one], statement);
+    let public_point = zkc::curve::msm(public_assignment, vk.input_query);
+    let left = [zkc::curve::neg(a), public_point, c, vk.alpha];
     let right = [b, vk.gamma, vk.delta, vk.beta];
-    let accepted = pairing::check::<F>(left, right);
+    let accepted = zkc::curve::pairing_check::<F>(left, right);
     return accepted;
   }
 
   fn Draw<F: Field>(coins: Rng<F>) -> (F::Element, F::Element) {
-    let (r, after_r) = random::draw(coins);
-    let (s, after_s) = random::draw(after_r);
+    let (r, after_r) = zkc::random::draw(coins);
+    let (s, after_s) = zkc::random::draw(after_r);
     return (r, s);
   }
 
   fn RequireZero<F: Field>(values: Vector<F::Element>) -> () {
-    let polynomial = poly::from_coefficients(values);
-    control::require(index::equal(poly::coefficient_count(polynomial), 0));
+    let polynomial = zkc::poly::from_coefficients(values);
+    zkc::core::require(zkc::algebra::index_equal(zkc::poly::coefficient_count(polynomial), 0));
     return ();
   }
 
@@ -117,14 +125,14 @@ module {
     statement: Vector<F::Element>,
     n_public: index
   ) -> (Vector<F::Element>, Vector<F::Element>, Vector<F::Element>) {
-    let one = field::constant::<F>() attributes ("1");
-    control::require(field::equal(assignment[0], one));
-    control::require(index::equal(statement.len(), n_public));
-    let actual_public = vector::slice(assignment, 1, n_public);
-    RequireZero(vector::sub(actual_public, statement));
-    let start = index::add(n_public, 1);
-    let private_count = index::sub(assignment.len(), start);
-    let private_assignment = vector::slice(assignment, start, private_count);
+    let one = zkc::algebra::constant::<F>() attributes ("1");
+    zkc::core::require(zkc::algebra::equal(assignment[0], one));
+    zkc::core::require(zkc::algebra::index_equal(statement.len(), n_public));
+    let actual_public = zkc::algebra::vector_slice(assignment, 1, n_public);
+    RequireZero(zkc::algebra::vector_sub(actual_public, statement));
+    let start = zkc::algebra::index_add(n_public, 1);
+    let private_count = zkc::algebra::index_sub(assignment.len(), start);
+    let private_assignment = zkc::algebra::vector_slice(assignment, start, private_count);
     return (assignment, statement, private_assignment);
   }
 

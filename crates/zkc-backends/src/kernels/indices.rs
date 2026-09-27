@@ -27,12 +27,19 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "indices.length" => (&[Indices], &[Index], NoAttributes),
         _ => return None,
     };
-    let physical = |kind| {
-        PhysicalType::default_for(LogicalType::new(kind, Identity::None).expect("index contract"))
-    };
+    let physical =
+        |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
     Some(KernelSignature {
-        inputs: inputs.iter().copied().map(physical).collect(),
-        outputs: outputs.iter().copied().map(physical).collect(),
+        inputs: inputs
+            .iter()
+            .copied()
+            .map(physical)
+            .collect::<Option<_>>()?,
+        outputs: outputs
+            .iter()
+            .copied()
+            .map(physical)
+            .collect::<Option<_>>()?,
         attributes,
     })
 }
@@ -179,6 +186,21 @@ pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], policy: &Policy) -> Option<
     })())
 }
 
+pub(crate) const OPERATIONS: &[&str] = &[
+    "index.constant",
+    "index.add",
+    "index.sub",
+    "index.mul",
+    "index.div",
+    "index.mod",
+    "index.equal",
+    "index.less",
+    "indices.empty",
+    "indices.append",
+    "indices.at",
+    "indices.length",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,7 +232,8 @@ mod tests {
     fn sequence_duplicates_bounds_and_wire() {
         let p = Policy::default();
         let ty =
-            PhysicalType::default_for(LogicalType::new(Type::Indices, Identity::None).unwrap());
+            PhysicalType::default_for(LogicalType::new(Type::Indices, Identity::None).unwrap())
+                .unwrap();
         let ns = Value::Indices(vec![u64::MAX, 9, 9].into());
         let wire = encode(&ns, &p).unwrap().unwrap();
         let decoded = decode(ty.clone(), &wire, &p).unwrap().unwrap();

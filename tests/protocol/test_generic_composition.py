@@ -98,8 +98,8 @@ def main():
     # Fixed configuration arguments are nominal constants, with residual arguments positional.
     extra = '''
       fn Pair<A: domain Field, B: domain Field>(x: B::Element) -> (bool) requires (Field(A), Field(B)) {
-        [constant] let a = field::constant::<A>() attributes (2130706434);
-        [same] let ok = field::equal::<A>(a, a);
+        [constant] let a = zkc::algebra::constant::<A>() attributes (2130706434);
+        [same] let ok = zkc::algebra::equal::<A>(a, a);
         return (ok);
       }
       configure Fixed = Pair(A = koala-bear);
@@ -137,8 +137,10 @@ def main():
     """
     positive(text.replace('module {', 'module {' + associated))
     selected_layout = """
+      use zkc::poly::{Table};
+      use zkc::poly;
       fn Fold<F: domain Field>(t: Table<F>, r: F::Element) -> (Table<F>) requires (CommRing(F)) {
-        [fold] let u = poly::fold::<F>(t, r);
+        [fold] let u = zkc::poly::fold::<F>(t, r);
         return (u);
       }
       configure Layout = Fold() using (fold = "arkworks-msb/poly.fold");

@@ -65,14 +65,16 @@ for name in ('back', 'coefficients', 'scalar'):
 # Exact numeric constants from distinct operations; different shifts mean
 # different ORDERED domains, without claiming the underlying sets are disjoint.
 constants = '''module {
+  use zkc::algebra;
+  use zkc::poly;
   fn Points<F: domain Field>()->() requires(TwoAdicField(F)) {
-    let four = index::constant() attributes ("4"); let eight = index::constant() attributes ("8");
-    let two = field::constant::<F>() attributes ("2"); let three = field::constant::<F>() attributes ("3");
-    let again = field::constant::<F>() attributes ("2");
-    let a = poly::domain_points::<F>(two,four);
-    let b = poly::domain_points::<F>(three,four);
-    let c = poly::domain_points::<F>(two,eight);
-    let d = poly::domain_points::<F>(again,four);
+    let four = zkc::algebra::index_constant() attributes ("4"); let eight = zkc::algebra::index_constant() attributes ("8");
+    let two = zkc::algebra::constant::<F>() attributes ("2"); let three = zkc::algebra::constant::<F>() attributes ("3");
+    let again = zkc::algebra::constant::<F>() attributes ("2");
+    let a = zkc::poly::domain_points::<F>(two,four);
+    let b = zkc::poly::domain_points::<F>(three,four);
+    let c = zkc::poly::domain_points::<F>(two,eight);
+    let d = zkc::poly::domain_points::<F>(again,four);
     return ();
   }
   configure Base=Points(F=koala-bear);
@@ -89,6 +91,7 @@ assert extended['field'] == 'koala-bear.ext8-binomial3'
 assert extended['convention'] == convention
 
 receptions = '''module {
+  use zkc::algebra::{Vector};
   bind points=poly::domain_points(koala-bear);
   bind interpolate=poly::coset_interpolate(koala-bear);
   fn Points(s:koala-bear::Element,n:index)->(Vector<koala-bear::Element>) {
@@ -134,6 +137,7 @@ relation(separate_size, 1, 3, 'unknown', 'size-equality-unproved')
 
 # Multilinear data gets no multiplicative coset by field, shape or name.
 multilinear = '''module {
+  use zkc::poly::{Table};
   bind fold=poly::fold(bls12-381.fr);
   fn Work(t:Table<"bls12-381.fr">,s:"bls12-381.fr"::Element)->(Table<"bls12-381.fr">) {
     let next = fold(t,s); return(next);
@@ -149,8 +153,8 @@ assert next(v for v in m['values'] if v['name'] == 'next')['unknown_reason'] == 
 
 # An arbitrary word can be interpreted repeatedly on the same coset without
 # inheriting a low-degree or producer fact. The different interpretation is legal.
-arbitrary = source.replace('let v = poly::coset_evaluate::<F>(p,s,n);',
-    'let v = poly::coefficients::<F>(p);')
+arbitrary = source.replace('let v = zkc::poly::coset_evaluate::<F>(p,s,n);',
+    'let v = zkc::poly::coefficients::<F>(p);')
 a = inspect(arbitrary)
 assert a['uses'][0]['compatibility']['reasons'] == ['no-producer-domain-fact']
 assert a['domains'][0]['size_origin_is_length']

@@ -1,6 +1,8 @@
 module {
+  use zkc::algebra::{Field, Vector};
+  use zkc::algebra;
   fn Twice<F: Field>(x: F::Element) -> F::Element {
-    let result = field::add(x, x);
+    let result = zkc::algebra::add(x, x);
     return result;
   }
   fn Work<F: Field>(x: F::Element, enabled: bool, start: index, end: index)
@@ -10,7 +12,7 @@ module {
       if enabled {
         acc = Twice::<F>(acc);
       } else {
-        acc = field::add(acc, x);
+        acc = zkc::algebra::add(acc, x);
       }
     }
     let values = [x, acc];

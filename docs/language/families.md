@@ -11,8 +11,9 @@ A protocol may bind static domain parameters, just as a local algorithm does:
 
 ```text
 module {
-  fn Double<F: Field>(x: F::Element) -> F::Element {
-    let y = field::add::<F>(x, x);
+  use zkc::algebra;
+  fn Double<F: algebra::Field>(x: F::Element) -> F::Element {
+    let y = algebra::add::<F>(x, x);
     return y;
   }
 

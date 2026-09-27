@@ -39,9 +39,7 @@ impl Domain {
             Type::Vector => self.field(),
             _ => self.identity(),
         };
-        Some(PhysicalType::default_for(
-            LogicalType::new(kind, identity).ok()?,
-        ))
+        PhysicalType::default_for(LogicalType::new(kind, identity).ok()?).ok()
     }
 }
 
@@ -364,7 +362,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         _ => return None,
     };
     Some((|| {
-        limits(kind, hashes.len(), policy)?;
+        validate_hash_count(kind, hashes.len(), policy)?;
         let prefix = if kind == Type::Commitment { 6 } else { 10 };
         let bytes = hashes
             .len()
@@ -384,7 +382,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         Ok(out)
     })())
 }
-fn limits(kind: Type, count: usize, policy: &Policy) -> Result<()> {
+pub(crate) fn validate_hash_count(kind: Type, count: usize, policy: &Policy) -> Result<()> {
     if kind == Type::Proof && count > 24 {
         return Err(refused("oracle-path-length"));
     }
@@ -414,7 +412,7 @@ pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], policy: &Policy) -> Option<
         if count.checked_mul(32) != Some(payload.len()) {
             return Err(refused("wire-length"));
         }
-        limits(kind, count, policy)?;
+        validate_hash_count(kind, count, policy)?;
         if kind == Type::Commitment {
             return Ok(Value::OracleRoot(
                 domain,
@@ -430,3 +428,17 @@ pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], policy: &Policy) -> Option<
         })
     })())
 }
+
+pub(crate) const OPERATIONS: &[&str] = &[
+    "oracle.commit",
+    "oracle.open",
+    "oracle.check",
+    "commitments.empty",
+    "commitments.append",
+    "commitments.at",
+    "commitments.length",
+    "opening_states.empty",
+    "opening_states.append",
+    "opening_states.at",
+    "opening_states.length",
+];

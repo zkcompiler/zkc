@@ -1,5 +1,6 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
 
@@ -18,14 +19,7 @@ const Kernel *findKernel(llvm::StringRef key) {
 } // namespace
 bool isHistoryTransition(llvm::StringRef key) {
   const auto *contracts = operationContracts(key);
-  const auto *sample = samplingContract(key);
-  return (contracts && contracts->observation) ||
-         (sample && sample->provider == RandomnessProvider::Transcript) ||
-         key == "external.monero.update" || key == "external.openvm.observe" ||
-         key == "external.openvm.sample" ||
-         key == "external.openvm.sample_ext" ||
-         key == "external.openvm.sample_bits" ||
-         key == "external.openvm.check_witness";
+  return contracts && contracts->history.has_value();
 }
 OperationContracts OperationContracts::replay() {
   OperationContracts c;
@@ -126,9 +120,35 @@ bool hasUnclassifiedProviderEffect(llvm::StringRef key) {
     return false;
   if (key.starts_with("resource_unit."))
     return true;
-  return llvm::any_of(k->inputs, [](const std::string &kind) {
-    return kind == "rng" || kind == "transcript" || kind == "nonce" ||
-           llvm::StringRef(kind).starts_with("capability");
+  const generic::Operation *declaration = nullptr;
+  for (const auto &candidate : boundOperationContracts())
+    if (candidate.name == key) {
+      declaration = &candidate;
+      break;
+    }
+  if (!declaration)
+    return true;
+  const auto &signature = declaration->signature;
+  const auto &scope = signature.scope;
+  // A Type formal carries no copy bound. Propagate this uncertainty through
+  // applications instead of classifying only the outer port constructor.
+  std::vector<bool> affineTerms;
+  auto potentiallyAffine = [&](llvm::StringRef head,
+                               llvm::ArrayRef<unsigned> arguments) {
+    const auto *permissions = typePermissions(head);
+    return !permissions || !permissions->copy ||
+           llvm::any_of(arguments, [&](unsigned i) {
+             return i >= affineTerms.size() || affineTerms[i];
+           });
+  };
+  for (auto [i, term] : llvm::enumerate(scope.terms)) {
+    bool affine = scope.sorts[i] == "Type";
+    if (affine && term.arguments)
+      affine = potentiallyAffine(term.name, *term.arguments);
+    affineTerms.push_back(affine);
+  }
+  return llvm::any_of(signature.inputs, [&](const generic::Type &type) {
+    return potentiallyAffine(type.constructor, type.arguments);
   });
 }
 } // namespace zkc::protocol

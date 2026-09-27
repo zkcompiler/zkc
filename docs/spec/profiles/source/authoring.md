@@ -45,6 +45,10 @@ PIR admission; printing it must round-trip to the exact same carrier. It cannot
 be captured as a source library or child module, and does not recover private
 library interfaces from emitted code. Construction uses the carrier's existing
 selector interpretation, without applying source-project aliases again.
+The printer qualifies installed type constructors by their module path. The
+carrier reader also accepts an unqualified export name when it identifies one
+constructor; it refuses an ambiguous name. Source export aliases do not change
+logical type identity or grant additional carrier authority.
 
 ## Captured projects
 
@@ -80,11 +84,12 @@ A nominal declaration can share a printed spelling with an installed type becaus
 its resolved identity and emitted symbol are distinct. It affects only references
 that resolve to that declaration, never installed references in another module.
 Opaque operation attributes remain data except for the contract's designated
-numeric slots. An explicit qualified primitive call and a quoted, lexically
-visible exact helper call keep different categories even if their textual names
-coincide. Neither may silently fall back to the other.
-Convenience profiles are application-root authoring choices and
-do not supply implicit domains or implementations to imported definitions.
+numeric slots. An imported intrinsic and a lexically visible helper retain
+distinct declaration categories. A failed call cannot silently fall back from
+one category to the other.
+Installed source names use the same import, alias and visibility rules as other
+declarations. There is no global primitive or installed-type fallback, and module
+headings cannot select a convenience profile or supply implicit domain arguments.
 
 An owner's checked environment includes its declarations, the direct public
 dependency interfaces and their reached public signature closure, plus installed
@@ -121,6 +126,37 @@ No general refactoring-to-wire-identity theorem follows.
 
 ## Names and types
 
+The installed contracts provide curated typed source modules: `zkc::algebra`,
+`zkc::poly`, `zkc::curve`, `zkc::random`, `zkc::pcs`, `zkc::oracle`,
+`zkc::external`, `zkc::core` and `zkc::transcript`. Source imports expose names
+from that fixed installation; they cannot install semantics, interpreters or
+backend implementations. Import aliases and reexports preserve the selected
+contract identity. The checked environment retains its whole-installation
+identity; selecting fewer imports does not define a narrower identity policy.
+
+Installed domain identities, raw domain sorts and capability predicates remain
+available globally. This profile does not redesign the domain catalog. Imported
+capability names and their aliases can express the same bounds, for example
+`use zkc::algebra; fn Foo<F: algebra::Field>(x: F::Element) -> F::Element`.
+An associated `Element` projection uses the domain's sort and installed
+projection metadata. It does not infer a capability merely from the member name.
+
+Installed type families require imports. `Vector<Element>` and `Matrix<Element>`
+select among finite declared family cases using the resolved element type;
+unlisted cases refuse. Checking neither leaves an unconstrained type application
+nor inverts a family equation to infer an unknown element type. Core `bool` and
+`index`, structural `Array`, and `ResourceUnit` remain available without imports.
+
+An explicit `bind` applies an installed logical contract, independently of its
+curated source spelling. In an authored module its target must permit the
+`Source` authoring stage. Importing a module, naming a contract directly or
+selecting an implementation cannot bypass that check. Transcript operations are
+construction-only and have no public source exports; importing
+`zkc::transcript` does not inject transcript operations. The separate common
+carrier may represent those operations, but admission alone does not establish
+construction provenance. Existing source-callable external schedule adapters
+likewise do not certify a construction merely by executing their calls.
+
 Resolution chooses the declaration category before checking the call. A failed
 operation call must not silently become a user function call. Static domain
 parameters are bound declarations, separate from runtime value variables and
@@ -154,6 +190,36 @@ or a bodiless external callable cannot manufacture a checked result, including
 one nested inside a record or product. An external-validation route would require a
 separately defined contract and is not supplied by a type name.
 
+## Operator bindings
+
+Operators select an installed binding or an ordinary function annotated with
+`#[operator(add)]`, `#[operator(sub)]`, `#[operator(mul)]` or
+`#[operator(neg)]`. A source binding must have a checked body, the hook's input
+arity and one source result. At least one operand must have a nominal record
+constructor owned by the function's defining package. An imported alias does not
+transfer that ownership. Referencing or importing an installed module, or one of
+its declarations, makes that module's operator bindings available in that file.
+This rule includes arithmetic on the core `index` type: its type needs no
+import, but its operators belong to `zkc::algebra`. Source function bindings are
+discoverable through accessible public exports in the package and its direct
+dependencies, or ordinary private visibility within their defining package.
+An attribute does not export a function. Neither policy changes coherence:
+duplicate bindings are checked across the complete dependency union.
+
+Selection uses the hook and ordered tuple of resolved operand constructor heads
+before record flattening. Duplicate tuples refuse. Predicate requirements,
+result types and wildcard heads cannot distinguish candidates; there is no
+specialization or fallback search. Once selected, the callable passes ordinary
+type, static-argument, requirement and resource checks. An opaque operand without
+a known head must use a named call. Ordinary functions and component bodies use
+the same selection rules.
+
+Operands evaluate once, left to right, before the selected binding permutes their
+values into callable port order. A binding cannot duplicate or discard a port.
+Intrinsic bindings emit the corresponding operation; source bindings emit the
+ordinary checked call. No algebraic law or permission to reorder evaluation
+follows from an operator spelling.
+
 ## Local values and distributed ports
 
 A local product is one value owned by one participant. Its layout is the ordered
@@ -171,6 +237,8 @@ unused resource or a peer's private value. Communication remains a separate
 protocol action; it is not inferred from a local reference.
 
 Named call arguments and record fields evaluate once in their written order.
+Installed intrinsic argument names come from the curated export's declared
+labels, with the same complete, unique port coverage as ordinary named calls.
 The resulting values are arranged in signature/layout order. Reordering the
 computations to achieve that arrangement is not justified by this rule.
 

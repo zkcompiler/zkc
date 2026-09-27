@@ -88,3 +88,5 @@ pub use zkc_arkworks::bn254::{
 
 mod variant;
 pub use variant::Variant;
+mod fixed_vector;
+pub use fixed_vector::FixedVector;

@@ -1,4 +1,10 @@
 module {
+  use zkc::algebra::{
+    Vector
+  };
+  use zkc::random::{
+    Nonce
+  };
   bind commit = curve::commit(bls12-381.g1);
   bind respond = curve::response(bls12-381.fr);
   bind guard = control::require();

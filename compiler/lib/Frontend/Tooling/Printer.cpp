@@ -1,7 +1,8 @@
 #include "../Lowering/Admission.h"
+#include "../Static/Structural.h"
 #include "../Syntax/Lexer.h"
-#include "../Syntax/Types.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Source/Codec.h"
@@ -167,25 +168,61 @@ class Printer {
     name(value);
   }
   void type(StringRef value) {
-    auto [kind, identity] = value.split(':');
-    if (kind == "field" || kind == "group") {
-      nominal(identity);
-      out << "::Element";
+    if (parameters)
+      for (const auto &parameter : *parameters)
+        if (parameter.sort == "Type" && parameter.name == value) {
+          nominal(value);
+          return;
+        }
+    auto parsed = splitLogical(value);
+    if (!parsed) {
+      quoted(value);
       return;
     }
-    if (kind == "vector" || kind == "groups" || kind == "matrix") {
-      out << (kind == "matrix" ? "Matrix<" : "Vector<");
-      nominal(identity);
-      out << "::Element>";
+    StringRef kind = parsed->constructor;
+    StringRef identity = parsed->arguments.size() == 1
+                             ? StringRef(parsed->arguments.front())
+                             : StringRef{};
+    if (kind == "bool" || kind == "index") {
+      out << kind;
       return;
     }
-    for (const auto &spelling : typeSpellings) {
+    for (const auto &associated : protocol::sourceAssociatedTypes())
+      if (kind == associated.constructor) {
+        nominal(identity);
+        out << "::" << associated.member;
+        return;
+      }
+    for (const auto &family : protocol::sourceTypeFamilies()) {
+      if (kind != family.resultConstructor)
+        continue;
+      for (const auto &exported : protocol::sourceTypeExports())
+        if (exported.constructor == family.family) {
+          out << exported.module << "::" << exported.name << '<';
+          type(family.elementConstructor + ":" + identity.str());
+          out << '>';
+          return;
+        }
+    }
+    for (const auto &spelling : protocol::sourceTypeExports()) {
       if (kind != spelling.constructor)
         continue;
-      out << spelling.surface;
-      if (!identity.empty()) {
+      out << spelling.module << "::" << spelling.name;
+      if (!parsed->arguments.empty()) {
         out << '<';
-        nominal(identity);
+        const auto *declaration = protocol::typeDeclaration(kind);
+        for (size_t i = 0; i < parsed->arguments.size(); ++i) {
+          if (i)
+            out << ", ";
+          if (declaration &&
+              declaration->parameters[i].kind == protocol::StaticKind::Type)
+            type(parsed->arguments[i]);
+          else if (declaration &&
+                   declaration->parameters[i].kind == protocol::StaticKind::Nat)
+            out << parsed->arguments[i];
+          else
+            nominal(parsed->arguments[i]);
+        }
         out << '>';
       }
       return;
@@ -206,9 +243,23 @@ class Printer {
     values(outputs);
     out << " = ";
   }
+  void staticArgument(StringRef value) {
+    uint64_t natural;
+    if (!value.getAsInteger(10, natural) && value == std::to_string(natural)) {
+      out << value;
+      return;
+    }
+    auto parsed = splitLogical(value);
+    if (parsed && protocol::typeDeclaration(parsed->constructor))
+      type(value);
+    else
+      nominal(value);
+  }
   void statics(const source::Names &arguments) {
     if (!arguments.empty())
-      list(arguments, [&](StringRef value) { nominal(value); }, "::<", ">");
+      list(
+          arguments, [&](StringRef value) { staticArgument(value); }, "::<",
+          ">");
   }
   void arguments(const std::vector<source::Parameter> &values) {
     list(values, [&](const source::Parameter &argument) {
@@ -395,8 +446,12 @@ class Printer {
         function.parameters,
         [&](const source::StaticParameter &parameter) {
           name(parameter.name);
-          out << ": domain ";
-          name(parameter.sort);
+          if (parameter.sort == "Type" || parameter.sort == "Nat")
+            out << ": " << (parameter.sort == "Type" ? "Type" : "nat");
+          else {
+            out << ": domain ";
+            name(parameter.sort);
+          }
         },
         "<", ">");
     arguments(function.arguments);
@@ -455,7 +510,11 @@ class Printer {
       name(configuration.name);
       out << " = ";
       name(configuration.base);
-      pairs(configuration.arguments);
+      list(configuration.arguments, [&](const auto &argument) {
+        name(argument.first);
+        out << " = ";
+        staticArgument(argument.second);
+      });
       if (!configuration.implementations.empty()) {
         out << " using ";
         pairs(configuration.implementations);

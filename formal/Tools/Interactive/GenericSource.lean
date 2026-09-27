@@ -103,7 +103,9 @@ def decodeDefinition (json : Json) : Result Definition := do
   let results ← (← Decode.array outputs limits.ports).mapM fun j => do valueType parameters (← Decode.string j)
   let (operations, code) ← decodeCode parameters limits.depth false body
   let some (.ret returns) := code.getLast? | throw "generic-terminator"
-  return ⟨← binder name, parameters, requirements, arguments, results, operations, returns, code⟩
+  -- A definition is a module-qualified symbol; only its static parameters are
+  -- unqualified binders. Imported helpers retain their qualified source names.
+  return ⟨← Decode.name name, parameters, requirements, arguments, results, operations, returns, code⟩
 
 private def bindValues (env : List (Name × ValueType)) (names : List Name)
     (types : List ValueType) : Result (List (Name × ValueType)) := do
@@ -177,6 +179,8 @@ private def checkCode (definition : Definition) (application : Operation → Res
 
 def checkDefinition (definition : Definition)
     (application : Operation → Result Signature := fun _ => .error "generic-callee") : Result CheckedDefinition := do
+  for ty in definition.arguments.map Prod.snd ++ definition.results do
+    ensure ((← termSort definition.parameters ty.term) == .type) "generic-type-sort"
   ensure (unique (definition.operations.map Operation.site)) "generic-duplicate-site"
   bodyLimits definition.instructions
   ensure (definition.arguments.length ≤ limits.ports && unique (definition.arguments.map Prod.fst))

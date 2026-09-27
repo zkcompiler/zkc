@@ -16,6 +16,7 @@ diagnostics, formatting and construction descriptors.
 | Source | Use |
 |---|---|
 | [inferred-calls.pir](inferred-calls.pir) | Domain inference and ordinary helper-call syntax |
+| [fixed-vector.pir](fixed-vector.pir) | A domain extension with Type/Nat parameters, exact-length bulk values, Plonky3 execution and independent Lean reference checks |
 | [execution-proof.pir](execution-proof.pir) | Bounded execution argument with R1CS reduction, nested Sumchecks and original-polynomial openings; not a complete production zkVM |
 | [confidential-transaction.pir](confidential-transaction.pir) | Composed range/IPA, balance and owner-knowledge argument; application and ledger assumptions remain explicit |
 | [checked-variants.pir](checked-variants.pir) | Checked finite variants and matching through source lowering |

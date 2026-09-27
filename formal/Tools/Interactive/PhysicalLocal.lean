@@ -31,6 +31,7 @@ private def arithmeticBytes {F : Type} (width : Nat) : ScalarReference.Data F �
 
 private def valueBytes (value : Value) (capacity : Nat) : Nat :=
   match value with
+  | .fixedVector value => 256 + 4 * value.values.length
   | .table _ => 256 + 32 * capacity
   | .point values => 256 + 32 * values.length
   | .arithmetic domain value => arithmeticBytes (if domain == .koalaBear then 4 else 32) value
@@ -143,7 +144,8 @@ private def output (location : Location) (ceiling available bytes : Nat) : Run U
 
 def supported (binding : OperationBinding) : Bool :=
   (Bindings.resourceUnitContract binding.contract || ScalarReference.supported binding.contract ||
-    ["field.constant", "field.add", "field.mul", "field.equal", "poly.product_sum", "poly.product_round",
+    ["fixed_vector.from_vector", "fixed_vector.to_vector", "fixed_vector.dot",
+      "field.constant", "field.add", "field.mul", "field.equal", "poly.product_sum", "poly.product_round",
       "poly.boundary", "poly.round_evaluate", "poly.fold", "poly.evaluate", "poly.empty_point",
       "poly.append_point", "table.relayout", "random.draw", "random.vector", "bool.and", "bool.not", "bool.or",
       "curve.empty", "curve.append", "curve.at", "curve.get", "curve.length", "control.require"].contains binding.contract) &&
@@ -260,7 +262,7 @@ private def bodyCode (ceiling : Nat) (bindings : List OperationBinding) :
               let count := value.leaves.length
               let currentCaps := capacities.take count
               capacities := capacities.drop count
-              let input : Stored := ⟨value, Bindings.defaultRepresentation value.ty.kind value.ty.identity,
+              let input : Stored := ⟨value, value.ty.defaultRepresentation,
                 currentCaps.headD 0, currentCaps⟩
               inputs := inputs ++ [input]
             let nestedLocation := { current with scope := { current.scope with
@@ -400,7 +402,7 @@ def reference (source candidateJson inputJson storageJson : Json) : Result Json 
           pure capacity
       | .field _ | .point _ | .round _ | .boolean _ | .rng .. => pure 0
       | _ => pure 0
-    return Stored.mk value (Bindings.defaultRepresentation value.ty.kind value.ty.identity) capacity []
+    return Stored.mk value (value.ty.defaultRepresentation) capacity []
   let location := { invocation.location with
     definition := function.origin
     scope := { invocation.location.scope with

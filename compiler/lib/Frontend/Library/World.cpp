@@ -346,6 +346,14 @@ llvm::Expected<StaticTerm> World::term(const StaticTerm &t,
   for (const auto &p : scope.arguments.statics)
     if (identity(p.first) == identity(t))
       return term(p.second, scope, depth + 1);
+  if (t.kind == StaticTerm::Kind::Root)
+    for (const auto &argument : scope.arguments.types)
+      if (identity(argument.first) == identity(t.declaration)) {
+        auto selected = publicType(argument.second, scope, depth + 1);
+        if (!selected)
+          return selected.takeError();
+        return logicalTypeTerm(*selected);
+      }
   if (scope.self &&
       identity(t) ==
           identity(scope.self->implementation.interface.declaration().self))
@@ -370,6 +378,8 @@ llvm::Expected<StaticTerm> World::term(const StaticTerm &t,
         if (identity(binding.second->selected) == identity(t.arguments[0]))
           owner = binding.second;
     if (owner) {
+      if (owner->implementation.representations.count(t.member))
+        return StaticTerm::project(owner->selected, t.member);
       auto m = owner->implementation.statics.find(t.member);
       if (m == owner->implementation.statics.end())
         return fail("library-static-member",
@@ -395,6 +405,8 @@ llvm::Expected<StaticTerm> World::term(const StaticTerm &t,
         return candidate.takeError();
       if (*parent != *candidate)
         continue;
+      if (selected->implementation.representations.count(out.member))
+        return StaticTerm::project(selected->selected, out.member);
       auto member = selected->implementation.statics.find(out.member);
       if (member == selected->implementation.statics.end())
         return fail("library-static-member",

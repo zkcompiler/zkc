@@ -3,12 +3,15 @@
 // Selected slots = batch sumcheck rounds + GKR layers; this body is a schedule
 // skeleton, not SWIRL arithmetic/verification. See tests/fixtures/archived-shapes/README.md.
 module {
+  use zkc::algebra::{Indices};
+  use zkc::algebra;
+  use zkc::core;
   fn Eq(a: index, b: index) -> index {
-    control::require(index::equal(a, b));
+    zkc::core::require(zkc::algebra::index_equal(a, b));
     return a;
   }
   fn AtMost(a: index, b: index) -> index {
-    control::require(index::less(a, b + 1));
+    zkc::core::require(zkc::algebra::index_less(a, b + 1));
     return a;
   }
   fn Power(exponent: index) -> index {
@@ -18,20 +21,20 @@ module {
     return result;
   }
   fn Select(key: Indices, proof: Indices) -> index {
-    control::require(index::less(3, key.len()));
-    control::require(index::less(8, proof.len()));
+    zkc::core::require(zkc::algebra::index_less(3, key.len()));
+    zkc::core::require(zkc::algebra::index_less(8, proof.len()));
     let skip = AtMost(key[0], 16);
     let stack = AtMost(key[1], 20);
     let maxHeight = AtMost(skip + stack, 20);
     let degree = AtMost(key[2], 16);
     let airs = AtMost(key[3], 32);
-    control::require(index::less(0, airs));
+    zkc::core::require(zkc::algebra::index_less(0, airs));
     let keyBase = 4 + airs * 10;
-    control::require(index::less(keyBase, key.len() + 1));
+    zkc::core::require(zkc::algebra::index_less(keyBase, key.len() + 1));
     let traceCount = Eq(proof[0], airs);
     let pvCount = Eq(proof[1], airs);
     let proofBase = 9 + airs * 4;
-    control::require(index::less(proofBase, proof.len() + 1));
+    zkc::core::require(zkc::algebra::index_less(proofBase, proof.len() + 1));
     let mut keyEnd = keyBase;
     let mut present = 0;
     let mut highest = 0;
@@ -50,15 +53,15 @@ module {
       let cached = AtMost(key[k + 8], 16);
       let widthOffset = Eq(key[k + 9], keyEnd);
       keyEnd = keyEnd + cached;
-      control::require(index::less(keyEnd, key.len() + 1));
+      zkc::core::require(zkc::algebra::index_less(keyEnd, key.len() + 1));
       for c in 0..cached { let width = AtMost(key[widthOffset + c], 4096); }
-      if index::equal(prepared, 0) {
+      if zkc::algebra::index_equal(prepared, 0) {
         let emptyHeight = Eq(preparedHeight, 0);
         let emptyWidth = Eq(preparedWidth, 0);
       }
       let exists = AtMost(proof[p], 1);
       let height = AtMost(proof[p + 1], maxHeight);
-      if index::equal(exists, 0) {
+      if zkc::algebra::index_equal(exists, 0) {
         let optional = Eq(required, 0);
         let noHeight = Eq(height, 0);
         let noCached = Eq(proof[p + 2], 0);
@@ -66,52 +69,52 @@ module {
       } else {
         let cachedOK = Eq(proof[p + 2], cached);
         let pvOK = Eq(proof[p + 3], expectedPV);
-        if index::equal(prepared, 1) { let prepOK = Eq(height, preparedHeight); }
+        if zkc::algebra::index_equal(prepared, 1) { let prepOK = Eq(height, preparedHeight); }
         present = present + 1;
-        if index::less(highest, height) { highest = height; }
+        if zkc::algebra::index_less(highest, height) { highest = height; }
         let mut paddedHeight = height;
-        if index::less(height, skip) { paddedHeight = skip; }
+        if zkc::algebra::index_less(height, skip) { paddedHeight = skip; }
         interactions = interactions + multiplicity * Power(paddedHeight);
       }
     }
     let keyExact = Eq(keyEnd, key.len());
-    control::require(index::less(0, present));
+    zkc::core::require(zkc::algebra::index_less(0, present));
     let numeratorOK = Eq(proof[2], present);
     let denominatorOK = Eq(proof[3], present);
     let univariateOK = Eq(proof[4], (degree + 1) * (Power(skip) - 1) + 1);
     let openingCount = Eq(proof[5], present);
     let mut batchRounds = 0;
-    if index::less(skip, highest) { batchRounds = highest - skip; }
+    if zkc::algebra::index_less(skip, highest) { batchRounds = highest - skip; }
     let batchOK = Eq(proof[6], batchRounds);
     // bit_length(total), including the extra layer for a power of two.
     let mut remaining = interactions;
     let mut gkrLayers = 0;
     for bit in 0..40 {
-      if index::less(0, remaining) {
+      if zkc::algebra::index_less(0, remaining) {
         gkrLayers = gkrLayers + 1;
-        remaining = index::div(remaining, 2);
+        remaining = zkc::algebra::index_div(remaining, 2);
       }
     }
     let exhausted = Eq(remaining, 0);
     let gkrOK = Eq(proof[7], gkrLayers);
     let mut gkrOuter = 0;
-    if index::less(0, gkrLayers) { gkrOuter = gkrLayers - 1; }
+    if zkc::algebra::index_less(0, gkrLayers) { gkrOuter = gkrLayers - 1; }
     let gkrOuterOK = Eq(proof[8], gkrOuter);
     let mut cursor = proofBase;
     let mut previousHeight = maxHeight;
     let mut previousAir = 0;
     for slot in 0..openingCount {
-      control::require(index::less(cursor + 1, proof.len()));
+      zkc::core::require(zkc::algebra::index_less(cursor + 1, proof.len()));
       let air = proof[cursor];
-      control::require(index::less(air, airs));
+      zkc::core::require(zkc::algebra::index_less(air, airs));
       let k = 4 + air * 10;
       let p = 9 + air * 4;
       let active = Eq(proof[p], 1);
       let height = proof[p + 1];
       let descending = AtMost(height, previousHeight);
-      if index::less(0, slot) {
-        if index::equal(height, previousHeight) {
-          control::require(index::less(previousAir, air));
+      if zkc::algebra::index_less(0, slot) {
+        if zkc::algebra::index_equal(height, previousHeight) {
+          zkc::core::require(zkc::algebra::index_less(previousAir, air));
         }
       }
       previousHeight = height;
@@ -121,10 +124,10 @@ module {
       let parts = Eq(proof[cursor + 1], 1 + prepared + cached);
       let widths = cursor + 2;
       cursor = widths + parts;
-      control::require(index::less(cursor, proof.len() + 1));
+      zkc::core::require(zkc::algebra::index_less(cursor, proof.len() + 1));
       let rotation = 1 + key[k + 2];
       let mainOK = Eq(proof[widths], key[k + 6] * rotation);
-      if index::equal(prepared, 1) {
+      if zkc::algebra::index_equal(prepared, 1) {
         let preparedOK = Eq(proof[widths + 1], key[k + 7] * rotation);
       }
       for c in 0..cached {

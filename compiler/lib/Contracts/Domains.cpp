@@ -1,5 +1,6 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <set>
@@ -22,6 +23,8 @@ Error invalid(StringRef reason) {
 
 bool applicableType(const DomainCatalog &catalog, StringRef kind,
                     StringRef identity) {
+  if (kind == "variant" || kind == "resource_unit")
+    return false;
   for (const auto &type : boundTypeConstructors())
     if (type.name == kind)
       return type.parameters.empty()
@@ -48,17 +51,23 @@ bool validPredicate(StringRef predicate, ArrayRef<std::string> sorts) {
 } // namespace
 
 DomainCatalog::DomainCatalog(std::vector<NominalDomain> domains,
+                             std::vector<LogicalTypeInstance> logicalTypes,
                              std::vector<CodecIdentity> codecs,
-                             std::vector<DomainRepresentation> representations)
-    : domains(std::move(domains)), codecs(std::move(codecs)),
-      representations(std::move(representations)) {}
+                             std::vector<DomainRepresentation> representations,
+                             std::vector<DefaultProvider> defaultProviders)
+    : domains(std::move(domains)), logicalTypes(std::move(logicalTypes)),
+      codecs(std::move(codecs)), representations(std::move(representations)),
+      defaultProviders(std::move(defaultProviders)) {}
 
 Expected<DomainCatalog>
 DomainCatalog::create(std::vector<NominalDomain> domains,
+                      std::vector<LogicalTypeInstance> logicalTypes,
                       std::vector<CodecIdentity> codecs,
-                      std::vector<DomainRepresentation> representations) {
-  DomainCatalog catalog(std::move(domains), std::move(codecs),
-                        std::move(representations));
+                      std::vector<DomainRepresentation> representations,
+                      std::vector<DefaultProvider> defaultProviders) {
+  DomainCatalog catalog(std::move(domains), std::move(logicalTypes),
+                        std::move(codecs), std::move(representations),
+                        std::move(defaultProviders));
   std::set<std::string> identities;
   for (const auto &d : catalog.domains) {
     if (!validName(d.identity))
@@ -71,7 +80,7 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
       consumeError(std::move(error));
       return invalid("invalid domain sort");
     }
-    if (d.sort == "Codec")
+    if (d.sort == "Codec" || !is_contained(domainSorts(), d.sort))
       return invalid("invalid domain sort");
     if (!d.modulus.empty() &&
         (d.sort != "Field" || d.modulus.size() > 1024 ||
@@ -101,6 +110,13 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
         return invalid("invalid capability fact");
     }
   }
+  std::set<std::pair<std::string, std::string>> admitted;
+  for (const auto &type : catalog.logicalTypes) {
+    if (!applicableType(catalog, type.kind, type.domain))
+      return invalid("invalid logical type instance");
+    if (!admitted.emplace(type.kind, type.domain).second)
+      return invalid("duplicate logical type instance");
+  }
   for (const auto &c : catalog.codecs) {
     if (!applicableType(catalog, c.kind, c.domain))
       return invalid("invalid codec payload domain");
@@ -109,6 +125,8 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
       sorts.push_back(catalog.identitySort(c.domain).str());
     if (!validPredicate("Encodes." + c.kind, sorts))
       return invalid("invalid codec payload kind");
+    if (!catalog.admitsLogicalType(c.kind, c.domain))
+      return invalid("unadmitted codec payload type");
   }
   // A shared scalar field does not identify a pairing's ordered source groups.
   // Validate the complete association before exposing a PairingField fact.
@@ -131,6 +149,8 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
       return invalid("invalid representation identity");
     if (!applicableType(catalog, r.kind, r.domain))
       return invalid("invalid representation domain");
+    if (!catalog.admitsLogicalType(r.kind, r.domain))
+      return invalid("unadmitted representation type");
     if (!legal.emplace(r.kind, r.domain, r.identity).second)
       return invalid("duplicate representation");
     if (r.isDefault && !defaults.emplace(r.kind, r.domain).second)
@@ -142,7 +162,31 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
         return invalid("ambiguous representation layout");
     }
   }
+  std::set<std::string> providerDomains;
+  for (const auto &selection : catalog.defaultProviders) {
+    if (!catalog.domain(selection.domain))
+      return invalid("invalid provider domain");
+    if (!validName(selection.provider) ||
+        StringRef(selection.provider).contains('/'))
+      return invalid("invalid default provider");
+    if (!providerDomains.insert(selection.domain).second)
+      return invalid("duplicate default provider");
+  }
   return catalog;
+}
+
+bool DomainCatalog::admitsLogicalType(StringRef kind,
+                                      StringRef identity) const {
+  return any_of(logicalTypes, [&](const auto &type) {
+    return type.kind == kind && type.domain == identity;
+  });
+}
+
+StringRef DomainCatalog::defaultProvider(StringRef identity) const {
+  for (const auto &selection : defaultProviders)
+    if (selection.domain == identity)
+      return selection.provider;
+  return {};
 }
 
 const NominalDomain *DomainCatalog::domain(StringRef identity) const {
@@ -314,6 +358,71 @@ const DomainCatalog &installedDomains() {
           "Transcript",
           {{"ChallengeField", field}},
           {"FieldTranscript", "Transcript"}}},
+        // Formation is an exact inventory, not inferred from the available
+        // representations below or from the nominal domains' sorts.
+        {{"bool", ""},
+         {"index", ""},
+         {"indices", ""},
+         {"field", field},
+         {"vector", field},
+         {"polynomial", field},
+         {"round", field},
+         {"matrix", field},
+         {"table", field},
+         {"point", field},
+         {"rng", field},
+         {"nonce", field},
+         {"field", scalar},
+         {"vector", scalar},
+         {"polynomial", scalar},
+         {"round", scalar},
+         {"matrix", scalar},
+         {"rng", scalar},
+         {"nonce", scalar},
+         {"field", bn254},
+         {"vector", bn254},
+         {"polynomial", bn254},
+         {"round", bn254},
+         {"matrix", bn254},
+         {"rng", bn254},
+         {"field", koala},
+         {"vector", koala},
+         {"polynomial", koala},
+         {"round", koala},
+         {"matrix", koala},
+         {"field", extension},
+         {"vector", extension},
+         {"polynomial", extension},
+         {"round", extension},
+         {"matrix", extension},
+         {"rng", extension},
+         {"group", group},
+         {"groups", group},
+         {"group", ristretto},
+         {"groups", ristretto},
+         {"group", bn254g1},
+         {"groups", bn254g1},
+         {"group", bn254g2},
+         {"groups", bn254g2},
+         {"transcript", transcript},
+         {"transcript", spongefish},
+         {"transcript", merlin},
+         {"transcript", extensionTranscript},
+         {"commitment", pcs},
+         {"proof", pcs},
+         {"prover_key", pcs},
+         {"verifier_key", pcs},
+         {"opening_state", pcs},
+         {"commitment", rowBase},
+         {"proof", rowBase},
+         {"opening_state", rowBase},
+         {"commitments", rowBase},
+         {"opening_states", rowBase},
+         {"commitment", rowExtension},
+         {"proof", rowExtension},
+         {"opening_state", rowExtension},
+         {"commitments", rowExtension},
+         {"opening_states", rowExtension}},
         {{"zkcv.commitment.rows-merkle-keccak256.koala-bear/1", "commitment",
           rowBase},
          {"zkcv.proof.rows-merkle-keccak256.koala-bear/1", "proof", rowBase},
@@ -435,7 +544,25 @@ const DomainCatalog &installedDomains() {
          {"arkworks.multilinear-pcs/1", "proof", pcs, true, ""},
          {"arkworks.multilinear-pcs/1", "prover_key", pcs, true, ""},
          {"arkworks.multilinear-pcs/1", "verifier_key", pcs, true, ""},
-         {"arkworks.multilinear-pcs/1", "opening_state", pcs, true, ""}});
+         {"arkworks.multilinear-pcs/1", "opening_state", pcs, true, ""}},
+        // Nominal provider policy does not follow representation spelling or
+        // associated fields. Implementation legality is checked separately.
+        {{field, "arkworks"},
+         {group, "arkworks"},
+         {bn254, "arkworks"},
+         {bn254g1, "arkworks"},
+         {bn254g2, "arkworks"},
+         {pcs, "arkworks"},
+         {transcript, "arkworks"},
+         {scalar, "dalek"},
+         {ristretto, "dalek"},
+         {merlin, "dalek"},
+         {spongefish, "spongefish"},
+         {koala, "plonky3"},
+         {extension, "plonky3"},
+         {extensionTranscript, "plonky3"},
+         {rowBase, "plonky3"},
+         {rowExtension, "plonky3"}});
     if (!result)
       report_fatal_error(Twine("invalid installed domain catalog: ") +
                              toString(result.takeError()),

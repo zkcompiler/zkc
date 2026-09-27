@@ -70,33 +70,42 @@ for flags in [[], ['--release-storage']]:
 
 # Readable conveniences work without configuring a generic function, too.
 closed = '''module {
+  use zkc::algebra;
   fn Local(x: koala-bear::Element) -> koala-bear::Element {
-    let values = [x, field::add(x, x)];
+    let values = [x, zkc::algebra::add(x, x)];
     let mut result = values[0];
-    for i in 0..2 { result = field::add(result, values[i]); }
-    if true { result = field::neg(result); } else { }
+    for i in 0..2 { result = zkc::algebra::add(result, values[i]); }
+    if true { result = zkc::algebra::neg(result); } else { }
     return result;
   }
 }'''
 native('protocol-import', closed)
 native('protocol-import', closed.replace('Local(', '__binding_0('))
-profile = '''module "arkworks.bls12-381/1" {
-  fn Local(x: field, enabled: bool) -> field {
+imported = '''module {
+  use zkc::algebra;
+  fn Local(x: bls12-381.fr::Element, enabled: bool) -> bls12-381.fr::Element {
     let mut result = x;
-    if enabled { result = field.add(x, field.add(x, x)); }
+    if enabled { result = zkc::algebra::add(x, zkc::algebra::add(x, x)); }
     let values = [result, x];
-    for i in 0..values.len() { result = field::add(result, values[i]); }
+    for i in 0..values.len() { result = zkc::algebra::add(result, values[i]); }
     return result;
   }
 }'''
-profile_source = native('protocol-source', profile)
-native('protocol-import', profile)
-assert native('protocol-source', native('protocol-format', profile_source)) == profile_source
-assert len([b for b in profile_source[1] if b[1] == 'field.add']) == 1
+imported_source = native('protocol-source', imported)
+native('protocol-import', imported)
+assert native('protocol-source', native('protocol-format', imported_source)) == imported_source
+assert len([b for b in imported_source[1] if b[1] == 'field.add']) == 1
+assert all(b[3] == '' for b in imported_source[1])
+executable = imported[:-1] + '''
+  protocol Main { roles(P); inputs(P x: bls12-381.fr::Element, P enabled: bool);
+    outputs(P bls12-381.fr::Element); local P: let result = Local(x, enabled); return result; }
+  entry main = Main;
+}'''
+imported_plan = native('protocol-compile', executable)
 assert all(b[3] == ('native/' if b[1].startswith(('index.', 'indices.')) else 'arkworks/') + b[1]
-           for b in profile_source[1])
-native('protocol-source', 'module { fn Work<>() -> Indices {let xs = [0,1,2]; return xs;} }')
-native('protocol-source', 'module { fn Work<F: Field>() -> Vector<F::Element> {let xs: Vector<F::Element> = []; return xs;} }')
+           for b in imported_plan[1])
+native('protocol-source', 'module { use zkc::algebra::{Indices}; fn Work<>() -> Indices {let xs = [0,1,2]; return xs;} }')
+native('protocol-source', 'module { use zkc::algebra::{Vector}; fn Work<F: Field>() -> Vector<F::Element> {let xs: Vector<F::Element> = []; return xs;} }')
 for fragment, replacement, code in [
     ('let mut acc = x;', 'let acc = x;', 'source-assignment'),
     ('if enabled', 'if x', 'source-condition-type'),
@@ -154,16 +163,17 @@ for spelling in ('a..b', 'a.'):
 # Explicit captures are immutable region arguments: outer mutation must not
 # silently disappear when the region supplies only its explicitly named yields.
 explicit = '''module {
+  use zkc::algebra;
   fn Local(flag: bool, x: koala-bear::Element) -> koala-bear::Element {
     let mut acc = x;
     if flag capture (acc) -> () {
-      acc = field::add(acc, acc); yield;
+      acc = zkc::algebra::add(acc, acc); yield;
     } else { yield; }
     return acc;
   }
 }'''
 native('protocol-source', explicit, refuses='source-assignment')
-native('protocol-source', explicit.replace('acc = field::add(acc, acc);', 'let hidden = field::add(acc, x);'), refuses='source-value-reference')
+native('protocol-source', explicit.replace('acc = zkc::algebra::add(acc, acc);', 'let hidden = zkc::algebra::add(acc, x);'), refuses='source-value-reference')
 shadow[2][0][4] = [
     ['for','range','outer','outer','outer',[['state','outer']],[],[['yield',['state']]],['result']],
     ['return',['result']]]
@@ -178,8 +188,10 @@ broken = logical.replace(loop_line, re.sub(r'local_for"\([^)]*\)', 'local_for"()
 run([optimizer, '--verify-each'], broken, refuses='')
 # Affine loop state must be carried, not implicitly borrowed on every trip.
 affine = """module {
+  use zkc::random::{Rng};
+  use zkc::random;
   fn Advance<F: Field>(rng: Rng<F>) -> Rng<F> {
-    let (ignored, next) = random::draw(rng); return next;
+    let (ignored, next) = zkc::random::draw(rng); return next;
   }
   fn Loop<F: Field>(rng: Rng<F>) -> Rng<F> {
     let mut state = rng;

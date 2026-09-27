@@ -9,29 +9,18 @@ The finite source/table carrier and its independent checks retain their scope.
 
 ## Authoring and admission
 
-Text modules headed `arkworks.multilinear.bls12-381/1` or
-`arkworks.bls12-381/1` are BLS authoring conveniences. The text parser elaborates
-them into explicit declarations before semantic admission, construction, MLIR
-import or execution; the carrier never names a profile. A module header naming
-any other profile is refused as `source-profile`. Ordinary `module { ... }`
-explicit/generic authoring is unchanged. Unknown syntax can still be
-parsed/formatted where structurally valid; formation rejects unknown
-types/contracts at admission.
+Authored text uses `module { ... }` with explicit domain choices and imports
+from the installed source modules. Historical BLS profile headings and their
+implicit type/domain defaults are removed. The [source reference](../language/reference.md)
+owns import-based authoring; the common carrier continues to contain exact
+logical types and operation bindings, without source import declarations.
 
-| Short type/operation family | Explicit identity or selection |
-|---|---|
-| `field`, `table`, `point`, `round`, `rng`, `nonce` | `bls12-381.fr` |
-| `group`, `groups` | `bls12-381.g1` |
-| PCS values and `pcs.*` | `multilinear.kzg.bls12-381/1` |
-| `transcript` and `transcript.*` | `merlin3.bls12-381.fr64be/1`; observations also carry payload identity and codec |
-| `curve.*` except `curve.response` | G1 operation argument |
-| `curve.response` | Fr operation argument; nonce remains an atomic affine resource |
-| Implementations | Actual `arkworks/<contract>` installation |
-
-The table describes recognized short types in their respective heading.
-A module heading is not a PCS scheme identity. Reference-group public scalars
-are not BLS G1 points. The [group exchange](../../examples/protocols/group-exchange.pir)
-uses actual G1 operations and retains nonce consumption.
+The separate `carrier module { ... }` form is a readable common representation.
+It preserves installed low-level type spellings and explicit bindings, including
+construction-stage operations. It cannot import source libraries, and its
+admission does not establish transcript-construction provenance. The
+[group exchange](../../examples/protocols/group-exchange.pir) uses explicit G1
+domains and retains nonce consumption.
 
 The current carrier provides no compatibility guarantee for earlier profile-based
 transcripts, artifact digests or proofs. Current artifact results, inputs,
@@ -41,7 +30,7 @@ form; a shared version suffix does not imply compatibility across carriers.
 Elaboration retains instruction order, sites, source locations and loop counts.
 It inserts declarations, not executable operations, and gives each function its
 logical origin. Generated binding symbols avoid authored top-level names.
-This is a defaults notation; it is not the former profile-specific allowlist.
+Imported operation aliases retain the same installed logical call identity.
 
 The carrier's second field lists explicit bindings. A profile string in that
 position is malformed (`interactive-shape`). The current readers admit only

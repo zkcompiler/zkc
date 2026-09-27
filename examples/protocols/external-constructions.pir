@@ -1,23 +1,26 @@
 // Atomic exact external constructions, with explicit copyable data state.
 // Indices here are checked bytes/words, not nominal group or field values.
 module {
+  use zkc::external;
+  use zkc::algebra::{Indices};
+  use zkc::algebra;
   fn Chain(initial: Indices, commitments: Indices, message: Indices) -> (Indices, Indices, Indices) {
-    let state = external::monero::init(initial);
-    let digest = external::monero::hash(commitments);
-    let (bound, _) = external::monero::update(state, digest);
-    let (next, challenge) = external::monero::update(bound, message);
-    let empty = indices::empty();
-    let (last, empty_challenge) = external::monero::update(next, empty);
+    let state = zkc::external::monero_init(initial);
+    let digest = zkc::external::monero_hash(commitments);
+    let (bound, _) = zkc::external::monero_update(state, digest);
+    let (next, challenge) = zkc::external::monero_update(bound, message);
+    let empty = zkc::algebra::indices_empty();
+    let (last, empty_challenge) = zkc::external::monero_update(next, empty);
     return (last, challenge, empty_challenge);
   }
   fn Duplex(observations: Indices, bits: index, witness: index) -> (Indices, index, Indices, index, bool, Indices, bool) {
-    let state = external::openvm::init();
-    let observed = external::openvm::observe(state, observations);
-    let (sampled, challenge) = external::openvm::sample(observed);
-    let (extended, extension) = external::openvm::sample_ext(sampled);
-    let (masked, bit_challenge) = external::openvm::sample_bits(extended, bits);
-    let (checked, accepted) = external::openvm::check_witness(masked, bits, witness);
-    let (unchanged, zero_ok) = external::openvm::check_witness(checked, 0, witness);
+    let state = zkc::external::openvm_init();
+    let observed = zkc::external::openvm_observe(state, observations);
+    let (sampled, challenge) = zkc::external::openvm_sample(observed);
+    let (extended, extension) = zkc::external::openvm_sample_ext(sampled);
+    let (masked, bit_challenge) = zkc::external::openvm_sample_bits(extended, bits);
+    let (checked, accepted) = zkc::external::openvm_check_witness(masked, bits, witness);
+    let (unchanged, zero_ok) = zkc::external::openvm_check_witness(checked, 0, witness);
     return (unchanged, challenge, extension, bit_challenge, accepted, masked, zero_ok);
   }
   protocol ChainDemo {

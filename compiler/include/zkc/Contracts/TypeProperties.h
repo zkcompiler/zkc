@@ -1,6 +1,8 @@
 #ifndef ZKC_CONTRACTS_TYPE_PROPERTIES_H
 #define ZKC_CONTRACTS_TYPE_PROPERTIES_H
 
+#include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Variant.h"
 #include "llvm/ADT/StringRef.h"
 
@@ -8,10 +10,23 @@ namespace zkc::protocol {
 // Classification of an admitted nominal type spelling. Formation and installed
 // domain checks remain with admission and the binding registry.
 inline llvm::StringRef typeKind(llvm::StringRef type) {
-  return type.split('@').first.split(':').first;
+  return type.take_front(type.find_first_of(":<@"));
 }
 inline bool duplicable(llvm::StringRef type);
 inline bool discardable(llvm::StringRef type);
+inline bool applicationPermission(llvm::StringRef type, bool copy) {
+  auto parsed = parseBoundType(type.split('@').first, false);
+  if (!parsed) {
+    llvm::consumeError(parsed.takeError());
+    return false;
+  }
+  for (const auto &argument : parsed->arguments)
+    if (argument.kind == TypeArgument::Kind::Type &&
+        !(copy ? duplicable(argument.type->spelling())
+               : discardable(argument.type->spelling())))
+      return false;
+  return true;
+}
 inline bool variantPermission(llvm::StringRef type, bool copy) {
   auto [logical, rep] = type.split('@');
   if (type.contains('@') && rep != "logical.variant/1")
@@ -25,7 +40,6 @@ inline bool variantPermission(llvm::StringRef type, bool copy) {
         return false;
   return true;
 }
-enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 inline Custody custody(llvm::StringRef type) {
   auto kind = typeKind(type);
   if (kind == "variant") {
@@ -36,19 +50,22 @@ inline Custody custody(llvm::StringRef type) {
     return variantPermission(type, true) ? Custody::PrivateImmutable
                                          : Custody::Affine;
   }
-  if (kind == "transcript" || kind == "rng" || kind == "nonce" ||
-      kind == "capability" || kind == "resource_unit")
-    return Custody::Affine;
-  if (kind == "opening_state" || kind == "opening_states" ||
-      kind == "prover_key" || kind == "verifier_key")
-    return Custody::PrivateImmutable;
-  if (kind == "index" || kind == "indices" || kind == "matrix" ||
-      kind == "vector" || kind == "polynomial" || kind == "field" ||
-      kind == "table" || kind == "point" || kind == "round" || kind == "bool" ||
-      kind == "commitment" || kind == "commitments" || kind == "proof" ||
-      kind == "scalar" || kind == "group" || kind == "groups")
-    return Custody::PublicValue;
-  return Custody::Unknown;
+  const auto *permissions = typePermissions(kind);
+  if (type.contains('<')) {
+    auto parsed = parseBoundType(type.split('@').first, false);
+    if (!parsed) {
+      llvm::consumeError(parsed.takeError());
+      return Custody::Unknown;
+    }
+    if (!permissions)
+      return Custody::Unknown;
+    // Element serialization does not confer a container codec.
+    return permissions->custody == Custody::Affine ||
+                   !applicationPermission(type, true)
+               ? Custody::Affine
+               : Custody::PrivateImmutable;
+  }
+  return permissions ? permissions->custody : Custody::Unknown;
 }
 inline bool hasTypeProperties(llvm::StringRef type) {
   return custody(type) != Custody::Unknown;
@@ -64,17 +81,18 @@ inline bool serializable(llvm::StringRef type) {
 inline bool discardable(llvm::StringRef type) {
   if (typeKind(type) == "variant")
     return variantPermission(type, false);
-  auto c = custody(type);
-  return typeKind(type) == "resource_unit" || c == Custody::PublicValue ||
-         c == Custody::PrivateImmutable;
+  const auto *permissions = typePermissions(typeKind(type));
+  return permissions && permissions->drop &&
+         (!type.contains('<') || applicationPermission(type, false));
 }
 // Aliasing immutable local custody does not authorize cross-role replay.
 // Logical resource units may be dropped, but never aliased.
 inline bool duplicable(llvm::StringRef type) {
   if (typeKind(type) == "variant")
     return variantPermission(type, true);
-  auto c = custody(type);
-  return c == Custody::PublicValue || c == Custody::PrivateImmutable;
+  const auto *permissions = typePermissions(typeKind(type));
+  return permissions && permissions->copy &&
+         (!type.contains('<') || applicationPermission(type, true));
 }
 } // namespace zkc::protocol
 #endif

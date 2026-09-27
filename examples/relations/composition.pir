@@ -1,6 +1,7 @@
 // Arithmetic consumers of two distinct rank-one relations and a finite AIR.
 // This diagnostic example checks composition; it is not a proof protocol.
 module {
+  use zkc::algebra::{Matrix, Vector};
   relation Circuit = r1cs("multiply.r1cs.json");
   relation Scaled = r1cs("scaled.r1cs.json");
   relation Trace = air("squaring.air.json");

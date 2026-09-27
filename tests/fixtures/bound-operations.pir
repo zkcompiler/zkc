@@ -1,4 +1,8 @@
 module {
+  use zkc::poly::{
+    Point,
+    Table
+  };
   bind fold_left = poly::fold(bls12-381.fr);
   bind fold_right = poly::fold(bls12-381.fr);
   bind scale = curve::scale(bls12-381.g1);

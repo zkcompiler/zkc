@@ -107,10 +107,25 @@ pub(crate) fn size(n: usize, width: usize) -> Result<usize> {
         .and_then(|s| s.checked_add(256))
         .ok_or_else(|| exhausted("size-overflow"))
 }
-/// Trusted variants; clones retain immutable backing. Public proof/commitment
-/// variants never carry private opening custody. No token deserializer exists.
-#[derive(Clone, Debug)]
-pub enum Value {
+// Keep the public typed sum and test coverage inventory in one declaration.
+macro_rules! value_inventory {
+    ($( $(#[$meta:meta])* $variant:ident ( $($payload:ty),+ $(,)? ), )*) => {
+        /// Trusted variants; clones retain immutable backing. Public proof/commitment
+        /// variants never carry private opening custody. No token deserializer exists.
+        #[derive(Clone, Debug)]
+        pub enum Value { $( $(#[$meta])* $variant($($payload),+), )* }
+        #[cfg(test)]
+        impl Value {
+            pub(crate) const PAYLOAD_NAMES: &'static [&'static str] = &[$(stringify!($variant)),*];
+            pub(crate) fn payload_name(&self) -> &'static str {
+                match self { $(Self::$variant(..) => stringify!($variant)),* }
+            }
+        }
+    };
+}
+value_inventory! {
+
+    FixedVector(crate::FixedVector),
     Variant(crate::variant::Variant),
     /// Zero payload; nominal identity and live ownership stay in authenticated metadata.
     ResourceUnit(crate::resource::LogicalUnit),
@@ -174,6 +189,7 @@ pub enum Value {
     Curve(zkc_arkworks::GroupPoint),
     Groups(Arc<[zkc_arkworks::GroupPoint]>),
 }
+
 impl Value {
     /// Visit only active leaves, preserving their exact capability handles.
     pub(crate) fn active_leaves(&self) -> Vec<&Self> {
@@ -192,56 +208,209 @@ impl Value {
     }
 
     pub fn ty(&self) -> Type {
+        self.type_identity().0
+    }
+    // Each payload supplies kind, nominal identity and representation together.
+    // New variants must explicitly classify all three properties.
+    fn type_identity(&self) -> (Type, Identity, Representation) {
         match self {
-            Self::Variant(_) => Type::Variant,
-            Self::ResourceUnit(_) => Type::ResourceUnit,
-            Self::Bn254Field(_) => Type::Field,
-            Self::Bn254Vector(_) => Type::Vector,
-            Self::Bn254Polynomial(_) => Type::Polynomial,
-            Self::Bn254Round(_) => Type::Round,
-            Self::Bn254Matrix(_) => Type::Matrix,
-            Self::Bn254G1(_) => Type::Group,
-            Self::Bn254G1Vector(_) => Type::Groups,
-            Self::Bn254G2(_) => Type::Group,
-            Self::Bn254G2Vector(_) => Type::Groups,
-            Self::OracleRoot(..) => Type::Commitment,
-            Self::OraclePath(..) => Type::Proof,
-            Self::OracleState(_) => Type::OpeningState,
-            Self::OracleRoots(..) => Type::Commitments,
-            Self::OracleStates(..) => Type::OpeningStates,
-            Self::KoalaBearExt8Matrix(_) => Type::Matrix,
-            Self::KoalaBearExt8Round(_) => Type::Round,
-            Self::KoalaBearExt8Polynomial(_) => Type::Polynomial,
-            Self::KoalaBearExt8Vector(_) => Type::Vector,
-            Self::KoalaBearExt8Field(_) => Type::Field,
-            Self::Matrix(_) | Self::RistrettoMatrix(_) | Self::KoalaBearMatrix(_) => Type::Matrix,
-            Self::KoalaBearField(_) => Type::Field,
-            Self::KoalaBearVector(_) => Type::Vector,
-            Self::KoalaBearPolynomial(_) => Type::Polynomial,
-            Self::KoalaBearRound(_) => Type::Round,
-            Self::Vector(_) | Self::RistrettoVector(_) | Self::FrDiagonal(_) => Type::Vector,
-            Self::Polynomial(_) | Self::RistrettoPolynomial(_) => Type::Polynomial,
-            Self::RistrettoField(_) => Type::Field,
-            Self::RistrettoRound(_) => Type::Round,
-            Self::RistrettoGroup(_) => Type::Group,
-            Self::RistrettoGroups(_) | Self::RistrettoDiagonal(_) => Type::Groups,
-            Self::Field(_) => Type::Field,
-            Self::Table(_) | Self::TableMsb(_) => Type::Table,
-            Self::Point(_) => Type::Point,
-            Self::Round(_) => Type::Round,
-            Self::Bool(_) => Type::Bool,
-            Self::Index(_) => Type::Index,
-            Self::Indices(_) => Type::Indices,
-            Self::Rng(_) => Type::Rng,
-            Self::Commitment(_) => Type::Commitment,
-            Self::OpeningState(_) => Type::OpeningState,
-            Self::Proof(_) => Type::Proof,
-            Self::ProverKey(_) => Type::ProverKey,
-            Self::VerifierKey(_) => Type::VerifierKey,
-            Self::Nonce(_) => Type::Nonce,
-            Self::Transcript(_) => Type::Transcript,
-            Self::Curve(_) => Type::Group,
-            Self::Groups(_) => Type::Groups,
+            Self::FixedVector(_) => (
+                Type::FixedVector,
+                Identity::None,
+                Representation::FixedVector,
+            ),
+            Self::Variant(_) => (Type::Variant, Identity::None, Representation::Variant),
+            Self::ResourceUnit(_) => (
+                Type::ResourceUnit,
+                Identity::None,
+                Representation::ResourceUnit,
+            ),
+            Self::Bn254Field(_) => (Type::Field, Identity::Bn254Fr, Representation::Bn254Fr),
+            Self::Bn254Vector(_) => (
+                Type::Vector,
+                Identity::Bn254Fr,
+                Representation::Bn254FrVector,
+            ),
+            Self::Bn254Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Bn254Fr,
+                Representation::Bn254Polynomial,
+            ),
+            Self::Bn254Round(_) => (Type::Round, Identity::Bn254Fr, Representation::Bn254Round),
+            Self::Bn254Matrix(_) => (
+                Type::Matrix,
+                Identity::Bn254Fr,
+                Representation::Bn254SparseCoo,
+            ),
+            Self::Bn254G1(_) => (Type::Group, Identity::Bn254G1, Representation::Bn254G1),
+            Self::Bn254G1Vector(_) => (
+                Type::Groups,
+                Identity::Bn254G1,
+                Representation::Bn254G1Vector,
+            ),
+            Self::Bn254G2(_) => (Type::Group, Identity::Bn254G2, Representation::Bn254G2),
+            Self::Bn254G2Vector(_) => (
+                Type::Groups,
+                Identity::Bn254G2,
+                Representation::Bn254G2Vector,
+            ),
+            Self::OracleRoot(d, _) => (Type::Commitment, d.identity(), Representation::MerkleRoot),
+            Self::OraclePath(d, _) => (Type::Proof, d.identity(), Representation::MerklePath),
+            Self::OracleState(s) => (
+                Type::OpeningState,
+                s.domain().identity(),
+                Representation::MerkleState,
+            ),
+            Self::OracleRoots(d, _) => {
+                (Type::Commitments, d.identity(), Representation::MerkleRoots)
+            }
+            Self::OracleStates(d, _) => (
+                Type::OpeningStates,
+                d.identity(),
+                Representation::MerkleStates,
+            ),
+            Self::KoalaBearExt8Matrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8SparseCoo,
+            ),
+            Self::KoalaBearExt8Round(_) => (
+                Type::Round,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8Round,
+            ),
+            Self::KoalaBearExt8Polynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8Polynomial,
+            ),
+            Self::KoalaBearExt8Vector(_) => (
+                Type::Vector,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8Vector,
+            ),
+            Self::KoalaBearExt8Field(_) => (
+                Type::Field,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8,
+            ),
+            Self::Matrix(_) => (
+                Type::Matrix,
+                Identity::Bls12381Fr,
+                Representation::FrSparseCoo,
+            ),
+            Self::RistrettoMatrix(_) => (
+                Type::Matrix,
+                Identity::Ristretto255Scalar,
+                Representation::DalekSparseCoo,
+            ),
+            Self::KoalaBearMatrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBear,
+                Representation::KoalaBearSparseCoo,
+            ),
+            Self::KoalaBearField(_) => {
+                (Type::Field, Identity::KoalaBear, Representation::KoalaBear)
+            }
+            Self::KoalaBearVector(_) => (
+                Type::Vector,
+                Identity::KoalaBear,
+                Representation::KoalaBearVector,
+            ),
+            Self::KoalaBearPolynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBear,
+                Representation::KoalaBearPolynomial,
+            ),
+            Self::KoalaBearRound(_) => (
+                Type::Round,
+                Identity::KoalaBear,
+                Representation::KoalaBearRound,
+            ),
+            Self::Vector(_) => (Type::Vector, Identity::Bls12381Fr, Representation::FrVector),
+            Self::RistrettoVector(_) => (
+                Type::Vector,
+                Identity::Ristretto255Scalar,
+                Representation::DalekVector,
+            ),
+            Self::FrDiagonal(_) => (
+                Type::Vector,
+                Identity::Bls12381Fr,
+                Representation::FrDiagonal,
+            ),
+            Self::Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Bls12381Fr,
+                Representation::Polynomial,
+            ),
+            Self::RistrettoPolynomial(_) => (
+                Type::Polynomial,
+                Identity::Ristretto255Scalar,
+                Representation::DalekPolynomial,
+            ),
+            Self::RistrettoField(_) => (
+                Type::Field,
+                Identity::Ristretto255Scalar,
+                Representation::DalekScalar,
+            ),
+            Self::RistrettoRound(_) => (
+                Type::Round,
+                Identity::Ristretto255Scalar,
+                Representation::DalekRound,
+            ),
+            Self::RistrettoGroup(_) => (
+                Type::Group,
+                Identity::Ristretto255Group,
+                Representation::Ristretto,
+            ),
+            Self::RistrettoGroups(_) => (
+                Type::Groups,
+                Identity::Ristretto255Group,
+                Representation::RistrettoVector,
+            ),
+            Self::RistrettoDiagonal(_) => (
+                Type::Groups,
+                Identity::Ristretto255Group,
+                Representation::RistrettoDiagonal,
+            ),
+            Self::Field(_) => (Type::Field, Identity::Bls12381Fr, Representation::Fr),
+            Self::Table(_) => (Type::Table, Identity::Bls12381Fr, Representation::TableLsb),
+            Self::TableMsb(_) => (Type::Table, Identity::Bls12381Fr, Representation::TableMsb),
+            Self::Point(_) => (Type::Point, Identity::Bls12381Fr, Representation::Point),
+            Self::Round(_) => (Type::Round, Identity::Bls12381Fr, Representation::Round),
+            Self::Bool(_) => (Type::Bool, Identity::None, Representation::Bool),
+            Self::Index(_) => (Type::Index, Identity::None, Representation::Index),
+            Self::Indices(_) => (Type::Indices, Identity::None, Representation::Indices),
+            Self::Rng(t) => (Type::Rng, t.identity(), Representation::Resource),
+            Self::Commitment(_) => (
+                Type::Commitment,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::OpeningState(_) => (
+                Type::OpeningState,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::Proof(_) => (
+                Type::Proof,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::ProverKey(_) => (
+                Type::ProverKey,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::VerifierKey(_) => (
+                Type::VerifierKey,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::Nonce(t) => (Type::Nonce, t.identity(), Representation::Resource),
+            Self::Transcript(t) => (Type::Transcript, t.identity(), Representation::Resource),
+            Self::Curve(_) => (Type::Group, Identity::Bls12381G1, Representation::G1),
+            Self::Groups(_) => (Type::Groups, Identity::Bls12381G1, Representation::Groups),
         }
     }
     /// Pre-import conservative charge for a key selected by an already validated
@@ -278,7 +447,24 @@ impl Value {
             Type::Indices => wire_len / 8,
             Type::Groups => wire_len / 48,
             Type::Proof => wire_len / 96,
-            _ => 0,
+            Type::FixedVector
+            | Type::Variant
+            | Type::ResourceUnit
+            | Type::Field
+            | Type::Matrix
+            | Type::Round
+            | Type::Group
+            | Type::Bool
+            | Type::Index
+            | Type::Rng
+            | Type::Commitment
+            | Type::OpeningState
+            | Type::ProverKey
+            | Type::VerifierKey
+            | Type::Nonce
+            | Type::Transcript
+            | Type::Commitments
+            | Type::OpeningStates => 0,
         };
         let bytes = payload_bytes(ty, elements)?;
         policy.output(bytes, usize::MAX)?;
@@ -333,7 +519,29 @@ impl Value {
             policy.wire(wire_len)?;
             let bytes = match ty.kind() {
                 Type::Vector | Type::Polynomial => size(wire_len / 4, 4)?,
-                _ => 512,
+                Type::FixedVector
+                | Type::Variant
+                | Type::ResourceUnit
+                | Type::Field
+                | Type::Matrix
+                | Type::Round
+                | Type::Table
+                | Type::Point
+                | Type::Group
+                | Type::Groups
+                | Type::Bool
+                | Type::Index
+                | Type::Indices
+                | Type::Rng
+                | Type::Commitment
+                | Type::OpeningState
+                | Type::Proof
+                | Type::ProverKey
+                | Type::VerifierKey
+                | Type::Nonce
+                | Type::Transcript
+                | Type::Commitments
+                | Type::OpeningStates => 512,
             };
             policy.output(bytes, usize::MAX)?;
             Ok(bytes)
@@ -352,7 +560,60 @@ impl Value {
         match self {
             Self::ResourceUnit(t) => Some(t.capability()),
             Self::Rng(t) | Self::Nonce(t) | Self::Transcript(t) => Some(t),
-            _ => None,
+            // Variants carry resources through active leaves, not a wrapper token.
+            Self::Variant(_) => None,
+            Self::FixedVector(..)
+            | Self::Bn254Field(..)
+            | Self::Bn254Vector(..)
+            | Self::Bn254Polynomial(..)
+            | Self::Bn254Round(..)
+            | Self::Bn254Matrix(..)
+            | Self::Bn254G1(..)
+            | Self::Bn254G1Vector(..)
+            | Self::Bn254G2(..)
+            | Self::Bn254G2Vector(..)
+            | Self::OracleRoot(..)
+            | Self::OraclePath(..)
+            | Self::OracleState(..)
+            | Self::OracleRoots(..)
+            | Self::OracleStates(..)
+            | Self::Index(..)
+            | Self::Indices(..)
+            | Self::Matrix(..)
+            | Self::RistrettoMatrix(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Field(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearField(..)
+            | Self::KoalaBearVector(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearRound(..)
+            | Self::Vector(..)
+            | Self::Polynomial(..)
+            | Self::RistrettoField(..)
+            | Self::RistrettoVector(..)
+            | Self::RistrettoPolynomial(..)
+            | Self::RistrettoRound(..)
+            | Self::RistrettoGroup(..)
+            | Self::RistrettoGroups(..)
+            | Self::FrDiagonal(..)
+            | Self::RistrettoDiagonal(..)
+            | Self::Field(..)
+            | Self::Table(..)
+            | Self::TableMsb(..)
+            | Self::Point(..)
+            | Self::Round(..)
+            | Self::Bool(..)
+            | Self::Commitment(..)
+            | Self::OpeningState(..)
+            | Self::Proof(..)
+            | Self::ProverKey(..)
+            | Self::VerifierKey(..)
+            | Self::Curve(..)
+            | Self::Groups(..) => None,
         }
     }
     /// Bounded host constructor for real G1 public vectors.
@@ -432,66 +693,30 @@ impl RuntimeValue for Value {
         self.ty().name()
     }
     fn physical_type(&self) -> PhysicalType {
-        if let Self::Variant(v) = self {
-            return PhysicalType::default_for(LogicalType::variant(v.descriptor().clone()));
+        // Structural families already retain their checked physical descriptor;
+        // do not traverse every inactive variant payload on each invocation.
+        if let Self::FixedVector(value) = self {
+            return value.physical_type().clone();
         }
-        if let Self::ResourceUnit(token) = self {
-            return PhysicalType::default_for(LogicalType::resource_unit(token.domain()));
+        if let Self::Variant(value) = self {
+            return value.physical_type().clone();
         }
-        let identity = match self {
-            Self::Bn254Field(_)
-            | Self::Bn254Vector(_)
-            | Self::Bn254Polynomial(_)
-            | Self::Bn254Round(_)
-            | Self::Bn254Matrix(_) => Identity::Bn254Fr,
-            Self::Bn254G1(_) | Self::Bn254G1Vector(_) => Identity::Bn254G1,
-            Self::Bn254G2(_) | Self::Bn254G2Vector(_) => Identity::Bn254G2,
-            Self::OracleRoot(d, _)
-            | Self::OraclePath(d, _)
-            | Self::OracleRoots(d, _)
-            | Self::OracleStates(d, _) => d.identity(),
-            Self::OracleState(s) => s.domain().identity(),
-            Self::KoalaBearExt8Field(_)
-            | Self::KoalaBearExt8Vector(_)
-            | Self::KoalaBearExt8Polynomial(_)
-            | Self::KoalaBearExt8Round(_)
-            | Self::KoalaBearExt8Matrix(_) => Identity::KoalaBearExt8,
-            Self::KoalaBearMatrix(_)
-            | Self::KoalaBearField(_)
-            | Self::KoalaBearVector(_)
-            | Self::KoalaBearPolynomial(_)
-            | Self::KoalaBearRound(_) => Identity::KoalaBear,
-            Self::RistrettoMatrix(_)
-            | Self::RistrettoField(_)
-            | Self::RistrettoVector(_)
-            | Self::RistrettoPolynomial(_)
-            | Self::RistrettoRound(_) => Identity::Ristretto255Scalar,
-            Self::RistrettoGroup(_) | Self::RistrettoGroups(_) | Self::RistrettoDiagonal(_) => {
-                Identity::Ristretto255Group
-            }
-            Self::Rng(t) | Self::Nonce(t) | Self::Transcript(t) => t.identity(),
-            Self::Bool(_) | Self::Index(_) | Self::Indices(_) => Identity::None,
-            Self::Curve(_) | Self::Groups(_) => Identity::Bls12381G1,
-
-            Self::Commitment(_)
-            | Self::Proof(_)
-            | Self::ProverKey(_)
-            | Self::VerifierKey(_)
-            | Self::OpeningState(_) => Identity::MultilinearKzgBls12381,
-            _ => Identity::Bls12381Fr,
-        };
-        let logical = LogicalType::new(self.ty(), identity).expect("intrinsic payload type");
-        if matches!(self, Self::FrDiagonal(_)) {
-            PhysicalType::new(logical, Representation::FrDiagonal).expect("intrinsic diagonal")
-        } else if matches!(self, Self::RistrettoDiagonal(_)) {
-            PhysicalType::new(logical, Representation::RistrettoDiagonal)
-                .expect("intrinsic diagonal")
-        } else if matches!(self, Self::TableMsb(_)) {
-            PhysicalType::new(logical, Representation::TableMsb).expect("MSB table representation")
-        } else {
-            PhysicalType::default_for(logical)
+        // Public enum wrappers can be mismatched by a host. Classification must
+        // remain total before validation; the private issued token owns its type.
+        // Core::validate still checks the wrapper kind against the resource store.
+        if let Some(token) = self.capability() {
+            let logical = if let Some(domain) = token.resource_domain() {
+                LogicalType::resource_unit(domain)
+            } else {
+                LogicalType::new(token.kind(), token.identity()).expect("issued capability type")
+            };
+            return PhysicalType::default_for(logical).expect("issued capability representation");
         }
+        let (kind, identity, representation) = self.type_identity();
+        let logical = LogicalType::new(kind, identity).expect("intrinsic payload type");
+        PhysicalType::new(logical, representation).expect("intrinsic represented leaf value")
     }
+
     fn validate_serializable(&self) -> Result<()> {
         if !self.physical_type().is_serializable() {
             return Err(refused("nonserializable"));
@@ -501,6 +726,7 @@ impl RuntimeValue for Value {
     fn retained_bytes(&self) -> usize {
         // Conservative retained Rust payload, counting shared backing in full.
         match self {
+            Self::FixedVector(v) => v.retained_bytes(),
             Self::Variant(v) => Ok(v.retained_bytes()),
             Self::ResourceUnit(_) => Ok(512),
             Self::OracleRoot(..) => Ok(512),
@@ -533,7 +759,26 @@ impl RuntimeValue for Value {
             Self::Proof(p) => payload_bytes(Type::Proof, p.metadata().arity()),
             Self::ProverKey(k) => prover_key_bytes(k.metadata().arity()),
             Self::VerifierKey(k) => payload_bytes(Type::VerifierKey, k.metadata().arity()),
-            _ => payload_bytes(self.ty(), 0),
+            Self::Bn254Field(_)
+            | Self::Bn254Round(_)
+            | Self::Bn254G1(_)
+            | Self::Bn254G2(_)
+            | Self::KoalaBearExt8Round(_)
+            | Self::KoalaBearExt8Field(_)
+            | Self::KoalaBearField(_)
+            | Self::KoalaBearRound(_)
+            | Self::RistrettoField(_)
+            | Self::RistrettoRound(_)
+            | Self::RistrettoGroup(_)
+            | Self::Field(_)
+            | Self::Round(_)
+            | Self::Bool(_)
+            | Self::Index(_)
+            | Self::Rng(_)
+            | Self::Commitment(_)
+            | Self::Nonce(_)
+            | Self::Transcript(_)
+            | Self::Curve(_) => Ok(512),
         }
         .unwrap_or(usize::MAX)
     }
@@ -546,7 +791,23 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         Type::Indices => size(elements, 8),
         Type::Groups | Type::VerifierKey => size(elements, 128),
         Type::Proof => size(elements, 192),
-        _ => Ok(512),
+        Type::FixedVector
+        | Type::Variant
+        | Type::ResourceUnit
+        | Type::Field
+        | Type::Matrix
+        | Type::Round
+        | Type::Group
+        | Type::Bool
+        | Type::Index
+        | Type::Rng
+        | Type::Commitment
+        | Type::OpeningState
+        | Type::ProverKey
+        | Type::Nonce
+        | Type::Transcript
+        | Type::Commitments
+        | Type::OpeningStates => Ok(512),
     }
 }
 

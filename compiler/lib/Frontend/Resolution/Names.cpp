@@ -1,5 +1,8 @@
 #include "Names.h"
+#include "../Static/Attributes.h"
+#include "../Static/Types.h"
 #include "Declarations.h"
+#include "Installed.h"
 #include "Vocabulary.h"
 #include "llvm/ADT/STLExtras.h"
 
@@ -61,6 +64,12 @@ class Qualifier {
             ReferenceKind kind = ReferenceKind::Static) {
     if (t.root.kind == syntax::Atom::Kind::Number)
       return;
+    if (kind == ReferenceKind::Static && typeArgumentSyntax(t)) {
+      auto expression = syntax::typeExpression(t);
+      type(expression, locals);
+      t = syntax::staticExpression(expression);
+      return;
+    }
     // An installed opaque root (bn254.fr) remains one root. Only the parser's
     // explicit members are projections; namespace names cannot split it.
     if (t.root.kind == syntax::Atom::Kind::String ||
@@ -94,7 +103,28 @@ class Qualifier {
   }
 
   void type(syntax::Type &t, const Names &locals, bool staticArgument = false) {
-    if (!t.natural && !t.product) {
+    // Carrier type spellings describe already admitted logical types. They
+    // neither import source declarations nor share their symbol namespace.
+    bool carrierType = false;
+    if (context.carrier && !staticArgument && !t.quoted) {
+      std::string path = t.name;
+      for (const auto &member : t.members)
+        path += "::" + member;
+      std::optional<std::string> constructor;
+      bool ambiguous = false;
+      for (const auto &exported : protocol::sourceTypeExports())
+        if (path == exported.module + "::" + exported.name ||
+            (t.members.empty() && path == exported.name)) {
+          ambiguous |= constructor && *constructor != exported.constructor;
+          constructor = exported.constructor;
+        }
+      if (constructor && !ambiguous) {
+        t.name = installedTypeSymbol(*constructor);
+        t.members.clear();
+        carrierType = true;
+      }
+    }
+    if (!t.natural && !t.product && !carrierType) {
       if (t.quoted || !protocol::installedIdentitySort(t.name).empty()) {
         if (name(t.name, t, {},
                  (staticArgument || !t.members.empty()) ? ReferenceKind::Static
@@ -111,7 +141,8 @@ class Qualifier {
                  false, t.name);
         if (d) {
           t.name = d->symbol;
-          projectedMembers(StringRef(s).drop_front(d->symbol.size()), t.members);
+          projectedMembers(StringRef(s).drop_front(d->symbol.size()),
+                           t.members);
         }
       }
     }
@@ -122,9 +153,13 @@ class Qualifier {
       // Array/Vector/Matrix contain element types. Other installed constructors
       // and source nominal applications take static domains/counts/components.
       bool argument =
-          !t.product &&
-          ((t.name == "Array" && i == 1) ||
-           (t.name != "Array" && t.name != "Vector" && t.name != "Matrix"));
+          !t.product && ((t.name == "Array" && i == 1) ||
+                         (t.name != "Array" && !elementTypeFamily(t.name)));
+      if (const auto *declaration =
+              protocol::typeDeclaration(logicalConstructor(t.name));
+          declaration && i < declaration->parameters.size())
+        argument =
+            declaration->parameters[i].kind != protocol::StaticKind::Type;
       type(t.arguments[i], locals, argument);
     }
   }
@@ -137,6 +172,11 @@ class Qualifier {
         qualified ? ReferenceKind::QualifiedCall : ReferenceKind::Call, quoted);
     if (d)
       quoted = false;
+    if (d && d->kind == Declaration::Kind::Operation) {
+      s = d->contract;
+      qualified = true;
+      return;
+    }
     if (d && ((s == d->symbol && (d->kind == Declaration::Kind::Function ||
                                   d->kind == Declaration::Kind::Configuration ||
                                   d->kind == Declaration::Kind::Link)) ||
@@ -158,8 +198,11 @@ class Qualifier {
       libraryTerm(arg, locals);
   }
   void parameters(std::vector<syntax::StaticParameter> &ps, Names &locals) {
-    for (const auto &p : ps)
+    for (const auto &p : ps) {
       locals.statics.insert(p.name);
+      if (llvm::is_contained(p.bounds, "Type"))
+        locals.types.insert(p.name);
+    }
     for (auto &p : ps)
       for (auto &bound : p.bounds)
         if (const auto *d = name(bound, p, locals, ReferenceKind::Predicate))
@@ -187,9 +230,7 @@ class Qualifier {
   }
   void sync(source::Names &names, const std::vector<syntax::StaticTerm> &ts) {
     for (size_t i = 0; i < names.size() && i < ts.size(); ++i) {
-      names[i] = ts[i].root.value;
-      for (const auto &member : ts[i].members)
-        names[i] += "." + member;
+      names[i] = syntax::staticSpelling(ts[i]);
     }
   }
   void attributes(source::Names &values, std::vector<syntax::Atom> &atoms,
@@ -204,15 +245,7 @@ class Qualifier {
     // Match the staging owner's numeric slots. Other attributes are opaque
     // operation data (labels, schema names, codecs), even when written bare.
     for (size_t i = 0; i < atoms.size() && i < values.size(); ++i) {
-      bool numeric =
-          ((op == "index.constant" || op == "vector.splat" ||
-            op == "vector.powers" || op == "vector.at" ||
-            op == "vector.length_check" || op == "poly.degree_check" ||
-            op == "random.vector" || op == "curve.at") &&
-           i == 0) ||
-          (op == "matrix.shape_check" && i < 2) ||
-          (op == "vector.matvec" && i < 3);
-      if (numeric) {
+      if (naturalAttribute(op, i)) {
         atom(atoms[i], locals);
         values[i] = atoms[i].value;
       }

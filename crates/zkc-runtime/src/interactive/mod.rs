@@ -7,9 +7,16 @@
 mod admit;
 mod backend;
 mod bindings;
+mod fixed_vector;
+mod operations;
 mod resource_unit;
+mod structural;
 mod variant;
 pub use resource_unit::ResourceDomain;
+pub use structural::{
+    ArgumentKind, NATURAL_ARGUMENT_LIMIT, STRUCTURAL_SPELLING_LIMIT, StructuralType,
+    TYPE_DEPTH_LIMIT, TYPE_NODE_LIMIT, TypeArgument,
+};
 pub use variant::{VariantAlternative, VariantDescriptor};
 mod decode;
 mod driver;

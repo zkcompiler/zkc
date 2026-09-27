@@ -94,7 +94,11 @@ fn exact_canonical_descriptors_and_conservative_permissions() {
     assert_eq!(t.spelling(), a);
     assert!(t.is_duplicable() && t.is_discardable());
     assert!(t.codec().is_none());
-    assert!(!PhysicalType::default_for(t.clone()).is_serializable());
+    assert!(
+        !PhysicalType::default_for(t.clone())
+            .unwrap()
+            .is_serializable()
+    );
     assert_ne!(
         t,
         LogicalType::parse(&logical(
@@ -216,7 +220,7 @@ fn malformed_descriptors_fail_closed() {
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
-            ErrorCode::Type,
+            ErrorCode::Representation,
             "representation does not implement logical type"
         )
     );

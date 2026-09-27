@@ -13,6 +13,21 @@ template <typename Tag> json::Value id(ModelId<Tag> value) {
   return value.valid() ? json::Value(int64_t(value.index))
                        : json::Value(nullptr);
 }
+json::Value id(const StaticArgument &argument) {
+  switch (argument.kind) {
+  case StaticArgument::Kind::Domain:
+    return id(argument.domain);
+  case StaticArgument::Kind::Type:
+    return json::Object{{"kind", "type"}, {"type", id(argument.type)}};
+  case StaticArgument::Kind::Natural:
+    return json::Object{{"kind", "natural"},
+                        {"parameter", id(argument.parameter)},
+                        {"value", argument.parameter.valid()
+                                      ? json::Value(nullptr)
+                                      : json::Value(argument.number)}};
+  }
+  llvm_unreachable("unknown static argument kind");
+}
 json::Value span(const std::optional<source::Span> &value) {
   if (!value)
     return nullptr;
@@ -192,10 +207,11 @@ json::Value inspectAnalysis(const Analysis &analysis) {
     for (auto argument : type.arguments)
       arguments.push_back(id(argument));
     types.push_back(
-        json::Object{{"kind", type.kind == Type::Kind::Record    ? "record"
-                              : type.kind == Type::Kind::Product ? "product"
-                              : type.kind == Type::Kind::Array   ? "array"
-                                                                 : "logical"},
+        json::Object{{"kind", type.kind == Type::Kind::Record      ? "record"
+                              : type.kind == Type::Kind::Product   ? "product"
+                              : type.kind == Type::Kind::Array     ? "array"
+                              : type.kind == Type::Kind::Parameter ? "parameter"
+                                                                   : "logical"},
                      {"count", type.count},
                      {"constructor", type.constructor},
                      {"declaration", id(type.declaration)},
@@ -338,6 +354,8 @@ json::Value inspectAnalysis(const Analysis &analysis) {
                                         {"span", span(d.location)}});
   const auto &model = model::AnalysisAccess::get(analysis);
   for (const auto &d : model.resolution->declarations) {
+    if (d.file == UINT32_MAX)
+      continue; // Installed declarations are catalog data, not captured source.
     std::string display;
     for (const auto &part : d.identity.module)
       display += part + "::";

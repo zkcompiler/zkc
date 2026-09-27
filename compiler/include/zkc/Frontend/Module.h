@@ -45,12 +45,37 @@ struct Domain {
   DeclId parameter;
   DomainId parent;
 };
+/// A scoped static argument retains its kind and binder identity. Natural
+/// parameters use `parameter`; closed naturals use `number`.
+struct StaticArgument {
+  enum class Kind { Domain, Type, Natural };
+  Kind kind = Kind::Domain;
+  DomainId domain;
+  TypeId type;
+  DeclId parameter;
+  uint64_t number = 0;
+  StaticArgument() = default;
+  StaticArgument(DomainId value) : domain(value) {}
+  static StaticArgument typeOf(TypeId value) {
+    StaticArgument result;
+    result.kind = Kind::Type;
+    result.type = value;
+    return result;
+  }
+  static StaticArgument natural(uint64_t value, DeclId parameter = {}) {
+    StaticArgument result;
+    result.kind = Kind::Natural;
+    result.number = value;
+    result.parameter = parameter;
+    return result;
+  }
+};
 struct Type {
-  enum class Kind { Logical, Record, Product, Array };
+  enum class Kind { Logical, Record, Product, Array, Parameter };
   Kind kind = Kind::Logical;
   std::string constructor;
-  DeclId declaration; // Required for Record; no structural record equivalence.
-  std::vector<DomainId> arguments;
+  DeclId declaration; // Required for Record and Parameter; both remain nominal.
+  std::vector<StaticArgument> arguments;
   std::vector<TypeId> elements; // Product elements; unit is the empty product.
   // Array has exactly one element type even when count is zero.
   uint64_t count = 0;
@@ -129,7 +154,7 @@ struct Declaration {
 };
 struct ParameterBinding {
   DeclId parameter;
-  DomainId argument;
+  StaticArgument argument;
 };
 struct ResolvedUse {
   enum class Kind { Call, Construct, Invoke };

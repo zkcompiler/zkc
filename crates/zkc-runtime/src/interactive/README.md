@@ -15,6 +15,33 @@ its `Backend` contract, while `zkc-tools::protocol` supplies the installed Lean
 candidate checker, common-source schedule and transport driver. The runtime does
 not depend on a cryptographic backend, avoiding a dependency cycle.
 
+## Independent operation installation
+
+`operations/` assembles exact logical-contract and physical-implementation owners
+from independently authored Rust family modules. Each contribution supplies its
+logical resolver and physical selection policy; FixedVector and resource-unit
+contracts remain beside those families. Family owners check nominal requirements,
+provider applicability and transcript payload restrictions; `operations/support.rs`
+contains typed construction helpers. `domain_bindings.rs` only assigns physical
+port representations. Logical resolution does not consult native
+backend advertisement. Physical admission still resolves every retained binding,
+including unused source declarations, before checking advertised signatures for
+operations in the program.
+
+The installation is immutable and initialized once. Duplicate logical owners or
+exact implementation owners refuse assembly. A second provider for the same
+logical contract is permitted only under its distinct implementation identity;
+its closed arguments and representations remain independently checked. Table
+relayout retains a physical-only owner and its logical-stage refusal. These
+private tables are finite installation code, not an artifact-driven plugin API.
+
+Alternative eligibility defaults to false on each contract. Assembly checks the
+exact logical owner after collecting all contributions, then rejects alternatives
+on fixed contracts. Selection checks an alternative's primary identity before
+calling its owner's physical resolver, so alternate layouts retain family rules.
+Transcript observation rows opt in; challenge/random operations and the custom
+fixed owners do not. Registration order cannot bypass this policy.
+
 ## Loading and custody
 
 1. Install a trusted `Backend` implementation. Its `binding_signature` must

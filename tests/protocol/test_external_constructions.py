@@ -139,8 +139,10 @@ def single_operation(contract, kinds, outputs):
     outs = ', '.join(f'y{i}' for i in range(len(outputs)))
     types = ', '.join(spell[k] for k in outputs)
     return f'''module {{
+      use zkc::algebra::Indices;
+      use zkc::external;
       fn Transition({args}) -> ({types}) {{
-        let ({outs}) = {contract.replace('.', '::')}({ins});
+        let ({outs}) = zkc::external::{contract.removeprefix('external.').replace('.', '_')}({ins});
         return ({outs});
       }}
       protocol Main {{ roles (Worker);
@@ -212,7 +214,7 @@ def test_uninstalled_suite_and_provider_rejected():
     wrong = participants.read_text().replace('native/external.openvm.sample','dalek/external.openvm.sample')
     path=journal.directory/'wrong-provider.json';path.write_text(wrong)
     journal.run([tools.checker('interactive-protocol'),'--check',source,path],refuses='binding-implementation')
-    text='''module { fn Wrong(t: Transcript<"openvm-babybear-poseidon2-v1">) -> Transcript<"openvm-babybear-poseidon2-v1"> { return t; } }'''
+    text='''module { use zkc::transcript::{Transcript}; fn Wrong(t: Transcript<"openvm-babybear-poseidon2-v1">) -> Transcript<"openvm-babybear-poseidon2-v1"> { return t; } }'''
     journal.run([tools.compiler,'protocol-source','-'],text,refuses='source-name-unresolved')
 
 
@@ -241,16 +243,18 @@ def test_external_operations_keep_failure_effects_and_reject_attributes():
     optimized=journal.run([tools.optimizer,'--canonicalize','--cse'],ir)
     for spelling in ['external_monero_hash','external_monero_update','external_openvm_check_witness']:
         assert optimized.count('"algebra.'+spelling+'"') == ir.count('"algebra.'+spelling+'"') > 0
-    malformed=text.replace('external::monero::init(initial);',
-                           'external::monero::init(initial) attributes ("prefix");')
+    malformed=text.replace('zkc::external::monero_init(initial);',
+                           'zkc::external::monero_init(initial) attributes ("prefix");')
     journal.run([tools.compiler,'protocol-source','-'],malformed,
                 refuses='interactive-kernel-parameters')
 
 
 def test_unused_external_validation_survives_standard_optimizations():
     text = '''module {
+  use zkc::external;
+  use zkc::algebra::{Indices};
       fn Validate(x: Indices) -> index {
-        let _ = external::monero::hash(x);
+        let _ = zkc::external::monero_hash(x);
         return 7;
       }
       protocol Check {

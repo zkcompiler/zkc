@@ -1,4 +1,5 @@
-module {
+// Exact construction contracts are exercised through the common carrier lane.
+carrier module {
   fn Observe<T: domain Transcript, E: domain Codec>(state: Transcript<T>, value: bool) -> Transcript<T> requires (
     Transcript(T),
     Encodes.bool(E)

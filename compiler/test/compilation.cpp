@@ -260,6 +260,10 @@ void tableOwnership() {
 }
 void constructionOwnership() {
   constexpr StringLiteral text = R"(module {
+    use zkc::algebra as field;
+    use zkc::core as control;
+    use zkc::random;
+    use zkc::random::Rng;
     fn Draw(r: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) {
       [pick] let (x, next) = random::draw::<bls12-381.fr>(r);
       return (x, next);

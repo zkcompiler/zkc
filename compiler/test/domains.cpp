@@ -6,6 +6,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 #include <map>
+#include <set>
 
 using namespace llvm;
 using namespace zkc;
@@ -36,6 +37,8 @@ struct Records {
       {"test.f1", "Field", {}, {"Field", "CommRing"}},
       {"test.f2", "Field", {}, {"PrimeField"}},
       {"test.g", "Group", {{"Scalar", "test.f1"}}, {"ScalarAction"}}};
+  std::vector<LogicalTypeInstance> logicalTypes{
+      {"table", "test.f1"}, {"table", "test.f2"}, {"bool", ""}};
   std::vector<CodecIdentity> codecs{{"test.codec1", "table", "test.f1"},
                                     {"test.codec2", "table", "test.f2"},
                                     {"test.bool", "bool", ""}};
@@ -44,8 +47,10 @@ struct Records {
       {"test.msb/1", "table", "test.f1", false, "msb"},
       {"test.other/1", "table", "test.f2", false, "lsb"},
       {"test.bool/1", "bool", "", true, ""}};
+  std::vector<DefaultProvider> providers{{"test.f1", "custom"}};
   Expected<DomainCatalog> build() const {
-    return DomainCatalog::create(domains, codecs, reps);
+    return DomainCatalog::create(domains, logicalTypes, codecs, reps,
+                                 providers);
   }
 };
 
@@ -93,6 +98,31 @@ void malformedCatalogs() {
          "invalid capability fact");
   reject([](auto &r) { r.domains[0].capabilities.push_back("Encodes.bool"); },
          "invalid capability fact");
+  reject([](auto &r) { r.logicalTypes.push_back(r.logicalTypes[0]); },
+         "duplicate logical type instance");
+  for (const auto &type :
+       std::vector<LogicalTypeInstance>{{"unknown", "test.f1"},
+                                        {"table", ""},
+                                        {"table", "test.g"},
+                                        {"table", "missing"},
+                                        {"table", "test.codec1"},
+                                        {"bool", "test.f1"},
+                                        {"variant", ""},
+                                        {"resource_unit", ""}})
+    reject([&](auto &r) { r.logicalTypes.push_back(type); },
+           "invalid logical type instance");
+  reject([](auto &r) { r.logicalTypes.clear(); },
+         "unadmitted codec payload type");
+  reject(
+      [](auto &r) {
+        r.logicalTypes.clear();
+        r.codecs.clear();
+      },
+      "unadmitted representation type");
+  reject([](auto &r) { r.codecs[0].kind = "field"; },
+         "unadmitted codec payload type");
+  reject([](auto &r) { r.reps[0].kind = "field"; },
+         "unadmitted representation type");
   reject([](auto &r) { r.codecs[0].domain = "test.g"; },
          "invalid codec payload domain");
   reject([](auto &r) { r.codecs[0].domain = "missing"; },
@@ -127,6 +157,16 @@ void malformedCatalogs() {
          "ambiguous representation layout");
   reject([](auto &r) { r.reps[0].layout = "bad@layout"; },
          "invalid representation layout");
+  for (StringRef identity : {"missing", "test.codec1", ""})
+    reject([&](auto &r) { r.providers[0].domain = identity.str(); },
+           "invalid provider domain");
+  for (StringRef provider : {"", "bad@provider", "custom/field.add"})
+    reject([&](auto &r) { r.providers[0].provider = provider.str(); },
+           "invalid default provider");
+  reject([](auto &r) { r.providers.push_back(r.providers[0]); },
+         "duplicate default provider");
+  reject([](auto &r) { r.providers.push_back({"test.f1", "other"}); },
+         "duplicate default provider");
 }
 
 void closedCatalogs() {
@@ -192,6 +232,7 @@ void closedCatalogs() {
           ambiguous.defaultCodec("table", "test.f2"),
       "ambiguous codec defaults fail closed without hiding explicit codecs");
   records.reps.push_back({"test.lsb/1", "field", "test.f2", true, ""});
+  records.logicalTypes.push_back({"field", "test.f2"});
   records.reps[2].identity = "test.lsb/1";
   records.reps[2].isDefault = true;
   const auto shared = accept(records.build());
@@ -201,13 +242,161 @@ void closedCatalogs() {
   records.domains.clear();
   records.codecs.clear();
   records.reps.clear();
+  records.logicalTypes.clear();
+  records.providers.clear();
   require(catalog.domain("test.f1") && catalog.codec("test.codec1") &&
-              shared.defaultRepresentation("table", "test.f2"),
+              shared.defaultRepresentation("table", "test.f2") &&
+              shared.admitsLogicalType("field", "test.f2") &&
+              shared.defaultProvider("test.f1") == "custom",
           "catalog owns all nested input strings");
   const auto empty = accept(records.build());
   require(!empty.defaultCodec("bool", "") &&
-              !empty.defaultRepresentation("bool", ""),
+              !empty.defaultRepresentation("bool", "") &&
+              !empty.admitsLogicalType("bool", "") &&
+              empty.defaultProvider("test.f1").empty(),
           "empty closed catalog guesses nothing, including bool");
+}
+
+void independentFormationAndProviders() {
+  Records records;
+  records.codecs.clear();
+  records.reps.clear();
+  records.providers.clear();
+  records.logicalTypes = {{"field", "test.f1"}, {"field", "test.f2"}};
+  const auto logical = accept(records.build());
+  require(logical.admitsLogicalType("field", "test.f1") &&
+              !logical.defaultRepresentation("field", "test.f1") &&
+              !logical.defaultCodec("field", "test.f1") &&
+              logical.defaultProvider("test.f1").empty(),
+          "a declared mathematical type needs no physical realization");
+  require(!logical.admitsLogicalType("table", "test.f1") &&
+              !logical.admitsLogicalType("field", "test.g") &&
+              !logical.admitsLogicalType("field", "missing"),
+          "sort and nominal installation do not imply logical admission");
+
+  records.reps = {
+      {"dalek.unrelated-carrier/1", "field", "test.f1", true, ""},
+      {"plonky3.unselected-carrier/1", "field", "test.f2", true, ""}};
+  const auto physical = accept(records.build());
+  require(physical.defaultProvider("test.f1").empty() &&
+              physical.defaultProvider("test.f2").empty(),
+          "representation names cannot create default provider policy");
+  records.providers = {{"test.f1", "custom"}};
+  const auto selected = accept(records.build());
+  require(
+      selected.defaultProvider("test.f1") == "custom" &&
+          selected.defaultRepresentation("field", "test.f1")->identity ==
+              "dalek.unrelated-carrier/1" &&
+          selected.defaultProvider("test.f2").empty() &&
+          selected.defaultProvider("test.g").empty(),
+      "explicit provider policy ignores representation and associated names");
+  records.reps[0].identity = "arkworks.renamed-carrier/1";
+  require(accept(records.build()).defaultProvider("test.f1") == "custom",
+          "renaming a representation leaves provider selection unchanged");
+
+  records.domains.push_back(
+      {"test.suite", "Transcript", {{"ChallengeField", "test.f1"}}, {}});
+  records.providers.push_back({"test.suite", "unimplemented"});
+  records.logicalTypes.clear();
+  records.reps.clear();
+  const auto policyOnly = accept(records.build());
+  require(policyOnly.defaultProvider("test.suite") == "unimplemented" &&
+              !policyOnly.hasFact("FieldTranscript", {"test.suite"}) &&
+              !policyOnly.admitsLogicalType("transcript", "test.suite") &&
+              !policyOnly.defaultRepresentation("transcript", "test.suite"),
+          "provider policy registers no type, representation or capability");
+}
+
+void installedInventory() {
+  // Frozen independently of representations: changing physical availability
+  // must not broaden or narrow this logical formation profile.
+  const std::map<std::string, std::vector<std::string>> expected{
+      {"", {"bool", "index", "indices"}},
+      {"bls12-381.fr",
+       {"field", "vector", "polynomial", "round", "matrix", "table", "point",
+        "rng", "nonce"}},
+      {"ristretto255.scalar",
+       {"field", "vector", "polynomial", "round", "matrix", "rng", "nonce"}},
+      {"bn254.fr", {"field", "vector", "polynomial", "round", "matrix", "rng"}},
+      {"koala-bear", {"field", "vector", "polynomial", "round", "matrix"}},
+      {"koala-bear.ext8-binomial3",
+       {"field", "vector", "polynomial", "round", "matrix", "rng"}},
+      {"bls12-381.g1", {"group", "groups"}},
+      {"ristretto255.group", {"group", "groups"}},
+      {"bn254.g1", {"group", "groups"}},
+      {"bn254.g2", {"group", "groups"}},
+      {"merlin3.bls12-381.fr64be/1", {"transcript"}},
+      {"spongefish0.7.4.keccak.bls12-381.fr64be/1", {"transcript"}},
+      {"merlin3.ristretto255.scalar64le/1", {"transcript"}},
+      {"merlin3.koala-bear.ext8-binomial3.rejection31le/1", {"transcript"}},
+      {"multilinear.kzg.bls12-381/1",
+       {"commitment", "proof", "prover_key", "verifier_key", "opening_state"}},
+      {"rows.merkle-keccak256.koala-bear/1",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/1",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}}};
+  std::set<std::pair<std::string, std::string>> pairs, actual;
+  for (const auto &[domain, kinds] : expected)
+    for (const auto &kind : kinds)
+      pairs.emplace(kind, domain);
+  const auto &catalog = installedDomains();
+  for (const auto &type : catalog.allLogicalTypes())
+    require(actual.emplace(type.kind, type.domain).second,
+            "logical inventory contains no duplicate instances");
+  require(pairs.size() == 63 && actual == pairs,
+          "the complete installed logical inventory is unchanged");
+
+  std::vector<std::string> identities{"", "missing"};
+  for (const auto &domain : catalog.allDomains())
+    identities.push_back(domain.identity);
+  for (const auto &codec : catalog.allCodecs())
+    identities.push_back(codec.identity);
+  for (const auto &constructor : boundTypeConstructors()) {
+    if (constructor.name == "variant" || constructor.name == "resource_unit")
+      continue;
+    for (const auto &identity : identities) {
+      const bool admitted = pairs.count({constructor.name, identity});
+      require(catalog.admitsLogicalType(constructor.name, identity) == admitted,
+              "only exact declared logical pairs are admitted");
+      BoundType logical{constructor.name, identity, ""};
+      auto parsed = parseBoundType(logical.spelling(), false);
+      if (admitted)
+        require(accept(std::move(parsed)) == logical,
+                "every installed logical spelling is unchanged");
+      else
+        refuse(std::move(parsed), "binding-type-identity");
+    }
+  }
+
+  const std::map<std::string, std::string> providers{
+      {"bls12-381.fr", "arkworks"},
+      {"bls12-381.g1", "arkworks"},
+      {"bn254.fr", "arkworks"},
+      {"bn254.g1", "arkworks"},
+      {"bn254.g2", "arkworks"},
+      {"multilinear.kzg.bls12-381/1", "arkworks"},
+      {"merlin3.bls12-381.fr64be/1", "arkworks"},
+      {"ristretto255.scalar", "dalek"},
+      {"ristretto255.group", "dalek"},
+      {"merlin3.ristretto255.scalar64le/1", "dalek"},
+      {"spongefish0.7.4.keccak.bls12-381.fr64be/1", "spongefish"},
+      {"koala-bear", "plonky3"},
+      {"koala-bear.ext8-binomial3", "plonky3"},
+      {"merlin3.koala-bear.ext8-binomial3.rejection31le/1", "plonky3"},
+      {"rows.merkle-keccak256.koala-bear/1", "plonky3"},
+      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/1", "plonky3"}};
+  require(catalog.allDomains().size() == providers.size(),
+          "the complete installed provider domain inventory is unchanged");
+  for (const auto &identity : identities) {
+    auto expectedProvider = providers.find(identity);
+    require(catalog.defaultProvider(identity) ==
+                (expectedProvider == providers.end()
+                     ? StringRef{}
+                     : StringRef(expectedProvider->second)),
+            "all installed provider selections are unchanged");
+  }
 }
 
 struct ExpectedType {
@@ -319,7 +508,8 @@ void installedBindings() {
         });
     source::OperationBinding binding{{}, "test", {operation.name, {}, ""}};
     for (auto [i, term] : enumerate(operation.signature.scope.terms))
-      if (!term.parent) {
+      if (!term.parent && !term.arguments &&
+          !operation.signature.scope.constants.count(i)) {
         const auto &sort = operation.signature.scope.sorts[i];
         binding.application.arguments.push_back(
             sort == "Codec"
@@ -338,8 +528,12 @@ void installedBindings() {
             : sort == "Field" && (embedding || operation.name == "random.index")
                 ? "koala-bear.ext8-binomial3"
             : sort == "Field" && operation.name == "pairing.check" ? "bn254.fr"
-            : sort == "Field" && twoAdic ? "koala-bear"
-                                         : roots.at(sort));
+            : sort == "Nat"                                        ? "4"
+            : sort == "Field" &&
+                    (twoAdic ||
+                     StringRef(operation.name).starts_with("fixed_vector."))
+                ? "koala-bear"
+                : roots.at(sort));
       }
     const auto logical = accept(resolveBinding(binding.application, false));
     const auto selected = accept(defaultImplementation(binding.application));
@@ -464,8 +658,8 @@ void extensionField() {
   }
   require(catalog.defaultRepresentation("rng", extension),
           "extension randomness has an explicit resource representation");
-  for (StringRef kind : {"table", "point", "nonce", "transcript",
-                         "group", "prover_key", "verifier_key"})
+  for (StringRef kind : {"table", "point", "nonce", "transcript", "group",
+                         "prover_key", "verifier_key"})
     require(!catalog.defaultRepresentation(kind, extension),
             "no unsupported extension services");
   source::OperationBinding embed{{}, "embed", {"field.embed", {extension}, ""}};
@@ -618,7 +812,7 @@ void bn254Domains() {
       {"g1", "Group", {{"Scalar", "f"}}, {"ScalarAction"}},
       {"g2", "Group", {{"Scalar", "f"}}, {"ScalarAction"}},
       {"other", "Field", {}, {"Field"}}};
-  accept(DomainCatalog::create(records, {}, {}));
+  accept(DomainCatalog::create(records, {}, {}, {}));
   for (unsigned mutation = 0; mutation < 4; ++mutation) {
     auto bad = records;
     if (mutation == 0)
@@ -629,7 +823,7 @@ void bn254Domains() {
       bad[2].associated[0].identity = "other";
     else
       bad[2].capabilities.clear();
-    refuse(DomainCatalog::create(bad, {}, {}),
+    refuse(DomainCatalog::create(bad, {}, {}, {}),
            "invalid pairing group association");
   }
 }
@@ -637,6 +831,8 @@ void bn254Domains() {
 int main() {
   malformedCatalogs();
   closedCatalogs();
+  independentFormationAndProviders();
+  installedInventory();
   installedBindings();
   numericalField();
   extensionField();

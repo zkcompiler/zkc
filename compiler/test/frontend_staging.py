@@ -125,7 +125,7 @@ with case("quoted names are never natural constant references"):
     run("protocol-source", 'module { const N: index=8; fn Count() -> index { let x = "N"; return x; } }', "source-value-reference")
 
 with case("constant operation attribute uses atom kind"):
-    bare = "module { const N: index=8; fn Count() -> index { let x=index::constant() attributes(N); return x; } }"
+    bare = "module { use zkc::algebra; const N: index=8; fn Count() -> index { let x=zkc::algebra::index_constant() attributes(N); return x; } }"
     assert common(bare) == common(bare.replace("attributes(N)", "attributes(8)"))
     quoted = bare.replace("attributes(N)", 'attributes("N")')
     # Quoting preserves the attribute bytes; common admission owns whether that
@@ -184,15 +184,15 @@ with case("example admission and format stability"):
 
 
 with case("unselected opaque attributes are not constant references"):
-    opaque = """module {
-      const N:index=8;
+    opaque = """carrier module {
       fn Observe<T:domain Transcript, E:domain Codec>(s:Transcript<T>, x:bool)
           -> Transcript<T> requires (Transcript(T), Encodes.bool(E)) {
         let y=transcript::observe::bool::<T,E>(s,x) attributes(N,message,schema,P,V);
         return y;
       }
     }"""
-    assert common(opaque) == common(opaque.replace("const N:index=8;", ""))
+    run("protocol-source", opaque.replace("carrier module {", "carrier module { const N:index=8;"),
+        "source-carrier-authoring")
     assert common(opaque) == common(opaque.replace("attributes(N,", 'attributes("N",'))
 
 with case("domain binders never replace role or value names"):
@@ -217,7 +217,7 @@ with case("specialization count is bounded"):
 
 
 with case("numeric operation attributes respect runtime binders"):
-    text = "module { const N:index=8; fn Count(N:index)->index {let x=index::constant() attributes(N);return x;} }"
+    text = "module { use zkc::algebra; const N:index=8; fn Count(N:index)->index {let x=zkc::algebra::index_constant() attributes(N);return x;} }"
     run("protocol-source", text, "expected-natural")
 
 with case("protocol loop count respects runtime binders"):

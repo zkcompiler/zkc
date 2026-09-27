@@ -22,7 +22,7 @@ notation is summarized in the [source reference](reference.md).
 4. **Declaration ownership.** A bundle or struct belongs to its declaring
    source module. Local declarations may be referenced before their position;
    cross-file lookup follows [project visibility](projects.md). Installed
-   type notation is shared and is not a declaration owned by an author.
+   type notation resolves through imports from its installed owner.
 
 ## 2. Constraint bundles
 
@@ -60,6 +60,7 @@ bundle has no sort and is refused there (`source-bound`).
 ## 3. Structs
 
 ```text
+use zkc::algebra::Vector;
 struct VerifyingKey<F: domain Field>(
   input_query: Vector<F::PairingG1::Element>,
   alpha: F::PairingG1::Element,
@@ -133,40 +134,39 @@ with struct inputs receives host inputs under the leaf names, for example
 
 ## 4. Operators
 
+With the relevant operations imported, for example `use zkc::{algebra, curve};`:
+
 ```text
 let a = alpha + linear_a + delta_g1 * r;
 let blinded = c + -(delta_g1 * (r * s));
 ```
 
-An operator is a spelling of an installed operation. Both the operation and
-its spelling belong to the definition of the domain: whoever defines `field`
-says what `field.mul` computes and that `*` is written for it. Installed
-domains are a closed catalog that this repository owns. Every installed
-operation needs an interpretation in the formal reference and a native
-implementation, so a domain is added in the tree, by the
-[procedure for operations](../compiler/protocol-libraries.md#adding-an-operation-or-implementation),
-and no source declares an operator for it. A declaration inside a protocol file
-would let each file give `*` its own meaning for a type the file does not own,
-and would repeat the same lines in every file.
+An operator selects either an installed operation binding or a checked ordinary
+function. Installed bindings live beside the logical contract declarations in
+[`Contracts/Declarations`](../../compiler/include/zkc/Contracts/Declarations).
+Import the operation's source module or export to make its binding available.
+The common carrier retains the selected contract and has no operator lookup.
 
-Within a domain's definition the two stay apart. What `field.mul` computes is
-its installed contract, with its signature and its value rule, and import,
-admission and planning read that. The spelling is authoring notation, which
-those stages do not read and another frontend need not share.
+A source library can define an operator for a record it owns:
 
-The catalog does not yet keep each domain's definition in one place: its
-operations, capabilities and domain facts are installed in separate tables,
-and none of them holds notation. Until the catalog is grouped by domain, the
-spellings are one table in the frontend,
-[`Operators.h`](../../compiler/lib/Frontend/Semantics/Operators.h), beside the type
-names in [`Types.h`](../../compiler/lib/Frontend/Syntax/Types.h). This is a
-temporary home. Both tables move into the per-domain definitions when that
-grouping is made, which belongs with the language and type-system design
-because capabilities, associated domains and notation are what that design
-reshapes. The catalog, the JSON form and every later stage are unchanged.
+```text
+use zkc::algebra;
+struct Number<F: domain Field> { value: F::Element }
+#[operator(add)]
+fn Add<F: algebra::Field>(left: Number<F>, right: Number<F>) -> Number<F> {
+  return Number { value: algebra::add(left.value, right.value) };
+}
+fn Twice<F: algebra::Field>(x: Number<F>) -> Number<F> { x + x }
+```
 
-A module may come to declare operators for a struct it declares, when operators
-accept struct operands; that module owns the type.
+The supported hooks are `add`, `sub`, `mul` and `neg`. The function must have a
+checked body, two operands (one for `neg`) and one source result. At least one
+operand's nominal record constructor must belong to the function's defining
+package. Imported aliases do not confer ownership of foreign records. A library
+cannot override installed arithmetic solely by declaring a function on field
+operands. Ordinary functions and component bodies share these rules.
+
+The installed arithmetic bindings are:
 
 | Symbol | Operands | Installed operation |
 |---|---|---|
@@ -184,34 +184,39 @@ Precedence is fixed: unary minus, then `*`, then `+` and `-`; binary operators
 associate to the left. Parentheses group. Names may contain `-`, so `a-b` is
 one name; a binary minus is written with a space before it.
 
-**Resolution.** The key of a spelling is its symbol and the logical constructor
-of each operand, such as `field`, `group` or `vector`. The table has one entry
-per key, so a use matches at most one. At a use, the operand types are already
-known; the key selects the operation, and the resulting call is elaborated as
-if written: static arguments are inferred, requirements are checked by the
-existing checker, and a failure is reported for that call. Nothing else is
-tried. Each selected entry is compared with the installed signature of the
-operation it names, so the table cannot state what the contract does not
-(`source-operator-table`). Operands are evaluated left to right in written
-order, whatever order the operation takes them in.
+**Resolution.** The key is the hook and ordered tuple of resolved nominal
+constructor heads, such as `field`, `group`, `vector` or a particular source
+record. Record identity is retained before layout erasure. Duplicate keys refuse;
+requirements, expected results and wildcard operands cannot choose among
+candidates. Opaque types without known heads use named calls. Static arguments
+are inferred and requirements checked only after selecting the unique callable.
+A failed call does not trigger another candidate search.
 
-A binding `let c = a * b;` over named operands is the flat call
-`let c = field::mul(a, b);`, so both spellings number later temporaries alike.
-`a + b + c` is exactly `add(add(a, b), c)`. No spelling implies a law, and no
-expression is reassociated or simplified. Operators are accepted in function
-bodies, where expressions already are. In a module that selects implementations
-by explicit `bind`, an operator is the qualified call with its default binding;
-such a module names its bindings to keep its selection.
+Operands evaluate once, left to right as written. The binding then arranges the
+resulting values in signature order; scalar/group multiplication can permute
+ports without permuting evaluation. Each installed port mapping is a bijection
+checked against the operation signature. No spelling implies an algebraic law,
+reassociation or simplification. Source record operators emit ordinary calls to
+their checked bodies, including when used in a component.
+
+With `use zkc::algebra;`, `let c = a * b;` on field values emits the same call as
+`let c = algebra::mul(a, b);`. A module selecting implementations through explicit
+`bind` declarations calls those binding names to retain that selection; intrinsic
+operator sugar uses the installed operation's default binding.
 
 | Refusal | Code |
 |---|---|
-| No spelling for the symbol and operand constructors at a use | `source-operator-unresolved` |
-| A struct operand | `source-struct-value` |
-| An internal table entry that disagrees with the installed signature; not author-triggerable with the installed table | `source-operator-table` |
+| No binding for the hook and operand heads, including unavailable imports | `source-operator-unresolved` |
+| Unsupported hook or misplaced/repeated attribute | `source-operator-attribute` |
+| Wrong operand arity or source result shape | `source-operator-arity`, `source-operator-result` |
+| Missing checked body or no operand record owned by the package | `source-operator-body`, `source-operator-ownership` |
+| Unsupported operand head or duplicate tuple | `source-operator-head`, `source-operator-duplicate` |
+| Installed binding disagrees with its signature | `source-operator-table` |
 
 ## 5. Checked structs
 
 ```text
+use zkc::algebra::Vector;
 checked struct BoundAssignment<F: domain Field>(
   assignment: Vector<F::Element>,
   statement: Vector<F::Element>,

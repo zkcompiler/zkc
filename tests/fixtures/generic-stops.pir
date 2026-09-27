@@ -1,10 +1,22 @@
 module {
+  use zkc::algebra::{
+    Field
+  };
+  use zkc::core;
+  use zkc::poly::{
+    Table
+  };
+  use zkc::poly;
+  use zkc::random::{
+    Rng
+  };
+  use zkc::random;
   fn Step<F: domain Field>(rng: Rng<F>, table: Table<F>, allowed: bool) -> (Table<F>, Rng<F>) requires (
     Field(F)
   ) {
-    [draw] let (r, next) = random::draw::<F>(rng);
-    [guard] control::require(allowed);
-    [fold] let result = poly::fold::<F>(table, r);
+    [draw] let (r, next) = zkc::random::draw::<F>(rng);
+    [guard] zkc::core::require(allowed);
+    [fold] let result = zkc::poly::fold::<F>(table, r);
     return (result, next);
   }
 

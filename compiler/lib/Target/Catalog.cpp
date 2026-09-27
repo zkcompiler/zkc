@@ -1,5 +1,6 @@
 #include "zkc/Target/Catalog.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Support/Json.h"
 
@@ -7,8 +8,8 @@ using namespace llvm;
 using namespace zkc::protocol;
 namespace zkc::target {
 namespace {
-// Derive from the logical contract's semantic facet and installed layout.
-// This is deliberately not a second list of supported operation names.
+// Facets identify the contraction port; exact installed descriptors identify
+// its available implementation. Representation spelling grants no provider.
 Expected<BindingApplication> diagonalAlternative(BindingApplication source) {
   source.implementation.clear();
   auto logical = resolveBinding(source, false);
@@ -28,8 +29,23 @@ Expected<BindingApplication> diagonalAlternative(BindingApplication source) {
       port.kind, port.identity, "diagonal");
   if (!representation || !isDiagonalRepresentation(representation->identity))
     return error("binding-contraction");
-  auto family = StringRef(representation->identity).split('.').first;
-  source.implementation = (family + "-diagonal/" + source.contract).str();
+  const ImplementationDescriptor *selected = nullptr;
+  for (const auto &entry : installedImplementations().all()) {
+    if (entry.contract != source.contract)
+      continue;
+    for (const auto &override : entry.representations) {
+      if (override.kind != port.kind || override.domain != port.identity ||
+          override.identity != representation->identity ||
+          override.port != index || override.output != producer)
+        continue;
+      if (selected)
+        return error("binding-contraction");
+      selected = &entry;
+    }
+  }
+  if (!selected)
+    return error("binding-contraction");
+  source.implementation = selected->identity;
   return source;
 }
 

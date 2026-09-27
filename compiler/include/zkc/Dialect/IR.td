@@ -1,3 +1,6 @@
+#ifndef ZKC_DIALECT_IR
+#define ZKC_DIALECT_IR
+
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "zkc/Dialect/Base.td"
@@ -243,3 +246,5 @@ include "zkc/Dialect/Kernels.td"
 include "zkc/Dialect/Plan/IR/Physical.td"
 
 include "zkc/Dialect/Claim/IR/Claim.td"
+
+#endif // ZKC_DIALECT_IR

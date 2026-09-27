@@ -108,10 +108,25 @@ def generic_source(contract, ins, outs, attrs, domain):
     out_names = [f'o{i}' for i in range(len(outs))]
     def join(xs):
         return ', '.join(xs)
+    family, operation = contract.split('.')
+    module = 'algebra' if family in ('field', 'vector', 'matrix') else family
+    public_name = (family + '_' + operation if family in ('vector', 'matrix') else
+                   'evaluate' if contract == 'poly.univariate_evaluate' else operation)
+    type_imports = {
+        'V': ('algebra', 'Vector'), 'M': ('algebra', 'Matrix'),
+        'T': ('poly', 'Table'), 'P': ('poly', 'Point'),
+        'U': ('poly', 'Polynomial'), 'B': ('algebra', 'Vector'),
+        'R': ('random', 'Rng'), 'N': ('random', 'Nonce'), 'Q': ('poly', 'Round'),
+    }
+    imports = '\n  '.join('use zkc::' + owner + '::' + name + ';'
+                           for owner, name in sorted({type_imports[k]
+                               for k in ins + outs if k in type_imports}))
     return f'''module {{
+  use zkc::{module};
+  {imports}
   fn Work<{parameter}: domain {sort}>({join(n+': '+abstract[k] for n,k in zip(in_names,ins))})
       -> ({join(abstract[k] for k in outs)}) requires ({'ScalarAction(G)' if group else 'Field(F)'}) {{
-    [site] let ({join(out_names)}) = {contract.replace('.', '::')}::<{parameter}>({join(in_names)})
+    [site] let ({join(out_names)}) = zkc::{module}::{public_name}::<{parameter}>({join(in_names)})
       attributes ({join(json.dumps(a) for a in attrs)});
     return ({join(out_names)});
   }}
@@ -138,7 +153,7 @@ for domain in fields:
                        else 'TPN' if domain[0] == 'bn254.fr'
                        else 'TP' if domain[2] == 'dalek' else '')
         if any(k in ins+outs for k in unavailable):
-            run('protocol-compile', source, refuses='binding-representation')
+            run('protocol-compile', source, refuses='binding-type-identity')
             continue
         ir = run('protocol-import', source)
         assert '"'+op+'"' in ir
@@ -214,7 +229,7 @@ verify(ir.replace('!poly.univariate<', '!poly.quadratic<'), 'binding-operation-s
 # Unknown operation contracts / actual dialect operations / physical kernels
 # cannot acquire support from an installed representation.
 source = generic_source('vector.sum', 'V', 'F', [], fields[0])
-run('protocol-import', source.replace('vector::sum::<F>', 'vector::unknown::<F>'), refuses='source-name-unresolved')
+run('protocol-import', source.replace('zkc::algebra::vector_sum::<F>', 'vector::unknown::<F>'), refuses='source-name-unresolved')
 pir = run('protocol-physical-ir', source)
 verify(pir.replace('kernel = "arkworks/vector.sum"', 'kernel = "arkworks/unknown"'),
        'binding-implementation')
@@ -238,7 +253,8 @@ for field, group, backend in fields[:2]:
         config = ('T = "'+transcript+'", '+
                   (parameter+' = '+nominal+', ' if kind != 'bool' else '')+
                   'E = "'+codec+'"')
-        text = f'''module {{
+        # Exact transcript operations belong to the admitted carrier lane.
+        text = f'''carrier module {{
           fn Observe<{roots}>(state: Transcript<T>, value: {payload}) -> (Transcript<T>)
               requires (Transcript(T), Encodes.{kind}({encoded})) {{
             [observe] let next = transcript::observe::{kind}::<{arguments}>(state, value)

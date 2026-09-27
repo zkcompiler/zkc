@@ -1,5 +1,6 @@
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Source/Codec.h"
@@ -119,19 +120,114 @@ class Elaborator {
     def.terms.emplace(path.str(), index);
     return index;
   }
-  std::optional<Type> type(Definition &def, StringRef spelling) {
-    auto [kind, parameter] = spelling.split(':');
-    Type type{kind.str(), {}};
-    if (!parameter.empty()) {
-      auto index = term(def, parameter);
-      if (!index)
+  std::optional<unsigned> staticTerm(Definition &def, StringRef value,
+                                     StringRef expected, unsigned depth = 0) {
+    auto &scope = def.function.signature.scope;
+    if (depth > 8) {
+      fail("generic-term-depth");
+      return {};
+    }
+    if (auto found = def.terms.find(value.str()); found != def.terms.end()) {
+      if (scope.sorts[found->second] == expected)
+        return found->second;
+      fail("generic-static-sort");
+      return {};
+    }
+    if (expected == "Type") {
+      auto application = type(def, value, depth);
+      if (!application)
         return {};
-      type.arguments.push_back(*index);
-    } else if (spelling.contains(':')) {
+      for (auto [i, existing] : enumerate(scope.terms))
+        if (existing.arguments && existing.name == application->constructor &&
+            *existing.arguments == application->arguments)
+          return i;
+      if (scope.terms.size() >= 128) {
+        fail("generic-static-scope");
+        return {};
+      }
+      unsigned index = scope.terms.size();
+      scope.terms.push_back(
+          {application->constructor, {}, application->arguments});
+      scope.sorts.push_back("Type");
+      return index;
+    }
+    if (protocol::staticIdentityMatches(expected, value)) {
+      for (const auto &[i, identity] : scope.constants)
+        if (scope.sorts[i] == expected && identity == value)
+          return i;
+      if (scope.terms.size() >= 128) {
+        fail("generic-static-scope");
+        return {};
+      }
+      unsigned index = scope.terms.size();
+      std::string label = "constant_" + std::to_string(index);
+      while (
+          any_of(scope.terms, [&](const auto &t) { return t.name == label; }))
+        label += '_';
+      scope.terms.push_back({label, {}});
+      scope.sorts.push_back(expected.str());
+      scope.constants.emplace(index, value.str());
+      return index;
+    }
+    auto index = term(def, value);
+    if (!index || scope.sorts[*index] != expected) {
+      fail("generic-static-sort");
+      return {};
+    }
+    return index;
+  }
+  std::optional<Type> type(Definition &def, StringRef spelling,
+                           unsigned depth = 0) {
+    auto syntax = protocol::splitTypeApplication(spelling);
+    if (!syntax) {
+      consumeError(syntax.takeError());
       fail("generic-type");
       return {};
     }
-    return type;
+    const auto *declaration = protocol::typeDeclaration(syntax->constructor);
+    if (!declaration || !declaration->common ||
+        declaration->parameters.size() != syntax->arguments.size()) {
+      fail("generic-type");
+      return {};
+    }
+    Type result{syntax->constructor, {}};
+    for (auto [argument, parameter] :
+         zip(syntax->arguments, declaration->parameters)) {
+      StringRef sort = parameter.kind == protocol::StaticKind::Type ? "Type"
+                       : parameter.kind == protocol::StaticKind::Nat
+                           ? "Nat"
+                           : StringRef(parameter.sort);
+      const bool structural =
+          declaration->parameters.size() != 1 ||
+          declaration->parameters[0].kind != protocol::StaticKind::Domain;
+      auto index =
+          staticTerm(def, argument, sort, depth + unsigned(structural));
+      if (!index)
+        return {};
+      result.arguments.push_back(*index);
+    }
+    return result;
+  }
+  std::string derivedIdentity(const requirements::Term &term,
+                              ArrayRef<std::string> known) {
+    if (term.parent)
+      return known[*term.parent].empty()
+                 ? ""
+                 : protocol::associatedIdentity(known[*term.parent], term.name)
+                       .str();
+    if (!term.arguments || any_of(*term.arguments, [&](unsigned i) {
+          return i >= known.size() || known[i].empty();
+        }))
+      return "";
+    std::vector<std::string> arguments;
+    for (unsigned i : *term.arguments)
+      arguments.push_back(known[i]);
+    auto type = protocol::applyBoundType(term.name, arguments);
+    if (!type) {
+      fail(toString(type.takeError()));
+      return "";
+    }
+    return type->spelling();
   }
   bool arguments(const source::Assignments &pairs,
                  std::map<std::string, std::string> &out) {
@@ -296,13 +392,6 @@ class Elaborator {
                   op ? op->callee : "apply:" + apply->callee,
                   {},
                   {}};
-        for (const auto &argument :
-             op ? op->staticArguments : apply->staticArguments) {
-          auto t = term(def, argument);
-          if (!t)
-            return false;
-          call.staticArguments.push_back(*t);
-        }
         if (!readValues(op ? op->inputs : apply->inputs, call.inputs))
           return false;
         if (apply) {
@@ -330,12 +419,29 @@ class Elaborator {
         const auto &outputs = op ? op->outputs : apply->outputs;
         if (!installed || outputs.size() != installed->signature.outputs.size())
           return fail("generic-operation");
+        const auto &actuals = op ? op->staticArguments : apply->staticArguments;
+        size_t nextStatic = 0;
+        for (auto [i, formal] : enumerate(installed->signature.scope.terms)) {
+          if (formal.parent || formal.arguments ||
+              installed->signature.scope.constants.count(i))
+            continue;
+          if (nextStatic >= actuals.size())
+            return fail("generic-static-arity");
+          auto actual = staticTerm(def, actuals[nextStatic++],
+                                   installed->signature.scope.sorts[i]);
+          if (!actual)
+            return false;
+          call.staticArguments.push_back(*actual);
+        }
+        if (nextStatic != actuals.size())
+          return fail("generic-static-arity");
         if (op) {
           // Constants are natural casts; reduce only after nominal selection.
-          if (call.operation == "field.constant" ||
-              call.operation == "vector.constant") {
-            if (call.operation == "field.constant" &&
-                op->attributes.size() != 1)
+          const auto *parameters = protocol::parameterContract(call.operation);
+          if (parameters && parameters->fieldTerm) {
+            if (op->attributes.size() < parameters->minimum ||
+                (parameters->maximum &&
+                 op->attributes.size() > *parameters->maximum))
               return fail("generic-field-literal");
             for (const auto &literal : op->attributes)
               if (literal.empty() || literal.size() > 1024 ||
@@ -371,14 +477,10 @@ class Elaborator {
     std::vector<std::string> known;
     for (auto [i, t] : enumerate(inferred->scope.terms)) {
       auto fixed = inferred->scope.constants.find(i);
-      known.push_back(
-          t.parent
-              ? (known[*t.parent].empty()
-                     ? ""
-                     : protocol::associatedIdentity(known[*t.parent], t.name)
-                           .str())
-          : fixed == inferred->scope.constants.end() ? ""
-                                                     : fixed->second);
+      known.push_back(t.parent || t.arguments ? derivedIdentity(t, known)
+                      : fixed == inferred->scope.constants.end()
+                          ? ""
+                          : fixed->second);
     }
     std::vector<requirements::Predicate> residual;
     for (const auto &need : inferred->obligations) {
@@ -458,8 +560,9 @@ class Elaborator {
       auto declared = result.definition->terms.find(parameter);
       if (declared == result.definition->terms.end() ||
           scope.terms[declared->second].parent ||
-          protocol::installedIdentitySort(value) !=
-              scope.sorts[declared->second]) {
+          scope.terms[declared->second].arguments ||
+          !protocol::staticIdentityMatches(scope.sorts[declared->second],
+                                           value)) {
         fail("generic-configuration-sort");
         return nullptr;
       }
@@ -491,12 +594,8 @@ class Elaborator {
     for (auto [i, term] : enumerate(scope.terms)) {
       if (auto fixed = scope.constants.find(i); fixed != scope.constants.end())
         known.push_back(fixed->second);
-      else if (term.parent)
-        known.push_back(
-            known[*term.parent].empty()
-                ? ""
-                : protocol::associatedIdentity(known[*term.parent], term.name)
-                      .str());
+      else if (term.parent || term.arguments)
+        known.push_back(derivedIdentity(term, known));
       else {
         auto value = result.arguments.find(term.name);
         known.push_back(value == result.arguments.end() ? "" : value->second);
@@ -542,16 +641,18 @@ class Elaborator {
         }
       }
       for (auto [index, term] : enumerate(scope.terms))
-        if (term.parent && !known[*term.parent].empty()) {
-          auto identity =
-              protocol::associatedIdentity(known[*term.parent], term.name);
-          if (identity.empty() ||
-              (!known[index].empty() && known[index] != identity)) {
+        if (term.parent || term.arguments) {
+          auto identity = derivedIdentity(term, known);
+          if (!problem.empty())
+            return nullptr;
+          if (identity.empty())
+            continue;
+          if (!known[index].empty() && known[index] != identity) {
             fail("binding-requirement");
             return nullptr;
           }
           if (known[index].empty()) {
-            known[index] = identity.str();
+            known[index] = identity;
             changed = true;
           }
         }
@@ -579,7 +680,7 @@ class Elaborator {
     std::vector<std::string> arguments;
     Array originArguments, choices;
     for (auto [i, term] : enumerate(signature.scope.terms)) {
-      if (term.parent || signature.scope.constants.count(i))
+      if (term.parent || term.arguments || signature.scope.constants.count(i))
         continue;
       auto found = configuration.arguments.find(term.name);
       if (found == configuration.arguments.end()) {
@@ -617,18 +718,31 @@ class Elaborator {
       fail(toString(std::move(e)));
       return {};
     }
-    auto concrete = [&](const Type &t) {
-      return protocol::BoundType{
-          t.constructor,
-          t.arguments.empty() ? "" : (*identities)[t.arguments[0]], ""}
-          .spelling();
+    auto concrete = [&](const Type &t) -> std::optional<std::string> {
+      std::vector<std::string> values;
+      for (unsigned index : t.arguments)
+        values.push_back((*identities)[index]);
+      auto type = protocol::applyBoundType(t.constructor, values);
+      if (!type) {
+        fail(toString(type.takeError()));
+        return {};
+      }
+      return type->spelling();
     };
     source::Function function;
     function.location = def.record->location;
-    for (auto [input, type] : zip(def.record->arguments, signature.inputs))
-      function.arguments.push_back({input.name, concrete(type)});
-    for (const auto &output : signature.outputs)
-      function.results.push_back(concrete(output));
+    for (auto [input, type] : zip(def.record->arguments, signature.inputs)) {
+      auto value = concrete(type);
+      if (!value)
+        return {};
+      function.arguments.push_back({input.name, *value});
+    }
+    for (const auto &output : signature.outputs) {
+      auto value = concrete(output);
+      if (!value)
+        return {};
+      function.results.push_back(*value);
+    }
     // Configuration symbols are already reserved; shared code mints names.
     std::string name = preserveSourceNames && !sourceName.empty()
                            ? sourceName.str()
@@ -636,7 +750,8 @@ class Elaborator {
     function.name = name;
     function.origin = source::LogicalOrigin{def.name, {}};
     for (auto [i, term] : enumerate(signature.scope.terms))
-      if (!term.parent && !signature.scope.constants.count(i))
+      if (!term.parent && !term.arguments &&
+          !signature.scope.constants.count(i))
         function.origin->arguments.emplace_back(
             term.name, configuration.arguments.at(term.name));
     function.body = def.record->body;
@@ -677,11 +792,21 @@ class Elaborator {
         return;
       }
       auto attrs = op.attributes;
-      if (call.operation == "field.constant" ||
-          call.operation == "vector.constant") {
-        // Literal elaboration in the installed scalar field, not execution.
+      const auto *parameters = protocol::parameterContract(call.operation);
+      if (parameters && parameters->fieldTerm) {
+        // Literal elaboration follows the declaration's field term, including
+        // associated projections, rather than an operation-name convention.
+        const auto &operation = *find_if(
+            protocol::boundOperationContracts(),
+            [&](const auto &value) { return value.name == call.operation; });
+        auto statics = protocol::resolveStaticArguments(
+            operation.signature.scope, binding.application.arguments);
+        if (!statics) {
+          fail(toString(statics.takeError()));
+          return;
+        }
         StringRef modulus =
-            protocol::fieldModulus(installed->outputs[0].identity);
+            protocol::fieldModulus((*statics)[*parameters->fieldTerm]);
         if (modulus.empty()) {
           fail("interactive-constant");
           return;
@@ -751,7 +876,7 @@ class Elaborator {
             if (next >= call->staticArguments.size())
               return fail("generic-static-arity");
             const auto &identity = call->staticArguments[next++];
-            if (protocol::installedIdentitySort(identity) != parameter.sort)
+            if (!protocol::staticIdentityMatches(parameter.sort, identity))
               return fail("generic-static-sort");
             selected->arguments.emplace(parameter.name, identity);
           }
@@ -931,8 +1056,31 @@ public:
       Array parameters;
       for (size_t i = 0; i < scope.terms.size(); ++i) {
         const auto &t = scope.terms[i];
-        terms.push_back(t.parent ? terms[*t.parent] + "." + t.name : t.name);
-        if (!t.parent && !scope.constants.count(i))
+        if (auto constant = scope.constants.find(i);
+            constant != scope.constants.end())
+          terms.push_back(constant->second);
+        else if (t.parent)
+          terms.push_back(terms[*t.parent] + "." + t.name);
+        else if (t.arguments) {
+          std::string spelling = t.name;
+          if (!t.arguments->empty()) {
+            const auto *declaration = protocol::typeDeclaration(t.name);
+            const bool atomic =
+                declaration && declaration->parameters.size() == 1 &&
+                declaration->parameters[0].kind == protocol::StaticKind::Domain;
+            spelling += atomic ? ":" : "<";
+            for (auto [position, argument] : enumerate(*t.arguments)) {
+              if (position)
+                spelling += ",";
+              spelling += terms[argument];
+            }
+            if (!atomic)
+              spelling += ">";
+          }
+          terms.push_back(std::move(spelling));
+        } else
+          terms.push_back(t.name);
+        if (!t.parent && !t.arguments && !scope.constants.count(i))
           parameters.push_back(Array{t.name, scope.sorts[i]});
       }
       auto predicates = [&](ArrayRef<requirements::Predicate> values) {
@@ -962,7 +1110,8 @@ public:
         implementations.push_back(Array{site, implementation});
       const auto &scope = configuration.definition->function.signature.scope;
       for (size_t i = 0; i < scope.terms.size(); ++i)
-        if (!scope.terms[i].parent && !scope.constants.count(i) &&
+        if (!scope.terms[i].parent && !scope.terms[i].arguments &&
+            !scope.constants.count(i) &&
             !configuration.arguments.count(scope.terms[i].name))
           remaining.push_back(Array{scope.terms[i].name, scope.sorts[i]});
       resolved.push_back(

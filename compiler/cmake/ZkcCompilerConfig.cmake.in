@@ -6,6 +6,7 @@ if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "@LLVM_PACKAGE_VERSION@")
   message(FATAL_ERROR
     "ZkcCompiler was built with LLVM/MLIR @LLVM_PACKAGE_VERSION@; found ${LLVM_PACKAGE_VERSION}")
 endif()
+@ZKC_CONTRIBUTION_FIND_DEPENDENCIES@
 include("${CMAKE_CURRENT_LIST_DIR}/ZkcCompilerTargets.cmake")
 # External imported libraries do not propagate their header paths themselves.
 set_property(TARGET Zkc::Support APPEND PROPERTY

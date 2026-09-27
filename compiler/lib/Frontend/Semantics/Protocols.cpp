@@ -18,7 +18,7 @@ class ProtocolChecker {
   const CheckPlacement &checkPlacement;
   bool valid = true;
   unsigned instructions = 0;
-  using Substitution = std::map<DeclId, DomainId>;
+  using Substitution = std::map<DeclId, StaticArgument>;
   using Environment = std::map<std::string, Port>;
   std::set<std::string> roles;
   std::map<DeclId, Substitution> dependencyBindings;
@@ -123,7 +123,13 @@ class ProtocolChecker {
       if (!same(left, right, node))
         return false;
     for (auto [left, right] : zip(x.arguments, y.arguments))
-      if (!equal(left, right, node))
+      if (left.kind != right.kind ||
+          (left.kind == StaticArgument::Kind::Domain &&
+           !equal(left.domain, right.domain, node)) ||
+          (left.kind == StaticArgument::Kind::Type &&
+           !same(left.type, right.type, node)) ||
+          (left.kind == StaticArgument::Kind::Natural &&
+           (left.parameter != right.parameter || left.number != right.number)))
         return false;
     return true;
   }
@@ -224,6 +230,59 @@ class ProtocolChecker {
     }
     return result;
   }
+  std::optional<StaticArgument> argument(StringRef sort, StringRef term,
+                                         const syntax::StaticTerm *written,
+                                         const source::Node &node) {
+    if (sort == "Nat") {
+      if (written &&
+          (written->root.kind == syntax::Atom::Kind::String ||
+           !written->members.empty() || !written->arguments.empty())) {
+        fail(node, "source-static-sort", "expected a natural static argument");
+        return {};
+      }
+      auto parameter = model.lookup(scope, term);
+      if (parameter.valid() &&
+          model.declarations[parameter.index].kind ==
+              Declaration::Kind::Parameter &&
+          model.declarations[parameter.index].sort == "Nat")
+        return StaticArgument::natural(0, parameter);
+      uint64_t number;
+      if (term.getAsInteger(10, number) || number > 1048576) {
+        fail(node, "source-static-sort",
+             "expected a bounded natural or a scoped Nat parameter");
+        return {};
+      }
+      return StaticArgument::natural(number);
+    }
+    if (sort == "Type") {
+      if (written) {
+        auto selected = resolveType(syntax::typeExpression(*written));
+        if (!selected.valid())
+          return {};
+        return StaticArgument::typeOf(selected);
+      }
+      auto parameter = model.lookup(scope, term);
+      if (parameter.valid() &&
+          model.declarations[parameter.index].sort == "Type")
+        return StaticArgument::typeOf(model.logical(term, scope));
+      auto checked = protocol::parseBoundType(term, false);
+      if (!checked) {
+        consumeError(checked.takeError());
+        fail(node, "source-static-sort", "expected a logical type argument");
+        return {};
+      }
+      return StaticArgument::typeOf(model.logical(checked->spelling(), scope));
+    }
+    auto selected = domain(term, written, node);
+    if (!selected.valid())
+      return {};
+    if (model.domains[selected.index].sort != sort) {
+      fail(node, "source-static-sort",
+           "static argument has the wrong domain sort");
+      return {};
+    }
+    return StaticArgument(selected);
+  }
   bool arguments(DeclId target, const std::optional<source::Names> &written,
                  ArrayRef<syntax::StaticTerm> terms, const source::Node &node,
                  Substitution &sub) {
@@ -237,16 +296,13 @@ class ProtocolChecker {
     size_t position = 0;
     if (written)
       for (auto [parameter, term] : zip(d.parameters, *written)) {
-        auto argument = domain(
-            term, position < terms.size() ? &terms[position] : nullptr, node);
+        auto selected = argument(
+            model.declarations[parameter.index].sort, term,
+            position < terms.size() ? &terms[position] : nullptr, node);
         ++position;
-        if (!argument.valid())
+        if (!selected)
           return false;
-        if (model.domains[argument.index].sort !=
-            model.declarations[parameter.index].sort)
-          return fail(node, "source-static-sort",
-                      "static argument has the wrong domain sort");
-        sub.emplace(parameter, argument);
+        sub.emplace(parameter, *selected);
       }
     return true;
   }
@@ -326,22 +382,18 @@ class ProtocolChecker {
           return fail(dependency, "source-static-parameter",
                       "unknown or duplicate dependency parameter");
         const auto &terms = written->second.terms;
-        auto argument =
-            domain(term, position < terms.size() ? &terms[position] : nullptr,
-                   dependency);
+        auto selected = argument(
+            model.declarations[parameter.index].sort, term,
+            position < terms.size() ? &terms[position] : nullptr, dependency);
         ++position;
-        if (!argument.valid())
+        if (!selected)
           return false;
-        if (model.domains[argument.index].sort !=
-            model.declarations[parameter.index].sort)
-          return fail(dependency, "source-static-sort",
-                      "dependency argument has the wrong domain sort");
-        sub.emplace(parameter, argument);
+        sub.emplace(parameter, *selected);
       }
     }
     if (sub.size() != d.parameters.size())
       return fail(dependency, "source-static-required",
-                  "dependency must bind every protocol domain parameter");
+                  "dependency must bind every protocol static parameter");
     if (!entails(requirements(target, sub), dependency))
       return false;
     dependencyBindings.emplace(alias, std::move(sub));
@@ -472,7 +524,7 @@ class ProtocolChecker {
         const auto helper = model.declarations[checked->function.index];
         for (auto parameter : helper.parameters) {
           const auto &p = model.declarations[parameter.index];
-          sub.emplace(parameter, model.internDomain(p.name, scope));
+          sub.emplace(parameter, model.argument(p.name, p.sort, scope));
         }
         if (!apply(checked->function, sub, checked->captures,
                    placement->outputs, placement->role, instruction,

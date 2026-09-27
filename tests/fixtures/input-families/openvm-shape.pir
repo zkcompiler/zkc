@@ -1,14 +1,17 @@
 // Minimal received-metadata contract: [rounds, width]. Full AIR/VK admission is
 // deliberately outside this fixture. The stored selector requires width one.
 module {
+  use zkc::algebra::{Indices};
+  use zkc::algebra;
+  use zkc::core;
   fn Select(metadata: Indices) -> index {
     let size = metadata.len();
-    let shaped = index::equal(size, 2);
-    control::require(shaped);
+    let shaped = zkc::algebra::index_equal(size, 2);
+    zkc::core::require(shaped);
     let rounds = metadata[0];
     let width = metadata[1];
-    let supported = index::equal(width, 1);
-    control::require(supported);
+    let supported = zkc::algebra::index_equal(width, 1);
+    zkc::core::require(supported);
     return rounds;
   }
   fn Zero() -> index { return 0; }

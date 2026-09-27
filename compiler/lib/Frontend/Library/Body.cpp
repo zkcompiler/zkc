@@ -162,7 +162,16 @@ llvm::Expected<Signature> sourceSignature(const SourceCall &call,
         term.kind == StaticTerm::Kind::Apply ||
         term.kind == StaticTerm::Kind::Seal) {
       auto key = identity(term.declaration);
-      if (!formals.count(key) && checkedRoots.insert(key).second) {
+      const bool installed =
+          term.kind == StaticTerm::Kind::Apply &&
+          key == identity(logicalConstructorDeclaration(term.declaration.name));
+      if (installed) {
+        auto sort = sortOf(term, call.callable.environment());
+        if (!sort)
+          return sort.takeError();
+      }
+      if (!installed && !formals.count(key) &&
+          checkedRoots.insert(key).second) {
         const auto *owned =
             findStatic(term.declaration, call.callable.environment());
         const auto *visible = findStatic(term.declaration, ctx.environment);
@@ -240,9 +249,11 @@ llvm::Expected<Signature> sourceSignature(const SourceCall &call,
                 "helper actuals do not cover all parameters");
   for (const auto &i : d.imports) {
     auto selected = actual(i.parameter, call.arguments);
+    if (!selected)
+      return selected.takeError();
     auto found = std::find_if(
         ctx.imports.begin(), ctx.imports.end(), [&](const auto &j) {
-          return identity(j.parameter) == identity(selected);
+          return identity(j.parameter) == identity(*selected);
         });
     // A helper is checked against the caller's imported interfaces; a
     // concrete component is selected by a link, not by a helper call
@@ -256,8 +267,10 @@ llvm::Expected<Signature> sourceSignature(const SourceCall &call,
                   "helper component actual violates exact public bound");
   }
   for (const auto &b : d.typeBounds) {
-    auto p =
-        permissions(actual(Type::parameter(b.parameter), call.arguments), ctx);
+    auto type = actual(Type::parameter(b.parameter), call.arguments);
+    if (!type)
+      return type.takeError();
+    auto p = permissions(*type, ctx);
     if (!p)
       return p.takeError();
     if ((b.permissions.copy && !p->copy) || (b.permissions.drop && !p->drop))

@@ -45,13 +45,19 @@ SourceCheck checkStaged(const syntax::Content &original,
     if (!origin.definition.valid() || !origin.emitted.valid())
       continue;
     auto scope = model->declarations[origin.definition.index].members;
-    for (const auto &argument : specialization.arguments)
-      origin.bindings.push_back({model->lookup(scope, argument.name),
-                                 model->internDomain(argument.domain, {0})});
+    for (const auto &argument : specialization.arguments) {
+      auto parameter = model->lookup(scope, argument.name);
+      if (!parameter.valid())
+        continue;
+      origin.bindings.push_back(
+          {parameter,
+           model->argument(argument.domain,
+                           model->declarations[parameter.index].sort, {0})});
+    }
     if (checked) {
       const auto definition = model->declarations[origin.definition.index];
       const auto emitted = model->declarations[origin.emitted.index];
-      std::map<DeclId, DomainId> substitution;
+      std::map<DeclId, StaticArgument> substitution;
       bool agrees = definition.kind == Declaration::Kind::Protocol &&
                     emitted.kind == Declaration::Kind::Protocol &&
                     definition.roles == emitted.roles &&
@@ -76,12 +82,14 @@ SourceCheck checkStaged(const syntax::Content &original,
       // Staging emits a specialization by substituting its arguments into
       // the definition; one that changes the interface is a staging defect.
       if (!agrees)
-        report_fatal_error(
-            "specialized protocol does not preserve its nominal interface");
+        model->diagnostics.push_back(
+            {"source-static-sort",
+             "specialized protocol does not preserve its nominal interface",
+             specialization.location});
     }
     model->instantiations.push_back(std::move(origin));
   }
-  if (checked)
+  if (checked && model->diagnostics.empty())
     return SourceAnalysisBuilder::finish(std::move(model));
   return model;
 }

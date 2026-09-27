@@ -54,6 +54,7 @@ public:
   std::optional<DeclId> lookup(ScopeId, llvm::StringRef) const;
   std::string display(TypeId) const;
   std::string display(DomainId) const;
+  std::string display(const StaticArgument &) const;
   /// Emit structurally checked common source; callers independently admit it
   /// with checkProtocolDocument. Partial/failed analysis cannot emit.
   llvm::Expected<source::Content> lower() const;

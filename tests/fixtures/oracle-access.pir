@@ -1,13 +1,27 @@
 module {
+  use zkc::algebra::{
+    Vector
+  };
+  use zkc::algebra;
+  use zkc::core;
+  use zkc::oracle::{
+    Commitments,
+    OpeningStates,
+    VectorCommitment
+  };
+  use zkc::oracle;
+  use zkc::pcs::{
+    Proof
+  };
   fn Commit<C: domain Commitment>(
     values: Vector<C::ValueField::Element>,
     width: index
   ) -> (Commitments<C>, OpeningStates<C>) requires (VectorCommitment(C)) {
-    [__site_0] let (root, state) = oracle::commit::<C>(values, width);
-    [__site_1] let empty_roots = commitments::empty::<C>();
-    [__site_2] let roots = commitments::append::<C>(empty_roots, root);
-    [__site_3] let empty_states = opening_states::empty::<C>();
-    [__site_4] let states = opening_states::append::<C>(empty_states, state);
+    [__site_0] let (root, state) = zkc::oracle::commit::<C>(values, width);
+    [__site_1] let empty_roots = zkc::oracle::commitments_empty::<C>();
+    [__site_2] let roots = zkc::oracle::commitments_append::<C>(empty_roots, root);
+    [__site_3] let empty_states = zkc::oracle::opening_states_empty::<C>();
+    [__site_4] let states = zkc::oracle::opening_states_append::<C>(empty_states, state);
     return (roots, states);
   }
 
@@ -15,9 +29,9 @@ module {
     states: OpeningStates<C>,
     query: index
   ) -> (Vector<C::ValueField::Element>, Proof<C>) requires (VectorCommitment(C)) {
-    [__site_0] let zero = index::constant() attributes ("0");
-    [__site_1] let state = opening_states::at::<C>(states, zero);
-    [__site_2] let (row, path) = oracle::open::<C>(state, query);
+    [__site_0] let zero = zkc::algebra::index_constant() attributes ("0");
+    [__site_1] let state = zkc::oracle::opening_states_at::<C>(states, zero);
+    [__site_2] let (row, path) = zkc::oracle::open::<C>(state, query);
     return (row, path);
   }
 
@@ -29,10 +43,10 @@ module {
     row: Vector<C::ValueField::Element>,
     path: Proof<C>
   ) -> bool requires (VectorCommitment(C)) {
-    [__site_0] let zero = index::constant() attributes ("0");
-    [__site_1] let root = commitments::at::<C>(roots, zero);
-    [__site_2] let valid = oracle::check::<C>(root, width, height, query, row, path);
-    [__site_3] control::require(valid);
+    [__site_0] let zero = zkc::algebra::index_constant() attributes ("0");
+    [__site_1] let root = zkc::oracle::commitments_at::<C>(roots, zero);
+    [__site_2] let valid = zkc::oracle::check::<C>(root, width, height, query, row, path);
+    [__site_3] zkc::core::require(valid);
     return valid;
   }
 

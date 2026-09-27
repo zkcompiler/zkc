@@ -73,6 +73,7 @@ struct Seal;
 /// ```
 #[derive(Clone)]
 pub struct Capability {
+    kind: Type,
     resource_domain: Option<zkc_runtime::interactive::ResourceDomain>,
     identity: Identity,
     authority: Arc<Authority>,
@@ -81,6 +82,9 @@ pub struct Capability {
     generation: u64,
 }
 impl Capability {
+    pub(crate) fn kind(&self) -> Type {
+        self.kind
+    }
     pub fn resource_domain(&self) -> Option<zkc_runtime::interactive::ResourceDomain> {
         self.resource_domain
     }
@@ -165,7 +169,9 @@ impl State {
             | Self::RistrettoSpentNonce => Identity::Ristretto255Scalar,
             #[cfg(feature = "test-utils")]
             Self::RistrettoTape(_) => Identity::Ristretto255Scalar,
-            _ => Identity::Bls12381Fr,
+            Self::Rng(_) | Self::IssuedNonce(_) | Self::ReadyNonce(_) | Self::SpentNonce => {
+                Identity::Bls12381Fr
+            }
         }
     }
     fn ty(&self) -> Type {
@@ -177,7 +183,12 @@ impl State {
             #[cfg(feature = "test-utils")]
             Self::Bn254Tape(_) | Self::RistrettoTape(_) => Type::Rng,
             Self::Transcript(_, _) => Type::Transcript,
-            _ => Type::Nonce,
+            Self::IssuedNonce(_)
+            | Self::ReadyNonce(_)
+            | Self::SpentNonce
+            | Self::RistrettoIssuedNonce(_)
+            | Self::RistrettoReadyNonce(_)
+            | Self::RistrettoSpentNonce => Type::Nonce,
         }
     }
     fn stage(&self) -> &'static str {
@@ -246,6 +257,7 @@ impl Resources {
             _ => None,
         };
         let identity = state.identity();
+        let kind = state.ty();
         let seal = Arc::new(Seal);
         self.slots.insert(
             id,
@@ -259,6 +271,7 @@ impl Resources {
             },
         );
         Ok(Capability {
+            kind,
             resource_domain,
             identity,
             authority: self.authority.clone(),
