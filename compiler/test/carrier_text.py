@@ -32,14 +32,14 @@ for example, libraries in (
         assert run("protocol-format", text) == printed
         run("protocol-admit", text)
         parsed = json.loads(run("protocol-parse", text))
-        assert parsed["content"]["carrier"] is True, parsed
+        assert parsed["content"] == json.loads(encoded), parsed
 
 
 for prefix in ("src_", "lib_", "client_", "__library_operation_"):
     with case(f"explicit-carrier-symbol-{prefix}"):
         text = directory / "symbols.pir"
-        body = f"module {{ fn {prefix}f(x: bool) -> bool {{ return x; }} }}"
-        text.write_text("carrier " + body)
+        body = f" fn {prefix}f(x: bool) -> bool {{ return x; }} "
+        text.write_text("carrier module { " + body + " }")
         run("protocol-source", text)
         text.write_text(body)
         run("protocol-source", text, refuses="source-name-reserved")
@@ -68,21 +68,20 @@ with case("carrier-is-not-a-child-module"):
     child = directory / "child.pir"
     child.write_text("carrier module { fn src_f(x: bool) -> bool { return x; } }")
     app = directory / "app.pir"
-    app.write_text("module { mod child; }")
+    app.write_text(" mod child; ")
     run("protocol-source", app, refuses="source-carrier-project")
 
 with case("carrier-root-has-no-captured-libraries"):
     text = directory / "standalone.pir"
     text.write_text("carrier module { fn src_f(x: bool) -> bool { return x; } }")
-    run("protocol-source", text, refuses="source-carrier-project",
+    run("protocol-source", text, refuses="unsupported-option",
         extra=(f"--library={ROOT / 'examples/libraries/group/lib.pir'}",))
 
 with case("carrier-is-not-a-library-dependency"):
     library = directory / "dependency.pir"
     library.write_text("carrier module { fn src_f(x: bool) -> bool { return x; } }")
     app = directory / "dependency-root.pir"
-    app.write_text('module { dependency x = library(namespace="test", '
-                   'name="x", version="1", resolution="r1"); }')
+    app.write_text(' dependency x = library(namespace="test", name="x", version="1", resolution="r1"); ')
     run("protocol-source", app, refuses="source-carrier-project",
         extra=(f"--library={library}",))
 
@@ -94,7 +93,7 @@ with case("carrier-requires-explicit-bindings"):
 with case("carrier-still-checks-types"):
     text = directory / "invalid.pir"
     text.write_text("carrier module { fn src_f(x: bool) -> index { return x; } }")
-    run("protocol-source", text, refuses="source-type-mismatch")
+    run("protocol-source", text, refuses="function-return-types")
 
 # Carrier origins are admitted metadata, not new claims to authored-project
 # origins. Names in unrelated namespaces do not identify function coordinates.
@@ -122,10 +121,9 @@ for owner in ("protocol", "binding", "instance", "entry"):
         assert json.loads(run("protocol-source", text)) == encoded
 
 with case("construction contracts require the common carrier stage"):
-    declaration = ('bind challenge = transcript.challenge('
-                   '"merlin3.bls12-381.fr64be/1");')
+    declaration = ('bind challenge = "transcript.challenge"("merlin3.bls12-381.fr64be/1");')
     text = directory / "construction-stage.pir"
-    text.write_text("module { " + declaration + " }")
+    text.write_text(declaration)
     run("protocol-source", text, refuses="source-operation-stage")
     text.write_text("carrier module { " + declaration + " }")
     encoded = json.loads(run("protocol-source", text))

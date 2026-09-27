@@ -165,17 +165,24 @@ Canonical inlining coalesces duplicable capture aliases consistently in MLIR and
 Lean. Logical origins and emitted symbols are allocated separately from exact
 source identities. Cross-owner origin collisions receive checked owner qualifiers;
 ambiguous source selectors refuse.
-Unquoted dotted references refuse (`source-name-ambiguous`) when the spelling
-has two complete readings that authorize the requested category, as an exact
-declaration and a module, import or dependency path do. This covers calls,
-declarations, types, static terms, record literals, predicates and values. An
-ordinary function does not authorize arbitrary member suffixes. Quoted calls/declaration references select the exact local name; other
-ambiguous uses need a renamed declaration or an unambiguous import alias.
+Ordinary source uses unwrapped files, strict ASCII identifiers and `r#` escapes.
+Declaration and associated paths use `::`; runtime projections use `.field`,
+`.N` and `[index]` according to receiver kind. Exact installed identities and
+`bind` contract IDs are quoted. Records use braces only. Qualified constants
+retain existing staging rules; protocol reference slots do not gain hidden
+computation. Temporary projections evaluate once and retain the owning source
+permission checks, including zero-leaf obligations and disjoint siblings.
+
 Printed carrier text is a `carrier module`: a closed flat form that keeps the
 names the compiler generated. It cannot import modules or assets or declare
 library interfaces, components, records, constants or exports
 (`source-carrier-authoring`), and cannot be a child module or an imported
-library (`source-carrier-project`). Operations with MLIR properties refuse an
+library (`source-carrier-project`); like common JSON, a carrier root refuses
+`--library` options (`unsupported-option`). Carrier text reads directly into common
+records and uses common admission diagnostics. Authored analysis is unsupported
+for both carrier forms. Canonical printing rereads its final formatted output
+for exact common equality; text formatting preserves tokens and comments.
+Operations with MLIR properties refuse an
 unknown property key (`mlir-unknown-property`) instead of dropping it.
 Normalized construction refuses a selected alias whose raw sites do not map to
 one numbered site (`construction-selector-coordinates`), and a direct function

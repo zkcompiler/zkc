@@ -1,5 +1,7 @@
 #include "zkc/Frontend/Dependencies.h"
 #include "../Syntax/Tree.h"
+#include "zkc/Frontend/Protocol.h"
+#include "zkc/Support/Json.h"
 #include <set>
 
 using namespace llvm;
@@ -16,8 +18,35 @@ bool moduleName(StringRef name) {
 } // namespace
 
 DependencyDeclarations inspectDependencies(const Input &input, uint32_t file) {
-  auto parsed = syntax::parseRecoverable(input.text(), input.filename(), file);
   DependencyDeclarations result;
+  const auto form = classifyDocument(input.text());
+  if (isCommonDocument(form)) {
+    result.form = form;
+    result.location = source::Span{0, input.text().size(), file};
+    auto document = parseProtocolDocument(input);
+    if (document)
+      result.complete = result.recoverable = true;
+    else
+      handleAllErrors(
+          document.takeError(),
+          [&](const SourceDiagnostic &d) {
+            auto location = d.location;
+            location.file = file;
+            result.diagnostics.push_back({d.code, d.message, location});
+          },
+          [&](const Refusal &e) {
+            result.diagnostics.push_back({e.code, e.detail, result.location});
+          },
+          [&](const ErrorInfoBase &e) {
+            std::string message;
+            raw_string_ostream out(message);
+            e.log(out);
+            result.diagnostics.push_back(
+                {"source-syntax", std::move(message), result.location});
+          });
+    return result;
+  }
+  auto parsed = syntax::parseRecoverable(input.text(), input.filename(), file);
   for (const auto &d : parsed.diagnostics)
     result.diagnostics.push_back({d.code, d.message, d.location});
   if (!parsed.content)
@@ -28,8 +57,7 @@ DependencyDeclarations inspectDependencies(const Input &input, uint32_t file) {
     result.diagnostics.push_back({code.str(), message.str(), node.location});
   };
   if (const auto *module = std::get_if<syntax::Module>(&*parsed.content)) {
-    result.form =
-        module->carrier ? SourceForm::CarrierModule : SourceForm::Module;
+    result.form = SourceForm::Module;
     result.location = module->location;
     std::set<std::string> modules, relations, libraries;
     for (const auto &child : module->modules) {

@@ -43,12 +43,15 @@ FRONTEND_LAYERS = {
     "Library": {"Library", "Work.h"},
     "Model": {"Model", "Static"},
     "Syntax": {"Syntax"},
+    # Carrier decoding shares lexical and logical-spelling helpers, but cannot
+    # resolve or elaborate an authored program.
+    "Carrier": {"Carrier", "Static", "Syntax"},
     "Static": {"Static", "Syntax", "Work.h"},
     "Resolution": {"Resolution", "Static", "Syntax"},
     "Instantiation": {"Instantiation", "Model", "Resolution", "Static", "Syntax", "Work.h"},
     "Lowering": {"Lowering", "Library", "Model", "Resolution", "Syntax", "LibrarySource.h", "Work.h"},
     "Semantics": {"Semantics", "Instantiation", "Library", "Model", "Resolution", "Static", "Syntax", "LibrarySource.h", "Work.h"},
-    "Tooling": {"Tooling", "Lowering", "Model", "Resolution", "Semantics", "Static", "Syntax"},
+    "Tooling": {"Tooling", "Carrier", "Lowering", "Model", "Resolution", "Semantics", "Static", "Syntax"},
     "Loading": {"Loading"},
 }
 

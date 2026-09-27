@@ -51,6 +51,7 @@ add_test(NAME contract-mapping-generation
 set_tests_properties(contract-mapping-generation PROPERTIES LABELS native)
 add_zkc_test(frontend_dependencies Frontend frontend-dependencies)
 add_zkc_test(frontend_loading FrontendLoading frontend-loading)
+add_zkc_test(frontend_documents FrontendLoading frontend-documents)
 add_zkc_test(source CompilerCore source-document)
 add_zkc_test(frontend_analysis FrontendLoading frontend-analysis)
 add_zkc_test(frontend_structural_types Frontend frontend-structural-types)

@@ -22,7 +22,7 @@ class PresentationTests(unittest.TestCase):
         return result
 
     def diagnostic(self, line, offset, left, right, code="source-character"):
-        result = self.run_command("protocol-parse", "module {\n" + line, code)
+        result = self.run_command("protocol-parse", "fn Incomplete() -> () {\n" + line, code)
         lines = result.stderr.splitlines()
         header = next(i for i, text in enumerate(lines) if ": error: " in text)
         self.assertIn(f"-:2:{offset + 1}: error:", lines[header])
@@ -68,12 +68,12 @@ class PresentationTests(unittest.TestCase):
         return formatted
 
     def test_keyword_path_members(self):
-        for member in ("at", "return", "roles", "requires", "attributes"):
+        for member in ("at", "r#return", "roles", "requires", "attributes"):
             for separator in ("::", ":: /* member */ ", ":: // member\n",
                               "/* path */ :: /* outer /* nested */ */ "):
                 with self.subTest(member=member, separator=separator):
-                    text = ("module { fn X(x: bool) -> bool { let y = "
-                            f"curve{separator}{member}(x); return y; }} }}")
+                    text = ("fn X(x: bool) -> bool { let y = "
+                            f"curve{separator}{member}(x); return y; }}")
                     formatted = self.roundtrip(text)
                     self.assertRegex(formatted, rf"\b{member}\(x\)")
                     for comment in ("/* member */", "// member", "/* path */",
@@ -83,10 +83,7 @@ class PresentationTests(unittest.TestCase):
 
     def test_midstatement_keyword_lists(self):
         formatted = self.roundtrip(
-            "module { fn X<F: Field>(x: F::Element) -> F::Element "
-            "requires (Field(F)) { let y = zkc::algebra::constant::<F>() "
-            "attributes (1); return (y); } "
-            "configure C = X(F = F) using (site = impl); }")
+            ' fn X<F: Field>(x: F::Element) -> F::Element requires (Field(F)) { let y = zkc::algebra::constant::<F>() attributes (1); return (y); } configure C = X(F = F) using (site = impl); ')
         for keyword in ("requires", "attributes", "using", "return"):
             self.assertIn(keyword + " (", formatted)
 

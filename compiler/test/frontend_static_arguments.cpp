@@ -1,5 +1,6 @@
 #include "../lib/Frontend/Library/Internal.h"
 #include "../lib/Frontend/Model/Module.h"
+#include "../lib/Frontend/Static/Domains.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -136,13 +137,13 @@ void modelArguments() {
          "unknown constructor is not interned as a logical type");
 }
 void domainProducts() {
-  auto analysis = analyzeProtocol(R"(module {
+  auto analysis = analyzeProtocol(R"(
     use zkc::algebra::{Vector, Field, vector_split};
     fn Split<G: Field>(x: Vector<G::Element>) -> (Vector<G::Element>, Vector<G::Element>) {
       let pair = vector_split::<G>(x);
       return pair;
     }
-  })",
+  )",
                                   "domain-product.pir");
   if (!complete(analysis))
     return;
@@ -222,7 +223,7 @@ void literals() {
           "interactive-constant");
 }
 void protocolTemplates() {
-  auto analysis = analyzeProtocol(R"(module {
+  auto analysis = analyzeProtocol(R"(
     use zkc::algebra::FixedVector;
     fn Keep<V: Type, L: nat>(x: FixedVector<V,L>) -> FixedVector<V,L> { x }
     protocol Bulk<T: Type, N: nat> {
@@ -242,7 +243,7 @@ void protocolTemplates() {
       invoke [child] child(x) -> (y);
       return y;
     }
-  })",
+  )",
                                   "protocol-static-templates.pir");
   if (!complete(analysis))
     return;
@@ -261,7 +262,7 @@ void protocolTemplates() {
     consumeError(lowered.takeError());
 }
 void protocols() {
-  constexpr StringLiteral text = R"(module {
+  constexpr StringLiteral text = R"(
     use zkc::algebra::FixedVector;
     fn Keep<V: Type, L: nat>(x: FixedVector<V, L>) -> FixedVector<V, L> { x }
     protocol Child<T: Type, N: nat> {
@@ -280,7 +281,7 @@ void protocols() {
     instance child: Selected::child { roles (P=Prover); }
     instance run: Selected { dependencies(child=child); roles (P=Prover); }
     entry main = run;
-  })";
+  )";
   for (auto choice : {std::pair<StringRef, StringRef>{"bool", "bool"},
                       {"\"koala-bear\"::Element", "field:koala-bear"},
                       {"FixedVector<\"koala-bear\"::Element,2>",
@@ -288,8 +289,7 @@ void protocols() {
     std::string selected = text.str();
     selected.replace(selected.find("U=bool"), 6, "U=" + choice.first.str());
     selected.replace(selected.find("K=4"), 3, "K=WIDTH");
-    selected.insert(selected.find('{') + 1,
-                    "const WIDTH: index = 4; const K: index = 9;");
+    selected.insert(0, "const WIDTH: index = 4; const K: index = 9;");
     auto analysis = analyzeProtocol(selected, "protocol-statics.pir");
     if (!complete(analysis))
       continue;
@@ -350,7 +350,7 @@ void protocols() {
   }
 }
 void diagnostics() {
-  refused(R"(module {
+  refused(R"(
     use zkc::algebra::{Field, Vector, FixedVector, fixed_vector_from_vector};
     fn Produce<F: Field, N: nat>(x: Vector<F::Element>) -> FixedVector<F::Element,N> {
       fixed_vector_from_vector::<F,N>(x)
@@ -358,17 +358,28 @@ void diagnostics() {
     fn Caller(x: Vector<"koala-bear"::Element>) -> () {
       let value = Produce(x); return;
     }
-  })",
+  )",
           "source-static-unresolved", "annotate this call's result type");
-  refused(R"(module { use zkc::algebra::{Vector, FixedVector};
+  refused(R"( use zkc::algebra::{Vector, FixedVector};
     fn Bad(x: Vector<FixedVector<bool,4>>) -> () { return; }
-  })",
+  )",
           "source-type", "fixed_vector<bool,4>");
-  refused(R"(module { protocol Bad<T: Type + nat> { roles(P); return; } })",
+  refused(R"( protocol Bad<T: Type + nat> { roles(P); return; } )",
           "source-bound-sort");
 }
 } // namespace
 int main() {
+  auto catalog = protocol::DomainCatalog::create(
+      {{"F", "Field", {}, {"Field"}}}, {}, {}, {});
+  expect(bool(catalog), "identifier-shaped installed domain is legal");
+  if (catalog) {
+    expect(!representableStaticBinder("F", *catalog),
+           "static binder cannot capture an installed exact identity");
+    expect(representableStaticBinder("G", *catalog),
+           "a distinct static binder remains representable");
+  } else
+    consumeError(catalog.takeError());
+
   modelArguments();
   domainProducts();
   constants();

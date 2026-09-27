@@ -438,7 +438,7 @@ fn groth16_project_preparation_binds_checked_in_relation_without_external_fixtur
 #[test]
 fn groth16_project_preparation_rejects_unused_selected_view() {
     let fixture = Groth16Project::new();
-    let checked = "    let (az, bz, cz) = Core_Products(relation.a, relation.b, relation.c, bound.assignment);\n    let residuals = Core_Residuals(az, bz, cz);\n    Groth16Zero(residuals);\n";
+    let checked = "  let (az, bz, cz) = Core_Products(relation.a, relation.b, relation.c, bound.assignment);\n  let residuals = Core_Residuals(az, bz, cz);\n  Groth16Zero(residuals);\n";
     assert!(fixture.source.contains(checked));
     fs::write(&fixture.library, fixture.source.replace(checked, "")).unwrap();
     assert_eq!(
@@ -464,8 +464,8 @@ fn groth16_project_preparation_rejects_different_reachable_view() {
 #[test]
 fn groth16_project_preparation_rejects_additional_reachable_view() {
     let fixture = Groth16Project::new();
-    let source = fixture.with_other_view().replace("    let (az, bz, cz) = Core_Products(",
-        "    let (other_a, other_b, other_c) = OtherCore_Products(relation.a, relation.b, relation.c, bound.assignment);\n    let (az, bz, cz) = Core_Products(");
+    let source = fixture.with_other_view().replace("  let (az, bz, cz) = Core_Products(",
+        "  let (other_a, other_b, other_c) = OtherCore_Products(relation.a, relation.b, relation.c, bound.assignment);\n  let (az, bz, cz) = Core_Products(");
     fs::write(&fixture.library, source).unwrap();
     assert_eq!(
         fixture.prepare().unwrap_err().code,

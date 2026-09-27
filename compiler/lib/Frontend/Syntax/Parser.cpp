@@ -1,3 +1,4 @@
+#include "Grammar.h"
 #include "Lexer.h"
 #include "Tree.h"
 #include "llvm/ADT/STLExtras.h"
@@ -14,13 +15,9 @@ class Parser {
   size_t cursor = 0, errorOffset = 0, lastEnd = 0;
   std::string errorCode, message;
   bool recovering = false;
-  bool recordLiteral = true;
   std::vector<syntax::ParseDiagnostic> diagnostics;
   std::set<std::string> explicitSites;
   std::vector<bool> anonymousSites;
-  // Whether the last name read was written quoted, for clauses whose common
-  // records keep only the spelling.
-  bool quotedName = false;
 
   const Token &token() const { return tokens[cursor]; }
   bool failed() const { return !errorCode.empty(); }
@@ -73,27 +70,40 @@ class Parser {
     return tokens[next];
   }
   std::string name() {
-    quotedName = false;
     if (failed())
       return {};
-    Token t = token();
-    if (t.kind != TokenKind::Name && t.kind != TokenKind::String) {
-      fail("source-syntax", "expected a name or quoted string");
+    // A word or quoted spelling in an identifier position is a misspelled
+    // identifier; punctuation there is ordinary malformed syntax.
+    if (token().kind != TokenKind::Name &&
+        token().kind != TokenKind::RawIdentifier &&
+        token().kind != TokenKind::String) {
+      fail("source-syntax", "expected an identifier");
       return {};
     }
-    advance();
-    if (t.kind == TokenKind::String) {
-      quotedName = true;
-      // The lexer has already validated quoted strings.
-      auto value = json::parse(t.spelling);
-      if (!value) {
-        consumeError(value.takeError());
-        fail("source-string", "invalid quoted string");
-        return {};
-      }
-      return value->getAsString()->str();
+    if (token().kind == TokenKind::String ||
+        (token().kind == TokenKind::Name &&
+         grammar::reserved(token().value()))) {
+      fail("source-identifier",
+           "expected an identifier (escape reserved words with r#)");
+      return {};
     }
-    return t.spelling.str();
+    auto result = token().value().str();
+    advance();
+    return result;
+  }
+  std::string label() {
+    if (token().kind != TokenKind::String)
+      return name();
+    auto result = token().value().str();
+    advance();
+    return result;
+  }
+  std::string exact() {
+    if (token().kind != TokenKind::String) {
+      fail("source-string", "expected an exact quoted string");
+      return {};
+    }
+    return label();
   }
   syntax::Atom atom() {
     syntax::Atom result;
@@ -102,11 +112,8 @@ class Parser {
                   : token().kind == TokenKind::Number
                       ? syntax::Atom::Kind::Number
                       : syntax::Atom::Kind::Name;
-    result.value = token().kind == TokenKind::Number ? number() : name();
+    result.value = token().kind == TokenKind::Number ? number() : label();
     return record(std::move(result), start);
-  }
-  std::string termSpelling(const syntax::StaticTerm &term) {
-    return syntax::staticSpelling(term);
   }
   std::string number() {
     if (failed())
@@ -119,26 +126,32 @@ class Parser {
     advance();
     return result;
   }
-  // Only authored :: separators become dots; dotted/quoted roots are opaque.
-  std::string path(bool *qualified = nullptr, bool *trailingSeparator = nullptr,
-                   StringRef separator = ".") {
-    if (trailingSeparator)
-      *trailingSeparator = false;
-    std::string result = name();
-    size_t members = 0;
+  // A declaration path of decoded identifiers. With `turbofish`, a trailing
+  // `::<` ends the path and is reported rather than read as a segment.
+  syntax::Path path(bool *turbofish = nullptr) {
+    size_t start = token().offset;
+    syntax::Path result;
+    if (turbofish)
+      *turbofish = false;
+    result.segments.push_back(name());
     while (eat("::")) {
-      if (trailingSeparator && token().is("<")) {
-        *trailingSeparator = true;
+      if (turbofish && token().is("<")) {
+        *turbofish = true;
         break;
       }
-      if (++members > 32768) {
+      // The root is not a member; members share the type-path cap.
+      if (result.segments.size() > 32768) {
         fail("source-limit", "path exceeds 32768 members");
         break;
       }
-      if (qualified)
-        *qualified = true;
-      result += separator.str() + name();
+      result.segments.push_back(name());
     }
+    return record(std::move(result), start);
+  }
+  syntax::Reference reference(bool *turbofish = nullptr) {
+    syntax::Reference result;
+    result.path = path(turbofish);
+    result.location = result.path.location;
     return result;
   }
   template <typename T> T record(T value, size_t offset) {
@@ -183,17 +196,18 @@ class Parser {
       result.arguments = list("<", ">", [&] { return staticTerm(depth + 1); });
     return result;
   }
-  source::Names staticTerms(std::vector<syntax::StaticTerm> &terms) {
+  syntax::StaticTerms staticTerms() {
+    return list("<", ">", [&] { return staticTerm(); });
+  }
+  syntax::StaticAssignments staticAssignments() {
     return list("<", ">", [&] {
-      terms.push_back(staticTerm());
-      return termSpelling(terms.back());
+      auto key = name();
+      expect("=");
+      return std::make_pair(std::move(key), staticTerm());
     });
   }
-  source::Names atoms(std::vector<syntax::Atom> &out) {
-    return list("(", ")", [&] {
-      out.push_back(atom());
-      return out.back().value;
-    });
+  std::vector<syntax::Atom> atoms() {
+    return list("(", ")", [&] { return atom(); });
   }
   syntax::Type type(unsigned depth = 0) {
     size_t start = token().offset;
@@ -225,9 +239,11 @@ class Parser {
       }
       return record(std::move(result), start);
     }
-    result.quoted = token().kind == TokenKind::String;
-    result.natural = token().kind == TokenKind::Number;
-    result.name = result.natural ? number() : name();
+    result.kind = token().kind == TokenKind::String ? syntax::Atom::Kind::String
+                  : token().kind == TokenKind::Number
+                      ? syntax::Atom::Kind::Number
+                      : syntax::Atom::Kind::Name;
+    result.name = result.natural() ? number() : label();
     if (token().is("<"))
       result.arguments = list("<", ">", [&] { return type(depth + 1); });
     while (eat("::")) {
@@ -239,14 +255,41 @@ class Parser {
       result.arguments = list("<", ">", [&] { return type(depth + 1); });
     return record(std::move(result), start);
   }
+  // A reference-only slot: a value path with field, product or literal index
+  // selections, parsed by the shared postfix grammar. It performs no
+  // computation; each context's owner decides which roots it permits.
+  syntax::Place place() {
+    size_t start = token().offset;
+    syntax::Expression root;
+    root.reference = reference();
+    auto value = postfix(record(std::move(root), start), 0);
+    auto place = syntax::placeCandidate(value);
+    if (!place || token().is("(")) {
+      fail("source-reference",
+           "this context requires a value reference without computation");
+      return {};
+    }
+    return *place;
+  }
+  syntax::Places places() {
+    return list("(", ")", [&] { return place(); });
+  }
   source::Names names() {
     return list("(", ")", [&] { return name(); });
   }
-  source::Assignments pairs(bool numeric = false, bool statics = false) {
+  syntax::PlaceAssignments placePairs() {
     return list("(", ")", [&] {
       auto key = name();
       expect("=");
-      auto value = numeric ? number() : statics ? path() : name();
+      return std::make_pair(std::move(key), place());
+    });
+  }
+  // Identifier keys bound to identifiers, or to exact labels when `labels`.
+  source::Assignments pairs(bool labels = false) {
+    return list("(", ")", [&] {
+      auto key = name();
+      expect("=");
+      auto value = labels ? label() : name();
       return std::make_pair(std::move(key), std::move(value));
     });
   }
@@ -255,7 +298,7 @@ class Parser {
     anonymousSites.push_back(anonymous);
     if (anonymous)
       return {};
-    auto result = name();
+    auto result = label();
     expect("]");
     explicitSites.insert(result);
     return result;
@@ -267,8 +310,8 @@ class Parser {
       for (auto &instruction : body) {
         if (!std::holds_alternative<syntax::Finish>(instruction.value) &&
             !std::holds_alternative<syntax::Exit>(instruction.value) &&
-            !std::holds_alternative<source::Return>(instruction.value) &&
-            !std::holds_alternative<source::Yield>(instruction.value)) {
+            !std::holds_alternative<syntax::Return>(instruction.value) &&
+            !std::holds_alternative<syntax::Yield>(instruction.value)) {
           if (anonymousSites[index++]) {
             do {
               instruction.site = "__site_" + std::to_string(next++);
@@ -330,19 +373,21 @@ class Parser {
     });
   }
   std::vector<syntax::Type> results() { return {type()}; }
-  source::Names values() {
+  syntax::Places values() {
     if (token().is(";"))
       return {};
-    return token().is("(") ? names() : source::Names{name()};
+    return token().is("(") ? places() : syntax::Places{place()};
   }
   // Operators have a fixed table: unary minus binds tightest, then `*`, then
   // `+` and `-`; binary operators associate to the left.
-  syntax::Expression expression(unsigned depth = 0) { return binary(depth, 0); }
-  syntax::Expression binary(unsigned depth, unsigned level) {
+  syntax::Expression expression(unsigned depth = 0, bool allowRecord = true) {
+    return binary(depth, 0, allowRecord);
+  }
+  syntax::Expression binary(unsigned depth, unsigned level, bool allowRecord) {
     if (level == 2)
-      return unary(depth);
+      return unary(depth, allowRecord);
     size_t start = token().offset;
-    auto result = binary(depth, level + 1);
+    auto result = binary(depth, level + 1, allowRecord);
     while (!failed() && (level == 0 ? token().is("+") || token().is("-")
                                     : (token().is("*") || token().is("/") ||
                                        token().is("%")))) {
@@ -355,14 +400,14 @@ class Parser {
       operation.name = token().spelling.str();
       advance();
       operation.operands.push_back(std::move(result));
-      operation.operands.push_back(binary(depth, level + 1));
+      operation.operands.push_back(binary(depth, level + 1, allowRecord));
       result = record(std::move(operation), start);
     }
     return result;
   }
-  syntax::Expression unary(unsigned depth) {
+  syntax::Expression unary(unsigned depth, bool allowRecord) {
     if (!token().is("-"))
-      return primary(depth);
+      return primary(depth, allowRecord);
     size_t start = token().offset;
     if (depth > 64) {
       fail("source-depth", "expression nesting exceeds 64");
@@ -372,10 +417,10 @@ class Parser {
     operation.kind = syntax::Expression::Kind::Operator;
     operation.name = "-";
     advance();
-    operation.operands.push_back(unary(depth + 1));
+    operation.operands.push_back(unary(depth + 1, allowRecord));
     return record(std::move(operation), start);
   }
-  syntax::Expression primary(unsigned depth) {
+  syntax::Expression primary(unsigned depth, bool allowRecord) {
     using Kind = syntax::Expression::Kind;
     size_t start = token().offset;
     syntax::Expression result;
@@ -383,14 +428,12 @@ class Parser {
       fail("source-depth", "expression nesting exceeds 64");
       return result;
     }
-    if ((token().is("map") || token().is("fold")) && !nextToken().is("(")) {
+    if (token().is("map") || token().is("fold")) {
       bool fold = eat("fold");
       if (!fold)
         expect("map");
       result.kind = fold ? Kind::Fold : Kind::Map;
       result.traversal = std::make_shared<syntax::LexicalTraversal>();
-      bool allowRecord = recordLiteral;
-      recordLiteral = true; // The following pipe delimits the operand.
       result.operands.push_back(expression(depth + 1));
       if (fold) {
         expect("with");
@@ -404,13 +447,9 @@ class Parser {
       result.traversal->element = name();
       expect("|");
       expect("{");
-      recordLiteral = true;
       result.traversal->body = body(true, depth + 1);
-      recordLiteral = allowRecord;
     } else if (token().is("(")) {
       advance();
-      bool allowRecord = recordLiteral;
-      recordLiteral = true;
       if (eat(")")) {
         result.kind = Kind::Product;
       } else {
@@ -431,7 +470,6 @@ class Parser {
         } else
           expect(")");
       }
-      recordLiteral = allowRecord;
     } else if (token().kind == TokenKind::Number) {
       result.kind = Kind::Index;
       result.name = number();
@@ -442,34 +480,31 @@ class Parser {
       result.kind = Kind::Vector;
       result.operands = list("[", "]", [&] { return expression(depth + 1); });
     } else {
+      if (token().kind != TokenKind::Name &&
+          token().kind != TokenKind::RawIdentifier &&
+          token().kind != TokenKind::String) {
+        fail("source-syntax", "expected an expression");
+        return result;
+      }
       bool trailing = false;
-      bool quoted = token().kind == TokenKind::String;
-      result.quoted = quoted;
-      result.name = path(&result.qualified, &trailing);
+      result.reference = reference(&trailing);
       if (trailing)
-        result.staticArguments = staticTerms(result.staticTerms);
-      if (recordLiteral && token().is("{") && !result.qualified && !quoted) {
+        result.staticArguments = staticTerms();
+      if (allowRecord && token().is("{")) {
         result.kind = Kind::Struct;
         result.operands = list("{", "}", [&] {
+          size_t fieldStart = token().offset;
           auto field = name();
           result.fields.push_back(field);
           if (eat(":"))
             return expression(depth + 1);
+          // Shorthand reads the lexical value with the field's name.
           syntax::Expression value;
-          value.name = field;
-          value.location = record(syntax::Expression{}, start).location;
+          value.reference.path.segments = {field};
+          value = record(std::move(value), fieldStart);
+          value.reference.location = value.reference.path.location =
+              value.location;
           return value;
-        });
-      } else if (token().is("(") && !result.qualified && !quoted &&
-                 (nextToken().kind == TokenKind::Name ||
-                  nextToken().kind == TokenKind::String) &&
-                 nextToken(2).is("=")) {
-        // A keyed list constructs a struct; a call's operands are never keyed.
-        result.kind = Kind::Struct;
-        result.operands = list("(", ")", [&] {
-          result.fields.push_back(name());
-          expect("=");
-          return expression(depth + 1);
         });
       } else if (token().is("(")) {
         result.kind = Kind::Call;
@@ -484,39 +519,49 @@ class Parser {
         if (llvm::all_of(result.argumentNames,
                          [](const auto &s) { return s.empty(); }))
           result.argumentNames.clear();
-        if (!quoted && !result.qualified && !result.staticArguments &&
-            StringRef(result.name).ends_with(".len") &&
-            result.operands.empty()) {
-          result.kind = Kind::Length;
-          syntax::Expression collection;
-          collection.name = StringRef(result.name).drop_back(4).str();
-          collection.location = record(syntax::Expression{}, start).location;
-          result.operands.push_back(std::move(collection));
-          result.name.clear();
-        }
-        if (eat("attributes")) {
-          if (result.kind != Kind::Call)
-            fail("source-expression",
-                 "only an operation call accepts attributes");
-          result.attributes = atoms(result.attributeAtoms);
-        }
-      } else if (trailing || result.qualified)
-        fail("source-expression", "a qualified expression must be a call");
+        if (eat("attributes"))
+          result.attributes = atoms();
+      } else if (trailing)
+        fail("source-expression",
+             "static actuals require a call or constructor");
     }
-    unsigned suffixDepth = depth;
-    while (!failed() && eat("[")) {
-      if (++suffixDepth > 64) {
+    return postfix(record(std::move(result), start), depth);
+  }
+  syntax::Expression postfix(syntax::Expression result, unsigned depth) {
+    using Kind = syntax::Expression::Kind;
+    size_t start = result.location->offset;
+    while (!failed() && (token().is("[") || token().is("."))) {
+      if (++depth > 64) {
         fail("source-depth", "expression nesting exceeds 64");
         break;
       }
-      syntax::Expression indexed;
-      indexed.kind = Kind::Get;
-      indexed.operands.push_back(std::move(result));
-      indexed.operands.push_back(expression(depth + 1));
-      expect("]");
-      result = std::move(indexed);
+      syntax::Expression projected;
+      projected.operands.push_back(std::move(result));
+      if (eat("[")) {
+        projected.kind = Kind::Get;
+        projected.operands.push_back(expression(depth + 1));
+        expect("]");
+      } else {
+        expect(".");
+        if (token().kind == TokenKind::Number) {
+          projected.kind = Kind::TupleField;
+          projected.name = number();
+        } else {
+          projected.kind = Kind::Field;
+          projected.name = name();
+        }
+        if (eat("(")) {
+          if (projected.kind != Kind::Field || projected.name != "len")
+            fail("source-receiver-call",
+                 "only the collection query .len() is supported");
+          expect(")");
+          projected.kind = Kind::Length;
+          projected.name.clear();
+        }
+      }
+      result = record(std::move(projected), start);
     }
-    return record(std::move(result), start);
+    return result;
   }
   syntax::Instruction localInstruction(unsigned depth) {
     size_t start = token().offset;
@@ -525,10 +570,10 @@ class Parser {
       result.site = site();
       result.explicitSite = !anonymousSites.back();
       syntax::Match match;
-      match.input = name();
+      match.input = place();
       if (eat("capture")) {
         match.explicitCaptures = true;
-        match.captures = names();
+        match.captures = places();
       }
       expect("->");
       match.outputs = names();
@@ -552,13 +597,11 @@ class Parser {
       result.site = site();
       result.explicitSite = !anonymousSites.back();
       syntax::Conditional branch;
-      recordLiteral = false;
-      branch.condition = expression();
-      recordLiteral = true;
+      branch.condition = expression(0, false);
       if (eat("capture")) {
         branch.explicitCaptures = true;
         branch.explicitRegion = true;
-        branch.captures = names();
+        branch.captures = places();
         expect("->");
         branch.outputs = names();
       } else if (eat("->")) {
@@ -579,21 +622,19 @@ class Parser {
       syntax::For loop;
       loop.induction = name();
       expect("in");
-      recordLiteral = false;
-      loop.lower = expression();
-      recordLiteral = true;
+      loop.lower = expression(0, false);
       if (token().is("carry")) {
         syntax::ArrayTraversal traversal;
         traversal.element = loop.induction;
-        if (loop.lower.kind != syntax::Expression::Kind::Name ||
-            loop.lower.quoted)
-          fail("library-source-traversal", "traversal requires a named array");
-        traversal.input = loop.lower.name;
+        auto input = syntax::placeCandidate(loop.lower);
+        if (!input)
+          fail("library-source-traversal", "traversal requires an array place");
+        traversal.input = input.value_or(syntax::Place{});
         expect("carry");
-        traversal.carried = pairs();
+        traversal.carried = placePairs();
         if (eat("capture")) {
           traversal.explicitCaptures = true;
-          traversal.captures = names();
+          traversal.captures = places();
         }
         expect("->");
         traversal.outputs = names();
@@ -603,15 +644,13 @@ class Parser {
         return record(std::move(result), start);
       }
       expect("..");
-      recordLiteral = false;
-      loop.upper = expression();
-      recordLiteral = true;
+      loop.upper = expression(0, false);
       if (eat("carry")) {
         loop.explicitRegion = true;
-        loop.carried = pairs();
+        loop.carried = placePairs();
         if (eat("capture")) {
           loop.explicitCaptures = true;
-          loop.captures = names();
+          loop.captures = places();
         }
         expect("->");
         loop.outputs = names();
@@ -631,15 +670,17 @@ class Parser {
           binding.annotation = results();
         expect("=");
         binding.expression = expression();
-      } else if ((token().kind == TokenKind::Name ||
-                  token().kind == TokenKind::String) &&
-                 nextToken().is("=")) {
-        binding.assignment = true;
-        binding.outputs = {name()};
-        expect("=");
+      } else {
         binding.expression = expression();
-      } else
-        binding.expression = expression();
+        if (eat("=")) {
+          auto place = syntax::placeCandidate(binding.expression);
+          if (!place)
+            fail("source-reference",
+                 "assignment requires an existing scalar place");
+          binding.assignment = place.value_or(syntax::Place{});
+          binding.expression = expression();
+        }
+      }
       if (token().is("}") && binding.outputs.empty() && !binding.assignment) {
         anonymousSites.pop_back();
         result.site.clear();
@@ -656,31 +697,22 @@ class Parser {
           (expr.kind == syntax::Expression::Kind::Call || isOperator) &&
           !binding.mutableBinding && !binding.assignment;
       for (const auto &operand : expr.operands)
-        flatCall &= operand.kind == syntax::Expression::Kind::Name;
+        flatCall &= syntax::placeCandidate(operand, false).has_value();
       if (flatCall) {
         syntax::Call call;
         call.location = expr.location;
-        call.callee = expr.name;
-        call.qualified = expr.qualified;
-        call.quoted = expr.quoted;
-        call.staticTerms = expr.staticTerms;
-        call.attributeAtoms = expr.attributeAtoms;
+        if (isOperator)
+          call.operatorSymbol = expr.name;
+        else
+          call.callee = expr.reference;
         call.staticArguments = expr.staticArguments;
         call.attributes = expr.attributes;
         call.argumentNames = expr.argumentNames;
-        call.isOperator = isOperator;
         call.outputs = binding.outputs;
         call.destructure = binding.destructure;
         call.annotation = binding.annotation;
-        for (const auto &operand : expr.operands) {
-          call.inputs.push_back(operand.name);
-          syntax::Atom atom;
-          atom.kind = operand.quoted ? syntax::Atom::Kind::String
-                                     : syntax::Atom::Kind::Name;
-          atom.value = operand.name;
-          atom.location = operand.location;
-          call.inputAtoms.push_back(std::move(atom));
-        }
+        for (const auto &operand : expr.operands)
+          call.inputs.push_back(*syntax::placeCandidate(operand, false));
         result.value = std::move(call);
       } else {
         binding.location = expr.location;
@@ -699,15 +731,14 @@ class Parser {
         result.annotation = results();
       expect("=");
     }
-    bool trailingSeparator = false;
-    result.quoted = token().kind == TokenKind::String;
-    result.callee = path(&result.qualified, &trailingSeparator);
+    bool turbofish = false;
+    result.callee = reference(&turbofish);
     // path consumes the turbofish separator, but never accepts bare <...>.
-    if (trailingSeparator)
-      result.staticArguments = staticTerms(result.staticTerms);
-    result.inputs = atoms(result.inputAtoms);
+    if (turbofish)
+      result.staticArguments = staticTerms();
+    result.inputs = places();
     if (eat("attributes"))
-      result.attributes = atoms(result.attributeAtoms);
+      result.attributes = atoms();
     return record(std::move(result), start);
   }
   std::vector<syntax::OwnedResult> ownedResults() {
@@ -721,27 +752,16 @@ class Parser {
       return syntax::OwnedResult{std::move(role), type(), std::move(port)};
     });
   }
-  std::vector<source::Dependency> dependencies(syntax::Protocol &owner) {
+  std::vector<syntax::Dependency> dependencies() {
     return list("(", ")", [&] {
       size_t start = token().offset;
-      source::Dependency result;
+      syntax::Dependency result;
       result.name = name();
       expect(":");
-      result.protocol = name();
-      if (quotedName)
-        owner.quotedDependencies.insert(result.name);
-      if (eat("::")) {
-        syntax::Protocol::DependencyArguments args;
-        args.arguments = list("<", ">", [&] {
-          auto key = name();
-          expect("=");
-          args.terms.push_back(staticTerm());
-          return std::make_pair(key, termSpelling(args.terms.back()));
-        });
-        if (!owner.dependencyArguments.emplace(result.name, std::move(args))
-                 .second)
-          fail("source-duplicate", "duplicate specialised dependency");
-      }
+      bool turbofish = false;
+      result.protocol = reference(&turbofish);
+      if (turbofish)
+        result.arguments = staticAssignments();
       result.agreements = pairs();
       return record(std::move(result), start);
     });
@@ -770,9 +790,16 @@ class Parser {
     if (!local && eat("finish")) {
       syntax::Finish finish;
       finish.values = list("{", "}", [&] {
+        size_t portStart = token().offset;
         auto port = name();
-        auto value = eat(":") ? name() : port;
-        return std::make_pair(port, value);
+        if (eat(":"))
+          return std::make_pair(port, place());
+        // Shorthand finishes the port from the lexical value of its name.
+        syntax::Place value;
+        value.root.path.segments = {port};
+        value = record(std::move(value), portStart);
+        value.root.location = value.root.path.location = value.location;
+        return std::make_pair(port, std::move(value));
       });
       expect(";");
       result.value = std::move(finish);
@@ -789,9 +816,9 @@ class Parser {
           value = expression();
         result.value = syntax::Exit{std::move(value)};
       } else if (isReturn)
-        result.value = source::Return{values()};
+        result.value = syntax::Return{values()};
       else
-        result.value = source::Yield{values()};
+        result.value = syntax::Yield{values()};
       expect(";");
       return record(std::move(result), start);
     }
@@ -816,12 +843,12 @@ class Parser {
       value.role = std::move(role);
       result.value = std::move(value);
     } else if (tag == "message") {
-      source::Message message;
-      message.schema = name();
+      syntax::Message message;
+      message.schema = label();
       expect(":");
       message.sender = name();
       expect("(");
-      message.input = name();
+      message.input = place();
       expect(")");
       expect("->");
       message.receiver = name();
@@ -832,7 +859,7 @@ class Parser {
     } else if (tag == "invoke") {
       syntax::Invocation call;
       call.callee = name();
-      call.inputs = names();
+      call.inputs = places();
       expect("->");
       if (token().is("{")) {
         call.outputs = list("{", "}", [&] {
@@ -845,26 +872,20 @@ class Parser {
       result.value = std::move(call);
     } else if (tag == "stop") {
       source::Stop stop;
-      auto first = name();
-      if (token().is(";"))
-        stop.reason = std::move(first);
-      else {
-        stop.role = std::move(first);
-        stop.reason = name();
-      }
+      // `stop reason;` or `stop Role reason;`: a role is an identifier and a
+      // reason an exact label.
+      if (!nextToken().is(";"))
+        stop.role = name();
+      stop.reason = label();
       result.value = std::move(stop);
     } else if (tag == "loop") {
       syntax::Loop loop;
-      loop.countAtom = atom();
-      loop.count.kind = loop.countAtom->kind == syntax::Atom::Kind::Number
-                            ? source::LoopCount::Kind::Constant
-                            : source::LoopCount::Kind::Parameter;
-      loop.count.value = loop.countAtom->value;
+      loop.count = atom();
       expect("carry");
-      loop.carried = pairs();
+      loop.carried = placePairs();
       if (eat("capture")) {
         loop.explicitCaptures = true;
-        loop.captures = names();
+        loop.captures = places();
       }
       expect("->");
       loop.outputs = names();
@@ -889,6 +910,10 @@ class Parser {
       return result;
     }
     while (!failed() && !eat("}")) {
+      if (token().kind == TokenKind::End) {
+        fail("source-syntax", "expected '}' before end of file");
+        break;
+      }
       result.push_back(instruction(local, depth));
       if (result.size() > 32768)
         fail("source-limit", "body exceeds 32768 instructions");
@@ -907,7 +932,7 @@ class Parser {
         parameter.sort = name();
       else {
         do {
-          parameter.bounds.push_back(path(nullptr, nullptr, "::"));
+          parameter.bounds.push_back(reference());
         } while (eat("+"));
       }
       return record(std::move(parameter), offset);
@@ -920,86 +945,66 @@ class Parser {
     if (token().is("<"))
       result.parameters = staticParameters();
     auto constructors = [&] {
-      return list("(", ")", [&] {
-        auto constructor = name();
-        if (quotedName)
-          result.quotedConstructors.insert(constructor);
-        return constructor;
-      });
+      return list("(", ")", [&] { return reference(); });
     };
     if (eat("constructors")) {
       result.checked = true;
       result.constructors = constructors();
     }
-    bool braces = token().is("{");
-    if (braces)
-      result.fields = list("{", "}", [&] {
-        auto field = name();
-        expect(":");
-        return syntax::Parameter{std::move(field), type()};
-      });
-    else
-      result.fields = arguments();
+    result.fields = list("{", "}", [&] {
+      auto field = name();
+      expect(":");
+      return syntax::Parameter{std::move(field), type()};
+    });
     if (checked) {
       if (!eat("constructors"))
         fail("source-syntax", "a checked struct names its constructors");
       result.constructors = constructors();
     }
-    if (braces)
-      eat(";");
-    else
-      expect(";");
+    eat(";");
     module.structs.push_back(record(std::move(result), start));
   }
-  std::vector<source::Requirement> requirementList(
-      std::vector<std::vector<syntax::StaticTerm>> *metadata = nullptr) {
+  // A requirement item: `Predicate(terms)`, or `term == term`. The leading
+  // static term of a predicate item is its declaration path.
+  syntax::Requirement requirement(syntax::StaticTerm subject, size_t offset) {
+    syntax::Requirement result;
+    if (eat("==")) {
+      result.arguments = {std::move(subject), staticTerm()};
+      return record(std::move(result), offset);
+    }
+    if (subject.root.kind != syntax::Atom::Kind::Name ||
+        !subject.arguments.empty() || !token().is("(")) {
+      fail("source-syntax",
+           "a requirement is Predicate(terms) or term == term");
+      return result;
+    }
+    syntax::Reference predicate;
+    predicate.location = predicate.path.location = subject.root.location;
+    predicate.path.segments.push_back(subject.root.value);
+    llvm::append_range(predicate.path.segments, subject.members);
+    result.predicate = std::move(predicate);
+    result.arguments = list("(", ")", [&] { return staticTerm(); });
+    return record(std::move(result), offset);
+  }
+  std::vector<syntax::Requirement> requirementList() {
     return list("(", ")", [&] {
       size_t offset = token().offset;
-      source::Requirement requirement;
-      requirement.predicate = path(nullptr, nullptr, "::");
-      std::vector<syntax::StaticTerm> terms;
-      requirement.arguments = list("(", ")", [&] {
-        terms.push_back(staticTerm());
-        return termSpelling(terms.back());
-      });
-      if (metadata)
-        metadata->push_back(std::move(terms));
-      return record(std::move(requirement), offset);
+      return requirement(staticTerm(), offset);
     });
   }
-  void
-  whereRequirements(std::vector<source::Requirement> &requirements,
-                    std::vector<std::vector<syntax::StaticTerm>> &metadata) {
+  void whereRequirements(std::vector<syntax::Requirement> &requirements) {
     do {
       size_t offset = token().offset;
       auto subject = staticTerm();
-      if (eat("==")) {
-        auto right = staticTerm();
-        source::Requirement r;
-        r.predicate = "=";
-        r.arguments = {termSpelling(subject), termSpelling(right)};
-        requirements.push_back(record(std::move(r), offset));
-        metadata.push_back({subject, right});
-      } else if (token().is("(")) {
-        source::Requirement r;
-        r.predicate = subject.root.value;
-        for (const auto &member : subject.members)
-          r.predicate += "::" + member;
-        std::vector<syntax::StaticTerm> terms;
-        r.arguments = list("(", ")", [&] {
-          terms.push_back(staticTerm());
-          return termSpelling(terms.back());
-        });
-        requirements.push_back(record(std::move(r), offset));
-        metadata.push_back(std::move(terms));
-      } else {
+      if (token().is("==") || token().is("("))
+        requirements.push_back(requirement(std::move(subject), offset));
+      else {
         expect(":");
         do {
-          source::Requirement r;
-          r.predicate = path(nullptr, nullptr, "::");
-          r.arguments = {termSpelling(subject)};
+          syntax::Requirement r;
+          r.predicate = reference();
+          r.arguments = {subject};
           requirements.push_back(record(std::move(r), offset));
-          metadata.push_back({subject});
         } while (eat("+"));
       }
       if (requirements.size() > 32768)
@@ -1023,23 +1028,22 @@ class Parser {
     expect("->");
     result.results = results();
     if (eat("where"))
-      whereRequirements(result.requirements, result.requirementTerms);
+      whereRequirements(result.requirements);
     if (eat("requires")) {
-      auto requirements = requirementList(&result.requirementTerms);
-      result.requirements.insert(result.requirements.end(),
-                                 requirements.begin(), requirements.end());
+      llvm::append_range(result.requirements, requirementList());
       if (result.requirements.size() > 32768)
         fail("source-limit", "requirements exceed 32768 entries");
     }
     if (eat("effects"))
-      result.effects = names();
+      result.effects = list(
+          "(", ")", [&] { return token().is("local") ? keyword() : label(); });
     if (!result.generic)
       result.origin = source::LogicalOrigin{result.name, {}};
     if (eat("origin")) {
       result.explicitOrigin = true;
       source::LogicalOrigin origin;
-      origin.definition = name();
-      origin.arguments = pairs(false, true);
+      origin.definition = label();
+      origin.arguments = pairs(true);
       result.origin = std::move(origin);
     }
     if (signature)
@@ -1059,12 +1063,9 @@ class Parser {
     if (result.generic)
       result.staticParameters = staticParameters();
     if (eat("where"))
-      whereRequirements(result.requirements, result.requirementTerms);
-    if (eat("requires")) {
-      auto extra = requirementList(&result.requirementTerms);
-      result.requirements.insert(result.requirements.end(), extra.begin(),
-                                 extra.end());
-    }
+      whereRequirements(result.requirements);
+    if (eat("requires"))
+      llvm::append_range(result.requirements, requirementList());
     expect("{");
     std::set<std::string> headers;
     while (!failed()) {
@@ -1086,7 +1087,7 @@ class Parser {
       else if (key == "outputs")
         result.results = ownedResults();
       else
-        result.dependencies = dependencies(result);
+        result.dependencies = dependencies();
       expect(";");
     }
     if (!headers.count("roles"))
@@ -1098,13 +1099,11 @@ class Parser {
       result.body = body(false);
     return record(std::move(result), start);
   }
-  source::Instance instance(size_t start, syntax::Module &module) {
-    source::Instance result;
+  syntax::Instance instance(size_t start) {
+    syntax::Instance result;
     result.name = name();
     expect(":");
-    auto protocol = staticTerm();
-    result.protocol = termSpelling(protocol);
-    module.instanceProtocolTerms.emplace(result.name, std::move(protocol));
+    result.protocol = reference();
     expect("{");
     std::set<std::string> headers;
     while (!failed() && !eat("}")) {
@@ -1112,46 +1111,36 @@ class Parser {
       if (!headers.insert(key).second)
         fail("source-duplicate", "duplicate instance clause '" + key + "'");
       if (key == "parameters") {
-        auto &metadata = module.instanceParameterAtoms[result.name];
         result.parameters = list("(", ")", [&] {
           auto key = name();
           expect("=");
-          source::ParameterBinding value;
+          syntax::InstanceParameter value;
           if (eat("ingress")) {
             expect("(");
-            metadata.push_back(atom());
-            source::FamilyIngress ingress;
-            ingress.bound = metadata.back().value;
+            value.value = atom();
             expect(",");
+            value.ingress.emplace();
             do {
-              auto role = name();
+              syntax::IngressSelector selector;
+              selector.role = name();
               expect("=");
-              auto function = name();
-              if (quotedName)
-                module.quotedSelectors.insert({result.name, key, role});
-              auto arguments = names();
-              ingress.selectors.push_back(
-                  {role, function, std::move(arguments)});
+              selector.function = reference();
+              selector.arguments = names();
+              value.ingress->push_back(std::move(selector));
             } while (eat(","));
             expect(")");
-            value = std::move(ingress);
-          } else {
-            metadata.push_back(atom());
-            value = metadata.back().value;
-          }
+          } else
+            value.value = atom();
           return std::make_pair(key, std::move(value));
         });
       } else if (key == "dependencies")
         result.dependencies = list("(", ")", [&] {
           auto alias = name();
           expect("=");
-          auto target = name();
-          if (quotedName)
-            module.quotedInstanceDependencies.insert({result.name, alias});
-          return std::make_pair(std::move(alias), std::move(target));
+          return std::make_pair(std::move(alias), reference());
         });
       else if (key == "roles")
-        result.roles = pairs();
+        result.roles = pairs(true);
       else
         fail("source-syntax", "expected parameters, dependencies, or roles");
       expect(";");
@@ -1236,8 +1225,8 @@ class Parser {
         else
           fail("library-source-facet",
                "facet requires required or optional status");
-        facet.owner = name();
-        facet.name = name();
+        facet.owner = label();
+        facet.name = label();
         expect(";");
         result.facets.push_back(record(std::move(facet), start));
       } else if (tag == "local") {
@@ -1251,7 +1240,7 @@ class Parser {
   }
   syntax::LibraryIdentity libraryIdentity(size_t start) {
     syntax::LibraryIdentity identity;
-    auto fields = pairs();
+    auto fields = pairs(true);
     std::set<std::string> seen;
     for (const auto &[key, value] : fields) {
       if (!seen.insert(key).second)
@@ -1280,7 +1269,7 @@ class Parser {
       fail("source-depth", "import path exceeds 64 levels");
       return;
     }
-    prefix.push_back(keyword());
+    prefix.push_back(name());
     while (eat("::")) {
       if (eat("{")) {
         do {
@@ -1291,23 +1280,101 @@ class Parser {
         } while (!failed() && !eat("}"));
         return;
       }
-      prefix.push_back(keyword());
+      prefix.push_back(name());
       if (prefix.size() > 64) {
         fail("source-depth", "import path exceeds 64 levels");
         return;
       }
     }
     syntax::Use item;
-    item.name = eat("as") ? keyword() : prefix.back();
+    item.name = eat("as") ? name() : prefix.back();
     item.path = std::move(prefix);
     item.exported = exported;
     module.uses.push_back(record(std::move(item), start));
   }
-  syntax::Module module(bool carrier = false) {
+  // Discard one failed declaration without stripping the next declaration's
+  // prefixes. Prefix lookahead is used only on failure and stops at recovery
+  // delimiters, so repeated unclosed attributes take linear work.
+  void recoverDeclaration(size_t start) {
+    size_t head = start;
+    auto skipCommentsAtHead = [&] {
+      while (tokens[head].kind == TokenKind::Comment)
+        ++head;
+    };
+    for (;;) {
+      skipCommentsAtHead();
+      if (tokens[head].is("pub")) {
+        ++head;
+        continue;
+      }
+      if (!tokens[head].is("#"))
+        break;
+      ++head;
+      skipCommentsAtHead();
+      if (!tokens[head].is("["))
+        break;
+      unsigned depth = 0;
+      do {
+        if (tokens[head].is("["))
+          ++depth;
+        else if (tokens[head].is("]"))
+          --depth;
+        ++head;
+      } while (depth && tokens[head].kind != TokenKind::End &&
+               !tokens[head].is(";") && !tokens[head].is("{") &&
+               !tokens[head].is("}"));
+      if (depth)
+        break;
+    }
+    // Contextual declaration words are legal names. Neither the failed
+    // declaration's own keyword nor its name is a new synchronization point.
+    if (tokens[head].kind == TokenKind::Name) {
+      bool checked = tokens[head].is("checked");
+      ++head;
+      skipCommentsAtHead();
+      if (checked && tokens[head].is("struct")) {
+        ++head;
+        skipCommentsAtHead();
+      }
+      if (tokens[head].kind == TokenKind::Name ||
+          tokens[head].kind == TokenKind::RawIdentifier)
+        ++head;
+    }
+    size_t resume = std::max(head, cursor);
+    cursor = start;
+    unsigned braces = 0, parentheses = 0, brackets = 0;
+    while (token().kind != TokenKind::End) {
+      if (token().is("}") && braces == 0) {
+        advance();
+        break;
+      }
+      if (cursor > start && cursor >= resume && braces == 0 &&
+          parentheses == 0 && brackets == 0 &&
+          (token().is("#") || (token().kind == TokenKind::Name &&
+                               grammar::declarationStart(token().value()))))
+        break;
+      bool done =
+          (token().is(";") && braces == 0) || (token().is("}") && braces == 1);
+      if (token().is("("))
+        ++parentheses;
+      if (token().is(")") && parentheses)
+        --parentheses;
+      if (token().is("["))
+        ++brackets;
+      if (token().is("]") && brackets)
+        --brackets;
+      if (token().is("{"))
+        ++braces;
+      if (token().is("}"))
+        --braces;
+      advance();
+      if (done)
+        break;
+    }
+  }
+  syntax::Module module() {
     syntax::Module result;
-    result.carrier = carrier;
-    expect("{");
-    while (!failed() && !eat("}")) {
+    while (!failed() && token().kind != TokenKind::End) {
       size_t start = token().offset;
       syntax::Module declaration;
       size_t declarationCursor = cursor;
@@ -1328,29 +1395,24 @@ class Parser {
       }
       bool exported = eat("pub");
       auto tag = keyword();
-      if (operatorHook && (carrier || tag != "fn"))
+      if (exported &&
+          (tag == "library" || tag == "dependency" || tag == "entry"))
+        fail("source-visibility", "this declaration cannot be exported");
+      if (operatorHook && tag != "fn")
         fail("source-operator-attribute",
              "operator attributes require an ordinary source function");
-      // This closed list cannot allocate authored-project generated symbols;
-      // it is what makes the carrier exception to reservedPrefix safe.
-      if (carrier && (exported || (tag != "fn" && tag != "bind" &&
-                                   tag != "configure" && tag != "protocol" &&
-                                   tag != "instance" && tag != "entry"))) {
-        fail("source-carrier-authoring",
-             "carrier modules contain only common-carrier declarations; "
-             "use an ordinary module for source authoring");
-      } else if (tag == "library") {
+      if (tag == "library") {
         auto identity = libraryIdentity(start);
         expect(";");
         declaration.libraryIdentities.push_back(std::move(identity));
       } else if (tag == "mod") {
         syntax::ModuleDeclaration child;
-        child.name = keyword();
+        child.name = name();
         expect(";");
         declaration.modules.push_back(record(std::move(child), start));
       } else if (tag == "dependency") {
         syntax::LibraryDependency dependency;
-        dependency.name = keyword();
+        dependency.name = name();
         expect("=");
         expect("library");
         dependency.identity = libraryIdentity(start);
@@ -1367,7 +1429,7 @@ class Parser {
         if (token().kind != TokenKind::String)
           fail("library-source-association",
                "captured association requires exact quoted subject bytes");
-        association.captured = name();
+        association.captured = exact();
         expect(";");
         if (association.captured.empty())
           fail("library-source-association",
@@ -1386,8 +1448,7 @@ class Parser {
         if (token().is("<"))
           component.parameters = staticParameters();
         expect(":");
-        component.interface = name();
-        component.quotedInterface = quotedName;
+        component.interface = reference();
         libraryMembers(component, true);
         declaration.libraryComponents.push_back(
             record(std::move(component), start));
@@ -1404,14 +1465,13 @@ class Parser {
         syntax::LibraryLink link;
         link.name = name();
         expect("=");
-        link.client = name();
-        link.quotedClient = quotedName;
+        link.client = reference();
         link.arguments = list("<", ">", [&] { return libraryTerm(); });
         expect(";");
         declaration.libraryLinks.push_back(record(std::move(link), start));
       } else if (tag == "const") {
         syntax::Constant constant;
-        constant.name = keyword();
+        constant.name = name();
         expect(":");
         expect("index");
         expect("=");
@@ -1422,10 +1482,10 @@ class Parser {
         source::OperationBinding binding;
         binding.name = name();
         expect("=");
-        binding.application.contract = path();
-        binding.application.arguments = list("(", ")", [&] { return path(); });
+        binding.application.contract = exact();
+        binding.application.arguments = list("(", ")", [&] { return exact(); });
         if (eat("using"))
-          binding.application.implementation = name();
+          binding.application.implementation = label();
         expect(";");
         declaration.bindings.push_back(record(std::move(binding), start));
       } else if (tag == "relation") {
@@ -1437,47 +1497,46 @@ class Parser {
         if (token().kind != TokenKind::String)
           fail("source-syntax",
                "relation asset requires a quoted relative path");
-        relation.path = name();
+        relation.path = exact();
         expect(")");
         expect(";");
         declaration.imports.push_back(record(std::move(relation), start));
       } else if (tag == "derive") {
-        source::RelationView view;
+        syntax::RelationView view;
         view.name = name();
         expect("=");
         view.kind = keyword();
         expect("(");
-        view.relation = name();
-        if (quotedName)
-          declaration.quotedRelations.insert(view.name);
+        view.relation = reference();
         expect(",");
         view.staging = keyword();
         if (eat(",")) {
-          auto height = atom();
-          declaration.relationViewHeights[view.name] = height;
-          if (height.kind == syntax::Atom::Kind::Number &&
-              StringRef(height.value).getAsInteger(10, view.height))
+          view.height = atom();
+          uint32_t height;
+          if (view.height->kind == syntax::Atom::Kind::Number &&
+              StringRef(view.height->value).getAsInteger(10, height))
             fail("relation-view-height", "expected a bounded trace height");
         }
         expect(")");
         expect(";");
         declaration.relationViews.push_back(record(std::move(view), start));
       } else if (tag == "configure") {
-        source::Configuration configuration;
+        syntax::Configuration configuration;
         configuration.name = name();
         expect("=");
-        configuration.base = name();
-        if (quotedName)
-          declaration.quotedBases.insert(configuration.name);
-        auto &terms = declaration.configurationTerms[configuration.name];
+        configuration.base = reference();
         configuration.arguments = list("(", ")", [&] {
           auto key = name();
           expect("=");
-          terms.push_back(staticTerm());
-          return std::make_pair(key, termSpelling(terms.back()));
+          return std::make_pair(std::move(key), staticTerm());
         });
+        // Implementation selections are exact installed identities.
         if (eat("using"))
-          configuration.implementations = pairs();
+          configuration.implementations = list("(", ")", [&] {
+            auto site = label();
+            expect("=");
+            return std::make_pair(std::move(site), label());
+          });
         expect(";");
         declaration.configurations.push_back(
             record(std::move(configuration), start));
@@ -1510,7 +1569,7 @@ class Parser {
         bundle.name = name();
         bundle.parameters = names();
         expect("=");
-        bundle.requirements = requirementList(&bundle.requirementTerms);
+        bundle.requirements = requirementList();
         expect(";");
         declaration.bundles.push_back(record(std::move(bundle), start));
       } else if (tag == "fn") {
@@ -1519,24 +1578,15 @@ class Parser {
       } else if (tag == "protocol")
         declaration.protocols.push_back(protocol(start));
       else if (tag == "instance")
-        declaration.instances.push_back(instance(start, declaration));
+        declaration.instances.push_back(instance(start));
       else if (tag == "entry") {
-        source::Entry entry;
+        syntax::Entry entry;
         entry.name = name();
         expect("=");
-        entry.instance = name();
-        if (quotedName)
-          declaration.quotedInstances.insert(entry.name);
-        if (eat("::")) {
-          auto &selection = declaration.entryArguments[entry.name];
-          selection.arguments = list("<", ">", [&] {
-            auto parameter = name();
-            expect("=");
-            selection.terms.push_back(staticTerm());
-            return std::make_pair(parameter,
-                                  termSpelling(selection.terms.back()));
-          });
-        }
+        bool turbofish = false;
+        entry.instance = reference(&turbofish);
+        if (turbofish)
+          entry.arguments = staticAssignments();
         expect(";");
         declaration.entries.push_back(record(std::move(entry), start));
       } else
@@ -1552,35 +1602,15 @@ class Parser {
         declaration = {};
         errorCode.clear();
         message.clear();
-        // Scan from the declaration start, respecting nested braces. Stop
-        // after its top-level semicolon or closing body brace.
-        cursor = declarationCursor;
-        unsigned braces = 0;
-        while (token().kind != TokenKind::End) {
-          if (token().is("}") && braces == 0)
-            break;
-          bool done = (token().is(";") && braces == 0) ||
-                      (token().is("}") && braces == 1);
-          if (token().is("{"))
-            ++braces;
-          if (token().is("}"))
-            --braces;
-          advance();
-          if (done)
-            break;
-        }
-        if (token().kind == TokenKind::End) {
-          fail("source-syntax", "expected '}'");
-          break;
-        }
+        recoverDeclaration(declarationCursor);
       }
+      if (failed())
+        break;
       auto append = [](auto &target, auto &items) {
         target.insert(target.end(), std::make_move_iterator(items.begin()),
                       std::make_move_iterator(items.end()));
       };
       if (exported && tag != "use") {
-        if (tag == "library" || tag == "dependency" || tag == "entry")
-          fail("source-visibility", "this declaration cannot be exported");
         auto publish = [&](const auto &items) {
           for (const auto &item : items)
             result.exports.push_back(item.name);
@@ -1617,8 +1647,6 @@ class Parser {
       append(result.protocols, declaration.protocols);
       append(result.instances, declaration.instances);
       append(result.entries, declaration.entries);
-      result.entryArguments.insert(declaration.entryArguments.begin(),
-                                   declaration.entryArguments.end());
       append(result.bindings, declaration.bindings);
       append(result.bundles, declaration.bundles);
       append(result.structs, declaration.structs);
@@ -1627,22 +1655,6 @@ class Parser {
       append(result.relations, declaration.relations);
       append(result.relationViews, declaration.relationViews);
       append(result.configurations, declaration.configurations);
-      result.instanceProtocolTerms.insert(
-          declaration.instanceProtocolTerms.begin(),
-          declaration.instanceProtocolTerms.end());
-      result.instanceParameterAtoms.insert(
-          declaration.instanceParameterAtoms.begin(),
-          declaration.instanceParameterAtoms.end());
-      result.configurationTerms.insert(declaration.configurationTerms.begin(),
-                                       declaration.configurationTerms.end());
-      result.relationViewHeights.insert(declaration.relationViewHeights.begin(),
-                                        declaration.relationViewHeights.end());
-      result.quotedBases.merge(declaration.quotedBases);
-      result.quotedRelations.merge(declaration.quotedRelations);
-      result.quotedInstances.merge(declaration.quotedInstances);
-      result.quotedInstanceDependencies.merge(
-          declaration.quotedInstanceDependencies);
-      result.quotedSelectors.merge(declaration.quotedSelectors);
       for (size_t size :
            {result.libraryIdentities.size(), result.libraryAssociations.size(),
             result.libraryInterfaces.size(), result.libraryComponents.size(),
@@ -1660,7 +1672,7 @@ class Parser {
   }
   source::Construction construction() {
     source::Construction result;
-    result.entry = name();
+    result.entry = selector();
     // Normalized identity is the default; exact identity is chosen explicitly
     // (docs/spec/profiles/compiler/local-algorithms.md).
     result.identity = source::Construction::Identity::Normalized;
@@ -1678,20 +1690,20 @@ class Parser {
       if (key != "public" && !clauses.insert(key).second)
         fail("source-duplicate", "duplicate construction clause '" + key + "'");
       if (key == "producer")
-        result.producer = name();
+        result.producer = label();
       else if (key == "validator")
-        result.validator = name();
+        result.validator = label();
       else if (key == "suite")
-        result.suite = name();
+        result.suite = label();
       else if (key == "accept")
         result.acceptance = number();
       else if (key == "random") {
-        result.randomness = name();
+        result.randomness = label();
         expect("at");
         result.draws = references();
       } else if (key == "public") {
         source::PublicBinding binding;
-        binding.name = name();
+        binding.name = label();
         expect("=");
         binding.ports = references();
         expect(";");
@@ -1708,10 +1720,17 @@ class Parser {
         fail("source-syntax", "missing construction clause '" + key + "'");
     return result;
   }
+  // A construction selector is common descriptor data: an exact quoted key,
+  // or a declaration path written as the descriptor's dotted key.
+  std::string selector() {
+    if (token().kind == TokenKind::String)
+      return label();
+    return llvm::join(path().segments, ".");
+  }
   source::Assignments references() {
     return list("(", ")", [&] {
-      auto owner = path();
-      return std::make_pair(std::move(owner), name());
+      auto owner = selector();
+      return std::make_pair(std::move(owner), label());
     });
   }
 
@@ -1725,18 +1744,16 @@ public:
     recovering = true;
     size_t start = token().offset;
     syntax::ParseResult out;
-    if (eat("carrier")) {
-      expect("module");
-      if (!token().is("{"))
-        fail("source-carrier-authoring",
-             "carrier modules use explicit bindings");
-      out.content = record(module(true), start);
-    } else if (eat("module"))
-      out.content = record(module(), start);
+    if (eat("carrier"))
+      fail("source-carrier-authoring",
+           "carrier text requires the common carrier reader");
+    else if (eat("module"))
+      fail("source-module-wrapper",
+           "ordinary files contain declarations without a module wrapper");
     else if (eat("construction"))
       out.content = record(construction(), start);
     else
-      fail("source-syntax", "expected module or construction");
+      out.content = record(module(), start);
     if (!failed() && token().kind != TokenKind::End)
       fail("source-syntax", "unexpected text after document");
     if (failed()) {

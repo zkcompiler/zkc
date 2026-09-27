@@ -131,6 +131,8 @@ rejects("frontend cannot use C file I/O headers", root / "lib/Frontend/Analysis.
         lambda text: '#include <cstdio>\n' + text, "input loading belongs to FrontendLoading")
 rejects("loading cannot reach private lexer internals", root / "lib/Frontend/Loading/Capture.cpp",
         lambda text: '#include "../Syntax/Lexer.h"\n' + text, "frontend phase dependency")
+rejects("carrier decoding cannot invoke authored name resolution", root / "lib/Frontend/Carrier/Reader.cpp",
+        lambda text: '#include "../Resolution/Names.h"\n' + text, "frontend phase dependency")
 rejects("installed headers cannot reach an implementation", root / "include/zkc/Claims/Claims.h",
         lambda text: '#include "../../../lib/Claims/Internal.h"\n' + text,
         "public header includes private implementation")

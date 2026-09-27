@@ -1,5 +1,8 @@
+#include "../Carrier/Reader.h"
+#include "../Carrier/Spelling.h"
 #include "../Lowering/Admission.h"
 #include "../Static/Structural.h"
+#include "../Syntax/Grammar.h"
 #include "../Syntax/Lexer.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
@@ -8,7 +11,6 @@
 #include "zkc/Source/Codec.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -19,24 +21,7 @@ class Printer {
   const std::vector<source::StaticParameter> *parameters = nullptr;
   void quoted(StringRef value) { out << json::Value(value); }
   void name(StringRef value) {
-    // Quoting is required at use sites where a name could be a keyword.
-    const bool keyword =
-        StringSwitch<bool>(value)
-            .Cases({"let", "return", "yield", "local", "message", "invoke",
-                    "loop", "if", "else", "mut", "true", "false"},
-                   true)
-            .Cases({"fn", "bind", "configure", "protocol", "instance", "entry",
-                    "module", "carrier"},
-                   true)
-            .Cases({"roles", "parameters", "dependencies", "inputs", "outputs"},
-                   true)
-            .Cases({"requires", "where", "origin", "external", "domain"}, true)
-            .Cases(
-                {"carry", "capture", "using", "at", "attributes", "for", "in"},
-                true)
-            .Default(false);
-    if (isName(value) && !value.ends_with("-") && !value.ends_with(".") &&
-        !value.contains("..") && !keyword)
+    if (grammar::identifier(value) && !grammar::reserved(value))
       out << value;
     else
       quoted(value);
@@ -57,14 +42,11 @@ class Printer {
   void names(const source::Names &values) {
     list(values, [&](StringRef value) { name(value); });
   }
-  void pairs(const source::Assignments &values, bool numeric = false) {
+  void pairs(const source::Assignments &values) {
     list(values, [&](const auto &pair) {
       name(pair.first);
       out << " = ";
-      if (numeric)
-        out << pair.second;
-      else
-        name(pair.second);
+      name(pair.second);
     });
   }
   void clause(StringRef key, const source::Names &values,
@@ -76,15 +58,14 @@ class Printer {
     out << ";\n";
   }
   void bindingClause(StringRef key, const source::Assignments &values,
-                     bool numeric = false, bool required = false) {
+                     bool required = false) {
     if (!required && values.empty())
       return;
     out << key << ' ';
-    pairs(values, numeric);
+    pairs(values);
     out << ";\n";
   }
-  void bindingClause(StringRef key, const source::ParameterBindings &values,
-                     bool) {
+  void bindingClause(StringRef key, const source::ParameterBindings &values) {
     if (values.empty())
       return;
     out << key << " (";
@@ -108,70 +89,32 @@ class Printer {
     });
     out << ");\n";
   }
-  void nominal(StringRef value) {
-    // Only a known generic root and known associated members are paths.
-    // Concrete identities (including dotted field names) remain opaque.
-    auto parameterName = [&](StringRef value) {
-      // Static references must remain names, not quoted identity literals.
-      // Separate a trailing '-' from the following '>' so it cannot lex as
-      // an arrow. The ordinary value-name printer has different quoting rules.
-      out << value;
-      if (value.ends_with("-"))
-        out << ' ';
-    };
-    if (parameters)
-      for (const auto &parameter : *parameters)
-        if (parameter.name == value && isName(value)) {
-          parameterName(value);
-          return;
-        }
-    auto [root, rest] = value.split('.');
-    if (parameters && !rest.empty()) {
-      for (const auto &parameter : *parameters) {
-        if (parameter.name != root)
-          continue;
-        StringRef sort = parameter.sort;
-        SmallVector<StringRef> members;
-        rest.split(members, '.');
-        bool known = true;
-        for (StringRef member : members) {
-          sort = protocol::associatedMemberSort(sort, member);
-          if (sort.empty()) {
-            known = false;
-            break;
-          }
-        }
-        if (known) {
-          parameterName(root);
-          for (StringRef member : members) {
-            out << "::";
-            name(member);
-          }
-          return;
-        }
-      }
-    }
-    if (value.contains('.'))
-      quoted(value);
-    else
-      name(value);
+  void pathSegment(StringRef value) {
+    if (grammar::reserved(value))
+      out << "r#";
+    out << value;
   }
   void operationName(StringRef value) {
-    for (const auto &contract : protocol::boundOperationContracts()) {
-      if (contract.name != value)
-        continue;
+    if (carrier::operationContract(value)) {
       SmallVector<StringRef> parts;
       value.split(parts, '.');
-      interleave(parts, out, "::");
+      interleave(parts, out, [&](StringRef part) { pathSegment(part); }, "::");
       return;
     }
     name(value);
+  }
+  void typeExport(const protocol::SourceTypeExport &spelling) {
+    SmallVector<StringRef> modules;
+    StringRef(spelling.module).split(modules, "::");
+    interleave(modules, out, [&](StringRef part) { pathSegment(part); }, "::");
+    out << "::";
+    pathSegment(spelling.name);
   }
   void type(StringRef value) {
     if (parameters)
       for (const auto &parameter : *parameters)
         if (parameter.sort == "Type" && parameter.name == value) {
-          nominal(value);
+          quoted(value);
           return;
         }
     auto parsed = splitLogical(value);
@@ -189,8 +132,9 @@ class Printer {
     }
     for (const auto &associated : protocol::sourceAssociatedTypes())
       if (kind == associated.constructor) {
-        nominal(identity);
-        out << "::" << associated.member;
+        quoted(identity);
+        out << "::";
+        pathSegment(associated.member);
         return;
       }
     for (const auto &family : protocol::sourceTypeFamilies()) {
@@ -198,7 +142,8 @@ class Printer {
         continue;
       for (const auto &exported : protocol::sourceTypeExports())
         if (exported.constructor == family.family) {
-          out << exported.module << "::" << exported.name << '<';
+          typeExport(exported);
+          out << '<';
           type(family.elementConstructor + ":" + identity.str());
           out << '>';
           return;
@@ -207,21 +152,18 @@ class Printer {
     for (const auto &spelling : protocol::sourceTypeExports()) {
       if (kind != spelling.constructor)
         continue;
-      out << spelling.module << "::" << spelling.name;
+      typeExport(spelling);
       if (!parsed->arguments.empty()) {
         out << '<';
         const auto *declaration = protocol::typeDeclaration(kind);
         for (size_t i = 0; i < parsed->arguments.size(); ++i) {
           if (i)
             out << ", ";
-          if (declaration &&
+          if (declaration && i < declaration->parameters.size() &&
               declaration->parameters[i].kind == protocol::StaticKind::Type)
             type(parsed->arguments[i]);
-          else if (declaration &&
-                   declaration->parameters[i].kind == protocol::StaticKind::Nat)
-            out << parsed->arguments[i];
           else
-            nominal(parsed->arguments[i]);
+            quoted(parsed->arguments[i]);
         }
         out << '>';
       }
@@ -243,23 +185,9 @@ class Printer {
     values(outputs);
     out << " = ";
   }
-  void staticArgument(StringRef value) {
-    uint64_t natural;
-    if (!value.getAsInteger(10, natural) && value == std::to_string(natural)) {
-      out << value;
-      return;
-    }
-    auto parsed = splitLogical(value);
-    if (parsed && protocol::typeDeclaration(parsed->constructor))
-      type(value);
-    else
-      nominal(value);
-  }
   void statics(const source::Names &arguments) {
     if (!arguments.empty())
-      list(
-          arguments, [&](StringRef value) { staticArgument(value); }, "::<",
-          ">");
+      list(arguments, [&](StringRef value) { quoted(value); }, "::<", ">");
   }
   void arguments(const std::vector<source::Parameter> &values) {
     list(values, [&](const source::Parameter &argument) {
@@ -295,7 +223,7 @@ class Printer {
     name(value);
     out << "] ";
   }
-  void body(const source::Body &body, bool generic = false) {
+  void body(const source::Body &body) {
     for (const auto &instruction : body) {
       if (const auto *ret = instruction.get<source::Return>()) {
         out << "return";
@@ -312,14 +240,14 @@ class Printer {
       } else if (const auto *operation = instruction.get<source::Operation>()) {
         site(instruction.site);
         binding(operation->outputs);
-        if (generic)
-          operationName(operation->callee);
-        else
-          name(operation->callee);
-        if (generic)
-          statics(operation->staticArguments);
+        operationName(operation->callee);
+        statics(operation->staticArguments);
         names(operation->inputs);
-        if (!operation->attributes.empty()) {
+        // An unqualified installed key needs the operation marker even when
+        // its attributes are empty; otherwise it reads as a helper call.
+        if (!operation->attributes.empty() ||
+            (carrier::operationContract(operation->callee) &&
+             !StringRef(operation->callee).contains('.'))) {
           out << " attributes ";
           names(operation->attributes);
         }
@@ -372,9 +300,9 @@ class Printer {
         out << " -> ";
         names(branch->outputs);
         out << " {\n";
-        this->body(branch->thenBody, generic);
+        this->body(branch->thenBody);
         out << "} else {\n";
-        this->body(branch->elseBody, generic);
+        this->body(branch->elseBody);
         out << "}\n";
         continue;
       } else if (const auto *loop = instruction.get<source::For>()) {
@@ -392,7 +320,7 @@ class Printer {
         out << " -> ";
         names(loop->outputs);
         out << " {\n";
-        this->body(loop->body, generic);
+        this->body(loop->body);
         out << "}\n";
         continue;
       } else if (const auto *loop = instruction.get<source::Loop>()) {
@@ -411,7 +339,7 @@ class Printer {
         out << " -> ";
         names(loop->outputs);
         out << " {\n";
-        this->body(loop->body, generic);
+        this->body(loop->body);
         out << "}\n";
         continue;
       }
@@ -461,11 +389,11 @@ class Printer {
       out << " requires ";
       list(function.requirements, [&](const source::Requirement &requirement) {
         name(requirement.predicate);
-        list(requirement.arguments, [&](StringRef value) { nominal(value); });
+        list(requirement.arguments, [&](StringRef value) { quoted(value); });
       });
     }
     out << " {\n";
-    body(function.body, true);
+    body(function.body);
     out << "}\n";
     parameters = nullptr;
   }
@@ -513,7 +441,7 @@ class Printer {
       list(configuration.arguments, [&](const auto &argument) {
         name(argument.first);
         out << " = ";
-        staticArgument(argument.second);
+        quoted(argument.second);
       });
       if (!configuration.implementations.empty()) {
         out << " using ";
@@ -525,7 +453,7 @@ class Printer {
       out << "bind ";
       name(binding.name);
       out << " = ";
-      operationName(binding.application.contract);
+      quoted(binding.application.contract);
       names(binding.application.arguments);
       if (!binding.application.implementation.empty()) {
         out << " using ";
@@ -543,9 +471,9 @@ class Printer {
       out << ": ";
       name(instance.protocol);
       out << " {\n";
-      bindingClause("parameters", instance.parameters, true);
+      bindingClause("parameters", instance.parameters);
       bindingClause("dependencies", instance.dependencies);
-      bindingClause("roles", instance.roles, false, true);
+      bindingClause("roles", instance.roles, true);
       out << "}\n";
     }
     for (const auto &entry : module.entries) {
@@ -604,31 +532,70 @@ public:
 
 Expected<std::string> printProtocol(const source::Content &content) {
   if (std::holds_alternative<source::Participants>(content))
-    return zkc::error("source-format");
+    return zkc::error("source-print-loss");
   if (auto e = checkSourceContent(content))
     return std::move(e);
   if (const auto *module = std::get_if<source::Module>(&content))
     if (!module->relations.empty() || !module->relationViews.empty())
-      return zkc::error("relation-snapshot-text-unsupported");
+      return zkc::error("source-print-loss");
+  bool unsupported = false;
+  auto checkBody = [&](const source::Body &body) {
+    source::walk(body, [&](const source::Instruction &instruction) {
+      if (instruction.get<source::Send>() ||
+          instruction.get<source::Receive>() ||
+          instruction.get<source::Release>() ||
+          instruction.get<source::Incomplete>() ||
+          instruction.get<source::VariantConstruct>() ||
+          instruction.get<source::Match>())
+        unsupported = true;
+    });
+  };
+  if (const auto *module = std::get_if<source::Module>(&content)) {
+    for (const auto &function : module->definitions)
+      checkBody(function.body);
+    for (const auto &function : module->functions)
+      if (function.body)
+        checkBody(*function.body);
+    for (const auto &protocol : module->protocols)
+      if (protocol.body)
+        checkBody(*protocol.body);
+  }
+  if (unsupported)
+    return zkc::error("source-print-loss");
   std::string text;
   raw_string_ostream out(text);
   Printer(out).run(content);
-  // Validate this representation conversion against the portable identity
-  // boundary. In particular an explicitly empty library envelope has no text
-  // spelling; losing it must fail rather than change exact-source custody.
-  auto document = parseProtocolDocument(Input::withoutFile(text, "<printer>"));
-  if (!document)
-    return document.takeError();
-  if (source::encode(document->root()) != source::encode(content))
-    return zkc::error("source-print-loss");
   auto tokens = lex(text, "<printer>");
   if (!tokens)
     return tokens.takeError();
-  return formatTokens(*tokens);
+  auto formatted = formatTokens(*tokens);
+  if (!formatted)
+    return formatted.takeError();
+  // Check the final representation, including any formatter changes, against
+  // exact common custody. Diagnostic spans are intentionally not serialized.
+  if (std::holds_alternative<source::Module>(content)) {
+    auto decoded = carrier::readCarrier(*formatted, "<printer>");
+    if (!decoded) {
+      consumeError(decoded.takeError());
+      return zkc::error("source-print-loss");
+    }
+    if (source::encode(*decoded) != source::encode(content))
+      return zkc::error("source-print-loss");
+  } else {
+    auto document =
+        parseProtocolDocument(Input::withoutFile(*formatted, "<printer>"));
+    if (!document) {
+      consumeError(document.takeError());
+      return zkc::error("source-print-loss");
+    }
+    if (source::encode(document->root()) != source::encode(content))
+      return zkc::error("source-print-loss");
+  }
+  return formatted;
 }
 
 Expected<std::string> formatProtocol(StringRef text, StringRef filename) {
-  if (text.ltrim().starts_with("[")) {
+  if (classifyDocument(text) == SourceForm::CommonJSON) {
     auto document = parseProtocolDocument(text, filename);
     if (!document)
       return document.takeError();

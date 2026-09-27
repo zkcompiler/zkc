@@ -1,13 +1,62 @@
 #include "zkc/Frontend/Input.h"
+#include "Carrier/Reader.h"
 #include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Diagnostic.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Relations.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/StringExtras.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::frontend {
+SourceForm classifyDocument(StringRef text) {
+  // JSON permits whitespace, but no comments, before its opening array. Select
+  // its reader even for malformed arrays rather than retrying source parsing.
+  text = text.ltrim();
+  if (text.starts_with("["))
+    return SourceForm::CommonJSON;
+  auto trivia = [&] {
+    for (;;) {
+      text = text.ltrim();
+      if (text.consume_front("//")) {
+        auto end = text.find('\n');
+        text = end == StringRef::npos ? StringRef() : text.drop_front(end);
+      } else if (text.consume_front("/*")) {
+        unsigned depth = 1;
+        while (!text.empty() && depth) {
+          if (text.consume_front("/*")) {
+            if (++depth > 64)
+              return false;
+          } else if (text.consume_front("*/"))
+            --depth;
+          else
+            text = text.drop_front();
+        }
+        if (depth)
+          return false;
+      } else
+        return true;
+    }
+  };
+  auto keyword = [&](StringRef word) {
+    if (!text.starts_with(word))
+      return false;
+    auto rest = text.drop_front(word.size());
+    if (!rest.empty() && (isAlnum(rest.front()) || rest.front() == '_'))
+      return false;
+    text = rest;
+    return true;
+  };
+  if (!trivia())
+    return SourceForm::Module;
+  if (keyword("construction"))
+    return SourceForm::Construction;
+  if (keyword("carrier") && trivia() && keyword("module"))
+    return SourceForm::CarrierModule;
+  return SourceForm::Module;
+}
+
 Input::Input(std::string text, std::string filename, Kind kind)
     : contents(std::make_shared<const Contents>(
           Contents{std::move(text), std::move(filename), kind})) {}
@@ -97,7 +146,17 @@ Expected<source::Document> parseProtocolDocument(StringRef text,
 }
 Expected<source::Document> parseProtocolDocument(const Input &input) {
   StringRef text = input.text(), filename = input.filename();
-  if (text.ltrim().starts_with("[")) {
+  const auto form = classifyDocument(text);
+  if (form == SourceForm::CarrierModule) {
+    auto content = carrier::readCarrier(text, filename);
+    if (!content)
+      return content.takeError();
+    if (auto error = source::checkStructure(*content))
+      return diagnostic(text, filename, 0, toString(std::move(error)),
+                        "invalid carrier structure");
+    return source::Document(std::move(*content), text.str(), filename.str());
+  }
+  if (form == SourceForm::CommonJSON) {
     // The versioned relation envelope owns an independent immutable-data
     // budget. Ordinary source still passes its 1MiB structure check.
     if (isRelationSnapshot(text)) {

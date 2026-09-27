@@ -6,7 +6,7 @@
 #include "zkc/Translation/Protocol.h"
 
 static llvm::Expected<zkc::Compilation> compile() {
-  auto analysis = zkc::frontend::analyzeProtocol(R"(module {
+  auto analysis = zkc::frontend::analyzeProtocol(R"(
     fn Identity(x: bool) -> bool { x }
     protocol Send {
       roles(P, V); inputs(P x: bool); outputs(V bool);
@@ -16,7 +16,7 @@ static llvm::Expected<zkc::Compilation> compile() {
     }
     instance run: Send { roles(P = prover, V = verifier); }
     entry main = run;
-  })",
+  )",
                                                  "consumer.pir");
   auto source = zkc::lowerSource(analysis);
   if (!source)

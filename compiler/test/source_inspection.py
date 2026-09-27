@@ -37,7 +37,7 @@ def operation_locations(ir, *needles):
     return result
 
 
-source = """module {
+source = """
   fn Identity<F: domain Field>(x: F::Element) -> (F::Element) {
     return (x);
   }
@@ -54,7 +54,7 @@ source = """module {
   }
   instance concrete: Example { roles (Alice = Alice); }
   entry main = concrete;
-}
+
 """
 
 report = json.loads(run("protocol-inspect", source).stdout)
@@ -118,13 +118,13 @@ option = f"--implementations={selection}"
 run("protocol-compile", folds, option)
 located_folds = run("protocol-physical-ir", folds, option, "--locations").stdout
 assert operation_locations(located_folds, '"pir.operation_binding"',
-                           'sym_name = "fold_left"') == [(6, 3)]
+                           'sym_name = "fold_left"') == [(5, 1)]
 assert operation_locations(located_folds, '"plan.kernel"',
-                           'binding = @fold_left') == [(11, 5)]
+                           'binding = @fold_left') == [(10, 3)]
 assert set(operation_locations(located_folds, '"plan.kernel"',
-                               'kernel = "arkworks/table.relayout"')) == {(11, 5), (12, 5)}
+                               'kernel = "arkworks/table.relayout"')) == {(10, 3), (11, 3)}
 assert operation_locations(located_folds, '"pir.local_call"',
-                           'site = "left"') == [(40, 5)]
+                           'site = "left"') == [(39, 3)]
 swapped = folds.replace("= fold_left(", "= TEMP(").replace(
     "= fold_right(", "= fold_left("
 ).replace("= TEMP(", "= fold_right(")
@@ -135,23 +135,23 @@ selection.write_text(json.dumps(chosen))
 run("protocol-compile", swapped, option)
 selection.write_text(json.dumps([["fold_left", "arkworks/field.add"]]))
 error = run("protocol-compile", folds, option, refuses="binding-implementation")
-assert "-\":6:3" in error.stderr or "-:6:3" in error.stderr, error.stderr
+assert "-\":5:1" in error.stderr or "-:5:1" in error.stderr, error.stderr
 
-binding_error = """module {
-  bind bad = unknown.operation();
+binding_error = """
+  bind bad = "unknown.operation"();
   fn Identity<>() -> () { return (); }
   configure Closed = Identity();
   protocol Example { roles (Alice); local Alice: Closed(); return (); }
   instance concrete: Example { roles (Alice = Alice); }
   entry main = concrete;
-}
+
 """
 error = run("protocol-source", binding_error, refuses="source-operation-stage")
 assert "-:2:3:" in error.stderr, error.stderr
 
 # Recursion must retain an inner failure, but a successful body must not steal
 # the location of a subsequent outer-result failure.
-loop_error = """module {
+loop_error = """
   protocol Example {
     roles (Alice);
     inputs (Alice x: bool);
@@ -161,13 +161,13 @@ loop_error = """module {
     }
     return (x);
   }
-}
+
 """
 error = run("protocol-source", loop_error, refuses="source-value-duplicate")
 assert "-:6:5:" in error.stderr, error.stderr
 error = run("protocol-source", loop_error.replace("yield (a)", "yield (missing)"),
             refuses="source-name-unresolved")
-assert "-:7:7:" in error.stderr, error.stderr
+assert "-:7:14:" in error.stderr, error.stderr
 
 # Formatting and syntax inspection do not authorize unresolved calls.
 broken = source.replace("First(x)", "Missing(x)")
@@ -184,11 +184,11 @@ assert "-:6:" in error.stderr, error.stderr
 value_error = source.replace("return (x);", "return (unknown);")
 error = run("protocol-inspect", value_error, refuses="source-name-unresolved")
 assert "-:3:" in error.stderr, error.stderr
-mixed_error = source.replace("module {", """module {
+mixed_error = """
   fn Bad(x: "bls12-381.fr"::Element) -> (bool) {
     return (x);
   }
-""", 1)
+""" + source
 error = run("protocol-import", mixed_error, refuses="source-type-mismatch")
 assert "-:3:" in error.stderr, error.stderr
 
@@ -215,6 +215,6 @@ for stem in ("generic-dleq", "generic-committed-two-factor", "generic-openings")
     if stem == "generic-dleq":
         ir = run("protocol-import", text, "--locations").stdout
         assert operation_locations(ir, '"pir.operation_binding"',
-                                   'contract = "curve.empty"') == [(21, 5)]
+                                   'contract = "curve.empty"') == [(21, 3)]
 
 print(f"{commands.save()} source inspection and provenance checks passed")

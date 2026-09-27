@@ -11,8 +11,12 @@ from tools import compiler, corpus, examples, records
 from journal import names
 
 def editable_source(path):
-    """Compact call arguments and omit generated sites for source mutation probes."""
-    text = re.sub(r'\[__site_\d+\] ', '', path.read_text())
+    """Compact call arguments for source mutation probes.
+
+    Sites stay: carrier text names every site, so each probe below labels the
+    instructions it inserts.
+    """
+    text = path.read_text()
     text = re.sub(r'\([^()]*\)', lambda m: re.sub(r'\s+', ' ', m[0]).replace('( ', '(').replace(' )', ')').replace(', ', ','), text)
     return text
 
@@ -67,8 +71,8 @@ assert access['coordinate_provider_history'] and not access['coordinate_receptio
 expect(source)
 assert inspect(source, command='oracle-inspect') == normal
 
-observe = '    local V: let observed = ObserveRoot(coins,received_root);\n'
-draw = '    local V: let (query,after) = DrawIndex(observed,height);\n'
+observe = '    local [__site_2] V: let observed = ObserveRoot(coins,received_root);\n'
+draw = '    local [__site_3] V: let (query,after) = DrawIndex(observed,height);\n'
 
 # No root observation: valid source with insufficient transcript linkage.
 unabsorbed = source.replace(observe, '').replace('DrawIndex(observed,height)', 'DrawIndex(coins,height)')
@@ -76,18 +80,19 @@ unabsorbed = source.replace(observe, '').replace('DrawIndex(observed,height)', '
 separate = source.replace('V coins: Transcript<', 'V other_coins: Transcript<"merlin3.koala-bear.ext8-binomial3.rejection31le/1">,V coins: Transcript<')
 separate = separate.replace('DrawIndex(observed,height)', 'DrawIndex(other_coins,height)')
 # Observation uses the actual draw successor, so the root is absorbed too late.
-after = unabsorbed.replace('    message query:',
-    '    local V: let observed = ObserveRoot(after,received_root);\n    message query:')
+after = unabsorbed.replace('    message [__site_4] query:',
+    '    local [late_observe] V: let observed = ObserveRoot(after,received_root);\n'
+    '    message [__site_4] query:')
 # Both the statistic and the list are computed from the real received root.
-list_prefix = '    local V: let roots = RootList(received_root);\n'
+list_prefix = '    local [roots] V: let roots = RootList(received_root);\n'
 statistic = source.replace(observe, list_prefix +
-    '    local V: let count = RootCount(roots);\n'
-    '    local V: let observed = ObserveStatistic(coins,count);\n')
+    '    local [count] V: let count = RootCount(roots);\n'
+    '    local [observe_count] V: let observed = ObserveStatistic(coins,count);\n')
 whole_list = source.replace(observe, list_prefix +
-    '    local V: let observed = ObserveRoots(coins,roots);\n')
+    '    local [observe_roots] V: let observed = ObserveRoots(coins,roots);\n')
 # Two receptions of the same authored root are separate arbitrary peer inputs.
 second = source.replace(observe,
-    '    message second_root: P(root) -> V(other_root);\n' + observe)
+    '    message [second_root] second_root: P(root) -> V(other_root);\n' + observe)
 second = second.replace('CheckRow(received_root,', 'CheckRow(other_root,')
 for text in (unabsorbed, separate, after, statistic, whole_list, second):
     expect(text)
@@ -98,13 +103,13 @@ for text in (unabsorbed, separate, after, statistic, whole_list, second):
     assert refused['accesses'][0]['coordinate_sample']
 # Exact local selection is supported; no byte/list congruence is inferred.
 selected = source.replace(observe, list_prefix +
-    '    local V: let selected_root = FirstRoot(roots);\n' +
+    '    local [select] V: let selected_root = FirstRoot(roots);\n' +
     observe.replace('coins,received_root', 'coins,selected_root'))
 expect(selected, (ORDER, SAMPLED))
 
 # A received bound remains a direct peer dependency, independently of history.
 received_bound = source.replace(draw,
-    '    message bound: P(width) -> V(peer_bound);\n' +
+    '    message [bound] bound: P(width) -> V(peer_bound);\n' +
     draw.replace('observed,height', 'observed,peer_bound'))
 expect(received_bound, (ORDER,), ('oracle-query-coordinate-received',))
 expect(received_bound, (SAMPLED,), (BOUND,))
@@ -115,8 +120,9 @@ received_height = received_bound.replace('expected_width,height,query',
 expect(received_height, (SAMPLED,))
 expect(received_height, (ORDER, SAMPLED), ('oracle-query-coordinate-received',))
 # A peer echo never inherits the validator's sample identity or draws.
-echo = source.replace('    local P: let (row,path)',
-    '    message echo: P(received_query) -> V(echoed_query);\n    local P: let (row,path)')
+echo = source.replace('    local [__site_5] P: let (row,path)',
+    '    message [echo] echo: P(received_query) -> V(echoed_query);\n'
+    '    local [__site_5] P: let (row,path)')
 echo = echo.replace('expected_width,height,query', 'expected_width,height,echoed_query')
 report = expect(echo)
 assert report['accesses'][0]['coordinate_receptions']
@@ -126,8 +132,9 @@ expect(echo, (SAMPLED,), (NOT_SAMPLE,))
 
 # Ordering checks contributing draws; it does not require an exact sample.
 mod_one = source.replace(draw, draw.replace('(query,after)', '(sample,after)') +
-    '    local V: let one = OneIndex();\n    local V: let query = ModIndex(sample,one);\n')
-constant = source.replace(draw, '    local V: let query = ZeroIndex();\n')
+    '    local [one] V: let one = OneIndex();\n'
+    '    local [modulo] V: let query = ModIndex(sample,one);\n')
+constant = source.replace(draw, '    local [zero] V: let query = ZeroIndex();\n')
 for text in (mod_one, constant):
     report = expect(text, (ORDER, RESPONSES))
     assert 'coordinate_sample' not in report['accesses'][0]
@@ -138,7 +145,7 @@ assert not expect(constant, (ORDER,))['accesses'][0]['coordinate_draws']
 
 # Bound 1 is not known to equal the independent height input. It is an exact
 # sample, but compatible height is unknown. A check of that same height 1 passes.
-bound_one = source.replace(draw, '    local V: let one = OneIndex();\n' +
+bound_one = source.replace(draw, '    local [one] V: let one = OneIndex();\n' +
     draw.replace('observed,height', 'observed,one'))
 report = expect(bound_one, (ORDER, RESPONSES))
 assert report['accesses'][0]['coordinate_sample']
@@ -148,13 +155,14 @@ expect(bound_one, (ORDER, SAMPLED, RESPONSES), (BOUND,))
 height_one = bound_one.replace('expected_width,height,query', 'expected_width,one,query')
 expect(height_one, (ORDER, SAMPLED, RESPONSES))
 # Separate equal constants do not manufacture exact local value identity.
-separate_height = height_one.replace('    local V: let ok = CheckRow',
-    '    local V: let also_one = OneIndex();\n    local V: let ok = CheckRow')
+separate_height = height_one.replace('    local [__site_8] V: let ok = CheckRow',
+    '    local [also_one] V: let also_one = OneIndex();\n'
+    '    local [__site_8] V: let ok = CheckRow')
 separate_height = separate_height.replace('expected_width,one,query', 'expected_width,also_one,query')
 expect(separate_height, (SAMPLED,), (BOUND,))
 
 # Ordinary returns are not acceptance sinks; the selected result must be bool.
-returned = source.replace('    control::require(ok);', '')
+returned = source.replace('    [__site_1] control::require(ok);\n', '')
 assert returned != source
 unguarded = (UNGUARDED, 'oracle-response-unauthenticated')
 expect(returned, (ORDER,), unguarded)
@@ -172,7 +180,8 @@ v_result = expect(mixed, ('--accept-result=1',))
 assert (p_result['acceptance_role'], v_result['acceptance_role']) == ('P', 'V')
 received_bool = returned.replace('inputs (P values:', 'inputs (P claimed:bool,P values:')
 received_bool = received_bool.replace('    return ok;\n  }\n\n  instance',
-    '    message verdict: P(claimed) -> V(received_verdict);\n    return received_verdict;\n  }\n\n  instance')
+    '    message [verdict] verdict: P(claimed) -> V(received_verdict);\n'
+    '    return received_verdict;\n  }\n\n  instance')
 peer = expect(received_bool, ('--accept-result=0',), unguarded)
 assert peer['acceptance_role'] == 'V'  # Received owner is V; no V check is entailed.
 
@@ -188,11 +197,11 @@ for flag in (ORDER, RESPONSES, SAMPLED):
 # No root/state byte equality or transcript-root equality is invented to link them.
 random_source = editable_source(corpus / 'oracle-provenance-random.pir')
 descriptor = (corpus / 'oracle-provenance-random.construction.pir').read_text()
-random_draw = '    local V: let (query,after) = DrawIndex(coins,height);\n'
-early = random_source.replace(random_draw, '').replace('    local P: let (root,state)',
-    random_draw + '    local P: let (root,state)')
-late = random_source.replace('    local V: let ok',
-    '    local V: let (later,final) = DrawIndex(after,height);\n    local V: let ok')
+random_draw = '  local [__site_2] V: let (query,after) = DrawIndex(coins,height);\n'
+early = random_source.replace(random_draw, '').replace('  local [__site_0] P: let (root,state)',
+    random_draw + '  local [__site_0] P: let (root,state)')
+late = random_source.replace('  local [__site_7] V: let ok',
+    '  local [later] V: let (later,final) = DrawIndex(after,height);\n  local [__site_7] V: let ok')
 OPENING = 'oracle-opening-coordinate-unresolved'
 EARLY = 'oracle-query-before-publication'
 LATE = 'oracle-query-after-response'
@@ -254,10 +263,10 @@ assert 'root_reception' not in collection_report['accesses'][0]
 
 # Construction indexes only V ports. The identical index 0 below selects P for
 # oracle acceptance, but V for construction; descriptor index 1 is out of range.
-mixed_random = random_source.replace('    zkc::core::require(ok);', '')
+mixed_random = random_source.replace('  [__site_1] zkc::core::require(ok);\n', '')
 mixed_random = mixed_random.replace('inputs (P values:', 'inputs (P claimed:bool,P values:')
 mixed_random = mixed_random.replace('outputs (V bool);', 'outputs (P bool,V bool);')
-mixed_random = mixed_random.replace('    return ok;\n  }\n\n  instance', '    return (claimed,ok);\n  }\n\n  instance')
+mixed_random = mixed_random.replace('  return ok;\n}\n\ninstance', '  return (claimed,ok);\n}\n\ninstance')
 assert expect(mixed_random, ('--accept-result=0',), unguarded)['acceptance_role'] == 'P'
 assert expect(mixed_random, ('--accept-result=1',))['acceptance_role'] == 'V'
 constructed_mixed = construct(mixed_random)

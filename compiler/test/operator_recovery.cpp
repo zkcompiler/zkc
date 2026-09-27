@@ -36,9 +36,8 @@ int main() {
   Cases cases;
   cases.run("recovery edges remain local to the dependency analysis", [] {
     auto resolved = resolution::resolve(ProjectInput::single(Input::withoutFile(
-        "module { struct R(value: index); "
-        "#[operator(add)] fn Add(a: R, b: R) -> R { return a; } "
-        "fn User(a: R, b: R) -> R { return a + b; } }")));
+        " struct R { value: index } #[operator(add)] fn Add(a: R, b: R) -> R { "
+        "return a; } fn User(a: R, b: R) -> R { return a + b; } ")));
     require(resolved.diagnostics.empty(), "fixture resolves independently");
     auto &module = std::get<syntax::Module>(resolved.content);
     const auto &project = *resolved.context;
@@ -52,7 +51,7 @@ int main() {
 
     // A producer outside this abstract interpretation must kill old evidence.
     // This models a message output shadowing a name in a protocol body.
-    source::Message message;
+    syntax::Message message;
     message.output = "a";
     syntax::Instruction instruction;
     instruction.value = std::move(message);

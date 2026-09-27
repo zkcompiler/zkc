@@ -48,7 +48,7 @@ json::Array calls(const Analysis &analysis) {
 } // namespace
 Expected<json::Array> inspectProtocolElaboration(StringRef text,
                                                  StringRef filename) {
-  if (text.empty() || text.ltrim().starts_with("["))
+  if (isCommonDocument(classifyDocument(text)))
     return json::Array{};
   return inspectProtocolElaboration(analyzeProtocol(text, filename));
 }

@@ -9,7 +9,7 @@ int main() {
   // consumer links only Frontend: neither MLIR nor file loading is required.
   auto analysis =
       zkc::frontend::analyzeProtocol(zkc::frontend::Input::withoutFile(
-          "module { fn Id(x: bool) -> bool { return x; } }"));
+          " fn Id(x: bool) -> bool { return x; } "));
   if (!analysis.complete())
     return 1;
   auto first = analysis.lower();
@@ -37,8 +37,8 @@ int main() {
     return 5;
   }
   module.functions.clear();
-  analysis = zkc::frontend::analyzeProtocol(
-      zkc::frontend::Input::withoutFile("module {}"));
+  analysis =
+      zkc::frontend::analyzeProtocol(zkc::frontend::Input::withoutFile(""));
   auto retained = zkc::frontend::lower(*checked);
   if (!retained) {
     llvm::consumeError(retained.takeError());
@@ -49,7 +49,7 @@ int main() {
     return 7;
   auto invalid =
       zkc::frontend::analyzeProtocol(zkc::frontend::Input::withoutFile(
-          "module { fn Bad(x: bool) -> bool { return missing; } }"));
+          " fn Bad(x: bool) -> bool { return missing; } "));
   auto rejected = invalid.lower();
   if (rejected)
     return 8;

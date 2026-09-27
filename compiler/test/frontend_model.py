@@ -18,10 +18,10 @@ def common(text):
 
 
 with case("nominal identities survive identical common layouts"):
-    source = '''module {
-      struct A<F: domain Field>(x: F::Element);
+    source = '''
+      struct A<F: domain Field> { x: F::Element }
       fn Id<F: domain Field>(value: A<F>) -> A<F> { return value; }
-    }'''
+    '''
     other = source.replace("struct A<", "struct B<").replace("A<F>", "B<F>")
     assert common(source) == common(other)
     first, second = analyze(source), analyze(other)
@@ -34,14 +34,14 @@ with case("nominal identities survive identical common layouts"):
     assert value_type["kind"] == "record"
 
 
-CHECKED = '''module {
-  checked struct Checked<F: domain Field>(value: F::Element) constructors(Make);
-  struct Wrapper<F: domain Field>(checked: Checked<F>);
+CHECKED = '''
+  checked struct Checked<F: domain Field> { value: F::Element } constructors(Make);
+  struct Wrapper<F: domain Field> { checked: Checked<F> }
   fn Make<F: Field>(value: F::Element) -> Checked<F> {
-    let result = Checked(value=value); return result;
+    let result = Checked{ value: value }; return result;
   }
   protocol Foreign { roles (P); outputs (P RESULT); external; }
-}'''
+'''
 for result in ['Checked<"koala-bear">', 'Wrapper<"koala-bear">']:
     with case(f"external protocol cannot issue {result}"):
         text = CHECKED.replace("RESULT", result)
@@ -56,11 +56,11 @@ with case("plain external results remain a separate admission concern"):
     assert report["admission"] == "not_requested"
 
 with case("syntax recovery retains surrounding declarations but never emits"):
-    text = '''module {
+    text = '''
       fn Before(x: bool) -> bool { return x; }
       fn Broken(x: bool) -> bool { let x = ; }
       fn After(x: bool) -> bool { return x; }
-    }'''
+    '''
     report = analyze(text)
     assert report["state"] == "incomplete", report
     assert {"Before", "After"} <= {d["name"] for d in report["declarations"]}
@@ -68,14 +68,14 @@ with case("syntax recovery retains surrounding declarations but never emits"):
     commands.source("protocol-source", text, refuses="source-syntax")
 
 with case("static error keeps its structured diagnostic identity"):
-    text = "module { const A: index = B; const B: index = A; }"
+    text = " const A: index = B; const B: index = A; "
     report = analyze(text)
     assert report["state"] == "incomplete"
     assert any(d["code"] == "source-constant-cycle" for d in report["diagnostics"]), report
     commands.source("protocol-source", text, refuses="source-constant-cycle")
 
 with case("new query is not a portable PIR producer"):
-    report = analyze("module { fn Id(x: bool) -> bool { return x; } }")
+    report = analyze(" fn Id(x: bool) -> bool { return x; } ")
     assert report["format"] == "zkc.frontend-analysis/1"
     commands.source("protocol-source", json.dumps(report), refuses="source-syntax")
 
@@ -83,7 +83,7 @@ with case("new query is not a portable PIR producer"):
 # An unused family is still checked under its abstract requirements. Selection
 # is not needed to expose these source errors, and common admission remains a
 # distinct later judgment.
-FAMILY = '''module {
+FAMILY = '''
   fn Id<F:Field>(x:F::Element)->F::Element {return x;}
   protocol Family<F:Field, H:Field> {
     roles(A,B); inputs(A x:F::Element,B z:H::Element); outputs(B F::Element);
@@ -91,7 +91,7 @@ FAMILY = '''module {
     message row:A(y)->B(received);
     return received;
   }
-}'''
+'''
 with case("unused protocol family has a checked abstract source body"):
     report = analyze(FAMILY)
     assert report["phase"] == "source_checked", report
@@ -119,7 +119,7 @@ for label, before, after, code in (
         commands.source("protocol-source", text, refuses=code)
 
 with case("failed source body is deferred, not external"):
-    report = analyze("module { fn Bad(x:bool)->bool { let y=Missing(x); return y; } }")
+    report = analyze(" fn Bad(x:bool)->bool { let y=Missing(x); return y; } ")
     assert report["phase"] == "semantic_error", report
     declaration = next(d for d in report["declarations"] if d["name"] == "Bad")
     assert declaration["has_body"] and declaration["body_state"] == "deferred"
@@ -131,7 +131,7 @@ with case("quoted static actual never captures a protocol parameter"):
     assert any(d["code"] == "source-name-unresolved" for d in analyze(text)["diagnostics"])
 
 with case("generic loop count resolves before selection"):
-    template = "module { CONSTANT protocol P<F:Field>{roles(A); PARAMETERS loop N carry()->(){yield;} return;} }"
+    template = " CONSTANT protocol P<F:Field>{roles(A); PARAMETERS loop N carry()->(){yield;} return;} "
     invalid = template.replace("CONSTANT", "").replace("PARAMETERS", "")
     commands.source("protocol-source", invalid, refuses="source-name-unresolved")
     for constant, parameter in (("const N:index=2;", ""), ("", "parameters(N);")):
@@ -141,29 +141,29 @@ with case("generic loop count resolves before selection"):
     commands.source("protocol-source", shadow, refuses="source-protocol-count")
 
 with case("quoted dependency actual never captures its enclosing parameter"):
-    text = '''module {
+    text = '''
       protocol Child<F:Field>{roles(A);return;}
       protocol P<F:Field>{roles(A);dependencies(c:Child::<F="F">());invoke c()->();return;}
-    }'''
+    '''
     commands.source("protocol-source", text, refuses="source-name-unresolved")
 
 with case("abstract dependency natural agreement resolves both declarations"):
-    text = '''module {
+    text = '''
       protocol Child<F:Field>{roles(A);parameters(N);return;}
       protocol P<F:Field>{roles(A);parameters(M);dependencies(c:Child::<F=F>(N=M));invoke c()->();return;}
-    }'''
+    '''
     assert analyze(text)["phase"] == "source_checked", analyze(text)
     commands.source("protocol-source", text.replace("N=M", "N=Absent"), refuses="source-protocol-parameter")
     commands.source("protocol-source", text.replace("N=M", "Absent=M"), refuses="source-protocol-parameter")
 
 
-with case("bound domain names cannot capture installed identities on emission"):
-    text = '''module {
-      fn Id<koala-bear:Field>(x:"koala-bear"::Element)->"koala-bear"::Element{return x;}
-      configure C=Id(koala-bear=bls12-381.fr);
-    }'''
-    commands.source("protocol-source", text, refuses="source-static-name")
-    assert analyze(text)["phase"] == "semantic_error"
+with case("generic binders cannot be spelled as installed identities"):
+    text = '''
+      fn Id<"koala-bear":Field>(x:"koala-bear"::Element)->"koala-bear"::Element{return x;}
+      configure C=Id("koala-bear"="bls12-381.fr");
+    '''
+    commands.source("protocol-source", text, refuses="source-identifier")
+    assert analyze(text)["phase"] == "syntax_partial"
 
 
 for label, fragment, code in (
@@ -175,18 +175,18 @@ for label, fragment, code in (
     ("where requirement", 'fn Bad<F:domain Field>(x:F::Element)->F::Element where "F":Field {return x;}', "source-name-unresolved"),
 ):
     with case(f"quoted roots remain identities in {label}"):
-        text = 'module {fn Id<F:Field>(x:F::Element)->F::Element{return x;}' + fragment + '}'
+        text = 'fn Id<F:Field>(x:F::Element)->F::Element{return x;}' + fragment
         commands.source("protocol-source", text, refuses=code)
         assert analyze(text)["phase"] == "semantic_error"
 
 with case("specialization preserves a record named like a domain parameter"):
-    text = '''module {
-      struct F(v:bool); struct "koala-bear"(v:bool);
+    text = '''
+      struct F { v:bool } struct KoalaBear { v:bool }
       protocol P<F:Field>{roles(A);inputs(A s:F);outputs(A F);return s;}
-      configure C=P(F=koala-bear);
+      configure C=P(F="koala-bear");
       instance I:C{roles(A=Alice);} entry E=I;
-    }'''
-    for program in (text, text.replace('struct "koala-bear"(v:bool);', '')):
+    '''
+    for program in (text, text.replace('struct KoalaBear { v:bool }', '')):
         report = analyze(program)
         assert report["phase"] == "source_checked", report
         template, concrete = (next(d for d in report["declarations"] if d["name"] == name) for name in ("P", "C"))
@@ -197,12 +197,12 @@ with case("specialization preserves a record named like a domain parameter"):
         common(program)
 
 with case("concrete protocols get the same source type check as families"):
-    text = '''module {
+    text = '''
       fn Id(x:"koala-bear"::Element)->"koala-bear"::Element{return x;}
       protocol P {roles(A);inputs(A x:"koala-bear"::Element);outputs(A "koala-bear"::Element);
         local A:let y=Id(x);return y;}
       instance I:P{roles(A=Alice);}entry E=I;
-    }'''
+    '''
     malformed = text.replace('inputs(A x:"koala-bear"', 'inputs(A x:"bls12-381.fr"')
     commands.source("protocol-source", malformed, refuses="source-call-type")
     report = analyze(malformed)
@@ -216,11 +216,11 @@ with case("concrete protocols get the same source type check as families"):
     commands.source("protocol-admit", json.dumps(portable), refuses="interactive-local-signature")
 
 with case("explicit installed types survive source type retention"):
-    text = '''module {
+    text = '''
       use zkc::algebra::{Vector};
-      fn Id(x:bls12-381.fr::Element)->bls12-381.fr::Element {return x;}
-      fn VectorId(x:Vector<bls12-381.fr::Element>)->Vector<bls12-381.fr::Element> {return x;}
-    }'''
+      fn Id(x:"bls12-381.fr"::Element)->"bls12-381.fr"::Element {return x;}
+      fn VectorId(x:Vector<"bls12-381.fr"::Element>)->Vector<"bls12-381.fr"::Element> {return x;}
+    '''
     report = analyze(text)
     assert report["phase"] == "source_checked", report
     for name, expected in (("Id", "field:bls12-381.fr"), ("VectorId", "vector:bls12-381.fr")):
@@ -231,15 +231,15 @@ with case("explicit installed types survive source type retention"):
 
 with case("quoted loop count never captures a natural parameter"):
     for parameters in ("", "<F:Field>"):
-        text = 'module {protocol P' + parameters + '{roles(A);parameters(N);loop "N" carry()->(){yield;}return;}}'
+        text = 'protocol P' + parameters + '{roles(A);parameters(N);loop "N" carry()->(){yield;}return;}'
         commands.source("protocol-source", text, refuses="source-protocol-count")
 
 
 with case("unused dependency declarations bind their complete contracts"):
-    text = '''module {
+    text = '''
       protocol Child<F:Field>{roles(A);return;}
       protocol P<F:Field>{roles(A);dependencies(c:Child::<F=F>());return;}
-    }'''
+    '''
     assert analyze(text)["phase"] == "source_checked"
     commands.source("protocol-source", text.replace("F=F", 'F="F"'), refuses="source-name-unresolved")
     commands.source("protocol-source", text.replace("Child::<F=F>()", "Child()"), refuses="source-static-required")
@@ -247,67 +247,68 @@ with case("unused dependency declarations bind their complete contracts"):
 
 
 with case("static values remain queryable without emitting constant declarations"):
-    report = analyze("module {const N:index=M*2;const M:index=4;}")
+    report = analyze("const N:index=M*2;const M:index=4;")
     constants = {d["name"]: d for d in report["declarations"] if d["kind"] == "constant"}
     assert report["phase"] == "source_checked"
     assert constants["N"]["constant_value"] == 8 and constants["M"]["constant_value"] == 4
     assert all(d["sort"] == "index" and d["signature_checked"] for d in constants.values())
-    assert common("module {const N:index=8;}") == common("module {}")
+    assert common("const N:index=8;") == common("")
 
 for label, fragment, code in (
-    ("function type", "fn Bad<G:ScalarAction>(x:G.Scalar::Element)->G::Scalar::Element{return x;}", "source-name-unresolved"),
-    ("family type", "protocol Bad<G:ScalarAction>{roles(A);inputs(A x:G.Scalar::Element);return;}", "source-name-unresolved"),
-    ("function static argument", "fn Bad<G:ScalarAction>(x:G::Scalar::Element)->G::Scalar::Element{let y=Id::<G.Scalar>(x);return y;}", "source-name-unresolved"),
-    ("family static argument", "protocol Bad<G:ScalarAction>{roles(A);inputs(A x:G::Scalar::Element);local A:let y=Id::<G.Scalar>(x);return;}", "source-name-unresolved"),
-    ("function requirement", "fn Bad<G:domain Group>() -> () requires(Field(G.Scalar)){return;}", "source-name-unresolved"),
-    ("function where", "fn Bad<G:domain Group>() -> () where G.Scalar:Field {return;}", "source-name-unresolved"),
-    ("bundle requirement", "bundle Bad(G)=(Field(G.Scalar));", "source-name-unresolved"),
-    ("family requirement", "protocol Bad<G:domain Group> requires(Field(G.Scalar)){roles(A);return;}", "source-name-unresolved"),
+    ("function type", "fn Bad<G:ScalarAction>(x:G.Scalar::Element)->G::Scalar::Element{return x;}", "source-syntax"),
+    ("family type", "protocol Bad<G:ScalarAction>{roles(A);inputs(A x:G.Scalar::Element);return;}", "source-syntax"),
+    ("function static argument", "fn Bad<G:ScalarAction>(x:G::Scalar::Element)->G::Scalar::Element{let y=Id::<G.Scalar>(x);return y;}", "source-syntax"),
+    ("family static argument", "protocol Bad<G:ScalarAction>{roles(A);inputs(A x:G::Scalar::Element);local A:let y=Id::<G.Scalar>(x);return;}", "source-syntax"),
+    ("function requirement", "fn Bad<G:domain Group>() -> () requires(Field(G.Scalar)){return;}", "source-syntax"),
+    ("function where", "fn Bad<G:domain Group>() -> () where G.Scalar:Field {return;}", "source-syntax"),
+    ("bundle requirement", "bundle Bad(G)=(Field(G.Scalar));", "source-syntax"),
+    ("family requirement", "protocol Bad<G:domain Group> requires(Field(G.Scalar)){roles(A);return;}", "source-syntax"),
 ):
-    with case(f"dotted roots are opaque in {label}"):
-        text = "module {fn Id<F:Field>(x:F::Element)->F::Element{return x;}" + fragment + "}"
+    with case(f"dotted static references are obsolete in {label}"):
+        text = "fn Id<F:Field>(x:F::Element)->F::Element{return x;}" + fragment
         commands.source("protocol-source", text, refuses=code)
-        assert analyze(text)["phase"] == "semantic_error"
+        assert analyze(text)["phase"] == "syntax_partial"
 
 with case("explicit projections check before and after family selection"):
-    text = '''module {
+    text = '''
       protocol P<G:ScalarAction>{roles(A);inputs(A x:G::Scalar::Element);
         outputs(A G::Scalar::Element);return x;}
       SELECTION
-    }'''
-    for selection in ("", "configure C=P(G=bls12-381.g1);"):
+    '''
+    for selection in ("", "configure C=P(G=\"bls12-381.g1\");"):
         valid = text.replace("SELECTION", selection)
         assert analyze(valid)["phase"] == "source_checked"
         common(valid)
-        commands.source("protocol-source", valid.replace("G::Scalar", "G.Scalar"), refuses="source-name-unresolved")
+        commands.source("protocol-source", valid.replace("G::Scalar", "G.Scalar"), refuses="source-syntax")
 
 with case("function configurations preserve root quotation and projection syntax"):
-    text = '''module {fn Id<F:Field>(x:F::Element)->F::Element{return x;}
-      configure C=Id(F=ACTUAL);}'''
+    text = '''fn Id<F:Field>(x:F::Element)->F::Element{return x;}
+      configure C=Id(F=ACTUAL);'''
     expected = common(text.replace("ACTUAL", '"bls12-381.fr"'))
-    for actual in ("bls12-381.fr", "bls12-381.g1::Scalar", '"bls12-381.g1"::Scalar'):
+    for actual in ('"bls12-381.fr"', '"bls12-381.g1"::Scalar'):
         assert common(text.replace("ACTUAL", actual)) == expected
-    for actual in ("bls12-381.g1.Scalar", '"bls12-381.g1.Scalar"'):
-        commands.source("protocol-source", text.replace("ACTUAL", actual), refuses="source-name-unresolved")
+    for actual in ("bls12-381.fr", "bls12-381.g1.Scalar"):
+        commands.source("protocol-source", text.replace("ACTUAL", actual), refuses="source-syntax")
+    commands.source("protocol-source", text.replace("ACTUAL", '"bls12-381.g1.Scalar"'), refuses="source-name-unresolved")
 
 with case("generic binder names cannot impersonate common domain projections"):
-    commands.source("protocol-source", 'module {fn Bad<"G.Scalar":Field>() -> () {return;}}', refuses="source-static-name")
-    commands.source("protocol-source", 'module {bundle Bad("G.Scalar")=(Field(G::Scalar));}', refuses="source-name-unresolved")
+    commands.source("protocol-source", 'fn Bad<"G.Scalar":Field>() -> () {return;}', refuses="source-identifier")
+    commands.source("protocol-source", 'bundle Bad("G.Scalar")=(Field(G::Scalar));', refuses="source-identifier")
 
 with case("family locals must have a supported specialization route"):
-    text = '''module {
+    text = '''
       fn H<>() -> () {return;}
       fn Id<F:Field>(x:F::Element)->F::Element{return x;}
       configure Open=Id();
       configure Closed=H();
       protocol P<F:Field>{roles(A);inputs(A x:F::Element);BODY return;}
       SELECTION
-    }'''
+    '''
     for body in ("local A:H();", "local A:let y=Open::<F>(x);", "local A:let y=Open(x);"):
         invalid = text.replace("BODY", body).replace("SELECTION", "")
         commands.source("protocol-source", invalid, refuses="source-local-configuration")
     for body in ("local A:H::<>();", "local A:Closed();", "local A:let y=Id::<F>(x);"):
-        for selection in ("", "configure C=P(F=koala-bear);"):
+        for selection in ("", "configure C=P(F=\"koala-bear\");"):
             valid = text.replace("BODY", body).replace("SELECTION", selection)
             assert analyze(valid)["phase"] == "source_checked"
             common(valid)

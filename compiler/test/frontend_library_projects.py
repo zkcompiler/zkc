@@ -25,7 +25,7 @@ def identity(name):
     return f'library(namespace="project-tests",name="{name}",version="1",resolution="r1")'
 
 
-CELL = f'''module {{
+CELL = f'''
   {identity("cell")};
   association Private = "private subject";
   pub interface Cell {{ type Value copy drop; local step(value: Value) -> Value; }}
@@ -35,7 +35,7 @@ CELL = f'''module {{
   }}
   fn Helper(x: bool) -> bool {{ return x; }}
   pub fn Client<C: Cell>(input: C::Value) -> C::Value {{ return C::step(value: input); }}
-}}'''
+'''
 
 
 def write(root, name, text):
@@ -53,12 +53,12 @@ def run(root, source, libraries, mode="protocol-analyze", refuses=None):
 
 
 def direct():
-    return f'''module {{
+    return f'''
       {identity("app")}; dependency cell = {identity("cell")};
       use cell::{{Cell, BoolCell, Client}};
       link Identity = Client<BoolCell>;
       fn Main(x: bool) -> bool {{ return Identity(input: x); }}
-    }}'''
+    '''
 
 
 def owned(report, section, owner):
@@ -86,22 +86,22 @@ with case("a diamond preserves the common owner's exact checked identity"), proj
     baseline = run(root, direct(), {"cell": CELL})
     libraries = {"cell": CELL}
     for name in ("left", "right"):
-        libraries[name] = f'''module {{
+        libraries[name] = f'''
           {identity(name)}; dependency cell = {identity("cell")};
           pub use cell::{{Cell, BoolCell}}; use cell::Client;
           association Hidden = "{name}";
           pub fn Through<C: Cell>(value: C::Value) -> C::Value {{
             return Client::<C>(input: value);
           }}
-        }}'''
-    diamond = f'''module {{
+        '''
+    diamond = f'''
       {identity("app")};
       dependency left = {identity("left")}; dependency right = {identity("right")};
       use left::{{Through as Left, BoolCell as A}};
       use right::{{Through as Right, BoolCell as B}};
       link One = Left<A>; link Two = Right<B>;
       fn Main(x: bool) -> bool {{ let y = One(value: x); return Two(value: y); }}
-    }}'''
+    '''
     report = run(root, diamond, libraries)
     assert report["state"] == "source_checked", report["diagnostics"]
     for section in ("interfaces", "clients"):
@@ -116,13 +116,13 @@ with case("a diamond preserves the common owner's exact checked identity"), proj
 with case("same member spellings in two owners retain distinct origins and subjects"), project_directory() as tmp:
     root = Path(tmp)
     second = CELL.replace(identity("cell"), identity("second"))
-    app = f'''module {{
+    app = f'''
       dependency a = {identity("cell")}; dependency b = {identity("second")};
       use a::{{Client as A, BoolCell as CA}};
       use b::{{Client as B, BoolCell as CB}};
       link Left = A<CA>; link Right = B<CB>;
       fn Main(x: bool) -> bool {{let y = Left(x); return Right(y);}}
-    }}'''
+    '''
     report = run(root, app, {"a": CELL, "b": second})
     assert report["state"] == "source_checked", report["diagnostics"]
     assert owned(report, "interfaces", "cell") != owned(report, "interfaces", "second")
@@ -131,29 +131,29 @@ with case("same member spellings in two owners retain distinct origins and subje
 
 with case("an anonymous application can own checked local definitions"), project_directory() as tmp:
     app = CELL.replace(identity("cell") + ";", "").replace("pub ", "")
-    app = app[:-1] + "link Closed = Client<BoolCell>; }"
+    app = app + "link Closed = Client<BoolCell>;"
     report = run(Path(tmp), app, {})
     assert report["state"] == "source_checked", report["diagnostics"]
 
 
 with case("checked generic traversals compose and configure by public static labels"), project_directory() as tmp:
     root = Path(tmp)
-    library = f'''module {{ {identity("folds")};
+    library = f''' {identity("folds")};
       pub fn Last<N: nat>(items: Array<bool, N>, initial: bool) -> bool {{
         return fold items with initial |state, item| {{ item }};
       }}
       pub fn Three(value: bool) -> bool {{
         return Last::<3>(items: [value, value, value], initial: value);
       }}
-    }}'''
-    source = f'''module {{
+    '''
+    source = f'''
       dependency folds = {identity("folds")}; use folds::{{Last, Three}};
       configure Empty = Last(N = 0);
       fn Main(value: bool) -> bool {{
         let empty = Empty(items: [], initial: value);
         return Three(value: empty);
       }}
-    }}'''
+    '''
     report = run(root, source, {"folds": library})
     assert report["state"] == "source_checked", report["diagnostics"]
     run(root, source, {"folds": library}, "protocol-admit")
@@ -164,12 +164,12 @@ with case("checked generic traversals compose and configure by public static lab
 
 with case("same named protocols remain distinct and private constructors cannot be impersonated"), project_directory() as tmp:
     root = Path(tmp)
-    libs = {name: f'''module {{ {identity(name)};
-      pub checked struct Ticket(value: bool) constructors(Make);
-      pub fn Make(value: bool) -> Ticket {{ return Ticket(value = value); }}
+    libs = {name: f''' {identity(name)};
+      pub checked struct Ticket {{ value: bool }} constructors(Make);
+      pub fn Make(value: bool) -> Ticket {{ return Ticket{{ value: value }}; }}
       pub protocol Echo {{ roles(A); inputs(A value: bool); outputs(A bool); return value; }}
-    }}''' for name in ("left", "right")}
-    source = f'''module {{
+    ''' for name in ("left", "right")}
+    source = f'''
       dependency left = {identity("left")}; dependency right = {identity("right")};
       use left::Echo as Left; use right::Echo as Right; use left::Ticket;
       protocol Parent {{ roles(A); inputs(A value: bool); outputs(A bool);
@@ -181,9 +181,9 @@ with case("same named protocols remain distinct and private constructors cannot 
       instance Root: Parent {{ roles(A=A); dependencies(first=L, second=R); }}
       instance L: Left {{ roles(A=A); }} instance R: Right {{ roles(A=A); }}
       entry main=Root;
-    }}'''
+    '''
     run(root, source, libs, "protocol-admit")
-    forged = source.replace("protocol Parent", "fn Make(x: bool)->Ticket { return Ticket(value = x); } protocol Parent")
+    forged = source.replace("protocol Parent", "fn Make(x: bool)->Ticket { return Ticket{ value: x }; } protocol Parent")
     run(root, forged, libs, "protocol-source", "source-checked-construction")
 
 
@@ -191,7 +191,7 @@ with case("split multi-type branding compares aliases seals and explicit identit
     import re
 
     root = Path(tmp)
-    library = f'''module {{
+    library = f'''
       {identity("branded")};
       pub interface Pair {{
         type Value drop; type Stamp drop;
@@ -206,15 +206,15 @@ with case("split multi-type branding compares aliases seals and explicit identit
       pub fn Client<C: Pair>(value: C::Value, stamp: C::Stamp) -> (C::Value, C::Stamp) {{
         return C::keep(value: value, stamp: stamp);
       }}
-    }}'''
-    app = f'''module {{
+    '''
+    app = f'''
       dependency branded = {identity("branded")};
       use branded::{{Empty, Client}};
       association Shared = "shared";
       association Left = "left"; association Right = "right";
       select A = Empty<Shared>; select B = Empty<Shared>;
       link First = Client<A>; link Second = Client<B>;
-    }}'''
+    '''
     alternatives = [
         (app, 2),
         (app.replace("select A", "seal A").replace("select B", "seal B"), 4),
@@ -229,16 +229,16 @@ with case("split multi-type branding compares aliases seals and explicit identit
 
 
 with case("source cannot impersonate installed contract owner"), project_directory() as tmp:
-    run(Path(tmp), '''module {
+    run(Path(tmp), '''
       library(namespace="zkc",name="installed-contracts",version="1",resolution="builtin");
       fn Main(x: bool) -> bool { return x; }
-    }''', {}, "protocol-source", "source-library-reserved")
+    ''', {}, "protocol-source", "source-library-reserved")
 
 
 with case("diagnostic overflow is bounded and cannot recover to emission"), project_directory() as tmp:
-    app = "module {\n" + "\n".join(
+    app = "\n".join(
         f"use missing::F{i};" for i in range(300)
-    ) + "\n}"
+    )
     report = run(Path(tmp), app, {})
     assert report["state"] == "incomplete"
     assert len(report["diagnostics"]) == 256

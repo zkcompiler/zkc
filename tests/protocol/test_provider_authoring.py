@@ -10,9 +10,9 @@ FIXTURE = ROOT / "tests/fixtures/contracts/provider-alternative.pir"
 DEFAULT = "arkworks/vector.dot"
 PAIRWISE = "arkworks-pairwise/vector.dot"
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
-ORDINARY = '''module {
+ORDINARY = '''
   use zkc::algebra::Vector;
-  bind dot = vector::dot(bls12-381.fr);
+  bind dot = "vector.dot"("bls12-381.fr");
   fn Dot(left: Vector<"bls12-381.fr"::Element>, right: Vector<"bls12-381.fr"::Element>)
       -> "bls12-381.fr"::Element {
     let result = dot(left, right); return result;
@@ -27,7 +27,7 @@ ORDINARY = '''module {
   }
   instance concrete: InnerProduct { roles (P = P, V = V); }
   entry main = concrete;
-}'''
+'''
 
 
 def write(directory, name, value):
@@ -83,9 +83,9 @@ def test_helper_specialization_retains_exact_identity(toolchain, directory, jour
     checker = toolchain.checker("interactive-protocol")
     # Import the ordinary source helper through the existing source-module path.
     text = FIXTURE.read_text()
-    helper, rest = text.split("  configure Default", 1)
-    (directory / "helpers.pir").write_text(helper + "}\n")
-    app = source_file(directory, 'module { use zkc::algebra::Vector; mod helpers; '
+    helper, rest = text.split("configure Default", 1)
+    (directory / "helpers.pir").write_text(helper)
+    app = source_file(directory, 'use zkc::algebra::Vector; mod helpers; '
                       'use helpers::Dot;\n  configure Default' + rest)
     original = write(directory, "source.json", journal.json([compiler, "protocol-source", app]))
     physical = journal.json([compiler, "protocol-compile", app])

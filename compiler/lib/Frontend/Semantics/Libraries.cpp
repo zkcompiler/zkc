@@ -7,7 +7,9 @@
 #include "../Static/Types.h"
 #include "../Syntax/Captures.h"
 #include "../Work.h"
+#include "Collections.h"
 #include "Operators.h"
+#include "Places.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -215,17 +217,18 @@ public:
     if (p.sort)
       return lib::Sort::domainOf(domainSort(*p.sort));
     if (p.bounds.size() == 1) {
-      if (p.bounds[0] == "nat" || p.bounds[0] == "Nat")
+      const auto bound = syntax::encode(p.bounds[0]);
+      if (bound == "nat" || bound == "Nat")
         return lib::Sort::natural();
-      if (p.bounds[0] == "Type")
+      if (bound == "Type")
         return lib::Sort::type();
-      auto sorts = capabilityDomainSorts(p.bounds[0]);
+      auto sorts = capabilityDomainSorts(bound);
       if (sorts.size() == 1)
         return lib::Sort::domainOf(sorts.front());
-      if (p.bounds[0] == "association")
+      if (bound == "association")
         return lib::Sort::association();
       for (const auto &interface : source.libraryInterfaces)
-        if (interface.name == p.bounds[0])
+        if (interface.name == bound)
           return lib::Sort::component();
     }
     return fail(p, "library-source-parameter",
@@ -236,7 +239,7 @@ public:
   parameterMembers(const syntax::StaticParameter &p) {
     if (!p.sort && p.bounds.size() == 1)
       for (const auto &interface : source.libraryInterfaces)
-        if (interface.name == p.bounds[0])
+        if (interface.name == syntax::encode(p.bounds[0]))
           return members(interface);
     return {};
   }
@@ -281,7 +284,7 @@ public:
       return lib::StaticTerm::natural(naturalConstants->at(a.value));
     }
     auto sort = protocol::installedIdentitySort(a.value);
-    if (sort.empty())
+    if (a.kind != syntax::Atom::Kind::String || sort.empty())
       return fail(a, "library-source-static",
                   "unknown static root '" + a.value + "'");
     // Installed identities remain exact nominal roots. Their owner supplies
@@ -393,9 +396,7 @@ public:
     syntax::LibraryTerm t;
     t.root.location = s.location;
     t.root.value = s.name;
-    t.root.kind = s.natural  ? syntax::Atom::Kind::Number
-                  : s.quoted ? syntax::Atom::Kind::String
-                             : syntax::Atom::Kind::Name;
+    t.root.kind = s.kind;
     t.members = s.members;
     return term(t, terms);
   }
@@ -417,7 +418,8 @@ public:
       }
       return lib::Type::product(std::move(elements));
     }
-    if (!s.quoted && !s.natural && s.arguments.empty() && s.members.empty()) {
+    if (!s.quoted() && !s.natural() && s.arguments.empty() &&
+        s.members.empty()) {
       auto local = types.find(s.name);
       if (local != types.end())
         return local->second;
@@ -431,7 +433,7 @@ public:
           return lib::Type::parameter(parameter->second.declaration);
       }
     }
-    if (!s.quoted && s.name == "Array" && s.members.empty() &&
+    if (!s.quoted() && s.name == "Array" && s.members.empty() &&
         s.arguments.size() == 2) {
       auto element = type(s.arguments[0], terms, types, depth + 1);
       if (!element)
@@ -471,7 +473,7 @@ public:
       }
       return fail(s, "library-source-type", "unknown domain type member");
     }
-    if (!s.quoted && !s.natural && s.members.empty())
+    if (!s.quoted() && !s.natural() && s.members.empty())
       for (const auto &enumeration : source.enums)
         if (enumeration.name == s.name) {
           if (s.arguments.size() != enumeration.parameters.size())
@@ -502,8 +504,9 @@ public:
             const auto &parameter = enumeration.parameters[n];
             if (expected->kind == lib::Sort::Kind::Component) {
               auto bound = componentBounds.find(lib::identity(*actual));
-              bool agrees = bound != componentBounds.end() &&
-                            bound->second == parameter.bounds.front();
+              bool agrees =
+                  bound != componentBounds.end() &&
+                  bound->second == syntax::encode(parameter.bounds.front());
               if (!agrees)
                 return fail(s, "library-source-enum-actual",
                             "enum component actual must have its declared "
@@ -531,7 +534,7 @@ public:
           result.arguments = std::move(actuals);
           return result;
         }
-    if (!s.quoted && s.members.empty())
+    if (!s.quoted() && s.members.empty())
       for (const auto &record : source.structs)
         if (record.name == s.name) {
           if (!record.parameters.empty() || !s.arguments.empty())
@@ -554,7 +557,7 @@ public:
           return lib::Type::record(id(record.name), std::move(fields),
                                    std::move(elements));
         }
-    if (elementTypeFamily(s.name) && !s.quoted && !s.natural) {
+    if (elementTypeFamily(s.name) && !s.quoted() && !s.natural()) {
       if (s.arguments.size() != 1)
         return fail(s, "library-source-type",
                     "type family requires one element type");
@@ -570,7 +573,8 @@ public:
       return lib::Type::logical(constructor.str(), element->arguments);
     }
     for (const auto &installed : protocol::boundTypeConstructors()) {
-      if (installed.name != logicalConstructor(s.name) || s.quoted || s.natural)
+      if (installed.name != logicalConstructor(s.name) || s.quoted() ||
+          s.natural())
         continue;
       if (s.arguments.size() != installed.parameters.size())
         return fail(s, "library-source-type",
@@ -627,14 +631,11 @@ public:
         return t.takeError();
       result.outputs.push_back({*t, {}});
     }
-    // The parser records one typed term list for every requirement it reads.
-    if (f.requirements.size() != f.requirementTerms.size())
-      report_fatal_error("library requirement syntax lacks its typed terms");
-    for (size_t n = 0; n < f.requirements.size(); ++n) {
+    for (const auto &requirement : f.requirements) {
       lib::Requirement r;
       r.relation =
-          f.requirements[n].predicate == "=" ? "" : f.requirements[n].predicate;
-      for (const auto &a : f.requirementTerms[n]) {
+          requirement.predicate ? syntax::encode(*requirement.predicate) : "";
+      for (const auto &a : requirement.arguments) {
         auto t = term(a, terms);
         if (!t)
           return t.takeError();
@@ -653,6 +654,20 @@ public:
     std::vector<lib::Import> imports;
     lib::Body body;
     std::map<std::string, lib::Place> locals;
+    // A captured place a region reads through its region input.
+    struct Alias {
+      syntax::Place place;
+      lib::Place value;
+    };
+    std::vector<Alias> captured;
+    // A source place checked against the typed value it selects. `complete`
+    // is false when an inferred capture stopped at an index into one
+    // collection value, which is captured whole.
+    struct Selected {
+      lib::Place value;
+      syntax::Place place;
+      bool complete = true;
+    };
     std::map<uint32_t, lib::Type> values;
     uint32_t next = 0;
     bool returned = false;
@@ -684,34 +699,75 @@ public:
       }
       return t;
     }
-    Expected<lib::Place> named(StringRef name, const source::Node &n) {
-      auto exact = locals.find(name.str());
-      if (exact != locals.end())
-        return exact->second;
-      auto [root, field] = name.rsplit('.');
-      if (!root.empty() && !field.empty()) {
-        auto base = named(root, n);
-        if (!base)
-          return base.takeError();
-        auto t = placeType(*base);
+    // Check a place's selections against its checked types. The body
+    // checker owns permissions: selecting a component leaves every sibling,
+    // including a zero-storage one, in the whole checked value.
+    Expected<Selected> select(const syntax::Place &place, const source::Node &n,
+                              bool captureCollection = false) {
+      const auto &at =
+          place.location ? static_cast<const source::Node &>(place) : n;
+      Selected result;
+      size_t begin = 0;
+      const auto *root = syntax::localRoot(place);
+      if (const auto *alias =
+              places::capturedAncestor(ArrayRef(captured), place)) {
+        result.value = alias->value;
+        result.place = alias->place;
+        begin = alias->place.steps.size();
+      } else if (root && locals.count(*root)) {
+        result.value = locals.at(*root);
+        result.place.root = place.root;
+        result.place.location = place.location;
+      } else
+        return a.fail(at, "library-source-name",
+                      "unknown value '" + syntax::spelling(place) + "'");
+      for (size_t i = begin; i < place.steps.size(); ++i) {
+        const auto &step = place.steps[i];
+        auto t = placeType(result.value);
         if (!t)
           return t.takeError();
-        unsigned index;
-        if (field.getAsInteger(10, index)) {
-          auto it = llvm::find(t->fields, field.str());
-          if (it == t->fields.end())
-            return a.fail(n, "library-source-projection",
-                          "unknown record field");
-          index = it - t->fields.begin();
+        auto kind = places::AggregateKind::Scalar;
+        size_t arity = t->elements.size();
+        if (t->kind == lib::Type::Kind::Record)
+          kind = places::AggregateKind::Record;
+        else if (t->kind == lib::Type::Kind::Product)
+          kind = places::AggregateKind::Product;
+        else if (t->kind == lib::Type::Kind::Array) {
+          if (t->arguments[0].kind != lib::StaticTerm::Kind::Natural)
+            return a.fail(at, "library-source-index",
+                          "array projection requires a known extent");
+          kind = places::AggregateKind::Array;
+          arity = t->arguments[0].number;
+        } else if (captureCollection &&
+                   step.kind == syntax::Projection::Kind::Index &&
+                   t->kind == lib::Type::Kind::Logical &&
+                   collectionOperations(t->name)) {
+          result.complete = false;
+          return result;
         }
-        auto p = *base;
-        p.path.push_back(index);
-        auto checked = placeType(p);
-        if (!checked)
-          return checked.takeError();
-        return p;
+        auto selection = places::select(step, kind, arity, t->fields);
+        if (!selection)
+          return a.fail(step.location ? static_cast<const source::Node &>(step)
+                                      : at,
+                        "library-source-projection",
+                        kind == places::AggregateKind::Scalar
+                            ? "projection requires the corresponding "
+                              "aggregate kind"
+                            : "invalid projection kind, field, or static "
+                              "index");
+        result.value.path.push_back(selection->index);
+        auto checked = step;
+        checked.key = selection->key;
+        result.place.steps.push_back(std::move(checked));
       }
-      return a.fail(n, "library-source-name", "unknown value '" + name + "'");
+      return result;
+    }
+    Expected<lib::Place> place(const syntax::Place &place,
+                               const source::Node &n) {
+      auto selected = select(place, n);
+      if (!selected)
+        return selected.takeError();
+      return selected->value;
     }
     Expected<lib::Signature> logical(const generic::Operation &op,
                                      const std::vector<lib::StaticTerm> &args) {
@@ -740,14 +796,14 @@ public:
          const std::vector<lib::Place> *materializedInputs = nullptr) {
       lib::Call c;
       lib::Signature signature;
-      auto [owner, member] = StringRef(e.name).rsplit('.');
-      auto component = terms.find(owner.str());
-      if (e.qualified && component != terms.end()) {
-        if (llvm::any_of(protocol::boundOperationContracts(),
-                         [&](const auto &op) { return op.name == e.name; }))
-          return a.fail(
-              e, "library-source-call-ambiguity",
-              "component member conflicts with an installed primitive");
+      const auto &target = e.reference.target;
+      const bool direct = target.kind == syntax::Target::Kind::Declaration &&
+                          target.members.empty();
+      auto component = target.kind == syntax::Target::Kind::Parameter
+                           ? terms.find(target.symbol)
+                           : terms.end();
+      if (component != terms.end()) {
+        const auto &member = target.members.front();
         if (e.staticArguments || !e.attributes.empty())
           return a.fail(
               e, "library-source-call",
@@ -758,20 +814,18 @@ public:
         if (imported == imports.end())
           return a.fail(e, "library-source-call",
                         "member call needs an interface-bound component");
-        auto fn =
-            imported->interface.declaration().functions.find(member.str());
+        auto fn = imported->interface.declaration().functions.find(member);
         if (fn == imported->interface.declaration().functions.end())
           return a.fail(e, "library-source-call",
                         "interface does not export this function");
         signature = replace(fn->second, imported->interface.declaration().self,
                             component->second);
-        c.target = lib::MemberCall{component->second, member.str()};
-      } else if (!e.quoted && !e.qualified &&
-                 llvm::any_of(a.source.functions, [&](const auto &f) {
-                   return f.name == e.name;
+        c.target = lib::MemberCall{component->second, member};
+      } else if (direct && llvm::any_of(a.source.functions, [&](const auto &f) {
+                   return f.name == target.symbol;
                  })) {
         const auto &f = *llvm::find_if(a.source.functions, [&](const auto &f) {
-          return f.name == e.name;
+          return f.name == target.symbol;
         });
         if (!e.attributes.empty())
           return a.fail(e, "library-source-call",
@@ -782,11 +836,11 @@ public:
         const auto &d = contract.declaration();
         lib::Substitution arguments;
         if (e.staticArguments) {
-          if (e.staticTerms.size() != d.parameters.size())
+          if (e.staticArguments->size() != d.parameters.size())
             return a.fail(e, "library-source-actual",
                           "wrong helper static arity");
           for (size_t i = 0; i < d.parameters.size(); ++i) {
-            auto t = a.term(e.staticTerms[i], terms);
+            auto t = a.term((*e.staticArguments)[i], terms);
             if (!t)
               return t.takeError();
             arguments.statics.push_back(
@@ -832,10 +886,9 @@ public:
             return order.takeError();
           for (size_t i = 0; i < e.operands.size(); ++i) {
             const auto &operand = e.operands[i];
-            if (operand.kind != syntax::Expression::Kind::Name ||
-                operand.quoted)
+            if (operand.kind != syntax::Expression::Kind::Name)
               continue;
-            auto p = named(operand.name, operand);
+            auto p = place(*syntax::placeCandidate(operand), operand);
             if (!p)
               return p.takeError();
             auto t = placeType(*p);
@@ -879,22 +932,25 @@ public:
         signature = std::move(*formed);
         c.target = std::move(target);
       } else {
-        std::string operation = e.name;
+        std::string operation = syntax::encode(target);
+        bool bound = false;
         std::vector<lib::StaticTerm> args =
             inferredStatics ? *inferredStatics : std::vector<lib::StaticTerm>{};
-        for (const auto &t : e.staticTerms) {
-          auto v = a.term(t, terms);
-          if (!v)
-            return v.takeError();
-          args.push_back(*v);
-        }
+        if (e.staticArguments)
+          for (const auto &t : *e.staticArguments) {
+            auto v = a.term(t, terms);
+            if (!v)
+              return v.takeError();
+            args.push_back(*v);
+          }
         for (const auto &binding : a.source.bindings)
-          if (binding.name == e.name && !e.qualified && !e.quoted) {
+          if (direct && binding.name == target.symbol) {
             if (e.staticArguments)
               return a.fail(
                   e, "library-source-call",
                   "bound operation cannot receive extra static arguments");
             operation = binding.application.contract;
+            bound = true;
             auto declaration =
                 llvm::find_if(protocol::boundOperationContracts(),
                               [&](const auto &candidate) {
@@ -936,15 +992,19 @@ public:
                             "checked logical calls cannot discard an explicit "
                             "implementation selection");
           }
-        auto op =
-            llvm::find_if(protocol::boundOperationContracts(),
-                          [&](const auto &o) { return o.name == operation; });
+        // Only an installed contract, directly or through a binding, is an
+        // operation; a declaration spelling never names one.
+        auto op = target.kind == syntax::Target::Kind::Operation || bound
+                      ? llvm::find_if(
+                            protocol::boundOperationContracts(),
+                            [&](const auto &o) { return o.name == operation; })
+                      : protocol::boundOperationContracts().end();
         if (op == protocol::boundOperationContracts().end())
           return a.fail(
               e, "library-source-call",
               "call is not an installed operation or interface member");
-        if (!a.source.carrier && protocol::authoringStage(operation) !=
-                                     protocol::AuthoringStage::Source)
+        if (protocol::authoringStage(operation) !=
+            protocol::AuthoringStage::Source)
           return a.fail(e, "source-operation-stage",
                         "operation is not available to ordinary source calls");
         auto s = logical(*op, args);
@@ -952,7 +1012,8 @@ public:
           return s.takeError();
         signature = *s;
         c.target = lib::LogicalCall{operation, std::move(args)};
-        c.attributes = e.attributes;
+        for (const auto &attribute : e.attributes)
+          c.attributes.push_back(attribute.value);
       }
       auto order = argumentOrder(e, signature);
       if (!order)
@@ -1018,27 +1079,29 @@ public:
           });
       if (!target)
         return std::move(failure);
-      if (operatorTargets && !target->qualified)
-        operatorTargets->insert(target->callee);
+      const bool installed =
+          target->target.kind == syntax::Target::Kind::Operation;
+      if (operatorTargets && !installed)
+        operatorTargets->insert(target->target.symbol);
       syntax::Expression use;
       use.location = e.location;
       use.kind = syntax::Expression::Kind::Call;
-      use.name = target->callee;
-      use.qualified = target->qualified;
+      use.reference = syntax::Reference(target->target);
       std::vector<lib::Place> inputs;
       for (auto index : target->order) {
         syntax::Expression operand;
         operand.location = e.operands[index].location;
-        operand.name = names[index];
+        operand.reference =
+            syntax::Reference(syntax::Target::local(names[index]));
         use.operands.push_back(std::move(operand));
         inputs.push_back(locals.at(names[index]));
       }
       std::vector<lib::StaticTerm> statics;
-      if (target->qualified) {
+      if (installed) {
         const auto &signature =
             llvm::find_if(protocol::boundOperationContracts(),
                           [&](const auto &operation) {
-                            return operation.name == target->callee;
+                            return operation.name == target->target.symbol;
                           })
                 ->signature;
         std::map<unsigned, lib::StaticTerm> solved;
@@ -1073,7 +1136,7 @@ public:
         }
       }
       auto results =
-          call(use, expected, target->qualified ? &statics : nullptr, &inputs);
+          call(use, expected, installed ? &statics : nullptr, &inputs);
       if (!results)
         return results.takeError();
       if (results->size() != 1)
@@ -1117,12 +1180,18 @@ public:
       if (e.kind == K::Map || e.kind == K::Fold)
         return lexicalTraversal(e, expected);
       if (e.kind == K::Index || e.kind == K::Boolean) {
+        auto literal = [&](StringRef value) {
+          syntax::Atom atom;
+          atom.kind = syntax::Atom::Kind::Number;
+          atom.value = value.str();
+          return std::vector<syntax::Atom>{std::move(atom)};
+        };
         syntax::Expression constant;
         constant.location = e.location;
         constant.kind = K::Call;
-        constant.qualified = true;
-        constant.name = "index.constant";
-        constant.attributes = {e.kind == K::Index ? e.name : "0"};
+        constant.reference =
+            syntax::Reference(syntax::Target::operation("index.constant"));
+        constant.attributes = literal(e.kind == K::Index ? e.name : "0");
         auto left = call(constant);
         if (!left)
           return left.takeError();
@@ -1130,7 +1199,7 @@ public:
           return left->front();
         auto right = left->front();
         if (e.name == "false") {
-          constant.attributes = {"1"};
+          constant.attributes = literal("1");
           auto other = call(constant);
           if (!other)
             return other.takeError();
@@ -1144,15 +1213,22 @@ public:
         body.instructions.push_back(std::move(equality));
         return lib::Place{output.id, {}};
       }
-      if (e.kind == K::Name && !e.quoted)
-        return named(e.name, e);
+      if (e.kind == K::Name)
+        return place(*syntax::placeCandidate(e), e);
       if (e.kind == K::Call) {
-        auto path = StringRef(e.name).rsplit('.');
-        auto owner = path.first;
-        auto label = path.second;
-        auto enumeration = llvm::find_if(
-            a.source.enums, [&](const auto &d) { return d.name == owner; });
-        if (e.qualified && !e.quoted && enumeration != a.source.enums.end()) {
+        // An enum alternative is the one member below its enum declaration.
+        const auto &target = e.reference.target;
+        const bool alternativePath =
+            target.kind == syntax::Target::Kind::Declaration &&
+            target.members.size() == 1;
+        const auto &owner = target.symbol;
+        auto enumeration =
+            alternativePath
+                ? llvm::find_if(a.source.enums,
+                                [&](const auto &d) { return d.name == owner; })
+                : a.source.enums.end();
+        if (enumeration != a.source.enums.end()) {
+          const auto &label = target.members.front();
           if (!expected || expected->kind != lib::Type::Kind::Variant)
             return a.fail(
                 e, "library-source-enum-expected",
@@ -1161,7 +1237,7 @@ public:
               lib::identity(a.id(owner)))
             return a.fail(e, "library-source-enum-nominal",
                           "constructor differs from expected enum declaration");
-          auto alternative = llvm::find(expected->fields, label.str());
+          auto alternative = llvm::find(expected->fields, label);
           if (alternative == expected->fields.end())
             return a.fail(e, "library-source-enum-alternative",
                           "unknown enum alternative");
@@ -1184,7 +1260,7 @@ public:
             return payload.takeError();
           auto output = value(*expected);
           body.instructions.push_back(
-              lib::VariantConstruct{output, label.str(), *payload});
+              lib::VariantConstruct{output, label, *payload});
           return lib::Place{output.id, {}};
         }
         auto ps = call(e, expected);
@@ -1195,13 +1271,14 @@ public:
         return product(std::move(*ps), e);
       }
       if (e.kind == K::Struct) {
-        if (e.staticArguments || !e.attributes.empty() || e.qualified ||
-            e.quoted)
+        if (e.staticArguments || !e.attributes.empty())
           return a.fail(
               e, "library-source-record-generic",
               "record construction requires an unapplied nominal record");
-        auto declaration = llvm::find_if(
-            a.source.structs, [&](const auto &r) { return r.name == e.name; });
+        const auto recordName = syntax::encode(e.reference);
+        auto declaration = llvm::find_if(a.source.structs, [&](const auto &r) {
+          return r.name == recordName;
+        });
         if (declaration == a.source.structs.end())
           return a.fail(e, "library-source-record",
                         "unknown nominal record constructor");
@@ -1210,7 +1287,7 @@ public:
                         "checked record constructor authority is not imported "
                         "by this library profile");
         syntax::Type spelling;
-        spelling.name = e.name;
+        spelling.name = recordName;
         auto t = a.type(spelling, terms, types);
         if (!t)
           return t.takeError();
@@ -1264,34 +1341,71 @@ public:
         }
         return product(std::move(ps), e, e.kind == K::Vector);
       }
-      if (e.kind == K::Get && e.operands.size() == 2) {
-        auto spelling = [&](auto &&self,
-                            const syntax::Expression &v) -> std::string {
-          if (v.kind == K::Name && !v.quoted)
-            return v.name;
-          if (v.kind != K::Get || v.operands.size() != 2 ||
-              v.operands[1].kind != K::Index)
-            return {};
-          auto base = self(self, v.operands.front());
-          return base.empty() ? std::string{} : base + "." + v.operands[1].name;
-        };
-        auto captured = locals.find(spelling(spelling, e));
-        if (captured != locals.end())
-          return captured->second;
-        auto p = expression(e.operands[0]);
-        if (!p)
-          return p.takeError();
-        unsigned index;
-        if (e.operands[1].kind != K::Index ||
-            StringRef(e.operands[1].name).getAsInteger(10, index))
-          return a.fail(
-              e, "library-source-index",
-              "checked aggregate access requires a literal static index");
-        p->path.push_back(index);
-        auto checked = placeType(*p);
-        if (!checked)
-          return checked.takeError();
-        return *p;
+      if (e.kind == K::Field || e.kind == K::TupleField || e.kind == K::Get ||
+          e.kind == K::Length) {
+        // A place read through a captured ancestor selects its region input.
+        if (auto candidate = syntax::placeCandidate(e))
+          if (places::capturedAncestor(ArrayRef(captured), *candidate)) {
+            auto selected = select(*candidate, e, true);
+            if (!selected)
+              return selected.takeError();
+            if (selected->complete)
+              return selected->value;
+          }
+        auto base = expression(e.operands.front());
+        if (!base)
+          return base.takeError();
+        auto type = placeType(*base);
+        if (!type)
+          return type.takeError();
+        if ((e.kind == K::Length || e.kind == K::Get) &&
+            type->kind == lib::Type::Kind::Logical) {
+          auto operations = collectionOperations(type->name);
+          if (!operations)
+            return a.fail(e, "source-collection-type",
+                          "indexing/length requires a supported collection");
+          std::vector<lib::Place> inputs{*base};
+          if (e.kind == K::Get) {
+            auto index = expression(e.operands[1]);
+            if (!index)
+              return index.takeError();
+            inputs.push_back(*index);
+          }
+          syntax::Expression query;
+          query.kind = K::Call;
+          query.location = e.location;
+          query.reference = syntax::Reference(syntax::Target::operation(
+              e.kind == K::Length ? operations->length : operations->index));
+          query.operands.resize(inputs.size());
+          auto result = call(query, expected, &type->arguments, &inputs);
+          if (!result)
+            return result.takeError();
+          return result->front();
+        }
+        auto kind = type->kind == lib::Type::Kind::Record
+                        ? places::AggregateKind::Record
+                    : type->kind == lib::Type::Kind::Product
+                        ? places::AggregateKind::Product
+                    : type->kind == lib::Type::Kind::Array
+                        ? places::AggregateKind::Array
+                        : places::AggregateKind::Scalar;
+        size_t arity = type->elements.size();
+        if (kind == places::AggregateKind::Array) {
+          if (type->arguments[0].kind != lib::StaticTerm::Kind::Natural)
+            return a.fail(e, "library-source-index",
+                          "array projection requires a known extent");
+          arity = type->arguments[0].number;
+        }
+        auto step = syntax::projection(e);
+        auto selection = step ? places::select(*step, kind, arity, type->fields)
+                              : std::nullopt;
+        if (!selection)
+          return a.fail(e, "library-source-projection",
+                        "invalid projection kind, field, or static index");
+        base->path.push_back(selection->index);
+        // The receiver remains a whole checked value. Body's resource owner
+        // checks every unselected sibling, including zero-storage types.
+        return *base;
       }
       return a.fail(
           e, "library-source-expression",
@@ -1350,23 +1464,26 @@ public:
     }
     Expected<std::shared_ptr<const lib::Region>>
     region(const syntax::Body &syntaxBody, std::vector<lib::Value> inputs,
-           std::map<std::string, lib::Place> names, bool lexical = false,
-           const lib::Type *expected = nullptr) {
+           std::map<std::string, lib::Place> names, std::vector<Alias> aliases,
+           bool lexical = false, const lib::Type *expected = nullptr) {
       // Swap only lexical state. The allocation table and counter remain global
       // so sibling arms cannot accidentally share a ValueId.
       auto oldInstructions = std::move(body.instructions);
       auto oldReturns = std::move(body.returns);
       auto oldLocals = std::move(locals);
+      auto oldCaptured = std::move(captured);
       bool oldReturned = returned;
       auto restore = llvm::scope_exit([&] {
         body.instructions = std::move(oldInstructions);
         body.returns = std::move(oldReturns);
         locals = std::move(oldLocals);
+        captured = std::move(oldCaptured);
         returned = oldReturned;
       });
       body.instructions.clear();
       body.returns.clear();
       locals = std::move(names);
+      captured = std::move(aliases);
       returned = false;
       if (auto err = instructions(syntaxBody, true, lexical, expected))
         return std::move(err);
@@ -1385,47 +1502,83 @@ public:
                       "duplicate region input name");
       return Error::success();
     }
-    struct CapturePlan {
-      std::vector<lib::Place> places;
-      std::vector<lib::Type> types;
-      std::vector<source::Names> aliases;
+    // A region capture: one captured checked place with its type, and the
+    // checked source places read through it. The captured place keeps its
+    // nominal type, so zero-storage obligations reach the body checker.
+    struct Capture {
+      lib::Place place;
+      lib::Type type;
+      std::vector<Selected> reads;
     };
-    Expected<CapturePlan> capturePlan(const source::Names &names,
+    using CapturePlan = std::vector<Capture>;
+    static std::vector<lib::Place> capturedPlaces(const CapturePlan &plan) {
+      std::vector<lib::Place> result;
+      for (const auto &capture : plan)
+        result.push_back(capture.place);
+      return result;
+    }
+    // Explicit capture lists keep their written order and refusals. Inferred
+    // captures are checked first: an index into one collection value captures
+    // that value, a whole value subsumes its selections, and first use orders
+    // the region inputs.
+    Expected<CapturePlan> capturePlan(const syntax::Places &places,
                                       bool explicitCaptures,
                                       const source::Node &n) {
       CapturePlan plan;
-      std::map<std::pair<uint32_t, std::vector<unsigned>>, unsigned> seen;
-      for (const auto &name : names) {
-        auto p = named(name, n);
-        if (!p)
-          return p.takeError();
-        auto t = placeType(*p);
+      for (const auto &place : places) {
+        auto selected = select(place, n, !explicitCaptures);
+        if (!selected)
+          return selected.takeError();
+        auto t = placeType(selected->value);
         if (!t)
           return t.takeError();
-        auto key = std::make_pair(p->value.index, p->path);
-        auto found = seen.find(key);
-        if (!explicitCaptures && found != seen.end()) {
-          plan.aliases[found->second].push_back(name);
+        Capture capture{selected->value, *t, {std::move(*selected)}};
+        if (explicitCaptures) {
+          plan.push_back(std::move(capture));
           continue;
         }
-        seen.emplace(std::move(key), plan.places.size());
-        plan.places.push_back(*p);
-        plan.types.push_back(*t);
-        plan.aliases.push_back({name});
+        syntax::unite(
+            plan, std::move(capture),
+            [](const Capture &parent, const Capture &child) {
+              const auto &a = parent.place, &b = child.place;
+              return a.value.index == b.value.index &&
+                     a.path.size() <= b.path.size() &&
+                     std::equal(a.path.begin(), a.path.end(), b.path.begin());
+            },
+            [](Capture &into, Capture &&from) {
+              // Distinct element reads can normalize to the same captured
+              // bulk value. Keep each source alias once; explicit capture
+              // lists bypass this merge and still reject duplicates.
+              for (auto &read : from.reads)
+                if (llvm::none_of(into.reads, [&](const Selected &existing) {
+                      return syntax::samePlace(existing.place, read.place);
+                    }))
+                  into.reads.push_back(std::move(read));
+            });
       }
       return plan;
     }
     Error captureInputs(const CapturePlan &plan,
                         std::vector<lib::Value> &inputs,
-                        std::map<std::string, lib::Place> &names,
-                        const source::Node &n) {
-      for (unsigned i = 0; i < plan.places.size(); ++i) {
-        auto v = value(plan.types[i]);
+                        const std::map<std::string, lib::Place> &names,
+                        std::vector<Alias> &aliases, const source::Node &n) {
+      for (const auto &capture : plan) {
+        auto v = value(capture.type);
         inputs.push_back(v);
-        for (const auto &name : plan.aliases[i])
-          if (!names.emplace(name, lib::Place{v.id, {}}).second)
+        for (const auto &source : capture.reads) {
+          const auto *root = syntax::localRoot(source.place);
+          if ((source.place.steps.empty() && root && names.count(*root)) ||
+              llvm::any_of(aliases, [&](const Alias &alias) {
+                return syntax::samePlace(alias.place, source.place);
+              }))
             return a.fail(n, "library-source-duplicate",
                           "duplicate region capture name");
+          lib::Place local{v.id, {}};
+          local.path.assign(source.value.path.begin() +
+                                capture.place.path.size(),
+                            source.value.path.end());
+          aliases.push_back({source.place, std::move(local)});
+        }
       }
       return Error::success();
     }
@@ -1450,14 +1603,16 @@ public:
       auto captures = capturePlan(c.captures, c.explicitCaptures, n);
       if (!captures)
         return captures.takeError();
-      join.captures = captures->places;
+      join.captures = capturedPlaces(*captures);
       for (unsigned index = 0; index < 2; ++index) {
         std::vector<lib::Value> inputs;
         std::map<std::string, lib::Place> names;
-        if (auto err = captureInputs(*captures, inputs, names, n))
+        std::vector<Alias> aliases;
+        if (auto err = captureInputs(*captures, inputs, names, aliases, n))
           return err;
-        auto nested = region(index == 0 ? c.thenBody : c.elseBody,
-                             std::move(inputs), std::move(names));
+        auto nested =
+            region(index == 0 ? c.thenBody : c.elseBody, std::move(inputs),
+                   std::move(names), std::move(aliases));
         if (!nested)
           return nested.takeError();
         if (auto err = inferJoinOutputs(join, **nested, c.outputs, n))
@@ -1499,7 +1654,7 @@ public:
       return Error::success();
     }
     Error matchRegion(const syntax::Match &syntaxMatch, const source::Node &n) {
-      auto input = named(syntaxMatch.input, n);
+      auto input = place(syntaxMatch.input, n);
       if (!input)
         return input.takeError();
       auto type = placeType(*input);
@@ -1514,7 +1669,7 @@ public:
           capturePlan(syntaxMatch.captures, syntaxMatch.explicitCaptures, n);
       if (!captures)
         return captures.takeError();
-      match.captures = captures->places;
+      match.captures = capturedPlaces(*captures);
       std::map<std::string, const syntax::MatchArm *> arms;
       for (const auto &arm : syntaxMatch.arms) {
         if (!llvm::is_contained(type->fields, arm.alternative))
@@ -1549,9 +1704,11 @@ public:
               return a.fail(arm, "library-source-duplicate",
                             "duplicate payload binding");
         }
-        if (auto err = captureInputs(*captures, inputs, names, arm))
+        std::vector<Alias> aliases;
+        if (auto err = captureInputs(*captures, inputs, names, aliases, arm))
           return err;
-        auto nested = region(arm.body, std::move(inputs), std::move(names));
+        auto nested = region(arm.body, std::move(inputs), std::move(names),
+                             std::move(aliases));
         if (!nested)
           return nested.takeError();
         if (auto err = inferJoinOutputs(match, **nested, syntaxMatch.outputs,
@@ -1567,7 +1724,7 @@ public:
       return Error::success();
     }
     Error traversal(const syntax::ArrayTraversal &loop, const source::Node &n) {
-      auto input = named(loop.input, n);
+      auto input = place(loop.input, n);
       if (!input)
         return input.takeError();
       auto type = placeType(*input);
@@ -1587,7 +1744,7 @@ public:
                                     inputs, names, n))
         return err;
       for (const auto &[name, initial] : loop.carried) {
-        auto p = named(initial, n);
+        auto p = place(initial, n);
         if (!p)
           return p.takeError();
         auto t = placeType(*p);
@@ -1601,10 +1758,12 @@ public:
       auto captures = capturePlan(loop.captures, loop.explicitCaptures, n);
       if (!captures)
         return captures.takeError();
-      traversal.captures = captures->places;
-      if (auto err = captureInputs(*captures, inputs, names, n))
+      traversal.captures = capturedPlaces(*captures);
+      std::vector<Alias> aliases;
+      if (auto err = captureInputs(*captures, inputs, names, aliases, n))
         return err;
-      auto nested = region(loop.body, std::move(inputs), std::move(names));
+      auto nested = region(loop.body, std::move(inputs), std::move(names),
+                           std::move(aliases));
       if (!nested)
         return nested.takeError();
       traversal.body = *nested;
@@ -1660,11 +1819,13 @@ public:
       auto captures = capturePlan(step.captures, false, e);
       if (!captures)
         return captures.takeError();
-      traversal.captures = captures->places;
-      if (auto err = captureInputs(*captures, inputs, names, e))
+      traversal.captures = capturedPlaces(*captures);
+      std::vector<Alias> aliases;
+      if (auto err = captureInputs(*captures, inputs, names, aliases, e))
         return std::move(err);
-      auto nested = region(step.body, std::move(inputs), std::move(names), true,
-                           resultType ? &*resultType : nullptr);
+      auto nested =
+          region(step.body, std::move(inputs), std::move(names),
+                 std::move(aliases), true, resultType ? &*resultType : nullptr);
       if (!nested)
         return nested.takeError();
       traversal.body = *nested;
@@ -1737,22 +1898,18 @@ public:
                           "role-local calls require explicit supported nodes");
           syntax::Expression e;
           e.location = c->location;
-          e.kind = c->isOperator ? syntax::Expression::Kind::Operator
-                                 : syntax::Expression::Kind::Call;
-          e.name = c->callee;
-          e.quoted = c->quoted;
-          e.qualified = c->qualified;
-          e.staticTerms = c->staticTerms;
+          if (c->operatorSymbol) {
+            e.kind = syntax::Expression::Kind::Operator;
+            e.name = *c->operatorSymbol;
+          } else {
+            e.kind = syntax::Expression::Kind::Call;
+            e.reference = c->callee;
+          }
           e.staticArguments = c->staticArguments;
           e.attributes = c->attributes;
           e.argumentNames = c->argumentNames;
-          for (unsigned i = 0; i < c->inputs.size(); ++i) {
-            syntax::Expression v;
-            v.name = c->inputs[i];
-            v.quoted = i < c->inputAtoms.size() &&
-                       c->inputAtoms[i].kind == syntax::Atom::Kind::String;
-            e.operands.push_back(v);
-          }
+          for (const auto &input : c->inputs)
+            e.operands.push_back(syntax::placeExpression(input));
           auto expected = annotationType(c->annotation, instruction);
           if (!expected)
             return expected.takeError();
@@ -1770,12 +1927,12 @@ public:
           body.instructions.push_back(lib::Stop{stop->reason});
           returned = true;
         } else if (const auto *yield =
-                       std::get_if<source::Yield>(&instruction.value)) {
+                       std::get_if<syntax::Yield>(&instruction.value)) {
           if (!region)
             return a.fail(instruction, "library-source-yield",
                           "yield requires a local region");
-          for (const auto &name : yield->values) {
-            auto p = named(name, instruction);
+          for (const auto &value : yield->values) {
+            auto p = place(value, instruction);
             if (!p)
               return p.takeError();
             body.returns.push_back(*p);
@@ -1887,7 +2044,7 @@ public:
   }
   Expected<lib::CheckedComponent>
   checkComponent(const syntax::LibraryComponent &s, Terms terms) {
-    auto interface = interfaces.find(s.interface);
+    auto interface = interfaces.find(syntax::encode(s.interface));
     if (interface == interfaces.end())
       return fail(s, "library-source-interface", "unknown component interface");
     // Retain every declared bound independently of method use. The core owns
@@ -1896,7 +2053,7 @@ public:
     std::vector<lib::Import> imports;
     for (const auto &parameter : s.parameters)
       if (!parameter.sort && parameter.bounds.size() == 1) {
-        auto bound = interfaces.find(parameter.bounds[0]);
+        auto bound = interfaces.find(syntax::encode(parameter.bounds[0]));
         if (bound != interfaces.end())
           imports.push_back({terms.at(parameter.name), bound->second});
       }
@@ -2067,8 +2224,8 @@ public:
         return fail(p, "library-source-duplicate",
                     "duplicate helper parameter");
       if (sort->kind == lib::Sort::Kind::Component) {
-        componentBounds[lib::identity(t)] = p.bounds.front();
-        imports.push_back({t, interfaces.at(p.bounds.front())});
+        componentBounds[lib::identity(t)] = syntax::encode(p.bounds.front());
+        imports.push_back({t, interfaces.at(syntax::encode(p.bounds.front()))});
       }
       names.push_back(p.name);
       parameters.push_back(q);
@@ -2318,7 +2475,8 @@ Expected<LinkedLibrarySource> Author::run() {
         return fail(parameter, "library-source-duplicate",
                     "duplicate enum parameter");
       if (sort->kind == lib::Sort::Kind::Component)
-        componentBounds[lib::identity(formal)] = parameter.bounds.front();
+        componentBounds[lib::identity(formal)] =
+            syntax::encode(parameter.bounds.front());
       syntax::Type argument;
       argument.name = parameter.name;
       spelling.arguments.push_back(std::move(argument));
@@ -2357,8 +2515,9 @@ Expected<LinkedLibrarySource> Author::run() {
   // on a method body's environment to carry its constructor declaration.
   for (const auto &s : source.libraryComponents) {
     auto interface =
-        llvm::find_if(source.libraryInterfaces,
-                      [&](const auto &x) { return x.name == s.interface; });
+        llvm::find_if(source.libraryInterfaces, [&](const auto &x) {
+          return x.name == syntax::encode(s.interface);
+        });
     if (interface == source.libraryInterfaces.end())
       return fail(s, "library-source-interface", "unknown component interface");
     std::vector<lib::Sort> sorts;
@@ -2442,19 +2601,21 @@ Expected<LinkedLibrarySource> Author::run() {
         llvm::any_of(f.parameters,
                      [&](const auto &p) {
                        return llvm::any_of(p.bounds, [&](const auto &b) {
-                         return interfaces.count(b);
+                         return interfaces.count(syntax::encode(b));
                        });
                      }) ||
-        llvm::any_of(source.libraryLinks,
-                     [&](const auto &link) { return link.client == f.name; });
+        llvm::any_of(source.libraryLinks, [&](const auto &link) {
+          return syntax::encode(link.client) == f.name;
+        });
     if (client)
       if (auto e = checkClient(f))
         return e;
   }
   for (const auto &s : source.libraryComponents) {
     auto interface =
-        llvm::find_if(source.libraryInterfaces,
-                      [&](const auto &x) { return x.name == s.interface; });
+        llvm::find_if(source.libraryInterfaces, [&](const auto &x) {
+          return x.name == syntax::encode(s.interface);
+        });
     if (interface == source.libraryInterfaces.end())
       return fail(s, "library-source-interface", "unknown component interface");
     std::vector<lib::Sort> sorts;
@@ -2467,7 +2628,8 @@ Expected<LinkedLibrarySource> Author::run() {
       auto q = id(p.name, {s.name});
       declareStatic(q, *sort, parameterMembers(p), {}, true);
       if (sort->kind == lib::Sort::Kind::Component)
-        componentBounds[lib::identity(lib::StaticTerm::root(q))] = p.bounds[0];
+        componentBounds[lib::identity(lib::StaticTerm::root(q))] =
+            syntax::encode(p.bounds[0]);
       if (!terms.emplace(p.name, lib::StaticTerm::root(q)).second)
         return fail(p, "library-source-duplicate",
                     "duplicate component parameter");
@@ -2484,7 +2646,7 @@ Expected<LinkedLibrarySource> Author::run() {
       return locate(
           checked.takeError(), s,
           {cause(DiagnosticCause::Kind::ImportedInterface,
-                 interfaces.at(s.interface).declaration().id,
+                 interfaces.at(syntax::encode(s.interface)).declaration().id,
                  "component must implement this exact interface"),
            cause(DiagnosticCause::Kind::SelectedComponent, q,
                  "component declaration under conformance checking")});
@@ -2544,17 +2706,15 @@ Expected<LinkedLibrarySource> Author::run() {
   // Reuse the checked linker when its target owns a checked callable, retaining
   // source terms (quotation and projections) rather than decoding strings.
   for (const auto &config : source.configurations) {
-    if (!callables.count(config.base))
+    const auto base = syntax::encode(config.base);
+    if (!callables.count(base))
       continue;
     if (!config.implementations.empty())
       return fail(config, "library-source-configuration",
                   "checked helper configuration does not select primitive "
                   "implementations");
-    const auto &parameters = clientParameters.at(config.base);
-    const auto metadata = source.configurationTerms.find(config.name);
-    if (config.arguments.size() != parameters.size() ||
-        metadata == source.configurationTerms.end() ||
-        metadata->second.size() != config.arguments.size())
+    const auto &parameters = clientParameters.at(base);
+    if (config.arguments.size() != parameters.size())
       return fail(
           config, "library-source-configuration",
           "configuration must supply every checked static parameter once");
@@ -2574,17 +2734,17 @@ Expected<LinkedLibrarySource> Author::run() {
           }) != 1)
         return fail(config, "library-source-configuration",
                     "unknown, duplicate or missing checked static parameter");
-      const auto &term = metadata->second[found - config.arguments.begin()];
+      const auto &term = found->second;
       syntax::LibraryTerm actual;
       actual.root = term.root;
       actual.members = term.members;
       link.arguments.push_back(std::move(actual));
     }
     requestedLinks.push_back(std::move(link));
-    out.configurationTerms.erase(config.name);
   }
-  llvm::erase_if(out.configurations,
-                 [&](const auto &c) { return callables.count(c.base); });
+  llvm::erase_if(out.configurations, [&](const auto &c) {
+    return callables.count(syntax::encode(c.base));
+  });
   // A checked closed helper remains callable under its authored name. This
   // applies equally to a lexical traversal and to an ordinary helper reached
   // from a checked client; checking it must not erase the public callable.
@@ -2592,7 +2752,7 @@ Expected<LinkedLibrarySource> Author::run() {
     if (clientParameters.at(name).empty()) {
       syntax::LibraryLink link;
       link.name = name;
-      link.client = name;
+      link.client = syntax::Reference(syntax::Target::declaration(name));
       if (const auto *d = project.lookup(name))
         link.location = d->location;
       requestedLinks.push_back(std::move(link));
@@ -2600,26 +2760,31 @@ Expected<LinkedLibrarySource> Author::run() {
   for (const auto &link : requestedLinks) {
     if (auto error = work::charge(budget, WorkAccount::LibraryFormation))
       return locate(std::move(error), link);
-    auto client = clients.find(link.client);
+    auto client = clients.find(syntax::encode(link.client));
     if (client == clients.end())
       return fail(link,
-                  externalCallables.count(link.client) ? "library-open-call"
-                                                       : "library-source-link",
+                  externalCallables.count(syntax::encode(link.client))
+                      ? "library-open-call"
+                      : "library-source-link",
                   "link requires a checked source client body");
-    if (link.arguments.size() != clientParameters.at(link.client).size())
+    if (link.arguments.size() !=
+        clientParameters.at(syntax::encode(link.client)).size())
       return fail(link, "library-source-link",
                   "link has wrong component arity");
     std::vector<DiagnosticCause> context;
-    context.push_back(cause(DiagnosticCause::Kind::Declaration,
-                            callables.at(link.client).declaration().id,
-                            "checked client selected by this link"));
+    context.push_back(
+        cause(DiagnosticCause::Kind::Declaration,
+              callables.at(syntax::encode(link.client)).declaration().id,
+              "checked client selected by this link"));
     lib::LinkRequest request{client->second, {}, {}};
     request.selectionEnvironment = environmentFor(id(link.name));
     for (const auto &helper : clients)
       request.helpers.push_back(helper.second);
     for (unsigned n = 0; n < link.arguments.size(); ++n) {
-      auto formal = lib::StaticTerm::root(
-          callables.at(link.client).declaration().parameters[n]);
+      auto formal =
+          lib::StaticTerm::root(callables.at(syntax::encode(link.client))
+                                    .declaration()
+                                    .parameters[n]);
       auto sort = lib::sortOf(formal, environment);
       if (!sort)
         return locate(sort.takeError(), link, context);
@@ -2640,7 +2805,8 @@ Expected<LinkedLibrarySource> Author::run() {
                   "selected component's checked public interface"));
         request.bindings.push_back(
             {formal, *selected,
-             link.name + "/" + clientParameters.at(link.client)[n]});
+             link.name + "/" +
+                 clientParameters.at(syntax::encode(link.client))[n]});
       } else {
         auto selected = term(link.arguments[n], {});
         if (!selected)

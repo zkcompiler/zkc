@@ -347,7 +347,7 @@ construct(source,descriptor(),'exact-once-output-proof-without-seed',ok=False,co
 
 source=copy.deepcopy(base)
 mixed=next(f for f in source[2] if f[1]=='CheckRoundAndDraw')
-draw=next(op for op in mixed[4] if op[0]=='op' and op[2]=='random.draw')
+draw=next(op for op in mixed[4] if op[0]=='op' and dict((b[0], b[1]) for b in source[1])[op[2]]=='random.draw')
 mixed[4].remove(draw);mixed[4].insert(0,draw)
 result=construct(source,base_desc,'source-draw-before-guard',stages=False)
 check('source-draw-before-guard-keeps-failure-prefix',observed(source)==observed(result[2],result[4]))

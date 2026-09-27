@@ -147,8 +147,10 @@ and print/read, and exercises failures and ownership.
 
 `checkProtocolSyntax` checks complete text syntax without resolution.
 `inspectProtocolSyntax` and `protocol-parse` emit tagged syntax inspection, not
-portable common JSON. `parseProtocolDocument` parses and elaborates text into
-explicit common records; it does not establish semantic admission. JSON input
+portable common JSON. Syntax inspection retains `::` paths, quoted exact static
+identities, and each type root's `rootKind`; it does not apply common-term
+serialization to unresolved syntax. `parseProtocolDocument` parses and elaborates
+text into explicit common records; it does not establish semantic admission. JSON input
 decodes directly into the existing model, bypassing the private syntax AST.
 `checkProtocolDocument` checks common/generic source. `prepareLibrary` preserves
 authored configuration names for construction; `elaborateLibrary` shares

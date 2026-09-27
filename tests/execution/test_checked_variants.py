@@ -29,7 +29,7 @@ def authored(depth=1, capture=False, stopping=False):
     association = 'association Subject = R;' if capture else ''
     subject = 'association Subject;' if capture else ''
     action = 'stop refused;' if stopping else 'return x;'
-    return f'''module {{
+    return f'''
       library(namespace="test", name="alternatives", version="2", resolution="exact");
       {relation}
       interface Cell {{ type State drop; {subject}
@@ -61,7 +61,7 @@ def authored(depth=1, capture=False, stopping=False):
       }}
       instance demo: Demo {{ roles (P = P); }}
       entry main = demo;
-    }}'''
+    '''
 
 
 def execute(journal, toolchain, source, physical, ready, stopped=False):

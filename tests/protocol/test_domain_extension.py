@@ -90,7 +90,7 @@ def test_fixed_vector_compiles_and_executes(toolchain, directory, journal, lengt
 
 def test_logical_extension_without_backend(toolchain, directory, journal):
     compiler = toolchain.compiler
-    text = (ROOT / "examples/protocols/fixed-vector.pir").read_text().replace("koala-bear", '"bls12-381.fr"')
+    text = (ROOT / "examples/protocols/fixed-vector.pir").read_text().replace("koala-bear", "bls12-381.fr")
     authored = directory / "unsupported.pir"
     authored.write_text(text)
     source = write(directory, "source.json", journal.json([compiler, "protocol-source", authored]))

@@ -5,7 +5,7 @@
 // An unused family parameter still executes its selector. Static trace views
 // must refuse instead of dropping this provenance-bearing entry execution.
 int main() {
-  auto document = zkc::frontend::parseProtocolDocument(R"pir(module {
+  auto document = zkc::frontend::parseProtocolDocument(R"pir(
     fn Select(n: index) -> index { return n; }
     protocol Family {
       roles (P, V);
@@ -19,7 +19,7 @@ int main() {
       roles (P = P, V = V);
     }
     entry main = Main;
-  })pir");
+  )pir");
   if (!document) {
     llvm::errs() << llvm::toString(document.takeError()) << '\n';
     return 1;

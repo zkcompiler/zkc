@@ -56,7 +56,7 @@ void refusedSource(StringRef text, StringRef code) {
              << '\n';
 }
 void closedSource() {
-  auto analysis = analyzeProtocol(R"(module {
+  auto analysis = analyzeProtocol(R"(
     use zkc::algebra::{Vector, FixedVector as Sized, fixed_vector_from_vector,
                        fixed_vector_to_vector, fixed_vector_dot};
     const WIDTH: index = 4;
@@ -83,7 +83,7 @@ void closedSource() {
     }
     fn Nested(value: Sized<Sized<"koala-bear"::Element, 4>, 2>) -> Sized<Sized<"koala-bear"::Element, 4>, 2> { return value; }
     fn Array(value: Array<"koala-bear"::Element, 4>) -> Array<"koala-bear"::Element, 4> { return value; }
-  })",
+  )",
                                   "closed-structural.pir");
   if (!complete(analysis))
     return;
@@ -156,7 +156,7 @@ void closedSource() {
   }
 }
 void genericSource() {
-  auto analysis = analyzeProtocol(R"(module {
+  auto analysis = analyzeProtocol(R"(
     use zkc::algebra::{Vector, FixedVector, Field, fixed_vector_from_vector, fixed_vector_dot};
     fn Dot<F: Field, N: nat>(value: Vector<F::Element>) -> F::Element {
       let fixed: FixedVector<F::Element, N> = fixed_vector_from_vector::<F, N>(value);
@@ -169,7 +169,7 @@ void genericSource() {
     }
     instance run: Selected { roles (P = Prover); }
     entry main = run;
-  })",
+  )",
                                   "generic-structural.pir");
   if (!complete(analysis))
     return;
@@ -250,7 +250,7 @@ void coreCarriers() {
                            std::string(protocol::VariantSpellingBytes, '0')),
          "malformed and oversized core carriers still refuse");
 
-  auto analysis = analyzeProtocol(R"(module {
+  auto analysis = analyzeProtocol(R"(
     library(namespace="example", name="carriers", version="1", resolution="captured");
     use zkc::algebra::Element;
     interface Cell { type Value drop; local step(x: Value) -> Value; }
@@ -284,7 +284,7 @@ void coreCarriers() {
     }
     fn InspectClient<C: Inspect>(x: (C::Value, bool)) -> bool { return C::check(x); }
     link Inspected = InspectClient<Inspector>;
-  })",
+  )",
                                   "core-carrier-helpers.pir");
   if (!complete(analysis))
     return;
@@ -408,7 +408,7 @@ void libraryPermissions() {
          "public field element does not grant a container codec");
 }
 void checkedSource() {
-  auto analysis = analyzeProtocol(R"(module {
+  auto analysis = analyzeProtocol(R"(
     use zkc::algebra::{FixedVector, Vector, fixed_vector_from_vector, fixed_vector_dot};
     const WIDTH: index = 4;
     interface BulkAPI {
@@ -428,7 +428,7 @@ void checkedSource() {
     fn Dot<C: BulkAPI>(value: Vector<"koala-bear"::Element>) -> "koala-bear"::Element effects (local) { return C::dot(value); }
     link SelectedKeep = Keep<Bulk>;
     link SelectedDot = Dot<Bulk>;
-  })",
+  )",
                                   "checked-structural.pir");
   if (!complete(analysis))
     return;
@@ -451,14 +451,14 @@ void checkedSource() {
 void reexports() {
   auto project = take(ProjectInput::capture(
       {{{{{},
-          Input(R"(module {
+          Input(R"(
     mod types;
     use self::types::Bulk;
     fn Keep(value: Bulk<"koala-bear"::Element, 4>) -> Bulk<"koala-bear"::Element, 4> { return value; }
-  })",
+  )",
                 "main.pir")},
          {{"types"},
-          Input("module { pub use zkc::algebra::FixedVector as Bulk; }",
+          Input(" pub use zkc::algebra::FixedVector as Bulk; ",
                 "types.pir")}}}}));
   auto analysis = analyzeProject(project);
   if (!complete(analysis))
@@ -480,29 +480,29 @@ int main() {
   checkedSource();
   reexports();
   refusedSource(
-      R"(module { use zkc::algebra::{FixedVector, Field}; fn Bad<F: Field>(x: FixedVector<F::Element, F>) -> () { return (); } })",
+      R"( use zkc::algebra::{FixedVector, Field}; fn Bad<F: Field>(x: FixedVector<F::Element, F>) -> () { return (); } )",
       "source-type-natural");
   refusedSource(
-      R"(module { use zkc::algebra::FixedVector; fn Bad(x: FixedVector<"koala-bear"::Element, Missing>) -> () { return (); } })",
+      R"( use zkc::algebra::FixedVector; fn Bad(x: FixedVector<"koala-bear"::Element, Missing>) -> () { return (); } )",
       "source-name-unresolved");
   refusedSource(
-      R"(module { use zkc::algebra::{Vector, fixed_vector_from_vector}; fn Bad(x: Vector<"koala-bear"::Element>) -> () { let y = fixed_vector_from_vector::<"koala-bear", "koala-bear">(x); return (); } })",
+      R"( use zkc::algebra::{Vector, fixed_vector_from_vector}; fn Bad(x: Vector<"koala-bear"::Element>) -> () { let y = fixed_vector_from_vector::<"koala-bear", "koala-bear">(x); return (); } )",
       "source-static-sort");
-  refusedSource(R"(module {
+  refusedSource(R"(
     use zkc::algebra::FixedVector;
     fn Keep<T: Type, N: Nat>(x: FixedVector<T, N>) -> FixedVector<T, N> { return x; }
     fn Bad(x: FixedVector<"koala-bear"::Element, 4>) -> FixedVector<"koala-bear"::Element, 4> {
       return Keep::<"koala-bear"::Element, "koala-bear">(x);
     }
-  })",
+  )",
                 "source-static-sort");
-  refusedSource(R"(module {
+  refusedSource(R"(
     use zkc::algebra::FixedVector;
     interface Resource { type Element; }
     fn Bad<C: Resource>(x: FixedVector<C::Element, 4>) -> (FixedVector<C::Element, 4>, FixedVector<C::Element, 4>) {
       return (x, x);
     }
-  })",
+  )",
                 "library-resource-use");
   outs() << checks << " structural frontend checks, " << failures
          << " failures\n";

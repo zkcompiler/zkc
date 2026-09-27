@@ -144,7 +144,7 @@ def test_administrative_resumes_do_not_preempt_work_limits(toolchain, directory,
 
 @pytest.mark.parametrize("count", [499996, 499997])
 def test_the_schedule_budget_stops_the_execution(toolchain, directory, count):
-    """The joint schedule walks a protocol loop holding no local, message or
+    """The joint schedule walks a protocol r#loop holding no local, message or
     stop without running a role, charging two of its 1,000,000 units per
     iteration. One iteration short of the budget, the spinning role's own
     iteration limit is reached first. At the budget the schedule is exhausted:

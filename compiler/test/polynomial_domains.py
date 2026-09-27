@@ -64,7 +64,7 @@ for name in ('back', 'coefficients', 'scalar'):
 
 # Exact numeric constants from distinct operations; different shifts mean
 # different ORDERED domains, without claiming the underlying sets are disjoint.
-constants = '''module {
+constants = '''
   use zkc::algebra;
   use zkc::poly;
   fn Points<F: domain Field>()->() requires(TwoAdicField(F)) {
@@ -77,11 +77,11 @@ constants = '''module {
     let d = zkc::poly::domain_points::<F>(again,four);
     return ();
   }
-  configure Base=Points(F=koala-bear);
-  configure Extension=Points(F=koala-bear.ext8-binomial3);
+  configure Base=Points(F="koala-bear");
+  configure Extension=Points(F="koala-bear.ext8-binomial3");
   protocol Main { roles(P); local P:Base(); local P:Extension(); return(); }
   instance main_instance:Main {roles(P=P);} entry main=main_instance;
-}'''
+'''
 relation(constants, 0, 1, 'different', 'shift-distinct-canonical-constants')
 relation(constants, 0, 2, 'different', 'size-distinct-canonical-constants')
 relation(constants, 0, 3, 'same')
@@ -90,19 +90,19 @@ extended = inspect(constants)['domains'][4]
 assert extended['field'] == 'koala-bear.ext8-binomial3'
 assert extended['convention'] == convention
 
-receptions = '''module {
+receptions = '''
   use zkc::algebra::{Vector};
-  bind points=poly::domain_points(koala-bear);
-  bind interpolate=poly::coset_interpolate(koala-bear);
-  fn Points(s:koala-bear::Element,n:index)->(Vector<koala-bear::Element>) {
+  bind points="poly.domain_points"("koala-bear");
+  bind interpolate="poly.coset_interpolate"("koala-bear");
+  fn Points(s:"koala-bear"::Element,n:index)->(Vector<"koala-bear"::Element>) {
     let v = points(s,n); return(v);
   }
-  fn Alias(s:koala-bear::Element)->(koala-bear::Element) {return(s);}
-  fn Back(v:Vector<koala-bear::Element>,s:koala-bear::Element)->() {
+  fn Alias(s:"koala-bear"::Element)->("koala-bear"::Element) {return(s);}
+  fn Back(v:Vector<"koala-bear"::Element>,s:"koala-bear"::Element)->() {
     let p = interpolate(v,s); return();
   }
   protocol Main {
-    roles(P,V); inputs(P s:koala-bear::Element,P n:index);
+    roles(P,V); inputs(P s:"koala-bear"::Element,P n:index);
     local P:let sent = Points(s,n);
     message size:P(n)->V(n1);
     message first:P(s)->V(s1);
@@ -116,7 +116,7 @@ receptions = '''module {
     return();
   }
   instance main_instance:Main {roles(P=P,V=V);} entry main=main_instance;
-}'''
+'''
 relation(receptions, 0, 1, 'unknown', 'size-equality-unproved')
 relation(receptions, 1, 2, 'same')
 relation(receptions, 1, 3, 'unknown', 'shift-equality-unproved')
@@ -136,16 +136,16 @@ separate_size = separate_size.replace('Points(s2,n1)', 'Points(s1,n2)')
 relation(separate_size, 1, 3, 'unknown', 'size-equality-unproved')
 
 # Multilinear data gets no multiplicative coset by field, shape or name.
-multilinear = '''module {
+multilinear = '''
   use zkc::poly::{Table};
-  bind fold=poly::fold(bls12-381.fr);
+  bind r#fold="poly.fold"("bls12-381.fr");
   fn Work(t:Table<"bls12-381.fr">,s:"bls12-381.fr"::Element)->(Table<"bls12-381.fr">) {
-    let next = fold(t,s); return(next);
+    let next = r#fold(t,s); return(next);
   }
   protocol Main {roles(P); inputs(P t:Table<"bls12-381.fr">,P s:"bls12-381.fr"::Element);
     local P:let v = Work(t,s); return();}
   instance main_instance:Main {roles(P=P);} entry main=main_instance;
-}'''
+'''
 m = inspect(multilinear)
 assert not m['domains'] and not m['uses']
 assert next(v for v in m['values'] if v['name'] == 'next')['unknown_reason'] == \

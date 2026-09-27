@@ -326,7 +326,7 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  auto document = accept(frontend::parseProtocolDocument(R"pir(module {
+  auto document = accept(frontend::parseProtocolDocument(R"pir(
     fn Select(n: index) -> index { return n; }
     protocol Family {
       roles (P, V);
@@ -345,7 +345,7 @@ int main() {
       roles (P = Prover, V = Verifier);
     }
     entry main = Main;
-  })pir"));
+  )pir"));
   auto common = accept(protocol::importModule(document.root(), context));
   negatives(*common, false);
   roundtrip(*common);

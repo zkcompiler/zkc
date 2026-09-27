@@ -102,60 +102,60 @@ def main():
         [same] let ok = zkc::algebra::equal::<A>(a, a);
         return (ok);
       }
-      configure Fixed = Pair(A = koala-bear);
+      configure Fixed = Pair(A = "koala-bear");
       fn Wrapper<F: domain Field>(x: F::Element) -> (bool) requires (Field(F)) {
         [partial] let ok = Fixed::<F>(x);
         return (ok);
       }
-      configure Wrapped = Wrapper(F = bls12-381.fr);
+      configure Wrapped = Wrapper(F = "bls12-381.fr");
       fn Use(x: "bls12-381.fr"::Element) -> (bool) {
         [closed] let ok = Wrapped(x);
         return (ok);
       }
     '''
-    positive(text.replace('module {', 'module {' + extra))
+    positive(extra + text)
     # A ground false requirement must never become an assumed fact.
-    impossible = text.replace('module {', 'module {' + extra.replace('Field(A), Field(B)', 'ExtensionField(A), Field(B)'))
+    impossible = extra.replace('Field(A), Field(B)', 'ExtensionField(A), Field(B)', 1) + text
     native('protocol-source', impossible, 'binding-requirement')
     # Native emits no JSON for rejected source; build the corresponding raw mutation.
-    bad_fixed = native('protocol-source', text.replace('module {', 'module {' + extra))
+    bad_fixed = native('protocol-source', extra + text)
     bad_fixed[1][0][3][0][0] = 'ExtensionField'
     lean(bad_fixed, error='binding-requirement')
     # A closed helper may directly apply a generic definition to nominal arguments.
-    positive(text.replace('Right(x)', 'Four::<koala-bear>(x)'))
+    positive(text.replace('Right(x)', 'Four::<"koala-bear">(x)'))
     associated = """
       fn Associated<G: domain Group>(x: G::Scalar::Element) -> (G::Scalar::Element)
           requires (Field(G::Scalar)) {
         [associated] let y = Twice::<G::Scalar>(x);
         return (y);
       }
-      configure AssociatedBls = Associated(G = bls12-381.g1);
+      configure AssociatedBls = Associated(G = "bls12-381.g1");
       fn UseAssociated(x: "bls12-381.fr"::Element) -> ("bls12-381.fr"::Element) {
         [selected] let y = AssociatedBls(x);
         return (y);
       }
     """
-    positive(text.replace('module {', 'module {' + associated))
+    positive(associated + text)
     selected_layout = """
       use zkc::poly::{Table};
       use zkc::poly;
       fn Fold<F: domain Field>(t: Table<F>, r: F::Element) -> (Table<F>) requires (CommRing(F)) {
-        [fold] let u = zkc::poly::fold::<F>(t, r);
+        [r#fold] let u = zkc::poly::r#fold::<F>(t, r);
         return (u);
       }
-      configure Layout = Fold() using (fold = "arkworks-msb/poly.fold");
+      configure Layout = Fold() using (r#fold = "arkworks-msb/poly.fold");
       configure Preferred = Layout();
       fn NestedFold<F: domain Field>(t: Table<F>, r: F::Element) -> (Table<F>) requires (Field(F)) {
-        [fold] let u = Preferred::<F>(t, r);
+        [r#fold] let u = Preferred::<F>(t, r);
         return (u);
       }
-      configure FoldBls = NestedFold(F = bls12-381.fr);
+      configure FoldBls = NestedFold(F = "bls12-381.fr");
       fn UseFold(t: Table<"bls12-381.fr">, r: "bls12-381.fr"::Element) -> (Table<"bls12-381.fr">) {
         [selected] let u = FoldBls(t, r);
         return (u);
       }
     """
-    positive(text.replace('module {', 'module {' + selected_layout))
+    positive(selected_layout + text)
 
 
     # Whole declaration DAG depth is checked even when never instantiated.

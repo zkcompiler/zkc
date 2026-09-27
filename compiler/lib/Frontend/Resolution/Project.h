@@ -73,7 +73,6 @@ struct Context {
   std::vector<SelectorScope> selectorScopes;
   std::map<uint32_t, std::vector<std::string>> componentMembers;
   size_t selectorWork = 0;
-  bool carrier = false;
   std::set<std::string> ambiguousOrigins;
   std::vector<uint32_t> order;
   std::vector<Reference> references;

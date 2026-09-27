@@ -87,9 +87,8 @@ int main() {
   refuses(readR1CS("abcd"), "relation-magic");
   require(zkc::mlirNestingWithinLimit("\"" + std::string(200, '[') + "\""),
           "quoted delimiters do not consume parser depth");
-  require(
-      zkc::mlirNestingWithinLimit("//" + std::string(200, '{') + "\nmodule {}"),
-      "comment delimiters do not consume parser depth");
+  require(zkc::mlirNestingWithinLimit("//" + std::string(200, '{') + "\n"),
+          "comment delimiters do not consume parser depth");
   require(zkc::mlirNestingWithinLimit("(i1) -> tuple<i1>"),
           "function arrow is not an angle delimiter");
   require(!zkc::mlirNestingWithinLimit(std::string(65, '[')),

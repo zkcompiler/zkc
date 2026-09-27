@@ -131,7 +131,7 @@ check_mutation(lambda m: m[3].append(["protocol", "Unused", ["P"], [], [], [], [
 check_mutation(lambda m: m[3].append(["protocol", "Unused", ["P", "V"], [], [], [], [["child", "Absent", []]], "external"]), "interactive-dependency-protocol")
 check_mutation(lambda m: m[3][0][7][2][4].append("coins"), "interactive-loop-capture")
 # One resource cannot supply two consumed operation operands through SSA reuse.
-check_mutation(lambda m: m[2][3][4].insert(4, ["op", "draw_again", "random.draw", [], ["coins"], ["r2", "coins2"]]), "interactive-resource-reuse")
+check_mutation(lambda m: m[2][3][4].insert(4, ["op", "draw_again", "random_draw", [], ["coins"], ["r2", "coins2"]]), "interactive-resource-reuse")
 # Zero is a structural-loop control; actual PCS setup has its separate n>=1 guard.
 zero = copy.deepcopy(source)
 for instance in zero[4]:

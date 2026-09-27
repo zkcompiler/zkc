@@ -41,8 +41,8 @@ command set and options. The
 
 | Command | Result |
 |---|---|
-| `protocol-analyze FILE` | Retained source declarations, types and uses; reports partial/error states and does not claim admission |
-| `protocol-parse FILE` | Tagged syntax inspection, including unresolved declarations; not portable common JSON |
+| `protocol-analyze FILE` | Retained authored source declarations, types and uses; carrier text and carrier JSON are unsupported |
+| `protocol-parse FILE` | Tagged authored syntax inspection or common content for carrier text/JSON |
 | `protocol-source FILE` | Elaborated, admitted JSON common module or structurally valid construction descriptor |
 | `protocol-explain FILE` | Checked requirements, partial configurations and specialization sharing |
 | `protocol-inspect FILE` | Machine-readable explanation, actual elaborated source, occurrence spans and selection snapshot |
@@ -64,13 +64,14 @@ the input before the tool starts. The formatter has no in-place mode.
 Formatting **text** requires complete syntax, but references, types and generic
 requirements may still be invalid. `protocol-source`, admission and compilation
 continue to reject those errors. JSON-to-text printing requires admitted module
-records (or a structurally valid descriptor) and checks its exact parse round trip.
+records (or a structurally valid descriptor) and checks exact common equality by
+reading the final formatted output.
 Printed modules start with `carrier module { ... }`. This explicit representation
 preserves the carrier's names (`src_`, `lib_`, `client_`,
 `__library_operation_`) and origins when read by `protocol-source`, including
 when copied into a new file or supplied on stdin. The printer uses that same
 public reader and checks exact carrier equality. There is no printer-only trust
-flag. An ordinary `module` still reserves generated prefixes.
+flag. An ordinary source file still reserves generated prefixes.
 Construction descriptors use the same closed names and selector interpretation
 for carrier text and JSON. Project aliases and origin-group expansion belong to
 ordinary authored modules and are not reapplied to a printed carrier.
@@ -79,10 +80,16 @@ A carrier module is self-contained: it accepts functions (including portable
 generic definitions), bindings, configurations, protocols, instances and entries.
 It cannot import modules/assets or declare source-library interfaces, components,
 records, constants or exports (`source-carrier-authoring`), and cannot be a child
-module or an imported library (`source-carrier-project`). Its functions and
-protocols still pass the usual checking and independent PIR admission. This form
+module or an imported library (`source-carrier-project`). Like common JSON, a
+carrier root refuses `--library` options (`unsupported-option`). Its functions and
+protocols pass common formation and PIR admission directly, without authored
+resolution, source checking or instantiation. Type failures therefore use common
+admission diagnostics. This form
 does not reconstruct the original library abstraction from a flattened carrier.
-`protocol-analyze` supports bounded declaration recovery. Formatting and
+`protocol-analyze` supports bounded declaration recovery for ordinary source.
+Neither carrier text nor carrier JSON supports authored analysis or produces a
+`SourceChecked` value. Formatting ordinary or carrier text preserves the complete
+token sequence, including comments, raw spelling and strings; it is idempotent. Formatting and
 accepted emission still require complete syntax; a full editor is outside scope.
 
 ```sh
@@ -111,10 +118,9 @@ features. These links own their detailed syntax and restrictions.
 | Development-host inputs for compiled participants | [Host input contract](../runtime/inputs.md#input-format) |
 | Artifact producer/validator inputs | [Artifact input format](../compiler/artifact-format.md#canonical-logical-encoding) |
 
-Struct declarations and construction accept both the parenthesized notation
-shown below and braces such as `struct Pair { left: bool, right: bool }` and
+Struct declarations and construction use braces, as in `struct Pair { left: bool, right: bool }` and
 `Pair { left: x, right: y }`. Brace construction also permits field shorthand.
-Both retain the same nominal source type before common lowering.
+Parenthesized record declarations and keyed parenthesized construction are rejected.
 
 ## Static source construction
 
@@ -124,7 +130,7 @@ Named natural constants and whole-protocol static parameters are part of the
 ```text
 const ROUNDS: index = 8;
 protocol Exchange<F: Field> { /* explicitly owned interactions */ }
-configure Small = Exchange(F = koala-bear);
+configure Small = Exchange(F = "koala-bear");
 ```
 
 Constants are pure bounded source computations, not runtime values. A protocol
@@ -141,29 +147,27 @@ This complete module admits and compiles with `protocol-source` and
 
 <!-- executable: source -->
 ```text
-module {
-  use zkc::algebra;
-  fn Twice<F: algebra::Field>(x: F::Element) -> F::Element {
-    [sum] let y = algebra::add(x, x);
-    return y;
-  }
-  fn Four<F: Field>(x: F::Element) -> F::Element {
-    [first] let a = Twice(x);
-    [second] let b = Twice(a);
-    return b;
-  }
-  configure Calculate = Four(F = "koala-bear");
-  protocol Demo {
-    roles (P, V);
-    inputs (P x: "koala-bear"::Element);
-    outputs (V "koala-bear"::Element);
-    local [calc] P: let y = Calculate(x);
-    message [send_result] result: P(y) -> V(received_y);
-    return received_y;
-  }
-  instance concrete: Demo { roles (P = P, V = V); }
-  entry main = concrete;
+use zkc::algebra;
+fn Twice<F: algebra::Field>(x: F::Element) -> F::Element {
+  [sum] let y = algebra::add(x, x);
+  return y;
 }
+fn Four<F: Field>(x: F::Element) -> F::Element {
+  [first] let a = Twice(x);
+  [second] let b = Twice(a);
+  return b;
+}
+configure Calculate = Four(F = "koala-bear");
+protocol Demo {
+  roles (P, V);
+  inputs (P x: "koala-bear"::Element);
+  outputs (V "koala-bear"::Element);
+  local [calc] P: let y = Calculate(x);
+  message [send_result] result: P(y) -> V(received_y);
+  return received_y;
+}
+instance concrete: Demo { roles (P = P, V = V); }
+entry main = concrete;
 ```
 
 ```sh
@@ -217,28 +221,44 @@ functions on records owned by their defining package. An imported intrinsic
 with concrete inferred domains creates a shared default binding; an explicit
 binding remains the way to select a particular implementation.
 
-Names that conflict with grammar keywords can be quoted at use sites; the common
-printer quotes them automatically. Cross-file declarations use the separate
-[project lookup rules](projects.md).
-A bare name may contain dots, so `inner.Keep` can be a declaration's own name.
-When it is also a path to another declaration, through a module, an import or a
-dependency, a call or a clause that names it unquoted (an instance's protocol,
-an entry's instance and the like) refuses as ambiguous, and `"inner.Keep"`
-names the declaration in scope. Types, static terms, record literals, predicates
-and values use the same ambiguity check for their own reference category;
-rename a declaration or use an unambiguous import alias to resolve those uses.
-A competing path must reach a declaration or member authorized for that category:
-an ordinary function followed by an arbitrary suffix is not such a path.
+Ordinary files contain declarations directly, without a `module { ... }`
+wrapper. Empty and comment-only files are syntactically valid; commands can still
+require an entry. Unfinished declarations and unmatched closing braces refuse.
+`carrier module { ... }` and `construction Entry { ... }` remain explicit,
+separate document forms.
+
+Ordinary identifiers match `[A-Za-z_][A-Za-z0-9_]*`. A raw identifier such as
+`r#return` has the decoded name `return`; `r#` changes parsing, not identity or
+visibility. The reserved words are `true`, `false`, `let`, `mut`, `return`, `yield`,
+`if`, `else`, `match`, `for`, `in`, `local`, `message`, `invoke`, `loop`, `stop`,
+`finish`, `map` and `fold`. Declaration and header words such as `fn`, `type`,
+`protocol`, `where` and `requires` remain contextual. `_` is an ordinary name,
+not a discard operation. Quoted, dotted and hyphenated ordinary declarations
+are rejected.
+
+Use `::` for declaration and associated paths, including `inner::Keep`,
+`sizes::N` and `poly::r#fold`. Use `.field` for record projections, `.0` for
+product projections, and `[index]` for arrays and supported bulk collections.
+Dots never introduce an alternative declaration lookup. Subtraction has the
+same meaning in `a-b` and `a - b`.
+
+Sites, schemas, origins, rejection reasons and construction selector keys are
+exact labels. An identifier abbreviates its decoded string; quote punctuation
+or reserved words, as in `attributes("message")`. Strings decode once and retain
+case and punctuation. These labels are not declaration references. Raw names do
+not bypass generated-name reservations or the contextual path-root rules for
+`crate`, `self`, `super` and `zkc`.
 
 Nominal terms distinguish bound parameters from installed identities. Write `F`
 or `G::Scalar` for a scoped parameter or its associated projection, and
-`"bls12-381.fr"` for a concrete installed identity. `G.Scalar` is an opaque dotted
-root, not an alias for `G::Scalar`; it refuses with `source-name-unresolved`
-when no such installed identity exists. Quoting it does not turn it into a
-projection. Concrete associated terms such as `"bls12-381.g1"::Scalar` normalize
-to the installed associated identity.
+`"bls12-381.fr"` for a concrete installed identity. Every exact installed identity
+is quoted, even if its spelling is a legal identifier. Unquoted roots use lexical
+lookup, with no installed-identity fallback. Concrete associated terms such as
+`"bls12-381.g1"::Scalar` normalize to the installed associated identity. Emission
+refuses a binder/identity collision that the common term representation cannot
+preserve; quoting alone cannot resolve that representation constraint.
 
-Explicit `bind add = field::add("bls12-381.fr");` applies the installed logical
+Explicit `bind add = "field.add"("bls12-381.fr");` applies the installed logical
 contract directly; later `add(x, y)` calls that binding. The contract key in a
 `bind` is a low-level contract identifier, separate from an imported source API.
 In authored modules the contract must permit the `Source` stage. Construction-only
@@ -246,7 +266,7 @@ transcript contracts cannot be reached through `bind` or imports. The readable
 common `carrier module` is a separate representation, whose admission alone does
 not establish a checked transcript construction.
 
-Use `module { ... }` with explicit imports and domain choices. Historical BLS
+Write file-level declarations with explicit imports and domain choices. Historical BLS
 profile headings and their default domains are removed. The source installation
 exports `zkc::algebra`, `poly`, `curve`, `random`, `pcs`, `oracle`, `external`,
 `core` and `transcript`; the last exports vocabulary but no source operations.
@@ -278,7 +298,7 @@ fn Evaluate<F: Field>(coefficients: Vector<F::Element>, point: F::Element,
 `[a, b, c]` constructs a homogeneous field/group vector or index collection.
 Its type follows its elements; annotate an empty literal, for example
 `let empty: Vector<F::Element> = [];`. `values[i]` performs checked indexing,
-and `values.len()` reads the length of a named collection. Integers in expressions
+and `values.len()` reads the length of a collection value. Integers in expressions
 are index values; field constants still use their typed operation. Boolean
 literals are `true` and `false`. Collection syntax does not denote SIMD vectors.
 
@@ -316,30 +336,28 @@ This excerpt omits the `BindAssignment` constructor body; the complete Groth16
 source linked below supplies it.
 
 ```text
-module {
-  use zkc::algebra::Vector;
-  use zkc::curve;
-  bundle PairingScalars(F) = (
-    ScalarAction(F::PairingG1), ScalarAction(F::PairingG2),
-    "="(F::PairingG1::Scalar, F), "="(F::PairingG2::Scalar, F)
-  );
+use zkc::algebra::Vector;
+use zkc::curve;
+bundle PairingScalars(F) = (
+  ScalarAction(F::PairingG1), ScalarAction(F::PairingG2),
+  F::PairingG1::Scalar == F, F::PairingG2::Scalar == F
+);
 
-  struct VerifyingKey<F: domain Field>(
-    input_query: Vector<F::PairingG1::Element>,
-    alpha: F::PairingG1::Element,
-    beta: F::PairingG2::Element
-  );
+struct VerifyingKey<F: domain Field> {
+  input_query: Vector<F::PairingG1::Element>,
+  alpha: F::PairingG1::Element,
+  beta: F::PairingG2::Element
+}
 
-  checked struct BoundAssignment<F: domain Field>(
-    assignment: Vector<F::Element>,
-    statement: Vector<F::Element>
-  ) constructors (BindAssignment);
+checked struct BoundAssignment<F: domain Field> {
+  assignment: Vector<F::Element>,
+  statement: Vector<F::Element>
+} constructors(BindAssignment);
 
-  fn Blind<F: PairingField>(vk: VerifyingKey<F>, r: F::Element) -> F::PairingG1::Element
-      requires (PairingScalars(F)) {
-    let blinded = vk.alpha + -(vk.alpha * r);
-    return blinded;
-  }
+fn Blind<F: PairingField>(vk: VerifyingKey<F>, r: F::Element) -> F::PairingG1::Element
+    requires (PairingScalars(F)) {
+  let blinded = vk.alpha + -(vk.alpha * r);
+  return blinded;
 }
 ```
 
@@ -347,8 +365,8 @@ module {
 |---|---|
 | `requires (Bundle(T))`, `where T: Bundle` | The bundle's requirements at that position, in declared order, arguments substituted; nested bundles expand recursively; nothing is sorted or deduplicated |
 | `p: Struct<F>` as a parameter, input or result | One parameter, input or result per leaf, in declaration order with nested structs depth first, named `p.field` |
-| `Struct(field = expr, ...)` | No operation. Initializers run once in written order; the leaves are arranged in declaration order |
-| `binding.field` | The leaf value of that name. The lexer reads `binding.field` as one name |
+| `Struct { field: expr, ... }` | No operation. Initializers run once in written order; the leaves are arranged in declaration order |
+| `binding.field` | The selected leaf values. A typed projection that emits no operation; `.` never forms a name |
 | `a + b`, `a * b`, `a - b`, `-a` | The installed operation or checked record function selected by the hook and operand heads, with operands evaluated once, left to right as written |
 
 A bundle is a name for a requirement list. It adds no assumption, and a header
@@ -618,9 +636,9 @@ renumber a declaration's anonymous sites. An added instruction can renumber them
 Use a descriptive label when another declaration selects a particular operation:
 
 ```text
-[fold] let result = poly::fold::<F>(table, challenge);
+[r#fold] let result = poly::r#fold::<F>(table, challenge);
 // In a configuration of the containing generic function:
-// using (fold = "arkworks-msb/poly.fold")
+// using (r#fold = "arkworks-msb/poly.fold")
 ```
 
 Formatting authored text keeps omitted labels omitted. Printing a portable record
@@ -628,14 +646,14 @@ shows its allocated sites because that carrier has no explicit/anonymous flag.
 Inspection exposes both site names and snapshot-relative structural paths.
 These are source references, not globally stable identifiers or proof evidence.
 
-- Bare names start with an ASCII letter or `_`, followed by letters, digits,
-  `_`, `.` or `-`. `->` is always an arrow. Double-quoted JSON strings can be used
-  for names, labels, attributes and types; escapes decode exactly once.
+- Identifiers match `[A-Za-z_][A-Za-z0-9_]*`; `r#name` escapes a reserved word.
+  `.`, `-` and `->` are always separate tokens. Double-quoted JSON strings are
+  exact data: installed identities, contract IDs, labels, attributes and carrier
+  names. They are never ordinary declaration names; escapes decode exactly once.
   Text strings require valid UTF-8 and paired Unicode surrogate escapes; malformed
   encodings are rejected instead of replaced in public labels.
 - Natural numbers use decimal digits without leading zeroes. Operation attributes
   are strings; an unquoted natural attribute is shorthand for its decimal string.
-  Qualified types such as `opaque:Trace` can also be quoted as `"opaque:Trace"`.
 - Lists accept trailing commas. Statements end with `;`. Whitespace and `//` or
   nested `/* ... */` comments do not enter the parsed representation.
 - Formatting uses two-space indentation and breaks long parenthesized lists near

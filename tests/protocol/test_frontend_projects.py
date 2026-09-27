@@ -264,18 +264,18 @@ def test_family_source_mutations_refuse_exact_boundaries(toolchain, directory, f
         text = replaced(text, ('return (scalar, after);',
             'let (again, reused) = zkc::random::draw::<"bls12-381.fr">(coins); return (again, reused);'))
     elif mutation == "reuse-view":
-        text = replaced(text, ('let previous = C::finish(state, ok);',
-                               'let previous = C::finish(state, ok); let twice = C::finish(state, ok);'))
+        text = replaced(text, ('let previous = C::r#finish(state, ok);',
+                               'let previous = C::r#finish(state, ok); let twice = C::r#finish(state, ok);'))
     elif mutation == "wrong-instance":
-        text = text[:-2] + '''
+        text = text + '''
           fn Swap<A: ViewAPI, B: ViewAPI>(x: A::View) -> B::View { return x; }
-        }'''
+        '''
     elif mutation == "private-layout":
         edited(app, ('use views::{', 'use views::layouts::EmptyViews as Leaked; use views::{'))
     elif mutation == "wrong-domain" and family == "air":
-        edited(app, ('P left: Vector<koala-bear::Element>', 'P left: Vector<bls12-381.fr::Element>'))
+        edited(app, ('P left: Vector<"koala-bear"::Element>', 'P left: Vector<"bls12-381.fr"::Element>'))
     elif mutation == "private-schedule":
-        edited(app, ('    return (accepted_all);', '''
+        edited(app, ('  return (accepted_all);', '''
           match accepted_all capture() -> (scheduled) {
             Ready(tag) => { yield (tag); }
           }
@@ -314,7 +314,7 @@ def test_alias_relocation_visibility_and_body_controls(toolchain, directory, fam
     library.write_text(text)
     assert source() != original
     # An exact declared resolution selects a different library, never a spelling match.
-    edited(app, ('resolution="source-v1"', 'resolution="absent"'))
+    edited(app, ('resolution = "source-v1"', 'resolution = "absent"'))
     journal.run([toolchain.compiler, "protocol-source", app, *options([library])],
                 refuses="source-dependency-missing")
 
@@ -323,25 +323,25 @@ def capacity_project(directory, rows, depth, repeated, distinct, descriptors):
     """Separate relation-size, selection-depth, sharing and descriptor axes."""
     identity = 'library(namespace="zkc.examples.capacity", name="views", version="1", resolution="bounded")'
     library = directory / "lib.pir"
-    declarations = [f"module {{ {identity};", '''
+    declarations = [f"{identity};", '''
       pub interface Cell { type State drop; association Subject;
-        local make(ok: bool) -> State; local finish(x: State, ok: bool) -> bool; }
+        local make(ok: bool) -> State; local r#finish(x: State, ok: bool) -> bool; }
       pub component Base<R: association>: Cell {
         type State = (); association Subject = R;
         local make(ok: bool) -> State { return (); }
-        local finish(x: State, ok: bool) -> bool { return ok; }
+        local r#finish(x: State, ok: bool) -> bool { return ok; }
       }
       pub component Wrap<C: Cell>: Cell {
         type State = C::State; association Subject = C::Subject;
         local make(ok: bool) -> State { return C::make(ok); }
-        local finish(x: State, ok: bool) -> bool { return C::finish(x, ok); }
+        local r#finish(x: State, ok: bool) -> bool { return C::r#finish(x, ok); }
       }
       pub enum Packed<C: Cell> { Ready(C::State) }
       pub fn Run<C: Cell>(ok: bool) -> bool {
         let state = C::make(ok);
         let packed: Packed<C> = Packed::Ready(state);
         match packed capture(ok) -> (answer) {
-          Ready(value) => { let answer = C::finish(value, ok); yield (answer); }
+          Ready(value) => { let answer = C::r#finish(value, ok); yield (answer); }
         }
         return answer;
       }
@@ -357,9 +357,8 @@ def capacity_project(directory, rows, depth, repeated, distinct, descriptors):
         declarations.append(f'pub relation R{selection} = r1cs("relation{selection}.json");')
     # Separate repeated type occurrences from repeated selections.
     declarations.append('pub fn Descriptors<C: Cell>(x: (' + ', '.join(['Packed<C>'] * descriptors) + ')) -> bool effects (local) { return true; }')
-    declarations.append('}')
     library.write_text('\n'.join(declarations))
-    client = [f'module {{ dependency cap = {identity}; use cap::{{Cell, Base, Wrap, Run, Descriptors, Packed, ' + ', '.join(f'R{i}' for i in range(distinct)) + '};']
+    client = [f'dependency cap = {identity}; use cap::{{Cell, Base, Wrap, Run, Descriptors, Packed, ' + ', '.join(f'R{i}' for i in range(distinct)) + '};']
     for occurrence in range(repeated):
         selected = f'Base<R{occurrence % distinct}>'
         selected = 'Wrap<' * depth + selected + '>' * depth
@@ -367,7 +366,7 @@ def capacity_project(directory, rows, depth, repeated, distinct, descriptors):
         client.append(f'link Types{occurrence} = Descriptors<{selected}>;')
     client += ['protocol Demo { roles (P); inputs (P ok: bool); outputs (P bool);',
                'local P: let answer = Run0(ok); return answer; }',
-               'instance run: Demo { roles (P = P); } entry main = run; }']
+               'instance run: Demo { roles (P = P); } entry main = run;']
     app = directory / "main.pir"
     app.write_text('\n'.join(client))
     return app, library
@@ -451,7 +450,7 @@ def test_bounded_relation_selection_descriptor_measurements(toolchain, directory
 def test_bounded_project_library_refusal_is_deterministic(toolchain, directory):
     journal = Journal(directory)
     app = directory / "main.pir"
-    app.write_text("module { fn Main(x: bool) -> bool { return x; } }")
+    app.write_text(" fn Main(x: bool) -> bool { return x; } ")
     # 64 supplied roots plus the application exceeds ProjectInput::maxLibraries.
     command = [toolchain.compiler, "protocol-source", app, *[f"--library={directory / f"root{i}.pir"}" for i in range(64)]]
     results = [journal.attempt(command) for _ in range(2)]
@@ -495,8 +494,8 @@ def test_imported_draw_selector_is_owner_qualified_and_ambiguity_refuses(toolcha
     journal = Journal(directory)
     app, library = copied_project(directory, "group")
     second = directory / "other.pir"
-    second.write_text(replaced(library.read_text(), ('name="group"', 'name="group-other"')))
-    edited(app, ('  use group::', '''
+    second.write_text(replaced(library.read_text(), ('name = "group"', 'name = "group-other"')))
+    edited(app, ('use group::', '''
       dependency other = library(namespace="zkc.examples", name="group-other", version="1", resolution="source-v1");
       use group::'''))
     descriptor = directory / "construction.pir"
@@ -504,7 +503,7 @@ def test_imported_draw_selector_is_owner_qualified_and_ambiguity_refuses(toolcha
     roots = options([library, second])
     selected = journal.json([toolchain.compiler, "protocol-construct", app, descriptor, *roots])
     assert selected[0] == "zkc.construction-result/1"
-    edited(descriptor, ('group::BlsGroup.draw', 'BlsGroup.draw'))
+    edited(descriptor, ('group.BlsGroup.draw', 'BlsGroup.draw'))
     journal.run([toolchain.compiler, "protocol-construct", app, descriptor, *roots],
                 refuses="construction-source-selector-ambiguous")
 
@@ -529,12 +528,12 @@ def test_imported_relation_capture_and_constructor_authority(toolchain, director
     # cannot mint a prepared assignment. Authority follows exact declarations.
     write(asset, relation)
     source = replaced(app.read_text(), ('use helpers::{', 'use helpers::{BoundAssignment,'))
-    source = source[:-2] + '''
-      fn BindAssignment(assignment: Vector<bn254.fr::Element>, statement: Vector<bn254.fr::Element>)
-          -> BoundAssignment<bn254.fr> {
+    source = source + '''
+      fn BindAssignment(assignment: Vector<"bn254.fr"::Element>, statement: Vector<"bn254.fr"::Element>)
+          -> BoundAssignment<"bn254.fr"> {
         return BoundAssignment { assignment, statement, private_assignment: assignment };
       }
-    }'''
+    '''
     app.write_text(source)
     journal.run([toolchain.compiler, "protocol-resolve", app, *options([library])],
                 refuses="source-checked-construction")

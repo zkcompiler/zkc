@@ -2,11 +2,11 @@
 carrier module {
   fn Observe<T: domain Transcript, E: domain Codec>(state: Transcript<T>, value: bool) -> Transcript<T> requires (
     Transcript(T),
-    Encodes.bool(E)
+    "Encodes.bool"(E)
   ) {
     [observe] let next = transcript::observe::bool::<T, E>(state, value) attributes (
       Round,
-      message,
+      "message",
       boolean,
       P,
       V

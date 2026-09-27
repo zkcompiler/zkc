@@ -6,49 +6,35 @@
 #include "llvm/ADT/STLExtras.h"
 
 namespace zkc::frontend::resolution {
-// Read the installed catalogs instead of granting authority to a string prefix.
-inline bool installedOperation(llvm::StringRef name) {
-  static const auto names = [] {
-    std::set<std::string> result;
-    for (const auto &op : protocol::boundOperationContracts())
-      result.insert(op.name);
-    return result;
-  }();
-  return names.count(name.str());
-}
+/// Core type words, available unless a lexical record or enum shadows them.
 inline bool installedType(llvm::StringRef name) {
   return name == "Array" || name == "ResourceUnit" || name == "bool" ||
          name == "index";
 }
-inline bool installedName(llvm::StringRef name, ReferenceKind kind,
-                          bool quoted) {
-  if (kind == ReferenceKind::Call || kind == ReferenceKind::QualifiedCall)
-    return false; // Source calls require a declaration or an explicit import.
+/// Installed predicate words, available unless a lexical predicate shadows
+/// them.
+inline bool installedPredicate(llvm::StringRef name) {
+  if (name == "=" || name == "nat" || name == "Nat" || name == "Type" ||
+      name == "association")
+    return true;
+  generic::Signature signature;
+  signature.requirements.push_back(
+      requirements::Predicate::holds(name.str(), {}));
+  auto error = protocol::checkStaticVocabulary(signature);
+  return !error ||
+         llvm::toString(std::move(error)) != "generic-declared-predicate";
+}
+/// Installed data a quoted static or type atom may name: an installed identity,
+/// or in a type position a closed wire type spelling.
+inline bool installedExact(llvm::StringRef value, ReferenceKind kind) {
   if (kind == ReferenceKind::Type) {
-    if (!quoted && installedType(name))
+    auto parsed = protocol::parseBoundType(value, false);
+    if (parsed)
       return true;
-    // Closed wire type spellings are admitted by the installed type parser.
-    if (quoted) {
-      auto parsed = protocol::parseBoundType(name, false);
-      if (parsed)
-        return true;
-      llvm::consumeError(parsed.takeError());
-    }
+    llvm::consumeError(parsed.takeError());
   }
-  if (kind == ReferenceKind::Static || kind == ReferenceKind::Type)
-    return !protocol::installedIdentitySort(name).empty();
-  if (kind == ReferenceKind::Predicate) {
-    if (name == "=" || name == "nat" || name == "Nat" || name == "Type" ||
-        name == "association")
-      return true;
-    generic::Signature signature;
-    signature.requirements.push_back(
-        requirements::Predicate::holds(name.str(), {}));
-    auto error = protocol::checkStaticVocabulary(signature);
-    return !error ||
-           llvm::toString(std::move(error)) != "generic-declared-predicate";
-  }
-  return false;
+  return (kind == ReferenceKind::Static || kind == ReferenceKind::Type) &&
+         !protocol::installedIdentitySort(value).empty();
 }
 } // namespace zkc::frontend::resolution
 #endif

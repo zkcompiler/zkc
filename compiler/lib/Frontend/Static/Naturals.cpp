@@ -62,15 +62,25 @@ class Evaluator {
              "natural constant exceeds 4294967295");
       return result;
     }
-    if (e.kind == Expression::Kind::Name && !e.quoted) {
-      auto found = constants.find(e.name);
+    if (e.kind == Expression::Kind::Name) {
+      // Resolution names a constant by its declaration symbol.
+      const auto &target = e.reference.target;
+      auto found = target.kind == syntax::Target::Kind::Declaration &&
+                           target.members.empty()
+                       ? constants.find(target.symbol)
+                       : constants.end();
       if (found == constants.end()) {
         fail(e, "source-constant-reference",
-             "unknown natural constant '" + e.name + "'");
+             "unknown natural constant '" +
+                 (e.reference.path.segments.empty()
+                      ? syntax::encode(target)
+                      : syntax::spelling(e.reference.path)) +
+                 "'");
         return 0;
       }
-      if (auto known = values.find(e.name); known != values.end()) {
-        unsigned h = constantHeights.at(e.name);
+      const auto &name = found->first;
+      if (auto known = values.find(name); known != values.end()) {
+        unsigned h = constantHeights.at(name);
         if (height)
           *height = h;
         if (depth + h > maxDepth)
@@ -78,19 +88,19 @@ class Evaluator {
                "constant dependency/expression depth exceeds 64");
         return known->second;
       }
-      if (!evaluating.insert(e.name).second) {
+      if (!evaluating.insert(name).second) {
         fail(e, "source-constant-cycle",
-             "cyclic natural constant '" + e.name + "'");
+             "cyclic natural constant '" + name + "'");
         return 0;
       }
       unsigned h = 0;
       uint64_t result = natural(found->second->expression, depth + 1, &h);
       if (height)
         *height = h + 1;
-      evaluating.erase(e.name);
+      evaluating.erase(name);
       if (good()) {
-        values.emplace(e.name, result);
-        constantHeights.emplace(e.name, h + 1);
+        values.emplace(name, result);
+        constantHeights.emplace(name, h + 1);
       }
       return result;
     }
@@ -148,7 +158,8 @@ public:
     }
     for (const auto &constant : input) {
       Expression expression;
-      expression.name = constant.name;
+      expression.reference =
+          syntax::Reference(syntax::Target::declaration(constant.name));
       expression.location = constant.location;
       natural(expression, 0);
       if (!good())

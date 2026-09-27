@@ -40,12 +40,12 @@ WorkLimits exact(const WorkUsage &usage) {
 std::string librarySource(unsigned aliases,
                           StringRef type = "(Array<bool, 0>, bool)") {
   std::string text =
-      "module { library(namespace=\"test\", name=\"budget\", version=\"1\", "
+      "library(namespace=\"test\", name=\"budget\", version=\"1\", "
       "resolution=\"fixed\"); fn Echo(x: " +
       type.str() + ") -> " + type.str() + " { return x; } ";
   for (unsigned i = 0; i < aliases; ++i)
     text += "link Alias" + std::to_string(i) + " = Echo<>; ";
-  return text + "}";
+  return text;
 }
 Analysis analyze(StringRef text, WorkLimits limits = {}) {
   return analyzeProtocol(text, "budget.pir", limits);
@@ -98,9 +98,9 @@ int main() {
   cases.run(
       "operator discovery cannot hide work exhaustion or publish clients", [&] {
         auto source = [](unsigned count) {
-          std::string text = R"(module {
+          std::string text = R"(
         use zkc::algebra::Field;
-        struct Number(value: index);
+        struct Number { value: index }
         #[operator(mul)]
         fn Scale<F: domain Field>(a: Number, b: F::Element) -> F::Element
             effects (local) {
@@ -115,7 +115,7 @@ int main() {
         fn Main<F: domain Field>(a: Number, b: F::Element) -> F::Element
             effects (local) { return a * b; }
         configure Closed = Main(F = "koala-bear");
-      })";
+      )";
         };
         auto small = analyze(source(0));
         auto large = analyze(source(200));
@@ -162,24 +162,23 @@ int main() {
   });
   cases.run("copied call vectors consume the authored account", [&] {
     syntax::Call call;
-    call.staticTerms.resize(2);
-    call.staticTerms.front().members.resize(3);
-    call.attributeAtoms.resize(4);
-    call.inputAtoms.resize(5);
-    call.staticArguments = source::Names(6);
-    call.attributes.resize(7);
+    call.staticArguments.emplace(2);
+    call.staticArguments->front().members.resize(3);
+    call.attributes.resize(4);
     call.inputs.resize(8);
+    call.inputs.front().steps.resize(5);
+    call.callee.path.segments.resize(6);
     call.outputs.resize(9);
     call.argumentNames.resize(10);
     syntax::Instruction instruction;
     instruction.value = std::move(call);
-    // One instruction and 54 copied vector slots, including lexical metadata.
+    // One instruction and 47 copied vector slots, including structured paths.
     WorkLimits limits;
-    limits.authoredStatic = 55;
+    limits.authoredStatic = 48;
     WorkBudget sufficient(limits);
     require(instantiation::chargeBodyCopy(sufficient, {instruction}),
             "exact call copy allowance");
-    require(sufficient.used(WorkAccount::AuthoredStatic) == 55,
+    require(sufficient.used(WorkAccount::AuthoredStatic) == 48,
             "all call vectors counted");
     --limits.authoredStatic;
     WorkBudget shortBudget(limits);
@@ -208,7 +207,7 @@ int main() {
   cases.run("default policy accepts 1024 modest protocol specializations", [&] {
     // Fixed input size protects useful default acceptance independently of
     // measured/injected ceilings. This is not the old worst-case envelope.
-    std::string text = "module { protocol Family<F: Field> { roles(A); inputs(";
+    std::string text = "protocol Family<F: Field> { roles(A); inputs(";
     for (unsigned i = 0; i < 8; ++i)
       text += (i ? ", " : "") + std::string("A x") + std::to_string(i) +
               ": F::Element";
@@ -221,8 +220,8 @@ int main() {
     text += "); } ";
     for (unsigned i = 0; i < 1024; ++i)
       text += "configure Instance" + std::to_string(i) +
-              " = Family(F = koala-bear); ";
-    text += "}";
+              " = Family(F = \"koala-bear\"); ";
+
     auto analysis = analyze(text);
     complete(analysis);
     require(analysis.instantiations().size() == 1024,
@@ -353,18 +352,14 @@ int main() {
     auto project = [](bool second) {
       ProjectLibrary owner;
       owner.sources.push_back(
-          {{},
-           Input(second ? "module { mod a; mod b; }" : "module { mod a; }",
-                 "root.pir")});
+          {{}, Input(second ? " mod a; mod b; " : " mod a; ", "root.pir")});
       owner.sources.push_back(
           {{"a"},
-           Input("module { pub fn Echo(x: bool) -> bool { return x; } }",
-                 "a.pir")});
+           Input(" pub fn Echo(x: bool) -> bool { return x; } ", "a.pir")});
       if (second)
         owner.sources.push_back(
             {{"b"},
-             Input("module { pub fn Echo(x: bool) -> bool { return x; } }",
-                   "b.pir")});
+             Input(" pub fn Echo(x: bool) -> bool { return x; } ", "b.pir")});
       return take(ProjectInput::capture({std::move(owner)}));
     };
     auto first = analyzeProject(project(false));
@@ -387,7 +382,7 @@ int main() {
     syntax::Expression literal, reference;
     literal.kind = syntax::Expression::Kind::Index;
     literal.name = "7";
-    reference.name = "A";
+    reference.reference.target = syntax::Target::declaration("A");
     auto a = constant("A", literal), b = constant("B", reference);
     WorkBudget forward, reverse;
     auto x = take(

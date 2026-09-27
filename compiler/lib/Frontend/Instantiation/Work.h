@@ -40,18 +40,21 @@ inline bool chargeBodyCopy(WorkBudget &budget, const syntax::Body &body) {
             if constexpr (std::is_same_v<T, syntax::Binding>)
               return chargeExpressionCopy(budget, v.expression);
             else {
-              // Both decoded operands and retained lexical atoms are copied.
               // Charge each vector separately to avoid overflowing a sum.
               for (size_t slots :
-                   {v.staticTerms.size(), v.attributeAtoms.size(),
-                    v.inputAtoms.size(), v.attributes.size(), v.inputs.size(),
-                    v.outputs.size(), v.argumentNames.size(),
+                   {v.attributes.size(), v.inputs.size(), v.outputs.size(),
+                    v.argumentNames.size(), v.callee.path.segments.size(),
                     v.staticArguments ? v.staticArguments->size() : size_t{0}})
                 if (!budget.charge(WorkAccount::AuthoredStatic, slots))
                   return false;
-              for (const auto &term : v.staticTerms)
+              if (v.staticArguments)
+                for (const auto &term : *v.staticArguments)
+                  if (!budget.charge(WorkAccount::AuthoredStatic,
+                                     term.members.size()))
+                    return false;
+              for (const auto &input : v.inputs)
                 if (!budget.charge(WorkAccount::AuthoredStatic,
-                                   term.members.size()))
+                                   input.steps.size()))
                   return false;
             }
           } else if constexpr (std::is_same_v<T, syntax::Invocation>) {

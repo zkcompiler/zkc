@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
   if (argc == 2 && StringRef(argv[1]) == "--checked-identities") {
     // Identical checked source under two installations captures each installed
     // declaration environment. Return exact keys, not hashes used as evidence.
-    auto common = zkc::frontend::analyzeProtocol(R"(module {
+    auto common = zkc::frontend::analyzeProtocol(R"(
       library(namespace="example", name="installation", version="1",
               resolution="installed-consumer");
       interface Cell { local keep(value: bool) -> bool; }
@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
       }
       fn Client<C: Cell>(value: bool) -> bool { return C::keep(value); }
       link Selected = Client<Plain>;
-    })",
+    )",
                                                  "identity.pir");
     if (!common.complete()) {
       for (const auto &diagnostic : common.diagnostics())
@@ -47,12 +47,12 @@ int main(int argc, char **argv) {
   }
   if (argc != 1)
     return 2;
-  auto analysis = zkc::frontend::analyzeProtocol(R"(module {
+  auto analysis = zkc::frontend::analyzeProtocol(R"(
     use zkc::envelope::{Envelope, keep};
     fn Keep<T: Type, N: nat>(value: Envelope<T,N>) -> Envelope<T,N> {
       return keep(value);
     }
-  })",
+  )",
                                                  "envelope.pir");
 #if !EXPECT_ENVELOPE
   for (const auto &diagnostic : analysis.diagnostics())
@@ -82,12 +82,12 @@ int main(int argc, char **argv) {
                          "let pair = envelope::pair(x,y);",
                          "let pair: (FixedVector<U,K>, FixedVector<U,L>) = "
                          "envelope::pair(x,y);"}) {
-    auto generic = zkc::frontend::analyzeProtocol((R"(module {
+    auto generic = zkc::frontend::analyzeProtocol((R"(
       use zkc::algebra::FixedVector;
       use zkc::envelope;
       fn Pair<U: Type, K: nat, L: nat>(x: FixedVector<U,K>, y: FixedVector<U,L>)
           -> (FixedVector<U,K>, FixedVector<U,L>) {
-    )" + call + "return pair; } }")
+    )" + call + "return pair; }")
                                                       .str(),
                                                   "pair.pir");
     require(generic.complete(),
@@ -104,10 +104,10 @@ int main(int argc, char **argv) {
       return 1;
     }
   }
-  auto protocol = zkc::frontend::analyzeProtocol(R"(module {
+  auto protocol = zkc::frontend::analyzeProtocol(R"(
     use zkc::envelope::Capability;
     protocol Abstract<D: Capability> { roles(P); return; }
-  })",
+  )",
                                                  "bound.pir");
   require(protocol.complete(),
           "contributed protocol domain-sort bound did not check");
@@ -159,13 +159,13 @@ int main(int argc, char **argv) {
           "contributed ODS contract mapping is missing");
   require(boundOperationName("envelope.pair").empty(),
           "logical-only declaration gained an invented native mapping");
-  auto concrete = zkc::frontend::analyzeProtocol(R"(module {
+  auto concrete = zkc::frontend::analyzeProtocol(R"(
     use zkc::envelope::{Envelope, keep};
-    fn Keep(value: Envelope<koala-bear::Element,4>)
-        -> Envelope<koala-bear::Element,4> {
+    fn Keep(value: Envelope<"koala-bear"::Element,4>)
+        -> Envelope<"koala-bear"::Element,4> {
       return keep(value);
     }
-  })",
+  )",
                                                  "concrete.pir");
   require(concrete.complete(), "concrete contributed source did not check");
   auto source = concrete.lower();

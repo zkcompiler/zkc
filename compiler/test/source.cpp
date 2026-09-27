@@ -86,9 +86,9 @@ template <typename T> Instruction instruction(std::string site, T value) {
 void builderProbe() {
   // Independent hand-written text and C++ authoring of the same open generic
   // module, ordinary local body and multi-role protocol. No JSON builder.
-  const char *text = R"pir(module {
+  const char *text = R"pir(
     use zkc::curve;
-    bind both = bool.and();
+    bind both = "bool.and"();
     fn Both(a: bool, b: bool) -> (bool) {
       [join] let c = both(a, b);
       return (c);
@@ -98,7 +98,7 @@ void builderProbe() {
       [scale] let h = curve::scale::<G>(g, k);
       return (h);
     }
-    configure Curve = Scale(G = bls12-381.g1);
+    configure Curve = Scale(G = "bls12-381.g1");
     protocol Demo {
       roles (Alice, Bob);
       inputs (Alice g: "bls12-381.g1"::Element, Alice k: "bls12-381.fr"::Element,
@@ -111,7 +111,7 @@ void builderProbe() {
     }
     instance demo: Demo { roles (Alice = Alice, Bob = Bob); }
     entry main = demo;
-  })pir";
+  )pir";
   Module module;
   module.bindings.push_back({{}, "both", {"bool.and", {}, ""}});
   Function both;
@@ -183,7 +183,7 @@ void builderProbe() {
           "generic operation variant");
 }
 void locations() {
-  std::string text = R"pir(/* prefix */ module {
+  std::string text = R"pir(/* prefix */
   use zkc::curve;
   configure Open = Scale(); // config before its definition
   fn Plain() -> () { return (); }
@@ -193,7 +193,7 @@ void locations() {
     return (h);
   }
   fn Other<>() -> () { return (); }
-  bind both = bool.and();
+  bind both = "bool.and"();
   protocol Demo {
     roles (Alice);
     loop 1 carry () -> () {
@@ -207,22 +207,25 @@ void locations() {
   }
   instance demo: Demo { roles (Alice = Alice); }
   entry main = demo;
-} // suffix)pir";
+ // suffix)pir";
   auto document = take(parseProtocolDocument(text, "locations.pir"));
   at(document, {2, 0}, "configure Open = Scale();");
   at(document, {3, 2, 0}, "fn Plain() -> () { return (); }");
   at(document, {1, 0, 6, 0}, "let h = curve::scale::<G>(g, k);");
   at(document, {1, 0, 6, 1}, "return (h);");
   at(document, {1, 1}, "fn Other<>() -> () { return (); }");
-  at(document, {3, 1, 0}, "bind both = bool.and();");
+  at(document, {3, 1, 0}, "bind both = \"bool.and\"();");
   at(document, {3, 3, 0, 7, 0, 5, 0, 5, 0}, "local Alice: Plain();");
   at(document, {3, 4, 0}, "instance demo: Demo { roles (Alice = Alice); }");
   at(document, {3, 5, 0}, "entry main = demo;");
   auto rootSpan = span(document, Path{});
-  require(rootSpan &&
-              document.text().substr(rootSpan->offset, rootSpan->length) ==
-                  StringRef(text).drop_front(13).drop_back(10),
-          "root remapping extent");
+  require(
+      rootSpan &&
+          document.text().substr(rootSpan->offset, rootSpan->length) ==
+              StringRef(text).slice(text.find("use "),
+                                    text.find("entry main = demo;") +
+                                        StringRef("entry main = demo;").size()),
+      "root remapping extent");
   require(!span(document, Path{3}),
           "library inner codec envelope has no second semantic root");
   source::walk(document.root(), [&](const Node &node) {
@@ -247,11 +250,11 @@ void locations() {
           "nested generic location");
   for (const auto &[source, needle, code] :
        {std::tuple<const char *, const char *, const char *>{
-            "module {\n fn Bad<F: domain Bogus>() -> () { return (); }\n}",
+            "\n fn Bad<F: domain Bogus>() -> () { return (); }\n",
             "<stdin>:2:9:", "generic-declared-sort"},
-        {"module {\n configure Bad = Missing();\n}",
+        {"\n configure Bad = Missing();\n",
          "<stdin>:2:2:", "source-name-unresolved"},
-        {"module { fn Bad<>() -> () {\n missing::<>();\n return (); } }",
+        {" fn Bad<>() -> () {\n missing::<>();\n return (); } ",
          "<stdin>:2:2:", "source-name-unresolved"}}) {
     success(checkProtocolSyntax(source));
     auto parsed = parseProtocolDocument(source);
@@ -407,9 +410,13 @@ void malformedOriginLocation() {
 }
 
 void syntaxBoundary() {
-  for (StringRef text :
-       {"", "// only a comment", "module", "module {", "module {} x",
-        "module { fn F<>() -> () { op::<>(", "[", "[\"x\",]"}) {
+  for (StringRef empty : {"", "// only a comment"}) {
+    success(checkProtocolSyntax(empty));
+    auto formatted = take(formatProtocol(empty));
+    success(checkProtocolSyntax(formatted));
+  }
+  for (StringRef text : {"module", "module {", " x", "fn F<>() -> () { op::<>(",
+                         "[", "[\"x\",]"}) {
     auto parsed = parseProtocolDocument(text);
     require(!bool(parsed), "incomplete document refused");
     consumeError(parsed.takeError());
@@ -423,8 +430,8 @@ void syntaxBoundary() {
     require(!decoded, "malformed JSON cannot become a typed document");
     consumeError(decoded.takeError());
   }
-  const char *missing = "module { fn F<>() -> () {\n missing::<>(); // keep "
-                        "me\n return (); } }";
+  const char *missing =
+      " fn F<>() -> () {\n missing::<>(); // keep me\n return (); } ";
   auto inspection = take(inspectProtocolSyntax(missing));
   const auto *syntax = inspection.getAsObject();
   require(syntax && syntax->getString("kind") == "syntax-inspection" &&
@@ -466,21 +473,22 @@ void syntaxBoundary() {
           "JSON retains invalid common records");
   rejects(checkProtocolDocument(decoded), "generic-operation");
   rejects(formatProtocol(json), "generic-operation");
-  for (StringRef argument : {"F-", "F--", "F_long-"}) {
+  for (StringRef argument : {"r#F", "r#return", "F_long"}) {
     auto text =
-        (Twine("module { use zkc::algebra as field; fn f<") + argument +
+        (Twine("use zkc::algebra as field; fn f<") + argument +
          ": domain Field>(x: " + argument + "::Element) -> (" + argument +
          "::Element) requires (Field(" + argument +
-         ")) { let y = field::add::<" + argument + " >(x, x); return (y); } }")
+         ")) { let y = field::add::<" + argument + " >(x, x); return (y); }")
             .str();
     auto original = take(parseProtocolDocument(text));
     success(checkProtocolDocument(original));
     auto formatted = take(formatProtocol(text));
     require(encoded(take(parseProtocolDocument(formatted))) ==
                 encoded(original),
-            "formatting preserves a name ending in '-' before '>'");
+            "formatting preserves raw identifiers before static argument "
+            "delimiters");
     require(take(formatProtocol(formatted)) == formatted,
-            "hyphen boundary formatting is idempotent");
+            "raw identifier formatting is idempotent");
     auto printed = take(printProtocol(original.root()));
     require(encoded(take(parseProtocolDocument(printed))) == encoded(original),
             "readable printer preserves the same lexical boundary");
@@ -499,14 +507,14 @@ void syntaxBoundary() {
 void parserLimitsAndLocations() {
   // Interleaved generic and common declarations retain the exact locations
   // of their own records in the immutable document.
-  std::string text = "module {\n";
+  std::string text = "\n";
   for (unsigned i = 0; i < 128; ++i) {
     auto suffix = std::to_string(i);
     text += "fn G" + suffix + "<>() -> () { return (); }\n";
     text += "configure C" + suffix + " = G" + suffix + "();\n";
     text += "fn F" + suffix + "() -> () external;\n";
   }
-  text += "}";
+
   auto interleaved = take(parseProtocolDocument(text));
   for (unsigned i = 0; i < 128; ++i) {
     auto suffix = std::to_string(i);
@@ -520,37 +528,35 @@ void parserLimitsAndLocations() {
   // Keep references source-well-formed while exercising the independent
   // per-section declaration bound. Name resolution now precedes common
   // emission.
-  const std::string entryContext =
-      "module { protocol P { roles (A); return (); } "
-      "instance i: P { roles (A=A); } ";
-  require(take(parseProtocolDocument(entryContext + entries + "}"))
+  const std::string entryContext = "protocol P { roles (A); return (); } "
+                                   "instance i: P { roles (A=A); } ";
+  require(take(parseProtocolDocument(entryContext + entries))
                   .module()
                   ->entries.size() == 32768,
           "declaration bound inclusive");
-  rejects(parseProtocolDocument(entryContext + entries + "entry e = i;}"),
+  rejects(parseProtocolDocument(entryContext + entries + "entry e = i;"),
           "source-limit");
   std::string body;
   for (unsigned i = 0; i < 32768; ++i)
     body += "return ();";
   // This exercises the parser bound, not semantic validity of unreachable
   // returns.
-  success(checkProtocolSyntax("module { fn F<>() -> () {" + body + "}}"));
-  rejects(parseProtocolDocument("module { fn F<>() -> () {" + body + "}}"),
+  success(checkProtocolSyntax("fn F<>() -> () {" + body + "}"));
+  rejects(parseProtocolDocument("fn F<>() -> () {" + body + "}"),
           "source-control-return");
-  rejects(parseProtocolDocument("module { fn F<>() -> () {" + body +
-                                "return ();}}"),
+  rejects(parseProtocolDocument("fn F<>() -> () {" + body + "return ();}"),
           "source-limit");
   std::string loop = "yield ();";
   for (unsigned i = 0; i < 64; ++i)
     loop = "loop 0 carry () -> () {" + loop + "} yield ();";
-  auto nested = "module { protocol P { roles (Alice); " + loop + "}}";
+  auto nested = "protocol P { roles (Alice); " + loop + "}";
   // yield at top level is a semantic editing error, not an incomplete grammar.
   success(checkProtocolSyntax(nested));
   rejects(parseProtocolDocument(nested), "source-protocol-return");
   auto complete = loop.substr(0, loop.size() - StringRef("yield ();").size()) +
                   "return ();";
-  auto deepest = take(parseProtocolDocument(
-      "module { protocol P { roles (Alice); " + complete + "}}"));
+  auto deepest = take(
+      parseProtocolDocument("protocol P { roles (Alice); " + complete + "}"));
   Path path{3, 0, 7, 0};
   for (unsigned i = 1; i < 64; ++i)
     path.insert(path.end(), {5, 0});
@@ -558,8 +564,8 @@ void parserLimitsAndLocations() {
               "__site_63",
           "anonymous paths at maximum body depth");
   rejects(parseProtocolDocument(
-              "module { protocol P { roles (Alice); loop 0 carry () -> () {" +
-              loop + "} return ();}}"),
+              "protocol P { roles (Alice); loop 0 carry () -> () {" + loop +
+              "} return ();}"),
           "source-depth");
   // A tiny deeply nested JSON spelling can otherwise allocate millions of
   // copied path components despite satisfying the portable byte/depth limits.
@@ -590,14 +596,13 @@ int main() {
   parserLimitsAndLocations();
   // A compact unused library must not allocate configurations x operation
   // maps. Each configuration references a shared declaration's coordinates.
-  std::string many =
-      "module { use zkc::core as control; fn Many<>(x: bool) -> () {\n";
+  std::string many = "use zkc::core as control; fn Many<>(x: bool) -> () {\n";
   for (unsigned i = 0; i < 1024; ++i)
     many += "[guard" + std::to_string(i) + "] control::require(x);\n";
   many += "return (); }\n";
   for (unsigned i = 0; i < 1024; ++i)
     many += "configure Alias" + std::to_string(i) + " = Many();\n";
-  many += "}";
+
   auto compact =
       take(resolveProtocolSites(*take(parseProtocolDocument(many)).module()));
   require(
@@ -620,8 +625,8 @@ int main() {
   // Document. LLVM JSON StringRef values alone do not own their storage.
   auto inspected = [] {
     auto document = take(parseProtocolDocument(
-        "module { protocol IndependentlyOwnedProtocol { roles (Alice); "
-        "stop [independently_owned_site] Alice reject; } }",
+        " protocol IndependentlyOwnedProtocol { roles (Alice); stop "
+        "[independently_owned_site] Alice reject; } ",
         "independently-owned-source-file.pir"));
     return take(zkc::inspectSource(document));
   }();

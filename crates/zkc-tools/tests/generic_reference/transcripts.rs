@@ -375,7 +375,7 @@ fn transcript_absorbs_canonical_field_and_table_payloads() {
                 "Observe<T: domain Transcript, F: domain Field, E: domain Codec>",
             )
             .replace("value: bool", &format!("value: {generic}"))
-            .replace("Encodes.bool(E)", &format!("Encodes.{kind}(E, F)"))
+            .replace("\"Encodes.bool\"(E)", &format!("\"Encodes.{kind}\"(E, F)"))
             .replace(
                 "transcript::observe::bool::<T, E>",
                 &format!("transcript::observe::{kind}::<T, F, E>"),
@@ -384,7 +384,7 @@ fn transcript_absorbs_canonical_field_and_table_payloads() {
             .replace("boolean,\n      P,\n      V", "payload,\n      P,\n      V")
             .replace(
                 "E = \"zkcv.bool/1\"",
-                &format!("F = bls12-381.fr, E = \"zkcv.{kind}.bls12-381.fr/1\""),
+                &format!("F = \"bls12-381.fr\", E = \"zkcv.{kind}.bls12-381.fr/1\""),
             )
             .replace(
                 &format!("P value: {generic}"),

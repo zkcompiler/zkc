@@ -12,7 +12,7 @@ int main() {
     return 1;
   }
   auto result = zkc::frontend::loadProtocolDocument(
-      "module { relation Circuit = r1cs(\"circuit.json\"); }", "root.pir",
+      " relation Circuit = r1cs(\"circuit.json\"); ", "root.pir",
       [&](llvm::StringRef path, size_t) -> llvm::Expected<std::string> {
         if (path != "circuit.json")
           return zkc::error("unexpected-path");
@@ -24,7 +24,7 @@ int main() {
   }
   unsigned reads = 0;
   auto rejected = zkc::frontend::loadProtocolDocument(
-      "module { relation R = r1cs(\"../escape.r1cs\"); }", "root.pir",
+      " relation R = r1cs(\"../escape.r1cs\"); ", "root.pir",
       [&](llvm::StringRef, size_t) -> llvm::Expected<std::string> {
         ++reads;
         return zkc::error("unexpected-read");

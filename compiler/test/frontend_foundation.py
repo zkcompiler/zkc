@@ -25,7 +25,7 @@ def stable(text):
     return common
 
 
-PRODUCTS = '''module {
+PRODUCTS = '''
   struct Pair<F: domain Field> { left: F::Element, right: F::Element }
   fn PairUp<F: Field>(x: F::Element, y: F::Element) -> (F::Element, F::Element) {
     (x, y)
@@ -39,7 +39,7 @@ PRODUCTS = '''module {
     let answer = First(nested.2);
     answer
   }
-}'''
+'''
 
 with case("products are values; nested records retain nominal types"):
     common = stable(PRODUCTS)
@@ -55,21 +55,21 @@ with case("named argument failures are checked before operand rearrangement"):
             refuses="source-argument-name")
 
 with case("nominal mismatch cannot hide inside a product"):
-    bad = '''module {
+    bad = '''
       struct Left<F: domain Field> { value: F::Element }
       struct Right<F: domain Field> { value: F::Element }
       fn Get<F: Field>(p: (Left<F>, bool)) -> F::Element { p.0.value }
       fn Bad<F: Field>(p: Right<F>, flag: bool) -> F::Element {
         let tuple = (p, flag); let result = Get(tuple); result
       }
-    }'''
+    '''
     run("protocol-source", bad, refuses="source-struct-mismatch")
 
 with case("named arguments evaluate in written order, once"):
-    text = '''module {
+    text = '''
       fn Pair(x: index, y: index) -> (index, index) { (x, y) }
       fn Use() -> (index, index) { Pair(y: 7, x: 11) }
-    }'''
+    '''
     module = stable(text)
     fn = next(f for f in module[2] if f[1] == "Use")
     body = fn[4]
@@ -79,16 +79,16 @@ with case("named arguments evaluate in written order, once"):
     assert call[4] == [constants[1][5][0], constants[0][5][0]]
 
 with case("unit is one source value and no PIR leaves"):
-    text = '''module {
+    text = '''
   use zkc::core;
       fn Guard<>(condition: bool) -> () { zkc::core::require(condition); () }
       fn Check<>(condition: bool) -> () { let done = Guard(condition); done }
-    }'''
+    '''
     module = stable(text)
     assert all(fn[5] == [] for fn in module[1])
     assert module[1][1][6][-1] == ["return", []]
 
-PLACEMENT = '''module {
+PLACEMENT = '''
   use zkc::algebra;
   use zkc::core;
   fn Twice<F: Field>(x: F::Element) -> F::Element { x + x }
@@ -111,7 +111,7 @@ PLACEMENT = '''module {
   configure Selected = SendTwice(F = "bls12-381.fr");
   instance main: Selected { roles (Worker=Worker, Checker=Checker); }
   entry test = main;
-}'''
+'''
 
 with case("placement checks generic templates and lowers closed helpers"):
     common = stable(PLACEMENT)
@@ -128,7 +128,8 @@ for label, old, new, code in (
     ("wrong output owner", "finish { result, accepted }", "finish { result: received, accepted }", "source-protocol-return"),
     ("missing output", "finish { result, accepted }", "finish { accepted }", "source-output-port"),
     ("duplicate output", "finish { result, accepted }", "finish { result, result }", "source-output-port"),
-    ("hidden communication", "let doubled = Twice(x);", "message secret: Worker(x) -> Checker(leak);", "source-syntax"),
+    # A reserved protocol statement cannot start a statement in a local block.
+    ("hidden communication", "let doubled = Twice(x);", "message secret: Worker(x) -> Checker(leak);", "source-identifier"),
 ):
     with case(label):
         run("protocol-source", PLACEMENT.replace(old, new), refuses=code)
@@ -147,23 +148,23 @@ with case("explicit aggregate annotations preserve nominal/product identity"):
 with case("direct generic entry selects a closed root without configuration boilerplate"):
     direct = PLACEMENT[:PLACEMENT.index("  configure Selected")] + '''
       entry main = SendTwice::<F = "bls12-381.fr">;
-    }'''
+    '''
     stable(direct)
     run("protocol-source", direct.replace('F = "bls12-381.fr"', 'Wrong = "bls12-381.fr"'),
         refuses="source-static-argument")
 
 with case("requirements admit predicates and explicit associated equality"):
-    text = '''module {
+    text = '''
       fn Identity<G: domain Group, F: domain Field>(x: F::Element) -> F::Element
         where ScalarAction(G), Field(F), G::Scalar == F { x }
-    }'''
+    '''
     stable(text)
 
 with case("constructor restriction is authority rather than a proof annotation"):
-    text = '''module {
+    text = '''
       struct Prepared<F: domain Field> constructors(Make) { value: F::Element }
       fn Make<F: Field>(value: F::Element) -> Prepared<F> { Prepared { value } }
-    }'''
+    '''
     stable(text)
     run("protocol-source", text.replace("constructors(Make)", "constructors(Other)"),
         refuses="source-name-unresolved")
@@ -187,13 +188,13 @@ with case("closed composition maps named child outputs independently of written 
         finish { accepted: ok, result: value };
       }
       entry main = TwiceThenReturn::<F="bls12-381.fr">;
-    }'''
+    '''
     stable(text)
     run("protocol-source", text.replace("result: value, accepted: ok", "result: value, result: ok"),
         refuses="source-output-port")
 
 with case("products preserve affine leaf usage"):
-    text = '''module {
+    text = '''
   use zkc::random::{Rng};
   use zkc::random;
       fn Twice<F: Field>(coins: Rng<F>) -> F::Element {
@@ -202,11 +203,11 @@ with case("products preserve affine leaf usage"):
         let (second, last) = zkc::random::draw(tuple.0);
         first
       }
-    }'''
+    '''
     run("protocol-source", text, refuses="generic-resource-reuse")
 
 with case("placement captures used leaves and does not consume unrelated resources"):
-    text = '''module {
+    text = '''
   use zkc::algebra;
   use zkc::random::{Rng};
   use zkc::random;
@@ -219,19 +220,19 @@ with case("placement captures used leaves and does not consume unrelated resourc
         finish { value };
       }
       entry main = Draw::<F="bls12-381.fr">;
-    }'''
+    '''
     common = stable(text)
     helpers = common[2]
     assert helpers[0][2] == [["x", "field:bls12-381.fr"]]
     assert helpers[1][2] == [["coins", "rng:bls12-381.fr"]]
 
 with case("record construction checks product structure before leaf layout"):
-    text = '''module {
+    text = '''
       struct Left { value: index }
       struct Right { value: index }
       struct Box { pair: (Left, ()) }
       fn Good(x: index) -> Box { Box { pair: (Left { value: x }, ()) } }
-    }'''
+    '''
     stable(text)
     for bad, code in (
         ("(Right { value: x }, ())", "source-annotation-type"),
@@ -243,48 +244,47 @@ with case("record construction checks product structure before leaf layout"):
             refuses=code)
 
 with case("call result annotations check structure before layout"):
-    text = '''module {
+    text = '''
       fn Pair(x: index) -> (index, index) { (x, x) }
       fn Bad(x: index) -> index { let p: (index, index, index) = Pair(x); x }
-    }'''
+    '''
     run("protocol-source", text, refuses="source-struct-mismatch")
 
 with case("result annotations preserve phantom domain parameters"):
-    text = '''module {
+    text = '''
       struct Marker<F: domain Field> { flag: bool }
       fn Make<F: Field>(flag: bool) -> Marker<F> { Marker::<F> { flag } }
       fn Bad<A: Field, B: Field>(flag: bool) -> bool {
         let marker: Marker<B> = Make::<A>(flag);
         flag
       }
-    }'''
+    '''
     run("protocol-source", text, refuses="source-annotation-type")
 
 with case("installed operation binding visits return and tail expressions"):
     for body in ("zkc::algebra::add(x, x)", "return zkc::algebra::add(x, x);",
                  "zkc::algebra::add(x, zkc::algebra::add(x, x))"):
-        text = ('module { use zkc::algebra; '
-                'fn Twice(x: bls12-381.fr::Element) -> bls12-381.fr::Element { ' + body + ' } }')
+        text = ('use zkc::algebra; fn Twice(x: "bls12-381.fr"::Element) -> "bls12-381.fr"::Element { ' + body + ' }')
         module = stable(text)
         assert any(b[1] == "field.add" for b in module[1])
 
 with case("operators reject zero-leaf aggregates without inspecting a scalar"):
     for shape in ("()", "((),)", "((), ())"):
         for body in ("let z = x + y; z", "x + y"):
-            text = f"module {{ fn Bad(x: {shape}, y: {shape}) -> {shape} {{ {body} }} }}"
+            text = f" fn Bad(x: {shape}, y: {shape}) -> {shape} {{ {body} }} "
             run("protocol-source", text, refuses="source-struct-value")
             report = json.loads(run("protocol-analyze", text))
             assert report["phase"] == "semantic_error"
             assert report["diagnostics"][0]["code"] == "source-struct-value"
 
 with case("region captures and induction variables retain their lexical scopes"):
-    text = '''module {
+    text = '''
       fn Scoped(flag: bool, u: (), x: index) -> index {
         if flag capture(u, x) -> (a) { yield(x); } else { yield(x); }
         for i in 0..2 { let inner = i; }
         a
       }
-    }'''
+    '''
     stable(text)
     report = json.loads(run("protocol-analyze", text))
     bindings = report["local_bindings"]

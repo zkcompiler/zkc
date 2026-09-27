@@ -98,20 +98,20 @@ def presentation(data, seed, enabled):
 
 
 def synthetic(calls):
-    lines = ["module {", "  fn Identity<F: domain Field>(x: F::Element) -> (F::Element) {",
+    lines = ["  fn Identity<F: domain Field>(x: F::Element) -> (F::Element) {",
              "    return (x);", "  }", "  configure Open = Identity();"]
     lines += [f'  configure Choice{i} = Open(F = "bls12-381.fr");'
               for i in range(calls)]
     lines += ["  protocol Repeated {", "    roles (Alice);",
-              "    inputs (Alice x: bls12-381.fr::Element);",
-              "    outputs (Alice bls12-381.fr::Element);"]
+              '    inputs (Alice x: "bls12-381.fr"::Element);',
+              '    outputs (Alice "bls12-381.fr"::Element);']
     previous = "x"
     for i in range(calls):
         lines.append(f"    local [call{i}] Alice: let v{i} = Choice{i}({previous});")
         previous = f"v{i}"
     lines += [f"    return ({previous});", "  }",
               "  instance repeated: Repeated { roles (Alice = Alice); }",
-              "  entry main = repeated;", "}"]
+              "  entry main = repeated;"]
     return ("\n".join(lines) + "\n").encode()
 
 

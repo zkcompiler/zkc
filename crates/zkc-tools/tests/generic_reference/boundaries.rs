@@ -54,13 +54,19 @@ fn polynomial_contract_boundaries_match_both_layouts() {
             let (b_generic, r_generic) = (written(bty, "F"), written(result_ty, "F"));
             let concrete = "\"bls12-381.fr\"";
             let (b_concrete, r_concrete) = (written(bty, concrete), written(result_ty, concrete));
+            let operation = match contract {
+                "fold" => "r#fold",
+                "evaluate" => "evaluate_multilinear",
+                _ => contract,
+            };
             let source = format!(
-                r#"module {{
+                r#"
+                use zkc::poly; use zkc::poly::{{Table, Point, Round}};
                 fn Check<F: domain Field>(a: Table<F>, b: {b_generic}) -> ({r_generic}) requires (CommRing(F)) {{
-                    [work] let (result) = poly::{contract}::<F>(a, b);
+                    [work] let (result) = poly::{operation}::<F>(a, b);
                     return (result);
                 }}
-                configure Bound = Check(F = bls12-381.fr) using (work = "{implementation}/poly.{contract}");
+                configure Bound = Check(F = "bls12-381.fr") using (work = "{implementation}/poly.{contract}");
                 protocol CheckProtocol {{
                     roles (P);
                     inputs (P a: Table<{concrete}>, P b: {b_concrete});
@@ -70,7 +76,7 @@ fn polynomial_contract_boundaries_match_both_layouts() {
                 }}
                 instance root: CheckProtocol {{ roles (P = P); }}
                 entry main = root;
-            }}"#
+            "#
             );
             let fixture = Fixture::from_text(&source);
             for (a, b) in cases {

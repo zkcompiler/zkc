@@ -12,17 +12,14 @@ and imports the public names it uses:
 
 ```text
 // library/lib.pir
-module {
-  library(namespace="example", name="bits", version="1", resolution="source-v1");
-  pub fn Identity(value: bool) -> bool { return value; }
-}
+library(namespace="example", name="bits", version="1", resolution="source-v1");
+pub fn Identity(value: bool) -> bool { return value; }
+
 
 // app.pir
-module {
-  dependency bits = library(namespace="example", name="bits", version="1", resolution="source-v1");
-  use bits::Identity as Keep;
-  fn Main(value: bool) -> bool { return Keep(value: value); }
-}
+dependency bits = library(namespace="example", name="bits", version="1", resolution="source-v1");
+use bits::Identity as Keep;
+fn Main(value: bool) -> bool { return Keep(value: value); }
 ```
 
 ```sh
@@ -51,9 +48,10 @@ identity.
 
 Authored references must resolve to a local binding, a visible declaration or
 permitted core vocabulary. Generated implementation symbols cannot be called by
-spelling them, including quoted names. A relation helper is reached through its
-visible view declaration. All authored files use explicit domains and imports;
-`module <profile>` headings are no longer accepted.
+spelling them, including raw escapes. A relation helper is reached through its
+visible view declaration. All authored files use explicit domains and imports.
+Ordinary files have no `module` wrapper or profile heading. Declarations appear
+directly at file scope; `mod child;` still requires explicit dependency capture.
 
 Relation references are relative to their declaring file, remain within the
 library root, and are read into the same snapshot. `protocol-resolve` produces a
@@ -68,12 +66,10 @@ The compiler supplies curated modules under `zkc`: `algebra`, `poly`, `curve`,
 resolution, aliases and reexports, without a captured `--library` file:
 
 ```text
-module {
-  use zkc::algebra;
-  use zkc::algebra::Field as ScalarField;
-  pub fn Double<F: ScalarField>(x: F::Element) -> F::Element {
-    return algebra::add(x, x);
-  }
+use zkc::algebra;
+use zkc::algebra::Field as ScalarField;
+pub fn Double<F: ScalarField>(x: F::Element) -> F::Element {
+  return algebra::add(x, x);
 }
 ```
 
@@ -148,9 +144,10 @@ cryptographic randomness.
 
 ## Names, observations and queries
 
-Explicit `::` qualification preserves each member's spelling: `Root::child.part`
-selects one member named `child.part`, while `Root::child::part` selects two
-successive members. Resolution keeps that distinction through imports and aliases.
+Declaration paths use `::` between strict identifier segments. `Root::child_part`
+selects one member, while `Root::child::part` selects two successive members.
+Resolution keeps those boundaries through imports and aliases. Exact construction
+selector keys remain quoted data, including dots in emitted origins.
 
 The frontend keeps exact declaration identity, emitted symbols and logical
 origins separate. Imported ordinary symbols have collision-checked compact

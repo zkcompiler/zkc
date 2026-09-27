@@ -306,6 +306,8 @@ json::Value inspectAnalysis(const Analysis &analysis) {
     json::Array syntaxFiles;
     bool checkedSyntax = false;
     auto inspectFile = [&](StringRef text, StringRef filename, uint32_t file) {
+      if (classifyDocument(text) != SourceForm::Module)
+        return;
       auto parsed = syntax::parseRecoverable(text, filename);
       if (!parsed.content)
         return;

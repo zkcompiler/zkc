@@ -38,18 +38,18 @@ const Declaration &named(const Analysis &analysis, StringRef name) {
 
 void retainedTypes() {
   std::string text = R"(
-module {
-  struct Left<F: domain Field>(value: F::Element);
-  struct Right<F: domain Field>(value: F::Element);
+
+  struct Left<F: domain Field> { value: F::Element }
+  struct Right<F: domain Field> { value: F::Element }
   fn KeepLeft<F: Field>(value: Left<F>) -> Left<F> { return value; }
   fn KeepRight<F: Field>(value: Right<F>) -> Right<F> { return value; }
   fn Make<F: Field>(value: F::Element) -> Left<F> {
-    let result = Left(value = value); return result;
+    let result = Left{ value: value }; return result;
   }
   fn Use<F: Field>(value: F::Element) -> Left<F> {
     let result = Make(value); return result;
   }
-})";
+)";
   auto analysis = analyzeProtocol(text, "owned.pir");
   require(analysis.complete(), "valid nominal source analyzes");
   auto saved = analysis;
@@ -102,14 +102,14 @@ module {
 }
 
 void checkedSnapshotAndLexicalTypes() {
-  const Input input(R"(module {
+  const Input input(R"(
     struct Pair { x: index, y: index }
     fn Choose(flag: bool, x: index) -> (Pair, ()) {
       let pair = Pair { y: x, x };
       if flag { let inner = pair.x; } else { let inner = pair.y; }
       (pair, ())
     }
-  })",
+  )",
                     "snapshot.pir");
   auto checked = [&] {
     auto analysis = analyzeProtocol(input);
@@ -146,11 +146,58 @@ void checkedSnapshotAndLexicalTypes() {
 }
 
 void incompleteCannotEmit() {
-  auto analysis = analyzeProtocol(R"(module {
+  for (StringRef text :
+       {"pub fn Broken(x:bool)->bool{return x.;} fn After()->(){return;}",
+        "#[operator(bogus)] fn Broken(x:bool)->bool{return x;} fn "
+        "After()->(){return;}",
+        "# /*comment*/ [operator(bogus)] pub fn Broken(x:bool)->bool{return "
+        "x;} fn After()->(){return;}",
+        "#[operator(add)] #[operator(add)] fn Broken(x:bool)->bool{return x;} "
+        "fn After()->(){return;}"}) {
+    auto recovered = analyzeProtocol(text);
+    require(recovered.diagnostics().size() == 1,
+            "failed attributed/exported declaration produces one diagnostic");
+    require(!recovered.lookup({0}, "Broken"),
+            "recovery cannot publish a declaration with dropped attributes");
+    require(bool(recovered.lookup({0}, "After")),
+            "recovery keeps the following complete declaration");
+  }
+
+  for (StringRef text :
+       {"pub entry Broken = missing; fn After()->(){return;}",
+        "pub entry Broken = ; fn After()->(){return;}",
+        "pub pub fn Broken()->(){return;} fn After()->(){return;}",
+        "pub #[operator(add)] fn Broken(x:bool)->bool{return x;} fn "
+        "After()->(){return;}",
+        "fn link(x:bool)->bool{return x.;} fn After()->(){return;}"}) {
+    auto recovered = analyzeProtocol(text);
+    require(recovered.diagnostics().size() == 1,
+            "invalid prefix or contextual name produces one diagnostic");
+    require(!recovered.lookup({0}, "Broken") && !recovered.lookup({0}, "link"),
+            "failed declaration is not published");
+    require(bool(recovered.lookup({0}, "After")),
+            "invalid visibility does not terminate recovery");
+  }
+  auto attributed = analyzeProtocol(
+      "const c:index=0 #[operator(bogus)] fn Broken(x:bool)->bool{return x;} "
+      "fn After()->(){return;}");
+  require(attributed.diagnostics().size() == 2,
+          "recovered attribute receives its own validation");
+  require(!attributed.lookup({0}, "Broken") && attributed.lookup({0}, "After"),
+          "recovery cannot discard a following declaration's attribute");
+  std::string repeated;
+  for (unsigned i = 0; i < 2000; ++i)
+    repeated += "#[;";
+  repeated += "fn After()->(){return;}";
+  auto bounded = analyzeProtocol(repeated);
+  require(bool(bounded.lookup({0}, "After")),
+          "unclosed attributes make bounded forward progress");
+
+  auto analysis = analyzeProtocol(R"(
     fn Before(x: bool) -> bool { return x; }
     fn Broken(x: bool) -> bool { let value = ; }
     fn After(x: bool) -> bool { return x; }
-  })");
+  )");
   require(!analysis.complete(), "recovered syntax is not complete analysis");
   require(!analysis.diagnostics().empty(), "recovery retains errors");
   require(bool(analysis.lookup({0}, "Before")),
@@ -169,9 +216,9 @@ void incompleteCannotEmit() {
 }
 void malformedProjectRefuses() {
   auto project = take(ProjectInput::capture(
-      {{{{{}, Input("module {}", "root.pir")},
+      {{{{{}, Input("", "root.pir")},
          {{"missing", "child"},
-          Input("module { use super::Absent; }", "child.pir")}}}}));
+          Input(" use super::Absent; ", "child.pir")}}}}));
   auto analysis = analyzeProject(project);
   require(!analysis.complete(), "a missing parent is incomplete, not a crash");
   bool missingParent = false;
@@ -203,24 +250,23 @@ void refused(Expected<T> result, StringRef code, StringRef what) {
 // Capture and resolution guard their inputs even where the command line
 // cannot produce the bad shape: these are the direct callers' refusals.
 void capturedProjectShapes() {
-  refused(ProjectInput::capture({{{{{}, Input("module {}", "m.pir")}}}},
+  refused(ProjectInput::capture({{{{{}, Input("", "m.pir")}}}},
                                 {{1, "a.json", ""}}),
           "project-asset-owner", "asset owned by a file that was not captured");
   // Text with no file has no directory to find child modules or assets in.
-  refused(captureProject(Input::withoutFile("module {}")),
-          "project-source-base", "a project root without a file");
-  refused(loadProtocolFile(Input::withoutFile("module {}")),
-          "relation-asset-base", "relation assets of a source without a file");
+  refused(captureProject(Input::withoutFile("")), "project-source-base",
+          "a project root without a file");
+  refused(loadProtocolFile(Input::withoutFile("")), "relation-asset-base",
+          "relation assets of a source without a file");
   // Two roots at one canonical path must carry the same bytes.
-  refused(captureProject(Input("module {}", __FILE__),
-                         {Input("module { }", __FILE__)}),
+  refused(captureProject(Input("", __FILE__), {Input(" ", __FILE__)}),
           "project-source-conflict", "one path captured with two contents");
-  auto project = take(ProjectInput::capture(
-      {{{{{}, Input("module { mod c; }", "r.pir")},
-         {{"c"},
-          Input("module { library(namespace=\"t\", name=\"c\", "
-                "version=\"1\", resolution=\"r1\"); }",
-                "c.pir")}}}}));
+  auto project = take(
+      ProjectInput::capture({{{{{}, Input(" mod c; ", "r.pir")},
+                               {{"c"},
+                                Input(" library(namespace=\"t\", name=\"c\", "
+                                      "version=\"1\", resolution=\"r1\"); ",
+                                      "c.pir")}}}}));
   auto analysis = analyzeProject(project);
   bool root = false;
   std::string seen;
@@ -231,14 +277,14 @@ void capturedProjectShapes() {
   require(root, "a child module cannot declare a library identity:" + seen);
 }
 void failedImportsAreNotReplayed() {
-  auto analysis = analyzeProtocol("module { use absent::name as imported; }");
+  auto analysis = analyzeProtocol(" use absent::name as imported; ");
   size_t failures = 0;
   for (const auto &d : analysis.diagnostics())
     failures += d.code == "source-name-unresolved";
   require(failures == 1, "retaining selector data replayed a failed import");
 }
 void constructionSelectorBounds() {
-  auto project = ProjectInput::single(Input("module {}", "empty.pir"));
+  auto project = ProjectInput::single(Input("", "empty.pir"));
   source::Construction descriptor;
   descriptor.draws.resize(32769, {"Unused", "draw"});
   auto checked = take(analyzeProject(project).checkedModule());
@@ -267,14 +313,12 @@ void retainedProjectOwnership() {
   for (bool valid : {true, false}) {
     auto analysis = [&] {
       auto project = take(ProjectInput::capture(
-          {{{{{}, Input("module { mod child; }", "root.pir")},
+          {{{{{}, Input(" mod child; ", "root.pir")},
              {{"child"},
-              Input(
-                  valid
-                      ? "module { pub fn Echo(x: bool) -> bool { return x; } }"
-                      : "module { pub fn Echo(x: bool) -> bool { return "
-                        "missing; } }",
-                  "child.pir")}}}}));
+              Input(valid
+                        ? " pub fn Echo(x: bool) -> bool { return x; } "
+                        : " pub fn Echo(x: bool) -> bool { return missing; } ",
+                    "child.pir")}}}}));
       return analyzeProject(project);
     }();
     auto copy = analysis;
@@ -297,7 +341,7 @@ void retainedProjectOwnership() {
 
 void partialLibrarySyntaxInspection() {
   auto analysis = analyzeProtocol(
-      "module { library(namespace=\"test\", name=\"partial\", version=\"1\", "
+      "library(namespace=\"test\", name=\"partial\", version=\"1\", "
       "resolution=\"one\"); fn Broken(x: ",
       "partial.pir");
   require(analysis.state() == AnalysisState::SyntaxPartial,

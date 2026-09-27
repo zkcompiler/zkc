@@ -91,39 +91,6 @@ std::string Context::origin(const library::QualifiedDecl &id) const {
   return result.empty() ? id.name : result + "." + id.name;
 }
 namespace {
-// Qualified syntax keeps :: until its members have been rewritten. Prefix
-// lookup still compares the shared dotted namespace, but a projected member
-// retains the parser's boundary ("child.part" is one member).
-std::string namespaceSpelling(StringRef path) {
-  std::string out;
-  while (!path.empty()) {
-    auto [head, tail] = path.split("::");
-    out += head;
-    if (!tail.empty())
-      out += ".";
-    path = tail;
-  }
-  return out;
-}
-std::pair<StringRef, StringRef> memberStep(StringRef suffix) {
-  const bool explicitMember = suffix.consume_front("::");
-  if (!explicitMember)
-    suffix.consume_front(".");
-  auto end = explicitMember ? suffix.find("::") : suffix.find_first_of(".:");
-  return {suffix.take_front(end),
-          end == StringRef::npos ? StringRef{} : suffix.drop_front(end)};
-}
-bool sameMembers(StringRef a, StringRef b) {
-  while (!a.empty() && !b.empty()) {
-    auto [left, leftTail] = memberStep(a);
-    auto [right, rightTail] = memberStep(b);
-    if (left != right)
-      return false;
-    a = leftTail;
-    b = rightTail;
-  }
-  return a.empty() && b.empty();
-}
 std::string digest(StringRef value) {
   auto bytes = SHA256::hash(arrayRefFromStringRef(value));
   return toHex(bytes, true);
@@ -214,14 +181,15 @@ std::string anonymousScope(const ProjectInput &input) {
   }
   return toHex(hash.final(), true);
 }
+// A lexical binding. A declaration binding can also select a generated view
+// helper (`helper` extends its identifier) or members below the declaration.
 struct Binding {
   enum class Kind { Declaration, Module, Use } kind;
   uint32_t index;
   bool exported;
-  std::string suffix;
-  Binding(Kind kind, uint32_t index, bool exported, std::string suffix = {})
-      : kind(kind), index(index), exported(exported),
-        suffix(std::move(suffix)) {}
+  std::string helper = {};
+  source::Names members = {};
+  bool exact() const { return helper.empty() && members.empty(); }
 };
 struct Module {
   uint32_t owner, file;
@@ -338,7 +306,7 @@ class Resolver {
                    "private relation view '" + *prefix + "'");
               return {};
             }
-            owner->suffix += name.drop_front(prefix->size()).str();
+            owner->helper += name.drop_front(prefix->size()).str();
             return owner;
           }
         }
@@ -356,10 +324,10 @@ class Resolver {
       return use(module, b.index);
     return b;
   }
+  // A declaration path another declaration's members are resolved through.
   struct Target {
     uint32_t module;
-    std::string name;
-    bool quoted = false;
+    source::Names path;
     ReferenceKind kind = ReferenceKind::Declaration;
   };
   struct Surface {
@@ -411,48 +379,43 @@ class Resolver {
         else if (d.kind == "multilinear") {
           out.calls = {"Assemble", "Products", "Contract", "Evaluate"};
           out.bindingHelpers = true;
-          out.viewRelation = Target{
-              module, d.relation, m.syntax.quotedRelations.count(d.name) != 0};
+          out.viewRelation = Target{module, d.relation.path.segments};
         } else if (d.kind == "arithmetic")
           out.calls = {"Evaluate"};
       }
       for (const auto &d : m.syntax.libraryComponents)
         members(d);
-      for (const auto &d : m.syntax.librarySelections) {
-        std::string target = d.target.root.value;
-        for (const auto &part : d.target.members)
-          target += "::" + part;
-        surface(d.name).base = Target{
-            module, target, d.target.root.kind == syntax::Atom::Kind::String,
-            ReferenceKind::Static};
-      }
+      // An exact quoted selection is installed data with no member surface.
+      for (const auto &d : m.syntax.librarySelections)
+        if (d.target.root.kind == syntax::Atom::Kind::Name) {
+          source::Names target{d.target.root.value};
+          llvm::append_range(target, d.target.members);
+          surface(d.name).base =
+              Target{module, std::move(target), ReferenceKind::Static};
+        }
       for (const auto &d : m.syntax.enums)
         for (const auto &v : d.alternatives)
           surface(d.name).calls.insert(v.name);
       for (const auto &d : m.syntax.protocols)
         for (const auto &v : d.dependencies)
           surface(d.name).dependencies.emplace(
-              v.name, Target{module, v.protocol,
-                             d.quotedDependencies.count(v.name) != 0});
+              v.name, Target{module, v.protocol.path.segments});
       for (const auto &d : m.syntax.instances)
         for (const auto &v : d.dependencies)
           surface(d.name).dependencies.emplace(
-              v.first, Target{module, v.second,
-                              m.syntax.quotedInstanceDependencies.count(
-                                  {d.name, v.first}) != 0});
+              v.first, Target{module, v.second.path.segments});
       for (const auto &d : m.syntax.configurations)
-        surface(d.name).base =
-            Target{module, d.base, m.syntax.quotedBases.count(d.name) != 0};
+        surface(d.name).base = Target{module, d.base.path.segments};
     }
   }
 
   // Read resolved imports without emitting diagnostics or granting visibility
-  // through a private alias. Ambiguity discovery includes private paths, as the
-  // source contract requires; selecting the resulting candidate does not.
+  // through a private alias. Existence and visibility stay separate so a
+  // private target receives an access diagnostic, never authority.
   std::optional<Candidate> candidateName(uint32_t module, StringRef name,
                                          uint32_t request) const {
     auto entry = modules[module].names.find(name.str());
-    std::string suffix;
+    std::string helper;
     if (entry == modules[module].names.end()) {
       auto prefix = viewHelperOwner(name);
       if (!prefix)
@@ -460,7 +423,7 @@ class Resolver {
       entry = modules[module].names.find(prefix->str());
       if (entry == modules[module].names.end())
         return {};
-      suffix = name.drop_front(prefix->size()).str();
+      helper = name.drop_front(prefix->size()).str();
     }
     auto b = entry->second;
     bool visible = b.exported || inside(request, module);
@@ -470,11 +433,11 @@ class Resolver {
         return {};
       b = alias->second;
     }
-    if (!suffix.empty()) {
-      if (b.kind != Binding::Kind::Declaration || !b.suffix.empty() ||
+    if (!helper.empty()) {
+      if (b.kind != Binding::Kind::Declaration || !b.exact() ||
           context->declarations[b.index].kind != Declaration::Kind::View)
         return {};
-      b.suffix = suffix;
+      b.helper = helper;
     }
     return Candidate{b, visible};
   }
@@ -490,15 +453,13 @@ class Resolver {
       return false;
     using K = Declaration::Kind;
     const auto k = context->declarations[b.index].kind;
-    const bool exact = b.suffix.empty();
-    if (exact) {
+    if (b.exact()) {
       switch (kind) {
       case ReferenceKind::Value:
         return k == K::Constant;
       case ReferenceKind::Constructor:
         return k == K::Record;
       case ReferenceKind::Call:
-      case ReferenceKind::QualifiedCall:
         return k == K::Function || k == K::Configuration || k == K::Link ||
                k == K::Binding || k == K::Operation;
       case ReferenceKind::Type:
@@ -518,10 +479,11 @@ class Resolver {
     if (found == surfaces.end())
       return false;
     const auto &surface = found->second;
-    if (k == K::View && StringRef(b.suffix).starts_with("_")) {
-      if (kind != ReferenceKind::Call && kind != ReferenceKind::QualifiedCall)
+    if (!b.helper.empty()) {
+      // A generated view helper is callable, never a namespace.
+      if (k != K::View || !b.members.empty() || kind != ReferenceKind::Call)
         return false;
-      auto helper = StringRef(b.suffix).drop_front();
+      auto helper = StringRef(b.helper).drop_front();
       if (surface.calls.count(helper.str()))
         return true;
       if (!surface.bindingHelpers)
@@ -534,108 +496,86 @@ class Resolver {
           helper != std::to_string(coordinate))
         return false;
       const auto &target = *surface.viewRelation;
-      auto relations = candidates(target.module, target.name, target.module,
-                                  ReferenceKind::Declaration, node,
-                                  target.quoted, depth + 1);
+      auto relations = candidates(target.module, target.path, target.module,
+                                  ReferenceKind::Declaration, node, depth + 1);
       if (relations.size() != 1 || !relations.front().visible ||
-          !relations.front().binding.suffix.empty())
+          !relations.front().binding.exact())
         return false;
       auto count = relationPublicCounts.find(relations.front().binding.index);
       return count != relationPublicCounts.end() && coordinate <= count->second;
     }
-    if (!StringRef(b.suffix).starts_with(".") &&
-        !StringRef(b.suffix).starts_with("::"))
-      return false;
-    auto [head, tail] = memberStep(b.suffix);
+    const auto &head = b.members.front();
+    const auto tail = ArrayRef(b.members).drop_front();
     if (surface.base) {
+      // A selected component or configured protocol exposes its target's
+      // members under its own name.
       const auto &base = *surface.base;
-      auto targets = candidates(base.module, base.name, base.module, base.kind,
-                                node, base.quoted, depth + 1);
+      auto targets = candidates(base.module, base.path, base.module, base.kind,
+                                node, depth + 1);
       if (targets.size() != 1 || !targets.front().visible)
         return false;
       auto target = targets.front().binding;
-      const auto prefix = target.suffix;
-      target.suffix += b.suffix;
-      if (!authorizes(target, kind, node, depth + 1))
-        return false;
-      if (prefix.empty())
-        b.suffix = std::move(target.suffix);
+      llvm::append_range(target.members, b.members);
+      return authorizes(target, kind, node, depth + 1);
+    }
+    if (kind == ReferenceKind::Call)
+      return tail.empty() && surface.calls.count(head);
+    if (tail.empty() &&
+        ((kind == ReferenceKind::Type && surface.types.count(head)) ||
+         (kind == ReferenceKind::Static && surface.statics.count(head))))
       return true;
-    }
-    if (kind == ReferenceKind::Call || kind == ReferenceKind::QualifiedCall) {
-      // Call syntax already carries its authored qualified name in the shared
-      // string namespace. Test the entire alternative/method, not a prefix.
-      auto member = StringRef(b.suffix).drop_front(
-          StringRef(b.suffix).starts_with("::") ? 2 : 1);
-      return surface.calls.count(member.str());
-    }
-    auto wholeMember = StringRef(b.suffix).drop_front(
-        StringRef(b.suffix).starts_with("::") ? 2 : 1);
-    if ((kind == ReferenceKind::Type &&
-         surface.types.count(wholeMember.str())) ||
-        (kind == ReferenceKind::Static &&
-         surface.statics.count(wholeMember.str()))) {
-      // Even an implicit dotted reading may name a single dotted member.
-      // Carry its actual boundary back to the syntax rewriter.
-      b.suffix = "::" + wholeMember.str();
-      return true;
-    }
     // Domain members carry a sort. Check every associated-domain projection
     // against the installed vocabulary before recognizing its final type.
-    auto domain = surface.statics.find(head.str());
+    auto domain = surface.statics.find(head);
     if (domain != surface.statics.end() && !tail.empty()) {
       StringRef sort = domain->second;
-      while (!sort.empty() && !tail.empty()) {
+      for (size_t i = 0; i < tail.size() && !sort.empty(); ++i) {
         if (!spend(node))
           return false;
-        auto [part, rest] = memberStep(tail);
-        if (rest.empty() && kind == ReferenceKind::Type)
-          return !associatedTypeConstructor(sort, part).empty();
-        sort = protocol::associatedMemberSort(sort, part);
-        tail = rest;
+        if (i + 1 == tail.size() && kind == ReferenceKind::Type)
+          return !associatedTypeConstructor(sort, tail[i]).empty();
+        sort = protocol::associatedMemberSort(sort, tail[i]);
       }
       return kind == ReferenceKind::Static && !sort.empty();
     }
     if (kind != ReferenceKind::Declaration)
       return false;
-    auto dependency = surface.dependencies.find(head.str());
+    auto dependency = surface.dependencies.find(head);
     if (dependency == surface.dependencies.end())
       return false;
     const auto &target = dependency->second;
-    auto targets = candidates(target.module, target.name, target.module, kind,
-                              node, target.quoted, depth + 1);
+    auto targets = candidates(target.module, target.path, target.module, kind,
+                              node, depth + 1);
     if (targets.size() != 1 || !targets.front().visible)
       return false;
     if (tail.empty())
       return true;
     auto nested = targets.front().binding;
-    nested.suffix += tail.str();
+    llvm::append_range(nested.members, tail);
     return authorizes(nested, kind, node, depth + 1);
   }
 
   // Invalid members never compete with complete candidates. When no complete
   // reading exists, a unique enum/protocol owner can still provide the precise
-  // semantic leaf diagnostic, including through opaque dotted module names.
+  // semantic leaf diagnostic.
   bool leafOwner(const Binding &b, ReferenceKind kind) const {
-    if (b.kind != Binding::Kind::Declaration || b.suffix.empty())
+    if (b.kind != Binding::Kind::Declaration || b.members.empty())
       return false;
     using K = Declaration::Kind;
     const auto k = context->declarations[b.index].kind;
-    return ((kind == ReferenceKind::Call ||
-             kind == ReferenceKind::QualifiedCall) &&
-            k == K::Enum && memberStep(b.suffix).second.empty()) ||
+    return (kind == ReferenceKind::Call && k == K::Enum &&
+            b.members.size() == 1) ||
            (kind == ReferenceKind::Declaration &&
             (k == K::Protocol || k == K::Configuration || k == K::Instance));
   }
 
-  // Enumerate complete readings, including opaque dotted names at each module
-  // boundary. Deduplicate aliases by declaration and member, not by spelling.
-  // Visibility is tracked separately from existence for ambiguity diagnostics.
-  std::vector<Candidate> candidates(uint32_t module, StringRef name,
+  // Resolve a path segment by segment. The first segment is a lexical name
+  // or a scope root; each module segment selects the next; a declaration
+  // keeps the remaining segments as members for category authorization.
+  std::vector<Candidate> candidates(uint32_t module, ArrayRef<std::string> path,
                                     uint32_t request, ReferenceKind kind,
                                     const source::Node &node,
-                                    bool quoted = false, unsigned depth = 0,
-                                    bool root = true,
+                                    unsigned depth = 0, bool root = true,
                                     bool diagnosticOnly = false) {
     std::vector<Candidate> out;
     if (depth > 64) {
@@ -643,75 +583,52 @@ class Resolver {
            "candidate resolution exceeds 64 levels");
       return out;
     }
-    auto add = [&](Candidate c) {
-      for (auto &prior : out)
-        if (prior.binding.index == c.binding.index &&
-            sameMembers(prior.binding.suffix, c.binding.suffix)) {
-          prior.visible |= c.visible;
-          return;
+    // reference() charged the root; each traversed namespace is charged once.
+    if (path.empty() || (depth != 0 && !spend(node)))
+      return out;
+    const auto &head = path.front();
+    auto candidate = candidateName(module, head, request);
+    bool scopeRoot = head == "crate" || head == "self" || head == "super";
+    if (root && (!candidate || scopeRoot)) {
+      if (scopeRoot)
+        candidate.reset();
+      std::optional<uint32_t> target;
+      const auto &owner = context->owners[modules[module].owner];
+      if (head == "crate")
+        target = owner.root;
+      else if (head == "self")
+        target = module;
+      else if (head == "zkc" && installedRoot)
+        target = *installedRoot;
+      else if (head == "super") {
+        auto p = modules[module].path;
+        if (!p.empty()) {
+          p.pop_back();
+          auto parent = paths.find({modules[module].owner, p});
+          if (parent != paths.end())
+            target = parent->second;
         }
-      out.push_back(std::move(c));
-    };
-    for (size_t end = name.size();;) {
-      // reference() paid for the first atom. Charge each additional prefix or
-      // recursive lookup once, not again for its category check or selection.
-      if ((depth != 0 || end != name.size()) && !spend(node))
-        break;
-      auto head = name.take_front(end);
-      const auto spelling = quoted ? head.str() : namespaceSpelling(head);
-      auto candidate = candidateName(module, spelling, request);
-      bool scopeRoot = head == "crate" || head == "self" || head == "super";
-      if (root && !quoted && (!candidate || scopeRoot)) {
-        if (scopeRoot)
-          candidate.reset();
-        std::optional<uint32_t> target;
-        const auto &owner = context->owners[modules[module].owner];
-        if (head == "crate")
-          target = owner.root;
-        else if (head == "self")
-          target = module;
-        else if (head == "zkc" && installedRoot)
-          target = *installedRoot;
-        else if (head == "super") {
-          auto p = modules[module].path;
-          if (!p.empty()) {
-            p.pop_back();
-            auto parent = paths.find({modules[module].owner, p});
-            if (parent != paths.end())
-              target = parent->second;
-          }
-        } else if (auto dep = owner.dependencies.find(spelling);
-                   dep != owner.dependencies.end())
-          target = context->owners[dep->second].root;
-        if (target)
-          candidate =
-              Candidate{Binding{Binding::Kind::Module, *target, true}, true};
+      } else if (auto dep = owner.dependencies.find(head);
+                 dep != owner.dependencies.end())
+        target = context->owners[dep->second].root;
+      if (target)
+        candidate =
+            Candidate{Binding{Binding::Kind::Module, *target, true}, true};
+    }
+    if (!candidate)
+      return out;
+    auto &b = candidate->binding;
+    if (b.kind == Binding::Kind::Declaration) {
+      llvm::append_range(b.members, path.drop_front());
+      if (diagnosticOnly ? leafOwner(b, kind)
+                         : authorizes(b, kind, node, depth))
+        out.push_back(std::move(*candidate));
+    } else if (b.kind == Binding::Kind::Module && path.size() > 1) {
+      for (auto c : candidates(b.index, path.drop_front(), request, kind, node,
+                               depth + 1, false, diagnosticOnly)) {
+        c.visible &= candidate->visible;
+        out.push_back(std::move(c));
       }
-      if (candidate) {
-        auto remaining = name.drop_front(end);
-        auto &b = candidate->binding;
-        if (b.kind == Binding::Kind::Declaration) {
-          b.suffix += remaining.str();
-          if (diagnosticOnly ? leafOwner(b, kind)
-                             : authorizes(b, kind, node, depth))
-            add(*candidate);
-        } else if (b.kind == Binding::Kind::Module && !remaining.empty()) {
-          auto nested = candidates(
-              b.index,
-              remaining.drop_front(remaining.starts_with("::") ? 2 : 1),
-              request, kind, node, false, depth + 1, false, diagnosticOnly);
-          for (auto c : nested) {
-            c.visible &= candidate->visible;
-            add(std::move(c));
-          }
-        }
-      }
-      if (quoted || end == 0)
-        break;
-      auto dot = name.take_front(end).find_last_of(".:");
-      if (dot == StringRef::npos)
-        break;
-      end = name[dot] == ':' ? dot - 1 : dot;
     }
     return out;
   }
@@ -776,53 +693,44 @@ class Resolver {
     }
     return b;
   }
-  const Declaration *reference(uint32_t module, std::string &name,
-                               const source::Node &node, ReferenceKind kind,
-                               bool signature, bool quoted) {
+  // Resolve authored path segments in one reference category. The result is
+  // the target that syntax records; failures are diagnosed here.
+  std::optional<Resolved> reference(uint32_t module, const syntax::Path &path,
+                                    const source::Node &node,
+                                    ReferenceKind kind, bool signature) {
     const auto origin = enclosing(node);
     const auto before = diagnostics.size();
     auto failure = scope_exit([&] {
       if (origin && diagnostics.size() > before)
         context->unavailable.insert(context->declarations[*origin].symbol);
     });
-    if (!spend(node))
-      return nullptr;
-    const bool exactCall =
-        kind == ReferenceKind::Call && modules[module].names.count(name);
-    if (modules[module].syntax.carrier &&
-        (kind == ReferenceKind::Call || kind == ReferenceKind::QualifiedCall) &&
-        !(kind == ReferenceKind::Call && quoted) && !exactCall &&
-        installedOperation(name)) {
-      auto head = StringRef(name).split('.').first;
-      const auto &deps = context->owners[modules[module].owner].dependencies;
-      bool namespaceConflict =
-          modules[module].names.count(head.str()) || deps.count(head.str()) ||
-          llvm::any_of(modules[context->owners[modules[module].owner].root]
-                           .syntax.dependencies,
-                       [&](const auto &d) { return d.name == head; });
-      if (namespaceConflict)
-        fail(node, "library-source-call-ambiguity",
-             "source path conflicts with an installed operation: '" + name +
-                 "'");
-      // Explicit :: identifies the installed target independently of an exact
-      // opaque authored helper name. Exact calls above resolve their
-      // declaration.
-      return nullptr;
+    if (!spend(node) || path.segments.empty())
+      return std::nullopt;
+    const auto &segments = path.segments;
+    const auto &head = segments.front();
+    const auto written = syntax::spelling(path);
+    const auto &deps = context->owners[modules[module].owner].dependencies;
+    const bool lexicalHead =
+        modules[module].names.count(head) || deps.count(head) ||
+        llvm::any_of(modules[context->owners[modules[module].owner].root]
+                         .syntax.dependencies,
+                     [&](const auto &d) { return d.name == head; }) ||
+        head == "crate" || head == "self" || head == "super" || head == "zkc";
+    // An installed predicate without a source export is named by the
+    // segments of its dotted vocabulary key, e.g. Encodes::field, when no
+    // lexical name owns the path's head.
+    if (kind == ReferenceKind::Predicate && segments.size() > 1 &&
+        !lexicalHead) {
+      auto word = llvm::join(segments, ".");
+      if (installedPredicate(word))
+        return Resolved{nullptr, {syntax::Target::Kind::Vocabulary, word, {}}};
     }
-    if (quoted &&
-        ((kind != ReferenceKind::Call && kind != ReferenceKind::QualifiedCall &&
-          kind != ReferenceKind::Declaration) ||
-         !modules[module].names.count(name))) {
-      if (kind == ReferenceKind::Call || !installedName(name, kind, true))
-        fail(node, "source-name-unresolved",
-             "quoted identifier does not name installed vocabulary: '" + name +
-                 "'");
-      return nullptr;
-    }
-    if ((kind == ReferenceKind::Type && installedType(name)) ||
-        (kind == ReferenceKind::Predicate &&
-         installedName(name, kind, false))) {
-      auto lexical = modules[module].names.find(name);
+    // Core type words and installed predicates are vocabulary, unless a
+    // lexical declaration of the same category shadows them.
+    if (segments.size() == 1 &&
+        ((kind == ReferenceKind::Type && installedType(head)) ||
+         (kind == ReferenceKind::Predicate && installedPredicate(head)))) {
+      auto lexical = modules[module].names.find(head);
       bool sameNamespace = false;
       if (lexical != modules[module].names.end()) {
         auto target = lexical->second.kind == Binding::Kind::Use
@@ -839,127 +747,78 @@ class Resolver {
         }
       }
       if (!sameNamespace)
-        return nullptr;
+        return Resolved{nullptr, {syntax::Target::Kind::Vocabulary, head, {}}};
     }
-    // Opaque installed roots are not implicit module paths.
-    if (!protocol::installedIdentitySort(name).empty() &&
-        (kind == ReferenceKind::Static ||
-         (kind == ReferenceKind::Type && !modules[module].names.count(name))))
-      return nullptr;
-    // Choose among complete, category-correct readings before rewriting the
-    // spelling. A private competing path is still ambiguous; a single private
-    // candidate is never access authority.
-    auto choices = candidates(module, name, module, kind, node, quoted);
-    if (choices.size() > 1) {
-      bool canQuote = kind == ReferenceKind::Call ||
-                      kind == ReferenceKind::QualifiedCall ||
-                      kind == ReferenceKind::Declaration;
-      fail(node, "source-name-ambiguous",
-           "'" + name +
-               "' names different declarations here and along a path; " +
-               (canQuote ? "quote the exact declaration, rename it, or use an "
-                           "unambiguous import alias"
-                         : "rename the declaration or use an unambiguous "
-                           "import alias"));
-      return nullptr;
-    }
-    auto diagnosticChoices = choices.empty()
-                                 ? candidates(module, name, module, kind, node,
-                                              quoted, 1, true, true)
-                                 : std::vector<Candidate>{};
+    // Resolve the category-correct path before recording its symbol.
+    // Existence alone does not grant access to a private declaration.
+    auto choices = candidates(module, segments, module, kind, node);
+    auto diagnosticChoices =
+        choices.empty()
+            ? candidates(module, segments, module, kind, node, 1, true, true)
+            : std::vector<Candidate>{};
     std::optional<Binding> b;
-    std::string suffix;
-    source::Names parts;
-    std::vector<StringRef> tails;
-    auto remaining = StringRef(name);
-    while (!remaining.empty()) {
-      auto [part, tail] = memberStep(remaining);
-      parts.push_back(part.str());
-      tails.push_back(tail);
-      remaining = tail;
-    }
-    const auto spelling = quoted ? name : namespaceSpelling(name);
+    source::Names members;
     if (!choices.empty()) {
       if (!choices.front().visible) {
         fail(node, "source-name-private",
-             "private name along path '" + name + "'");
-        return nullptr;
+             "private name along path '" + written + "'");
+        return std::nullopt;
       }
       b = choices.front().binding;
     } else if (diagnosticChoices.size() == 1) {
       if (!diagnosticChoices.front().visible) {
         fail(node, "source-name-private",
-             "private name along path '" + name + "'");
-        return nullptr;
+             "private name along path '" + written + "'");
+        return std::nullopt;
       }
       b = diagnosticChoices.front().binding;
-    } else if (modules[module].names.count(spelling)) {
-      b = lookup(module, spelling, module, node);
     } else {
-      const auto &deps = context->owners[modules[module].owner].dependencies;
-      bool starts =
-          modules[module].names.count(parts.front()) ||
-          deps.count(parts.front()) ||
-          llvm::any_of(
-              modules[context->owners[modules[module].owner].root]
-                  .syntax.dependencies,
-              [&](const auto &d) { return d.name == parts.front(); }) ||
-          parts.front() == "crate" || parts.front() == "self" ||
-          parts.front() == "super" || parts.front() == "zkc";
-      if (!starts) {
+      // No reading authorizes this category. Walk the namespace prefix once
+      // more with diagnostics to report a missing, private or misused name.
+      if (!lexicalHead) {
         // Generated relation helper names are lexically owned by their view.
-        b = lookup(module, name, module, node, false);
+        if (segments.size() == 1)
+          b = lookup(module, head, module, node, false);
         if (!b) {
-          if (!installedName(name, kind, false)) {
-            std::string message = "name has no local, resolved declaration, or "
-                                  "installed authority: '" +
-                                  name + "'";
-            if (kind == ReferenceKind::Value && StringRef(name).contains('-')) {
-              std::string spaced;
-              for (char c : name)
-                spaced += c == '-' ? " - " : std::string(1, c);
-              message +=
-                  "; if subtraction was intended, write '" + spaced + "'";
-            }
-            fail(node, "source-name-unresolved", message);
-          }
-          return nullptr;
+          fail(node, "source-name-unresolved",
+               "name has no local, resolved declaration, or installed "
+               "authority: '" +
+                   written + "'");
+          return std::nullopt;
         }
       } else {
-        // A declaration followed by members is an associated projection, enum
-        // alternative or component method. Resolve the namespace prefix only.
-        for (size_t count = 1; count <= parts.size(); ++count) {
-          b = path(module, ArrayRef(parts).take_front(count), module, node);
+        for (size_t count = 1; count <= segments.size(); ++count) {
+          b = this->path(module, ArrayRef(segments).take_front(count), module,
+                         node);
           if (!b)
-            return nullptr;
+            return std::nullopt;
           if (b->kind == Binding::Kind::Declaration) {
-            suffix = tails[count - 1].str();
+            members.assign(segments.begin() + count, segments.end());
             break;
           }
         }
       }
     }
     if (!b)
-      return nullptr;
+      return std::nullopt;
     if (b->kind != Binding::Kind::Declaration) {
       fail(node, "source-name-kind", "a module is not a value or type");
-      return nullptr;
+      return std::nullopt;
     }
     const auto &d = context->declarations[b->index];
-    b->suffix += suffix;
-    // Candidate discovery must require complete members. If none exists,
-    // retain a recognized enum/protocol owner for the semantic leaf checker:
-    // it can report the missing alternative or dependency precisely. This
-    // diagnostic-only fallback never contributes an ambiguity candidate and
-    // never turns an ordinary function into a suffix namespace.
+    llvm::append_range(b->members, members);
+    // Candidate discovery requires complete members. If none exists, retain a
+    // recognized enum/protocol owner for the semantic leaf checker: it can
+    // report the missing alternative or dependency precisely. This fallback
+    // never turns an ordinary function into a member namespace.
     const bool authorized =
         !choices.empty() || leafOwner(*b, kind) || authorizes(*b, kind, node);
     if (!authorized) {
       fail(
           node, "source-name-kind",
           "resolved declaration does not authorize this reference category: '" +
-              name + "'");
-      return nullptr;
+              written + "'");
+      return std::nullopt;
     }
     if (origin) {
       context->references.push_back({context->declarations[*origin].symbol,
@@ -972,9 +831,25 @@ class Resolver {
         d.kind == Declaration::Kind::Capability)
       context->installedModules[modules[module].file].insert(
           "zkc::" + llvm::join(d.identity.module, "::"));
-    name = (d.kind == Declaration::Kind::Capability ? d.contract : d.symbol) +
-           b->suffix;
-    return &d;
+    if (d.kind == Declaration::Kind::Operation)
+      return Resolved{&d, syntax::Target::operation(d.contract)};
+    if (d.kind == Declaration::Kind::Capability)
+      return Resolved{&d, {syntax::Target::Kind::Vocabulary, d.contract, {}}};
+    return Resolved{&d,
+                    {syntax::Target::Kind::Declaration, d.symbol + b->helper,
+                     std::move(b->members)}};
+  }
+  // A quoted atom is exact data. In a static or type position it must name
+  // installed vocabulary; it never selects a source declaration.
+  void exact(StringRef value, const source::Node &node, ReferenceKind kind) {
+    const auto origin = enclosing(node);
+    if (installedExact(value, kind))
+      return;
+    fail(node, "source-name-unresolved",
+         "quoted identifier does not name installed vocabulary: '" + value +
+             "'");
+    if (origin)
+      context->unavailable.insert(context->declarations[*origin].symbol);
   }
   void ownerOrder(uint32_t owner, std::vector<unsigned> &states) {
     if (states[owner] == 2)
@@ -1130,13 +1005,6 @@ class Resolver {
           syntax.relations.push_back(std::move(*decoded));
         }
         syntax.imports.clear();
-        if (syntax.carrier &&
-            (owner != 0 || !source.module.empty() ||
-             context->input.libraries().size() != 1 ||
-             context->input.libraries().front().sources.size() != 1))
-          fail(syntax, "source-carrier-project",
-               "a carrier module is a self-contained representation, not a "
-               "project dependency or child module");
         uint32_t index = modules.size();
         if (!paths.emplace(std::make_pair(owner, source.module), index).second)
           fail(syntax, "project-module-duplicate",
@@ -1240,9 +1108,6 @@ class Resolver {
           fail(m.syntax, "source-module-undeclared",
                "captured module is not declared by its parent");
       }
-      // Explicit carrier text preserves symbols without granting source-library
-      // authority. The parser and project boundary keep it self-contained.
-      const bool authored = !m.syntax.carrier;
       declarations(m.syntax, [&](const auto &node, auto kind) {
         uint32_t id = context->declarations.size();
         library::QualifiedDecl q{context->owners[m.owner].identity, m.path,
@@ -1262,7 +1127,7 @@ class Resolver {
         auto symbol = m.owner == 0 && m.path.empty() && !builtinCollision
                           ? node.name
                           : "src_" + digest(library::identity(q)).substr(0, 40);
-        if (auto prefix = reservedPrefix(node.name); prefix && authored) {
+        if (auto prefix = reservedPrefix(node.name); prefix) {
           fail(node, "source-name-reserved",
                "'" + node.name + "' begins with '" + *prefix +
                    "', which names only what the compiler generates");
@@ -1299,9 +1164,8 @@ class Resolver {
                node);
       });
       for (const auto &binding : m.syntax.bindings)
-        if (!m.syntax.carrier &&
-            protocol::authoringStage(binding.application.contract) !=
-                protocol::AuthoringStage::Source)
+        if (protocol::authoringStage(binding.application.contract) !=
+            protocol::AuthoringStage::Source)
           fail(binding, "source-operation-stage",
                "operation is not available to ordinary source bindings");
       for (const auto &binding : m.syntax.bindings)
@@ -1316,9 +1180,7 @@ class Resolver {
             fail(m.syntax, "source-name-duplicate",
                  "dependency alias conflicts with a declaration");
     }
-    context->carrier = modules[context->owners[0].root].syntax.carrier;
-    if (!context->carrier)
-      installDeclarations();
+    installDeclarations();
     context->intervals.resize(file);
     for (uint32_t i = 0; i < context->declarations.size(); ++i) {
       const auto &d = context->declarations[i];
@@ -1441,11 +1303,8 @@ class Resolver {
         }
         auto &d = context->declarations[m.names.at(f.name).index];
         bounded(f.origin->definition, f);
-        // Closed carriers retain admitted origin metadata. Source declaration
-        // allocation must not reinterpret it as an authored namespace claim.
-        if (!m.syntax.carrier)
-          claim(f.origin->definition,
-                "explicit-application:" + f.origin->definition, f);
+        claim(f.origin->definition,
+              "explicit-application:" + f.origin->definition, f);
         if (!f.generic)
           d.origin = f.origin->definition;
       }
@@ -1562,8 +1421,7 @@ class Resolver {
               continue;
             target = alias->second;
           }
-          if (target.kind == Binding::Kind::Declaration &&
-              target.suffix.empty())
+          if (target.kind == Binding::Kind::Declaration && target.exact())
             visible.insert(target.index);
           else if (target.kind == Binding::Kind::Module &&
                    modules[target.index].owner == m.owner)
@@ -1587,8 +1445,7 @@ class Resolver {
     for (const auto &d : diagnostics) {
       StringRef code = d.code;
       if (code != "source-name-unresolved" && code != "source-name-private" &&
-          code != "source-name-kind" && code != "source-name-ambiguous" &&
-          code != "source-name-reserved" &&
+          code != "source-name-kind" && code != "source-name-reserved" &&
           code != "source-dependency-missing" &&
           code != "source-private-signature" &&
           code != "source-private-reexport" && code != "source-import-cycle")
@@ -1626,18 +1483,6 @@ class Resolver {
         return context->unavailable.count(d.name);
       });
     });
-    auto trim = [&](auto &map) {
-      for (auto it = map.begin(); it != map.end();)
-        if (context->unavailable.count(it->first))
-          it = map.erase(it);
-        else
-          ++it;
-    };
-    trim(filtered.entryArguments);
-    trim(filtered.instanceParameterAtoms);
-    trim(filtered.instanceProtocolTerms);
-    trim(filtered.configurationTerms);
-    trim(filtered.relationViewHeights);
     return syntax::Content(std::move(filtered));
   }
 
@@ -1676,18 +1521,31 @@ public:
     }
     memberSurfaces();
     for (auto [key, binding] : aliases)
-      if (!binding.suffix.empty() &&
+      if (!binding.exact() &&
           !authorizes(binding, ReferenceKind::Call,
                       modules[key.first].syntax.uses[key.second]))
         fail(modules[key.first].syntax.uses[key.second],
              "source-name-unresolved",
              "import does not name a generated helper");
-    for (uint32_t i = 0; i < modules.size(); ++i)
-      qualify(modules[i].syntax, *context,
-              [&](auto &s, const auto &n, ReferenceKind kind, bool signature,
-                  bool quoted) {
-                return reference(i, s, n, kind, signature, quoted);
-              });
+    for (uint32_t i = 0; i < modules.size(); ++i) {
+      ModuleResolver resolver;
+      resolver.path = [&, i](const syntax::Path &path, const source::Node &n,
+                             ReferenceKind kind, bool signature) {
+        return reference(i, path, n, kind, signature);
+      };
+      resolver.exact = [&](StringRef value, const source::Node &n,
+                           ReferenceKind kind) { exact(value, n, kind); };
+      // A definition's own name is exact, never a path.
+      resolver.definition = [&,
+                             i](StringRef name) -> std::optional<std::string> {
+        auto found = modules[i].names.find(name.str());
+        if (found == modules[i].names.end() ||
+            found->second.kind != Binding::Kind::Declaration)
+          return std::nullopt;
+        return context->declarations[found->second.index].symbol;
+      };
+      qualify(modules[i].syntax, *context, resolver);
+    }
     publicSignatures();
     environments();
     // Retain the resolved name graph. Construction indexes it only when a
@@ -1695,7 +1553,6 @@ public:
     // does not acquire construction selector limits or diagnostics.
     context->selectorWork = work;
     context->componentMembers = componentMembers;
-    context->carrier = modules[context->owners[0].root].syntax.carrier;
     context->selectorScopes.resize(modules.size());
     for (uint32_t i = 0; i < modules.size(); ++i) {
       auto &scope = context->selectorScopes[i];
@@ -1724,7 +1581,6 @@ public:
       auto kb = ownerIdentity(context->owners[modules[b].owner].identity);
       return std::tie(ka, modules[a].path) < std::tie(kb, modules[b].path);
     });
-    out.carrier = modules[context->owners[0].root].syntax.carrier;
     out.location = modules[context->owners[0].root].syntax.location;
     for (auto i : ordered) {
       auto &m = modules[i];

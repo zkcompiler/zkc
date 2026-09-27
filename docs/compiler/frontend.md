@@ -116,6 +116,36 @@ Recovery is at module declaration boundaries. It can retain usable declarations
 before and after a malformed declaration; it is not a complete IDE, incremental
 database or a guarantee that every unfinished expression has a type.
 
+## Document and notation boundaries
+
+A shared classifier selects ordinary unwrapped source, explicit `carrier module`,
+construction descriptors or common JSON. Empty text is an ordinary syntax module.
+The relation-snapshot JSON route retains its own data budget. Malformed JSON
+keeps JSON diagnostics rather than falling back to source parsing.
+
+Ordinary syntax retains identifiers, segmented declaration paths, exact atoms
+and typed postfix steps as distinct structures. The lexer separates dots and
+minus from names and preserves raw spelling. Resolution owns declaration
+identity; semantic place checking distinguishes fields, product ordinals,
+structural array indices and installed collection operations. Internal flat names
+are encoded only after interpretation and do not determine source authority.
+
+Carrier text is read directly into common records, like common JSON. Neither
+carrier form enters authored resolution, semantics or instantiation, and neither
+supports `protocol-analyze` or produces a `SourceChecked` value. Common parsing,
+inspection, construction and admission remain available. Carrier type failures
+are common-admission diagnostics. Exact names and static binders, including
+punctuated names such as `F-`, retain their common meaning. Operation paths such
+as `poly::r#fold` remain distinct from exact helper names such as `"poly.fold"`.
+
+Ordinary and carrier text formatting is syntax-only, idempotent and preserves
+all tokens, including comments, exact strings and raw spelling. Original line
+placement is best effort. Canonical carrier printing is a separate admitted
+conversion: it rereads the final formatted text and compares exact common
+records without spans. It neither reconstructs source abstractions nor uses a
+printer trust bypass. Captured source bytes may change anonymous identities;
+this notation migration does not promise proof-byte equality.
+
 ## Source abstraction and erasure
 
 Records retain nominal type identity and source field structure in analysis.
@@ -169,6 +199,7 @@ defines charged work, omitted work and artifact monotonicity under larger limits
 | Component | Responsibility |
 |---|---|
 | `Syntax/` | Tokens, parser tree, spans, formatting, lexical capture discovery and bounded recovery; no retained semantic model |
+| `Carrier/` | Exact common text decoding and installed spelling metadata; no authored resolution or source-only judgments |
 | `Model/` | Owned analysis and phase products, typed body plans, immutable reports and paired final content; no retained parser tree or MLIR pointers |
 | `Resolution/` | Exact project names, public exports, captured dependencies and lexical lookup |
 | `Library/` | Checked interface/component formation, conformance and static linking |

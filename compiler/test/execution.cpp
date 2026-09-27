@@ -21,25 +21,25 @@ template <typename T> T take(Expected<T> result) {
 }
 } // namespace
 int main() {
-  auto document = take(frontend::parseProtocolDocument(R"pir(module {
-    bind one = field.constant(koala-bear);
-    bind add = field.add(koala-bear);
-    bind equal = field.equal(koala-bear);
-    bind require = control.require();
-    fn Increment(x: koala-bear::Element) -> (koala-bear::Element) {
+  auto document = take(frontend::parseProtocolDocument(R"pir(
+    bind one = "field.constant"("koala-bear");
+    bind add = "field.add"("koala-bear");
+    bind equal = "field.equal"("koala-bear");
+    bind require = "control.require"();
+    fn Increment(x: "koala-bear"::Element) -> ("koala-bear"::Element) {
       let unit = one() attributes ("1");
       let next = add(x, unit);
       return (next);
     }
-    fn Check(x: koala-bear::Element) -> () {
+    fn Check(x: "koala-bear"::Element) -> () {
       let ok = equal(x, x);
       require(ok);
       return ();
     }
     protocol Exchange {
       roles (P, V);
-      inputs (P initial: koala-bear::Element);
-      outputs (P koala-bear::Element);
+      inputs (P initial: "koala-bear"::Element);
+      outputs (P "koala-bear"::Element);
       loop [rounds] 12 carry (x = initial) -> (last) {
         local P: let next = Increment(x);
         message value: P(next) -> V(received);
@@ -50,7 +50,7 @@ int main() {
     }
     instance exchange: Exchange { roles (P = Prover, V = Verifier); }
     entry main = exchange;
-  })pir"));
+  )pir"));
   auto view = take(source::inspectExecution(*document.module(), "main"));
   require(view.values.at("v0").role == "Prover", "input owner lost");
   require(view.order.size() == 60, "wrong expanded operation count");

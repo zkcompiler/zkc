@@ -10,7 +10,7 @@ Imports expose the installation's domain vocabulary. Its constructors declare
 whether each static argument is a nominal domain, a type or a natural. For
 example:
 
-<!-- executable: module-body -->
+<!-- executable: source -->
 ```text
 use zkc::algebra::{Field, Vector, FixedVector};
 use zkc::algebra;
@@ -21,7 +21,7 @@ fn Dot<F: Field, N: nat>(left: Vector<F::Element>, right: Vector<F::Element>)
   let y: FixedVector<F::Element, N> = algebra::fixed_vector_from_vector(right);
   algebra::fixed_vector_dot(x, y)
 }
-configure DotFour = Dot(F = koala-bear, N = 4);
+configure DotFour = Dot(F = "koala-bear", N = 4);
 ```
 
 `F::Element` denotes the selected field's element type. `Vector<T>` uses the
@@ -39,7 +39,7 @@ type arguments, while serialization requires separate installed support. See
 
 ## Products, local blocks and distributed outputs
 
-<!-- executable: module-body -->
+<!-- executable: source -->
 ```text
 use zkc::{algebra, core};
 struct Pair<F: domain Field> { left: F::Element, right: F::Element }
@@ -68,7 +68,7 @@ protocol Exchange<F: Field> {
 entry main = Exchange::<F = "bls12-381.fr">;
 ```
 
-These declarations go inside `module { ... }`. A product is an ordinary local
+These declarations appear directly in the file. A product is an ordinary local
 value: it can be stored, passed, returned, nested and projected with `.0`, `.1`,
 and so on. `(x)` groups an expression; `(x,)` is a singleton; `()` is unit.
 Source product types retain the same distinctions. Lowering concatenates leaf
@@ -78,8 +78,10 @@ Annotations on aggregate expressions check their source types before erasure.
 
 `local Worker { ... }` admits only Worker's available values and returns a value
 owned by Worker. Its ordinary function calls do not communicate. The compiler
-creates a private helper and supplies only used free leaves, preserving affine
-resource checks. Scratch bindings stay inside the block. The shared local checker
+creates a private helper and captures used source places with their nominal
+types and usage obligations before flattening. This includes zero-leaf values;
+bulk indexing captures the whole collection and the index dependencies. Scratch
+bindings stay inside the block. The shared local checker
 also handles explicit `return value;`, existing bounded `for` and local `if`.
 An explicit return must be final in the enclosing function/block; early returns
 inside control regions are refused. Same-scope and inherited-name shadowing are
@@ -128,3 +130,26 @@ written `struct Prepared<F: domain Field> constructors(Make) { ... }`; the
 restriction is not a proof that `Make` establishes an arbitrary mathematical
 predicate. The explicit `requires (...)` and common-source record spelling are
 still accepted by the same parser, without a migration adapter.
+
+## Projections and temporary values
+
+Records use `.field`, products use `.N`, and arrays use `[index]`; positional
+record access and bracket access to products are rejected. Suffixes compose:
+`nested.0.value`, `rows[0].value`, and `MakePair(x, y).left`. Literal indices can
+select flattened source arrays; dynamic indexing does not add support for
+arrays of flattened aggregates. Existing bulk collection indexing stays governed
+by its installed contracts. `.len()` is a fixed query on supported collections,
+not general method dispatch or an implicit borrow; a plain `.len` is a field.
+
+A temporary receiver is evaluated exactly once and checked as a fresh local
+binding before projection. Every unselected component must be droppable,
+including empty values with nominal usage obligations. Checked-library clients
+are checked under abstract permissions before concrete selection. Existing
+binding projections leave disjoint siblings available under their owner rules.
+
+Function and local returns are expressions and can use `sizes::N`. Protocol
+returns, `finish`, messages, captures and other reference-only slots do not gain
+hidden computation or constant materialization. Compute values in `local Role`
+first. Assignments still target existing mutable scalar places, never a call
+result or an arbitrary dynamic index. Parenthesize a brace-record expression in
+a control head when the following body would otherwise be ambiguous.

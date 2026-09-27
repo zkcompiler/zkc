@@ -34,30 +34,30 @@ def main():
 
     def source(field, rows, columns, concrete=False):
         function = f'''fn Work<F: domain Field>(m:Matrix<F::Element>,x:Vector<F::Element>,y:Vector<F::Element>) -> (Vector<F::Element>,Vector<F::Element>,F::Element,bool) requires (Field(F)) {{
-          [mv] let v = matrix::mul_vector::<F>(m,x);
-          [tmv] let t = matrix::transpose_mul_vector::<F>(m,y);
-          [bi] let b = matrix::bilinear::<F>(m,y,x);
-          [sh] let s = matrix::shape_check::<F>(m) attributes ("{rows}","{columns}");
+          [mv] let v = algebra::matrix_mul_vector::<F>(m,x);
+          [tmv] let t = algebra::matrix_transpose_mul_vector::<F>(m,y);
+          [bi] let b = algebra::matrix_bilinear::<F>(m,y,x);
+          [sh] let s = algebra::matrix_shape_check::<F>(m) attributes ("{rows}","{columns}");
           return (v,t,b,s);
         }}
-        configure Concrete = Work(F={field});'''
+        configure Concrete = Work(F="{field}");'''
         if concrete:
-            function = f'''bind M = matrix::mul_vector({field});
-            bind T = matrix::transpose_mul_vector({field});
-            bind B = matrix::bilinear({field});
-            bind S = matrix::shape_check({field});
-            fn Concrete(m:Matrix<{field}::Element>,x:Vector<{field}::Element>,y:Vector<{field}::Element>) -> (Vector<{field}::Element>,Vector<{field}::Element>,{field}::Element,bool) {{
+            function = f'''bind M = "matrix.mul_vector"("{field}");
+            bind T = "matrix.transpose_mul_vector"("{field}");
+            bind B = "matrix.bilinear"("{field}");
+            bind S = "matrix.shape_check"("{field}");
+            fn Concrete(m:Matrix<"{field}"::Element>,x:Vector<"{field}"::Element>,y:Vector<"{field}"::Element>) -> (Vector<"{field}"::Element>,Vector<"{field}"::Element>,"{field}"::Element,bool) {{
               [mv] let v = M(m,x); [tmv] let t = T(m,y); [bi] let b = B(m,y,x);
               [sh] let s = S(m) attributes ("{rows}","{columns}"); return (v,t,b,s);
             }}'''
-        return f'''module {{ {function}
+        return f''' use zkc::algebra; use zkc::algebra::{{Vector, Matrix}}; {function}
           protocol Main {{ roles (P);
-            inputs (P m:Matrix<{field}::Element>,P x:Vector<{field}::Element>,P y:Vector<{field}::Element>);
-            outputs (P Vector<{field}::Element>,P Vector<{field}::Element>,P {field}::Element,P bool);
+            inputs (P m:Matrix<"{field}"::Element>,P x:Vector<"{field}"::Element>,P y:Vector<"{field}"::Element>);
+            outputs (P Vector<"{field}"::Element>,P Vector<"{field}"::Element>,P "{field}"::Element,P bool);
             local [call] P: let (v,t,b,s) = Concrete(m,x,y); return (v,t,b,s);
           }}
           instance concrete: Main {{roles (P=P);}} entry main = concrete;
-        }}'''
+        '''
 
 
     def pipeline(field, rows, columns, concrete=False):

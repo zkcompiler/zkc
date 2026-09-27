@@ -10,28 +10,26 @@ which choices change meaning and which select a physical implementation.
 A protocol may bind static domain parameters, just as a local algorithm does:
 
 ```text
-module {
-  use zkc::algebra;
-  fn Double<F: algebra::Field>(x: F::Element) -> F::Element {
-    let y = algebra::add::<F>(x, x);
-    return y;
-  }
-
-  protocol Exchange<F: Field> {
-    roles (Sender, Receiver);
-    inputs (Sender x: F::Element);
-    outputs (Receiver value: F::Element);
-    let y = local Sender { Double(x) };
-    message answer: Sender(y) -> Receiver(received);
-    finish { value: received };
-  }
-
-  configure Small = Exchange(F = koala-bear);
-  configure Large = Exchange(F = "bls12-381.fr");
-  instance small: Small { roles (Sender = Sender, Receiver = Receiver); }
-  instance large: Large { roles (Sender = Sender, Receiver = Receiver); }
-  entry main = small;
+use zkc::algebra;
+fn Double<F: algebra::Field>(x: F::Element) -> F::Element {
+  let y = algebra::add::<F>(x, x);
+  return y;
 }
+
+protocol Exchange<F: Field> {
+  roles (Sender, Receiver);
+  inputs (Sender x: F::Element);
+  outputs (Receiver value: F::Element);
+  let y = local Sender { Double(x) };
+  message answer: Sender(y) -> Receiver(received);
+  finish { value: received };
+}
+
+configure Small = Exchange(F = "koala-bear");
+configure Large = Exchange(F = "bls12-381.fr");
+instance small: Small { roles (Sender = Sender, Receiver = Receiver); }
+instance large: Large { roles (Sender = Sender, Receiver = Receiver); }
+entry main = small;
 ```
 
 `F` is a bound domain; `F::Element` is its element type. `Field` is an explicit
@@ -44,7 +42,8 @@ backend by rewriting strings in the body.
 
 The [nominal-term rules](reference.md#module-and-local-algorithms) distinguish
 quoted installed identities, bound parameters and associated projections.
-Domain and bundle parameter names must be undotted; the same rules apply in
+Domain and bundle parameter names are strict ASCII identifiers, with raw escapes
+for reserved words; the same rules apply in
 types, static arguments, requirements and configurations.
 A record named `F` remains a record in a type-head position even inside a
 protocol binding domain `F`; specialization does not rename the record.
@@ -62,7 +61,7 @@ nested dependency projections). This resolves through dependency declarations,
 not a generated-name convention:
 
 ```text
-configure Selected = Parent(F = koala-bear);
+configure Selected = Parent(F = "koala-bear");
 instance child: Selected::child { roles (P = Prover); }
 instance parent: Selected {
   dependencies (child = child);

@@ -330,12 +330,13 @@ int zkc::runCompiler(int argc, char **argv,
                                     : sourceByteLimit);
   if (!text)
     return fail(text.takeError());
+  const auto documentForm = frontend::classifyDocument(*text);
+  const bool commonSource = frontend::isCommonDocument(documentForm);
   if (interactiveCommand && mode != "protocol-export" &&
       text->size() > sourceByteLimit &&
-      !StringRef(*text).ltrim().starts_with("["))
+      documentForm != frontend::SourceForm::CommonJSON)
     return fail(zkc::error("byte-limit"));
-  bool jsonSource = StringRef(*text).ltrim().starts_with("[");
-  if (!libraryPaths.empty() && (jsonSource || StringRef(argv[2]) == "-"))
+  if (!libraryPaths.empty() && (commonSource || StringRef(argv[2]) == "-"))
     return fail(zkc::error("unsupported-option"));
   std::optional<frontend::ProjectInput> project;
   std::optional<frontend::Analysis> sourceAnalysis;
@@ -382,7 +383,7 @@ int zkc::runCompiler(int argc, char **argv,
     return Error::success();
   };
   auto loadSourceDocument = [&]() -> Expected<source::Document> {
-    if (jsonSource)
+    if (commonSource)
       return frontend::parseProtocolDocument(*text, argv[2]);
     if (auto error = captureSource())
       return std::move(error);
@@ -439,11 +440,11 @@ int zkc::runCompiler(int argc, char **argv,
     return 0;
   }
   if (mode == "protocol-analyze") {
-    if (!jsonSource)
+    if (!commonSource)
       if (auto error = captureSource())
         return fail(std::move(error));
-    auto analysis = jsonSource ? frontend::analyzeProtocol(*text, argv[2])
-                               : frontend::analyzeProject(*project);
+    auto analysis = commonSource ? frontend::analyzeProtocol(*text, argv[2])
+                                 : frontend::analyzeProject(*project);
     outs() << printJson(frontend::inspectAnalysis(analysis)) << '\n';
     return 0;
   }

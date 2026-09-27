@@ -9,8 +9,8 @@ The finite source/table carrier and its independent checks retain their scope.
 
 ## Authoring and admission
 
-Authored text uses `module { ... }` with explicit domain choices and imports
-from the installed source modules. Historical BLS profile headings and their
+Authored files contain declarations directly, with explicit domain choices and
+imports from the installed source modules. Historical BLS profile headings and their
 implicit type/domain defaults are removed. The [source reference](../language/reference.md)
 owns import-based authoring; the common carrier continues to contain exact
 logical types and operation bindings, without source import declarations.

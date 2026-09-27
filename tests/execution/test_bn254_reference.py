@@ -159,14 +159,16 @@ def main(groth16=None, r1cs=None):
     exercise("zero-shift", "poly.domain_points", [("field", 0), ("index", 4)], ["vector"], error="coset-zero-shift")
 
     # Generic associated groups must survive specialization and participant formation.
-    pir = '''module {
+    pir = '''
+      use zkc::algebra::Vector;
+      use zkc::curve;
       fn Pair<F: domain Field>(left: Vector<F::PairingG1::Element>, right: Vector<F::PairingG2::Element>)
-          -> bool requires (PairingField(F)) { let ok = pairing::check::<F>(left,right); return ok; }
-      configure Concrete = Pair(F=bn254.fr);
-      protocol Main { roles(V); inputs(V left: Vector<bn254.g1::Element>, V right: Vector<bn254.g2::Element>);
+          -> bool requires (PairingField(F)) { let ok = zkc::curve::pairing_check::<F>(left,right); return ok; }
+      configure Concrete = Pair(F = "bn254.fr");
+      protocol Main { roles(V); inputs(V left: Vector<"bn254.g1"::Element>, V right: Vector<"bn254.g2"::Element>);
         outputs(V bool); local V: let ok = Concrete(left,right); return ok; }
       instance root: Main {roles(V=V);} entry main=root;
-    }'''
+    '''
     path = args.output / "pairing.pir"
     path.write_text(pir)
     sp = save("pairing-source", run([args.compiler, "protocol-source", path]))

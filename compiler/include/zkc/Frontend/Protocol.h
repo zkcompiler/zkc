@@ -11,7 +11,8 @@ class Input;
 /// Parse and elaborate authoring syntax into explicit common source. Omitted
 /// static arguments are reconstructed before common admission; success is not
 /// a claim that capability or resource obligations have been discharged.
-/// Portable JSON remains an explicit common-source input with source spans.
+/// JSON and explicit carrier text are read directly as common source; neither
+/// representation creates an authored Analysis.
 llvm::Expected<source::Document>
 parseProtocolDocument(llvm::StringRef text,
                       llvm::StringRef filename = "<stdin>");
@@ -21,13 +22,14 @@ llvm::Expected<source::Document> parseProtocolDocument(const Input &);
 /// admission. This is the editing/formatting boundary.
 llvm::Error checkProtocolSyntax(llvm::StringRef text,
                                 llvm::StringRef filename = "<stdin>");
-/// Inspect authoring syntax, not a portable common-source interchange format.
+/// Inspect authored syntax or the decoded records of an explicit common input.
 llvm::Expected<llvm::json::Value>
 inspectProtocolSyntax(llvm::StringRef text,
                       llvm::StringRef filename = "<stdin>");
 
 /// Reconstruct source-linked call decisions for inspection. This is diagnostic
-/// metadata, never part of the common source or an artifact identity.
+/// metadata, never part of the common source or an artifact identity. Common
+/// inputs have no authored call decisions and return an empty array.
 llvm::Expected<llvm::json::Array>
 inspectProtocolElaboration(llvm::StringRef text, llvm::StringRef filename);
 llvm::Expected<llvm::json::Array> inspectProtocolElaboration(const Analysis &);

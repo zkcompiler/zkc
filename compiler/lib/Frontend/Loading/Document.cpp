@@ -11,7 +11,7 @@ namespace zkc::frontend {
 Expected<source::Document> loadProtocolDocument(StringRef text,
                                                 StringRef filename,
                                                 AssetResolver resolver) {
-  if (text.ltrim().starts_with("[")) {
+  if (isCommonDocument(classifyDocument(text))) {
     auto document = parseProtocolDocument(text, filename);
     if (!document)
       return document.takeError();

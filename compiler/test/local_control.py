@@ -69,43 +69,43 @@ for flags in [[], ['--release-storage']]:
     plans.append(plan)
 
 # Readable conveniences work without configuring a generic function, too.
-closed = '''module {
+closed = '''
   use zkc::algebra;
-  fn Local(x: koala-bear::Element) -> koala-bear::Element {
+  fn Local(x: "koala-bear"::Element) -> "koala-bear"::Element {
     let values = [x, zkc::algebra::add(x, x)];
     let mut result = values[0];
     for i in 0..2 { result = zkc::algebra::add(result, values[i]); }
     if true { result = zkc::algebra::neg(result); } else { }
     return result;
   }
-}'''
+'''
 native('protocol-import', closed)
 native('protocol-import', closed.replace('Local(', '__binding_0('))
-imported = '''module {
+imported = '''
   use zkc::algebra;
-  fn Local(x: bls12-381.fr::Element, enabled: bool) -> bls12-381.fr::Element {
+  fn Local(x: "bls12-381.fr"::Element, enabled: bool) -> "bls12-381.fr"::Element {
     let mut result = x;
     if enabled { result = zkc::algebra::add(x, zkc::algebra::add(x, x)); }
     let values = [result, x];
     for i in 0..values.len() { result = zkc::algebra::add(result, values[i]); }
     return result;
   }
-}'''
+'''
 imported_source = native('protocol-source', imported)
 native('protocol-import', imported)
 assert native('protocol-source', native('protocol-format', imported_source)) == imported_source
 assert len([b for b in imported_source[1] if b[1] == 'field.add']) == 1
 assert all(b[3] == '' for b in imported_source[1])
-executable = imported[:-1] + '''
-  protocol Main { roles(P); inputs(P x: bls12-381.fr::Element, P enabled: bool);
-    outputs(P bls12-381.fr::Element); local P: let result = Local(x, enabled); return result; }
+executable = imported + '''
+  protocol Main { roles(P); inputs(P x: "bls12-381.fr"::Element, P enabled: bool);
+    outputs(P "bls12-381.fr"::Element); local P: let result = Local(x, enabled); return result; }
   entry main = Main;
-}'''
+'''
 imported_plan = native('protocol-compile', executable)
 assert all(b[3] == ('native/' if b[1].startswith(('index.', 'indices.')) else 'arkworks/') + b[1]
            for b in imported_plan[1])
-native('protocol-source', 'module { use zkc::algebra::{Indices}; fn Work<>() -> Indices {let xs = [0,1,2]; return xs;} }')
-native('protocol-source', 'module { use zkc::algebra::{Vector}; fn Work<F: Field>() -> Vector<F::Element> {let xs: Vector<F::Element> = []; return xs;} }')
+native('protocol-source', ' use zkc::algebra::{Indices}; fn Work<>() -> Indices {let xs = [0,1,2]; return xs;} ')
+native('protocol-source', ' use zkc::algebra::{Vector}; fn Work<F: Field>() -> Vector<F::Element> {let xs: Vector<F::Element> = []; return xs;} ')
 for fragment, replacement, code in [
     ('let mut acc = x;', 'let acc = x;', 'source-assignment'),
     ('if enabled', 'if x', 'source-condition-type'),
@@ -125,15 +125,16 @@ native('protocol-source', text.replace('for i in start..end', 'while enabled'), 
 native('protocol-source', text.replace('local P:', 'if enabled {} else {} local P:'), refuses='source-syntax')
 # Surface expression depth and reserved-looking quoted helpers are deliberate.
 native('protocol-source', text.replace('values[1]', 'values' + '[0]' * 70), refuses='source-depth')
-native('protocol-source', text.replace('values.len()', 'values.len() attributes (1)'), refuses='source-expression')
-native('protocol-source', 'module { fn "helper.len"<>() -> index { let n = 0; return n; } fn Use<>() -> index { let n = "helper.len"(); return n; } }')
+# A collection length is a query, not an operation call that takes attributes.
+native('protocol-source', text.replace('values.len()', 'values.len() attributes (1)'), refuses='source-syntax')
+native('protocol-source', ' fn helper_len<>() -> index { let n = 0; return n; } fn Use<>() -> index { let n = helper_len(); return n; } ')
 assert native('protocol-source', text.replace('[x, acc]', '[x, acc,]')) == source
 # Dead branches must be well formed, even when the condition is a literal.
 native('protocol-source', closed.replace('else { }', 'else { result = missing; }'), refuses='source-name-unresolved')
 native('protocol-source', closed.replace('else { }', 'else { yield; }'), refuses='source-control-yield')
-# Quoted names and same spelling in disjoint scopes must survive printing.
+# Raw keyword names and same spelling in disjoint scopes must survive printing.
 for keyword in ('if', 'for', 'else', 'mut', 'true', 'false'):
-    renamed = closed.replace('Local(', json.dumps(keyword) + '(')
+    renamed = closed.replace('Local(', 'r#' + keyword + '(')
     common = native('protocol-source', renamed)
     assert native('protocol-source', native('protocol-format', common)) == common
 
@@ -162,16 +163,16 @@ for spelling in ('a..b', 'a.'):
 
 # Explicit captures are immutable region arguments: outer mutation must not
 # silently disappear when the region supplies only its explicitly named yields.
-explicit = '''module {
+explicit = '''
   use zkc::algebra;
-  fn Local(flag: bool, x: koala-bear::Element) -> koala-bear::Element {
+  fn Local(flag: bool, x: "koala-bear"::Element) -> "koala-bear"::Element {
     let mut acc = x;
     if flag capture (acc) -> () {
       acc = zkc::algebra::add(acc, acc); yield;
     } else { yield; }
     return acc;
   }
-}'''
+'''
 native('protocol-source', explicit, refuses='source-assignment')
 native('protocol-source', explicit.replace('acc = zkc::algebra::add(acc, acc);', 'let hidden = zkc::algebra::add(acc, x);'), refuses='source-value-reference')
 shadow[2][0][4] = [
@@ -187,7 +188,7 @@ loop_line = next(line for line in logical.splitlines() if '"pir.local_for"(' in 
 broken = logical.replace(loop_line, re.sub(r'local_for"\([^)]*\)', 'local_for"()', loop_line), 1)
 run([optimizer, '--verify-each'], broken, refuses='')
 # Affine loop state must be carried, not implicitly borrowed on every trip.
-affine = """module {
+affine = """
   use zkc::random::{Rng};
   use zkc::random;
   fn Advance<F: Field>(rng: Rng<F>) -> Rng<F> {
@@ -198,8 +199,8 @@ affine = """module {
     for i in 0..2 { state = Advance(state); }
     return state;
   }
-  configure Concrete = Loop(F = bls12-381.fr);
-}"""
+  configure Concrete = Loop(F = "bls12-381.fr");
+"""
 native('protocol-import', affine)
 native('protocol-source', affine.replace('state = Advance(state);', 'let lost = Advance(rng);'), refuses='')
 
