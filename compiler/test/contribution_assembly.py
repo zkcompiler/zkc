@@ -397,7 +397,8 @@ def main():
             text=True, capture_output=True, check=False,
         )
         if expected:
-            assert result.returncode and expected in result.stderr, result.stderr
+            assert result.returncode > 0, (result.returncode, result.stderr)
+            assert expected in result.stderr, result.stderr
             return None
         assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)

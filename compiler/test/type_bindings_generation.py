@@ -17,7 +17,7 @@ def run(command, expected=None):
     if expected is None:
         assert result.returncode == 0, result.stderr
     else:
-        assert result.returncode != 0, "negative fixture was accepted"
+        assert result.returncode > 0, (result.returncode, result.stderr)
         assert expected in result.stderr, result.stderr
     return result.stdout
 
