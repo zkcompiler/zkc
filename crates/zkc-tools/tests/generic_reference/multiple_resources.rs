@@ -5,12 +5,14 @@ use zkc_backends::Domain;
 #[test]
 fn two_resources_preserve_identity_and_stopped_prefix() {
     let fixture = Fixture::from_text(
-        r#"module {
+        r#"
+      use zkc::random;
+      use zkc::random::Rng;
       fn Draw<F: domain Field>(state: Rng<F>) -> (F::Element, Rng<F>) requires (Field(F)) {
         [draw] let (value, next) = random::draw::<F>(state);
         return (value, next);
       }
-      configure Random = Draw(F = bls12-381.fr);
+      configure Random = Draw(F = "bls12-381.fr");
       protocol Pair {
         roles (P);
         inputs (P a: Rng<"bls12-381.fr">, P b: Rng<"bls12-381.fr">);
@@ -22,7 +24,7 @@ fn two_resources_preserve_identity_and_stopped_prefix() {
       }
       instance pair: Pair { roles (P = P); }
       entry main = pair;
-    }"#,
+    "#,
     );
     let checker = ParticipantChecker::new(&fixture.checker_path).unwrap();
     let admitted =

@@ -1,4 +1,6 @@
 #include "Local.h"
+#include "Collections.h"
+#include "Places.h"
 #include "llvm/ADT/STLExtras.h"
 #include <set>
 
@@ -10,6 +12,11 @@ struct Variable {
   bool mutableBinding = false;
   ValueId binding;
 };
+// A captured place bound in a region under its checked flat key.
+struct Alias {
+  syntax::Place place;
+  std::string key;
+};
 struct Environment {
   ScopeId scope;
   LocalTypes types;
@@ -17,12 +24,21 @@ struct Environment {
   // A struct binding is its leaves, each an ordinary entry of `names` under
   // `binding.path`. This map only records which bindings are structs.
   LocalAggregates structs;
+  std::vector<Alias> captured;
 };
 /// The values of one authored operand or result: one value, or a struct's
 /// leaves in declaration order.
 struct Operand {
   source::Names values;
   std::optional<AggregateShape> shape;
+};
+/// A place checked against the typed environment: its normalized steps and
+/// flat key. `complete` is false when an inferred capture stopped at an index
+/// into one bulk collection value, which is captured whole.
+struct Selected {
+  syntax::Place place;
+  std::string key;
+  bool complete = true;
 };
 class LocalElaborator {
   const LocalCallbacks &cb;
@@ -71,26 +87,12 @@ class LocalElaborator {
                      const Environment &env) {
     auto it = env.names.find(name.str());
     if (it == env.names.end()) {
-      // Names may contain '-', so `a-b` is one name and not a subtraction.
-      auto [left, right] = name.split('-');
-      bool subtraction = !right.empty() && env.names.count(left.str()) &&
-                         env.names.count(right.str());
       cb.fail(node, "source-value-reference",
-              "unknown input value '" + name + "'" +
-                  (subtraction ? "; write a subtraction with spaces, as '" +
-                                     left + " - " + right + "'"
-                               : Twine()));
+              "unknown input value '" + name + "'");
       return {};
     }
     symbols.use(it->second.binding, env.scope, node);
     return it->second.value;
-  }
-  source::Names lookup(const source::Names &names, const source::Node &node,
-                       const Environment &env) {
-    source::Names result;
-    for (const auto &name : names)
-      result.push_back(lookup(name, node, env));
-    return result;
   }
   std::string type(const Environment &env, StringRef name) {
     auto it = env.types.find(name.str());
@@ -105,7 +107,7 @@ class LocalElaborator {
     out.push_back(std::move(ins));
   }
   std::vector<Operand>
-  emit(syntax::Call call, ArrayRef<Operand> operands,
+  emit(CallRequest call, ArrayRef<Operand> operands,
        const source::Names &outputs,
        const std::optional<std::vector<syntax::Type>> &annotation,
        Environment &env, source::Body &out, StringRef site) {
@@ -166,22 +168,105 @@ class LocalElaborator {
     }
     return result;
   }
-  /// The values of an authored name: a struct binding's leaves, or one value.
-  Operand named(StringRef name, const source::Node &node,
+  /// The values bound under a checked flat key: a struct binding's leaves, or
+  /// one value.
+  Operand named(StringRef key, const source::Node &node,
                 const Environment &env) {
     Operand result;
-    auto it = env.structs.find(name.str());
+    auto it = env.structs.find(key.str());
     if (it == env.structs.end()) {
-      result.values.push_back(lookup(name, node, env));
+      result.values.push_back(lookup(key, node, env));
       return result;
     }
-    auto binding = env.names.find(name.str());
+    auto binding = env.names.find(key.str());
     if (binding != env.names.end())
       symbols.use(binding->second.binding, env.scope, node);
     result.shape = it->second;
     for (const auto &path : it->second.paths)
-      result.values.push_back(lookup(name.str() + "." + path, node, env));
+      result.values.push_back(lookup(key.str() + "." + path, node, env));
     return result;
+  }
+  static places::AggregateKind aggregateKind(const AggregateShape &shape) {
+    return shape.array     ? places::AggregateKind::Array
+           : shape.product ? places::AggregateKind::Product
+                           : places::AggregateKind::Record;
+  }
+  static source::Names fieldNames(const AggregateShape &shape) {
+    source::Names fields;
+    auto add = [&](StringRef path) {
+      auto field = path.split('.').first.str();
+      if (!llvm::is_contained(fields, field))
+        fields.push_back(std::move(field));
+    };
+    for (const auto &path : shape.paths)
+      add(path);
+    for (const auto &nested : shape.nested)
+      add(nested.first);
+    return fields;
+  }
+  /// Check a place's steps against the aggregate shapes of its binding. A
+  /// region reads a captured place through the longest captured ancestor.
+  std::optional<Selected> select(const syntax::Place &place,
+                                 const source::Node &node,
+                                 const Environment &env,
+                                 bool captureCollection = false) {
+    Selected result;
+    const auto *root = syntax::localRoot(place);
+    const auto *alias = places::capturedAncestor(ArrayRef(env.captured), place);
+    size_t begin = 0;
+    if (alias) {
+      result.place = alias->place;
+      result.key = alias->key;
+      begin = alias->place.steps.size();
+    } else if (root && (env.names.count(*root) || env.structs.count(*root))) {
+      result.place.root = place.root;
+      result.place.location = place.location;
+      result.key = *root;
+    } else {
+      cb.fail(place.location ? place : node, "source-value-reference",
+              "unknown input value '" + syntax::spelling(place) + "'");
+      return std::nullopt;
+    }
+    for (size_t i = begin; i < place.steps.size(); ++i) {
+      const auto &step = place.steps[i];
+      auto parent = env.structs.find(result.key);
+      if (parent == env.structs.end()) {
+        auto scalar = env.names.find(result.key);
+        if (captureCollection && step.kind == syntax::Projection::Kind::Index &&
+            scalar != env.names.end() &&
+            collectionOperations(
+                StringRef(type(env, scalar->second.value)).split(':').first)) {
+          result.complete = false;
+          return result;
+        }
+        cb.fail(step.location ? step : node, "source-projection",
+                "projection requires the corresponding aggregate kind");
+        return std::nullopt;
+      }
+      const auto &shape = parent->second;
+      auto selection = places::select(step, aggregateKind(shape), shape.arity,
+                                      fieldNames(shape));
+      if (!selection) {
+        cb.fail(step.location ? step : node, "source-projection",
+                "invalid projection kind, field, or static index");
+        return std::nullopt;
+      }
+      auto checked = step;
+      checked.key = selection->key;
+      result.place.steps.push_back(std::move(checked));
+      result.key += "." + selection->key;
+    }
+    if (!env.names.count(result.key) && !env.structs.count(result.key)) {
+      cb.fail(place.location ? place : node, "source-value-reference",
+              "unknown input value '" + syntax::spelling(place) + "'");
+      return std::nullopt;
+    }
+    return result;
+  }
+  Operand named(const syntax::Place &place, const source::Node &node,
+                const Environment &env) {
+    auto selected = select(place, node, env);
+    return selected ? named(selected->key, node, env) : Operand{};
   }
   void registerStruct(StringRef name, const AggregateShape &shape,
                       Environment &env) {
@@ -220,13 +305,12 @@ class LocalElaborator {
                         source::Body &out, source::Names attributes = {},
                         std::optional<source::Names> statics = std::nullopt,
                         StringRef output = {}, StringRef site = {}) {
-    syntax::Call call;
+    CallRequest call;
     call.location = node.location;
-    call.callee = name.str();
-    call.qualified = true;
+    call.target = syntax::Target::operation(name);
     call.inputs = std::move(inputs);
     call.attributes = std::move(attributes);
-    call.staticArguments = std::move(statics);
+    call.suppliedStatics = std::move(statics);
     std::string result = output.empty() ? fresh() : output.str();
     std::vector<Operand> operands;
     for (auto &input : call.inputs)
@@ -270,6 +354,32 @@ class LocalElaborator {
     }
     return cb.good();
   }
+  static source::Names atomValues(ArrayRef<syntax::Atom> atoms) {
+    source::Names result;
+    for (const auto &atom : atoms)
+      result.push_back(atom.value);
+    return result;
+  }
+  /// The flat key of a selection receiver. A place performs no computation;
+  /// any other receiver is evaluated once and bound, as
+  /// `let fresh = receiver; fresh.step`, under this route's ordinary rules.
+  std::optional<std::string> receiver(const syntax::Expression &base,
+                                      Environment &env, source::Body &out) {
+    if (auto candidate = syntax::placeCandidate(base)) {
+      auto selected = select(*candidate, base, env, true);
+      if (!selected)
+        return std::nullopt;
+      // A literal index into a collection value is itself a runtime query.
+      if (selected->complete)
+        return selected->key;
+    }
+    auto value = operand(base, env, out);
+    if (!cb.good())
+      return std::nullopt;
+    auto name = fresh();
+    bind(name, value, false, base, env);
+    return cb.good() ? std::optional<std::string>(name) : std::nullopt;
+  }
   std::vector<Operand>
   expressionValues(const syntax::Expression &expr, const source::Names &outputs,
                    const std::optional<std::vector<syntax::Type>> &annotation,
@@ -278,23 +388,26 @@ class LocalElaborator {
     if (!budget(expr))
       return {};
     if (expr.kind == Kind::Call) {
-      syntax::Call call;
+      CallRequest call;
       call.location = expr.location;
-      call.callee = expr.name;
-      call.qualified = expr.qualified;
+      call.target = expr.reference.target;
       call.staticArguments = expr.staticArguments;
-      call.staticTerms = expr.staticTerms;
-      call.attributes = expr.attributes;
+      call.attributes = atomValues(expr.attributes);
       call.argumentNames = expr.argumentNames;
       call.inputs.resize(expr.operands.size());
       Shapes actualShapes(expr.operands.size());
-      for (auto [i, argument] : enumerate(expr.operands))
-        if (argument.kind == Kind::Name && env.names.count(argument.name)) {
-          call.inputs[i] = env.names.at(argument.name).value;
-          if (auto found = env.structs.find(argument.name);
-              found != env.structs.end())
-            actualShapes[i] = found->second;
-        }
+      // Known argument types guide expectations before operands run.
+      for (auto [i, argument] : enumerate(expr.operands)) {
+        const auto &target = argument.reference.target;
+        if (argument.kind != Kind::Name ||
+            target.kind != syntax::Target::Kind::Local ||
+            !env.names.count(target.symbol))
+          continue;
+        call.inputs[i] = env.names.at(target.symbol).value;
+        if (auto found = env.structs.find(target.symbol);
+            found != env.structs.end())
+          actualShapes[i] = found->second;
+      }
       call.annotation = annotation;
       auto order = cb.argumentOrder(call);
       if (!order)
@@ -303,13 +416,16 @@ class LocalElaborator {
       std::vector<unsigned> formal(expr.operands.size());
       for (unsigned i = 0; i < formal.size(); ++i)
         formal[order->empty() ? i : (*order)[i]] = i;
+      // Operands run once, left to right as written, whatever order the
+      // callee's ports take them in.
       std::vector<Operand> operands;
-      for (auto [i, argument] : enumerate(expr.operands))
+      for (auto [i, argument] : enumerate(expr.operands)) {
         operands.push_back(operand(
             argument, env, out,
             formal[i] < expected.size() ? expected[formal[i]] : std::nullopt));
-      if (!cb.good())
-        return {};
+        if (!cb.good())
+          return {};
+      }
       return emit(std::move(call), operands, outputs, annotation, env, out,
                   site);
     }
@@ -331,15 +447,12 @@ class LocalElaborator {
         types.push_back(value.shape ? "record:" + value.shape->name
                                     : type(env, value.values.front()));
       }
-      if (!cb.good())
-        return {};
-      auto target = cb.resolveOperator(expr, types);
+      auto target = cb.resolveOperator(expr, expr.name, types);
       if (!target)
         return {};
-      syntax::Call call;
+      CallRequest call;
       call.location = expr.location;
-      call.callee = target->callee;
-      call.qualified = target->qualified;
+      call.target = target->target;
       std::vector<Operand> ordered;
       for (unsigned index : target->order)
         ordered.push_back(operands[index]);
@@ -351,38 +464,91 @@ class LocalElaborator {
               "this expression produces exactly one value");
       return {};
     }
-    if (expr.kind == Kind::Get) {
-      auto spelling = [&](auto &&self,
-                          const syntax::Expression &e) -> std::string {
-        if (e.kind == Kind::Name && !e.quoted)
-          return e.name;
-        if (e.kind != Kind::Get || e.operands.size() != 2 ||
-            e.operands[1].kind != Kind::Index)
+    auto checkedValue = [&](Operand value) -> std::vector<Operand> {
+      if (!cb.good())
+        return {};
+      if (value.shape) {
+        if (!annotated(value, annotation, expr))
           return {};
-        auto base = self(self, e.operands.front());
-        return base.empty() ? std::string{} : base + "." + e.operands[1].name;
-      };
-      auto place = spelling(spelling, expr);
-      if (!place.empty() &&
-          (env.names.count(place) || env.structs.count(place))) {
-        auto value = named(place, expr, env);
-        if (value.shape) {
-          if (!annotated(value, annotation, expr))
-            return {};
-        } else if (annotation && !cb.same(type(env, value.values.front()),
-                                          cb.type(annotation->front()), expr)) {
+      } else if (annotation && !cb.same(type(env, value.values.front()),
+                                        cb.type(annotation->front()), expr)) {
+        if (cb.good())
           cb.fail(expr, "source-type-mismatch",
                   "projected value differs from expected type");
+        return {};
+      }
+      return {std::move(value)};
+    };
+    std::string nameKey;
+    if (expr.kind == Kind::Name) {
+      auto selected = select(*syntax::placeCandidate(expr), expr, env);
+      if (!selected)
+        return {};
+      if (env.structs.count(selected->key))
+        return checkedValue(named(selected->key, expr, env));
+      nameKey = selected->key;
+    }
+    if (expr.kind == Kind::Field || expr.kind == Kind::TupleField ||
+        expr.kind == Kind::Get || expr.kind == Kind::Length) {
+      // A place read through a captured ancestor is selected as a whole.
+      if (auto candidate = syntax::placeCandidate(expr))
+        if (places::capturedAncestor(ArrayRef(env.captured), *candidate)) {
+          auto selected = select(*candidate, expr, env, true);
+          if (!selected)
+            return {};
+          if (selected->complete)
+            return checkedValue(named(selected->key, expr, env));
+        }
+      auto root = receiver(expr.operands.front(), env, out);
+      if (!root)
+        return {};
+      if (auto parent = env.structs.find(*root); parent != env.structs.end()) {
+        if (expr.kind == Kind::Length) {
+          cb.fail(expr, "source-collection-type",
+                  "length requires a supported collection value");
           return {};
         }
-        return {std::move(value)};
+        // Select the named component without reading its siblings.
+        const auto &shape = parent->second;
+        auto step = syntax::projection(expr);
+        std::optional<places::Selection> selection;
+        if (step)
+          selection = places::select(*step, aggregateKind(shape), shape.arity,
+                                     fieldNames(shape));
+        if (!selection) {
+          cb.fail(expr, "source-projection",
+                  expr.kind == Kind::Get && !step
+                      ? "an aggregate index must be a static literal"
+                      : "invalid projection kind, field, or static index");
+          return {};
+        }
+        return checkedValue(named(*root + "." + selection->key, expr, env));
       }
-    }
-    if (expr.kind == Kind::Name && env.structs.count(expr.name)) {
-      auto value = named(expr.name, expr, env);
-      if (!annotated(value, annotation, expr))
+      if (expr.kind == Kind::Field || expr.kind == Kind::TupleField) {
+        cb.fail(expr, "source-projection",
+                "projection requires the corresponding aggregate kind");
         return {};
-      return {std::move(value)};
+      }
+      // A runtime query on one collection value.
+      auto collection = lookup(*root, expr, env);
+      auto spelling = type(env, collection);
+      auto operations =
+          collectionOperations(StringRef(spelling).split(':').first);
+      if (!operations) {
+        cb.fail(expr, "source-collection-type",
+                "indexing/length requires a supported collection");
+        return {};
+      }
+      source::Names inputs{collection};
+      if (expr.kind == Kind::Get)
+        inputs.push_back(scalar(expr.operands[1], env, out));
+      if (!cb.good())
+        return {};
+      auto result = primitive(expr.kind == Kind::Length ? operations->length
+                                                        : operations->index,
+                              std::move(inputs), expr, env, out, {},
+                              std::nullopt, outputs[0], site);
+      return checkedValue(Operand{{result}, std::nullopt});
     }
     if (expr.kind == Kind::Product) {
       std::vector<ConstructedField> fields;
@@ -420,6 +586,8 @@ class LocalElaborator {
         const auto &field = expr.fields[i];
         auto value = operand(initializer, env, out,
                              i < expected.size() ? expected[i] : std::nullopt);
+        if (!cb.good())
+          return {};
         fields.push_back({field, std::move(value.values), value.shape});
       }
       if (!cb.good())
@@ -439,7 +607,7 @@ class LocalElaborator {
     }
     std::string result;
     if (expr.kind == Kind::Name)
-      result = lookup(expr.name, expr, env);
+      result = lookup(nameKey, expr, env);
     else if (expr.kind == Kind::Index)
       result = primitive("index.constant", {}, expr, env, out, {expr.name},
                          std::nullopt, outputs[0], site);
@@ -449,27 +617,6 @@ class LocalElaborator {
                        ? zero
                        : primitive("index.constant", {}, expr, env, out, {"1"});
       result = primitive("index.equal", {zero, other}, expr, env, out, {},
-                         std::nullopt, outputs[0], site);
-    } else if (expr.kind == Kind::Get || expr.kind == Kind::Length) {
-      auto collection = scalar(expr.operands[0], env, out);
-      auto spelling = type(env, collection);
-      auto kind = StringRef(spelling).split(':').first;
-      std::string prefix = kind == "vector"    ? "vector"
-                           : kind == "groups"  ? "curve"
-                           : kind == "indices" ? "indices"
-                                               : "";
-      if (prefix.empty()) {
-        cb.fail(expr, "source-collection-type",
-                "indexing/length requires a supported collection");
-        return {};
-      }
-      source::Names inputs{collection};
-      if (expr.kind == Kind::Get)
-        inputs.push_back(scalar(expr.operands[1], env, out));
-      std::string suffix = expr.kind == Kind::Length ? ".length"
-                           : kind == "indices"       ? ".at"
-                                                     : ".get";
-      result = primitive(prefix + suffix, std::move(inputs), expr, env, out, {},
                          std::nullopt, outputs[0], site);
     } else if (expr.kind == Kind::Vector) {
       if (annotation && annotation->size() == 1 &&
@@ -512,11 +659,8 @@ class LocalElaborator {
           vectorType = "indices";
       }
       auto [kind, domain] = StringRef(vectorType).split(':');
-      std::string prefix = kind == "vector"    ? "vector"
-                           : kind == "groups"  ? "curve"
-                           : kind == "indices" ? "indices"
-                                               : "";
-      if (prefix.empty()) {
+      auto operations = collectionOperations(kind);
+      if (!operations) {
         cb.fail(expr, "source-vector-type",
                 "vector literals require field/group elements or indices; "
                 "annotate empty literals");
@@ -525,11 +669,11 @@ class LocalElaborator {
       std::optional<source::Names> statics;
       if (!domain.empty())
         statics = source::Names{domain.str()};
-      result = primitive(prefix + ".empty", {}, expr, env, out, {}, statics,
+      result = primitive(operations->empty, {}, expr, env, out, {}, statics,
                          elements.empty() ? outputs[0] : fresh(),
                          elements.empty() ? site.str() : fresh(true));
       for (size_t i = 0; i < elements.size() && cb.good(); ++i)
-        result = primitive(prefix + ".append", {result, elements[i]}, expr, env,
+        result = primitive(operations->append, {result, elements[i]}, expr, env,
                            out, {}, std::nullopt,
                            i + 1 == elements.size() ? outputs[0] : fresh(),
                            i + 1 == elements.size() ? site.str() : fresh(true));
@@ -563,8 +707,10 @@ class LocalElaborator {
     auto visit = [&](auto &&self, const syntax::Body &body) -> void {
       for (const auto &ins : body)
         if (auto *b = std::get_if<syntax::Binding>(&ins.value)) {
-          if (b->assignment)
-            result.insert(b->outputs.begin(), b->outputs.end());
+          // Only a whole mutable scalar binding can be assigned.
+          if (b->assignment && b->assignment->steps.empty())
+            if (const auto *root = syntax::localRoot(*b->assignment))
+              result.insert(*root);
         } else if (auto *b = std::get_if<syntax::Conditional>(&ins.value)) {
           self(self, b->thenBody);
           self(self, b->elseBody);
@@ -629,16 +775,19 @@ class LocalElaborator {
       return terminal(branch->thenBody) && terminal(branch->elseBody);
     return false;
   }
-  Environment capturedEnvironment(const source::Names &names,
+  // A region binds each captured place under its checked key and reads
+  // selections below it through that capture.
+  Environment capturedEnvironment(ArrayRef<Selected> captured,
                                   const source::Node &node,
                                   const Environment &outer) {
     Environment inner;
     inner.scope = symbols.scope(outer.scope);
-    for (const auto &name : names) {
-      auto value = named(name, node, outer);
+    for (const auto &place : captured) {
+      auto value = named(place.key, node, outer);
       for (const auto &leaf : value.values)
         inner.types.emplace(leaf, type(outer, leaf));
-      bind(name, value, false, node, inner);
+      bind(place.key, value, false, node, inner);
+      inner.captured.push_back({place.place, place.key});
     }
     return inner;
   }
@@ -647,68 +796,60 @@ class LocalElaborator {
     inner.scope = symbols.scope(outer.scope);
     return inner;
   }
-  /// Flat values of authored names, expanding struct bindings.
-  source::Names flatten(const source::Names &names, const source::Node &node,
-                        const Environment &env) {
+  /// Region capture values: each captured place's flat values, without
+  /// repeating a value an inferred capture list already contains.
+  source::Names captureValues(ArrayRef<Selected> captured,
+                              bool explicitCaptures, const source::Node &node,
+                              const Environment &env) {
     source::Names result;
-    for (const auto &name : names) {
-      auto value = named(name, node, env);
-      result.insert(result.end(), value.values.begin(), value.values.end());
-    }
+    std::set<std::string> seen;
+    for (const auto &place : captured)
+      for (auto &value : named(place.key, node, env).values)
+        if (explicitCaptures || seen.insert(value).second)
+          result.push_back(std::move(value));
     return result;
   }
-  source::Names captureValues(const source::Names &names, bool explicitCaptures,
-                              const source::Node &node,
-                              const Environment &env) {
-    auto result = flatten(names, node, env);
-    if (explicitCaptures)
-      return result;
-    std::set<std::string> seen;
-    source::Names unique;
-    for (const auto &value : result)
-      if (seen.insert(value).second)
-        unique.push_back(value);
-    return unique;
-  }
-  source::Names captureNames(const source::Names &names, bool explicitCaptures,
-                             const Environment &env) {
-    if (explicitCaptures)
-      return names;
-    source::Names result;
-    for (const auto &name : names) {
-      auto selected = name;
-      // A runtime vector is one logical value. Only statically shaped
-      // products/records expose independent captured field places.
-      if (!env.names.count(name) && !env.structs.count(name)) {
-        StringRef prefix(name);
-        while (prefix.contains('.')) {
-          prefix = prefix.rsplit('.').first;
-          auto found = env.names.find(prefix.str());
-          if (found == env.names.end() || found->second.value.empty())
-            continue;
-          auto spelling = type(env, found->second.value);
-          auto kind = StringRef(spelling).split(':').first;
-          if (kind == "vector" || kind == "groups" || kind == "indices") {
-            selected = prefix.str();
-            break;
-          }
-        }
-      }
-      if (!llvm::is_contained(result, selected))
-        result.push_back(std::move(selected));
+  /// Check captured places against their types before any flattening. An
+  /// inferred index into one bulk collection value captures that whole value;
+  /// its index expression's inputs are candidates of their own. Inferred
+  /// captures keep first use, and a whole value subsumes its selections.
+  /// Explicit capture lists keep their written order and refusals.
+  std::optional<std::vector<Selected>>
+  normalizeCaptures(const syntax::Places &places, bool explicitCaptures,
+                    const source::Node &node, const Environment &env) {
+    std::vector<Selected> result;
+    for (const auto &place : places) {
+      auto selected = select(place, node, env, !explicitCaptures);
+      if (!selected)
+        return std::nullopt;
+      if (explicitCaptures)
+        result.push_back(std::move(*selected));
+      else
+        syntax::unite(
+            result, std::move(*selected),
+            [](const Selected &a, const Selected &b) {
+              return syntax::ancestor(a.place, b.place);
+            },
+            [](Selected &, Selected &&) {});
     }
     return result;
   }
   /// Region results and carried values are single values.
-  source::Names singles(const source::Names &names, const source::Node &node,
+  source::Names singles(const syntax::Places &places, const source::Node &node,
                         const Environment &env) {
-    for (const auto &name : names)
-      if (env.structs.count(name))
-        cb.fail(node, "source-struct-value",
-                "a region carries and yields single values; use the fields "
-                "of '" +
-                    name + "'");
-    return lookup(names, node, env);
+    source::Names result;
+    for (const auto &place : places) {
+      auto value = named(place, node, env);
+      if (!cb.good())
+        return {};
+      if (value.shape || value.values.size() != 1) {
+        cb.fail(place.location ? place : node, "source-struct-value",
+                "a region carries and yields single values; select a field");
+        return {};
+      }
+      result.push_back(value.values.front());
+    }
+    return result;
   }
   void bindResults(const source::Names &outputs, const source::Names &returned,
                    const Environment &region, const source::Node &node,
@@ -740,13 +881,16 @@ class LocalElaborator {
       }
       if (auto *call = std::get_if<syntax::Call>(&ins.value)) {
         std::vector<Operand> operands;
-        for (const auto &name : call->inputs)
-          operands.push_back(named(name, ins, env));
-        syntax::Call resolved = *call;
-        if (call->isOperator && cb.good()) {
-          syntax::Expression use;
-          use.location = call->location;
-          use.name = call->callee;
+        for (const auto &place : call->inputs)
+          operands.push_back(named(place, ins, env));
+        CallRequest resolved;
+        resolved.location = call->location;
+        resolved.target = call->callee.target;
+        resolved.staticArguments = call->staticArguments;
+        resolved.attributes = atomValues(call->attributes);
+        resolved.argumentNames = call->argumentNames;
+        resolved.destructure = call->destructure;
+        if (call->operatorSymbol && cb.good()) {
           std::vector<std::string> types;
           for (const auto &operand : operands) {
             if (operand.shape &&
@@ -759,11 +903,12 @@ class LocalElaborator {
                                           : type(env, operand.values.front()));
           }
           auto target =
-              cb.good() ? cb.resolveOperator(use, types) : std::nullopt;
+              cb.good()
+                  ? cb.resolveOperator(*call, *call->operatorSymbol, types)
+                  : std::nullopt;
           if (!target)
             break;
-          resolved.callee = target->callee;
-          resolved.qualified = target->qualified;
+          resolved.target = target->target;
           std::vector<Operand> ordered;
           for (unsigned index : target->order)
             ordered.push_back(operands[index]);
@@ -777,9 +922,15 @@ class LocalElaborator {
           bind(name, value, false, ins, env);
       } else if (auto *binding = std::get_if<syntax::Binding>(&ins.value)) {
         source::Names outputs = binding->outputs;
+        std::string assignedKey;
         if (binding->assignment) {
-          auto it = env.names.find(outputs.front());
-          if (it == env.names.end() || !it->second.mutableBinding) {
+          auto assigned = select(*binding->assignment, ins, env);
+          if (!assigned)
+            break;
+          assignedKey = assigned->key;
+          auto it = env.names.find(assignedKey);
+          if (it == env.names.end() || !it->second.mutableBinding ||
+              env.structs.count(assignedKey)) {
             cb.fail(ins, "source-assignment",
                     "assignment requires an existing mutable binding");
             break;
@@ -811,7 +962,7 @@ class LocalElaborator {
                     "a struct cannot be assigned; assign its fields' values");
             break;
           }
-          auto &variable = env.names.at(binding->outputs.front());
+          auto &variable = env.names.at(assignedKey);
           const auto &assigned = values.front().values.front();
           if (!cb.same(type(env, variable.value), type(env, assigned), ins)) {
             cb.fail(ins, "source-assignment-type",
@@ -854,13 +1005,14 @@ class LocalElaborator {
           break;
         }
         append(out, ins, {}, source::Return{std::move(value.values)});
-      } else if (auto *ret = std::get_if<source::Return>(&ins.value)) {
+      } else if (auto *ret = std::get_if<syntax::Return>(&ins.value)) {
         if (region)
           cb.fail(ins, "source-control-return",
                   "early return from a local region is not supported");
         source::Names returned;
-        for (auto [index, name] : enumerate(ret->values)) {
-          auto value = named(name, ins, env);
+        for (auto [index, place] : enumerate(ret->values)) {
+          auto value = named(place, ins, env);
+          auto name = syntax::spelling(place);
           const std::optional<AggregateShape> *declared =
               index < cb.results.size() ? &cb.results[index] : nullptr;
           if (bool(value.shape) != bool(declared && *declared))
@@ -883,7 +1035,7 @@ class LocalElaborator {
           cb.fail(ins, "source-local-control",
                   "local stop names no participant");
         append(out, ins, ins.site, *stop);
-      } else if (auto *yield = std::get_if<source::Yield>(&ins.value)) {
+      } else if (auto *yield = std::get_if<syntax::Yield>(&ins.value)) {
         if (!region || !explicitYield)
           cb.fail(ins, "source-control-yield",
                   "yield requires an explicit capture/carry region");
@@ -893,13 +1045,15 @@ class LocalElaborator {
         result.condition = scalar(branch->condition, env, out);
         if (type(env, result.condition) != "bool")
           cb.fail(ins, "source-condition-type", "if requires bool");
-        auto captured =
-            captureNames(branch->captures, branch->explicitCaptures, env);
+        auto captured = normalizeCaptures(branch->captures,
+                                          branch->explicitCaptures, ins, env);
+        if (!captured)
+          break;
         Environment yes = branch->explicitRegion
-                              ? capturedEnvironment(captured, ins, env)
+                              ? capturedEnvironment(*captured, ins, env)
                               : nestedEnvironment(env);
         Environment no = branch->explicitRegion
-                             ? capturedEnvironment(captured, ins, env)
+                             ? capturedEnvironment(*captured, ins, env)
                              : nestedEnvironment(env);
         result.thenBody =
             body(branch->thenBody, yes, true, branch->explicitRegion);
@@ -907,7 +1061,7 @@ class LocalElaborator {
             body(branch->elseBody, no, true, branch->explicitRegion);
         if (branch->explicitRegion) {
           result.captures =
-              captureValues(captured, branch->explicitCaptures, ins, env);
+              captureValues(*captured, branch->explicitCaptures, ins, env);
           result.outputs = branch->outputs;
           bool yesStops = terminal(result.thenBody),
                noStops = terminal(result.elseBody);
@@ -968,9 +1122,11 @@ class LocalElaborator {
           cb.fail(ins, "source-loop-bound-type",
                   "for bounds require index values");
         auto captured =
-            captureNames(loop->captures, loop->explicitCaptures, env);
+            normalizeCaptures(loop->captures, loop->explicitCaptures, ins, env);
+        if (!captured)
+          break;
         Environment inner = loop->explicitRegion
-                                ? capturedEnvironment(captured, ins, env)
+                                ? capturedEnvironment(*captured, ins, env)
                                 : nestedEnvironment(env);
         inner.types.emplace(result.induction, "index");
         define(loop->induction, result.induction, false, ins, inner);
@@ -978,7 +1134,10 @@ class LocalElaborator {
         std::vector<std::string> changed;
         if (loop->explicitRegion) {
           for (const auto &[name, initial] : loop->carried) {
-            auto value = singles({initial}, ins, env).front();
+            auto values = singles({initial}, ins, env);
+            if (values.empty())
+              break;
+            const auto &value = values.front();
             result.carried.emplace_back(name, value);
             inner.types.emplace(name, type(env, value));
             define(name, name, false, ins, inner);
@@ -1005,7 +1164,7 @@ class LocalElaborator {
         result.body = body(loop->body, inner, true, loop->explicitRegion);
         if (loop->explicitRegion) {
           result.captures =
-              captureValues(captured, loop->explicitCaptures, ins, env);
+              captureValues(*captured, loop->explicitCaptures, ins, env);
           result.outputs = loop->outputs;
           bindResults(result.outputs, yielded(result.body, ins), inner, ins,
                       env);

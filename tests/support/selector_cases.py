@@ -96,17 +96,21 @@ def nonprimitive_owner_source(*, conflict=False):
 
 def authored_helper_source():
     """Real checked-library helper adaptation, with no authored carrier origins."""
-    return '''module {
+    return '''
+      use zkc::algebra;
+      use zkc::core;
+      use zkc::random;
+      use zkc::random::Rng;
       library(namespace="example", name="selectors", version="1", resolution="capture-1");
-      fn Draw(r: rng<"bls12-381.fr">) -> (field<"bls12-381.fr">, rng<"bls12-381.fr">) effects (local) {
-        let (x, next) = random::draw::<"bls12-381.fr">(r); return (x, next);
+      fn Draw(r: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) effects (local) {
+        let (x, next) = zkc::random::draw::<"bls12-381.fr">(r); return (x, next);
       }
-      fn Client<>(r: rng<"bls12-381.fr">) -> (field<"bls12-381.fr">, rng<"bls12-381.fr">) effects (local) {
+      fn Client<>(r: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) effects (local) {
         return Draw(r);
       }
       link Closed = Client<>;
       fn Check(x: "bls12-381.fr"::Element) -> bool {
-        let ok = field::equal::<bls12-381.fr>(x, x); control::require(ok); return ok;
+        let ok = zkc::algebra::equal::<"bls12-381.fr">(x, x); zkc::core::require(ok); return ok;
       }
       protocol Main {
         roles (P, V);
@@ -119,4 +123,44 @@ def authored_helper_source():
       }
       instance root: Main { roles (P = P, V = V); }
       entry main = root;
-    }'''
+    '''
+
+
+def authored_source(*, offset=True, calls=False, origins=("Sampling", "Sampling")):
+    """Independent authored counterpart of source(), with project selectors."""
+    functions = []
+    for name, origin in zip(("F", "A"), origins):
+        padding = '[padding] let pad = constant() attributes("1");' if name == "A" and offset else ""
+        functions.append(f'''
+          fn {name}(r: Rng<"bls12-381.fr">)
+              -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) origin "{origin}"() {{
+            {padding}
+            [sample] let (x, next) = draw(r); return (x, next);
+          }}
+        ''')
+    if calls:
+        functions.append('''
+          fn Identity(b: bool) -> bool { return b; }
+          fn Caller(b: bool) -> bool { [call] let out = Identity(b); return out; }
+        ''')
+    return '''
+      use zkc::random::Rng;
+      bind draw = "random.draw"("bls12-381.fr");
+      bind constant = "index.constant"();
+      bind equal = "field.equal"("bls12-381.fr");
+      bind guard = "control.require"();
+    ''' + "\n".join(functions) + '''
+      fn Check(x: "bls12-381.fr"::Element) -> bool {
+        [equal] let ok = equal(x, x); [guard] guard(ok); return ok;
+      }
+      protocol Main {
+        roles(P, V); inputs(V coins: Rng<"bls12-381.fr">);
+        outputs(V bool, V Rng<"bls12-381.fr">);
+        local [first] V: let (x, r1) = F(coins);
+        local [second] V: let (y, r2) = A(r1);
+        local [check] V: let ok = Check(y);
+        return (ok, r2);
+      }
+      instance root: Main { roles(P=P, V=V); }
+      entry main=root;
+    '''

@@ -8,21 +8,19 @@ then projects and lowers to the existing executable subset. The selected
 is `canonical-expanded-locals/1`.
 
 ```text
-module {
-  use zkc::algebra;
-  fn Twice<F: Field>(x: F::Element) -> F::Element {
-    [sum] let y = algebra::add(x, x);
-    return y;
-  }
-  configure Selected = Twice();
-  fn Four<F: PrimeField>(x: F::Element) -> F::Element {
-    [first] let a = Selected(x);
-    [second] let b = Twice::<F>(a);
-    return b;
-  }
-  configure Bls = Four(F = "bls12-381.fr");
-  configure Koala = Four(F = "koala-bear");
+use zkc::algebra;
+fn Twice<F: Field>(x: F::Element) -> F::Element {
+  [sum] let y = algebra::add(x, x);
+  return y;
 }
+configure Selected = Twice();
+fn Four<F: PrimeField>(x: F::Element) -> F::Element {
+  [first] let a = Selected(x);
+  [second] let b = Twice::<F>(a);
+  return b;
+}
+configure Bls = Four(F = "bls12-381.fr");
+configure Koala = Four(F = "koala-bear");
 ```
 
 This declaration-only library admits with `protocol-source`; the

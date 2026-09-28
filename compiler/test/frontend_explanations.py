@@ -27,9 +27,9 @@ def identity(name):
 
 
 with case("unused lexical alias warns even when its underlying value is used"):
-    text = '''module {
+    text = '''
       fn Main(x: bool) -> bool { let unused = x; return x; }
-    }'''
+    '''
     report = analyze(text)
     result = warnings(report)
     assert report["state"] == "source_checked", report
@@ -40,39 +40,39 @@ with case("unused lexical alias warns even when its underlying value is used"):
     commands.source("protocol-source", text)
 
 with case("explicit discard names opt out"):
-    report = analyze('''module {
+    report = analyze('''
       fn Main(x: bool) -> bool { let _ = x; let _ignored = x; return x; }
-    }''')
+    ''')
     assert report["state"] == "source_checked", report
     assert warnings(report) == [], report
 
 with case("Verify name has only ordinary usage semantics"):
-    report = analyze('''module {
+    report = analyze('''
       fn Verify(x: bool) -> bool { return x; }
       fn Main(x: bool) -> bool { let checked = Verify(x); return x; }
-    }''')
+    ''')
     assert len(warnings(report)) == 1, report
     assert report["decision_result_usage"] == "unavailable_no_decision_metadata"
     assert report["acceptance_dependence"] == "not_analyzed"
     assert report["cryptographic_soundness"] == "not_claimed"
 
 with case("ordinary use does not claim acceptance dependence"):
-    report = analyze('''module {
+    report = analyze('''
       fn Verify(x: bool) -> bool { return x; }
       fn Ignore(x: bool) -> bool { return true; }
       fn Main(x: bool) -> bool {
         let checked = Verify(x); return Ignore(checked);
       }
-    }''')
+    ''')
     assert report["state"] == "source_checked", report
     assert warnings(report) == [], report
     assert report["acceptance_dependence"] == "not_analyzed"
     assert report["cryptographic_soundness"] == "not_claimed"
 
-AGGREGATE = '''module {
-  struct Pair(a: bool, b: bool);
-  fn Main(x: bool) -> bool { let pair = Pair(a=x, b=x); return RESULT; }
-}'''
+AGGREGATE = '''
+  struct Pair { a: bool, b: bool }
+  fn Main(x: bool) -> bool { let pair = Pair{ a: x, b: x }; return RESULT; }
+'''
 with case("aggregate projection counts as use without unused sibling warnings"):
     report = analyze(AGGREGATE.replace("RESULT", "pair.a"))
     assert report["state"] == "source_checked", report
@@ -85,22 +85,22 @@ with case("unused aggregate produces one source binding warning"):
     assert "'pair'" in result[0]["message"], result
 
 with case("captured aliases in exclusive arms are not new unused bindings"):
-    report = analyze('''module {
+    report = analyze('''
       fn Main(flag: bool, x: bool) -> bool {
         if flag capture(x) -> (answer) { yield x; }
         else { let yes = true; yield yes; }
         return answer;
       }
-    }''')
+    ''')
     assert report["state"] == "source_checked", report
     assert warnings(report) == [], report
 
 with case("warnings survive missing imports only for retained checked bodies"):
-    text = f'''module {{
+    text = f'''
       dependency missing = {identity("missing")}; use missing::Absent;
       fn Independent(x: bool) -> bool {{ let unused = x; return x; }}
       fn Dependent(x: bool) -> bool {{ let unchecked = x; return Absent(x); }}
-    }}'''
+    '''
     report = analyze(text)
     assert report["state"] == "incomplete", report
     result = warnings(report)
@@ -110,9 +110,9 @@ with case("warnings survive missing imports only for retained checked bodies"):
     commands.source("protocol-source", text, refuses="source-dependency-missing")
 
 with case("a failed body does not yield speculative unused warnings"):
-    report = analyze('''module {
+    report = analyze('''
       fn Broken(x: bool) -> index { let unused = x; return x; }
-    }''')
+    ''')
     assert report["state"] == "incomplete", report
     assert report["diagnostics"], report
     assert warnings(report) == [], report
@@ -122,15 +122,15 @@ with case("warnings retain their declaring source file"):
     root.mkdir()
     app = root / "app.pir"
     child = root / "child.pir"
-    app.write_text("module {mod child;}")
-    child.write_text("module {fn Main(x: bool) -> bool {let unused = x; return x;}}")
+    app.write_text("mod child;")
+    child.write_text("fn Main(x: bool) -> bool {let unused = x; return x;}")
     report = json.loads(commands.run([compiler, "protocol-analyze", app]))
     result = warnings(report)
     assert len(result) == 1, result
     assert result[0]["primary"]["file"] == 1, result
     assert report["files"][1]["filename"] == str(child), report
 
-OBLIGATION = '''module {
+OBLIGATION = '''
   use zkc::algebra::{Element};
   interface FieldAPI { domain F: field = "koala-bear";
     local step(x: Element<F>) -> Element<F>;
@@ -140,7 +140,7 @@ OBLIGATION = '''module {
   }
   fn Client<C: FieldAPI>(x: Element<C::F>) -> Element<C::F> { return C::step(x); }
   link Closed = Client<Impl>;
-}'''
+'''
 
 with case("failed core proof retains exact static obligation and finite checker"):
     report = analyze(OBLIGATION)
@@ -169,8 +169,8 @@ with case("obligation context points to the exact imported interface file"):
     library = root / "library.pir"
     app = root / "app.pir"
     interface = OBLIGATION[OBLIGATION.index("  interface"):OBLIGATION.index("  component")]
-    library.write_text(f'module {{ use zkc::algebra::Element; {identity("fields")}; {interface.replace("interface", "pub interface", 1)} }}')
-    app.write_text(f'''module {{
+    library.write_text(f' use zkc::algebra::Element; {identity("fields")}; {interface.replace("interface", "pub interface", 1)} ')
+    app.write_text(f'''
       use zkc::algebra::Element;
       dependency fields = {identity("fields")}; use fields::FieldAPI;
       {OBLIGATION[OBLIGATION.index("  component"):]}
@@ -185,7 +185,7 @@ with case("obligation context points to the exact imported interface file"):
     assert any(c["kind"] == "unsatisfied_obligation" for c in diagnostic["causes"]), diagnostic
 
 with case("ordinary type failures do not invent an unsatisfied obligation"):
-    report = analyze("module {fn Broken(x: bool) -> index {return x;}}")
+    report = analyze("fn Broken(x: bool) -> index {return x;}")
     assert report["diagnostics"], report
     assert all(c["kind"] != "unsatisfied_obligation"
                for d in report["diagnostics"] for c in d["causes"]), report

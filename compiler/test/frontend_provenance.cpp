@@ -13,7 +13,7 @@ int main() {
   for (bool generated : {false, true}) {
     model::Module module;
     module.resolution = std::make_shared<const resolution::Context>(
-        ProjectInput::single(Input::withoutFile("module {}")));
+        ProjectInput::single(Input::withoutFile("")));
     const source::Span declaration{10, 20, 0};
     const source::Span call = generated ? declaration : source::Span{15, 3, 0};
     auto owner =
@@ -36,13 +36,13 @@ int main() {
 
   // Header formation diagnoses type nodes, not the enclosing function. Every
   // nested node generated for an aggregate alias must retain its source span.
-  const char *text = R"(module {
+  const char *text = R"(
     library(namespace="test", name="locations", version="1", resolution="one");
     fn Echo(x: (Array<bool, 0>, (bool, bool))) -> (Array<bool, 0>, (bool, bool)) {
       return x;
     }
     link Closed = Echo<>;
-  })";
+  )";
   auto project = ProjectInput::single(Input::withoutFile(text));
   auto resolved = resolution::resolve(project);
   if (!resolved.diagnostics.empty())
@@ -94,8 +94,7 @@ int main() {
   // without weakening that earlier admission boundary.
   const auto symbol = formed.programs.front().entry();
   std::string collisionText = text;
-  collisionText.insert(collisionText.rfind('}'),
-                       "fn " + symbol + "(x: bool) -> bool { return x; }\n");
+  collisionText.append("fn " + symbol + "(x: bool) -> bool { return x; }\n");
   auto collisionProject =
       ProjectInput::single(Input::withoutFile(collisionText, "collision.pir"));
   auto collisionContext = resolution::resolve(collisionProject);

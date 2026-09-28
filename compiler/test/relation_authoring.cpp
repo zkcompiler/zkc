@@ -47,7 +47,7 @@ int main() {
             "bounded resolver request");
     return asset;
   };
-  const char *text = R"pir(module {
+  const char *text = R"pir(
     use zkc::algebra::Vector;
     relation Circuit = r1cs("circuit.r1cs");
     derive Rows = multilinear(Circuit, specialized);
@@ -55,7 +55,7 @@ int main() {
         -> (Vector<"bls12-381.fr"::Element>) {
       let a = Rows_Assemble(s, w); return (a);
     }
-  })pir";
+  )pir";
   require(!frontend::checkProtocolSyntax(text), "pure syntax accepts imports");
   rejects(frontend::parseProtocolDocument(text), "relation-unresolved");
   require(loads == 0, "parser never invokes resolver");
@@ -175,7 +175,7 @@ int main() {
     return airAsset;
   };
   auto airDocument =
-      take(frontend::loadProtocolDocument(R"pir(module {
+      take(frontend::loadProtocolDocument(R"pir(
     use zkc::algebra::Vector;
     relation Trace = air("trace.json");
     derive Steps = arithmetic(Trace, specialized, 3);
@@ -183,7 +183,7 @@ int main() {
         -> (Vector<"bls12-381.fr"::Element>) {
       let r = Steps_Evaluate(s, t); return (r);
     }
-  })pir",
+  )pir",
                                           "air.pir", airResolver));
   require(airDocument.module()->functions.size() == 2,
           "AIR generated typed interface is called");

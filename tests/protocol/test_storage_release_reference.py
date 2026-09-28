@@ -41,8 +41,8 @@ def main():
             journal.run([compiler, "protocol-import", "-"], source))))
 
     # The same source using an installed operation reaches the identical pass.
-    imported = source.replace('module {\n  bind both = bool.and();',
-                             'module { use zkc::core;')
+    imported = source.replace('bind both = "bool.and"();',
+                             'use zkc::core;')
     imported = imported.replace('= both(', '= zkc::core::and(')
     imported_source = compile("protocol-source", imported)
     imported_released = compile("protocol-compile", json.dumps(imported_source),

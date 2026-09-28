@@ -28,24 +28,34 @@ struct ConstructedField {
 /// The call a declared operator stands for. `order[k]` is the authored
 /// operand passed as the target's k-th argument.
 struct OperatorTarget {
-  std::string callee;
-  bool qualified = false;
+  syntax::Target target;
   std::vector<unsigned> order;
 };
+/// One call after its operands have run: a resolved target over flat values.
+/// `inputs` are flat values; `outputs` are the authored result names.
+struct CallRequest : source::Node {
+  syntax::Target target;
+  // Written static arguments, or the closed common spellings of arguments the
+  // elaborator itself supplies. At most one is present.
+  std::optional<syntax::StaticTerms> staticArguments;
+  std::optional<source::Names> suppliedStatics;
+  source::Names attributes, inputs, outputs, argumentNames;
+  std::optional<std::vector<syntax::Type>> annotation;
+  bool destructure = false;
+};
 struct LocalCallbacks {
-  std::function<std::optional<std::vector<unsigned>>(const syntax::Call &)>
+  std::function<std::optional<std::vector<unsigned>>(const CallRequest &)>
       argumentOrder;
   // Formal expected types, queried only after the label bijection is checked.
   std::function<std::vector<std::optional<syntax::Type>>(
-      const syntax::Call &, const LocalTypes &, const Shapes &)>
+      const CallRequest &, const LocalTypes &, const Shapes &)>
       argumentTypes;
   std::function<std::vector<std::optional<syntax::Type>>(
       const syntax::Expression &,
       const std::optional<std::vector<syntax::Type>> &)>
       fieldTypes;
-  /// `inputs` are flat values; `outputs` are the authored result names.
   std::function<std::optional<source::Instruction::Value>(
-      const syntax::Call &, LocalTypes &, llvm::StringRef, CallShapes &)>
+      const CallRequest &, LocalTypes &, llvm::StringRef, CallShapes &)>
       call;
   std::function<std::string(const syntax::Type &)> type;
   std::function<std::optional<AggregateShape>(const syntax::Type &)> aggregate;
@@ -63,8 +73,8 @@ struct LocalCallbacks {
                      const source::Node &)>
       sameAggregate;
   /// Select the one declaration for a symbol and the operands' logical types.
-  std::function<std::optional<OperatorTarget>(const syntax::Expression &,
-                                              llvm::ArrayRef<std::string>)>
+  std::function<std::optional<OperatorTarget>(
+      const source::Node &, llvm::StringRef, llvm::ArrayRef<std::string>)>
       resolveOperator;
   std::function<void(const source::Node &, llvm::StringRef,
                      const llvm::Twine &)>

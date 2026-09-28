@@ -22,7 +22,7 @@ CLIENT = '''fn Client<C: Cell>(state: C::State, ok: bool) -> bool {
 
 
 def module(client=CLIENT, enum=ENUM, cell=CELL, link=False):
-    return f'module {{ {IDENTITY} {cell} {enum} {client} ' + ('link Closed = Client<Scalar>;' if link else '') + '}'
+    return f'{IDENTITY} {cell} {enum} {client} ' + ('link Closed = Client<Scalar>;' if link else '')
 
 
 def run(text, refuses=None):
@@ -95,6 +95,7 @@ with case('inactive payload cannot be projected'):
     run(module(CLIENT.replace('match result', 'let payload = result.Ready; match result')), 'library-source-projection')
 
 with case('match outputs must agree across arms'):
+    # A yield names values; an empty tuple is not a reference.
     run(module(CLIENT.replace('yield (error);', 'yield (());')), 'source-syntax')
     run(module(CLIENT.replace('yield (ok);', 'yield (next);')), 'library-type-mismatch')
 
@@ -158,12 +159,12 @@ with case('duplicate alternatives refused even unused'):
 with case('unsupported arbitrary type parameter is explicit'):
     run(module(enum='enum Result<T: type, E: type> { Ok(T), Err(E) }', client=''), 'source-name-unresolved')
 
-with case('protocol match cannot schedule work'):
-    text = module(client='')[:-1] + ' protocol P { roles (P); inputs (P x: bool); outputs (P bool); match x capture() -> (out) { Ready(x) => { yield (x); } } return out; }}'
+with case('protocol r#match cannot schedule work'):
+    text = module(client='') + ' protocol P { roles (P); inputs (P x: bool); outputs (P bool); match x capture() -> (out) { Ready(x) => { yield (x); } } return out; }'
     run(text, 'source-syntax')
 
 with case('ordinary placement cannot bypass checked library match'):
-    text = module(client='')[:-1] + ' protocol P { roles (P); inputs (P x: bool); outputs (P bool); let out = local P { match x capture() -> (answer) { Ready(x) => { yield (x); } } return answer; }; return out; }}'
+    text = module(client='') + ' protocol P { roles (P); inputs (P x: bool); outputs (P bool); let out = local P { match x capture() -> (answer) { Ready(x) => { yield (x); } } return answer; }; return out; }'
     run(text, 'source-local-control')
 
 with case('phantom component captures remain nominally distinct before selection'):
@@ -179,8 +180,8 @@ with case('phantom captures distinguish equal concrete layouts after linking'):
       return Marker::Value(ok);
     }'''
     cells = CELL + ' component Other: Cell { type State = bool; local step(x: State) -> State { return x; } }'
-    text = module(client, enum='enum Marker<C: Cell> { Value(bool) }', cell=cells)[:-1]
-    emitted = json.loads(run(text + 'link One = Client<Scalar>; link Two = Client<Other>;}'))
+    text = module(client, enum='enum Marker<C: Cell> { Value(bool) }', cell=cells)
+    emitted = json.loads(run(text + 'link One = Client<Scalar>; link Two = Client<Other>;'))
     functions = emitted[2]
     selected = {f[1]: f[3] for f in functions if f[1] in ('One', 'Two')}
     assert selected['One'] != selected['Two']
@@ -245,7 +246,7 @@ with case('loaded relation captures exact public partition as a static subject')
     relation = ['zkc.relation.r1cs/1', 'bn254.fr', '3', '0', '1',
                 [[[["1", "1"]], [["2", "1"]], [["0", "6"]]]]]
     asset.write_text(json.dumps(relation))
-    path.write_text(f'''module {{ {IDENTITY}
+    path.write_text(f''' {IDENTITY}
       relation Circuit = r1cs("captured-relation.json");
       interface Preparation {{ type State drop; association Subject;
         local forward(state: State) -> State;
@@ -259,7 +260,7 @@ with case('loaded relation captures exact public partition as a static subject')
         return Prepared::Ready(C::forward(state));
       }}
       link Selected = Forward<ForRelation<Circuit>>;
-    }}''')
+    ''')
     first = commands.source('protocol-resolve', None, path)
     snapshot.write_text(first)
     # The explicit loader emits the common carrier, not a source analysis AST.
@@ -284,14 +285,14 @@ with case('loaded relation captures exact public partition as a static subject')
 
 
 def expand(text, inputs='state: bool, ok: bool', arguments='state, ok'):
-    text = text.rstrip()[:-1] + f"""
+    text = text + f"""
       protocol Test {{
         roles (P); inputs ({', '.join('P ' + p.strip() for p in inputs.split(','))}); outputs (P bool);
         local P: let result = Closed({arguments}); return result;
       }}
       instance Run: Test {{ roles (P = Prover); }}
       entry test = Run;
-    }}"""
+    """
     return commands.source('protocol-expand', text)
 
 
@@ -357,7 +358,7 @@ fn Client<C: Choose>(ok: bool) -> bool {
 link Closed = Client<Runtime>;"""
 
 with case('runtime conditional in selected component member constructs either result'):
-    text = f'module {{ {IDENTITY} {MEMBER} }}'
+    text = f' {IDENTITY} {MEMBER} '
     emitted = run(text)
     assert 'if' in emitted
     expand(text, 'ok: bool', 'ok')

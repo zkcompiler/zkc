@@ -4,8 +4,6 @@ from commands import Commands
 from source_text import COLLISION
 from tools import records
 
-COLLISION = COLLISION.replace("module {", "module { use zkc::core;", 1).replace(
-    "bool::and(x, x)", "zkc::core::and(x, x)")
 
 
 
@@ -28,7 +26,7 @@ def report(text):
 
 # A bound is an assumption, not a spelling for a sort. Their source identities
 # differ even when the body is the same and both configurations are admissible.
-weak = 'module { fn Id<F: domain Field>(x: F::Element) -> F::Element { return x; } }'
+weak = ' fn Id<F: domain Field>(x: F::Element) -> F::Element { return x; } '
 strong = weak.replace("domain Field", "Field")
 assert report(weak)["snapshot"] != report(strong)["snapshot"]
 weak_record = common(weak)
@@ -39,23 +37,23 @@ assert common(run("protocol-format", json.dumps(weak_record))) == weak_record
 # The elaboration report's view of the choice; frontend_pipeline.py checks the
 # same choice as the encoded record's node tag, which is the other surface.
 assert report(COLLISION)["elaborated_calls"][0]["kind"] == "operation"
-helper = COLLISION.replace("zkc::core::and(x, x)", '"bool.and"(x, x)')
+helper = COLLISION.replace("zkc::core::and(x, x)", 'and(x, x)')
 assert report(helper)["elaborated_calls"][0]["kind"] == "algorithm"
 helper_record = common(helper)
 assert common(run("protocol-format", json.dumps(helper_record))) == helper_record
 for name in ("let", "return", "yield", "attributes", "local"):
-    quoted = helper.replace('"bool.and"', json.dumps(name))
+    quoted = helper.replace("fn and", "fn r#" + name).replace("= and(", "= r#" + name + "(")
     record = common(quoted)
     assert common(run("protocol-format", json.dumps(record))) == record
 
 # Inference selects a deterministic member of the constraint-provided equality
 # class. Swapping input order still changes the authored operation; it must not
 # change the selected nominal argument. No artifact-equality claim is made.
-equality = '''module {
+equality = '''
   use zkc::algebra;
   fn Add<F: Field, E: Field>(x: F::Element, y: E::Element) -> F::Element
-    requires ("="(F, E)) { let z = zkc::algebra::add(x, y); return z; }
-}'''
+    where F == E { let z = zkc::algebra::add(x, y); return z; }
+'''
 for text in (equality, equality.replace("add(x, y)", "add(y, x)")):
     assert report(text)["elaborated_calls"][0]["static_arguments"] == ["E"]
 written = equality.replace("zkc::algebra::add(x, y)", "zkc::algebra::add::<F>(x, y)")
@@ -63,52 +61,59 @@ assert report(written)["elaborated_calls"][0]["static_arguments"] == ["F"]
 
 # Malformed equality is rejected at its own declaration, before a later call
 # could receive a misleading operand/type diagnostic.
-malformed = '''module {
+malformed = '''
   fn Id<F: domain Field, G: domain Group>(x: F::Element) -> F::Element
-  requires ("="(F, G)) { return x; }
-}'''
+  where F == G { return x; }
+'''
 error = run("protocol-source", malformed, "generic-equality-sort")
-assert "-:3:13:" in error, error
-run("protocol-source", malformed.replace('"="(F, G)', '"="(F)'), "generic-predicate-arity")
-run("protocol-source", malformed.replace('"="(F, G)', 'Field(G)'), "generic-predicate-sort")
+assert "-:3:9:" in error, error
+run("protocol-source", malformed.replace("where F == G", "requires (Field(F, G))"),
+    "generic-predicate-arity")
+run("protocol-source", malformed.replace("where F == G", "requires (Field(G))"),
+    "generic-predicate-sort")
+# Source equality is binary by construction; a common record can still carry
+# a malformed one, and common admission refuses it.
+unary = common(malformed.replace("domain Group", "domain Field"))
+unary[1][0][3] = [["=", ["F"]]]
+run("protocol-source", json.dumps(unary), "requirements-predicate")
 
 # Generic records may name parameters/projections, not closed catalog identities.
-run("protocol-source", '''module {
-  fn Bad<F: Field>(x: koala-bear::Element) -> koala-bear::Element { return x; }
-}''', "source-generic-term")
-run("protocol-source", weak.replace("{ return x; }", "requires (Field(koala-bear)) { return x; }"),
+run("protocol-source", '''
+  fn Bad<F: Field>(x: "koala-bear"::Element) -> "koala-bear"::Element { return x; }
+''', "source-generic-term")
+run("protocol-source", weak.replace("{ return x; }", "requires (Field(\"koala-bear\")) { return x; }"),
     "source-generic-term")
-wrong_sort = '''module {
+wrong_sort = '''
   fn Id<F: domain Field>(x: F::Element) -> F::Element { return x; }
   fn Use<G: ScalarAction>(x: G::Scalar::Element) -> G::Scalar::Element {
     let y = Id::<G>(x); return y;
   }
-}'''
+'''
 run("protocol-source", wrong_sort, "source-static-sort")
 
 # Concrete associated projections are resolved at the configuration boundary,
 # including the emitted record, rather than only in a private inferred signature.
-config = weak[:-1] + ' configure Closed = Id(F = "bls12-381.g1"::Scalar); }'
+config = weak + ' configure Closed = Id(F = "bls12-381.g1"::Scalar);'
 assert common(config) == common(config.replace('"bls12-381.g1"::Scalar', '"bls12-381.fr"'))
 
 # Empty generic signatures still require explicit protocol-local configuration.
-local = '''module {
+local = '''
   fn Id<>(x: bool) -> bool { return x; }
   configure Closed = Id();
   protocol Demo { roles (P); inputs (P x: bool); outputs (P bool);
     local P: let y = Closed(x); return y; }
-}'''
+'''
 common(local)
 run("protocol-source", local.replace("Closed(x)", "Id(x)"), "source-local-configuration")
 
 # Explicit concrete domains preserve origins. Retired profile headers refuse
 # structurally, and generic declarations cannot capture a concrete domain.
-concrete = '''module {
-  fn Identity(x: bls12-381.fr::Element) -> bls12-381.fr::Element origin Chosen() { return x; }
-}'''
+concrete = '''
+  fn Identity(x: "bls12-381.fr"::Element) -> "bls12-381.fr"::Element origin Chosen() { return x; }
+'''
 assert common(concrete)[2][0][-1] == ["Chosen", []]
 run("protocol-source", concrete.replace(" origin Chosen()", "").replace("Identity(x", "Identity<>(x"), "source-generic-term")
-run("protocol-source", concrete.replace("bls12-381.fr::Element", "Vector"), "source-name-unresolved")
-run("protocol-source", 'module "arkworks.bls12-381/1" {}', "source-syntax")
+run("protocol-source", concrete.replace("\"bls12-381.fr\"::Element", "Vector"), "source-name-unresolved")
+run("protocol-source", 'module "arkworks.bls12-381/1" {}', "source-module-wrapper")
 
 print(f"frontend elaboration: {commands.save()} review regression checks passed")

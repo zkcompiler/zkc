@@ -30,14 +30,14 @@ def write(root, name, text):
 
 
 with case("missing imports retain independent checked types, bodies and uses"):
-    text = f'''module {{
+    text = f'''
       dependency missing = {identity("missing")};
       use missing::Absent;
       fn Dependent(x: bool) -> bool {{ return Absent(x); }}
       fn Transitive(x: bool) -> bool {{ return Dependent(x); }}
       fn Identity(x: bool) -> bool {{ return x; }}
       fn Independent(x: bool) -> bool {{ return Identity(x); }}
-    }}'''
+    '''
     report = analyze(text)
     assert report["state"] == "incomplete", report
     assert "source-dependency-missing" in {d["code"] for d in report["diagnostics"]}
@@ -56,18 +56,18 @@ with case("missing imports retain independent checked types, bodies and uses"):
     commands.source("protocol-source", text, refuses="source-dependency-missing")
 
 with case("resource exhaustion is distinct from an ordinary semantic error"):
-    deep = "module {" + "".join(f"const N{i}:index=N{i+1};" for i in range(70)) + "const N70:index=1;}"
+    deep = "".join(f"const N{i}:index=N{i+1};" for i in range(70)) + "const N70:index=1;"
     report = analyze(deep)
     assert report["phase"] == "resource_limit", report
     assert any(d["code"] == "source-constant-depth" and d["category"] == "resource_limit"
                for d in report["diagnostics"])
     commands.source("protocol-source", deep, refuses="source-constant-depth")
-    invalid = analyze("module {fn Wrong(x: bool) -> index {return x;}}")
+    invalid = analyze("fn Wrong(x: bool) -> index {return x;}")
     assert invalid["phase"] == "semantic_error", invalid
     assert all(d["category"] == "error" for d in invalid["diagnostics"])
 
 with case("source checking never claims admission, execution or a security lint"):
-    report = analyze("module {fn Verify(x: bool) -> bool {return x;}}")
+    report = analyze("fn Verify(x: bool) -> bool {return x;}")
     assert report["state"] == "source_checked", report
     assert report["phases"]["resolution"] == "complete"
     assert report["phases"]["pir_admission"] == "not_requested"
@@ -80,13 +80,13 @@ with case("source checking never claims admission, execution or a security lint"
 
 with case("imported names and semantic edges survive physical relocation"):
     root = record_dir / "relocation"
-    library = f'''module {{ {identity("bits")};
+    library = f''' {identity("bits")};
       pub fn Identity(value: bool) -> bool {{ return value; }}
-    }}'''
-    app = write(root, "app.pir", f'''module {{
+    '''
+    app = write(root, "app.pir", f'''
       dependency bits = {identity("bits")}; use bits::Identity;
       fn Main(value: bool) -> bool {{ return Identity(value); }}
-    }}''')
+    ''')
     lib = write(root, "lib.pir", library)
     before = json.loads(commands.run([compiler, "protocol-analyze", app, f"--library={lib}"]))
     origin = next(d for d in before["resolved_declarations"]
@@ -105,8 +105,8 @@ with case("imported names and semantic edges survive physical relocation"):
 
 with case("a child diagnostic uses its own file and an exact declaration cause"):
     root = record_dir / "diagnostic"
-    app = write(root, "app.pir", "module {mod child;}")
-    child = write(root, "child.pir", "module {fn Wrong(x: bool) -> index {return x;}}")
+    app = write(root, "app.pir", "mod child;")
+    child = write(root, "child.pir", "fn Wrong(x: bool) -> index {return x;}")
     report = json.loads(commands.run([compiler, "protocol-analyze", app]))
     diagnostic = report["diagnostics"][0]
     assert diagnostic["primary"]["file"] == 1, diagnostic
@@ -118,12 +118,12 @@ with case("a child diagnostic uses its own file and an exact declaration cause")
 
 with case("generic common-source names are distinct from resolver symbols"):
     root = record_dir / "generic_names"
-    lib = write(root, "lib.pir", f'''module {{ {identity("generic")};
+    lib = write(root, "lib.pir", f''' {identity("generic")};
       pub fn Identity<F: Field>(value: F::Element) -> F::Element {{ return value; }}
-    }}''')
-    app = write(root, "app.pir", f'''module {{
+    ''')
+    app = write(root, "app.pir", f'''
       dependency generic = {identity("generic")}; use generic::Identity;
-    }}''')
+    ''')
     report = json.loads(commands.run([compiler, "protocol-analyze", app, f"--library={lib}"]))
     assert report["state"] == "source_checked", report
     generic = declaration(report, "Identity")
@@ -135,13 +135,13 @@ with case("generic common-source names are distinct from resolver symbols"):
 
 with case("a failed imported call relates the callee in its owning file"):
     root = record_dir / "related"
-    lib = write(root, "lib.pir", f'''module {{ {identity("numbers")};
+    lib = write(root, "lib.pir", f''' {identity("numbers")};
       pub fn Identity(value: index) -> index {{ return value; }}
-    }}''')
-    app = write(root, "app.pir", f'''module {{
+    ''')
+    app = write(root, "app.pir", f'''
       dependency numbers = {identity("numbers")}; use numbers::Identity;
       fn Main(value: bool) -> bool {{ return Identity(value); }}
-    }}''')
+    ''')
     report = json.loads(commands.run([compiler, "protocol-analyze", app, f"--library={lib}"]))
     assert report["phase"] == "semantic_error", report
     diagnostic = report["diagnostics"][0]
@@ -158,9 +158,9 @@ COMPONENT = '''component Bit: Cell {
 }'''
 HELPERS = '''fn Helper<C: Cell>(value: C::Value) -> C::Value { return C::step(value); }
 fn Client<C: Cell>(value: C::Value) -> C::Value { return Helper::<C>(value); }'''
-LIBRARY = f'''module {{ {identity("calls")}; {INTERFACE} {COMPONENT} {HELPERS}
+LIBRARY = f''' {identity("calls")}; {INTERFACE} {COMPONENT} {HELPERS}
   link Closed = Client<Bit>;
-}}'''
+'''
 
 with case("a failed generic body retains formed interfaces without claiming a link"):
     invalid = LIBRARY.replace("return C::step(value);", "let next = C::step(value); return C::step(value);")
@@ -211,14 +211,14 @@ with case("body edits preserve formed interface and invalidate checked body and 
 
 with case("project inspection retains elaborated calls in every captured owner"):
     root = record_dir / "project_inspection"
-    lib = write(root, "lib.pir", f'''module {{ {identity("inspection")};
+    lib = write(root, "lib.pir", f''' {identity("inspection")};
       fn Private(value: bool) -> bool {{ return value; }}
       pub fn Public(value: bool) -> bool {{ return Private(value); }}
-    }}''')
-    app = write(root, "app.pir", f'''module {{
+    ''')
+    app = write(root, "app.pir", f'''
       dependency bits = {identity("inspection")}; use bits::Public;
       fn Main(value: bool) -> bool {{ return Public(value); }}
-    }}''')
+    ''')
     report = json.loads(commands.run([compiler, "protocol-inspect", app, f"--library={lib}"]))
     calls = report["elaborated_calls"]
     assert len(calls) == 2, calls

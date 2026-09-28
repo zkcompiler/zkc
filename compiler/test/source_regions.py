@@ -90,7 +90,7 @@ for captures, returned, index in [
     with case(f"captures {captures}, returning operand {returned}"):
         params = ", ".join(f"%c{i}: {FIELD_IR}" for i in range(len(captures)))
         types = ", ".join(["!pir.flow"] + [FIELD_IR] * len(captures))
-        mapping = f'''module {{
+        mapping = f'''
   "pir.program"() <{{context = "{ctx}", resultType = {FIELD_IR}, sourceFormat = "region-source-1"}}> ({{
   ^bb0(%flow: !pir.flow, %x: {FIELD_IR}, %y: {FIELD_IR}):
     %after, %value = "pir.bind"(%flow, {", ".join(captures)}) ({{
@@ -99,7 +99,7 @@ for captures, returned, index in [
     }}) : ({types}) -> (!pir.flow, {FIELD_IR})
     "pir.return"(%after, %value) : (!pir.flow, {FIELD_IR}) -> ()
   }}) : () -> ()
-}}'''
+'''
         assert planned(commands, mapping, directory)[9] == [
             "bind",
             FIELD,

@@ -232,16 +232,16 @@ def main():
     modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
     rng = random.Random(418920)
     for value in [0, 1, modulus - 1, modulus, modulus + 1, 10**1023] + [rng.randrange(10**180) for _ in range(20)]:
-        literal = f"""module {{
+        literal = f"""
   use zkc::algebra;
               fn Literal<F: domain Field>() -> (F::Element) requires (Field(F)) {{
                 [constant] let result = zkc::algebra::constant::<F>() attributes (\"{value}\"); return (result);
               }}
-              configure Number = Literal(F = bls12-381.fr);
+              configure Number = Literal(F = "bls12-381.fr");
               protocol P {{ roles (A); inputs (); outputs (A "bls12-381.fr"::Element);
                 local [call] A: let value = Number(); return (value); }}
               instance p: P {{ roles (A = A); }} entry main = p;
-            }}"""
+            """
         original, compiled = native("protocol-source", literal), native("protocol-compile", literal)
         f = compiled[3][0]
         check(original, compiled, "Number", f[1])

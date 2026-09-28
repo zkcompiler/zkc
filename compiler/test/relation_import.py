@@ -135,16 +135,16 @@ for field, prime in FIELDS.items():
     # Local libraries currently need a field with table/point/PCS support.
     if field == "bls12-381.fr":
         code = run("relation-compile", model, "Circuit")
-        assert b"vector::scatter_sum" in code and b"vector::constant" in code
+        assert b'"vector.scatter_sum"' in code and b'"vector.constant"' in code
         invoke(compiler, "protocol-import", "-", data=code)
         staged = run("relation-compile-data", model, "Circuit")
-        assert b"matrix::mul_vector" in staged and b"matrix::bilinear" in staged
-        assert b"vector::scatter_sum" not in staged
+        assert b'"matrix.mul_vector"' in staged and b'"matrix.bilinear"' in staged
+        assert b'"vector.scatter_sum"' not in staged
         invoke(compiler, "protocol-import", "-", data=staged)
         changed[3:5] = model[3:5]
         changed[5][0][0][0][1] = "2"
         assert run("relation-compile-data", changed, "Circuit") != staged
-        assert b"matrix::identity_check" in staged
+        assert b'"matrix.identity_check"' in staged
         assert run("relation-compile", changed, "Circuit") != code
         matrices = json.loads(run("relation-matrices", model))
         assert matrices == [["2", "4", [["0", str(c), "1"]]] for c in (2, 3, 1)]
@@ -193,7 +193,7 @@ invoke(
 # must remain usable even when embedding its indices into code is refused.
 large = canonical("bls12-381.fr", rows=[[[["0", "1"]], [], []]] * 16384)
 run("relation-compile", large, refuses="relation-specialization-attributes")
-assert b"matrix::mul_vector" in run("relation-compile-data", large)
+assert b'"matrix.mul_vector"' in run("relation-compile-data", large)
 public = canonical("bls12-381.fr", rows=[], columns=130, outputs=0, inputs=129)
 run("relation-compile-data", public, refuses="relation-public-opening-limit")
 long_coefficients = canonical(

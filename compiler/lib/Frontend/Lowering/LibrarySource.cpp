@@ -54,7 +54,7 @@ public:
           if (!bound.identity.empty()) {
             syntax::Type argument;
             argument.name = bound.identity;
-            argument.quoted = true;
+            argument.kind = syntax::Atom::Kind::String;
             t.arguments.push_back(std::move(argument));
           }
           for (const auto &argument : bound.arguments) {
@@ -63,9 +63,9 @@ public:
             else {
               syntax::Type value;
               value.name = argument.spelling();
-              value.natural =
-                  argument.kind == protocol::TypeArgument::Kind::Nat;
-              value.quoted = !value.natural;
+              value.kind = argument.kind == protocol::TypeArgument::Kind::Nat
+                               ? syntax::Atom::Kind::Number
+                               : syntax::Atom::Kind::String;
               t.arguments.push_back(std::move(value));
             }
           }
@@ -126,7 +126,7 @@ public:
         t.name = "Array";
         syntax::Type extent;
         extent.location = result.location;
-        extent.natural = true;
+        extent.kind = syntax::Atom::Kind::Number;
         extent.name = std::to_string(count);
         t.arguments = {std::move(*element), std::move(extent)};
         return t;

@@ -29,7 +29,7 @@ notation is summarized in the [source reference](reference.md).
 ```text
 bundle PairingArithmetic(F) = (
   ScalarAction(F::PairingG1), ScalarAction(F::PairingG2),
-  "="(F::PairingG1::Scalar, F), "="(F::PairingG2::Scalar, F)
+  F::PairingG1::Scalar == F, F::PairingG2::Scalar == F
 );
 fn Verify<F: PairingField>(...) -> bool requires (PairingArithmetic(F)) { ... }
 ```
@@ -41,7 +41,9 @@ bundle's requirements in declared order with arguments substituted for
 parameters. A bundle body may use other bundles; expansion is recursive.
 Duplicates are kept, as the existing requirement order rule already keeps them.
 The stored requirements are therefore exactly what the author would have
-written by hand, and the existing checker sees nothing new.
+written by hand, and the existing checker sees nothing new. An equality
+requirement is written `A == B` in any requirement list, as in a `where` clause;
+it stores the common `=` predicate over both terms.
 
 | Refusal | Code |
 |---|---|
@@ -61,13 +63,13 @@ bundle has no sort and is refused there (`source-bound`).
 
 ```text
 use zkc::algebra::Vector;
-struct VerifyingKey<F: domain Field>(
+struct VerifyingKey<F: domain Field> {
   input_query: Vector<F::PairingG1::Element>,
   alpha: F::PairingG1::Element,
   beta: F::PairingG2::Element
-);
+}
 
-let vk = VerifyingKey(input_query = q, alpha = a, beta = b);
+let vk = VerifyingKey{ input_query: q, alpha: a, beta: b };
 let x = vk.alpha;
 ```
 
@@ -78,27 +80,25 @@ A struct records no capability assumption, so a capability bound on a struct
 parameter is refused (`source-struct-bound`) instead of being dropped silently.
 Capabilities remain promises of the functions that use the struct.
 
-The parenthesized forms remain accepted. Declarations also accept
-`struct Pair { left: T, right: T }`, and construction accepts
-`Pair { left: x, right: y }` or field shorthand. The
-[source product guide](values.md#products-local-blocks-and-distributed-outputs)
-explains brace syntax and named function arguments.
+Declarations use `struct Pair { left: T, right: T }`; construction uses
+`Pair { left: x, right: y }` or field shorthand. Parenthesized declarations and
+keyed parenthesized construction are rejected. Named runtime call arguments
+use `:`, while static configuration bindings use `=`.
 
-**Flattening.** A struct value is its leaves: the fields in declaration order,
-nested structs expanded depth first. A binding `vk` of struct type is the
-ordinary values `vk.input_query`, `vk.alpha`, `vk.beta`. These are legal value
-names already, and the lexer reads `vk.alpha` as one name, so a field read is
-an ordinary name reference and needs no operation. A parameter `vk: VerifyingKey<F>`
-becomes the parameters `vk.input_query`, `vk.alpha`, `vk.beta`; a struct result
-occupies as many result positions as it has leaves. Declaring a value whose
-name collides with a leaf, or with the struct binding itself, is the existing
-duplicate-binding error.
+**Flattening.** Records keep nominal identity and field structure until checked.
+Lowering then lays out fields in declaration order, recursively expanding nested
+records. Internal leaf names such as `vk.alpha` are common-carrier data, not
+legal ordinary binders or an alternative interpretation of source punctuation.
+A source `vk.alpha` is a typed field projection and emits no operation merely
+for selecting a structural leaf.
 
-**Construction.** `Name(field = expr, ...)` names every field exactly once, in
-any order. Initializers are evaluated in written order; the leaves are then
-arranged in declaration order. Construction emits no operation. Static
-arguments are inferred from the initializers by the rule already used for
-calls, or written as `Name::<F>(...)`. Nullary structs are refused.
+**Construction.** `Name { field: expr, ... }` names every field exactly once, in
+any order. Initializers evaluate once in written order; leaves are then arranged
+in declaration order. Static arguments are inferred under existing rules or
+written as `Name::<F> { ... }`. Qualified heads such as `types::Name { ... }`
+use the same constructor resolver and retain visibility, nominal compatibility
+and restricted-constructor authority. Existing applied generic record checker
+limits remain. Nullary structs are refused.
 
 **Use.** A struct value may be passed where a parameter of the same struct and
 equal static arguments is declared, returned, bound with `let`, and read by
@@ -181,8 +181,8 @@ The installed arithmetic bindings are:
 easily as an elementwise product, so both stay named.
 
 Precedence is fixed: unary minus, then `*`, then `+` and `-`; binary operators
-associate to the left. Parentheses group. Names may contain `-`, so `a-b` is
-one name; a binary minus is written with a space before it.
+associate to the left. Parentheses group. Names never contain `-`, so `a-b` and
+`a - b` are the same subtraction.
 
 **Resolution.** The key is the hook and ordered tuple of resolved nominal
 constructor heads, such as `field`, `group`, `vector` or a particular source
@@ -217,11 +217,11 @@ operator sugar uses the installed operation's default binding.
 
 ```text
 use zkc::algebra::Vector;
-checked struct BoundAssignment<F: domain Field>(
+checked struct BoundAssignment<F: domain Field> {
   assignment: Vector<F::Element>,
   statement: Vector<F::Element>,
   private_assignment: Vector<F::Element>
-) constructors (BindAssignment);
+} constructors(BindAssignment);
 ```
 
 The brace form can state the same restriction without the `checked` keyword:

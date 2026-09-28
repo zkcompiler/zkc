@@ -59,7 +59,7 @@ For the numerical Plonky3 example, substitute `folded-contraction`. Its input
 fixture folds `[1,2,3,4]` and `[5,6,7,8]` at 2, producing `[5,6]` and `[9,10]`.
 The weighted contraction is `2*5*9 + 3*6*10 = 270`. The checker supplies that
 expected result. The generic functions retain their actual algorithms; the
-configuration selects `koala-bear`, and physical planning selects installed
+configuration selects `"koala-bear"`, and physical planning selects installed
 implementations. This is an executable interaction testing the numerical path,
 not a cryptographic argument that the worker computed correctly. There is no
 KoalaBear transcript or PCS installation in this example.

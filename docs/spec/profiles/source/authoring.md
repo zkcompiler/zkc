@@ -41,7 +41,10 @@ as an authority. It is self-contained and cannot declare imports, exports,
 source interfaces, components, source records or relation assets. It admits the
 same portable function, binding, configuration, protocol, instance and entry
 records as the corresponding carrier. Reading it still checks formation and
-PIR admission; printing it must round-trip to the exact same carrier. It cannot
+PIR admission directly, without authored resolution, checking or instantiation.
+Printing must reread the final formatted output and recover the exact common
+record, excluding diagnostic spans. Both text and JSON carriers refuse authored
+Analysis and produce no `SourceChecked` value. It cannot
 be captured as a source library or child module, and does not recover private
 library interfaces from emitted code. Construction uses the carrier's existing
 selector interpretation, without applying source-project aliases again.
@@ -49,6 +52,30 @@ The printer qualifies installed type constructors by their module path. The
 carrier reader also accepts an unqualified export name when it identifies one
 constructor; it refuses an ambiguous name. Source export aliases do not change
 logical type identity or grant additional carrier authority.
+
+## File and value notation
+
+Ordinary files contain declarations directly and terminate at EOF. Empty and
+comment-only files are syntactically valid. An unmatched closing brace or an
+unfinished declaration refuses; the old ordinary wrapper is not accepted.
+Construction descriptors and explicit carriers keep their separate document forms.
+
+Runtime projections are structural: `.field` for records, `.N` for products,
+`[index]` for source arrays and supported collections. Suffixes compose after
+calls and aggregate expressions. Literal-indexed source arrays retain their
+existing support; dynamic aggregate indexing is not added. `.len()` is the fixed
+query on supported bulk types, not method dispatch or implicit borrowing.
+
+Projecting a temporary means forming a fresh scoped binding and applying the
+owning source permission judgment to it. Evaluation occurs once; all maximal
+disjoint unselected siblings must be droppable, including zero-leaf nominal
+values. Captures retain typed source places and their obligations before physical
+flattening. Checked clients are judged abstractly before concrete selection.
+
+A value path may resolve an existing constant where the slot already admits
+constant materialization, including function/local return expressions. Protocol
+return, finish, message and capture slots remain references and introduce no
+hidden computation. Assignment still requires an existing mutable scalar place.
 
 ## Captured projects
 
@@ -70,16 +97,15 @@ Dependency and alias cycles refuse. Source resolution neither chooses a package
 version nor trusts an ambient declaration with a matching printed name.
 
 Reference authorization is category-specific. Runtime value binders do not
-shadow type, static or module paths. Quoted exact authored names still require
-lexical visibility; generated implementation symbols are not source authority.
-An authored name may contain dots. An unquoted dotted reference that names such
-a declaration in scope and is also a path through modules, imports or a
-dependency refuses as ambiguous, whether or not the path's target is visible
-there. Both candidates must authorize the complete reference in the requested
-category; a namespace prefix alone is not a competing declaration. Quoting a
-call or a declaration reference names the authored declaration. Other categories
-require an unambiguous spelling or alias, since quoted type/static vocabulary
-already has its own meaning.
+shadow type, static or module paths. Ordinary identifiers use strict ASCII
+`[A-Za-z_][A-Za-z0-9_]*`; raw identifiers decode to the same name and never act as
+keywords. The reserved set is defined in the [syntax reference](../../../language/reference.md).
+Quoted, dotted and hyphenated ordinary declarations refuse. Declaration and
+associated references use segmented `::` paths; dots select runtime fields or
+product positions. There is no alternative dotted declaration interpretation.
+Generated implementation symbols are not source authority, including when raw.
+Exact labels and carrier names remain data and preserve punctuation.
+
 A nominal declaration can share a printed spelling with an installed type because
 its resolved identity and emitted symbol are distinct. It affects only references
 that resolve to that declaration, never installed references in another module.
@@ -134,8 +160,9 @@ backend implementations. Import aliases and reexports preserve the selected
 contract identity. The checked environment retains its whole-installation
 identity; selecting fewer imports does not define a narrower identity policy.
 
-Installed domain identities, raw domain sorts and capability predicates remain
-available globally. This profile does not redesign the domain catalog. Imported
+Exact installed domain identities are quoted, even when identifier-shaped.
+Unquoted domain roots require lexical lookup. Raw domain sorts and capability
+predicates retain their existing availability. This profile does not redesign the domain catalog. Imported
 capability names and their aliases can express the same bounds, for example
 `use zkc::algebra; fn Foo<F: algebra::Field>(x: F::Element) -> F::Element`.
 An associated `Element` projection uses the domain's sort and installed
@@ -147,8 +174,8 @@ unlisted cases refuse. Checking neither leaves an unconstrained type application
 nor inverts a family equation to infer an unknown element type. Core `bool` and
 `index`, structural `Array`, and `ResourceUnit` remain available without imports.
 
-An explicit `bind` applies an installed logical contract, independently of its
-curated source spelling. In an authored module its target must permit the
+An explicit `bind add = "field.add"("koala-bear");` applies an exact quoted
+logical contract ID, independently of its curated source spelling. In an authored module its target must permit the
 `Source` authoring stage. Importing a module, naming a contract directly or
 selecting an implementation cannot bypass that check. Transcript operations are
 construction-only and have no public source exports; importing
@@ -166,7 +193,9 @@ forms a source projection; the dotted spelling of an opaque identity is not an
 implicit projection. A quoted root denotes a concrete identity, not a bound
 parameter. Emission must preserve the distinction
 between a bound parameter and a concrete identity even when spelling collides;
-a carrier that cannot encode the distinction must rename lawfully or refuse.
+a common term that cannot encode the distinction must refuse before erasure.
+A shared representability check owns that refusal; emission does not silently
+rename portable binders.
 
 A source type is a logical type application, an instance of a nominal
 record declaration, an ordered product of source types, or a finite homogeneous
@@ -177,6 +206,10 @@ parameters and their associated projections. Two records with the same leaf
 layout remain different source types. Two distinct domain parameters may select
 the same domain; substitution need not be injective. An array is not a product,
 and zero length does not erase its element identity before source checking.
+
+Records use brace declarations and brace construction only. Named runtime
+arguments use `:`, static configuration bindings use `=`, and qualified record
+heads retain the same constructor authority as aliases.
 
 A record construction checks its declared fields, static arguments and constructor
 authority before layout erasure. Field expressions execute exactly once in written
@@ -232,8 +265,11 @@ A participant placement block checks in a lexical environment containing only
 that participant's available values. The block uses the same local computation
 language as a function. Its final expression (or final explicit return) yields a
 local value; its internal bindings do not escape. Closure conversion creates a
-local algorithm and passes exactly its used free leaves. It must not capture an
-unused resource or a peer's private value. Communication remains a separate
+local algorithm. It checks the used free places and their source-level obligations
+before flattening them into arguments, including obligations on types with no
+runtime storage. A selected record field is captured precisely; indexing a bulk
+collection captures that collection and the index's dependencies. It must not
+capture an unused resource or a peer's private value. Communication remains a separate
 protocol action; it is not inferred from a local reference.
 
 Named call arguments and record fields evaluate once in their written order.

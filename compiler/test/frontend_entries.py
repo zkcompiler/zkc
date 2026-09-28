@@ -7,8 +7,8 @@ from tools import records
 
 commands = Commands(records())
 
-AGGREGATE = """module { library(namespace="test", name="entries", version="1", resolution="one");
-  struct Held(empty: Array<bool, 0>, pair: (bool, bool));
+AGGREGATE = """ library(namespace="test", name="entries", version="1", resolution="one");
+  struct Held { empty: Array<bool, 0>, pair: (bool, bool) }
   fn Echo(input: Held) -> Held { return input; }
   link Closed = Echo<>;
   configure Configured = Echo();
@@ -16,13 +16,13 @@ AGGREGATE = """module { library(namespace="test", name="entries", version="1", r
   component Unit: Cell { type Value = (); local step(x: Value) -> Value { return x; } }
   fn Client<C: Cell>(x: C::Value, data: Held) -> (C::Value, Held) { return (C::step(x), data); }
   link Mixed = Client<Unit>;
-}"""
-TICKET = """module { library(namespace="test", name="entries", version="1", resolution="one");
-  checked struct Ticket(value: bool) constructors(Make);
-  fn Make(value: bool) -> Ticket { return Ticket(value = value); }
+"""
+TICKET = """ library(namespace="test", name="entries", version="1", resolution="one");
+  checked struct Ticket { value: bool } constructors(Make);
+  fn Make(value: bool) -> Ticket { return Ticket{ value: value }; }
   fn Echo(x: Ticket) -> Ticket { return x; }
   link Closed = Echo<>;
-}"""
+"""
 
 with case("link, configure and self-link preserve the same aggregate boundary"):
     module = json.loads(commands.source("protocol-source", AGGREGATE))
@@ -59,12 +59,12 @@ with case("linked result construction cannot bypass checked record authority"):
     commands.source("protocol-source", source)
 
 with case("projected and canonical field spellings have one linked layout"):
-    source = """module {
+    source = """
       library(namespace="test", name="entries", version="1", resolution="one");
-      struct Held(x: bls12-381.g1::Scalar::Element, y: bls12-381.fr::Element);
+      struct Held { x: "bls12-381.g1"::Scalar::Element, y: "bls12-381.fr"::Element }
       fn Echo(value: Held) -> Held { return value; }
       link Closed = Echo<>;
-    }"""
+    """
     module = json.loads(commands.source("protocol-source", source))
     functions = {f[1]: f for f in module[2]}
     entry = functions["Closed"]
@@ -72,25 +72,25 @@ with case("projected and canonical field spellings have one linked layout"):
     assert entry[3] == ["field:bls12-381.fr", "field:bls12-381.fr"]
 
 with case("generated entries reserve aliases during static specialization"):
-    source = """module {
+    source = """
       library(namespace="test", name="entries", version="1", resolution="one");
       fn Echo(x: (bool, bool)) -> (bool, bool) { return x; }
       link __stage_45_protocol_726f6f74 = Echo<>;
       protocol Family<F: Field> {
         roles (P); inputs (P x: F::Element); outputs (P F::Element); return x;
       }
-      entry E = Family::<F = koala-bear>;
-    }"""
+      entry E = Family::<F = "koala-bear">;
+    """
     for shape in ("bool", "(bool, bool)"):
         commands.source("protocol-source", source.replace("(bool, bool)", shape),
                         refuses="source-static-duplicate")
 
 with case("authored alias collisions have one declaration diagnostic"):
     for shape in ("bool", "(bool, bool)"):
-        source = f'''module {{
+        source = f'''
           library(namespace="test", name="collision", version="1", resolution="one");
           fn Echo(x: {shape}) -> {shape} {{ return x; }}
           link Alias = Echo<>;
           fn Alias(x: {shape}) -> {shape} {{ return x; }}
-        }}'''
+        '''
         commands.source("protocol-source", source, refuses="source-duplicate-symbol")

@@ -112,6 +112,7 @@ add_zkc_component(ClaimTranslation
 )
 add_zkc_component(Frontend
   lib/Frontend/Analysis.cpp
+  lib/Frontend/Carrier/Reader.cpp
   lib/Frontend/Compile.cpp
   lib/Frontend/Diagnostic.cpp
   lib/Frontend/Input.cpp

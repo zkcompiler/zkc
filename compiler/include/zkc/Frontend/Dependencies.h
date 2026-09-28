@@ -5,7 +5,6 @@
 #include "zkc/Frontend/Input.h"
 
 namespace zkc::frontend {
-enum class SourceForm { Unknown, Module, CarrierModule, Construction };
 
 struct ModuleReference {
   std::string name;
@@ -26,8 +25,10 @@ struct LibraryDependency {
 };
 
 /// Owned dependency spelling and declaration classification, without filesystem
-/// access, relation decoding, name resolution, or semantic admission. Locations
-/// use the caller's snapshot-local file ID and byte offsets in the input.
+/// access, name resolution, or semantic admission. Authored declarations are
+/// inspected without decoding their relation assets. Common documents are
+/// structurally decoded and have no authored dependencies. Locations use the
+/// caller's snapshot-local file ID and byte offsets in the input.
 struct DependencyDeclarations {
   SourceForm form = SourceForm::Unknown;
   std::optional<source::Span> location;
@@ -48,7 +49,8 @@ struct DependencyDeclarations {
 /// Inspect textual frontend syntax using the ordinary recovering parser.
 /// Malformed declarations are omitted by that parser; fully recognized ones
 /// retain their spelling even when a later declaration fails. Portable JSON
-/// documents use parseProtocolDocument and contain no external requests.
+/// documents and carrier text contain no external requests and are classified
+/// explicitly. Neither is an authored project dependency.
 DependencyDeclarations inspectDependencies(const Input &, uint32_t file = 0);
 } // namespace zkc::frontend
 #endif

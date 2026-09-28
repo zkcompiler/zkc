@@ -126,16 +126,19 @@ def main():
 
     # A domain-independent collection crosses participant transport with values that
     # cannot be represented injectively in the KoalaBear base field.
-    transport = '''module {
+    transport = '''
+ use zkc::algebra::Indices;
+ use zkc::algebra;
  fn Make<>(x:index) -> (Indices) {
-   let e = indices::empty(); let a = indices::append(e,x); let b = indices::append(a,x); return (b);
+   let e = zkc::algebra::indices_empty(); let a = zkc::algebra::indices_append(e,x);
+   let b = zkc::algebra::indices_append(a,x); return (b);
  }
  configure Build = Make();
  protocol Main { roles(P,V); inputs(P x:index); outputs(V Indices);
    local P: let xs = Build(x); message indices: P(xs) -> V(ys); return (ys);
  }
  instance concrete: Main {roles(P=P,V=V);} entry main=concrete;
-}'''
+'''
     source=compile_source('index-transport',transport)
     exercise('index-transport',source,'koala-bear',[('x','index',2**64-1)],ports=('P','V'))
     journal.run([compiler,'protocol-compile','-'],base.replace('requires (TwoAdicField(F), CharacteristicNotTwo(F))','requires (Field(F))'), 'generic-public-requirement')

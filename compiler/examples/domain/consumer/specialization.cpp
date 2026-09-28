@@ -30,17 +30,17 @@ template <typename T> T take(Expected<T> value) {
   return std::move(*value);
 }
 
-constexpr StringLiteral functionSource = R"(module {
-  bind first_add = field.add(koala-bear);
-  bind second_add = field.add(koala-bear);
-  bind unused_mul = field.mul(koala-bear);
-  fn SumThree(x: koala-bear::Element, y: koala-bear::Element,
-              z: koala-bear::Element) -> koala-bear::Element {
+constexpr StringLiteral functionSource = R"(
+  bind first_add = "field.add"("koala-bear");
+  bind second_add = "field.add"("koala-bear");
+  bind unused_mul = "field.mul"("koala-bear");
+  fn SumThree(x: "koala-bear"::Element, y: "koala-bear"::Element,
+              z: "koala-bear"::Element) -> "koala-bear"::Element {
     [first] let partial = first_add(x, y);
     [second] let result = second_add(partial, z);
     return result;
   }
-})";
+)";
 
 // Authored independently of the frontend result and transformation output.
 // In particular, the unused declaration and the two distinct binding/site
@@ -71,28 +71,28 @@ zkc::source::Module expectedFunction() {
   return module;
 }
 
-constexpr StringLiteral participantSource = R"(module {
-  bind first_add = field.add(koala-bear);
-  bind second_add = field.add(koala-bear);
-  bind unused_mul = field.mul(koala-bear);
-  fn SumThree(x: koala-bear::Element, y: koala-bear::Element,
-              z: koala-bear::Element) -> koala-bear::Element {
+constexpr StringLiteral participantSource = R"(
+  bind first_add = "field.add"("koala-bear");
+  bind second_add = "field.add"("koala-bear");
+  bind unused_mul = "field.mul"("koala-bear");
+  fn SumThree(x: "koala-bear"::Element, y: "koala-bear"::Element,
+              z: "koala-bear"::Element) -> "koala-bear"::Element {
     [first] let partial = first_add(x, y);
     [second] let result = second_add(partial, z);
     return result;
   }
   protocol SendSum {
     roles(P, V);
-    inputs(P x: koala-bear::Element, P y: koala-bear::Element,
-           P z: koala-bear::Element);
-    outputs(V koala-bear::Element);
+    inputs(P x: "koala-bear"::Element, P y: "koala-bear"::Element,
+           P z: "koala-bear"::Element);
+    outputs(V "koala-bear"::Element);
     local P: let total = SumThree(x, y, z);
     message sum: P(total) -> V(received);
     return received;
   }
   instance run: SendSum { roles(P = prover, V = verifier); }
   entry main = run;
-})";
+)";
 
 zkc::Compilation compile(StringRef text, zkc::ProtocolAction action) {
   DialectRegistry registry;

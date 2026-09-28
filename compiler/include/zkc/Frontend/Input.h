@@ -9,6 +9,20 @@
 #include <vector>
 
 namespace zkc::frontend {
+/// Select an input grammar without parsing, loading dependencies, or admitting
+/// its contents. Malformed input remains the selected reader's responsibility.
+enum class SourceForm {
+  Unknown,
+  Module,
+  CarrierModule,
+  CommonJSON,
+  Construction
+};
+SourceForm classifyDocument(llvm::StringRef text);
+inline bool isCommonDocument(SourceForm form) {
+  return form == SourceForm::CarrierModule || form == SourceForm::CommonJSON;
+}
+
 /// Immutable source snapshot. No filesystem access or driver state is retained.
 class Input {
   enum class Kind { File, Stream };

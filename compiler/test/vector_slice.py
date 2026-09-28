@@ -12,7 +12,7 @@ directory = commands.directory
 source = Path(directory) / "slice.pir"
 for field in fields:
     with case(f"vector slice over {field}"):
-        source.write_text('''module {
+        source.write_text('''
   use zkc::algebra::{Vector};
   use zkc::algebra;
           fn Slice<F: domain Field>(a: Vector<F::Element>, start: index, length: index)
@@ -20,7 +20,7 @@ for field in fields:
             let result = zkc::algebra::vector_slice::<F>(a, start, length);
             return result;
           }
-          configure Concrete = Slice(F = FIELD);
+          configure Concrete = Slice(F = "FIELD");
           protocol Main {
             roles (P);
             inputs (P a: Vector<"FIELD"::Element>, P start: index, P length: index);
@@ -30,7 +30,7 @@ for field in fields:
           }
           instance concrete: Main { roles (P = P); }
           entry main = concrete;
-        }'''.replace("FIELD", field))
+        '''.replace("FIELD", field))
         printed = commands.run([compiler, "protocol-compile", source])
         physical = json.loads(printed)
         assert "vector.slice" in printed and field in printed

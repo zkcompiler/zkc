@@ -9,8 +9,6 @@ from commands import Commands
 from source_text import COLLISION
 from tools import compiler, examples, records
 
-COLLISION = COLLISION.replace("module {", "module { use zkc::core;", 1).replace(
-    "bool::and(x, x)", "zkc::core::and(x, x)")
 
 
 root = Path(__file__).resolve().parents[2]
@@ -76,22 +74,23 @@ for stem in ("two-factor", "committed-two-factor", "dleq"):
         "protocol-compile", text=encode(constructed)
     ).stdout
 
-# Roles are explicit declarations, including more than two roles. Names
-# containing '-' and zero-result calls exercise token boundaries.
-relay = '''module {
-      fn Identity(a: bls12-381.fr::Element) -> (bls12-381.fr::Element) { return (a); }
+# Roles are explicit declarations, including more than two roles. Quoted
+# domain identities containing '-' and zero-result calls exercise token
+# boundaries.
+relay = '''
+      fn Identity(a: "bls12-381.fr"::Element) -> ("bls12-381.fr"::Element) { return (a); }
       protocol Relay {
         roles (Alice, Bob, Checker);
-        inputs (Alice input-value: bls12-381.fr::Element);
-        outputs (Checker bls12-381.fr::Element);
-        local [copy] Alice: let owned = Identity(input-value);
+        inputs (Alice input_value: "bls12-381.fr"::Element);
+        outputs (Checker "bls12-381.fr"::Element);
+        local [copy] Alice: let owned = Identity(input_value);
         message [first] scalar: Alice(owned)->Bob(received);
         message [second] scalar: Bob(received)->Checker(result);
         return (result);
       }
       instance relay: Relay { roles (Alice=Alice, Bob=Bob, Checker=Checker); }
       entry main = relay;
-    }'''
+    '''
 parsed = json.loads(run("protocol-source", text=relay).stdout)
 projected = json.loads(run("protocol-project", text=relay).stdout)
 assert [p[3] for p in projected[4]] == ["Alice", "Bob", "Checker"]
@@ -113,10 +112,10 @@ assert json.loads(run("protocol-source", text=formatted).stdout) == parsed
 
 # Empty modules and external bodies remain declarations, not executable
 # protocol implementations. Unknown role ownership uses existing admission.
-run("protocol-source", text='module {}')
+run("protocol-source", text='')
 external = relay.replace(
-    "fn Identity(a: bls12-381.fr::Element) -> (bls12-381.fr::Element) { return (a); }",
-    "fn Identity(a: bls12-381.fr::Element) -> (bls12-381.fr::Element) external;",
+    "fn Identity(a: \"bls12-381.fr\"::Element) -> (\"bls12-381.fr\"::Element) { return (a); }",
+    "fn Identity(a: \"bls12-381.fr\"::Element) -> (\"bls12-381.fr\"::Element) external;",
 )
 run("protocol-source", text=external)
 run("protocol-compile", text=external, refuses="interactive-external-body")
@@ -130,7 +129,7 @@ assert f"{bad_file}:{bad_line}:" in error.stderr, error.stderr
 assert "local [copy] Bob" in error.stderr
 run("protocol-source", text=relay.replace("[second]", "[first]"),
     refuses="interactive-site")
-run("protocol-source", text=relay.replace("Identity(input-value)", "Identity(absent)"),
+run("protocol-source", text=relay.replace("Identity(input_value)", "Identity(absent)"),
     refuses="source-name-unresolved")
 run("protocol-source", text=relay.replace("roles (Alice, Bob, Checker);", "roles ();"),
     refuses="source-protocol-role")
@@ -148,22 +147,23 @@ for nesting in (0, 3):
         for level in range(nesting):
             body = (f'loop [l{level}] 1 carry () -> () {{\n{body}\n}}\n'
                     + ('return ();' if level == nesting - 1 else 'yield ();'))
-        broken = ('module {\nprotocol Broken {\nroles (P);\n'
+        broken = ('protocol Broken {\nroles (P);\n'
                   + body + '\n}\n'
                   + ''.join(f'fn F{i}() -> () external;\n'
                                 f'protocol Z{i} {{ roles (P); external; }}\n'
-                            for i in range(padding)) + '}')
+                            for i in range(padding)))
         expected_line = next(i for i, line in enumerate(broken.splitlines(), 1)
                              if '(absent)' in line)
         diagnostic = run("protocol-source", text=broken, refuses="source-name-unresolved")
-        assert f'-:{expected_line}:1:' in diagnostic.stderr, diagnostic.stderr
-cycle = '''module {
+        expected_column = broken.splitlines()[expected_line - 1].index('absent') + 1
+        assert f'-:{expected_line}:{expected_column}:' in diagnostic.stderr, diagnostic.stderr
+cycle = '''
 protocol A { roles (P); dependencies (b: B()); invoke [ab] b() -> (); return (); }
 protocol B { roles (P); dependencies (a: A()); invoke [ba] a() -> (); return (); }
 protocol Z { roles (P); return (); }
 instance z: Z { roles (P = P); }
 entry main = z;
-}'''
+'''
 diagnostic = run("protocol-source", text=cycle, refuses="interactive-call-cycle")
 assert '-:2:1:' in diagnostic.stderr, diagnostic.stderr
 
@@ -171,24 +171,24 @@ assert '-:2:1:' in diagnostic.stderr, diagnostic.stderr
 # states. Formatting must retain their tokens/comments and still reject them
 # at the admission wrapper. JSON-to-text retains its admitted-only contract.
 edits = [
-    (relay.replace("Identity(input-value)", "Missing(input-value)"),
+    (relay.replace("Identity(input_value)", "Missing(input_value)"),
      "source-name-unresolved"),
-    (relay.replace("Identity(input-value)", "Identity(absent)"),
+    (relay.replace("Identity(input_value)", "Identity(absent)"),
      "source-name-unresolved"),
-    (relay.replace("outputs (Checker bls12-381.fr::Element);", "outputs (Checker unknown);"),
+    (relay.replace("outputs (Checker \"bls12-381.fr\"::Element);", "outputs (Checker unknown);"),
      "source-name-unresolved"),
-    ('''module {
+    ('''
   use zkc::poly::{Table};
   use zkc::poly;
           fn Fold<F: domain Field>(a: Table<F>, r: F::Element) -> (Table<F>) {
-            let b = zkc::poly::fold::<F>(a, r); // missing public requirement
+            let b = zkc::poly::r#fold::<F>(a, r); // missing public requirement
             return (b);
           }
-        }''', "generic-public-requirement"),
-    ('''module { fn Bad<>() -> () {
+        ''', "generic-public-requirement"),
+    (''' fn Bad<>() -> () {
           uninstalled::<>(); /* preserve the unknown operation */
           return ();
-        } }''', "source-name-unresolved"),
+        } ''', "source-name-unresolved"),
 ]
 for editing, code in edits:
     pretty = run("protocol-format", text=editing).stdout
@@ -204,11 +204,11 @@ run("protocol-format", text=encode(bad_json), refuses="interactive-local-symbol"
 # Independently written expected records cover every site-bearing grammar
 # production, zero/multiple outputs and declared roles beyond P/V. Reserve
 # labels even in future nested blocks, decoded from quoted spellings.
-anonymous = r'''module {
+anonymous = r'''
   use zkc::algebra::{Vector};
   use zkc::random::{Nonce};
-      bind guard = control.require();
-      bind commit = curve.commit(bls12-381.g1);
+      bind guard = "control.require"();
+      bind commit = "curve.commit"("bls12-381.g1");
       fn Guard(x: bool) -> () { guard(x); return (); }
       fn Commit(b: Vector<"bls12-381.g1"::Element>, n: Nonce<"bls12-381.fr">)
           -> (Vector<"bls12-381.g1"::Element>, Nonce<"bls12-381.fr">) {
@@ -249,7 +249,7 @@ anonymous = r'''module {
         roles (Alice = Alice, Bob = Bob, Checker = Checker);
       }
       entry main = root;
-    }'''
+    '''
 resolved = json.loads(run("protocol-source", text=anonymous).stdout)
 assert resolved[0] == "zkc.protocol/1"
 assert resolved[2][0][4][0] == ["op", "__site_0", "guard", [], ["x"], []]
@@ -279,7 +279,7 @@ inspectable = run("protocol-format", text=encode(resolved)).stdout
 assert "[__site_9]" in inspectable  # carrier inspection exposes generated names
 assert json.loads(run("protocol-source", text=inspectable).stdout) == resolved
 perturbations = [
-    anonymous.replace("module {", "module { fn __site_2() -> () { return (); }", 1),
+    (" fn __site_2() -> () { return (); }" + anonymous),
     anonymous.replace("protocol Leaf", "protocol Unrelated { roles (Z); stop [__site_2] Z reject; } protocol Leaf"),
     anonymous.replace("entry main", "// unrelated comment __site_2\nentry main"),
 ]
@@ -292,7 +292,7 @@ run("protocol-source", text=duplicate, refuses="interactive-site")
 run("protocol-format", text=duplicate)
 # Names outside the site namespace (including a later selector) cannot cause
 # the site they refer to to be renamed during parsing.
-generic_effects = '''module {
+generic_effects = '''
   use zkc::algebra::{Vector};
   use zkc::core;
   use zkc::curve;
@@ -303,21 +303,21 @@ generic_effects = '''module {
         let (points, ready) = zkc::curve::commit::<G>(bases, nonce);
         return (points, ready);
       }
-    }'''
+    '''
 effects = json.loads(run("protocol-source", text=generic_effects).stdout)
 assert effects[1][0][6][0] == ["op", "__site_0", "control.require", [], [], ["x"], []]
 assert effects[1][1][6][0] == ["op", "__site_0", "curve.commit", ["G"], [],
                              ["bases", "nonce"], ["points", "ready"]]
 assert json.loads(run("protocol-source", text=run("protocol-format", text=encode(effects)).stdout).stdout) == effects
-generic_anonymous = '''module {
+generic_anonymous = '''
   use zkc::poly::{Table};
   use zkc::poly;
       fn Fold<F: domain Field>(a: Table<F>, r: F::Element) -> (Table<F>)
           requires (CommRing(F)) {
-        let b = zkc::poly::fold::<F>(a, r); return (b);
+        let b = zkc::poly::r#fold::<F>(a, r); return (b);
       }
       configure Partial = Fold();
-      configure Fast = Partial(F = bls12-381.fr) using (__site_0 = "arkworks-msb/poly.fold");
+      configure Fast = Partial(F = "bls12-381.fr") using (__site_0 = "arkworks-msb/poly.fold");
       configure Alias = Fast();
       protocol Calls {
         roles (Researcher);
@@ -329,7 +329,7 @@ generic_anonymous = '''module {
       }
       instance calls: Calls { roles (Researcher = Researcher); }
       entry main = calls;
-    }'''
+    '''
 library = json.loads(run("protocol-source", text=generic_anonymous).stdout)
 assert library[1][0][6][0] == ["op", "__site_0", "poly.fold", ["F"], [], ["a", "r"], ["b"]]
 assert library[3][3][0][7][0][1] == "__site_0"
@@ -347,10 +347,12 @@ again = json.loads(run("protocol-export", text=run("protocol-import", text=unrel
 assert again[1:3] == shared[1:3]
 
 negatives = [
-    ("", "source-syntax"),
-    ("module", "source-syntax"),
-    ('module {', "source-syntax"),
-    ('module {} trailing', "source-syntax"),
+    ("fn", "source-syntax"),
+    ('fn F() -> () {', "source-syntax"),
+    ('fn F() -> () { return; } }', "source-syntax"),
+    ('fn F() -> () { return; } trailing', "source-syntax"),
+    ("module", "source-module-wrapper"),
+    ('module {}', "source-module-wrapper"),
     ("@", "source-character"),
     ('module "bad', "source-string"),
     ('module "bad\\q" {}', "source-string"),
@@ -362,7 +364,7 @@ negatives = [
     (relay.replace("roles (Alice, Bob, Checker);", ""), "source-syntax"),
     (relay.replace("roles (Alice=Alice, Bob=Bob, Checker=Checker);", ""),
      "source-syntax"),
-    (relay.replace("outputs (Checker bls12-381.fr::Element);", "outputs (Checker unknown);"),
+    (relay.replace("outputs (Checker \"bls12-381.fr\"::Element);", "outputs (Checker unknown);"),
      "source-name-unresolved"),
     ('construction main { producer P; producer V; }', "source-duplicate"),
     ('construction main {}', "source-syntax"),
@@ -446,18 +448,22 @@ for iteration in range(40):
 # Whitespace expansion must not produce an unreadable file. Both the input
 # and its normalized JSON fit the limits, but canonical indentation does not.
 comments = "/*" + "x" * 66 + "*/"
-large = 'module {' + comments * 14500 + '}'
+large = 'fn Commented() -> () {' + comments * 14500 + 'return; }'
 run("protocol-source", text=large)
 run("protocol-format", text=large, refuses="source-limit")
 
-# Sampled suffix truncations must terminate; any surviving complete document
-# must retain the original source. This also covers lexer EOF error paths.
+# Sampled suffix truncations must terminate. A file ends at any declaration
+# boundary, so a surviving document must retain a prefix of the original
+# declarations unchanged. This also covers lexer EOF error paths.
 for end in range(0, len(relay), 7):
     result = commands.attempt([compiler, "protocol-source", "-"],
                               stdin=relay[:end], timeout=20)
     assert result.returncode in (0, 1), result.stderr
     if result.returncode == 0:
-        assert json.loads(result.stdout) == parsed
+        survived = json.loads(result.stdout)
+        assert survived[0] == parsed[0]
+        for kept, original in zip(survived[1:], parsed[1:]):
+            assert kept == original[:len(kept)], (end, kept)
     else:
         assert not result.stdout
 
@@ -474,7 +480,7 @@ def equivalent(inferred, explicit):
     return actual
 
 
-inferred = '''module {
+inferred = '''
   use zkc::algebra;
   fn Four<F: Field>(x: F::Element) -> F::Element {
     [first] let y = Twice(x);
@@ -484,8 +490,8 @@ inferred = '''module {
   fn Twice<F: Field>(x: F::Element) -> F::Element {
     [sum] let y = zkc::algebra::add(x, x); return y;
   }
-}'''
-explicit = '''module {
+'''
+explicit = '''
   use zkc::algebra;
   fn Four<F: domain Field>(x: F::Element) -> F::Element requires (Field(F)) {
     [first] let y = Twice::<F>(x);
@@ -495,7 +501,7 @@ explicit = '''module {
   fn Twice<F: domain Field>(x: F::Element) -> F::Element requires (Field(F)) {
     [sum] let y = zkc::algebra::add::<F>(x, x); return y;
   }
-}'''
+'''
 record = equivalent(inferred, explicit)
 assert record[1][0][6][0] == ["apply", "first", "Twice", ["F"], ["x"], ["y"]]
 assert record[1][1][6][0] == ["op", "sum", "field.add", ["F"], [], ["x", "x"], ["y"]]
@@ -513,30 +519,30 @@ run("protocol-source", text=unknown, refuses="source-name-unresolved")
 explicit_syntax = json.loads(run("protocol-parse", text=explicit).stdout)
 assert explicit_syntax["content"]["functions"][0]["body"][0]["staticArguments"] == ["F"]
 
-constant = '''module {
+constant = '''
   use zkc::algebra;
   fn One<F: Field>() -> F::Element {
     let one: F::Element = zkc::algebra::constant() attributes (1); return one;
   }
-}'''
-equivalent(constant, '''module {
+'''
+equivalent(constant, '''
   use zkc::algebra;
   fn One<F: Field>() -> F::Element {
     let one = zkc::algebra::constant::<F>() attributes (1); return one;
   }
-}''')
+''')
 run("protocol-source", text=constant.replace(": F::Element =", " ="),
     refuses="source-static-unresolved")
 run("protocol-source", text=constant.replace("let one: F::Element =", "let one: bool ="),
     refuses="source-type-mismatch")
 
 # Complete tuple annotations preserve arity; unused parameters still need statics.
-pair = '''module {
+pair = '''
   fn Pair<F: domain Field>(x: bool) -> (bool, bool) { return (x, x); }
   fn Use<F: domain Field>(x: bool) -> (bool, bool) {
     let (a, b): (bool, bool) = Pair::<F>(x); return (a, b);
   }
-}'''
+'''
 common(pair)
 run("protocol-source", text=pair.replace("Pair::<F>(x)", "Pair(x)"),
     refuses="source-static-unresolved")
@@ -545,15 +551,15 @@ run("protocol-source", text=pair.replace("(a, b): (bool, bool)", "(a, b): bool")
 
 # Kind-only declarations cannot acquire body-derived assumptions. Bounds are
 # stored in header / where / requires order, including intentional duplicates.
-weak = '''module { fn Id<F: domain Field>(x: F::Element) -> F::Element { return x; } }'''
+weak = ''' fn Id<F: domain Field>(x: F::Element) -> F::Element { return x; } '''
 assert common(weak)[1][0][3] == []
 strong = common(weak.replace("domain Field", "TwoAdicField"))
 assert strong[1][0][3] == [["TwoAdicField", ["F"]]]
-ordered = '''module {
+ordered = '''
   fn Id<F: TwoAdicField, G: ScalarAction>(x: F::Element) -> F::Element
       where G::Scalar: Field, F: PrimeField
       requires (Field(F), Field(F)) { return x; }
-}'''
+'''
 assert common(ordered)[1][0][3] == [
     ["TwoAdicField", ["F"]], ["ScalarAction", ["G"]],
     ["Field", ["G.Scalar"]], ["PrimeField", ["F"]],
@@ -562,44 +568,44 @@ assert common(ordered)[1][0][3] == [
 run("protocol-source", text=inferred.replace("F: Field", "F: domain Field"),
     refuses="generic-public-requirement")
 
-associated = '''module {
+associated = '''
   fn Scalar<G: ScalarAction>(x: G::Scalar::Element) -> G::Scalar::Element { return x; }
   fn Use<G: ScalarAction>(x: G::Scalar::Element) -> G::Scalar::Element {
     let y = Scalar::<G>(x); return y;
   }
-}'''
+'''
 common(associated)
 run("protocol-source", text=associated.replace("Scalar::<G>(x)", "Scalar(x)"),
     refuses="source-static-unresolved")
-associated_add = '''module {
+associated_add = '''
   use zkc::algebra;
   fn Add<G: ScalarAction>(x: G::Scalar::Element) -> G::Scalar::Element
       where G::Scalar: Field {
     let y = zkc::algebra::add(x, x); return y;
   }
-}'''
+'''
 equivalent(associated_add, associated_add.replace("zkc::algebra::add(x", "zkc::algebra::add::<G::Scalar>(x"))
 
-partial = '''module {
+partial = '''
   fn Id<F: domain Field, G: domain Group>(x: F::Element) -> F::Element { return x; }
   configure Partial = Id(G = "bls12-381.g1");
   fn Use<F: domain Field>(x: F::Element) -> F::Element {
     let y = Partial(x); return y;
   }
-}'''
+'''
 equivalent(partial, partial.replace("Partial(x)", "Partial::<F>(x)"))
 run("protocol-source", text=partial.replace("Partial(x)", 'Partial::<F, "bls12-381.g1">(x)'),
     refuses="generic-static-arity")
 
 # Ordinary functions, bound operations, generic operations, helpers and empty
 # generic definitions retain their categories, including zero-result guards.
-closed = '''module {
+closed = '''
   use zkc::core;
-  bind both = bool::and();
+  bind both = "bool.and"();
   fn Use(x: bool) -> bool { let y = Identity(x); let z = both(x, y); return z; }
   fn Identity(x: bool) -> bool { return x; }
   fn Guard<>(x: bool) -> () { zkc::core::require(x); return; }
-}'''
+'''
 categories = common(closed)
 assert categories[3][2][0][4][0][0] == "apply"
 assert categories[3][2][0][4][1][0] == "op"
@@ -616,30 +622,30 @@ run("protocol-source", text=closed.replace("fn Identity(x", "fn Use(x"),
     refuses="source-duplicate-symbol")
 # The encoded record's view of the choice; frontend_elaboration.py checks the
 # same choice as the elaboration report's `kind`, and owns the format roundtrip
-# over the quoted spellings.
+# over raw helper spellings.
 primitive = common(COLLISION)
 assert primitive[1][1][6][0][0] == "op"
-helper = common(COLLISION.replace("zkc::core::and(x, x)", '\"bool.and\"(x, x)'))
+helper = common(COLLISION.replace("zkc::core::and(x, x)", 'and(x, x)'))
 assert helper[1][1][6][0][0] == "apply"
 
-conflict = '''module {
+conflict = '''
   use zkc::algebra;
   fn Bad<F: Field, E: Field>(x: F::Element, y: E::Element) -> F::Element {
     let z = zkc::algebra::add(x, y); return z;
   }
-}'''
+'''
 run("protocol-source", text=conflict, refuses="source-static-conflict")
 run("protocol-source", text=conflict.replace("zkc::algebra::add(x, y)", "zkc::algebra::add::<F>(x, y)"),
     refuses="source-static-conflict")
 
 # Inference cannot copy consumed resources or insert implicit cleanup.
-affine = '''module {
+affine = '''
   use zkc::random::{Rng};
   use zkc::random;
   fn Draw<F: Field>(rng: Rng<F>) -> (F::Element, Rng<F>) {
     let (n, next) = zkc::random::draw(rng); return (n, next);
   }
-}'''
+'''
 equivalent(affine, affine.replace("zkc::random::draw(rng)", "zkc::random::draw::<F>(rng)"))
 run("protocol-source", text=affine.replace("return (n, next);",
     "let (again, last) = zkc::random::draw(rng); return (again, last);"),
@@ -649,39 +655,40 @@ run("protocol-source", text=affine.replace("let (n, next) = zkc::random::draw(rn
 
 # Obsolete syntax is refused, while nested types and unsupported tuple forms
 # have independent controls rather than being silently interpreted differently.
-for old in [
-    'module { fn F<>() -> () { () = control.require<>(x); return (); } }',
-    'module { fn F<F: domain Field>(x: field:F) -> () { return; } }',
-    'module { fn F<>() -> () { let x = apply Helper<>(); return; } }',
+for old, code in [
+    # An empty tuple is not an assignable place.
+    ('fn F<>() -> () { () = control.require<>(x); return (); }', "source-reference"),
+    ('fn F<F: domain Field>(x: field:F) -> () { return; }', "source-syntax"),
+    ('fn F<>() -> () { let x = apply Helper<>(); return; }', "source-syntax"),
 ]:
-    run("protocol-format", text=old, refuses="source-syntax")
-run("protocol-source", text='module { use zkc::algebra::{Vector}; fn F<F: Field>(x: Vector<Vector<F::Element>>) -> () { return; } }',
+    run("protocol-format", text=old, refuses=code)
+run("protocol-source", text=' use zkc::algebra::{Vector}; fn F<F: Field>(x: Vector<Vector<F::Element>>) -> () { return; } ',
     refuses="source-type")
 
 # An annotation supplies the extension itself; the base projection alone must
 # never be inverted, nor may an extension conversion appear implicitly.
-embedding = '''module {
+embedding = '''
   use zkc::algebra::{Vector};
   use zkc::algebra;
   fn Embed<E: ExtensionField>(x: Vector<E::BaseField::Element>) -> Vector<E::Element> {
     let y: Vector<E::Element> = zkc::algebra::vector_embed(x); return y;
   }
-}'''
+'''
 equivalent(embedding, embedding.replace("let y: Vector<E::Element> = zkc::algebra::vector_embed(x)",
                                       "let y = zkc::algebra::vector_embed::<E>(x)"))
 run("protocol-source", text=embedding.replace("let y: Vector<E::Element>", "let y"),
     refuses="source-static-unresolved")
-no_conversion = '''module {
+no_conversion = '''
   use zkc::algebra::{Vector};
   fn Id<E: ExtensionField>(x: Vector<E::Element>) -> Vector<E::Element> { return x; }
   fn Use<E: ExtensionField>(x: Vector<E::BaseField::Element>) -> Vector<E::Element> {
     let y = Id::<E>(x); return y;
   }
-}'''
+'''
 run("protocol-source", text=no_conversion, refuses="source-static-conflict")
 
 # Tuple expected types solve two independent holes in a forward helper call.
-tuple_expected = '''module {
+tuple_expected = '''
   use zkc::algebra;
   fn Use<F: Field, G: Field>() -> (F::Element, G::Element) {
     let (a, b): (F::Element, G::Element) = Pair(); return (a, b);
@@ -690,7 +697,7 @@ tuple_expected = '''module {
     let a = zkc::algebra::constant::<F>() attributes (1);
     let b = zkc::algebra::constant::<G>() attributes (2); return (a, b);
   }
-}'''
+'''
 equivalent(tuple_expected, tuple_expected.replace(
     "let (a, b): (F::Element, G::Element) = Pair()", "let (a, b) = Pair::<F, G>()"))
 run("protocol-source", text=tuple_expected.replace(
@@ -698,10 +705,10 @@ run("protocol-source", text=tuple_expected.replace(
 run("protocol-source", text=tuple_expected.replace(
     "Pair()", "Pair::<F>()"), refuses="generic-static-arity")
 
-strong_helper = '''module {
+strong_helper = '''
   fn Strong<F: PrimeField>(x: F::Element) -> F::Element { return x; }
   fn Weak<F: Field>(x: F::Element) -> F::Element { let y = Strong(x); return y; }
-}'''
+'''
 run("protocol-source", text=strong_helper, refuses="generic-public-requirement")
 equivalent(strong_helper.replace("Weak<F: Field>", "Weak<F: PrimeField>"),
            strong_helper.replace("Weak<F: Field>", "Weak<F: PrimeField>").replace("Strong(x)", "Strong::<F>(x)"))
@@ -711,13 +718,13 @@ run("protocol-source", text=constant.replace("let one: F::Element", "let one").r
     "return one;", "let two: F::Element = zkc::algebra::add(one, one); return two;"),
     refuses="source-static-unresolved")
 
-nonce = '''module {
+nonce = '''
   use zkc::curve;
   use zkc::random::{Nonce};
   fn Respond<F: Field>(x: F::Element, c: F::Element, n: Nonce<F>) -> F::Element {
     let y = zkc::curve::response(x, c, n); return y;
   }
-}'''
+'''
 equivalent(nonce, nonce.replace("zkc::curve::response(x", "zkc::curve::response::<F>(x"))
 run("protocol-source", text=nonce.replace("return y;",
     "let z = zkc::curve::response(x, c, n); return z;"), refuses="generic-resource-reuse")
@@ -728,22 +735,22 @@ assert len(unused[1][0][6]) == 2
 assert unused[1][0][6][0][2] == "random.draw"
 
 # A protocol-local generic call must have a named closed configuration.
-local_generic = '''module {
+local_generic = '''
   fn Id<F: domain Field>(x: F::Element) -> F::Element { return x; }
   configure Closed = Id(F = "koala-bear");
   protocol P { roles (A); inputs (A x: "koala-bear"::Element);
     outputs (A "koala-bear"::Element); local A: let y = Closed(x); return y; }
-}'''
+'''
 common(local_generic)
 run("protocol-source", text=local_generic.replace("Closed(x)", "Id(x)"),
     refuses="source-local-configuration")
 run("protocol-source", text=local_generic.replace('Id(F = "koala-bear")', "Id()"),
     refuses="source-local-configuration")
 # Category errors do not fall back to an installed primitive.
-run("protocol-source", text='''module {
+run("protocol-source", text='''
   fn Plain(x: bool) -> bool { return x; }
   fn Generic<>(x: bool) -> bool { let y = Plain(x); return y; }
-}''', refuses="generic-call-target")
+''', refuses="generic-call-target")
 run("protocol-source", text=closed.replace("Identity(x);", "Identity::<>(x);", 1))
 run("protocol-source", text=closed.replace("Identity(x);", 'Identity::<"koala-bear">(x);', 1),
     refuses="generic-static-arity")
@@ -775,15 +782,15 @@ run("protocol-source", text=pair.replace("Pair::<F>(x)", 'Pair::<"bls12-381.g1">
     refuses="source-generic-term")
 
 # Closed bound operation attributes are distinct from statics and runtime args;
-# opaque function/domain names retain their periods exactly.
-attribute = '''module {
-  bind constant = field::constant("koala-bear");
-  fn "custom.name"() -> "koala-bear"::Element {
+# exact contract and domain identities retain their periods.
+attribute = '''
+  bind constant = "field.constant"("koala-bear");
+  fn custom_name() -> "koala-bear"::Element {
     let one = constant() attributes ("1"); return one;
   }
-}'''
+'''
 attribute_record = common(attribute)
-assert attribute_record[2][0][1] == "custom.name"
+assert attribute_record[2][0][1] == "custom_name"
 assert attribute_record[2][0][4][0][3] == ["1"]
 assert common(run("protocol-format", text=encode(attribute_record)).stdout) == attribute_record
 noncanonical_attribute = attribute.replace('attributes ("1")', 'attributes ("01")')
@@ -793,7 +800,7 @@ run("protocol-source", text=noncanonical_attribute, refuses="noncanonical-natura
 # Formatting uses the syntax budget even for semantically unsupported nesting.
 for depth in (64, 65):
     nested_type = "Vector<" * depth + "F::Element" + ">" * depth
-    nested_source = f"module {{ use zkc::algebra::Vector; fn Deep<F: Field>(x: {nested_type}) -> () {{ return; }} }}"
+    nested_source = f" use zkc::algebra::Vector; fn Deep<F: Field>(x: {nested_type}) -> () {{ return; }} "
     if depth == 64:
         formatted = run("protocol-format", text=nested_source).stdout
         assert run("protocol-format", text=formatted).stdout == formatted
@@ -804,12 +811,12 @@ for depth in (64, 65):
 
 # Public contracts and origins cannot be accepted and then dropped at the
 # ordinary/generic common-model category boundary.
-run("protocol-source", text='''module {
+run("protocol-source", text='''
   fn Plain() -> () requires (Field("koala-bear")) { return; }
-}''', refuses="source-function-contract")
-run("protocol-source", text='''module {
+''', refuses="source-function-contract")
+run("protocol-source", text='''
   fn Generic<>() -> () origin Original() { return; }
-}''', refuses="source-function-origin")
+''', refuses="source-function-origin")
 
 help_result = commands.attempt([compiler, "--help"])
 assert "protocol-format" in help_result.stdout

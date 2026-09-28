@@ -86,18 +86,19 @@ fn main() {
             "arkworks/poly.fold"
         };
         let source = format!(
-            r#"module {{
-  fn Fold<F: Field>(a: table:F, r: field:F) -> (table:F) requires (CommRing(F)) {{
-    [fold] (out) = poly.fold<F>(a, r); return (out);
+            r#"
+  use zkc::poly; use zkc::poly::Table;
+  fn Fold<F: Field>(a: Table<F>, r: F::Element) -> (Table<F>) requires (CommRing(F)) {{
+    [r#fold] let out = poly::r#fold::<F>(a, r); return (out);
   }}
-  configure Chosen = Fold(F = bls12-381.fr) using (fold = "{implementation}");
+  configure Chosen = Fold(F = "bls12-381.fr") using (r#fold = "{implementation}");
   protocol FoldOnce {{
-    roles (P); inputs (P a: table:bls12-381.fr, P r: field:bls12-381.fr);
-    outputs (P table:bls12-381.fr);
-    local [fold] P: (out) = Chosen(a, r); return (out);
+    roles (P); inputs (P a: Table<"bls12-381.fr">, P r: "bls12-381.fr"::Element);
+    outputs (P Table<"bls12-381.fr">);
+    local [r#fold] P: let out = Chosen(a, r); return (out);
   }}
   instance concrete: FoldOnce {{ roles (P = P); }} entry main = concrete;
-}}"#
+"#
         );
         let path: PathBuf =
             std::env::temp_dir().join(format!("zkc-library-cost-{}-{msb}.pir", std::process::id()));

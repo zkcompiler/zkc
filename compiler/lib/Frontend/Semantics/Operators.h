@@ -87,7 +87,9 @@ public:
                 operation->signature.inputs[k].constructor ==
                     binding.operands[binding.order[k]];
       Candidate candidate{
-          binding.symbol, {}, {binding.contract, true, binding.order}};
+          binding.symbol,
+          {},
+          {syntax::Target::operation(binding.contract), binding.order}};
       for (const auto &operand : binding.operands) {
         candidate.heads.push_back(logicalOperatorHead(operand));
         valid &= !candidate.heads.back().empty();
@@ -127,13 +129,13 @@ public:
                           : hook == "mul" ? "*"
                                           : "-",
                           {},
-                          {function.name, false, {}}};
+                          {syntax::Target::declaration(function.name), {}}};
       const auto *owner = project.lookup(function.name);
       bool ownsOperand = false;
       for (const auto &argument : function.arguments) {
         const auto &type = argument.type;
         std::string resolved;
-        if (!type.product && !type.quoted && type.members.empty())
+        if (!type.product && !type.quoted() && type.members.empty())
           if (const auto *record = project.lookup(type.name))
             if (record->kind == resolution::Declaration::Kind::Record) {
               resolved = nominalOperatorHead(record->identity);
@@ -171,11 +173,10 @@ public:
       if (candidate.symbol != symbol ||
           llvm::ArrayRef(candidate.heads) != heads)
         continue;
-      if (candidate.target.qualified &&
-          !project.operationAvailable(node, candidate.target.callee))
-        continue;
-      if (!candidate.target.qualified &&
-          !project.sourceOperatorAvailable(node, candidate.target.callee))
+      const auto &target = candidate.target.target;
+      if (target.kind == syntax::Target::Kind::Operation
+              ? !project.operationAvailable(node, target.symbol)
+              : !project.sourceOperatorAvailable(node, target.symbol))
         continue;
       return candidate.target;
     }

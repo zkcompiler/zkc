@@ -16,7 +16,7 @@ def run(text, refuses=None, command="protocol-source"):
 
 def module(body):
     imports = 'use zkc::core;' if 'zkc::core::' in body else ''
-    return f'module {{ {imports} {IDENTITY} {MARKER} {body} }}'
+    return f' {imports} {IDENTITY} {MARKER} {body} '
 
 
 def accepted(text):
@@ -148,62 +148,62 @@ AFFINE = '''
 '''
 for count in (0, 1, 2):
     with case(f"affine invariant capture refuses even for {count} trips"):
-        run(f'''module {{ {IDENTITY} {AFFINE}
+        run(f''' {IDENTITY} {AFFINE}
           fn Client<C: Cell>(items: Array<bool, {count}>, resource: C::Value) -> Array<C::Value, {count}> {{
             return map items |item| {{ C::step(resource) }};
           }}
           link Closed = Client<Empty>;
-        }}''', "library-traversal-capture")
+        ''', "library-traversal-capture")
 
 with case("array element consumption remains affine inside lexical map"):
-    run(f'''module {{ {IDENTITY} {AFFINE}
+    run(f''' {IDENTITY} {AFFINE}
       fn Client<C: Cell>(items: Array<C::Value, 2>) -> Array<(C::Value, C::Value), 2> {{
         return map items |item| {{ (item, item) }};
       }}
       link Closed = Client<Empty>;
-    }}''', "library-resource-use")
+    ''', "library-resource-use")
 
 with case("affine map and fold preserve zero-storage resource transfers"):
-    accepted(f'''module {{ {IDENTITY} {AFFINE}
+    accepted(f''' {IDENTITY} {AFFINE}
       fn Client<C: Cell>(items: Array<C::Value, 2>) -> Array<C::Value, 2> {{
         return map items |item| {{ C::step(item) }};
       }}
       link Closed = Client<Empty>;
-    }}''')
+    ''')
 
 with case("ordinary named arguments receive expected types before empty literals"):
-    accepted('''module {
+    accepted('''
   use zkc::algebra::{Indices};
       fn Choose(flag: bool, items: Indices) -> bool { return flag; }
       fn Use(flag: bool) -> bool { return Choose(items: [], flag: flag); }
-    }''')
+    ''')
 
 with case("ordinary positional arguments receive the same expected types"):
-    accepted('''module {
+    accepted('''
   use zkc::algebra::{Indices};
       fn Choose(flag: bool, items: Indices) -> bool { return flag; }
       fn Use(flag: bool) -> bool { return Choose(flag, []); }
-    }''')
+    ''')
 
 with case("ordinary generic operand heads determine expected empty vector type"):
-    accepted('''module {
+    accepted('''
   use zkc::algebra::{Vector};
       fn Choose<F: Field>(flag: F::Element, items: Vector<F::Element>) -> F::Element { return flag; }
       fn Use(flag: "koala-bear"::Element) -> "koala-bear"::Element {
         return Choose(items: [], flag: flag);
       }
-    }''')
+    ''')
 
 for args in ("flag: flag, flag: flag", "unknown: flag, items: []", "flag, items: []", "flag: flag"):
     with case(f"ordinary invalid label bijection refuses before operands: {args}"):
-        run(f'''module {{
+        run(f'''
   use zkc::algebra::{{Indices}};
           fn Choose(flag: bool, items: Indices) -> bool {{ return flag; }}
           fn Use(flag: bool) -> bool {{ return Choose({args}); }}
-        }}''', "source-argument-name")
+        ''', "source-argument-name")
 
 with case("ordinary function traversals enter the checked finite traversal owner"):
-    accepted('''module {
+    accepted('''
   use zkc::core;
       fn Map(items: Array<bool, 2>) -> Array<bool, 2> effects (local) {
         return map items |item| { zkc::core::not(item) };
@@ -211,22 +211,22 @@ with case("ordinary function traversals enter the checked finite traversal owner
       fn Fold(items: Array<bool, 2>, initial: bool) -> bool effects (local) {
         return fold items with initial |state, item| { zkc::core::and(state, item) };
       }
-    }''')
+    ''')
 
 with case("free aggregate places leave unrelated affine siblings available"):
-    accepted(f'''module {{ {IDENTITY} {AFFINE}
+    accepted(f''' {IDENTITY} {AFFINE}
       fn Client<C: Cell>(items: Array<bool, 2>, held: (bool, C::Value))
           -> (Array<bool, 2>, C::Value) {{
-        let mapped = map items |item| {{ held[0] }};
+        let mapped = map items |item| {{ held.0 }};
         return (mapped, held.1);
       }}
       link Closed = Client<Empty>;
-    }}''')
+    ''')
 
 with case("nested projected captures resolve without capturing whole parents"):
     accepted(module('''
       fn Client<C: Marker>(items: Array<bool, 2>, held: ((bool, bool), bool)) -> Array<bool, 2> {
-        return map items |item| { held[0][1] };
+        return map items |item| { held.0.1 };
       }
       link Closed = Client<Selected>;
     '''))
@@ -279,10 +279,10 @@ with case("capture order is authored first use rather than alphabetical"):
     assert traversals
     assert traversals[0]["captures"] == [{"value": 1, "path": []}, {"value": 2, "path": []}]
 
-with case("capture deduplication identifies equivalent literal places"):
+with case("capture deduplication identifies repeated structural places"):
     report = json.loads(run(module('''
       fn Client<C: Marker>(items: Array<bool, 2>, held: (bool, bool)) -> Array<bool, 2> effects (local) {
-        return map items |item| { zkc::core::and(held.0, held[0]) };
+        return map items |item| { zkc::core::and(held.0, held.0) };
       }
       link Closed = Client<Selected>;
     '''), command="protocol-analyze"))
@@ -291,32 +291,32 @@ with case("capture deduplication identifies equivalent literal places"):
 
 for count in (0, 1, 3):
     with case(f"affine fold threads its initial resource for {count} trips"):
-        accepted(f'''module {{ {IDENTITY} {AFFINE}
+        accepted(f''' {IDENTITY} {AFFINE}
           fn Client<C: Cell>(items: Array<bool, {count}>, initial: C::Value) -> C::Value {{
             return fold items with initial |state, item| {{ C::step(state) }};
           }}
           link Closed = Client<Empty>;
-        }}''')
+        ''')
 
 with case("resolved aliases share one inferred affine capture across exclusive arms"):
-    accepted(f'''module {{ {IDENTITY} {AFFINE}
+    accepted(f''' {IDENTITY} {AFFINE}
       fn Client<C: Cell>(flag: bool, resource: C::Value) -> C::Value {{
         let alias = resource;
         if flag -> (result) {{ yield alias; }} else {{ yield resource; }}
         return result;
       }}
       link Closed = Client<Empty>;
-    }}''')
+    ''')
 
 with case("explicit overlapping affine captures retain their refusal"):
-    run(f'''module {{ {IDENTITY} {AFFINE}
+    run(f''' {IDENTITY} {AFFINE}
       fn Client<C: Cell>(flag: bool, resource: C::Value) -> C::Value {{
         let alias = resource;
         if flag capture(alias, resource) -> (result) {{ yield alias; }} else {{ yield resource; }}
         return result;
       }}
       link Closed = Client<Empty>;
-    }}''', "library-resource-use")
+    ''', "library-resource-use")
 
 with case("map retains finite variant arms and authored-arm capture order"):
     text = module('''
@@ -338,7 +338,7 @@ with case("map retains finite variant arms and authored-arm capture order"):
     assert traversal["captures"] == [{"value": 1, "path": []}, {"value": 2, "path": []}]
 
 with case("ordinary runtime indexing captures its vector rather than a fictitious field"):
-    accepted('''module {
+    accepted('''
   use zkc::algebra::{Indices};
       fn Use(flag: bool, items: Indices) -> index {
         if flag -> (result) {
@@ -348,11 +348,11 @@ with case("ordinary runtime indexing captures its vector rather than a fictitiou
         }
         return result;
       }
-    }''')
+    ''')
 
 with case("nested record array projections capture only the used element"):
     accepted(module('''
-      struct Held(values: Array<bool, 2>);
+      struct Held { values: Array<bool, 2> }
       fn Client<C: Marker>(items: Array<bool, 2>, held: Held) -> Array<bool, 2> {
         return map items |item| { held.values[1] };
       }
@@ -379,68 +379,68 @@ with case("lexical map composes through a natural-generic source helper"):
     '''))
 
 with case("ordinary named operands evaluate once in written order before permutation"):
-    emitted = accepted('''module {
+    emitted = accepted('''
   use zkc::core;
       fn Choose(left: bool, right: bool) -> bool { return left; }
       fn First(value: bool) -> bool { return zkc::core::not(value); }
       fn Second(value: bool) -> bool { return zkc::core::not(value); }
       fn Use(x: bool, y: bool) -> bool { return Choose(right: First(x), left: Second(y)); }
-    }''')
+    ''')
     calls = [row for row in functions(emitted)["Use"][4] if row[0] == "apply"]
     assert [row[2] for row in calls] == ["First", "Second", "Choose"]
     assert calls[-1][4] == [calls[1][5][0], calls[0][5][0]]
 
 with case("ordinary local terminal arms do not manufacture continuing yields"):
-    accepted('''module {
+    accepted('''
       fn Use(flag: bool, value: bool) -> bool {
         if flag -> (result) { stop abort; } else { yield value; }
         return result;
       }
-    }''')
+    ''')
 
 with case("ordinary source refuses instructions following a terminal stop"):
-    run('''module {
+    run('''
       fn Use(flag: bool) -> bool { stop abort; return flag; }
-    }''', "source-control-stop")
+    ''', "source-control-stop")
 
 with case("ordinary finite arrays retain element shape and contextual literals"):
-    accepted('''module {
+    accepted('''
       fn Echo(items: Array<(bool, bool), 2>) -> Array<(bool, bool), 2> { return items; }
       fn Use(a: bool, b: bool) -> Array<(bool, bool), 2> {
         return Echo(items: [(a, b), (b, a)]);
       }
-    }''')
+    ''')
 
 with case("array and product boundaries are distinct even with identical leaves"):
-    run('''module {
+    run('''
       fn Echo(items: Array<bool, 2>) -> Array<bool, 2> { return items; }
       fn Use(a: bool, b: bool) -> Array<bool, 2> { return Echo(items: (a, b)); }
-    }''', "source-annotation-type")
+    ''', "source-annotation-type")
 
 with case("ordinary array literal length must match its expected count"):
-    run('''module {
+    run('''
       fn Echo(items: Array<bool, 2>) -> Array<bool, 2> { return items; }
       fn Use(a: bool) -> Array<bool, 2> { return Echo(items: [a]); }
-    }''', "source-array-arity")
+    ''', "source-array-arity")
 
 with case("ordinary empty arrays retain their element identity"):
-    run('''module {
+    run('''
       fn Echo(items: Array<bool, 0>) -> Array<bool, 0> { return items; }
       fn Use(items: Array<index, 0>) -> Array<bool, 0> { return Echo(items); }
-    }''', "source-annotation-type")
+    ''', "source-annotation-type")
 
 with case("ordinary record constructors propagate expected array field types"):
-    accepted('''module {
-      struct Held(values: Array<(bool, bool), 2>);
+    accepted('''
+      struct Held { values: Array<(bool, bool), 2> }
       fn Use(a: bool, b: bool) -> Held { return Held { values: [(a, b), (b, a)] }; }
-    }''')
+    ''')
 
 with case("ordinary array count and nested expansion are bounded"):
-    run('''module { fn Use(x: Array<bool, 4097>) -> Array<bool, 4097> { return x; } }''',
+    run(''' fn Use(x: Array<bool, 4097>) -> Array<bool, 4097> { return x; } ''',
         "source-array-limit")
-    run('''module { fn Use(x: Array<bool, missing>) -> () { return (); } }''',
+    run(''' fn Use(x: Array<bool, missing>) -> () { return (); } ''',
         "source-name-unresolved")
-    run('''module { fn Use(x: Array<Array<(), 4096>, 4096>) -> () { return (); } }''',
+    run(''' fn Use(x: Array<Array<(), 4096>, 4096>) -> () { return (); } ''',
         "source-array-limit")
 
 with case("named imported link retains aggregate labels and exact record owner"):
@@ -449,48 +449,48 @@ with case("named imported link retains aggregate labels and exact record owner")
     lib = root / "lib.pir"
     app = root / "app.pir"
     identity = 'library(namespace="test", name="arrays", version="1", resolution="fixture")'
-    lib.write_text(f'''module {{ {identity};
-      pub struct Held(values: Array<(bool, bool), 2>);
+    lib.write_text(f''' {identity};
+      pub struct Held {{ values: Array<(bool, bool), 2> }}
       fn Echo(input: Held, flag: bool) -> Held {{ return input; }}
       pub link Selected = Echo<>;
-    }}''')
-    app.write_text(f'''module {{
+    ''')
+    app.write_text(f'''
       dependency lib = {identity};
       use lib::Held; use lib::Selected as Identity;
       fn Main(a: bool, b: bool) -> Held {{
         return Identity(flag: b, input: Held {{ values: [(a, b), (b, a)] }});
       }}
-    }}''')
+    ''')
     emitted = commands.source("protocol-source", None, str(app), f"--library={lib}")
     assert json.loads(run(emitted)) == json.loads(emitted)
     commands.source("protocol-admit", None, str(app), f"--library={lib}")
 
 with case("zero-length rigid array heads infer a generic element domain"):
-    accepted('''module {
+    accepted('''
       fn Echo<F: Field>(items: Array<F::Element, 0>) -> Array<F::Element, 0> { return items; }
       fn Use(items: Array<"koala-bear"::Element, 0>) -> Array<"koala-bear"::Element, 0> {
         return Echo(items);
       }
-    }''')
+    ''')
 
 with case("rigid array heads provide expected type for a second empty argument"):
-    accepted('''module {
+    accepted('''
       fn Choose<F: Field>(first: Array<F::Element, 0>, second: Array<F::Element, 0>)
           -> Array<F::Element, 0> { return second; }
       fn Use(items: Array<"koala-bear"::Element, 0>) -> Array<"koala-bear"::Element, 0> {
         return Choose(second: [], first: items);
       }
-    }''')
+    ''')
 
 with case("expected zero-array result determines a helper static domain"):
-    accepted('''module {
+    accepted('''
       fn Empty<F: Field>() -> Array<F::Element, 0> { return []; }
       fn Use() -> Array<"koala-bear"::Element, 0> { return Empty(); }
-    }''')
+    ''')
 
 with case("fold initial may be an authored record construction"):
     accepted(module('''
-      struct State(value: bool);
+      struct State { value: bool }
       fn Client<C: Marker>(items: Array<bool, 2>, initial: bool) -> State {
         return fold items with State { value: initial } |state, item| { state };
       }
@@ -499,7 +499,7 @@ with case("fold initial may be an authored record construction"):
 
 for count in (0, 2):
     with case(f"selected terminal member stops lexical traversal at first trip, count={count}"):
-        text = f'''module {{
+        text = f'''
   use zkc::core; {IDENTITY}
           interface Step {{ local next(item: bool) -> bool; }}
           component Halt: Step {{ local next(item: bool) -> bool {{ stop abort; }} }}
@@ -508,7 +508,7 @@ for count in (0, 2):
             return zkc::core::not(after);
           }}
           link Closed = Client<Halt>;
-        }}'''
+        '''
         emitted = accepted(text)
         fns = functions(emitted)
         pending, reached, instructions = ["Closed"], set(), []

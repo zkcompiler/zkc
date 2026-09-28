@@ -54,16 +54,6 @@ inline void append(syntax::Module &to, syntax::Module from) {
   move(to.configurations, from.configurations);
   move(to.instances, from.instances);
   move(to.entries, from.entries);
-  to.entryArguments.merge(from.entryArguments);
-  to.instanceParameterAtoms.merge(from.instanceParameterAtoms);
-  to.instanceProtocolTerms.merge(from.instanceProtocolTerms);
-  to.configurationTerms.merge(from.configurationTerms);
-  to.relationViewHeights.merge(from.relationViewHeights);
-  to.quotedBases.merge(from.quotedBases);
-  to.quotedRelations.merge(from.quotedRelations);
-  to.quotedInstances.merge(from.quotedInstances);
-  to.quotedInstanceDependencies.merge(from.quotedInstanceDependencies);
-  to.quotedSelectors.merge(from.quotedSelectors);
 }
 } // namespace zkc::frontend::resolution
 #endif

@@ -17,12 +17,12 @@ interface Cell {
   type State drop;
   local start(ok: bool) -> State effects (local);
   local step(state: State) -> State;
-  local finish(state: State, ok: bool) -> bool;
+  local r#finish(state: State, ok: bool) -> bool;
 }
 fn Client<C: Cell>(ok: bool) -> bool effects (local) {
   let state = C::start(ok);
   let next = C::step(state);
-  return C::finish(next, ok);
+  return C::r#finish(next, ok);
 }
 link Empty = Client<EmptyCell>;
 link Stored = Client<StoredCell>;
@@ -95,7 +95,7 @@ fn Use<C: Cell>(ok: bool) -> bool {
   match result capture(ok) -> (answer) {
     Ready(state) => {
       let next = C::step(state);
-      let accepted = C::finish(next, ok);
+      let accepted = C::r#finish(next, ok);
       yield (accepted);
     },
     Invalid(error) => { yield (error); }
@@ -144,11 +144,11 @@ name no participant; the protocol's `local P:` places their execution.
 let elements = [C::start(ok), C::start(ok)];
 let initial = C::start(ok);
 for element in elements carry(state = initial) capture(ok) -> (output) {
-  let accepted = C::finish(state, ok);
+  let accepted = C::r#finish(state, ok);
   let next = C::step(element);
   yield (next);
 }
-return C::finish(output, ok);
+return C::r#finish(output, ok);
 ```
 
 Traversal consumes each element once and threads the carried state. Invariant

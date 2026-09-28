@@ -286,7 +286,28 @@ for identity, with_call in (("exact", False), ("exact", True),
             ["return", ["result"]]], ["Unused", []]])
     # This case exercises authoring's origin-group expansion. The formatter
     # emits closed carrier text, whose descriptors follow the JSON contract.
-    authored = run("protocol-format", subject).replace("carrier module", "module", 1)
+    site = descriptor[5][1][0][1]
+    authored = f'''
+      use zkc::random::Rng;
+      bind random = "random.draw"("{field}");
+      bind constant = "field.constant"("{field}");
+      bind equal = "field.equal"("{field}");
+      fn Draw(rng: Rng<"{field}">) -> Rng<"{field}"> origin Shared() {{
+        ["{site}"] let (value0, state0) = random(rng); return state0;
+      }}
+      fn Accept() -> bool origin Shared() {{
+        [zero] let z = constant() attributes("0");
+        [equal] let ok = equal(z, z); return ok;
+      }}
+      protocol Subject {{
+        roles(P, V); inputs(V coins: Rng<"{field}">); outputs(V bool, V Rng<"{field}">);
+        local [draw] V: let after = Draw(coins);
+        local [accept] V: let accepted = Accept(); return (accepted, after);
+      }}
+      instance subject: Subject {{ roles(P=P, V=V); }} entry main=subject;
+    '''
+    if with_call:
+        authored += "fn Unused() -> bool { [call] let result = Accept(); return result; }"
     result = json.loads(run("protocol-construct", authored, path))
     bindings = {binding[0]: binding[1] for binding in result[2][1]}
     functions = {function[1]: function for function in result[2][2]}

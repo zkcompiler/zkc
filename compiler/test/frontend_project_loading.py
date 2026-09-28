@@ -48,12 +48,12 @@ def identity(name):
 
 
 def relation_source(path="data.json"):
-    return f'module {{ relation Circuit = r1cs("{path}"); }}'
+    return f' relation Circuit = r1cs("{path}"); '
 
 
 with case("parse and format do not load modules or assets"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", 'module { mod missing; relation R = r1cs("absent.json"); }')
+    source = write(root, "app.pir", ' mod missing; relation R = r1cs("absent.json"); ')
     json.loads(run("protocol-parse", source))
     formatted = run("protocol-format", source)
     source.write_text(formatted)
@@ -63,12 +63,12 @@ with case("parse and format do not load modules or assets"), project_directory()
 
 with case("nested modules use root-relative conventional paths"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", '''module {
+    source = write(root, "app.pir", '''
       mod outer; use outer::inner::Id;
       fn Main(x: bool) -> bool { return Id(x); }
-    }''')
-    write(root, "outer.pir", "module { pub mod inner; }")
-    write(root, "outer/inner.pir", "module { pub fn Id(x: bool) -> bool { return x; } }")
+    ''')
+    write(root, "outer.pir", " pub mod inner; ")
+    write(root, "outer/inner.pir", " pub fn Id(x: bool) -> bool { return x; } ")
     # A wrong sibling lookup must not succeed by finding a convenient file.
     write(root, "inner.pir", "this is not source")
     json.loads(run("protocol-source", source))
@@ -78,18 +78,18 @@ with case("nested modules use root-relative conventional paths"), project_direct
 
 with case("repeat explicit roots and dependency aliases are independent"), project_directory() as tmp:
     root = Path(tmp)
-    left = write(root, "left/lib.pir", f'''module {{ {identity("left")};
+    left = write(root, "left/lib.pir", f''' {identity("left")};
       pub fn Id(x: bool) -> bool {{ return x; }}
-    }}''')
-    right = write(root, "right/lib.pir", f'''module {{ {identity("right")};
+    ''')
+    right = write(root, "right/lib.pir", f''' {identity("right")};
       pub fn Id(x: bool) -> bool {{ return x; }}
-    }}''')
-    source = write(root, "app.pir", f'''module {{
+    ''')
+    source = write(root, "app.pir", f'''
       dependency alpha = {identity("left")};
       dependency beta = {identity("right")};
       use alpha::Id as A; use beta::Id as B;
       fn Main(x: bool) -> bool {{ let y = A(x); return B(y); }}
-    }}''')
+    ''')
     options = (f"--library={left}", f"--library={right}")
     original = json.loads(run("protocol-source", source, *options))
     source.write_text(source.read_text().replace("alpha", "renamed"))
@@ -99,9 +99,9 @@ with case("repeat explicit roots and dependency aliases are independent"), proje
 
 with case("assets belong to declaring files and frozen snapshots survive deletion"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", "module { mod left; mod right; }")
-    write(root, "left.pir", "module { mod leaf; }")
-    write(root, "right.pir", "module { mod leaf; }")
+    source = write(root, "app.pir", " mod left; mod right; ")
+    write(root, "left.pir", " mod leaf; ")
+    write(root, "right.pir", " mod leaf; ")
     write(root, "left/leaf.pir", relation_source())
     write(root, "right/leaf.pir", relation_source())
     left = write(root, "left/data.json", json.dumps(RELATION))
@@ -124,15 +124,15 @@ with case("same relative asset name has independent library owners"), project_di
     root = Path(tmp)
     libraries = []
     for name, coefficient in (("left", "1"), ("right", "3")):
-        libraries.append(write(root, f"{name}/lib.pir", f'''module {{
+        libraries.append(write(root, f"{name}/lib.pir", f'''
           {identity(name)}; relation Circuit = r1cs("data.json");
-        }}'''))
+        '''))
         relation = copy.deepcopy(RELATION)
         relation[5][0][0][0][1] = coefficient
         write(root, f"{name}/data.json", json.dumps(relation))
-    source = write(root, "app.pir", f'''module {{
+    source = write(root, "app.pir", f'''
       dependency a = {identity("left")}; dependency b = {identity("right")};
-    }}''')
+    ''')
     frozen = json.loads(run("protocol-resolve", source, *(f"--library={p}" for p in libraries)))
     assert frozen[0] == "zkc.relations/1", frozen
     assert len(frozen[1][0]) == 2, frozen
@@ -167,11 +167,11 @@ for kind in ("missing", "directory", "escape", "cycle"):
     with case(f"module capture refuses {kind}"), project_directory() as tmp:
         root = Path(tmp) / "project"
         root.mkdir()
-        source = write(root, "app.pir", "module { mod child; }")
+        source = write(root, "app.pir", " mod child; ")
         if kind == "directory":
             (root / "child.pir").mkdir()
         elif kind == "escape":
-            outside = write(Path(tmp), "outside.pir", "module {}")
+            outside = write(Path(tmp), "outside.pir", "")
             (root / "child.pir").symlink_to(outside)
         elif kind == "cycle":
             (root / "child.pir").symlink_to(source)
@@ -180,31 +180,31 @@ for kind in ("missing", "directory", "escape", "cycle"):
 
 with case("duplicate module declarations refuse before second read"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", "module { mod child; mod child; }")
-    write(root, "child.pir", "module {}")
+    source = write(root, "app.pir", " mod child; mod child; ")
+    write(root, "child.pir", "")
     run("protocol-source", source, refuses="project-module-duplicate")
 
 for metadata in (f"{identity('child')};", f"dependency a = {identity('a')};"):
     with case(f"child cannot own root metadata: {metadata}"), project_directory() as tmp:
         root = Path(tmp)
-        source = write(root, "app.pir", "module { mod child; }")
-        write(root, "child.pir", f"module {{ {metadata} }}")
+        source = write(root, "app.pir", " mod child; ")
+        write(root, "child.pir", f" {metadata} ")
         run("protocol-source", source, refuses="project-library-root")
 
 with case("relation dependency count is project-wide including repeated paths"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", "module { mod left; mod right; }")
+    source = write(root, "app.pir", " mod left; mod right; ")
     write(root, "data.json", json.dumps(RELATION))
     for name, count in (("left", 33), ("right", 32)):
         imports = " ".join(f'relation R{i} = r1cs("data.json");' for i in range(count))
-        write(root, f"{name}.pir", f"module {{ {imports} }}")
+        write(root, f"{name}.pir", f" {imports} ")
     run("protocol-resolve", source, refuses="relation-dependency-limit")
 
 for count, size in ((1, 8 * 1024 * 1024 + 1), (17, 8 * 1024 * 1024)):
     with case(f"family and project asset bytes are bounded ({count} imports)"), project_directory() as tmp:
         root = Path(tmp)
         imports = " ".join(f'relation R{i} = air("large.json");' for i in range(count))
-        source = write(root, "app.pir", f"module {{ {imports} }}")
+        source = write(root, "app.pir", f" {imports} ")
         # A sparse file tests capture bounds before decoding. Repeated aliases
         # must count their decoding work even though capture reads bytes once.
         with (root / "large.json").open("wb") as asset:
@@ -213,22 +213,22 @@ for count, size in ((1, 8 * 1024 * 1024 + 1), (17, 8 * 1024 * 1024)):
 
 with case("project source count is bounded before extra child reads"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", "module { " + " ".join(f"mod m{i};" for i in range(256)) + " }")
+    source = write(root, "app.pir", " ".join(f"mod m{i};" for i in range(256)))
     for i in range(255):
-        write(root, f"m{i}.pir", "module {}")
+        write(root, f"m{i}.pir", "")
     # The 257th source is deliberately absent: count refusal takes precedence.
     run("protocol-source", source, refuses="project-source-limit")
 
 with case("module depth is bounded"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", "module { mod m; }")
+    source = write(root, "app.pir", " mod m; ")
     for depth in range(1, 65):
-        write(root, "/".join(["m"] * depth) + ".pir", "module { mod m; }")
+        write(root, "/".join(["m"] * depth) + ".pir", " mod m; ")
     run("protocol-source", source, refuses="project-module-depth")
 
 with case("options are exact and inappropriate combinations refuse"), project_directory() as tmp:
     root = Path(tmp)
-    source = write(root, "app.pir", "module {}")
+    source = write(root, "app.pir", "")
     for option in ("--library", "--library=", "--library=-", "--libraries=x", "extra.pir"):
         run("protocol-source", source, option, refuses="unsupported-option")
     run("protocol-source", source, "--library=x", "--library=x", refuses="duplicate-option")
@@ -236,7 +236,7 @@ with case("options are exact and inappropriate combinations refuse"), project_di
     run("protocol-source", source, "--library=missing.pir", refuses="project-source-missing")
     snapshot = write(root, "source.json", run("protocol-source", source))
     run("protocol-source", snapshot, "--library=missing.pir", refuses="unsupported-option")
-    commands.source("protocol-source", "module {}", "--library=missing.pir", refuses="unsupported-option")
+    commands.source("protocol-source", "", "--library=missing.pir", refuses="unsupported-option")
 
 with case("source stdin never resolves relation assets from working directory"):
     commands.source("protocol-source", relation_source(), refuses="relation-unresolved")
@@ -245,33 +245,33 @@ with case("a root file named like standard input is a file"), project_directory(
     # Only standard input itself has no file. A file of that name anchors its
     # project's child modules like any other.
     root = Path(tmp)
-    write(root, "<stdin>", "module { mod child; use child::Keep; fn Main(x: bool) -> bool { return Keep(x); } }")
-    write(root, "child.pir", "module { pub fn Keep(x: bool) -> bool { return x; } }")
+    write(root, "<stdin>", " mod child; use child::Keep; fn Main(x: bool) -> bool { return Keep(x); } ")
+    write(root, "child.pir", " pub fn Keep(x: bool) -> bool { return x; } ")
     commands.run([compiler, "protocol-source", "<stdin>"], cwd=root)
 
 with case("a refused name leaves the rest of the project to analysis"), project_directory() as tmp:
     # The declaration a name refusal belongs to, and what calls it, are
     # deferred; unrelated declarations are still checked.
     root = Path(tmp)
-    write(root, "inner.pir", "module { pub fn Keep(x: bool) -> bool { return x; } }")
+    write(root, "inner.pir", " fn Hidden(x: bool) -> bool { return x; } "
+                             "pub fn Keep(x: bool) -> bool { return Hidden(x); } ")
     for refusal, text in (
         ("source-name-reserved", "fn src_f(x: bool) -> bool { return x; } "
                                  "fn Uses(x: bool) -> bool { return src_f(x); }"),
-        ("source-name-ambiguous", "mod inner; fn inner.Keep(x: bool) -> bool origin Chosen() { return x; } "
-                                  "fn Uses(x: bool) -> bool { return inner.Keep(x); }"),
+        ("source-name-private", "mod inner; fn Uses(x: bool) -> bool { return inner::Hidden(x); }"),
     ):
-        source = write(root, "app.pir", f"module {{ {text} fn Good(x: bool) -> bool {{ return x; }} }}")
+        source = write(root, "app.pir", f" {text} fn Good(x: bool) -> bool {{ return x; }} ")
         analysis = json.loads(run("protocol-analyze", source))
         assert [d["code"] for d in analysis["diagnostics"]] == [refusal], analysis["diagnostics"]
         states = {d["display_name"]: d["body_state"] for d in analysis["declarations"]}
         assert states["Good"] == "source_checked" and states["Uses"] == "deferred", states
 
 with case("file syntax recovery preserves partial analysis"), project_directory() as tmp:
-    source = write(Path(tmp), "app.pir", '''module {
+    source = write(Path(tmp), "app.pir", '''
       fn Before(x: bool) -> bool { return x; }
       fn Broken(x: bool) -> bool { let x = ; }
       fn After(x: bool) -> bool { return x; }
-    }''')
+    ''')
     analysis = json.loads(run("protocol-analyze", source))
     assert analysis["state"] == "incomplete", analysis
     assert analysis["diagnostics"], analysis

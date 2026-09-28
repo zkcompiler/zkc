@@ -49,7 +49,7 @@ def main():
         if extension:
             source_text = source_text.replace('rows.merkle-keccak256.koala-bear/1',
                 'rows.merkle-keccak256.koala-bear.ext8-binomial3/1')
-            source_text = source_text.replace('Vector<koala-bear::Element>', 'Vector<"koala-bear.ext8-binomial3"::Element>')
+            source_text = source_text.replace('Vector<"koala-bear"::Element>', 'Vector<"koala-bear.ext8-binomial3"::Element>')
         source_path = folder / 'source.pir'
         source_path.write_text(source_text)
         descriptor_path = repo / 'tests/fixtures/oracle-construction.construction.pir'

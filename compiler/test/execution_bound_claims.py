@@ -261,7 +261,7 @@ loop = """loop [outer] 2 carry () capture (x, y, ctx, admitted) -> () {
       }
       yield ();
     }"""
-prefix = original[: original.index("  protocol Pair")]
+prefix = original[: original.index("protocol Pair")]
 loopsource = (
     prefix
     + """  protocol Repeated {
@@ -272,7 +272,7 @@ loopsource = (
     }
     instance repeated: Repeated { roles (V = V); }
     entry main = repeated;
-    }"""
+    """
 )
 source.write_text(loopsource.replace("BODY", loop))
 repeated = json.loads(call(compiler, "claim-inspect", source, "main"))
@@ -400,8 +400,9 @@ repository = Path(__file__).resolve().parents[2]
 source = root / "source.pir"
 text = (corpus / "generic-committed-two-factor.pir").read_text()
 text = text.replace(
-    ' using (\n    fold_f = "arkworks-msb/poly.fold",\n    fold_g = "arkworks-msb/poly.fold"\n  )', ''
+    ' using (\n  fold_f = "arkworks-msb/poly.fold",\n  fold_g = "arkworks-msb/poly.fold"\n)', ''
 )
+assert "arkworks-msb/poly.fold" not in text
 source.write_text(text)
 descriptor = examples / "committed-two-factor.construction.pir"
 catalog = json.loads(call(compiler, "claim-inspect", source, "main"))

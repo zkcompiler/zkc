@@ -111,7 +111,7 @@ def generic_source(contract, ins, outs, attrs, domain):
     family, operation = contract.split('.')
     module = 'algebra' if family in ('field', 'vector', 'matrix') else family
     public_name = (family + '_' + operation if family in ('vector', 'matrix') else
-                   'evaluate' if contract == 'poly.univariate_evaluate' else operation)
+                   'evaluate' if contract == 'poly.univariate_evaluate' else 'r#fold' if operation == 'fold' else operation)
     type_imports = {
         'V': ('algebra', 'Vector'), 'M': ('algebra', 'Matrix'),
         'T': ('poly', 'Table'), 'P': ('poly', 'Point'),
@@ -121,7 +121,7 @@ def generic_source(contract, ins, outs, attrs, domain):
     imports = '\n  '.join('use zkc::' + owner + '::' + name + ';'
                            for owner, name in sorted({type_imports[k]
                                for k in ins + outs if k in type_imports}))
-    return f'''module {{
+    return f'''
   use zkc::{module};
   {imports}
   fn Work<{parameter}: domain {sort}>({join(n+': '+abstract[k] for n,k in zip(in_names,ins))})
@@ -130,7 +130,7 @@ def generic_source(contract, ins, outs, attrs, domain):
       attributes ({join(json.dumps(a) for a in attrs)});
     return ({join(out_names)});
   }}
-  configure Concrete = Work({parameter} = {actual});
+  configure Concrete = Work({parameter} = {json.dumps(actual)});
   protocol Main {{
     roles (P);
     inputs ({join('P '+n+': '+concrete[k] for n,k in zip(in_names,ins))});
@@ -140,7 +140,7 @@ def generic_source(contract, ins, outs, attrs, domain):
   }}
   instance concrete: Main {{ roles (P = P); }}
   entry main = concrete;
-}}'''
+'''
 
 
 for domain in fields:
@@ -251,14 +251,14 @@ for field, group, backend in fields[:2]:
         codec = 'zkcv.'+kind+('.'+nominal if kind != 'bool' else '')+'/1'
         encoded = 'E, '+parameter if kind != 'bool' else 'E'
         config = ('T = "'+transcript+'", '+
-                  (parameter+' = '+nominal+', ' if kind != 'bool' else '')+
+                  (parameter+' = '+json.dumps(nominal)+', ' if kind != 'bool' else '')+
                   'E = "'+codec+'"')
         # Exact transcript operations belong to the admitted carrier lane.
         text = f'''carrier module {{
           fn Observe<{roots}>(state: Transcript<T>, value: {payload}) -> (Transcript<T>)
-              requires (Transcript(T), Encodes.{kind}({encoded})) {{
+              requires (Transcript(T), "Encodes.{kind}"({encoded})) {{
             [observe] let next = transcript::observe::{kind}::<{arguments}>(state, value)
-                attributes (Main, message, schema, P, V);
+                attributes (Main, "message", schema, P, V);
             return (next);
           }}
           configure Concrete = Observe({config});
@@ -277,7 +277,8 @@ for field, group, backend in fields[:2]:
         verify(run('protocol-physical-ir', text))
         if kind != 'bool':
             bad = text.replace('E = "'+codec+'"', 'E = "zkcv.bool/1"')
-            run('protocol-import', bad, refuses='source-protocol-requirement')
+            # Carrier text is checked by common admission, not the source checker.
+            run('protocol-import', bad, refuses='binding-requirement')
 
 for contract, ins, outs, attrs in [('vector.constant', '', 'V', ['1']),
                                     ('vector.scatter_sum', 'V', 'V', ['1', '0']),

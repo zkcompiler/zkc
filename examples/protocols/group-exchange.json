@@ -2,7 +2,7 @@
   "zkc.protocol/1",
   [
     [
-      "curve.generator",
+      "curve_generator",
       "curve.generator",
       [
         "bls12-381.g1"
@@ -10,7 +10,7 @@
       "arkworks/curve.generator"
     ],
     [
-      "curve.scale",
+      "curve_scale",
       "curve.scale",
       [
         "bls12-381.g1"
@@ -18,7 +18,7 @@
       "arkworks/curve.scale"
     ],
     [
-      "curve.empty",
+      "curve_empty",
       "curve.empty",
       [
         "bls12-381.g1"
@@ -26,7 +26,7 @@
       "arkworks/curve.empty"
     ],
     [
-      "curve.append",
+      "curve_append",
       "curve.append",
       [
         "bls12-381.g1"
@@ -34,7 +34,7 @@
       "arkworks/curve.append"
     ],
     [
-      "curve.commit",
+      "curve_commit",
       "curve.commit",
       [
         "bls12-381.g1"
@@ -42,7 +42,7 @@
       "arkworks/curve.commit"
     ],
     [
-      "curve.at",
+      "curve_at",
       "curve.at",
       [
         "bls12-381.g1"
@@ -50,7 +50,7 @@
       "arkworks/curve.at"
     ],
     [
-      "curve.response",
+      "curve_response",
       "curve.response",
       [
         "bls12-381.fr"
@@ -58,7 +58,7 @@
       "arkworks/curve.response"
     ],
     [
-      "curve.add",
+      "curve_add",
       "curve.add",
       [
         "bls12-381.g1"
@@ -66,7 +66,7 @@
       "arkworks/curve.add"
     ],
     [
-      "curve.equal",
+      "curve_equal",
       "curve.equal",
       [
         "bls12-381.g1"
@@ -74,7 +74,7 @@
       "arkworks/curve.equal"
     ],
     [
-      "control.require",
+      "control_require",
       "control.require",
       [],
       "arkworks/control.require"
@@ -97,7 +97,7 @@
         [
           "op",
           "generator",
-          "curve.generator",
+          "curve_generator",
           [],
           [],
           [
@@ -107,7 +107,7 @@
         [
           "op",
           "public",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "base",
@@ -146,7 +146,7 @@
         [
           "op",
           "generator",
-          "curve.generator",
+          "curve_generator",
           [],
           [],
           [
@@ -156,7 +156,7 @@
         [
           "op",
           "empty",
-          "curve.empty",
+          "curve_empty",
           [],
           [],
           [
@@ -166,7 +166,7 @@
         [
           "op",
           "append",
-          "curve.append",
+          "curve_append",
           [],
           [
             "empty",
@@ -179,7 +179,7 @@
         [
           "op",
           "commit",
-          "curve.commit",
+          "curve_commit",
           [],
           [
             "bases",
@@ -193,7 +193,7 @@
         [
           "op",
           "point",
-          "curve.at",
+          "curve_at",
           [
             "0"
           ],
@@ -241,7 +241,7 @@
         [
           "op",
           "respond",
-          "curve.response",
+          "curve_response",
           [],
           [
             "secret",
@@ -292,7 +292,7 @@
         [
           "op",
           "generator",
-          "curve.generator",
+          "curve_generator",
           [],
           [],
           [
@@ -302,7 +302,7 @@
         [
           "op",
           "left",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "base",
@@ -315,7 +315,7 @@
         [
           "op",
           "public",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "public",
@@ -328,7 +328,7 @@
         [
           "op",
           "right",
-          "curve.add",
+          "curve_add",
           [],
           [
             "commitment",
@@ -341,7 +341,7 @@
         [
           "op",
           "equal",
-          "curve.equal",
+          "curve_equal",
           [],
           [
             "left",
@@ -354,7 +354,7 @@
         [
           "op",
           "require",
-          "control.require",
+          "control_require",
           [],
           [
             "ok"

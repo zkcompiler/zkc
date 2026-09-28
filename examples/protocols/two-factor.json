@@ -2,7 +2,7 @@
   "zkc.protocol/1",
   [
     [
-      "pcs.commit",
+      "pcs_commit",
       "pcs.commit",
       [
         "multilinear.kzg.bls12-381/1"
@@ -10,7 +10,7 @@
       "arkworks/pcs.commit"
     ],
     [
-      "poly.empty_point",
+      "poly_empty_point",
       "poly.empty_point",
       [
         "bls12-381.fr"
@@ -18,7 +18,7 @@
       "arkworks/poly.empty_point"
     ],
     [
-      "poly.product_round",
+      "poly_product_round",
       "poly.product_round",
       [
         "bls12-381.fr"
@@ -26,7 +26,7 @@
       "arkworks/poly.product_round"
     ],
     [
-      "poly.boundary",
+      "poly_boundary",
       "poly.boundary",
       [
         "bls12-381.fr"
@@ -34,7 +34,7 @@
       "arkworks/poly.boundary"
     ],
     [
-      "field.equal",
+      "field_equal",
       "field.equal",
       [
         "bls12-381.fr"
@@ -42,13 +42,13 @@
       "arkworks/field.equal"
     ],
     [
-      "control.require",
+      "control_require",
       "control.require",
       [],
       "arkworks/control.require"
     ],
     [
-      "random.draw",
+      "random_draw",
       "random.draw",
       [
         "bls12-381.fr"
@@ -56,7 +56,7 @@
       "arkworks/random.draw"
     ],
     [
-      "poly.round_evaluate",
+      "poly_round_evaluate",
       "poly.round_evaluate",
       [
         "bls12-381.fr"
@@ -64,7 +64,7 @@
       "arkworks/poly.round_evaluate"
     ],
     [
-      "poly.fold",
+      "poly_fold",
       "poly.fold",
       [
         "bls12-381.fr"
@@ -72,7 +72,7 @@
       "arkworks/poly.fold"
     ],
     [
-      "poly.append_point",
+      "poly_append_point",
       "poly.append_point",
       [
         "bls12-381.fr"
@@ -80,7 +80,7 @@
       "arkworks/poly.append_point"
     ],
     [
-      "pcs.open",
+      "pcs_open",
       "pcs.open",
       [
         "multilinear.kzg.bls12-381/1"
@@ -88,7 +88,7 @@
       "arkworks/pcs.open"
     ],
     [
-      "pcs.check",
+      "pcs_check",
       "pcs.check",
       [
         "multilinear.kzg.bls12-381/1"
@@ -96,7 +96,7 @@
       "arkworks/pcs.check"
     ],
     [
-      "field.mul",
+      "field_mul",
       "field.mul",
       [
         "bls12-381.fr"
@@ -132,7 +132,7 @@
         [
           "op",
           "commit_f",
-          "pcs.commit",
+          "pcs_commit",
           [],
           [
             "key",
@@ -146,7 +146,7 @@
         [
           "op",
           "commit_g",
-          "pcs.commit",
+          "pcs_commit",
           [],
           [
             "key",
@@ -183,7 +183,7 @@
         [
           "op",
           "point",
-          "poly.empty_point",
+          "poly_empty_point",
           [],
           [],
           [
@@ -222,7 +222,7 @@
         [
           "op",
           "round",
-          "poly.product_round",
+          "poly_product_round",
           [],
           [
             "f",
@@ -270,7 +270,7 @@
         [
           "op",
           "boundary",
-          "poly.boundary",
+          "poly_boundary",
           [],
           [
             "q"
@@ -282,7 +282,7 @@
         [
           "op",
           "equal",
-          "field.equal",
+          "field_equal",
           [],
           [
             "sum",
@@ -295,7 +295,7 @@
         [
           "op",
           "require",
-          "control.require",
+          "control_require",
           [],
           [
             "valid"
@@ -305,7 +305,7 @@
         [
           "op",
           "draw",
-          "random.draw",
+          "random_draw",
           [],
           [
             "coins"
@@ -318,7 +318,7 @@
         [
           "op",
           "evaluate",
-          "poly.round_evaluate",
+          "poly_round_evaluate",
           [],
           [
             "q",
@@ -367,7 +367,7 @@
         [
           "op",
           "fold_f",
-          "poly.fold",
+          "poly_fold",
           [],
           [
             "f",
@@ -380,7 +380,7 @@
         [
           "op",
           "fold_g",
-          "poly.fold",
+          "poly_fold",
           [],
           [
             "g",
@@ -423,7 +423,7 @@
         [
           "op",
           "append",
-          "poly.append_point",
+          "poly_append_point",
           [],
           [
             "p",
@@ -466,7 +466,7 @@
         [
           "op",
           "open",
-          "pcs.open",
+          "pcs_open",
           [],
           [
             "state",
@@ -522,7 +522,7 @@
         [
           "op",
           "check",
-          "pcs.check",
+          "pcs_check",
           [],
           [
             "key",
@@ -538,7 +538,7 @@
         [
           "op",
           "require",
-          "control.require",
+          "control_require",
           [],
           [
             "valid"
@@ -581,7 +581,7 @@
         [
           "op",
           "product",
-          "field.mul",
+          "field_mul",
           [],
           [
             "f",
@@ -594,7 +594,7 @@
         [
           "op",
           "equal",
-          "field.equal",
+          "field_equal",
           [],
           [
             "product",

@@ -158,21 +158,21 @@ The readable development frontend retains generic source before specialization:
 use zkc::poly;
 fn Fold<F: domain Field>(table: poly::Table<F>, r: F::Element) -> poly::Table<F>
     requires (CommRing(F)) {
-  [fold] let result = poly::fold::<F>(table, r);
+  [r#fold] let result = poly::r#fold::<F>(table, r);
   return result;
 }
 configure Partial = Fold();
-configure Direct = Partial(F = bls12-381.fr);
-configure OtherLayout = Partial(F = bls12-381.fr)
-    using (fold = "arkworks-msb/poly.fold");
+configure Direct = Partial(F = "bls12-381.fr");
+configure OtherLayout = Partial(F = "bls12-381.fr")
+    using (r#fold = "arkworks-msb/poly.fold");
 ```
 
 `F: domain Field` declares only the sort of a static identity. `CommRing(F)` is an
 algebraic requirement, not a runtime field object. An operation has explicit static term
 arguments and ordinary SSA operands. Empty static argument lists support helpers
 such as `Both<>` with no cryptographic dependencies. Associated members retain
-their own sorts: `G.Scalar`, `C.ValueField`, `C.PointField`,
-`C.EvaluationField` and `T.ChallengeField` do not acquire generic equality merely
+their own sorts: `G::Scalar`, `C::ValueField`, `C::PointField`,
+`C::EvaluationField` and `T::ChallengeField` do not acquire generic equality merely
 because the current finite installation uses the same field for them.
 
 Formation checks every definition, including unused definitions. It checks

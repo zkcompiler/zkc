@@ -206,12 +206,12 @@ def test_structural_formation_permissions_and_refusals(drivers, directory):
         deepest = fixed(deepest, 1)
     accepted.append((deepest, True, True, None))
     refused = [
-        "", "unknown", "unknown<field:koala-bear,4>", "field<koala-bear>",
+        "", "unknown", "unknown<field:\"koala-bear\",4>", "field<\"koala-bear\">",
         "fixed_vector", "fixed_vector:field:koala-bear,4", "fixed_vector<>",
-        "fixed_vector<field:koala-bear>", "fixed_vector<field:koala-bear,4,4>",
-        "fixed_vector<koala-bear,4>", "fixed_vector<4,field:koala-bear>",
-        "fixed_vector<field:unknown,4>", "fixed_vector<field:koala-bear, 4>",
-        "fixed_vector<field:koala-bear@plonky3.koala-bear/1,4>",
+        "fixed_vector<field:\"koala-bear\">", "fixed_vector<field:\"koala-bear\",4,4>",
+        "fixed_vector<\"koala-bear\",4>", "fixed_vector<4,field:\"koala-bear\">",
+        "fixed_vector<field:unknown,4>", "fixed_vector<field:\"koala-bear\", 4>",
+        "fixed_vector<field:\"koala-bear\"@plonky3.koala-bear/1,4>",
         fixed("field:koala-bear") + "@plonky3.fixed-vector/1",
         fixed("field:koala-bear", "04"), fixed("field:koala-bear", "-1"),
         fixed("field:koala-bear", "+4"), fixed("field:koala-bear", "1.0"),
@@ -549,7 +549,7 @@ def test_unknowns_malformed_arguments_and_no_codec(drivers, directory):
             ("fixed_vector.dot", ["koala-bear", "04"]),
             ("fixed_vector.dot", ["koala-bear", "1048577"]),
             ("transcript.observe.fixed_vector", ["merlin3.bls12-381.fr64be/1",
-                                                 "fixed_vector<field:bls12-381.fr,4>", "invented.codec"]),
+                                                 "fixed_vector<field:\"bls12-381.fr\",4>", "invented.codec"]),
             ("transcript.observe.field", ["merlin3.bls12-381.fr64be/1", "bls12-381.fr", "invented.codec"]),
             ("resource_unit.create", ["0bad"]),
             ("field.add", ["koala-bear", "koala-bear"]),
@@ -627,7 +627,7 @@ def test_uninstalled_envelope_vocabulary_refuses(drivers, directory):
     # to its separate compiler installation. Unchanged readers must not infer
     # its admission or semantics from familiar nested types or contract shape.
     requests = [
-        {"type": "envelope<field:koala-bear,4>"},
+        {"type": "envelope<field:\"koala-bear\",4>"},
         {"type": "envelope<bool,2>"},
         {"type": "fixed_vector<envelope<bool,2>,3>"},
         binding("envelope.keep", ["field:koala-bear", "4"]),

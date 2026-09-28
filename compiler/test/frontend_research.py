@@ -68,7 +68,7 @@ class Research(unittest.TestCase):
             self.assertEqual(stages[name]["status"], "success")
         self.assertEqual((output / "original.bin").read_bytes(), self.source.read_bytes())
         self.assertFalse((output / "injected").exists())
-        self.assertIn("module", (output / "source.pir").read_text())
+        self.assertIn("entry main", (output / "source.pir").read_text())
         report = manifest["measurement"]
         # The build requires major 23 and only warns on the patch release,
         # which compiler/CMakeLists.txt says is "reported, not required", so
@@ -110,7 +110,7 @@ class Research(unittest.TestCase):
         self.assertGreater(manifest["measurement"]["counts"]["spans"], 0)
 
     def test_syntax_failure(self):
-        self.source.write_bytes(b"module {\n  fn")
+        self.source.write_bytes(b"fn Broken(\n  x")
         output, manifest, stages = self.run_bundle(code=1)
         self.assertEqual(stages["syntax"]["status"], "refused")
         self.assertEqual(stages["admission"]["status"], "skipped")
@@ -202,7 +202,7 @@ class Research(unittest.TestCase):
         def change(path):
             captured = real_snapshot(path)
             reads.append(Path(path))
-            Path(path).write_bytes(b"module { broken after capture")
+            Path(path).write_bytes(b"fn broken after capture")
             return captured
 
         output = self.root / "one snapshot"

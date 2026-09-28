@@ -2,6 +2,7 @@
 #include "Requests.h"
 #include "zkc/Frontend/Loading.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 #include <filesystem>
 #include <map>
@@ -53,6 +54,8 @@ struct Capture {
   Error source(ProjectLibrary &library, const fs::path &base,
                const fs::path &physical, std::vector<std::string> logical,
                Input input, std::set<fs::path> &ancestors) {
+    if (isCommonDocument(classifyDocument(input.text())))
+      return zkc::error("source-carrier-project");
     if (logical.size() > 64)
       return zkc::error("project-module-depth");
     if (sourceCount == ProjectInput::maxSources ||
@@ -135,6 +138,11 @@ Expected<ProjectInput> captureProject(Input application,
                                       ArrayRef<Input> libraryRoots) {
   if (libraryRoots.size() >= ProjectInput::maxLibraries)
     return zkc::error("project-library-limit");
+  if (isCommonDocument(classifyDocument(application.text())) ||
+      llvm::any_of(libraryRoots, [](const Input &input) {
+        return isCommonDocument(classifyDocument(input.text()));
+      }))
+    return zkc::error("source-carrier-project");
   Capture capture;
   std::vector<Input> roots{std::move(application)};
   roots.insert(roots.end(), libraryRoots.begin(), libraryRoots.end());

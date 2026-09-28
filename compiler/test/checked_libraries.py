@@ -23,10 +23,10 @@ SCALAR = '''component ScalarCell<F: domain field>: Cell {
   type Value = Element<F>;
   local step(x: Value) -> Value { return x; }
 }'''
-DEMO = f'''module {{ {IDENTITY} {INTERFACE} {CLIENT} {EMPTY} use zkc::algebra::Element; {SCALAR}
+DEMO = f''' {IDENTITY} {INTERFACE} {CLIENT} {EMPTY} use zkc::algebra::Element; {SCALAR}
   link Empty = Client<EmptyCell>;
   link Scalar = Client<ScalarCell<"koala-bear">>;
-}}'''
+'''
 
 
 def run(command, text, refuses=None):
@@ -55,48 +55,48 @@ with case("one abstract client links zero-payload affine and scalar layouts"):
     assert source(emitted) == json.loads(emitted)
 
 with case("client checks separately without any component declaration"):
-    report = json.loads(run("protocol-analyze", f"module {{ {IDENTITY} {INTERFACE} {CLIENT} }}"))
+    report = json.loads(run("protocol-analyze", f" {IDENTITY} {INTERFACE} {CLIENT} "))
     assert report["state"] == "source_checked"
     assert report["checked_libraries"]["query_state"] == "retained_checked_capabilities"
     assert report["checked_libraries"]["pir_admission"] == "not_requested"
 
 with case("affine duplication fails before selecting a concrete implementation"):
     bad = CLIENT.replace("return C::step(x);", "let y = C::step(x); return C::step(x);")
-    run("protocol-source", f"module {{ {IDENTITY} {INTERFACE} {bad} }}", "library-resource-use")
+    run("protocol-source", f" {IDENTITY} {INTERFACE} {bad} ", "library-resource-use")
 
 with case("copy permission permits reuse under the public interface"):
     copy = INTERFACE.replace("Value drop", "Value copy drop")
     client = CLIENT.replace("return C::step(x);", "let y = C::step(x); return C::step(x);")
-    source(f"module {{ {IDENTITY} {copy} {client} use zkc::algebra::Element; {SCALAR} link Closed = Client<ScalarCell<\"koala-bear\">>; }}")
+    source(f"{IDENTITY} {copy} {client} use zkc::algebra::Element; {SCALAR} link Closed = Client<ScalarCell<\"koala-bear\">>;")
 
 with case("copy promise cannot be implemented by affine RNG"):
     copy = INTERFACE.replace("Value drop", "Value copy drop")
     affine = SCALAR.replace("Element<F>", "Rng<F>")
-    run("protocol-source", f"module {{ {IDENTITY} {copy} {CLIENT} use zkc::algebra::Element; use zkc::random::Rng; {affine} link Closed = Client<ScalarCell<\"koala-bear\">>; }}", "library-permission-bound")
+    run("protocol-source", f"{IDENTITY} {copy} {CLIENT} use zkc::algebra::Element; use zkc::random::Rng; {affine} link Closed = Client<ScalarCell<\"koala-bear\">>;", "library-permission-bound")
 
 with case("typed product projection remains before layout"):
     client = '''fn Client<C: Cell>(x: (C::Value, C::Value)) -> C::Value {
-      return C::step(x[1]);
+      return C::step(x.1);
     }'''
-    source(f"module {{ {IDENTITY} {INTERFACE} {client} {EMPTY} link Closed = Client<EmptyCell>; }}")
+    source(f" {IDENTITY} {INTERFACE} {client} {EMPTY} link Closed = Client<EmptyCell>; ")
 
 with case("static source array projections preserve distinct resources"):
     client = '''fn Client<C: Cell>(x: Array<C::Value, 2>) -> (C::Value, C::Value) {
       return (C::step(x[0]), C::step(x[1]));
     }'''
-    source(f"module {{ {IDENTITY} {INTERFACE} {client} {EMPTY} link Closed = Client<EmptyCell>; }}")
+    source(f" {IDENTITY} {INTERFACE} {client} {EMPTY} link Closed = Client<EmptyCell>; ")
 
 with case("overlapping whole and partial moves fail"):
     client = '''fn Client<C: Cell>(x: Array<C::Value, 2>) -> Array<C::Value, 2> {
       let y = C::step(x[0]); return x;
     }'''
-    run("protocol-source", f"module {{ {IDENTITY} {INTERFACE} {client} }}", "library-resource-use")
+    run("protocol-source", f" {IDENTITY} {INTERFACE} {client} ", "library-resource-use")
 
 with case("dynamic array indexing is refused explicitly"):
     client = '''fn Client<C: Cell>(x: Array<C::Value, 2>, n: index) -> C::Value {
       return x[n];
     }'''
-    run("protocol-source", f"module {{ {IDENTITY} {INTERFACE} {client} }}", "library-source-index")
+    run("protocol-source", f" {IDENTITY} {INTERFACE} {client} ", "library-source-projection")
 
 with case("sorted associated natural width is typed in the interface"):
     interface = '''interface Views { type View drop; nat Width;
@@ -105,7 +105,7 @@ with case("sorted associated natural width is typed in the interface"):
     client = '''fn Client<C: Views>(x: Array<C::View, C::Width>) -> Array<C::View, C::Width> {
       return C::forward(x);
     }'''
-    source(f"module {{ {IDENTITY} {interface} {client} }}")
+    source(f" {IDENTITY} {interface} {client} ")
 
 for text, code in [
     (DEMO.replace('resolution="capture-1"', 'mystery="capture-1"'), "library-source-identity"),
@@ -128,7 +128,7 @@ with case("unit-result guard remains an installed logical operation"):
     interface = INTERFACE.replace("x: Value", "x: Value, ok: bool").replace("-> Value;", "-> Value effects (local);")
     empty = EMPTY.replace("x: Value", "x: Value, ok: bool").replace("-> Value {", "-> Value effects (local) {").replace("return x;", "zkc::core::require(ok); return x;")
     client = CLIENT.replace("x: C::Value", "x: C::Value, ok: bool").replace("-> C::Value {", "-> C::Value effects (local) {").replace("C::step(x)", "C::step(x, ok)")
-    emitted = run("protocol-source", f"module {{ {IDENTITY} {interface} {client} {empty} link Closed = Client<EmptyCell>; }}")
+    emitted = run("protocol-source", f" {IDENTITY} {interface} {client} {empty} link Closed = Client<EmptyCell>; ")
     assert "control.require" in emitted
     assert "resource_unit:" in emitted
 
@@ -143,9 +143,9 @@ with case("natural and association parameters remain typed selections"):
     client = '''fn Client<C: Views>(x: Array<C::View, C::Width>) -> Array<C::View, C::Width> {
       return C::forward(x);
     }'''
-    text = f'''module {{ {IDENTITY} association Captured = "relation:exact-subject-1";
+    text = f''' {IDENTITY} association Captured = "relation:exact-subject-1";
       {interface} {component} {client} link Closed = Client<ViewsImpl<2, Captured>>;
-    }}'''
+    '''
     source(text)
     run("protocol-source", text.replace("ViewsImpl<2, Captured>", "ViewsImpl<Captured, 2>"), "library-static-sort")
 
@@ -157,29 +157,29 @@ with case("exact public domain equation rejects a different installed field"):
       local step(x: Element<F>) -> Element<F> { return x; }
     }'''
     client = '''fn Client<C: FieldAPI>(x: Element<C::F>) -> Element<C::F> { return C::step(x); }'''
-    run("protocol-source", f"module {{ use zkc::algebra::Element; {IDENTITY} {interface} {component} {client} link Closed = Client<Impl>; }}", "library-bound")
+    run("protocol-source", f" use zkc::algebra::Element; {IDENTITY} {interface} {component} {client} link Closed = Client<Impl>; ", "library-bound")
 
 with case("explicit component origin is refused rather than discarded"):
     component = EMPTY.replace("-> Value {", "-> Value origin Other() {")
-    run("protocol-source", f"module {{ {IDENTITY} {INTERFACE} {component} }}", "library-source-origin")
+    run("protocol-source", f" {IDENTITY} {INTERFACE} {component} ", "library-source-origin")
 
 with case("static-only components retain a captured constructor environment"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface Marker {{ type Value copy drop; }}
       component BoolMarker: Marker {{ type Value = bool; }}
       fn Client<C: Marker>(x: C::Value) -> C::Value {{ return x; }}
       link Closed = Client<BoolMarker>;
-    }}'''
+    '''
     source(text)
 
 with case("explicit selected backend is not silently discarded"):
-    text = f'''module {{ {IDENTITY}
-      bind negate = bool::not() using "logical/bool.not";
+    text = f''' {IDENTITY}
+      bind negate = "bool.not"() using "logical/bool.not";
       interface Bit {{ type Value copy drop; local flip(x: Value) -> Value; }}
       component Impl: Bit {{ type Value = bool;
         local flip(x: Value) -> Value {{ return negate(x); }}
       }}
-    }}'''
+    '''
     run("protocol-source", text, "library-source-implementation")
 
 with case("generic component dependency checks against its bound interface"):
@@ -187,9 +187,9 @@ with case("generic component dependency checks against its bound interface"):
       type Value = D::Value;
       local step(x: Value) -> Value { return D::step(x); }
     }'''
-    text = f'''module {{ {IDENTITY} {INTERFACE} {CLIENT} {EMPTY} {wrapper}
+    text = f''' {IDENTITY} {INTERFACE} {CLIENT} {EMPTY} {wrapper}
       link Closed = Client<Wrapper<EmptyCell>>;
-    }}'''
+    '''
     emitted = run("protocol-source", text)
     assert "resource_unit:" in emitted
 
@@ -202,17 +202,17 @@ with case("component dependency must match the exact declared interface"):
       component OtherImpl: Other { type Value = bool;
         local step(x: Value) -> Value { return x; }
       }'''
-    text = f'''module {{ {IDENTITY} {INTERFACE} {CLIENT} {EMPTY} {wrapper} {other}
+    text = f''' {IDENTITY} {INTERFACE} {CLIENT} {EMPTY} {wrapper} {other}
       link Closed = Client<Wrapper<OtherImpl>>;
-    }}'''
+    '''
     run("protocol-source", text, "library-interface-drift")
 
 with case("authored occurrence labels cannot silently lose their identity"):
     client = CLIENT.replace("return C::step(x);", "[named] let y = C::step(x); return y;")
-    run("protocol-source", f"module {{ {IDENTITY} {INTERFACE} {client} }}", "library-source-site")
+    run("protocol-source", f" {IDENTITY} {INTERFACE} {client} ", "library-source-site")
 
 
-NATIVE_DEMO = """module {
+NATIVE_DEMO = """
   use zkc::algebra;
   use zkc::core;
   library(namespace="example", name="checked-guards", version="1", resolution="demo-1");
@@ -260,7 +260,7 @@ NATIVE_DEMO = """module {
   instance ScalarRun: RunScalar { roles (P = Prover); }
   entry empty = EmptyRun;
   entry scalar = ScalarRun;
-}
+
 """
 
 with case("readable two-layout guarded clients compile through physical PIR"):
@@ -277,41 +277,41 @@ with case("same-named component members retain distinct origin selectors"):
 
 with case("pure aliases share while explicit seals distinguish selections"):
     import re
-    aliases = f'''module {{ {IDENTITY} {INTERFACE} {EMPTY} {CLIENT}
+    aliases = f''' {IDENTITY} {INTERFACE} {EMPTY} {CLIENT}
       select A = EmptyCell; select B = EmptyCell;
       link First = Client<A>; link Second = Client<B>;
-    }}'''
+    '''
     shared = run("protocol-source", aliases)
     assert len(set(re.findall(r"resource_unit:library_slot_[0-9]+", shared))) == 1
     sealed = run("protocol-source", aliases.replace("select A", "seal A").replace("select B", "seal B"))
     assert len(set(re.findall(r"resource_unit:library_slot_[0-9]+", sealed))) == 2
 
 with case("selection alias cycles refuse with a bounded diagnostic"):
-    run("protocol-source", f"module {{ {IDENTITY} select A = B; select B = A; }}", "library-source-cycle")
+    run("protocol-source", f" {IDENTITY} select A = B; select B = A; ", "library-source-cycle")
 
 with case("installed primitive work cannot be claimed effect-free"):
-    text = f'''module {{
+    text = f'''
   use zkc::core; {IDENTITY}
       interface Bit {{ type Value copy drop; local flip(x: Value) -> Value; }}
       component Impl: Bit {{ type Value = bool;
         local flip(x: Value) -> Value {{ return zkc::core::not(x); }}
       }}
-    }}'''
+    '''
     run("protocol-source", text, "library-effect")
 
 with case("unsupported required facets block linking"):
     interface = INTERFACE.replace("type Value drop;", 'type Value drop; facet required "unknown-owner" "security";')
-    run("protocol-source", f"module {{ {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; }}", "library-required-facet")
+    run("protocol-source", f" {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; ", "library-required-facet")
 
 with case("unsupported optional facets are retained without blocking"):
     interface = INTERFACE.replace("type Value drop;", 'type Value drop; facet optional "unknown-owner" "security";')
-    source(f"module {{ {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; }}")
+    source(f" {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; ")
 
 with case("supported resource and conservative effect facets check"):
     interface = INTERFACE.replace("type Value drop;", '''type Value drop;
       facet required "zkc.frontend.library" "resources";
       facet required "zkc.frontend.library" "effects";''')
-    source(f"module {{ {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; }}")
+    source(f" {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; ")
 
 with case("retained queries expose abstract checks and linked layouts"):
     report = json.loads(run("protocol-analyze", DEMO))["checked_libraries"]
@@ -328,11 +328,11 @@ with case("retained queries expose abstract checks and linked layouts"):
 
 with case("optional facet evidence stays unavailable in immutable link query"):
     interface = INTERFACE.replace("type Value drop;", 'type Value drop; facet optional "unknown-owner" "security";')
-    report = json.loads(run("protocol-analyze", f"module {{ {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; }}"))["checked_libraries"]
+    report = json.loads(run("protocol-analyze", f" {IDENTITY} {interface} {EMPTY} {CLIENT} link Closed = Client<EmptyCell>; "))["checked_libraries"]
     assert report["links"][0]["evidence"][0]["state"] == "unavailable"
 
 with case("nominal records construct and project before private layout"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       struct Box {{ value: bool }}
       interface Boxes {{ type Value copy drop;
         local pack(x: bool) -> Value; local unpack(x: Value) -> bool;
@@ -343,30 +343,30 @@ with case("nominal records construct and project before private layout"):
       }}
       fn Client<C: Boxes>(x: bool) -> bool {{ return C::unpack(C::pack(x)); }}
       link Closed = Client<Impl>;
-    }}'''
+    '''
     source(text)
     report = json.loads(run("protocol-analyze", text))["checked_libraries"]
     assert report["component_bodies"][0]["body"]["instructions"][0]["output"]["type"]["kind"] == "record"
 
 with case("equal record layouts do not erase nominal mismatch"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       struct A {{ value: bool }} struct B {{ value: bool }}
       interface Boxes {{ type Value copy drop; local pack(x: bool) -> Value; }}
       component Impl: Boxes {{ type Value = A;
         local pack(x: bool) -> Value {{ return B {{ value: x }}; }}
       }}
-    }}'''
+    '''
     run("protocol-source", text, "library-type-mismatch")
 
 with case("effect declarations cannot silently extend ordinary source functions"):
-    run("protocol-source", 'module { fn Ordinary(x: bool) -> bool effects (local) { return x; } }', "source-effects")
+    run("protocol-source", ' fn Ordinary(x: bool) -> bool effects (local) { return x; } ', "source-effects")
 
 with case("a client must declare its imported member effect"):
     interface = INTERFACE.replace("-> Value;", "-> Value effects (local);")
-    run("protocol-source", f"module {{ {IDENTITY} {interface} {CLIENT} }}", "library-effect")
+    run("protocol-source", f" {IDENTITY} {interface} {CLIENT} ", "library-effect")
 
 
-GROUP_DEMO = """module {
+GROUP_DEMO = """
   use zkc::algebra::{Element};
   library(namespace="example", name="groups", version="1", resolution="group-case");
   interface GroupAPI {
@@ -381,7 +381,7 @@ GROUP_DEMO = """module {
   }
   fn Client<C: GroupAPI>(x: Element<C::F>) -> Element<C::F> { return C::scalar(x); }
   link Closed = Client<GroupImpl<"ristretto255.group">>;
-}
+
 """
 
 with case("group scalar equation links using installed associated-domain truth"):
@@ -396,7 +396,7 @@ with case("unequal selected scalar domain refuses despite the field constructor"
 
 # Declaration conformance must hold under parameter bounds, before any selected
 # representation is available, including unused declarations and parameters.
-UPGRADE = f'''module {{ {IDENTITY}
+UPGRADE = f''' {IDENTITY}
   interface Affine {{ type Value drop; local step(x: Value) -> Value; }}
   interface Copyable {{ type Value copy drop; local step(x: Value) -> Value; }}
   component Base: Affine {{ type Value = bool;
@@ -409,7 +409,7 @@ UPGRADE = f'''module {{ {IDENTITY}
     return (C::step(x), C::step(x));
   }}
   link Closed = Client<Upgrade<Base>>;
-}}'''
+'''
 
 for selected in (False, True):
     with case(f"affine dependency cannot export copy through bool storage, selected={selected}"):
@@ -417,14 +417,14 @@ for selected in (False, True):
         run("protocol-source", text, "library-permission-bound")
 
 with case("unused methodless component cannot strengthen dependency permissions"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface Affine {{ type Value drop; }}
       interface Copyable {{ type Value copy drop; }}
       component Upgrade<D: Affine>: Copyable {{ type Value = D::Value; }}
-    }}'''
+    '''
     run("protocol-source", text, "library-permission-bound")
 
-METHODLESS_BOUND = f'''module {{ {IDENTITY}
+METHODLESS_BOUND = f''' {IDENTITY}
   interface Need {{ type Value copy drop; }}
   interface Other {{ type Value drop; }}
   interface Marker {{ type Value copy drop; }}
@@ -433,7 +433,7 @@ METHODLESS_BOUND = f'''module {{ {IDENTITY}
   component Wrap<D: Need>: Marker {{ type Value = bool; }}
   fn Client<C: Marker>(x: C::Value) -> C::Value {{ return x; }}
   link Closed = Client<Wrap<Wrong>>;
-}}'''
+'''
 
 with case("unused parameter interface bound survives a methodless selection"):
     run("protocol-source", METHODLESS_BOUND, "library-interface-drift")
@@ -452,21 +452,21 @@ with case("parameter bound persists when existing methods do not use it"):
     run("protocol-source", text, "library-interface-drift")
 
 with case("unselected component must match interface signatures"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface I {{ local f(x: bool) -> bool; }}
       component Bad: I {{ local f(x: index) -> index {{ return x; }} }}
-    }}'''
+    '''
     run("protocol-source", text, "library-type-mismatch")
 
 with case("unselected component must define the complete interface member set"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface I {{ local f(x: bool) -> bool; }}
       component Bad: I {{}}
-    }}'''
+    '''
     run("protocol-source", text, "library-conformance")
 
 with case("convenient selected domain cannot repair a nonparametric signature"):
-    text = f'''module {{
+    text = f'''
   use zkc::algebra::{{Element}}; {IDENTITY}
       interface I {{ domain F: field; local f(x: Element<F>) -> Element<F>; }}
       component Bad<H: domain field>: I {{ domain F: field = "koala-bear";
@@ -474,11 +474,11 @@ with case("convenient selected domain cannot repair a nonparametric signature"):
       }}
       fn Client<C: I>(x: Element<C::F>) -> Element<C::F> {{ return C::f(x); }}
       link Closed = Client<Bad<"koala-bear">>;
-    }}'''
+    '''
     run("protocol-source", text, "library-type-mismatch")
 
 # Nominal source equality must not follow equal private storage.
-NOMINAL_FORGERY = f'''module {{ {IDENTITY}
+NOMINAL_FORGERY = f''' {IDENTITY}
   interface Token {{ type V drop; local spend(x: V) -> bool; }}
   component TokenImpl: Token {{ type V = bool;
     local spend(x: V) -> bool {{ return x; }}
@@ -492,7 +492,7 @@ NOMINAL_FORGERY = f'''module {{ {IDENTITY}
   }}
   fn Client<C: Wrapper>(x: bool) -> bool {{ return C::leak(C::wrap(x)); }}
   link Closed = Client<W<TokenImpl>>;
-}}'''
+'''
 
 for selected in (False, True):
     with case(f"own bool storage cannot forge a dependency token signature, selected={selected}"):
@@ -537,7 +537,7 @@ with case("unused generic group declaration retains its checked static equations
     assert component["functions"][0]["fingerprint"] == report["component_bodies"][0]["fingerprint"]
 
 with case("methodless wrapper derives group equation from its parameter interface"):
-    text = f'''module {{
+    text = f'''
   use zkc::algebra::{{Element}}; {IDENTITY}
       interface GroupAPI {{ domain G: group; domain F: field = G::Scalar; }}
       component GroupImpl<H: domain group>: GroupAPI {{
@@ -548,11 +548,11 @@ with case("methodless wrapper derives group equation from its parameter interfac
       }}
       fn Client<C: GroupAPI>(x: Element<C::F>) -> Element<C::F> {{ return x; }}
       link Closed = Client<Wrapper<GroupImpl<"ristretto255.group">>>;
-    }}'''
+    '''
     assert "field:ristretto255.scalar" in run("protocol-source", text)
 
 with case("seal retains Self-rooted member signatures under static substitution"):
-    text = f'''module {{
+    text = f'''
   use zkc::algebra::{{Element}}; {IDENTITY}
       interface I {{ domain F: field; local step(x: Element<F>) -> Element<F>; }}
       component Impl<H: domain field>: I {{ domain F: field = H;
@@ -563,7 +563,7 @@ with case("seal retains Self-rooted member signatures under static substitution"
       select B = Impl<"koala-bear">;
       link Sealed = Client<A>;
       link Plain = Client<B>;
-    }}'''
+    '''
     emitted = run("protocol-source", text)
     assert "field:koala-bear" in emitted and '"Sealed"' in emitted and '"Plain"' in emitted
     reversed_links = text.replace(
@@ -574,11 +574,11 @@ with case("seal retains Self-rooted member signatures under static substitution"
 
 with case("unsupported required facets refuse even on unselected components"):
     interface = INTERFACE.replace("type Value drop;", 'type Value drop; facet required "unknown-owner" "security";')
-    run("protocol-source", f"module {{ {IDENTITY} {interface} {EMPTY} }}", "library-required-facet")
+    run("protocol-source", f" {IDENTITY} {interface} {EMPTY} ", "library-required-facet")
 
 # Checked call contracts preserve the authored API independently of private
 # binder names, flattened storage, and the order in which declarations appear.
-HELPERS = f'''module {{ {IDENTITY} {INTERFACE} {EMPTY}
+HELPERS = f''' {IDENTITY} {INTERFACE} {EMPTY}
   fn Client<C: Cell>(state: C::Value) -> C::Value {{
     return Helper::<C>(state: state);
   }}
@@ -586,7 +586,7 @@ HELPERS = f'''module {{ {IDENTITY} {INTERFACE} {EMPTY}
     return D::step(x: state);
   }}
   link Closed = Client<EmptyCell>;
-}}'''
+'''
 
 with case("checked source helper composes before private body selection"):
     emitted = run("protocol-source", HELPERS)
@@ -635,16 +635,16 @@ with case("a sealed alias that selects no component is refused at the alias"):
     assert said.startswith(f"-:{line}:"), said
 
 with case("ordinary helpers acquire a checked callable and body contract"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface Marker {{ }} component M: Marker {{ }}
       fn Client<C: Marker>(value: bool) -> bool {{ return Identity(value: value); }}
       fn Identity(value: bool) -> bool {{ return value; }}
       link Closed = Client<M>;
-    }}'''
+    '''
     run("protocol-source", text)
-    run("protocol-source", text.replace("module {", "module { use zkc::core;", 1).replace("return value;", "return zkc::core::not(value);"), "library-effect")
+    run("protocol-source", (" use zkc::core;" + text).replace("return value;", "return zkc::core::not(value);"), "library-effect")
 
-NAMED = f'''module {{ {IDENTITY}
+NAMED = f''' {IDENTITY}
   interface Pair {{ local choose(left: bool, right: bool) -> bool; }}
   component Impl: Pair {{
     local choose(privateLeft: bool, privateRight: bool) -> bool {{ return privateLeft; }}
@@ -652,7 +652,7 @@ NAMED = f'''module {{ {IDENTITY}
   fn Client<C: Pair>(a: bool, b: bool) -> bool {{ return C::choose(right: b, left: a); }}
   link Closed = Client<Impl>;
   fn Use(x: bool, y: bool) -> bool {{ return Closed(b: y, a: x); }}
-}}'''
+'''
 
 with case("interface and closed-link labels survive different private binders"):
     run("protocol-source", NAMED)
@@ -663,41 +663,41 @@ for arguments in ("unknown: b, left: a", "left: b, left: a", "b, left: a", "left
         run("protocol-source", NAMED.replace("right: b, left: a", arguments), "library-source-argument-name")
 
 with case("installed positional operation does not acquire guessed labels"):
-    text = f'''module {{
+    text = f'''
   use zkc::core; {IDENTITY}
       interface Marker {{ }}
       fn Client<C: Marker>(value: bool) -> bool effects (local) {{ return zkc::core::not(value: value); }}
-    }}'''
+    '''
     run("protocol-source", text, "library-source-argument-name")
 
 with case("named argument expected types precede empty aggregate construction"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface I {{ local f(items: Array<bool, 0>, flag: bool) -> bool; }}
       component Impl: I {{ local f(xs: Array<bool, 0>, b: bool) -> bool {{ return b; }} }}
       fn Client<C: I>(value: bool) -> bool {{ return C::f(flag: value, items: []); }}
       link Closed = Client<Impl>;
-    }}'''
+    '''
     run("protocol-source", text)
 
 with case("closed aggregate argument binds its logical label before flattening"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface Marker {{ }} component M: Marker {{ }}
       fn Client<C: Marker>(pair: (bool, bool), flag: bool) -> (bool, bool) {{ return pair; }}
       link Closed = Client<M>;
       fn Use(a: bool, b: bool) -> (bool, bool) {{ return Closed(flag: b, pair: (a, b)); }}
-    }}'''
+    '''
     run("protocol-source", text)
     run("protocol-admit", text)
     run("protocol-source", text.replace("flag: b, pair: (a, b)", "v0_0: a, v0_1: b, flag: b"), "source-argument-name")
 
 with case("named argument permutation cannot duplicate an affine input"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface I {{ type V drop; local f(first: V, second: V) -> V; }}
       fn Client<C: I>(value: C::V) -> C::V {{ return C::f(second: value, first: value); }}
-    }}'''
+    '''
     run("protocol-source", text, "library-resource-use")
 
-ORDERED = f'''module {{
+ORDERED = f'''
   use zkc::core; {IDENTITY}
   interface Two {{ local choose(left: bool, right: bool) -> bool; }}
   component Impl: Two {{ local choose(a: bool, b: bool) -> bool {{ return a; }} }}
@@ -707,7 +707,7 @@ ORDERED = f'''module {{
   fn First(value: bool) -> bool effects (local) {{ return zkc::core::not(value); }}
   fn Second(value: bool) -> bool effects (local) {{ return zkc::core::not(value); }}
   link Closed = Client<Impl>;
-}}'''
+'''
 
 with case("named operands evaluate exactly once in written order before permutation"):
     emitted = source(ORDERED)
@@ -737,75 +737,84 @@ with case("installed roots have the same owner across author libraries"):
         elif isinstance(value, list):
             for item in value:
                 yield from installed_roots(item)
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       interface Field {{ domain F: field = "koala-bear"; }}
-    }}'''
+    '''
     left = list(installed_roots(json.loads(run("protocol-analyze", text))))
     right = list(installed_roots(json.loads(run("protocol-analyze", text.replace('name="cells"', 'name="other"')))))
     assert left and right and left == right
     assert {root["library"] for root in left} == {"installed-contracts"}
 
 with case("helper natural and domain arguments infer from typed structural dimensions"):
-    text = f'''module {{
+    text = f'''
   use zkc::algebra::{{Element}}; {IDENTITY}
       interface Marker {{ }} component M: Marker {{ }}
       fn Client<C: Marker>(values: Array<Element<"koala-bear">, 2>) -> Array<Element<"koala-bear">, 2> {{ return Echo(values: values); }}
       fn Echo<F: domain field, N: nat>(values: Array<Element<F>, N>) -> Array<Element<F>, N> {{ return values; }}
       link Closed = Client<M>;
-    }}'''
+    '''
     run("protocol-source", text)
     run("protocol-admit", text)
     mismatched = text.replace("Client<C: Marker>", "Client<C: Marker, N: nat>").replace('Array<Element<"koala-bear">, 2>', 'Array<Element<"koala-bear">, N>').replace("Client<M>", "Client<M, 2>").replace("Echo(values:", 'Echo::<"bls12-381.fr", N>(values:')
     run("protocol-source", mismatched, "library-type-mismatch")
 
 with case("a source helper cannot silently replace an installed primitive"):
-    text = f'''module {{
+    text = f'''
   use zkc::core; {IDENTITY}
       interface Marker {{ }}
       fn Client<C: Marker>(value: bool) -> bool effects (local) {{ return zkc::core::not(value); }}
-      fn "bool.not"(value: bool) -> bool {{ return value; }}
-    }}'''
+      fn not(value: bool) -> bool {{ return value; }}
+    '''
     report = json.loads(run("protocol-analyze", text))
     assert report["state"] == "source_checked", report
     clients = report["checked_libraries"]["clients"]
     client = next(c for c in clients if c["display_name"] == "Client")
     calls = [i for i in client["body"]["instructions"] if i["kind"] == "call"]
     assert calls[0]["target"]["operation"] == "bool.not", calls
-    helper = json.loads(run("protocol-analyze", text.replace("zkc::core::not(value)", '\"bool.not\"(value)')))
+    helper = json.loads(run("protocol-analyze", text.replace("zkc::core::not(value)", 'not(value)')))
     assert helper["state"] == "source_checked", helper
     client = next(c for c in helper["checked_libraries"]["clients"] if c["display_name"] == "Client")
     calls = [i for i in client["body"]["instructions"] if i["kind"] == "call"]
-    assert calls[0]["target"]["function"]["name"] == "bool.not", calls
+    assert calls[0]["target"]["function"]["name"] == "not", calls
 
 with case("component members cannot silently shadow installed operation namespaces"):
-    text = f'''module {{
+    text = f'''
   use zkc::core; {IDENTITY}
       interface Bits {{ local not(value: bool) -> bool; }}
-      fn Client<bool: Bits>(value: bool) -> bool {{ return zkc::core::not(value); }}
-    }}'''
-    run("protocol-source", text, "library-source-call-ambiguity")
+      fn Client<bool: Bits>(value: bool) -> bool effects(local) {{ return zkc::core::not(value); }}
+    '''
+    report = json.loads(run("protocol-analyze", text))
+    assert report["state"] == "source_checked", report
+    client = next(c for c in report["checked_libraries"]["clients"] if c["display_name"] == "Client")
+    calls = [i for i in client["body"]["instructions"] if i["kind"] == "call"]
+    assert calls[0]["target"]["operation"] == "bool.not", calls
+    member = json.loads(run("protocol-analyze", text.replace("zkc::core::not", "bool::not")))
+    assert member["state"] == "source_checked", member["diagnostics"]
+    client = next(c for c in member["checked_libraries"]["clients"] if c["display_name"] == "Client")
+    targets = [i["target"] for i in client["body"]["instructions"] if i["kind"] == "call"]
+    assert [(t["component"]["declaration"]["name"], t["member"]) for t in targets] == [("bool", "not")]
     run("protocol-source", text.replace("<bool: Bits>", "<C: Bits>").replace("zkc::core::not", "C::not"))
-    run("protocol-source", text.replace("module {", "module { use zkc::core as Bits;", 1),
+    run("protocol-source", (" use zkc::core as Bits;" + text),
         "source-name-duplicate")
 
 with case("named enum operands receive the matched formal's expected type"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       enum Flag {{ Off(), On(bool) }}
       interface I {{ local choose(value: Flag, ok: bool) -> bool; }}
       component Impl: I {{ local choose(v: Flag, b: bool) -> bool {{ return b; }} }}
       fn Client<C: I>(ok: bool) -> bool {{ return C::choose(ok: ok, value: Flag::Off()); }}
       link Closed = Client<Impl>;
-    }}'''
+    '''
     run("protocol-source", text)
     run("protocol-source", text.replace("value: Flag::Off()", "unknown: Flag::Off()"), "library-source-argument-name")
 
 with case("closed variant aggregates retain the existing admitted carrier path"):
-    text = f'''module {{ {IDENTITY}
+    text = f''' {IDENTITY}
       enum Flag {{ Off(), On(bool) }}
       interface Marker {{ }} component M: Marker {{ }}
       fn Client<C: Marker>(pair: (Flag, bool)) -> (Flag, bool) {{ return pair; }}
       link Closed = Client<M>;
-    }}'''
+    '''
     emitted = run("protocol-source", text)
     assert "variant:" in emitted
     run("protocol-admit", text)
@@ -815,11 +824,11 @@ with case("an external helper signature supports checking without executable lin
     run("protocol-source", text)
 
 with case("an explicit link root forms a domain-generic checked callable"):
-    text = f'''module {{
+    text = f'''
   use zkc::algebra::{{Element}}; {IDENTITY}
       fn Echo<F: domain field>(value: Element<F>) -> Element<F> {{ return value; }}
       link Closed = Echo<"koala-bear">;
       fn Use(value: "koala-bear"::Element) -> "koala-bear"::Element {{ return Closed(value: value); }}
-    }}'''
+    '''
     run("protocol-source", text)
     run("protocol-admit", text)

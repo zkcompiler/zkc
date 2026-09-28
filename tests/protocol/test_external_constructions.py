@@ -138,7 +138,7 @@ def single_operation(contract, kinds, outputs):
     ins = ', '.join(f'x{i}' for i in range(len(kinds)))
     outs = ', '.join(f'y{i}' for i in range(len(outputs)))
     types = ', '.join(spell[k] for k in outputs)
-    return f'''module {{
+    return f'''
       use zkc::algebra::Indices;
       use zkc::external;
       fn Transition({args}) -> ({types}) {{
@@ -152,7 +152,7 @@ def single_operation(contract, kinds, outputs):
         return ({outs});
       }}
       entry main = Main;
-    }}'''
+    '''
 
 
 BAD_CASES = [
@@ -214,7 +214,7 @@ def test_uninstalled_suite_and_provider_rejected():
     wrong = participants.read_text().replace('native/external.openvm.sample','dalek/external.openvm.sample')
     path=journal.directory/'wrong-provider.json';path.write_text(wrong)
     journal.run([tools.checker('interactive-protocol'),'--check',source,path],refuses='binding-implementation')
-    text='''module { use zkc::transcript::{Transcript}; fn Wrong(t: Transcript<"openvm-babybear-poseidon2-v1">) -> Transcript<"openvm-babybear-poseidon2-v1"> { return t; } }'''
+    text=''' use zkc::transcript::{Transcript}; fn Wrong(t: Transcript<"openvm-babybear-poseidon2-v1">) -> Transcript<"openvm-babybear-poseidon2-v1"> { return t; } '''
     journal.run([tools.compiler,'protocol-source','-'],text,refuses='source-name-unresolved')
 
 
@@ -250,7 +250,7 @@ def test_external_operations_keep_failure_effects_and_reject_attributes():
 
 
 def test_unused_external_validation_survives_standard_optimizations():
-    text = '''module {
+    text = '''
   use zkc::external;
   use zkc::algebra::{Indices};
       fn Validate(x: Indices) -> index {
@@ -263,7 +263,7 @@ def test_unused_external_validation_survives_standard_optimizations():
         return result;
       }
       entry main = Check;
-    }'''
+    '''
     tools = Toolchain()
     journal = Journal(records(case='unused-external-validation'))
     ir = journal.run([tools.compiler, 'protocol-import', '-'], text)

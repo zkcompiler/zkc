@@ -86,7 +86,7 @@ REGION = """fn Client<C: Cell>(value: C::Value, ok: bool) -> bool {
 def library(*declarations):
     """A checked-library module holding these declarations."""
     imports = "use zkc::algebra::Element;" if any("Element<" in d for d in declarations) else ""
-    return " ".join(["module {", imports, IDENTITY, *declarations, "}"])
+    return " ".join([imports, IDENTITY, *declarations])
 
 
 def region(old, new):
@@ -140,7 +140,7 @@ SOURCES = [
     ("library-source-effect",
      library("interface Cell { type Value drop; local step(x: Value) -> Value effects (local, local); }")),
     # An installed operation called without the static actuals it requires.
-    ("library-source-operation",
+    ("library-operation-arity",
      library("interface Cell { type Value copy drop; local step(x: Value) -> Value; }",
              "component ScalarCell<F: domain field>: Cell { type Value = Element<F>; "
              "local step(x: Value) -> Value { let y = zkc::algebra::add(x, x); return y; } }")),
@@ -160,11 +160,11 @@ SOURCES = [
                          "local pack(x: bool) -> Value { return Box { value: x, other: x }; } }")),
     # A checked struct built directly rather than through its constructor.
     ("library-source-record-authority",
-     library("checked struct Box(value: bool) constructors(Make);",
-             "fn Make(value: bool) -> Box { return Box(value = value); }", BOXES,
+     library("checked struct Box { value: bool } constructors(Make);",
+             "fn Make(value: bool) -> Box { return Box{ value: value }; }", BOXES,
              "component Impl: Boxes { type Value = Box; local pack(x: bool) -> Value { return Box { value: x }; } }")),
     # An array length, which checked bodies do not have.
-    ("library-source-expression",
+    ("library-source-projection",
      library(CELL, "fn Client<C: Cell>(x: Array<C::Value, 2>) -> index { return x.len(); }")),
     # A tuple pattern over a value that is not a product.
     ("library-source-pattern",
@@ -185,12 +185,14 @@ SOURCES = [
     # A component whose interface names a component.
     ("library-source-interface",
      library(CELL, "component EmptyCell: EmptyCell { type Value = (); local step(x: Value) -> Value { return x; } }")),
-    # Retired profile headers refuse before semantic elaboration.
-    ("source-syntax", "module standard { fn F(x: bool) -> bool { return x; } }"),
+    # Retired module and profile wrappers refuse before semantic elaboration.
+    ("source-module-wrapper", "module standard { fn F(x: bool) -> bool { return x; } }"),
     # The same retired header refuses before checking a component map.
-    ("source-syntax",
+    ("source-module-wrapper",
      "module standard { fn F(items: Array<bool, 2>) -> Array<bool, 2> "
      "{ return map items |item| { zkc::core::not(item) }; } }"),
+    # A declaration name must be an identifier; quoting is not an escape.
+    ("source-identifier", 'fn "F"(x: bool) -> bool { return x; }'),
     # An association whose subject is a name rather than a quoted string.
     ("library-source-association", library("association A = B;")),
     # A facet without `required` or `optional`.
@@ -239,10 +241,10 @@ SOURCES = [
     # Two component naturals defined as each other.
     ("library-substitution-cycle",
      library("interface Two { nat A; nat B; }", "component M: Two { nat A = Self::B; nat B = Self::A; }")),
-    # A requirement that projects a type member as though it were a static.
-    ("library-static-member",
+    # A requirement that projects an undeclared associated member.
+    ("library-member",
      library("interface Marker { type Value copy drop; }", "component M: Marker { type Value = bool; }",
-             'fn Client<C: Marker>(x: C::Value) -> C::Value requires ("="(C::Value, C::Value)) { return x; }',
+             'fn Client<C: Marker>(x: C::Value) -> C::Value where C::Missing == C::Missing { return x; }',
              "link Closed = Client<M>;")),
 ]
 
@@ -271,45 +273,44 @@ SOURCES += [
 # Ordinary sources through `protocol-source`, one identifier each.
 SOURCES += [
     # A use path that continues past a function.
-    ("source-import-path", "module { fn Main(x: bool) -> bool { return x; } use Main::x; }"),
+    ("source-import-path", " fn Main(x: bool) -> bool { return x; } use Main::x; "),
     # A child module declared in a source read from standard input.
-    ("source-module-missing", "module { mod child; }"),
+    ("source-module-missing", " mod child; "),
     # `super` in a root module.
-    ("source-module-parent", "module { use super::X; }"),
+    ("source-module-parent", " use super::X; "),
     # A private function re-exported as public.
-    ("source-private-reexport", "module { fn F(x: bool) -> bool { return x; } pub use F as G; }"),
+    ("source-private-reexport", " fn F(x: bool) -> bool { return x; } pub use F as G; "),
     # An entry protocol whose dependency names a function.
     ("source-entry-dependency",
-     "module { fn F() -> () { return; } protocol P { roles(A); dependencies(c: F()); return; } entry E = P; }"),
+     " fn F() -> () { return; } protocol P { roles(A); dependencies(c: F()); return; } entry E = P; "),
     # An entry protocol that takes natural parameters.
-    ("source-entry-parameters", "module { protocol P { roles(A); parameters(n); return; } entry E = P; }"),
+    ("source-entry-parameters", " protocol P { roles(A); parameters(n); return; } entry E = P; "),
     # Static arguments given to a protocol that has none.
-    ("source-entry-target", "module { protocol P { roles(A); return; } entry E = P::<F=koala-bear>; }"),
+    ("source-entry-target", " protocol P { roles(A); return; } entry E = P::<F=\"koala-bear\">; "),
     # A concrete domain in a generic protocol's requirement.
-    ("source-static-domain", "module { protocol P<F:Field> requires (Field(koala-bear)) { roles(A); return; } }"),
+    ("source-static-domain", " protocol P<F:Field> requires (Field(\"koala-bear\")) { roles(A); return; } "),
     # An array type with no count.
-    ("source-array-count", "module { fn Use(x: Array<bool>) -> () { return (); } }"),
+    ("source-array-count", " fn Use(x: Array<bool>) -> () { return (); } "),
     # An entry naming a function.
-    ("source-declaration-kind", "module { fn Helper(x: bool) -> bool { return x; } entry main = Helper; }"),
+    ("source-declaration-kind", " fn Helper(x: bool) -> bool { return x; } entry main = Helper; "),
     # A placement block with no final value.
     ("source-local-result",
-     "module { protocol Q { roles (P); inputs (P x: bool); outputs (P bool); local P { let y = x; }; return x; } }"),
+     " protocol Q { roles (P); inputs (P x: bool); outputs (P bool); local P { let y = x; }; return x; } "),
     # A tuple pattern over a bool.
-    ("source-product-pattern", "module { fn F(x: bool) -> bool { let (a, b) = x; return a; } }"),
+    ("source-product-pattern", " fn F(x: bool) -> bool { let (a, b) = x; return a; } "),
     # A protocol loop with an empty body.
-    ("source-protocol-body", "module { protocol Q { roles(A); loop 1 carry () -> () { } return; } }"),
+    ("source-protocol-body", " protocol Q { roles(A); loop 1 carry () -> () { } return; } "),
     # A protocol that ends without a terminator.
     ("source-protocol-terminator",
-     "module { protocol Q { roles (P, V); inputs (P x: bool); outputs (V bool); message m: P(x) -> V(y); } }"),
+     " protocol Q { roles (P, V); inputs (P x: bool); outputs (V bool); message m: P(x) -> V(y); } "),
     # A resource unit whose slot is a type rather than a quoted slot name.
-    ("source-resource-unit", "module { fn Use(x: ResourceUnit<bool>) -> () { return (); } }"),
+    ("source-resource-unit", " fn Use(x: ResourceUnit<bool>) -> () { return (); } "),
     # A dependency's static argument named for a parameter the callee does not have.
     ("source-static-parameter",
-     "module { protocol Child<F:Field> { roles(A); return; } "
-     "protocol P<F:Field> { roles(A); dependencies(c: Child::<G=F>()); return; } }"),
+     ' protocol Child<F:Field> { roles(A); return; } protocol P<F:Field> { roles(A); dependencies(c: Child::<G=F>()); return; } '),
     # `pub` on an entry.
     ("source-visibility",
-     "module { protocol Q { roles (P); inputs (P x: bool); outputs (P bool); return x; } pub entry main = Q; }"),
+     " protocol Q { roles (P); inputs (P x: bool); outputs (P bool); return x; } pub entry main = Q; "),
 ]
 
 for code, text in SOURCES:
@@ -331,9 +332,9 @@ with case("library-source-yield: a return inside a region"):
 
 with case("source-product-limit"):
     # A product over 4096 leaves, written as a type and built as an expression.
-    source("source-product-limit", "module { fn Use(x: (Array<bool, 4096>, bool)) -> () { return (); } }")
+    source("source-product-limit", " fn Use(x: (Array<bool, 4096>, bool)) -> () { return (); } ")
     source("source-product-limit",
-           "module { fn Use(x: Array<bool, 4096>, y: bool) -> () { let p = (x, y); return (); } }")
+           " fn Use(x: Array<bool, 4096>, y: bool) -> () { let p = (x, y); return (); } ")
 
 with case("source-type-depth"):
     # Aggregate nesting beyond 64, reached only through a struct field: one
@@ -342,7 +343,7 @@ with case("source-type-depth"):
     for _ in range(63):
         nested = f"({nested},)"
     source("source-type-depth",
-           f"module {{ struct A(x: B); struct B(x: {nested}); fn Use(v: A) -> A {{ return v; }} }}")
+           f" struct A {{ x: B }} struct B {{ x: {nested} }} fn Use(v: A) -> A {{ return v; }} ")
 
 with case("a check of the lowered library source keeps its identifier"):
     # A linked client whose lowered inputs exceed the ordinary source's bound
@@ -355,35 +356,35 @@ with case("a check of the lowered library source keeps its identifier"):
 # Projects, which are read from files.
 with case("project-module-name"):
     # A child module name longer than 128 bytes.
-    project("project-module-name", {"app.pir": f"module {{ mod {'a' * 129}; }}"})
+    project("project-module-name", {"app.pir": f" mod {'a' * 129}; "})
 
 with case("project-module-root"):
     # A child module file that holds a construction rather than a module.
-    project("project-module-root", {"app.pir": "module { mod child; }", "child.pir": "construction E {}"})
+    project("project-module-root", {"app.pir": " mod child; ", "child.pir": "construction E {}"})
 
 with case("source-dependency-duplicate"):
     # Two dependencies under one alias.
     project("source-dependency-duplicate",
-            {"app.pir": f"module {{ {dependency('a')} {dependency('a')} }}", "a.pir": f"module {{ {owns('a')} }}"},
+            {"app.pir": f" {dependency('a')} {dependency('a')} ", "a.pir": f" {owns('a')} "},
             "a.pir")
 
 with case("source-library-cycle"):
     # Two libraries that depend on each other.
     project("source-library-cycle",
-            {"app.pir": f"module {{ {dependency('a')} }}",
-             "a.pir": f"module {{ {owns('a')} {dependency('b')} }}",
-             "b.pir": f"module {{ {owns('b')} {dependency('a')} }}"},
+            {"app.pir": f" {dependency('a')} ",
+             "a.pir": f" {owns('a')} {dependency('b')} ",
+             "b.pir": f" {owns('b')} {dependency('a')} "},
             "a.pir", "b.pir")
 
 with case("source-library-identity"):
     # A library root that declares no identity.
-    project("source-library-identity", {"app.pir": "module {}", "lib.pir": "module {}"}, "lib.pir")
+    project("source-library-identity", {"app.pir": "", "lib.pir": ""}, "lib.pir")
 
 with case("source-project-kind"):
     # A construction as the application of a project that has libraries.
     project("source-project-kind",
             {"app.pir": "construction E { producer p; validator v; random r at (); accept 1; suite s; }",
-             "lib.pir": f"module {{ {owns('a')} }}"},
+             "lib.pir": f" {owns('a')} "},
             "lib.pir")
 
 with case("source-name-reserved"):
@@ -394,28 +395,27 @@ with case("source-name-reserved"):
     for declaration in ("fn src_f(x: bool) -> bool { return x; }",
                         "fn lib_f(x: bool) -> bool { return x; }",
                         "fn client_f(x: bool) -> bool { return x; }",
-                        "bind __library_operation_0 = control::require();"):
-        source("source-name-reserved", f"module {{ {declaration} }}")
+                        "bind __library_operation_0 = \"control.require\"();"):
+        source("source-name-reserved", f" {declaration} ")
     # Only the prefix is reserved.
-    compiled("module { fn my_src_f(x: bool) -> bool { return x; } }")
+    compiled(" fn my_src_f(x: bool) -> bool { return x; } ")
 
-with case("source-name-ambiguous"):
+with case("obsolete dotted declaration"):
     # A root function spelled as the path to a child module's function, called
     # by that spelling unquoted.
-    project("source-name-ambiguous",
-            {"app.pir": "module { mod inner; fn inner.Keep(x: bool) -> bool origin Chosen() { return x; } "
-                        "fn Main(x: bool) -> bool { return inner.Keep(x); } }",
-             "inner.pir": "module { pub fn Keep(x: bool) -> bool { return x; } }"})
+    project("source-syntax",
+            {"app.pir": ' mod inner; fn inner.Keep(x: bool) -> bool origin Chosen() { return x; } fn Main(x: bool) -> bool { return inner_Keep(x); } ',
+             "inner.pir": " pub fn Keep(x: bool) -> bool { return x; } "})
 
-with case("a lowering refusal keeps its identifier and location"):
-    # A generic in a child module whose origin a root function with an explicit
-    # origin also claims. Lowering finds the collision; the refusal is its own,
-    # located in the child module, not wrapped in another identifier.
+with case("an origin collision keeps its identifier and location"):
+    # A root function's explicit origin claims the automatic origin of a
+    # generic in a child module. The refusal is its own, located at the root
+    # declaration that makes the second claim, not wrapped in another identifier.
     project("source-origin-collision",
-            {"app.pir": "module { mod inner; fn inner.Keep(x: bool) -> bool origin Chosen() { return x; } }",
-             "inner.pir": "module { fn Keep<F: Field>(x: bool) -> bool { return x; } }"})
+            {"app.pir": " mod inner; fn Keep(x: bool) -> bool origin \"inner.Keep\"() { return x; } ",
+             "inner.pir": " fn Keep<F: Field>(x: bool) -> bool { return x; } "})
     said = commands.attempt([compiler, "protocol-source", root / "source-origin-collision" / "app.pir"])
-    assert said.stderr.startswith(f"{root / 'source-origin-collision' / 'inner.pir'}:1:10: error: "), said.stderr
+    assert said.stderr.startswith(f"{root / 'source-origin-collision' / 'app.pir'}:1:13: error: "), said.stderr
 
 # Carriers the compiler would not emit, made by damaging one it did.
 CARRIER = library(

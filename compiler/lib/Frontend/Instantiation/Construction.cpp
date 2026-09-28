@@ -17,8 +17,6 @@ bindConstruction(const CheckedModule &checked,
     return zkc::error("construction-input-kind");
   const auto &source = *sourceModule;
   assert(model.resolution && "checked source retains resolved project input");
-  if (model.resolution->carrier)
-    return descriptor;
   const auto &context = *model.resolution;
   auto indexed = resolution::constructionSelectors(context);
   if (!indexed)

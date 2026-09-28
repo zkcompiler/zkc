@@ -91,13 +91,11 @@ explicit installation facts.
 The text form omits a module-wide profile:
 
 ```text
-module {
-  use zkc::poly::Point;
-  bind empty = poly::empty_point(bls12-381.fr);
-  fn Empty() -> Point<"bls12-381.fr"> {
-    let point = empty();
-    return point;
-  }
+use zkc::poly::Point;
+bind empty = "poly.empty_point"("bls12-381.fr");
+fn Empty() -> Point<"bls12-381.fr"> {
+  let point = empty();
+  return point;
 }
 ```
 

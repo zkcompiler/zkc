@@ -1,4 +1,5 @@
 #include "Lexer.h"
+#include "Grammar.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
@@ -7,12 +8,6 @@
 
 using namespace llvm;
 namespace zkc::frontend {
-bool isName(StringRef value) {
-  return !value.empty() && (isAlpha(value.front()) || value.front() == '_') &&
-         all_of(value, [](char c) {
-           return isAlnum(c) || c == '_' || c == '.' || c == '-';
-         });
-}
 
 Expected<std::vector<Token>> lex(StringRef text, StringRef filename) {
   if (text.size() > 1024 * 1024)
@@ -26,6 +21,7 @@ Expected<std::vector<Token>> lex(StringRef text, StringRef filename) {
     }
     size_t start = i;
     TokenKind kind = TokenKind::Punctuation;
+    std::string value;
     if (text.substr(i).starts_with("//")) {
       kind = TokenKind::Comment;
       i = text.find('\n', i);
@@ -77,14 +73,23 @@ Expected<std::vector<Token>> lex(StringRef text, StringRef filename) {
         return diagnostic(text, filename, start, "source-string",
                           "invalid quoted string or escape");
       }
-    } else if (isAlpha(text[i]) || text[i] == '_') {
-      kind = TokenKind::Name;
+      value = decoded->getAsString()->str();
+    } else if (text.substr(i).starts_with("r#") ||
+               grammar::identifierStart(text[i])) {
+      bool raw = text.substr(i).starts_with("r#");
+      kind = raw ? TokenKind::RawIdentifier : TokenKind::Name;
+      if (raw) {
+        i += 2;
+        if (i == text.size() || !grammar::identifierStart(text[i]))
+          return diagnostic(text, filename, start, "source-identifier",
+                            "raw identifier requires an identifier after r#");
+      }
+      size_t nameStart = i;
       do {
         ++i;
-      } while (i < text.size() &&
-               (isAlnum(text[i]) || text[i] == '_' ||
-                (text[i] == '.' && !text.substr(i).starts_with("..")) ||
-                (text[i] == '-' && !text.substr(i).starts_with("->"))));
+      } while (i < text.size() && grammar::identifierContinue(text[i]));
+      if (raw)
+        value = text.slice(nameStart, i).str();
     } else if (isDigit(text[i])) {
       kind = TokenKind::Number;
       while (i < text.size() && isDigit(text[i]))
@@ -98,17 +103,17 @@ Expected<std::vector<Token>> lex(StringRef text, StringRef filename) {
                text.substr(i).starts_with("=>") ||
                text.substr(i).starts_with(".."))
       i += 2;
-    else if (StringRef("{}()[]<>,:;=+*-/%|#").contains(text[i]))
+    else if (StringRef("{}()[]<>,:;=+*-/%|#.").contains(text[i]))
       ++i;
     else
       return diagnostic(text, filename, i, "source-character",
                         "unexpected character");
-    tokens.push_back({kind, text.slice(start, i), start});
+    tokens.push_back({kind, text.slice(start, i), start, std::move(value)});
     if (tokens.size() > 262144)
       return diagnostic(text, filename, start, "source-limit",
                         "too many tokens");
   }
-  tokens.push_back({TokenKind::End, {}, text.size()});
+  tokens.push_back({TokenKind::End, {}, text.size(), {}});
   return tokens;
 }
 } // namespace zkc::frontend

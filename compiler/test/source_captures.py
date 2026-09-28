@@ -103,7 +103,7 @@ for captures, yes, no, expected in [
     with case(f"captures {captures} on a choice"):
         arguments = ", ".join(f"%c{i}: {FIELD_IR}" for i in range(len(captures)))
         types = ", ".join(["!pir.flow", "i1"] + [FIELD_IR] * len(captures))
-        text = f"""module {{
+        text = f"""
   "pir.program"() <{{context = {ctx_attr}, resultType = {FIELD_IR}}}> ({{
   ^bb0(%flow: !pir.flow, %x: {FIELD_IR}, %y: {FIELD_IR}, %flag: i1):
     "pir.choose"(%flow, %flag, {", ".join(captures)}) ({{
@@ -114,7 +114,7 @@ for captures, yes, no, expected in [
       "pir.return"(%f, %c{no}) : (!pir.flow, {FIELD_IR}) -> ()
     }}) : ({types}) -> ()
   }}) : () -> ()
-}}"""
+"""
         assert export(text) == expected
 
 print(f"source captures: {commands.save()} checks; three CSE scope cases and four explicit capture mappings")

@@ -99,8 +99,8 @@ for ty in ["rng", "transcript", "nonce", "opening_state", "prover_key", "verifie
         run("protocol-import", json.dumps(resource_plan))
 
 # Installed source imports reach the identical storage-only pass.
-imported_text = source.replace('module {\n  bind both = bool.and();',
-                              'module { use zkc::core;').replace('= both(', '= zkc::core::and(')
+imported_text = source.replace('bind both = "bool.and"();',
+                              'use zkc::core;').replace('= both(', '= zkc::core::and(')
 imported_source = json.loads(run("protocol-source", imported_text))
 imported_dense = json.loads(run("protocol-compile", json.dumps(imported_source)))
 imported_released = json.loads(

@@ -137,7 +137,7 @@ public:
     index.ambiguousOrigins = context.ambiguousOrigins;
   }
   Expected<SelectorIndex> run() {
-    if (!context.carrier && !context.owners.empty()) {
+    if (!context.owners.empty()) {
       selectors(context.owners[0].root, {}, false);
       for (const auto &[alias, target] : context.owners[0].dependencies)
         selectors(context.owners[target].root, alias, true);

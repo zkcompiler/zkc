@@ -35,7 +35,7 @@ template <typename T> T take(Expected<T> result) {
   }
   return std::move(*result);
 }
-constexpr StringLiteral program = R"(module {
+constexpr StringLiteral program = R"(
   fn Identity(x: bool) -> bool { return x; }
   fn Nested(flag: bool, x: bool) -> bool {
     let mut result = x;
@@ -52,7 +52,7 @@ constexpr StringLiteral program = R"(module {
   }
   instance run: Send { roles(P = prover, V = verifier); }
   entry main = run;
-})";
+)";
 Compilation compile(ProtocolAction action) {
   // Both the caller's registry and analysis die before using the returned IR.
   mlir::DialectRegistry registry;
@@ -259,17 +259,17 @@ void tableOwnership() {
   require(structured, "Compiler lost an extension invocation precondition");
 }
 void constructionOwnership() {
-  constexpr StringLiteral text = R"(module {
+  constexpr StringLiteral text = R"(
     use zkc::algebra as field;
     use zkc::core as control;
     use zkc::random;
     use zkc::random::Rng;
     fn Draw(r: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) {
-      [pick] let (x, next) = random::draw::<bls12-381.fr>(r);
+      [pick] let (x, next) = random::draw::<"bls12-381.fr">(r);
       return (x, next);
     }
     fn Check(x: "bls12-381.fr"::Element) -> bool {
-      let ok = field::equal::<bls12-381.fr>(x, x);
+      let ok = field::equal::<"bls12-381.fr">(x, x);
       control::require(ok);
       ok
     }
@@ -283,7 +283,7 @@ void constructionOwnership() {
     }
     instance run: Main { roles(P = P, V = V); }
     entry main = run;
-  })";
+  )";
   source::Construction descriptor;
   descriptor.identity = source::Construction::Identity::Exact;
   descriptor.entry = "main";
@@ -361,7 +361,7 @@ void constructionOwnership() {
                 fresh.getLoadedDialects().size() == 1,
             "claim checker lost its loaded-context precondition");
   }
-  auto failed = frontend::analyzeProtocol("module {", "broken.pir");
+  auto failed = frontend::analyzeProtocol("fn Broken() -> () {", "broken.pir");
   auto bad = constructProtocol(failed, descriptor, mlir::DialectRegistry{});
   require(!bad, "incomplete analysis constructed a protocol");
   bool located = false;
@@ -370,15 +370,14 @@ void constructionOwnership() {
               e.refusals.front().code == "source-syntax" &&
               !e.refusals.front().detail.empty() && e.locations.size() == 1 &&
               e.locations.front().filename == "broken.pir" &&
-              e.locations.front().line == 1 && e.locations.front().column == 9;
+              e.locations.front().line == 1 && e.locations.front().column == 20;
   });
   require(located, "construction discarded structured frontend diagnostics");
   // A diagnostic in a captured child must use that file's text, not the root's.
   auto project = take(frontend::ProjectInput::capture(
-      {{{{{}, frontend::Input("module { mod child; }", "root.pir")},
+      {{{{{}, frontend::Input(" mod child; ", "root.pir")},
          {{"child"},
-          frontend::Input("module {\n  fn Broken(x: Absent) -> () "
-                          "{ return (); }\n}",
+          frontend::Input("\n  fn Broken(x: Absent) -> () { return (); }\n",
                           "child.pir")}}}}));
   auto invalidProject = frontend::analyzeProject(project);
   auto childError =

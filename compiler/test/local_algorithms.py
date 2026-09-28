@@ -38,7 +38,7 @@ assert 'let ' in native('protocol-format', source)
 roundtrip = native('protocol-export', common)
 assert sum(i[0] == 'apply' for f in roundtrip[2] for i in f[4]) == 5
 run(optimizer, '--verify-each', text=common)
-native('protocol-source', text.replace('Twice(x);', 'Twice::<koala-bear>(x);'), 'generic-static-arity')
+native('protocol-source', text.replace('Twice(x);', 'Twice::<"koala-bear">(x);'), 'generic-static-arity')
 expanded_ir = run(optimizer, '--zkc-expand-algorithms', text=common)
 assert 'call @' not in expanded_ir
 assert run(optimizer, '--zkc-expand-algorithms', text=expanded_ir) == expanded_ir

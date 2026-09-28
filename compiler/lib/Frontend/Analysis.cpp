@@ -31,6 +31,27 @@ Analysis analyzeProject(const ProjectInput &input) {
   return analyzeProject(input, {});
 }
 Analysis analyzeProject(const ProjectInput &input, WorkLimits limits) {
+  // Common records have neither authored scopes nor source-only judgments.
+  // Preserve an inspectable refusal without manufacturing a checked module.
+  uint32_t file = 0;
+  for (const auto &library : input.libraries())
+    for (const auto &source : library.sources) {
+      if (isCommonDocument(classifyDocument(source.input.text()))) {
+        auto model = std::make_unique<model::Module>();
+        model->resolution = std::make_shared<resolution::Context>(input);
+        if (const auto *root = input.file(0)) {
+          model->text = root->text().str();
+          model->filename = root->filename().str();
+        }
+        model->diagnostics.push_back(
+            {"source-analysis-unsupported",
+             "common carriers do not have authored source analysis; use common "
+             "inspection or admission",
+             source::Span{0, 0, file}});
+        return model::AnalysisAccess::freeze(std::move(model));
+      }
+      ++file;
+    }
   WorkBudget budget(limits);
   auto resolved = resolution::resolve(input);
   const auto *root = input.file(

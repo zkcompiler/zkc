@@ -8,7 +8,7 @@ from collections import Counter
 import pytest
 
 
-SOURCE = '''module {
+SOURCE = '''
   library(namespace="zkc.tests", name="zero-storage-execution", version="1",
           resolution="authored");
   interface Cell {
@@ -174,7 +174,7 @@ SOURCE = '''module {
   }
   instance run: Run { roles (P = P); }
   entry main = run;
-}'''
+'''
 
 
 @pytest.mark.parametrize("client,units", [

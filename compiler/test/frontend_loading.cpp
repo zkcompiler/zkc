@@ -21,11 +21,11 @@ const char *asset = R"(["zkc.relation.r1cs/1","bls12-381.fr","4","1","1",
 
 std::string imports(size_t count, StringRef family = "r1cs",
                     StringRef path = "data.json") {
-  std::string text = "module {";
+  std::string text;
   for (size_t i = 0; i < count; ++i)
     text += "relation R" + std::to_string(i) + " = " + family.str() + "(\"" +
             path.str() + "\");";
-  return text + "}";
+  return text;
 }
 
 struct Directory {
@@ -70,28 +70,29 @@ void noCallback(StringRef text, StringRef code) {
 
 int main() {
   Cases cases;
-  for (
-      const auto &text :
-      {R"(module { relation R = r1cs("a"); relation R = r1cs("b"; })",
-       R"(module { relation R = r1cs("a"); relation S = r1cs(unquoted); })",
-       R"(module { relation R = r1cs("a"); fn Broken(x: bool) -> bool { let y = ; } })",
-       R"(module { relation R = r1cs("a"); } trailing)",
-       R"(module { relation R = r1cs("a");)"})
+  for (const auto &text :
+       {R"( relation R = r1cs("a"); relation R = r1cs("b"; )",
+        R"( relation R = r1cs("a"); relation S = r1cs(unquoted); )",
+        R"( relation R = r1cs("a");  trailing)",
+        R"( relation R = r1cs("a"); fn Broken() {)"})
     cases.run("strict parse refusal: " + StringRef(text),
               [&] { noCallback(text, "source-syntax"); });
 
+  cases.run("strict invalid expression preflight", [] {
+    noCallback(
+        R"( relation R = r1cs("a"); fn Broken(x: bool) -> bool { let y = ; } )",
+        "source-syntax");
+  });
   cases.run("strict duplicate relation preflight", [] {
-    noCallback(R"(module { relation R = r1cs("a"); relation R = air("b"); })",
+    noCallback(R"( relation R = r1cs("a"); relation R = air("b"); )",
                "relation-duplicate-alias");
   });
   cases.run("strict family preflight", [] {
-    noCallback(
-        R"(module { relation R = r1cs("a"); relation S = future("b"); })",
-        "relation-import-family");
+    noCallback(R"( relation R = r1cs("a"); relation S = future("b"); )",
+               "relation-import-family");
   });
   cases.run("strict child name preflight", [] {
-    noCallback("module { relation R = air(\"a\"); mod " +
-                   std::string(129, 'a') + "; }",
+    noCallback("relation R = air(\"a\"); mod " + std::string(129, 'a') + ";",
                "project-module-name");
   });
   cases.run("strict dependency count preflight", [] {
@@ -106,9 +107,9 @@ int main() {
            "", "/absolute", "../outside", "a/../outside", "back\\slash",
            std::string("nul\0suffix", 10), std::string(4097, 'a')}) {
     cases.run("portable request preflight: " + path, [&] {
-      const auto text = "module { relation First = r1cs(\"missing.json\"); "
+      const auto text = "relation First = r1cs(\"missing.json\"); "
                         "relation Bad = air(" +
-                        printJson(json::Value(path)) + "); }";
+                        printJson(json::Value(path)) + ");";
       noCallback(text, "relation-asset-path");
       Directory directory;
       refuses(captureProject(directory.input("app.pir", text)),
@@ -185,13 +186,13 @@ int main() {
     Directory directory;
     directory.write("data.json", asset);
     directory.write("child.pir",
-                    "module { pub fn Keep(x: bool) -> bool { return x; } }");
-    auto input = directory.input("app.pir", R"(module {
+                    " pub fn Keep(x: bool) -> bool { return x; } ");
+    auto input = directory.input("app.pir", R"(
       relation R = r1cs("data.json");
       relation R = r1cs("never-read.json";
       mod child;
       fn Good(x: bool) -> bool { return x; }
-    })");
+    )");
     auto project = take(captureProject(input));
     require(project.libraries().front().sources.size() == 2 &&
                 project.assets().size() == 1 &&
@@ -204,16 +205,16 @@ int main() {
   });
   cases.run("capture duplicate alias precedes missing assets", [] {
     Directory directory;
-    refuses(captureProject(directory.input("app.pir", R"(module {
+    refuses(captureProject(directory.input("app.pir", R"(
       relation R = r1cs("absent"); relation R = air("also-absent");
-    })")),
+    )")),
             "relation-duplicate-alias");
   });
   cases.run("capture family refusal precedes missing assets", [] {
     Directory directory;
-    refuses(captureProject(directory.input("app.pir", R"(module {
+    refuses(captureProject(directory.input("app.pir", R"(
       relation R = r1cs("absent"); relation S = future("also-absent");
-    })")),
+    )")),
             "relation-import-family");
   });
   cases.run("capture count preflight precedes missing assets", [] {
@@ -241,12 +242,12 @@ int main() {
   });
   cases.run("nested modules retain root-relative paths and file IDs", [] {
     Directory directory;
-    directory.write("outer.pir", "module { mod inner; }");
+    directory.write("outer.pir", " mod inner; ");
     directory.write("outer/inner.pir", imports(1));
     directory.write("outer/data.json", asset);
     directory.write("inner.pir", "invalid decoy");
-    auto project = take(
-        captureProject(directory.input("app.pir", "module { mod outer; }")));
+    auto project =
+        take(captureProject(directory.input("app.pir", " mod outer; ")));
     const auto &sources = project.libraries().front().sources;
     require(
         sources.size() == 3 &&
@@ -261,25 +262,23 @@ int main() {
         "resolution=\"r\");"}) {
     cases.run("child cannot own root declarations: " + metadata, [&] {
       Directory directory;
-      directory.write("child.pir", "module {" + metadata +
-                                       "relation R = air(\"never-read\"); }");
-      refuses(
-          captureProject(directory.input("app.pir", "module { mod child; }")),
-          "project-library-root");
+      directory.write("child.pir",
+                      metadata + "relation R = air(\"never-read\");");
+      refuses(captureProject(directory.input("app.pir", " mod child; ")),
+              "project-library-root");
     });
   }
   cases.run("child construction is not a module root", [] {
     Directory directory;
     directory.write("child.pir", "construction main { producer P; validator V; "
                                  "random R at (); accept 0; suite S; }");
-    refuses(captureProject(directory.input("app.pir", "module { mod child; }")),
+    refuses(captureProject(directory.input("app.pir", " mod child; ")),
             "project-module-root");
   });
   cases.run("child diagnostic preserves file and spelling", [] {
     Directory directory;
-    auto child = directory.write("child.pir", "module { mod x; mod x; }");
-    auto project =
-        captureProject(directory.input("app.pir", "module { mod child; }"));
+    auto child = directory.write("child.pir", " mod x; mod x; ");
+    auto project = captureProject(directory.input("app.pir", " mod child; "));
     require(!project, "duplicate child declarations refuse");
     bool located = false;
     handleAllErrors(
@@ -295,8 +294,8 @@ int main() {
   });
   cases.run("memory labels never supply a filesystem base", [] {
     Directory directory;
-    auto path = directory.write("app.pir", "module {}");
-    auto input = Input::withoutFile("module {}", path.string());
+    auto path = directory.write("app.pir", "");
+    auto input = Input::withoutFile("", path.string());
     require(inspectDependencies(input).complete,
             "pure inspection accepts memory input");
     refuses(captureProject(input), "project-source-base");
@@ -306,34 +305,33 @@ int main() {
   });
   cases.run("a file named stdin retains physical file identity", [] {
     Directory directory;
-    auto project =
-        take(captureProject(directory.input("<stdin>", "module {}")));
+    auto project = take(captureProject(directory.input("<stdin>", "")));
     require(project.file(0) && project.file(0)->file(),
             "input kind governs file identity");
   });
   cases.run("all explicit roots seed the physical cache", [] {
     Directory directory;
     auto path = directory.write("child.pir", "disk bytes must not be reopened");
-    Input child("module {}", path.string());
-    auto project = take(captureProject(
-        directory.input("app.pir", "module { mod child; }"), {child}));
+    Input child("", path.string());
+    auto project = take(
+        captureProject(directory.input("app.pir", " mod child; "), {child}));
     require(project.libraries().size() == 2 &&
-                project.libraries()[0].sources[1].input.text() == "module {}" &&
-                project.libraries()[1].sources[0].input.text() == "module {}",
+                project.libraries()[0].sources[1].input.text() == "" &&
+                project.libraries()[1].sources[0].input.text() == "",
             "explicit snapshots win over later physical reads");
   });
   cases.run("conflicting snapshots of one physical root refuse", [] {
     Directory directory;
-    auto first = directory.input("app.pir", "module {}");
+    auto first = directory.input("app.pir", "");
     auto alias = directory.path / "alias.pir";
     fs::create_symlink(directory.path / "app.pir", alias);
-    Input second("module { mod child; }", alias.string());
+    Input second(" mod child; ", alias.string());
     refuses(captureProject(first, {second}), "project-source-conflict");
   });
   cases.run("module symlink escape refuses", [] {
     Directory directory;
-    auto outside = directory.write("outside.pir", "module {}");
-    auto input = directory.input("inside/app.pir", "module { mod child; }");
+    auto outside = directory.write("outside.pir", "");
+    auto input = directory.input("inside/app.pir", " mod child; ");
     fs::create_symlink(outside, directory.path / "inside/child.pir");
     refuses(captureProject(input), "project-source-path");
   });
@@ -347,39 +345,36 @@ int main() {
   });
   cases.run("physical module cycle refuses", [] {
     Directory directory;
-    auto input = directory.input("app.pir", "module { mod child; }");
+    auto input = directory.input("app.pir", " mod child; ");
     fs::create_symlink(directory.path / "app.pir",
                        directory.path / "child.pir");
     refuses(captureProject(input), "project-module-cycle");
   });
   cases.run("source count refuses before the absent extra child", [] {
     Directory directory;
-    std::string text = "module {";
+    std::string text;
     for (size_t i = 0; i < ProjectInput::maxSources; ++i) {
       auto name = "m" + std::to_string(i);
       text += "mod " + name + ";";
       if (i + 1 < ProjectInput::maxSources)
-        directory.write(name + ".pir", "module {}");
+        directory.write(name + ".pir", "");
     }
-    refuses(captureProject(directory.input("app.pir", text + "}")),
+    refuses(captureProject(directory.input("app.pir", text)),
             "project-source-limit");
   });
   cases.run("programmatic project admission remains independent", [] {
-    const auto text =
-        R"(module { relation R = r1cs("a"); relation R = r1cs("b"); })";
+    const auto text = R"( relation R = r1cs("a"); relation R = r1cs("b"); )";
     auto project =
         take(ProjectInput::capture({{{{{}, Input::withoutFile(text)}}}},
                                    {{0, "a", asset}, {0, "b", asset}}));
     refuses(compileProject(project), "relation-duplicate-alias");
   });
-  cases.run("programmatic unsupported family remains independently refused",
-            [] {
-              auto project = take(ProjectInput::capture(
-                  {{{{{},
-                      Input::withoutFile(
-                          R"(module { relation R = future("a"); })")}}}},
-                  {{0, "a", asset}}));
-              refuses(compileProject(project), "relation-import-family");
-            });
+  cases.run(
+      "programmatic unsupported family remains independently refused", [] {
+        auto project = take(ProjectInput::capture(
+            {{{{{}, Input::withoutFile(R"( relation R = future("a"); )")}}}},
+            {{0, "a", asset}}));
+        refuses(compileProject(project), "relation-import-family");
+      });
   return cases.result();
 }

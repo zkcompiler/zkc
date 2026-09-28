@@ -55,7 +55,7 @@ def test_polynomial_family_execution(domain):
     directory = records(case=f"polynomial-{domain}")
     directory.mkdir(parents=True, exist_ok=True)
     text = (EXAMPLES / "folded-contraction-family.pir").read_text()
-    text = text.replace("F = koala-bear", f'F = "{domain}"')
+    text = text.replace("F = \"koala-bear\"", f'F = "{domain}"')
     inputs = json.loads((EXAMPLES / "folded-contraction.inputs.json").read_text())
     report = execute(text, inputs, directory)
     assert report["outcome"][0] == "returned", report
@@ -108,7 +108,7 @@ def test_closed_composition_executes_named_ports():
     directory = records(case="closed-composition")
     directory.mkdir(parents=True, exist_ok=True)
     text = (EXAMPLES / "group-agreement-family.pir").read_text()
-    text = text[:text.index("  entry main")] + '''
+    text = text[:text.index("entry main")] + '''
       protocol RepeatAgreement<G: ScalarAction> {
         roles (Sender, Receiver);
         outputs (Receiver accepted: bool);
@@ -118,7 +118,7 @@ def test_closed_composition_executes_named_ports():
         finish {accepted: second};
       }
       entry main = RepeatAgreement::<G="bls12-381.g1">;
-    }'''
+    '''
     inputs = ["zkc.run/2", "main", "closed-source-composition", [], [
         ["Sender", [], [], []], ["Receiver", [], [], []],
     ], []]

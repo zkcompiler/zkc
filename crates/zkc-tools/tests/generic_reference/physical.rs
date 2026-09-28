@@ -345,11 +345,14 @@ fn checked_local_plans_preserve_physical_failure_and_retained_state() {
     let result = compare(&fixture, 2, (ceiling / 2 - 256) / 32, 2, true, ceiling);
     assert_eq!(result[1][0], "limit");
     compare_tape(&fixture, 2, 4, 2, true, ceiling, &[]);
-    let identity = Fixture::from_text(&source.replace(
-        "[draw] (r, next) = random.draw<F>(rng);\n    [guard] () = control.require<>(allowed);\n    [fold] (result) = poly.fold<F>(table, r);\n    return (result, next);",
-        "return (table, rng);",
-    ).replace("using (fold = \"arkworks/poly.fold\")", ""));
-    let result = compare(&identity, 2, 21, 2, true, ceiling);
+    let step_body = "  [draw] let (r, next) = zkc::random::draw::<F>(rng);\n  [guard] zkc::core::require(allowed);\n  [r#fold] let result = zkc::poly::r#fold::<F>(table, r);\n  return (result, next);";
+    assert_eq!(source.matches(step_body).count(), 1);
+    let identity_source = source
+        .replace(step_body, "  return (table, rng);")
+        .replace(" using (r#fold = \"arkworks/poly.fold\")", "");
+    assert!(!identity_source.contains("using ("));
+    let identity = Fixture::from_text(&identity_source);
+    let result = compare_tape(&identity, 2, 21, 2, true, ceiling, &[]);
     assert_eq!(result[1][0], "returned");
 }
 
@@ -406,13 +409,13 @@ fn kernel_completion_precedes_live_value_retention() {
 #[test]
 fn empty_local_uses_the_declared_participant_without_input_ports() {
     let fixture = Fixture::from_text(
-        r#"module {
+        r#"
       fn Empty<>() -> () { return; }
       configure Run = Empty();
       protocol Main { roles(P); inputs(); outputs();
         local [step] P: Run(); return; }
       instance root: Main { roles(P=P); } entry main=root;
-    }"#,
+    "#,
     );
     let checker = ParticipantChecker::new(&fixture.checker_path).unwrap();
     let inner = backend();

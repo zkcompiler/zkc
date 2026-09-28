@@ -72,18 +72,19 @@ existing field literal checking/reduction rules remain authoritative.
 
 Resolve imported operation paths such as `algebra::add` through ordinary project
 lookup to their installed declaration, which supplies the exact contract key
-`field.add`. Do not replace dots globally: `bls12-381.fr`, schema names, user
-symbols and implementation identities are opaque identities. Quoted helper names
-still require lexical visibility. Unresolved exact names have no installed
-operation fallback, including in generic bodies. A low-level `bind` names the
-logical contract separately and checks its authored-source stage permission.
+`field.add`. Declaration paths use `::`; value projections use `.`. Exact data
+such as `"bls12-381.fr"`, schemas and implementation identities retain their
+contents. Quotes do not name ordinary helpers or bypass lexical visibility.
+Unresolved calls have no installed-operation fallback, including in generic
+bodies. A low-level `bind` names the exact quoted logical contract separately
+and checks its authored-source stage permission.
 
 Named-call resolution is independent of argument types. Installed intrinsics use
 the export's generated argument labels for named calls. Operators select from
 [coherent constructor tuples](../language/data.md#4-operators) before flattening
-records. Quoting a nominal term escapes its lexical spelling; it does not create
-a new nominal-term grammar. See the [source reference](../language/reference.md)
-for lookup and projection rules.
+records. A quoted static root denotes an exact identity; an unquoted root must
+resolve lexically. See the [source reference](../language/reference.md) for
+lookup and projection rules.
 
 ## 2. Logical types and bounds
 

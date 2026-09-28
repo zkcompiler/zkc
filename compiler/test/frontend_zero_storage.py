@@ -12,34 +12,34 @@ from tools import records
 commands = Commands(records())
 
 REGRESSIONS = {
-    "empty helper round trip": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+    "empty helper round trip": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local step(x: Value) -> Value; }
   component Impl: Cell { type Value = (); local step(x: Value) -> Value { return Id(x); } }
   fn Id(x: ()) -> () { return x; }
   fn Client<C: Cell>(x: C::Value) -> C::Value { return C::step(x); }
   link Closed = Client<Impl>;
-}''',
-    "empty helper result creation": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "empty helper result creation": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local make(b: bool) -> Value; }
   component Impl: Cell { type Value = (); local make(b: bool) -> Value { return Unit(b); } }
   fn Unit(b: bool) -> () { return (); }
   fn Client<C: Cell>(b: bool) -> C::Value { return C::make(b); }
   link Closed = Client<Impl>;
-}''',
-    "mixed aggregate helper input": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "mixed aggregate helper input": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local f(x: (Value, bool)) -> bool; }
   component Impl: Cell { type Value = (); local f(x: (Value, bool)) -> bool { return Snd(x); } }
   fn Snd(p: ((), bool)) -> bool { return p.1; }
   fn Client<C: Cell>(x: (C::Value, bool)) -> bool { return C::f(x); }
   link Closed = Client<Impl>;
-}''',
-    "mixed aggregate projection": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "mixed aggregate projection": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local step(x: Value, b: bool) -> bool; }
-  component Impl: Cell { type Value = (); local step(x: Value, b: bool) -> bool { let p = (x, b); return p[1]; } }
+  component Impl: Cell { type Value = (); local step(x: Value, b: bool) -> bool { let p = (x, b); return p.1; } }
   fn Client<C: Cell>(x: C::Value, b: bool) -> bool { return C::step(x, b); }
   link Closed = Client<Impl>;
-}''',
-    "mixed aggregate conditional capture": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "mixed aggregate conditional capture": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local f(x: (Value, bool), b: bool) -> bool; }
   component Impl: Cell { type Value = ();
     local f(x: (Value, bool), b: bool) -> bool {
@@ -49,8 +49,8 @@ REGRESSIONS = {
   }
   fn Client<C: Cell>(x: (C::Value, bool), b: bool) -> bool { return C::f(x, b); }
   link Closed = Client<Impl>;
-}''',
-    "mixed aggregate conditional result": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "mixed aggregate conditional result": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local f(x: ((), bool), b: bool) -> (Value, bool); }
   component Impl: Cell { type Value = ();
     local f(x: ((), bool), b: bool) -> (Value, bool) {
@@ -60,20 +60,20 @@ REGRESSIONS = {
   }
   fn Client<C: Cell>(x: ((), bool), b: bool) -> (C::Value, bool) { return C::f(x, b); }
   link Closed = Client<Impl>;
-}''',
-    "empty tuple projection": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "empty tuple projection": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local first(x: (Value, Value)) -> Value; }
   component Impl: Cell { type Value = (); local first(x: (Value, Value)) -> Value { return x.0; } }
   fn Client<C: Cell>(x: (C::Value, C::Value)) -> C::Value { return C::first(x); }
   link Closed = Client<Impl>;
-}''',
-    "distinct associated slot conversion": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "distinct associated slot conversion": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Swap { type A drop; type B drop; local f(x: A) -> B; }
   component Impl: Swap { type A = (); type B = (); local f(x: A) -> B { return x; } }
   fn Client<C: Swap>(x: C::A) -> C::B { return C::f(x); }
   link Closed = Client<Impl>;
-}''',
-    "empty conditional result creation": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "empty conditional result creation": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local make(x: (), b: bool) -> Value; }
   component Impl: Cell { type Value = ();
     local make(x: (), b: bool) -> Value {
@@ -83,13 +83,13 @@ REGRESSIONS = {
   }
   fn Client<C: Cell>(x: (), b: bool) -> C::Value { return C::make(x, b); }
   link Closed = Client<Impl>;
-}''',
-    "projected empty result disposal": '''module { library(namespace="example", name="cells", version="1", resolution="capture-1");
+''',
+    "projected empty result disposal": ''' library(namespace="example", name="cells", version="1", resolution="capture-1");
   interface Cell { type Value drop; local erase(x: (Value, bool)) -> (); }
   component Impl: Cell { type Value = (); local erase(x: (Value, bool)) -> () { return x.0; } }
   fn Client<C: Cell>(x: (C::Value, bool)) -> () { return C::erase(x); }
   link Closed = Client<Impl>;
-}''',
+''',
 }
 
 # Logical unit counts at the authored Closed boundary, independent of storage.
@@ -187,7 +187,7 @@ with case("a helper adapter inside each arm retains nested call resolution"):
     emit(text)
 
 with case("mixed join creates only on the plain arm without widening its input"):
-    emit('''module {
+    emit('''
       library(namespace="example", name="mixed-join", version="1", resolution="r1");
       interface Cell { type Value drop; local choose(x: Value, y: (), b: bool) -> Value; }
       component Impl: Cell {
@@ -201,17 +201,17 @@ with case("mixed join creates only on the plain arm without widening its input")
         return C::choose(x, y, b);
       }
       link Closed = Client<Impl>;
-    }''')
+    ''')
 
 
 # A known private variant carries an empty owned payload beside stored data.
-MIXED_VARIANT = '''module { library(namespace="example", name="cells", version="1", resolution="capture-1"); enum Holder { Has(((), bool)), Nothing(bool) } interface Cell { type Value drop; local f(x: (Value, bool), b: bool) -> bool; } component Impl: Cell { type Value = ();
+MIXED_VARIANT = ''' library(namespace="example", name="cells", version="1", resolution="capture-1"); enum Holder { Has(((), bool)), Nothing(bool) } interface Cell { type Value drop; local f(x: (Value, bool), b: bool) -> bool; } component Impl: Cell { type Value = ();
                local f(x: (Value, bool), b: bool) -> bool {
                  let h: Holder = Holder::Has(x);
                  match h capture(b) -> (r) { Has(p) => { yield (b); }, Nothing(q) => { yield (q); } }
                  return r;
                }
-             } fn Client<C: Cell>(x: (C::Value, bool), b: bool) -> bool { return C::f(x, b); } link Closed = Client<Impl>; }'''
+             } fn Client<C: Cell>(x: (C::Value, bool), b: bool) -> bool { return C::f(x, b); } link Closed = Client<Impl>; '''
 
 with case("private mixed variant transports and disposes its empty resource"):
     carrier, encoded = emit(MIXED_VARIANT)
@@ -319,7 +319,7 @@ with case("nested variants meet ownership from every alternative"):
     }
 
 with case("a droppable token does not grant drop to another variant alternative"):
-    text = '''module {
+    text = '''
       library(namespace="example", name="variant-permissions", version="1", resolution="r1");
       interface Cell { type Value drop; type Required; }
       component Impl: Cell { type Value = (); type Required = bool; }
@@ -327,7 +327,7 @@ with case("a droppable token does not grant drop to another variant alternative"
       enum Outer<C: Cell> { Wrap(Choice<C>), Spare(bool) }
       fn Client<C: Cell>(x: Outer<C>) -> Outer<C> { return x; }
       link Closed = Client<Impl>;
-    }'''
+    '''
     leaves = linked_variant_leaves(text)
     assert leaves
     assert all(not leaf["copy"] and not leaf["drop"] for leaf in leaves)
@@ -337,7 +337,7 @@ with case("a droppable token does not grant drop to another variant alternative"
         refuses="library-resource-leak")
 
 
-CAPTURE_ALIASES = '''module {
+CAPTURE_ALIASES = '''
   library(namespace="example", name="capture-aliases", version="1", resolution="r1");
   interface Marker {}
   component Impl: Marker {}
@@ -351,7 +351,7 @@ CAPTURE_ALIASES = '''module {
     return result;
   }
   link Closed = Client<Impl>;
-}'''
+'''
 
 with case("copyable aggregate aliases share one conditional carrier capture"):
     emit(CAPTURE_ALIASES)
@@ -379,7 +379,7 @@ with case("flattened capture deduplication never authorizes a nested affine vari
         refuses="library-resource-use")
 
 
-PUBLIC_VARIANT_RETURN = '''module {
+PUBLIC_VARIANT_RETURN = '''
   library(namespace="example", name="variant-return", version="1", resolution="r1");
   enum Holder { Has(((), bool)), Nothing(bool) }
   interface Cell { type Value drop; local get(x: (Value, bool), b: bool) -> Holder; }
@@ -398,7 +398,7 @@ PUBLIC_VARIANT_RETURN = '''module {
     return C::get(x, b);
   }
   link Closed = Client<Impl>;
-}'''
+'''
 
 with case("a public variant return disposes the private active payload token"):
     carrier, encoded = emit(PUBLIC_VARIANT_RETURN)
@@ -409,7 +409,7 @@ with case("a public variant return disposes the private active payload token"):
     assert "resource_unit.create" not in encoded
 
 
-VARIANT_RESULT_JOIN = '''module {
+VARIANT_RESULT_JOIN = '''
   library(namespace="example", name="variant-result-join", version="1", resolution="r1");
   enum Holder { Has(((), bool)), Nothing(bool) }
   interface Cell { type Value drop; local get(x: (Value, bool), b: bool) -> bool; }
@@ -438,7 +438,7 @@ VARIANT_RESULT_JOIN = '''module {
     return C::get(x, b);
   }
   link Closed = Client<Impl>;
-}'''
+'''
 
 for alternative, constructor in [
     ("Has", "let pair = ((), b); let h: Holder = Holder::Has(pair);"),

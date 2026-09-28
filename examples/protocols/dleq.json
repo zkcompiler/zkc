@@ -2,7 +2,7 @@
   "zkc.protocol/1",
   [
     [
-      "curve.empty",
+      "curve_empty",
       "curve.empty",
       [
         "bls12-381.g1"
@@ -10,7 +10,7 @@
       "arkworks/curve.empty"
     ],
     [
-      "curve.append",
+      "curve_append",
       "curve.append",
       [
         "bls12-381.g1"
@@ -18,7 +18,7 @@
       "arkworks/curve.append"
     ],
     [
-      "curve.commit",
+      "curve_commit",
       "curve.commit",
       [
         "bls12-381.g1"
@@ -26,7 +26,7 @@
       "arkworks/curve.commit"
     ],
     [
-      "curve.at",
+      "curve_at",
       "curve.at",
       [
         "bls12-381.g1"
@@ -34,7 +34,7 @@
       "arkworks/curve.at"
     ],
     [
-      "random.draw",
+      "random_draw",
       "random.draw",
       [
         "bls12-381.fr"
@@ -42,7 +42,7 @@
       "arkworks/random.draw"
     ],
     [
-      "curve.response",
+      "curve_response",
       "curve.response",
       [
         "bls12-381.fr"
@@ -50,7 +50,7 @@
       "arkworks/curve.response"
     ],
     [
-      "curve.scale",
+      "curve_scale",
       "curve.scale",
       [
         "bls12-381.g1"
@@ -58,7 +58,7 @@
       "arkworks/curve.scale"
     ],
     [
-      "curve.add",
+      "curve_add",
       "curve.add",
       [
         "bls12-381.g1"
@@ -66,7 +66,7 @@
       "arkworks/curve.add"
     ],
     [
-      "curve.equal",
+      "curve_equal",
       "curve.equal",
       [
         "bls12-381.g1"
@@ -74,13 +74,13 @@
       "arkworks/curve.equal"
     ],
     [
-      "control.require",
+      "control_require",
       "control.require",
       [],
       "arkworks/control.require"
     ],
     [
-      "bool.and",
+      "bool_and",
       "bool.and",
       [],
       "arkworks/bool.and"
@@ -113,7 +113,7 @@
         [
           "op",
           "empty",
-          "curve.empty",
+          "curve_empty",
           [],
           [],
           [
@@ -123,7 +123,7 @@
         [
           "op",
           "append_0",
-          "curve.append",
+          "curve_append",
           [],
           [
             "empty",
@@ -136,7 +136,7 @@
         [
           "op",
           "append_1",
-          "curve.append",
+          "curve_append",
           [],
           [
             "one",
@@ -149,7 +149,7 @@
         [
           "op",
           "commit",
-          "curve.commit",
+          "curve_commit",
           [],
           [
             "bases",
@@ -163,7 +163,7 @@
         [
           "op",
           "at_0",
-          "curve.at",
+          "curve_at",
           [
             "0"
           ],
@@ -177,7 +177,7 @@
         [
           "op",
           "at_1",
-          "curve.at",
+          "curve_at",
           [
             "1"
           ],
@@ -219,7 +219,7 @@
         [
           "op",
           "draw",
-          "random.draw",
+          "random_draw",
           [],
           [
             "coins"
@@ -266,7 +266,7 @@
         [
           "op",
           "respond",
-          "curve.response",
+          "curve_response",
           [],
           [
             "x",
@@ -333,7 +333,7 @@
         [
           "op",
           "left_0",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "base_0",
@@ -346,7 +346,7 @@
         [
           "op",
           "image_0",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "image_0",
@@ -359,7 +359,7 @@
         [
           "op",
           "right_0",
-          "curve.add",
+          "curve_add",
           [],
           [
             "a_0",
@@ -372,7 +372,7 @@
         [
           "op",
           "equal_0",
-          "curve.equal",
+          "curve_equal",
           [],
           [
             "left_0",
@@ -385,7 +385,7 @@
         [
           "op",
           "require_0",
-          "control.require",
+          "control_require",
           [],
           [
             "ok_0"
@@ -395,7 +395,7 @@
         [
           "op",
           "left_1",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "base_1",
@@ -408,7 +408,7 @@
         [
           "op",
           "image_1",
-          "curve.scale",
+          "curve_scale",
           [],
           [
             "image_1",
@@ -421,7 +421,7 @@
         [
           "op",
           "right_1",
-          "curve.add",
+          "curve_add",
           [],
           [
             "a_1",
@@ -434,7 +434,7 @@
         [
           "op",
           "equal_1",
-          "curve.equal",
+          "curve_equal",
           [],
           [
             "left_1",
@@ -447,7 +447,7 @@
         [
           "op",
           "require_1",
-          "control.require",
+          "control_require",
           [],
           [
             "ok_1"
@@ -457,7 +457,7 @@
         [
           "op",
           "both",
-          "bool.and",
+          "bool_and",
           [],
           [
             "ok_0",
@@ -499,7 +499,7 @@
         [
           "op",
           "both",
-          "bool.and",
+          "bool_and",
           [],
           [
             "first",

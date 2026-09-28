@@ -294,7 +294,7 @@ for operation, text in [
     ("pir.yield", '"pir.yield"() : () -> ()'),
     ("pir.incomplete", '"pir.incomplete"() <{site="x"}> : () -> ()'),
 ]:
-    run(optimizer, text=f"module {{ {text} }}", op=operation, code="parent")
+    run(optimizer, text=f" {text} ", op=operation, code="parent")
 
 print(f"native verifier checks: {commands.save()} passed; {len(KERNELS)} "
       "portable kernel contracts and full example passes")

@@ -38,27 +38,28 @@ def main():
 
 
     def constant(name, values):
-        return f'[{name}] let ({name}) = vector::constant::<F>() attributes ({attributes(values)});'
+        return f'[{name}] let ({name}) = algebra::vector_constant::<F>() attributes ({attributes(values)});'
 
 
     def scatter(name, values, length, indices):
-        return f'[{name}] let ({name}) = vector::scatter_sum::<F>({values}) attributes ({attributes([length, *indices])});'
+        return f'[{name}] let ({name}) = algebra::vector_scatter_sum::<F>({values}) attributes ({attributes([length, *indices])});'
 
 
     def source(domain, body):
-        return f'''module {{
+        return f'''
+          use zkc::algebra; use zkc::algebra::Vector;
           fn Work<F: domain Field>() -> (Vector<F::Element>) requires (Field(F)) {{
             {body}
             return (result);
           }}
-          configure Concrete = Work(F = {domain});
+          configure Concrete = Work(F = "{domain}");
           protocol Main {{
-            roles (P); inputs (); outputs (P Vector<{domain}::Element>);
+            roles (P); inputs (); outputs (P Vector<"{domain}"::Element>);
             local [call] P: let out = Concrete(); return (out);
           }}
           instance concrete: Main {{ roles (P = P); }}
           entry main = concrete;
-        }}'''
+        '''
 
 
     def exercise(domain, label, body, expected=None, failure=None):
@@ -142,8 +143,8 @@ def main():
             expected = [sum(a * vector[r if transpose else c] for r, c, a in entries
                             if (c if transpose else r) == i) % p for i in range(length)]
             body = constant('input', vector) + constant('coefficients', [a for _, _, a in entries])
-            body += f'[gather] let selected = vector::gather::<F>(input) attributes ({attributes(gather)});'
-            body += '[multiply] let products = vector::mul::<F>(selected, coefficients);'
+            body += f'[gather] let selected = algebra::vector_gather::<F>(input) attributes ({attributes(gather)});'
+            body += '[multiply] let products = algebra::vector_mul::<F>(selected, coefficients);'
             body += scatter('result', 'products', length, indices)
             exercise(domain, 'transpose' if transpose else 'matrix', body, expected)
         # A valid binding in a different field cannot consume the constant vector.
@@ -155,17 +156,18 @@ def main():
         badpath = journal.write(directory / 'field-mismatch-plan.json', changed)
         journal.run([lean, '--check-generic', str(directory / 'source.json'), badpath], refuses='binding-operation-signature')
         # The readable bound spelling has the same canonical ABI.
-        bound = f'''module {{
-          bind Constant = vector::constant({field});
-          bind Scatter = vector::scatter_sum({field});
-          fn Work() -> (Vector<{field}::Element>) {{
+        bound = f'''
+          use zkc::algebra::Vector;
+          bind Constant = "vector.constant"("{field}");
+          bind Scatter = "vector.scatter_sum"("{field}");
+          fn Work() -> (Vector<"{field}"::Element>) {{
             [c] let v = Constant() attributes ("0", "7");
             [s] let r = Scatter(v) attributes ("1", "0", "0"); return (r);
           }}
-          protocol Main {{ roles (P); inputs (); outputs (P Vector<{field}::Element>);
+          protocol Main {{ roles (P); inputs (); outputs (P Vector<"{field}"::Element>);
             local [call] P: let out = Work(); return (out); }}
           instance concrete: Main {{ roles (P = P); }} entry main = concrete;
-        }}'''
+        '''
         journal.run([compiler, 'protocol-compile', '-'], bound)
         journal.run([compiler, 'protocol-import', '-'], bound.replace('"0", "7"', f'"0", "{p}"'), 'interactive-constant')
         for bad, code in [('01', 'generic-field-literal'), ('-1', 'generic-field-literal')]:
@@ -180,7 +182,7 @@ def main():
                             (['1', '-1'], 'expected-natural'),
                             (['18446744073709551616'], 'interactive-kernel-parameters')]:
             malformed = source(field, constant('values', []) +
-                f'[scatter] let result = vector::scatter_sum::<F>(values) attributes ({attributes(attrs)});')
+                f'[scatter] let result = algebra::vector_scatter_sum::<F>(values) attributes ({attributes(attrs)});')
             journal.run([compiler, 'protocol-import', '-'], malformed, code)
             parsed = json.loads(journal.run([compiler, 'protocol-source', '-'],
                 source(field, constant('values', []) + scatter('result', 'values', 0, []))))

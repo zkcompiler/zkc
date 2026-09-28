@@ -4,7 +4,7 @@ import json
 
 from cases import case
 from commands import Commands
-from selector_cases import descriptor, family_source, source
+from selector_cases import authored_source, descriptor, family_source, source
 from tools import compiler, construction_test, records
 
 
@@ -20,10 +20,6 @@ def write(name, value):
 
 def run(mode, *paths, refuses=None):
     return commands.run([compiler, mode, *paths], refuses=refuses)
-
-
-def authored_source(printed):
-    return printed.replace('carrier module {', 'module {\n  use zkc::random::Rng;', 1)
 
 
 for identity in ('exact', 'normalized'):
@@ -49,7 +45,7 @@ for identity in ('exact', 'normalized'):
                         assert json.loads(formatted) == json.loads(original)
                 # Authoring has project selectors. Carrier text retains the
                 # closed selector contract, checked separately below.
-                spelling = authored_source(printed)
+                spelling = authored_source(offset=offset, calls=calls)
                 text = write('source.pir', spelling)
                 direct = write('direct.json', descriptor(identity, ['F']))
                 # F must not silently select A's draw through Sampling.
@@ -114,7 +110,7 @@ with case('reclaimed-origin-is-valid-but-direct-authoring-selector-is-ambiguous'
     carrier[2][1][5][0] = 'F'
     raw = write('reclaimed.json', carrier)
     printed = run('protocol-format', raw)
-    app = write('reclaimed.pir', authored_source(printed))
+    app = write('reclaimed.pir', authored_source(offset=False, origins=("Different", "F")))
     run('protocol-admit', app)
     for identity in ('exact', 'normalized'):
         draw = write('reclaimed-draw.json', descriptor(identity, ['F', 'A']))
@@ -134,30 +130,30 @@ for generic in (False, True):
           pub fn Draw<F: domain Field>(r: Rng<F>) -> (F::Element, Rng<F>) requires (Field(F)) {
             [sample] let (x, next) = zkc::random::draw::<F>(r); return (x, next);
           }
-          pub configure First = Draw(F = bls12-381.fr);
-          pub configure Second = Draw(F = bls12-381.fr);
+          pub configure First = Draw(F = "bls12-381.fr");
+          pub configure Second = Draw(F = "bls12-381.fr");
         ''' if generic else '''
           pub fn First(r: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) {
-            [sample] let (x, next) = zkc::random::draw::<bls12-381.fr>(r); return (x, next);
+            [sample] let (x, next) = zkc::random::draw::<"bls12-381.fr">(r); return (x, next);
           }
           pub fn Second(r: Rng<"bls12-381.fr">) -> ("bls12-381.fr"::Element, Rng<"bls12-381.fr">) {
             [padding] let pad = zkc::algebra::index_constant() attributes ("1");
-            [sample] let (x, next) = zkc::random::draw::<bls12-381.fr>(r); return (x, next);
+            [sample] let (x, next) = zkc::random::draw::<"bls12-381.fr">(r); return (x, next);
           }
         '''
         helper_imports = 'use zkc::random::Rng;'
         if not generic:
             helper_imports += ' use zkc::algebra;'
-        write('helpers.pir', 'module {' + helper_imports + body + '}')
+        write('helpers.pir', helper_imports + body)
         # Format a complete admitted source first, then substitute declarations.
         raw = write('import-base.json', source())
-        formatted = run('protocol-format', raw)
+        formatted = authored_source()
         check_start = formatted.index('fn Check')
         rest = formatted[check_start:]
-        rest = rest.replace('equal(x, x)', 'zkc::algebra::equal::<bls12-381.fr>(x, x)')
+        rest = rest.replace('equal(x, x)', 'zkc::algebra::equal::<"bls12-381.fr">(x, x)')
         rest = rest.replace('guard(ok)', 'zkc::core::require(ok)')
         rest = rest.replace('F(coins)', 'First(coins)').replace('A(r1)', 'Second(r1)')
-        app = write('import.pir', 'module { use zkc::random::Rng; use zkc::algebra; use zkc::core; mod helpers; use helpers::{First, Second}; use helpers::First as Alias;\n' + rest)
+        app = write('import.pir', 'use zkc::random::Rng; use zkc::algebra; use zkc::core; mod helpers; use helpers::{First, Second}; use helpers::First as Alias;\n' + rest)
         lowered = json.loads(run('protocol-source', app))
         common = lowered[3] if generic else lowered
         if generic:
@@ -191,15 +187,7 @@ with case('a-function-named-as-its-shared-group-is-ambiguous'):
     # F and A both claim the origin F. The selector F names F alone and the
     # group, whose closed carrier selector would also reach A.
     raw = write('namesake.json', family_source())
-    lines = authored_source(run('protocol-format', raw)).splitlines()
-    index = next(i for i, line in enumerate(lines) if line.lstrip().startswith('fn F('))
-    # The printer leaves a self-origin implicit; authored source states F's claim.
-    start = index
-    while not lines[index].endswith(' {'):
-        index += 1
-    assert 'origin' not in '\n'.join(lines[start:index + 1])
-    lines[index] = lines[index][:-2] + ' origin F() {'
-    app = write('namesake.pir', '\n'.join(lines) + '\n')
+    app = write('namesake.pir', authored_source(offset=False, origins=("F", "F")))
     run('protocol-admit', app)
     for identity in ('exact', 'normalized'):
         for owners in (['F'], ['F', 'A']):
@@ -211,7 +199,7 @@ with case('a-function-named-as-its-shared-group-is-ambiguous'):
         draw = write('namesake-draw.json', descriptor(identity, ['F']))
         run('protocol-construct', raw, draw)
 
-LIBRARY = """module {
+LIBRARY = """
   use zkc::algebra::{Element};
   use zkc::random::{Rng};
   use zkc::random;
@@ -231,15 +219,15 @@ LIBRARY = """module {
   pub fn Forward<C: Source>(coins: Rng<"bls12-381.fr">) -> (Element<"bls12-381.fr">, Rng<"bls12-381.fr">) effects (local) {
     return C::draw(coins);
   }
-}
+
 """
-LINKING = """module {
+LINKING = """
   use zkc::algebra;
   use zkc::random::{Rng};
   dependency sel = library(namespace="test", name="sel", version="1", resolution="r1");
   use sel::{Sample, Plain, Forward};
   link Linked = Forward<Plain>;
-  fn Same(a: "bls12-381.fr"::Element) -> bool { let s = zkc::algebra::equal::<bls12-381.fr>(a, a); return s; }
+  fn Same(a: "bls12-381.fr"::Element) -> bool { let s = zkc::algebra::equal::<"bls12-381.fr">(a, a); return s; }
   protocol Pair {
     roles (P, V);
     inputs (V coins: Rng<"bls12-381.fr">);
@@ -251,7 +239,7 @@ LINKING = """module {
   }
   instance run: Pair { roles (P = P, V = V); }
   entry main = run;
-}
+
 """
 
 with case('an-imported-library-function-reaches-its-copies'):

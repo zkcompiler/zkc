@@ -14,7 +14,7 @@ int main() {
   zkc::registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  auto document = zkc::frontend::parseProtocolDocument(R"pir(module {
+  auto document = zkc::frontend::parseProtocolDocument(R"pir(
     protocol Transfer {
       roles (Alice, Bob);
       inputs (Alice x: bool);
@@ -23,7 +23,7 @@ int main() {
     }
     instance transfer: Transfer { roles (Alice = Alice, Bob = Bob); }
     entry main = transfer;
-  })pir");
+  )pir");
   if (!document) {
     errs() << toString(document.takeError());
     return 1;

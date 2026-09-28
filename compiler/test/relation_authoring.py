@@ -69,14 +69,14 @@ relation = [
     [[[["2", "1"]], [["3", "1"]], [["1", "1"]]]],
 ]
 asset.write_text(json.dumps(relation))
-spelling = f'''module {{
+spelling = f'''
   use zkc::algebra::{{Vector}};
       relation Circuit = r1cs("multiply.json");
       derive Rows = multilinear(Circuit, specialized);
       fn Assemble(s: Vector<"{FIELD}"::Element>, w: Vector<"{FIELD}"::Element>) -> (Vector<"{FIELD}"::Element>) {{
         let a = Rows_Assemble(s, w); return (a);
       }}
-    }}'''
+    '''
 source.write_text(spelling)
 formatted = run("protocol-format", source)
 source.write_text(formatted)
@@ -124,8 +124,7 @@ for old, new, refusal in [
     source.write_text(spelling.replace(old, new))
     run("protocol-resolve", source, refusal)
 # Without that invalid helper reference, retain the family-specific refusal.
-source.write_text('module { relation Circuit = r1cs("multiply.json"); '
-                  'derive Rows = arithmetic(Circuit, specialized); }')
+source.write_text(' relation Circuit = r1cs("multiply.json"); derive Rows = arithmetic(Circuit, specialized); ')
 run("protocol-resolve", source, "relation-view-family")
 source.write_text(
     spelling.replace(
@@ -220,7 +219,7 @@ air = {
     ],
 }
 (directory / "trace.json").write_text(json.dumps(air))
-source.write_text(f'''module {{
+source.write_text(f'''
   use zkc::algebra::{{Vector}};
       relation Trace = air("trace.json");
       derive Steps = arithmetic(Trace, specialized, 3);
@@ -232,7 +231,7 @@ source.write_text(f'''module {{
       }}
       instance Run: Evaluate {{ roles (Alice = Alice); }}
       entry main = Run;
-    }}''')
+    ''')
 snapshot.write_text(run("protocol-resolve", source))
 air_ir = run("protocol-import", snapshot)
 assert "relation.air @Trace" in air_ir and "relation = @Trace" in air_ir
@@ -260,7 +259,7 @@ unresolved = ["zkc.relations/1", [[["Circuit", relation]], []],
 bad.write_text(json.dumps(unresolved))
 run("protocol-resolve", bad, "interactive-entry-instance")
 asset.write_text(json.dumps(relation))
-source.write_text('module { relation Circuit = r1cs("multiply.json"); entry main = Missing; }')
+source.write_text(' relation Circuit = r1cs("multiply.json"); entry main = Missing; ')
 # Authored source resolves declaration kinds before common admission. The
 # portable snapshot above still reaches the independent common diagnostic.
 run("protocol-resolve", source, "source-name-unresolved")
@@ -273,7 +272,7 @@ embedded = directory / "embedded"
 embedded.mkdir()
 (embedded / "multiply.json").write_text(json.dumps(relation))
 mixed = embedded / "mixed.pir"
-mixed.write_text(f'''module {{
+mixed.write_text(f'''
   use zkc::algebra::{{Vector}};
   library(namespace="test", name="mixed", version="1", resolution="exact");
   relation Circuit = r1cs("multiply.json");
@@ -300,7 +299,7 @@ mixed.write_text(f'''module {{
   fn Assemble(s: Vector<"{FIELD}"::Element>, w: Vector<"{FIELD}"::Element>) -> (Vector<"{FIELD}"::Element>) {{
     let a = Rows_Assemble(s, w); return (a);
   }}
-}}''')
+''')
 captured = run("protocol-resolve", mixed)
 assert "variant:" in captured, captured
 intact = embedded / "snapshot.json"

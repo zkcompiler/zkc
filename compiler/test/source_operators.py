@@ -20,21 +20,21 @@ def same(authored, named):
     # Anonymous checked-library identities intentionally hash captured bytes.
     # Fix the package identity when comparing two authored spellings.
     if "interface " in authored and "library(" not in authored:
-        declaration = 'module { library(namespace="operators", name="comparison", version="1", resolution="fixed");'
-        authored = authored.replace("module {", declaration, 1)
-        named = named.replace("module {", declaration, 1)
+        declaration = 'library(namespace="operators", name="comparison", version="1", resolution="fixed");'
+        authored = declaration + authored
+        named = declaration + named
     result = common(authored)
     assert result == common(named)
     assert result == common(commands.source("protocol-format", authored))
     return result
 
 
-RECORD = """module {
-  struct Number(value: index);
+RECORD = """
+  struct Number { value: index }
   #[operator(add)]
   fn Add(a: Number, b: Number) -> Number { return a; }
   fn Main(a: Number, b: Number) -> Number { return a + b; }
-}"""
+"""
 
 with case("attribute roundtrip and inspection"):
     parsed = json.loads(commands.source("protocol-parse", RECORD))["content"]
@@ -69,75 +69,75 @@ with case("flat let operator path preserves nominal heads"):
     same(text, text.replace("a + b", "Add(a, b)"))
 
 with case("generic record arguments use ordinary inference after head lookup"):
-    text = """module {
+    text = """
       use zkc::algebra;
       use zkc::algebra::Field;
-      struct Number<F: domain Field>(value: F::Element);
+      struct Number<F: domain Field> { value: F::Element }
       #[operator(add)] fn Add<F: Field>(a: Number<F>, b: Number<F>)
           -> Number<F> { return a; }
       fn Main<F: Field>(a: Number<F>, b: Number<F>) -> Number<F> {
         return a + b;
       }
-    }"""
+    """
     same(text, text.replace("a + b", "Add(a, b)"))
 
 with case("mixed record and logical heads use checked generic arguments"):
-    text = """module {
+    text = """
       use zkc::algebra;
       use zkc::algebra::Field;
-      struct Number<F: domain Field>(value: F::Element);
+      struct Number<F: domain Field> { value: F::Element }
       #[operator(mul)] fn Scale<F: Field>(a: Number<F>, b: F::Element)
           -> Number<F> { return a; }
       fn Main<F: Field>(a: Number<F>, b: F::Element) -> Number<F> {
         return a * b;
       }
-    }"""
+    """
     same(text, text.replace("a * b", "Scale(a, b)"))
 
 with case("selected source operator still checks exact static arguments"):
-    text = """module {
+    text = """
       use zkc::algebra;
       use zkc::algebra::Field;
-      struct Number<F: domain Field>(value: F::Element);
+      struct Number<F: domain Field> { value: F::Element }
       #[operator(add)] fn Add<F: Field>(a: Number<F>, b: Number<F>)
           -> Number<F> { return a; }
       fn Main<A: Field, B: Field>(a: Number<A>, b: Number<B>)
           -> Number<A> { return a + b; }
-    }"""
+    """
     commands.source("protocol-source", text, refuses="source-static-conflict")
 
 with case("selected source operator keeps its public requirements"):
-    text = """module {
+    text = """
       use zkc::algebra;
       use zkc::algebra::{Field, PrimeField};
-      struct Number<F: domain Field>(value: F::Element);
+      struct Number<F: domain Field> { value: F::Element }
       #[operator(add)] fn Add<F: PrimeField>(a: Number<F>, b: Number<F>)
           -> Number<F> { return a; }
       fn Main<F: Field>(a: Number<F>, b: Number<F>) -> Number<F> {
         return a + b;
       }
-    }"""
+    """
     commands.source("protocol-source", text, refuses="generic-public-requirement")
 
 with case("selected source operator keeps affine operand use"):
-    text = """module {
+    text = """
       use zkc::algebra;
       use zkc::algebra::Field;
       use zkc::random;
-      struct Number<F: domain Field>(value: random::Rng<F>);
+      struct Number<F: domain Field> { value: random::Rng<F> }
       #[operator(neg)] fn Negate<F: Field>(a: Number<F>) -> Number<F> { return a; }
       fn Main<F: Field>(a: Number<F>) -> Number<F> {
         let b = -a; return -a;
       }
-    }"""
+    """
     commands.source("protocol-source", text, refuses="generic-resource-reuse")
 
 with case("zero-leaf records still have nominal operator heads"):
-    text = RECORD.replace("struct Number(value: index);", "struct Number(value: ());")
+    text = RECORD.replace("struct Number { value: index }", "struct Number { value: () }")
     same(text, text.replace("a + b", "Add(a, b)"))
 
 with case("a structurally equal record does not acquire another head's hook"):
-    text = RECORD.replace("fn Main", "struct Other(value: index); fn Main")
+    text = RECORD.replace("fn Main", "struct Other { value: index } fn Main")
     text = text.replace("fn Main(a: Number, b: Number) -> Number", "fn Main(a: Other, b: Other) -> Other")
     commands.source("protocol-source", text, refuses="source-operator-unresolved")
 
@@ -157,20 +157,20 @@ for change, code in [
         commands.source("protocol-source", RECORD.replace(*change), refuses=code)
 
 with case("different static instantiations do not create disjoint overloads"):
-    text = """module {
-      struct Number<F: domain Field>(value: F::Element);
+    text = """
+      struct Number<F: domain Field> { value: F::Element }
       #[operator(add)] fn First(a: Number<"koala-bear">, b: Number<"koala-bear">)
           -> Number<"koala-bear"> { return a; }
       #[operator(add)] fn Second(a: Number<"bls12-381.fr">, b: Number<"bls12-381.fr">)
           -> Number<"bls12-381.fr"> { return a; }
-    }"""
+    """
     commands.source("protocol-source", text, refuses="source-operator-duplicate")
 
 with case("return types cannot disambiguate duplicate operand heads"):
     text = RECORD.replace("fn Main", "#[operator(add)] fn Other(a: Number, b: Number) -> index { return a.value; } fn Main")
     commands.source("protocol-source", text, refuses="source-operator-duplicate")
 
-INTRINSIC = """module {
+INTRINSIC = """
   use zkc::algebra;
   use zkc::algebra::Field;
   use zkc::curve;
@@ -178,13 +178,13 @@ INTRINSIC = """module {
   fn Main<F: Field>(a: F::Element, b: F::Element) -> F::Element {
     return a + b * -a;
   }
-}"""
+"""
 
 with case("intrinsic sugar has the named operation identity"):
     same(INTRINSIC, INTRINSIC.replace("a + b * -a", "algebra::add(a, algebra::mul(b, algebra::neg(a)))"))
 
 with case("installed operators require imported authority"):
-    text = 'module { fn Main(a: "koala-bear"::Element, b: "koala-bear"::Element) -> "koala-bear"::Element { return a + b; } }'
+    text = ' fn Main(a: "koala-bear"::Element, b: "koala-bear"::Element) -> "koala-bear"::Element { return a + b; } '
     commands.source("protocol-source", text, refuses="source-operator-unresolved")
 
 with case("vector multiplication remains unresolved"):
@@ -192,7 +192,7 @@ with case("vector multiplication remains unresolved"):
     commands.source("protocol-source", text, refuses="source-operator-unresolved")
 
 with case("scalar group permutation keeps nested evaluation order"):
-    text = """module {
+    text = """
       use zkc::algebra;
       use zkc::algebra::Field;
       use zkc::curve;
@@ -202,15 +202,15 @@ with case("scalar group permutation keeps nested evaluation order"):
           requires (Field(G::Scalar)) {
         return (a * b) * (p + q);
       }
-    }"""
+    """
     expanded = text.replace("(a * b) * (p + q)", "curve::scale(field: algebra::mul(a, b), group: curve::add(p, q))")
     emitted = same(text, expanded)
     operations = [i for i in emitted[1][0][-1] if i[0] == "op"]
     assert [op[2] for op in operations] == ["field.mul", "curve.add", "curve.scale"]
     assert operations[2][5] == [operations[1][6][0], operations[0][6][0]]
 
-COMPONENT = """module {
-  struct Number(value: index);
+COMPONENT = """
+  struct Number { value: index }
   #[operator(add)] fn Add(a: Number, b: Number) -> Number { return a; }
   interface Cell { type Value copy drop; local add(a: Value, b: Value) -> Value; }
   component Numbers: Cell {
@@ -219,24 +219,24 @@ COMPONENT = """module {
   }
   fn Client<C: Cell>(a: C::Value, b: C::Value) -> C::Value { return C::add(a, b); }
   link Closed = Client<Numbers>;
-}"""
+"""
 
 with case("component body shares record operator lookup"):
     same(COMPONENT, COMPONENT.replace("return a + b", "return Add(a, b)"))
 
 with case("checked helpers retain bindings for ordinary callers"):
-    text = COMPONENT[:-1] + "fn Ordinary(a: Number, b: Number) -> Number { return a + b; } }"
+    text = COMPONENT + "fn Ordinary(a: Number, b: Number) -> Number { return a + b; }"
     same(text, text.replace("return a + b", "return Add(a, b)"))
 
 # These hooks use the checked library's supported record schema. Generic
 # records are independently refused there, so they cannot establish routing
 # equality. The all-record hook infers F from the call's result only *after*
 # selecting Add by its two record heads.
-CHECKED_RECORD = """module {
+CHECKED_RECORD = """
   library(namespace="operators", name="checked", version="1", resolution="fixed");
   use zkc::algebra;
   use zkc::algebra::{Field, PrimeField};
-  struct Number(value: index);
+  struct Number { value: index }
   #[operator(add)]
   fn Add<F: domain Field>(a: Number, b: Number) -> F::Element
       requires (Field(F)) effects (local) {
@@ -246,7 +246,7 @@ CHECKED_RECORD = """module {
   fn Main<F: domain Field>(a: Number, b: Number) -> F::Element
       requires (Field(F)) effects (local) { return a + b; }
   configure Closed = Main(F = "koala-bear");
-}"""
+"""
 CHECKED_MIXED = (CHECKED_RECORD.replace("operator(add)", "operator(mul)")
                  .replace("Add", "Scale").replace("b: Number", "b: F::Element")
                  .replace("a + b", "a * b")
@@ -279,18 +279,18 @@ for heads, base, expression, named in [
           component Numbers: Cell {{ local run{signature} {{ return {expression}; }} }}
           fn Client<C: Cell>{signature} {{ return C::run(a, b); }}
           link Closed = Client<Numbers>;
-        }}"""
+        """
     with case(f"generic checked {heads} hook in component body"):
         same(component, component.replace(expression, named))
 
     with case(f"component-discovered generic {heads} hook reaches ordinary users"):
         text = component.replace("    let ignored = map [true] |item| { item };", "")
         ordinary = base[base.index("  fn Main"):].replace("Closed", "OrdinaryClosed")
-        text = text.rstrip()[:-1] + ordinary
+        text = text + ordinary
         same(text, text.replace(expression, named))
 
     with case(f"generic checked {heads} hook retains unused registration"):
-        text = base[:base.index("  fn Main")] + "}"
+        text = base[:base.index("  fn Main")]
         common(text)
 
     with case(f"generic checked {heads} hook keeps required predicates"):
@@ -301,14 +301,14 @@ for heads, base, expression, named in [
         same(accepted, accepted.replace(expression, named))
 
 with case("operator discovery leaves unrelated ordinary functions on their checker"):
-    text = CHECKED_RECORD[:-1] + """
+    text = CHECKED_RECORD + """
       fn Ordinary<F: Field>(a: F::Element, b: F::Element) -> F::Element {
         return a + b;
       }
-      struct Other(value: index);
+      struct Other { value: index }
       #[operator(add)] fn OtherAdd(a: Other, b: Other) -> Other { return b; }
       fn OtherUser(a: Other, b: Other) -> Other { return a + b; }
-    }"""
+    """
     named = text.replace("return a + b;", "return Add(a, b);", 1)
     emitted = same(text, named)
     assert any(f[1] == "Ordinary" for f in emitted[1])
@@ -320,11 +320,11 @@ with case("operator discovery leaves unrelated ordinary functions on their check
     assert not any(d["source"] == identities["Main"] and d["target"] == identities["Add"]
                    for d in report["dependencies"])
 
-CHECKED_AFFINE = """module {
+CHECKED_AFFINE = """
   library(namespace="operators", name="checked", version="1", resolution="fixed");
   use zkc::algebra::Field;
   use zkc::random;
-  struct Token(value: random::Rng<"bls12-381.fr">);
+  struct Token { value: random::Rng<"bls12-381.fr"> }
   #[operator(mul)]
   fn Scale<F: domain Field>(a: Token, b: F::Element) -> Token effects (local) {
     let ignored = map [true] |item| { item };
@@ -334,7 +334,7 @@ CHECKED_AFFINE = """module {
     return a * b;
   }
   configure Closed = Main(F = "koala-bear");
-}"""
+"""
 
 with case("generic checked operator consumes an affine operand exactly once"):
     same(CHECKED_AFFINE, CHECKED_AFFINE.replace("a * b", "Scale(a, b)"))
@@ -372,15 +372,15 @@ with case("checked generic hook discovered through another checked helper"):
     same(text, text.replace("a + b", "Add(a, b)"))
 
 with case("checked hooks cannot use result types to disambiguate duplicate heads"):
-    text = CHECKED_RECORD[:-1] + """
+    text = CHECKED_RECORD + """
       #[operator(add)] fn OtherAdd(a: Number, b: Number) -> Number { return a; }
-    }"""
+    """
     for spelling in [text, text.replace("a + b", "Add(a, b)")]:
         commands.source("protocol-source", spelling, refuses="source-operator-duplicate")
 
 with case("generic checked record schemas keep the existing named-call refusal"):
-    text = CHECKED_MIXED.replace("struct Number(value: index)",
-                                "struct Number<F: domain Field>(value: F::Element)")
+    text = CHECKED_MIXED.replace("struct Number { value: index }",
+                                "struct Number<F: domain Field> { value: F::Element }")
     text = text.replace("a: Number", "a: Number<F>")
     for spelling in [text, text.replace("a * b", "Scale(a, b)")]:
         commands.source("protocol-source", spelling, refuses="library-source-record-generic")
@@ -395,7 +395,7 @@ with case("a registration cannot use an opaque associated operand head"):
     commands.source("protocol-source", text, refuses="source-operator-head")
 
 with case("component intrinsic operators retain named identity"):
-    text = """module {
+    text = """
       use zkc::algebra;
   use zkc::algebra::{Field, PrimeField};
       interface Cell { type Value copy drop;
@@ -406,12 +406,12 @@ with case("component intrinsic operators retain named identity"):
       }
       fn Client<C: Cell>(a: C::Value, b: C::Value) -> C::Value effects (local) { return C::add(a, b); }
       link Closed = Client<Numbers>;
-    }"""
+    """
     same(text, text.replace("a + b", "algebra::index_add(a, b)"))
     commands.source("protocol-source", text.replace(" effects (local)", ""), refuses="library-effect")
 
 with case("component field operators infer static arguments from operands"):
-    text = """module {
+    text = """
       use zkc::algebra;
   use zkc::algebra::{Field, PrimeField};
       interface Cell { type Value copy drop;
@@ -423,18 +423,18 @@ with case("component field operators infer static arguments from operands"):
       }
       fn Client<C: Cell>(a: C::Value, b: C::Value) -> C::Value effects (local) { return C::add(a, b); }
       link Closed = Client<Numbers>;
-    }"""
+    """
     same(text, text.replace("a + b", 'algebra::add::<"koala-bear">(a, b)'))
 
 with case("component scalar group permutation preserves identity and evaluation"):
     signature = '(a: "bls12-381.fr"::Element, p: "bls12-381.g1"::Element) -> "bls12-381.g1"::Element effects (local)'
-    text = f'''module {{
+    text = f'''
       use zkc::algebra; use zkc::curve;
       interface Scale {{ local run{signature}; }}
       component Scaling: Scale {{ local run{signature} {{ return (a * a) * (p + p); }} }}
       fn Client<C: Scale>{signature} {{ return C::run(a, p); }}
       link Closed = Client<Scaling>;
-    }}'''
+    '''
     named = text.replace('(a * a) * (p + p)', 'curve::scale::<"bls12-381.g1">(field: algebra::mul::<"bls12-381.fr">(a, a), group: curve::add::<"bls12-381.g1">(p, p))')
     same(text, named)
 
@@ -456,14 +456,14 @@ def project(source, libraries, refuses=None, command="protocol-source"):
     return commands.run([compiler, command, app, *paths], refuses=refuses)
 
 
-LIBRARY = f'''module {{ {identity("numbers")};
-  pub struct Number(value: index);
+LIBRARY = f''' {identity("numbers")};
+  pub struct Number {{ value: index }}
   #[operator(add)] pub fn Add(a: Number, b: Number) -> Number {{ return a; }}
-}}'''
-APP = f'''module {{ dependency n = {identity("numbers")};
+'''
+APP = f''' dependency n = {identity("numbers")};
   use n::{{Number as Alias, Add}};
   fn Main(a: Alias, b: Alias) -> Alias {{ return a + b; }}
-}}'''
+'''
 
 with case("imported record aliases preserve the defining operator identity"):
     assert project(APP, {"numbers": LIBRARY}) == project(APP.replace("a + b", "Add(a, b)"), {"numbers": LIBRARY})
@@ -487,7 +487,7 @@ with case("same spelling in another package is a distinct nominal head"):
     project(text, {"numbers": LIBRARY, "other": other})
 
 with case("a private module's public function needs an exported path"):
-    facade = f'module {{ {identity("numbers")}; mod inner; pub use inner::Number; }}'
+    facade = f' {identity("numbers")}; mod inner; pub use inner::Number; '
     inner = LIBRARY.replace(identity("numbers") + ";", "")
     text = APP.replace("Number as Alias, Add", "Number as Alias")
     project(text, {"numbers": facade, "numbers/inner.pir": inner}, "source-operator-unresolved")
@@ -495,10 +495,10 @@ with case("a private module's public function needs an exported path"):
     assert project(text, {"numbers": reexport, "numbers/inner.pir": inner}) == project(APP, {"numbers": reexport, "numbers/inner.pir": inner})
 
 with case("duplicate hooks in linked child modules reject even without uses"):
-    text = "module { struct Number(value: index); mod left; mod right; }"
-    child = """module { use super::Number;
+    text = " struct Number { value: index } mod left; mod right; "
+    child = """ use super::Number;
       #[operator(add)] fn Add(a: Number, b: Number) -> Number { return a; }
-    }"""
+    """
     project(text, {"left.pir": child, "right.pir": child}, "source-operator-duplicate")
 
 
@@ -507,42 +507,42 @@ with case("duplicate hooks in linked child modules reject even without uses"):
 # a direct dependency's exports, without importing the hook's spelling.
 INDEX = "fn Sum(a: index, b: index) -> index { return a + b; }"
 with case("index arithmetic has no implicit installed import"):
-    commands.source("protocol-source", f"module {{ {INDEX} }}",
+    commands.source("protocol-source", f" {INDEX} ",
                     refuses="source-operator-unresolved")
-    common(f"module {{ use zkc::algebra::Indices; {INDEX} }}")
-    common(f"module {{ use zkc::algebra::index_sub; {INDEX} }}")
-    common(f"module {{ fn Ref(a: index) -> index {{ return zkc::algebra::index_add(a, a); }} {INDEX} }}")
+    common(f" use zkc::algebra::Indices; {INDEX} ")
+    common(f" use zkc::algebra::index_sub; {INDEX} ")
+    common(f" fn Ref(a: index) -> index {{ return zkc::algebra::index_add(a, a); }} {INDEX} ")
 
 with case("installed authority does not flow from parent or sibling files"):
-    text = "module { use zkc::algebra; mod left; mod right; }"
-    left = f"module {{ use zkc::algebra; {INDEX} }}"
-    right = f"module {{ {INDEX} }}"
+    text = " use zkc::algebra; mod left; mod right; "
+    left = f" use zkc::algebra; {INDEX} "
+    right = f" {INDEX} "
     project(text, {"left.pir": left, "right.pir": right}, "source-operator-unresolved")
-    project(text, {"left.pir": left, "right.pir": right.replace("module {", "module { use zkc::algebra::Indices;")})
+    project(text, {"left.pir": left, "right.pir": (" use zkc::algebra::Indices;" + right)})
 
 with case("public source hook discovery crosses sibling files without imports"):
-    text = "module { mod numbers; mod consumer; }"
+    text = " mod numbers; mod consumer; "
     numbers = LIBRARY.replace(identity("numbers") + ";", "")
-    consumer = """module {
+    consumer = """
       fn Main(a: super::numbers::Number, b: super::numbers::Number)
           -> super::numbers::Number { return a + b; }
-    }"""
+    """
     project(text, {"numbers.pir": numbers, "consumer.pir": consumer})
     project(text, {"numbers.pir": numbers.replace("pub fn Add", "fn Add"),
                    "consumer.pir": consumer}, "source-operator-unresolved")
 
 with case("a private hook stays visible to descendants of its declaring module"):
     text = RECORD.replace("fn Main(a:", "mod child; fn Main(a:")
-    child = "module { use super::Number; fn Child(a: Number, b: Number) -> Number { return a + b; } }"
+    child = " use super::Number; fn Child(a: Number, b: Number) -> Number { return a + b; } "
     project(text, {"child.pir": child})
 
 with case("same-package public reexport exposes a hook through a private module"):
     # Stable package identity permits a whole-output comparison after editing
     # the spelling in a child file; anonymous identities hash captured bytes.
-    text = f"module {{ {identity('publicalias')}; mod outer; mod consumer; }}"
-    outer = "module { mod hidden; pub use hidden::{Number, Add}; }"
+    text = f" {identity('publicalias')}; mod outer; mod consumer; "
+    outer = " mod hidden; pub use hidden::{Number, Add}; "
     hidden = LIBRARY.replace(identity("numbers") + ";", "")
-    consumer = "module { use super::outer::Number; fn Main(a: Number, b: Number) -> Number { return a + b; } }"
+    consumer = " use super::outer::Number; fn Main(a: Number, b: Number) -> Number { return a + b; } "
     exposed = {"outer.pir": outer, "outer/hidden.pir": hidden, "consumer.pir": consumer}
     named = dict(exposed, **{"consumer.pir": consumer.replace("a + b", "super::outer::Add(a, b)")})
     assert project(text, exposed) == project(text, named)
@@ -550,32 +550,32 @@ with case("same-package public reexport exposes a hook through a private module"
                    "outer/hidden.pir": hidden, "consumer.pir": consumer}, "source-operator-unresolved")
 
 with case("private module scope permits hooks only inside its subtree"):
-    text = "module { mod outer; }"
-    outer = "module { mod hidden; mod consumer; }"
+    text = " mod outer; "
+    outer = " mod hidden; mod consumer; "
     hidden = LIBRARY.replace(identity("numbers") + ";", "")
-    consumer = "module { use super::hidden::Number; fn Main(a: Number, b: Number) -> Number { return a + b; } }"
+    consumer = " use super::hidden::Number; fn Main(a: Number, b: Number) -> Number { return a + b; } "
     project(text, {"outer.pir": outer, "outer/hidden.pir": hidden, "outer/consumer.pir": consumer})
 
 with case("source function calls confer no installed operator authority"):
-    library = f"module {{ {identity('numbers')}; pub fn Id(a: index) -> index {{ return a; }} }}"
-    text = f"module {{ dependency n = {identity('numbers')}; fn Main(a: index) -> index {{ return n::Id(a) + a; }} }}"
+    library = f" {identity('numbers')}; pub fn Id(a: index) -> index {{ return a; }} "
+    text = f" dependency n = {identity('numbers')}; fn Main(a: index) -> index {{ return n::Id(a) + a; }} "
     project(text, {"numbers": library}, "source-operator-unresolved")
-    project(text.replace("module {", "module { use zkc::algebra::Indices;", 1), {"numbers": library})
+    project((" use zkc::algebra::Indices;" + text), {"numbers": library})
 
 with case("indirect dependency hooks require an exposed reexport"):
-    middle = f"module {{ {identity('middle')}; dependency n = {identity('numbers')}; pub use n::Number; }}"
-    text = f"module {{ dependency middle = {identity('middle')}; use middle::Number; fn Main(a: Number, b: Number) -> Number {{ return a + b; }} }}"
+    middle = f" {identity('middle')}; dependency n = {identity('numbers')}; pub use n::Number; "
+    text = f" dependency middle = {identity('middle')}; use middle::Number; fn Main(a: Number, b: Number) -> Number {{ return a + b; }} "
     project(text, {"middle": middle, "numbers": LIBRARY}, "source-operator-unresolved")
     project(text, {"middle": middle.replace("n::Number", "n::{Number, Add}"), "numbers": LIBRARY})
 
 with case("private operator visibility does not spend the authored name budget"):
     # This valid project used to exhaust name resolution during the internal
     # per-module, per-hook lookup. None of these modules uses an operator.
-    text = "module { " + " ".join(f"mod child{i};" for i in range(64)) + " }"
-    child = "module { " + " ".join(
-        f"struct R{j}(value: index); "
+    text = " ".join(f"mod child{i};" for i in range(64))
+    child = " ".join(
+        f"struct R{j} {{ value: index }} "
         f"#[operator(add)] fn Add{j}(a: R{j}, b: R{j}) -> R{j} {{ return a; }}"
-        for j in range(16)) + " }"
+        for j in range(16))
     project(text, {f"child{i}.pir": child for i in range(64)})
 
 
@@ -595,10 +595,10 @@ def recovered(text, unavailable, checked, libraries=None):
     return report
 
 
-RECOVERY = """module {
+RECOVERY = """
   use zkc::algebra;
-  struct R(value: index);
-  struct S(value: index);
+  struct R { value: index }
+  struct S { value: index }
   #[operator(add)] fn Broken(a: R, b: R) -> Missing { return a; }
   #[operator(add)] fn Valid(a: S, b: S) -> S { return a; }
   fn User(a: R, b: R) -> R { return a + b; }
@@ -606,7 +606,7 @@ RECOVERY = """module {
   fn Unrelated(unused: R, a: S, b: S) -> S { return a + b; }
   fn Indices(a: index, b: index) -> index { return a + b; }
   fn Independent(a: bool) -> bool { return a; }
-}"""
+"""
 SURVIVORS = {"Valid", "Unrelated", "Indices", "Independent"}
 for label, expression in (
     ("direct expression", "return a + b;"),
@@ -621,28 +621,28 @@ for label, expression in (
 
 with case("recovery follows a hook whose body references an unavailable helper"):
     text = RECOVERY.replace("-> Missing { return a; }", "-> R { return Helper(a); }")
-    text = text.replace("struct R(value: index);", "struct R(value: index); fn Helper(a: R) -> Missing { return a; }")
+    text = text.replace("struct R { value: index }", "struct R { value: index } fn Helper(a: R) -> Missing { return a; }")
     recovered(text, {"Helper", "Broken", "User", "Caller"}, SURVIVORS)
 
 with case("recovery follows operands returned by ordinary functions"):
     text = RECOVERY.replace("return a + b; }\n  fn Caller", "return Identity(a) + b; }\n  fn Caller")
-    text = text.replace("struct R(value: index);", "struct R(value: index); fn Identity(a: R) -> R { return a; }")
+    text = text.replace("struct R { value: index }", "struct R { value: index } fn Identity(a: R) -> R { return a; }")
     recovered(text, {"Broken", "User", "Caller"}, SURVIVORS | {"Identity"})
 
 with case("recovery preserves nominal heads through record projection"):
-    text = RECOVERY.replace("struct R(value: index);", "struct R(value: index); struct Wrapper(value: R);")
-    text = text.replace("return a + b; }\n  fn Caller", "let c = Wrapper(value=a); return c.value + b; }\n  fn Caller")
+    text = RECOVERY.replace("struct R { value: index }", "struct R { value: index } struct Wrapper { value: R }")
+    text = text.replace("return a + b; }\n  fn Caller", "let c = Wrapper{ value: a }; return c.value + b; }\n  fn Caller")
     recovered(text, {"Broken", "User", "Caller"}, SURVIVORS)
 
 with case("recovery selects mixed record and generic logical operand heads"):
-    text = """module {
+    text = """
       use zkc::algebra::Field;
-      struct R<F: domain Field>(value: F::Element);
+      struct R<F: domain Field> { value: F::Element }
       #[operator(mul)] fn Broken<F: Field>(a: R<F>, b: F::Element)
           -> Missing { return a; }
       fn User<F: Field>(a: R<F>, b: F::Element) -> R<F> { return a * b; }
       fn Independent(a: bool) -> bool { return a; }
-    }"""
+    """
     recovered(text, {"Broken", "User"}, {"Independent"})
 
 with case("unary and binary hooks have distinct recovery keys"):
@@ -667,11 +667,11 @@ with case("component operator users participate in transitive recovery"):
     assert independent["body_state"] == "source_checked", independent
 
 with case("unavailable invisible hook does not suppress a real missing operator"):
-    text = "module { mod hidden; mod consumer; }"
-    hidden = """module { pub struct R(value: index);
+    text = " mod hidden; mod consumer; "
+    hidden = """ pub struct R { value: index }
       #[operator(add)] fn Broken(a: R, b: R) -> Missing { return a; }
-    }"""
-    consumer = "module { use super::hidden::R; fn User(a: R, b: R) -> R { return a + b; } }"
+    """
+    consumer = " use super::hidden::R; fn User(a: R, b: R) -> R { return a + b; } "
     report = json.loads(project(text, {"hidden.pir": hidden, "consumer.pir": consumer}, command="protocol-analyze"))
     assert [d["code"] for d in report["diagnostics"]] == ["source-name-unresolved", "source-operator-unresolved"]
     assert {d["display_name"] for d in report["resolved_declarations"]

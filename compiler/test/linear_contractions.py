@@ -279,7 +279,7 @@ for used, selected, field_selected in [(4094, 1, False), (4093, 2, True)]:
     assert any(b[3].startswith('arkworks-diagonal/') for b in p[1]) == field_selected
 
 # Fresh symbols cannot collide with unrelated user binding/function symbols.
-collision = shared.replace('bind mul =', 'bind diagonal_0 = vector::sum(bls12-381.fr);\n  bind mul =')
+collision = shared.replace('bind mul =', 'bind diagonal_0 = "vector.sum"("bls12-381.fr");\n  bind mul =')
 collision = collision.replace('fn Dense(', 'fn diagonal_1(').replace('= Dense(', '= diagonal_1(')
 p = plan(collision, 3)
 assert bindings(p)['diagonal_0'][3] == 'arkworks/vector.sum'

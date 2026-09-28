@@ -110,16 +110,16 @@ assert function[4][0][3] == ["17"]
 
 
 for source, code in [
-    ('module { use zkc::transcript::{Transcript}; fn Dup<T: domain Transcript>(t: Transcript<T>)->(Transcript<T>, Transcript<T>){return(t,t);} }', 'generic-resource-reuse'),
-    ('module { fn Bad<F: domain Bogus>()->(){return();} }', 'generic-declared-sort'),
-    ('module { fn Bad<G: domain Group>()->() requires (CommRing(G)){return();} }', 'generic-predicate-sort'),
-    ('module { fn Bad<F: domain Field>()->() requires (CommRing(F,F)){return();} }', 'generic-predicate-arity'),
-    ('module { fn Bad<F: domain Field>()->() requires (Unknown(F)){return();} }', 'source-name-unresolved'),
-    ('module { fn Equal<E: domain Codec,D: domain Codec,X: domain Codec>()->() requires ("="(E,X),"="(X,D)){return();} configure C=Equal(E="zkcv.bool/1",D="zkcv.field.bls12-381.fr/1"); }', 'binding-requirement'),
-    ('module { fn Bad<E: domain Codec,D: domain Codec,F: domain Field>()->() requires ("="(E,D),Encodes.field(E,F)){return();} configure C=Bad(D="zkcv.bool/1",F=bls12-381.fr); }', 'binding-requirement'),
-    ('module { use zkc::poly::{Table}; use zkc::poly; fn Fold<F: domain Field>(a:Table<F>,r:F::Element)->(Table<F>) requires (CommRing(F)){[f]let b = zkc::poly::fold::<F>(a,r);return(b);} configure Bad=Fold() using(f="arkworks/curve.scale"); }', 'binding-implementation'),
+    (' use zkc::transcript::{Transcript}; fn Dup<T: domain Transcript>(t: Transcript<T>)->(Transcript<T>, Transcript<T>){return(t,t);} ', 'generic-resource-reuse'),
+    (' fn Bad<F: domain Bogus>()->(){return();} ', 'generic-declared-sort'),
+    (' fn Bad<G: domain Group>()->() requires (CommRing(G)){return();} ', 'generic-predicate-sort'),
+    (' fn Bad<F: domain Field>()->() requires (CommRing(F,F)){return();} ', 'generic-predicate-arity'),
+    (' fn Bad<F: domain Field>()->() requires (Unknown(F)){return();} ', 'source-name-unresolved'),
+    (' fn Equal<E: domain Codec,D: domain Codec,X: domain Codec>()->() where E == X, X == D{return();} configure C=Equal(E="zkcv.bool/1",D="zkcv.field.bls12-381.fr/1"); ', 'binding-requirement'),
+    (' fn Bad<E: domain Codec,D: domain Codec,F: domain Field>()->() where E == D requires (Encodes::field(E,F)){return();} configure C=Bad(D="zkcv.bool/1",F="bls12-381.fr"); ', 'binding-requirement'),
+    (' use zkc::poly::{Table}; use zkc::poly; fn Fold<F: domain Field>(a:Table<F>,r:F::Element)->(Table<F>) requires (CommRing(F)){[f]let b = zkc::poly::r#fold::<F>(a,r);return(b);} configure Bad=Fold() using(f="arkworks/curve.scale"); ', 'binding-implementation'),
 ]:
     run("protocol-admit", source, refuses=code)
-run("protocol-admit", 'module { use zkc::pcs::{OpeningState}; use zkc::poly::{Point}; use zkc::pcs::{Proof}; use zkc::pcs; fn Open<C: domain Commitment>(s:OpeningState<C>,p:Point<C::PointField>)->(C::EvaluationField::Element,Proof<C>) requires(MultilinearOpening(C)){[open]let (v,q) = zkc::pcs::open::<C>(s,p);return(v,q);} }')
-run("protocol-admit", 'module { fn Good<E: domain Codec,D: domain Codec,F: domain Field>()->() requires ("="(E,D),Encodes.field(E,F)){return();} configure C=Good(D="zkcv.field.bls12-381.fr/1",F=bls12-381.fr); }')
+run("protocol-admit", ' use zkc::pcs::{OpeningState}; use zkc::poly::{Point}; use zkc::pcs::{Proof}; use zkc::pcs; fn Open<C: domain Commitment>(s:OpeningState<C>,p:Point<C::PointField>)->(C::EvaluationField::Element,Proof<C>) requires(MultilinearOpening(C)){[open]let (v,q) = zkc::pcs::open::<C>(s,p);return(v,q);} ')
+run("protocol-admit", ' fn Good<E: domain Codec,D: domain Codec,F: domain Field>()->() where E == D requires (Encodes::field(E,F)){return();} configure C=Good(D="zkcv.field.bls12-381.fr/1",F="bls12-381.fr"); ')
 print(f"generic libraries: {commands.save()} checks; source roundtrip, requirements, partial bindings, sharing, mixed plans, refusals")

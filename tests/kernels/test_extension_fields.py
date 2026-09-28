@@ -75,33 +75,34 @@ def main():
         return [strings(x) for x in value] if isinstance(value, list) else str(value)
 
 
-    text = f'''module {{
+    text = f'''
+      use zkc::{{algebra, poly, core}}; use zkc::algebra::{{Vector, Matrix}}; use zkc::poly::Round;
       fn Work<E: domain Field>(a:E::Element,b:E::Element,k:E::BaseField::Element,xs:Vector<E::Element>,m:Matrix<E::Element>,q:Round<E>)
           -> (E::Element,E::Element,E::Element,Vector<E::Element>,E::Element,E::Element,E::Element,Vector<E::Element>,Vector<E::Element>,E::Element,E::Element)
           requires (ExtensionField(E)) {{
-        [mul] let product = field::mul::<E>(a,b);
-        [inv] let inverse = field::inverse::<E>(a);
-        [embed] let embedded = field::embed::<E>(k);
-        [scale] let scaled = vector::scale::<E>(xs,b);
-        [dot] let dot = vector::dot::<E>(xs,scaled);
+        [mul] let product = algebra::mul::<E>(a,b);
+        [inv] let inverse = algebra::inverse::<E>(a);
+        [embed] let embedded = algebra::embed::<E>(k);
+        [scale] let scaled = algebra::vector_scale::<E>(xs,b);
+        [dot] let dot = algebra::vector_dot::<E>(xs,scaled);
         [coeff] let poly = poly::from_coefficients::<E>(xs);
-        [eval] let evaluated = poly::univariate_evaluate::<E>(poly,a);
+        [eval] let evaluated = poly::evaluate::<E>(poly,a);
         [round] let round = poly::round_evaluate::<E>(q,a);
-        [matrix] let mv = matrix::mul_vector::<E>(m,xs);
-        [transpose] let tmv = matrix::transpose_mul_vector::<E>(m,xs);
-        [bilinear] let bilinear = matrix::bilinear::<E>(m,xs,xs);
-        [constant] let constant = field::constant::<E>() attributes ("{P + 7}");
+        [matrix] let mv = algebra::matrix_mul_vector::<E>(m,xs);
+        [transpose] let tmv = algebra::matrix_transpose_mul_vector::<E>(m,xs);
+        [bilinear] let bilinear = algebra::matrix_bilinear::<E>(m,xs,xs);
+        [constant] let constant = algebra::constant::<E>() attributes ("{P + 7}");
         return (product,inverse,embedded,scaled,dot,evaluated,round,mv,tmv,bilinear,constant);
       }}
-      configure Concrete = Work(E={EXT});
+      configure Concrete = Work(E="{EXT}");
       protocol Main {{ roles (P);
-        inputs (P a:{EXT}::Element,P b:{EXT}::Element,P k:koala-bear::Element,P xs:Vector<{EXT}::Element>,P m:Matrix<{EXT}::Element>,P q:Round<{EXT}>);
-        outputs (P {EXT}::Element,P {EXT}::Element,P {EXT}::Element,P Vector<{EXT}::Element>,P {EXT}::Element,P {EXT}::Element,P {EXT}::Element,P Vector<{EXT}::Element>,P Vector<{EXT}::Element>,P {EXT}::Element,P {EXT}::Element);
+        inputs (P a:"{EXT}"::Element,P b:"{EXT}"::Element,P k:"koala-bear"::Element,P xs:Vector<"{EXT}"::Element>,P m:Matrix<"{EXT}"::Element>,P q:Round<"{EXT}">);
+        outputs (P "{EXT}"::Element,P "{EXT}"::Element,P "{EXT}"::Element,P Vector<"{EXT}"::Element>,P "{EXT}"::Element,P "{EXT}"::Element,P "{EXT}"::Element,P Vector<"{EXT}"::Element>,P Vector<"{EXT}"::Element>,P "{EXT}"::Element,P "{EXT}"::Element);
         local [work] P: let (product,inverse,embedded,scaled,dot,evaluated,round,mv,tmv,bilinear,constant) = Concrete(a,b,k,xs,m,q);
         return (product,inverse,embedded,scaled,dot,evaluated,round,mv,tmv,bilinear,constant);
       }}
       instance concrete: Main {{roles (P=P);}} entry main=concrete;
-    }}'''
+    '''
     (root / 'source.pir').write_text(text)
     authored = json.loads(journal.run([compiler, 'protocol-source', '-'], text))
     plan = json.loads(journal.run([compiler, 'protocol-compile', '-'], text))
@@ -161,8 +162,8 @@ def main():
     for label, bad, code in [
         ('prime', text.replace('ExtensionField(E)', 'PrimeField(E), ExtensionField(E)'), 'source-protocol-requirement'),
         ('missing-extension', text.replace('ExtensionField(E)', 'Field(E)'), 'generic-public-requirement'),
-        ('implicit-base', text.replace('field::mul::<E>(a,b)', 'field::mul::<E>(a,k)'), 'source-static-conflict'),
-        ('wrong-base', text.replace('P k:koala-bear::Element', 'P k:"bls12-381.fr"::Element'), 'source-call-type'),
+        ('implicit-base', text.replace('algebra::mul::<E>(a,b)', 'algebra::mul::<E>(a,k)'), 'source-static-conflict'),
+        ('wrong-base', text.replace('P k:"koala-bear"::Element', 'P k:"bls12-381.fr"::Element'), 'source-call-type'),
     ]:
         (root / (label + '.pir')).write_text(bad)
         journal.run([compiler, 'protocol-source', '-'], bad, code)
@@ -180,23 +181,24 @@ def main():
     journal.run([lean, '--check-generic', prime_path, pp], refuses='binding-requirement')
 
     # Actual participant transport decodes extension scalars through the same ZKCV envelope.
-    transport = f'''module {{
+    transport = f'''
+      use zkc::{{algebra, core}};
       fn Multiply<F: domain Field>(a:F::Element,b:F::Element) -> (F::Element) requires (Field(F)) {{
-        let r = field::mul::<F>(a,b); return (r);
+        let r = algebra::mul::<F>(a,b); return (r);
       }}
       fn Check<F: domain Field>(a:F::Element,b:F::Element) -> (bool) requires (Field(F)) {{
-        let r = field::equal::<F>(a,b); control::require(r); return (r);
+        let r = algebra::equal::<F>(a,b); core::require(r); return (r);
       }}
-      configure MultiplyE=Multiply(F={EXT}); configure CheckE=Check(F={EXT});
+      configure MultiplyE=Multiply(F="{EXT}"); configure CheckE=Check(F="{EXT}");
       protocol Main {{ roles (P,V);
-        inputs (P a:{EXT}::Element,P b:{EXT}::Element,V expected:{EXT}::Element);
+        inputs (P a:"{EXT}"::Element,P b:"{EXT}"::Element,V expected:"{EXT}"::Element);
         outputs (V bool);
         local P: let r = MultiplyE(a,b);
         message product: P(r) -> V(received);
         local V: let accepted = CheckE(received,expected); return (accepted);
       }}
       instance concrete:Main {{roles (P=P,V=V);}} entry main=concrete;
-    }}'''
+    '''
     ts = journal.write('transport-source.json', json.loads(journal.run([compiler, 'protocol-source', '-'], transport)))
     tp = journal.write('transport-plan.json', json.loads(journal.run([compiler, 'protocol-compile', '-'], transport)))
     for label, expected, success in [('good', mul(X7,X7), True), ('wrong', ZERO, False)]:

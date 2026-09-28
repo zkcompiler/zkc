@@ -69,7 +69,7 @@ class OperatorRecovery {
       // and all bounds must agree. Do not solve by intersecting ambiguities.
       std::optional<std::string> selected;
       for (const auto &bound : p.bounds) {
-        auto candidates = capabilityDomainSorts(bound);
+        auto candidates = capabilityDomainSorts(syntax::encode(bound));
         if (candidates.size() != 1 ||
             (selected && *selected != candidates.front())) {
           selected.reset();
@@ -92,10 +92,10 @@ class OperatorRecovery {
                  unsigned depth = 0) const {
     if (!visit(depth))
       return {};
-    if (type.product || type.natural || type.name == "Array")
+    if (type.product || type.natural() || type.name == "Array")
       return {};
     if (type.members.empty()) {
-      if (!type.quoted) {
+      if (!type.quoted()) {
         if (const auto *d = context.lookup(type.name))
           if (d->kind == Declaration::Kind::Record)
             return Head{Head::Kind::Record, d->symbol};
@@ -114,7 +114,7 @@ class OperatorRecovery {
       return {};
     }
     auto found = scope.find(type.name);
-    llvm::StringRef sort = !type.quoted && found != scope.end()
+    llvm::StringRef sort = !type.quoted() && found != scope.end()
                                ? found->second
                                : protocol::installedIdentitySort(type.name);
     if (!spend(type.members.size()))
@@ -123,29 +123,31 @@ class OperatorRecovery {
       sort = protocol::associatedMemberSort(sort, member);
     return logical(associatedTypeConstructor(sort, type.members.back()));
   }
-  KnownHead value(llvm::StringRef name, const Values &values,
-                  unsigned depth = 0) const {
-    if (!visit(depth) || !spend(name.size()))
+  // A projected record field keeps its declared type's head. Other
+  // selections, and non-local roots, are unknown here.
+  KnownHead value(const syntax::Place &place, const Values &values) const {
+    const auto *root = syntax::localRoot(place);
+    if (!root || !visit(0) || !spend(1 + place.steps.size()))
       return {};
-    auto found = values.find(name.str());
-    if (found != values.end())
-      return found->second;
-    // A projected value keeps its record declaration, not its flattened layout.
-    auto [base, field] = name.rsplit('.');
-    if (field.empty() || base == name)
+    auto found = values.find(*root);
+    if (found == values.end())
       return {};
-    auto parent = value(base, values, depth + 1);
-    if (!parent || parent->kind != Head::Kind::Record)
-      return {};
-    auto record = records.find(parent->name);
-    if (record == records.end())
-      return {};
-    if (!spend(record->second->fields.size()))
-      return {};
-    for (const auto &f : record->second->fields)
-      if (f.name == field)
-        return head(f.type, recordSorts.at(parent->name));
-    return {};
+    auto current = found->second;
+    for (const auto &step : place.steps) {
+      if (!current || current->kind != Head::Kind::Record ||
+          step.kind != syntax::Projection::Kind::Field)
+        return {};
+      auto record = records.find(current->name);
+      if (record == records.end() || !spend(record->second->fields.size()))
+        return {};
+      auto field = llvm::find_if(record->second->fields, [&](const auto &f) {
+        return f.name == step.key;
+      });
+      if (field == record->second->fields.end())
+        return {};
+      current = head(field->type, recordSorts.at(current->name));
+    }
+    return current;
   }
   KnownHead result(llvm::StringRef callee) const {
     auto found = results.find(callee.str());
@@ -199,18 +201,21 @@ class OperatorRecovery {
     using K = syntax::Expression::Kind;
     switch (expr.kind) {
     case K::Name:
-      return value(expr.name, values);
+    case K::Field:
+      if (auto place = syntax::placeCandidate(expr))
+        return value(*place, values);
+      return {};
     case K::Index:
     case K::Length:
       return logical("index");
     case K::Boolean:
       return logical("bool");
     case K::Struct:
-      if (records.count(expr.name))
-        return Head{Head::Kind::Record, expr.name};
+      if (records.count(syntax::encode(expr.reference)))
+        return Head{Head::Kind::Record, syntax::encode(expr.reference)};
       return {};
     case K::Call:
-      return result(expr.name);
+      return result(syntax::encode(expr.reference));
     case K::Operator:
       return use(expr, expr.name, operands);
     default:
@@ -240,12 +245,12 @@ class OperatorRecovery {
               expression(v.expression, values, scope, depth + 1);
             } else if constexpr (std::is_same_v<T, syntax::Call>) {
               std::vector<KnownHead> outputs;
-              if (v.isOperator) {
+              if (v.operatorSymbol) {
                 std::vector<KnownHead> operands;
                 for (const auto &input : v.inputs)
                   operands.push_back(value(input, values));
-                outputs.push_back(use(v, v.callee, operands));
-              } else if (auto found = results.find(v.callee);
+                outputs.push_back(use(v, *v.operatorSymbol, operands));
+              } else if (auto found = results.find(syntax::encode(v.callee));
                          found != results.end())
                 outputs = found->second;
               for (size_t i = 0; i < v.outputs.size(); ++i)
@@ -296,7 +301,7 @@ class OperatorRecovery {
             } else if constexpr (std::is_same_v<T, syntax::Invocation>) {
               for (const auto &output : v.outputs)
                 values[output] = {};
-            } else if constexpr (std::is_same_v<T, source::Message>) {
+            } else if constexpr (std::is_same_v<T, syntax::Message>) {
               // Unmodelled producers must kill previous evidence for a name.
               values[v.output] = {};
             }

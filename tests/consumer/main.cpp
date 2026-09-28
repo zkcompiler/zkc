@@ -18,7 +18,7 @@ int main() {
   if (field.getDomain() != "f7")
     return 1;
   const zkc::frontend::Input input(
-      R"pir(module {
+      R"pir(
         library(namespace="consumer", name="install", version="1", resolution="test");
         interface Cell {
           type Value copy drop;
@@ -31,7 +31,7 @@ int main() {
         fn Client<C: Cell>(x: C::Value) -> C::Value { return C::id(x); }
         link Checked = Client<BoolCell>;
         fn Identity(x: index) -> index { x }
-      })pir",
+      )pir",
       "consumer.pir");
   auto analysis = zkc::frontend::analyzeProtocol(input);
   auto checked = analysis.checkedModule();

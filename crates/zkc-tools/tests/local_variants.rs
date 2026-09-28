@@ -443,7 +443,7 @@ fn authored_checked_variants_and_traversals_execute_in_both_machines() {
             original
                 .replace("let next = C::step(state);", &format!("stop {reason};"))
                 .replace(
-                    "        let answer = C::finish(next, ok);\n        yield (answer);",
+                    "      let answer = C::r#finish(next, ok);\n      yield (answer);",
                     "",
                 ),
             Some(reason),
@@ -452,32 +452,35 @@ fn authored_checked_variants_and_traversals_execute_in_both_machines() {
     }
     let all_stopping = original
         .replacen(
-            "match result capture(ok) -> (answer)",
-            "match result capture(ok) -> ()",
+            "match result capture (ok) -> (answer)",
+            "match result capture (ok) -> ()",
             1,
         )
         .replacen("let next = C::step(state);", "stop abort;", 1)
         .replacen(
-            "        let answer = C::finish(next, ok);\n        yield (answer);",
+            "      let answer = C::r#finish(next, ok);\n      yield (answer);",
             "",
             1,
         )
         .replacen(
-            "Invalid(error) => { yield (error); }",
+            "Invalid(error) => {\n      yield (error);\n    }",
             "Invalid(error) => { stop reject; }",
             1,
         )
-        .replacen("    return answer;", "", 1);
+        .replacen("  return answer;", "", 1);
+    assert!(all_stopping.contains("match result capture (ok) -> ()"));
+    assert!(all_stopping.contains("Invalid(error) => { stop reject; }"));
     cases.push((all_stopping, Some("abort"), &["ready", "stored"]));
     let (prefix, stored) = original.split_once("component StoredCell").unwrap();
     let stopping_member = format!(
         "{prefix}component StoredCell{}",
         stored.replacen(
-            "local step(state: State) -> State { return state; }",
+            "local step(state: State) -> State {\n    return state;\n  }",
             "local step(state: State) -> State { stop refused; }",
             1
         )
     );
+    assert!(stopping_member.contains("local step(state: State) -> State { stop refused; }"));
     cases.push((stopping_member, Some("refused"), &["stored"]));
     for (index, (text, stop, stop_entries)) in cases.iter().enumerate() {
         fs::write(&authored, text).unwrap();

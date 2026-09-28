@@ -19,7 +19,7 @@ def test_documented_source_forms(page, toolchain, directory):
     match = re.search(r"<!-- executable: (source|module-body) -->\s*```text\n(.*?)\n```",
                       document, re.S)
     assert match, f"the maintained source example is missing: {page}"
-    source = match[2] if match[1] == "source" else "module {\n" + match[2] + "\n}"
+    source = match[2]
     path = directory / "example.pir"
     path.write_text(source)
     result = run_process([toolchain.compiler, "protocol-source", path],
@@ -82,8 +82,8 @@ def test_demo_entry_point(toolchain, directory, journal):
 
 
 @pytest.mark.parametrize("source,code", [
-    ('module { bundle Bad(F) = (Field("koala-bear")); }', "source-bundle-term"),
-    ("module { bundle Bad(F) = (Field(G)); }", "source-name-unresolved"),
+    (' bundle Bad(F) = (Field("koala-bear")); ', "source-bundle-term"),
+    (" bundle Bad(F) = (Field(G)); ", "source-name-unresolved"),
 ])
 def test_documented_data_refusals(source, code, toolchain, journal):
     journal.run([toolchain.compiler, "protocol-source", "-"], stdin=source, refuses=code)

@@ -45,6 +45,69 @@ struct StructInfo {
 Shapes authored(const Shapes &shapes, size_t flat) {
   return shapes.empty() ? Shapes(flat) : shapes;
 }
+// Common records of resolved declarations. Each reference keeps the encoded
+// symbol of its recorded target; staging has already made heights and
+// natural parameters literal.
+source::RelationView commonView(const syntax::RelationView &view) {
+  source::RelationView result;
+  result.location = view.location;
+  result.name = view.name;
+  result.relation = encode(view.relation);
+  result.kind = view.kind;
+  result.staging = view.staging;
+  if (view.height)
+    StringRef(view.height->value).getAsInteger(10, result.height);
+  return result;
+}
+source::Instance commonInstance(const syntax::Instance &instance) {
+  source::Instance result;
+  result.location = instance.location;
+  result.name = instance.name;
+  result.protocol = encode(instance.protocol);
+  for (const auto &[name, parameter] : instance.parameters) {
+    if (!parameter.ingress) {
+      result.parameters.emplace_back(name, parameter.value.value);
+      continue;
+    }
+    source::FamilyIngress ingress;
+    ingress.bound = parameter.value.value;
+    for (const auto &selector : *parameter.ingress)
+      ingress.selectors.push_back(
+          {selector.role, encode(selector.function), selector.arguments});
+    result.parameters.emplace_back(name, std::move(ingress));
+  }
+  for (const auto &[alias, target] : instance.dependencies)
+    result.dependencies.emplace_back(alias, encode(target));
+  result.roles = instance.roles;
+  return result;
+}
+source::Entry commonEntry(const syntax::Entry &entry) {
+  source::Entry result;
+  result.location = entry.location;
+  result.name = entry.name;
+  result.instance = encode(entry.instance);
+  return result;
+}
+/// Common spellings of static arguments: written terms, or those supplied by
+/// elaboration.
+std::optional<source::Names>
+spelledStatics(const std::optional<StaticTerms> &written,
+               const std::optional<source::Names> &supplied = std::nullopt) {
+  if (written)
+    return staticSpellings(*written);
+  return supplied;
+}
+ArrayRef<StaticTerm> writtenTerms(const std::optional<StaticTerms> &written) {
+  return written ? ArrayRef<StaticTerm>(*written) : ArrayRef<StaticTerm>();
+}
+source::Dependency commonDependency(const syntax::Dependency &dependency) {
+  source::Dependency result;
+  result.location = dependency.location;
+  result.name = dependency.name;
+  result.protocol = encode(dependency.protocol);
+  result.agreements = dependency.agreements;
+  return result;
+}
 using Sorts = std::map<std::string, std::string>;
 using Values = std::map<std::string, std::string>;
 
@@ -72,7 +135,7 @@ class Checker {
   std::map<DeclId, Signature> signatures;
   std::set<std::string> algorithms, genericAlgorithms;
   std::map<std::string, std::optional<source::Span>> declared;
-  std::map<std::string, const source::Configuration *> configurations;
+  std::map<std::string, const syntax::Configuration *> configurations;
   std::map<std::string, const Bundle *> bundles;
   std::map<std::string, StructInfo> structs;
   std::map<std::string, LocalAggregates> structParameters;
@@ -122,8 +185,7 @@ class Checker {
         // The explicit common carrier shares a spelling namespace between
         // bound domain terms and installed identities. Refuse capture instead
         // of silently turning a quoted concrete domain into a parameter.
-        if (StringRef(p.name).contains('.') ||
-            !protocol::installedIdentitySort(p.name).empty()) {
+        if (!representableStaticBinder(p.name)) {
           fail(p, "source-static-name",
                "domain parameter must be undotted and distinct from installed "
                "identities");
@@ -144,7 +206,8 @@ class Checker {
       parameters(owner, d.parameters);
       model.declarations[owner.index].checked = d.checked;
       for (const auto &constructor : d.constructors)
-        model.declarations[owner.index].constructors.push_back(id(constructor));
+        model.declarations[owner.index].constructors.push_back(
+            id(encode(constructor)));
     }
     for (const auto *header : functions) {
       const auto &d = *header;
@@ -190,7 +253,8 @@ class Checker {
         }
         auto reference = model.add(Declaration::Kind::Dependency, scope,
                                    dependency.name, dependency.location);
-        model.declarations[reference.index].target = id(dependency.protocol);
+        model.declarations[reference.index].target =
+            id(encode(dependency.protocol));
       }
     }
     auto requireKind = [&](const source::Node &node, DeclId target,
@@ -201,18 +265,20 @@ class Checker {
     };
     for (const auto &p : syntax.protocols)
       for (const auto &d : p.dependencies)
-        requireKind(d, id(d.protocol), Declaration::Kind::Protocol,
+        requireKind(d, id(encode(d.protocol)), Declaration::Kind::Protocol,
                     "dependency");
     for (const auto &d : syntax.instances)
-      requireKind(d, id(d.protocol), Declaration::Kind::Protocol, "instance");
+      requireKind(d, id(encode(d.protocol)), Declaration::Kind::Protocol,
+                  "instance");
     for (const auto &d : syntax.entries)
-      requireKind(d, id(d.instance), Declaration::Kind::Instance, "entry");
+      requireKind(d, id(encode(d.instance)), Declaration::Kind::Instance,
+                  "entry");
     for (const auto &d : syntax.configurations)
-      model.declarations[id(d.name).index].target = id(d.base);
+      model.declarations[id(d.name).index].target = id(encode(d.base));
     for (const auto &d : syntax.instances)
-      model.declarations[id(d.name).index].target = id(d.protocol);
+      model.declarations[id(d.name).index].target = id(encode(d.protocol));
     for (const auto &d : syntax.entries)
-      model.declarations[id(d.name).index].target = id(d.instance);
+      model.declarations[id(d.name).index].target = id(encode(d.instance));
     operators.form(
         original ? *original : syntax, *model.resolution,
         [&](const syntax::Function &function, const syntax::Type &operand) {
@@ -241,7 +307,7 @@ class Checker {
           for (const auto &parameter : function.parameters) {
             auto sort = parameter.sort.value_or("");
             if (sort.empty() && !parameter.bounds.empty())
-              sort = boundSort(parameter.bounds.front(), parameter);
+              sort = boundSort(encode(parameter.bounds.front()), parameter);
             scope.emplace(parameter.name, sort);
             model.declarations[model.lookup(activeScope, parameter.name).index]
                 .sort = sort;
@@ -365,11 +431,11 @@ class Checker {
     return shape ? shape->type
                  : model.logical(type(t, scope, generic), activeScope);
   }
-  Requirement
+  frontend::Requirement
   retainRequirement(const source::Requirement &r,
                     const std::map<std::string, std::string> &sub = {},
                     const Sorts &scope = {}) {
-    Requirement result;
+    frontend::Requirement result;
     result.predicate = r.predicate;
     result.location = r.location;
     for (const auto &term : r.arguments)
@@ -390,24 +456,23 @@ class Checker {
       model.declarations[parameter.index].sort = p.sort;
     }
   }
-  void retainCall(const Call &call, StringRef owner, StringRef site,
+  void retainCall(const CallRequest &call, StringRef owner, StringRef site,
                   const Signature &signature,
                   const std::map<std::string, std::string> &sub,
                   const source::Names &statics, const CallShapes &shapes,
                   const source::Names &, bool algorithm,
                   const generic::Operation *operation) {
     DeclId target;
-    if (algorithm || !operation ||
-        (!call.qualified && !model.declarations[id(owner).index].generic))
-      target = id(call.callee);
+    if (algorithm || !operation)
+      target = id(encode(call.target));
     else {
       // Installed contracts inhabit their own scope, not the module namespace.
       if (operationScope.index == std::numeric_limits<uint32_t>::max())
         operationScope = model.addScope({}, {});
-      target = model.lookup(operationScope, call.callee);
+      target = model.lookup(operationScope, operation->name);
       if (!target.valid()) {
         target = model.add(Declaration::Kind::Operation, operationScope,
-                           call.callee);
+                           operation->name);
         retainSignature(target, signature);
         auto scope = model.declarations[target.index].members;
         for (const auto &t : signature.inputs)
@@ -452,8 +517,8 @@ class Checker {
     use.scope = activeScope;
     use.location = call.location;
     use.site = site.str();
-    use.role = call.role.value_or("");
-    use.writtenArguments = bool(call.staticArguments);
+    use.writtenArguments =
+        bool(call.staticArguments) || bool(call.suppliedStatics);
     auto parameterScope = model.declarations[target.index].members;
     for (auto [parameter, argument] : zip(signature.parameters, statics))
       use.bindings.push_back(
@@ -488,7 +553,8 @@ class Checker {
       contract.location = p.location;
       for (const auto &parameter : p.staticParameters) {
         std::string sort = parameter.sort.value_or("");
-        for (const auto &bound : parameter.bounds) {
+        for (const auto &reference : parameter.bounds) {
+          auto bound = encode(reference);
           if (bound == "nat" || bound == "Nat" || bound == "Type") {
             auto candidate = bound == "Type" ? "Type" : "Nat";
             if (!sort.empty() && sort != candidate)
@@ -521,7 +587,8 @@ class Checker {
       std::vector<std::string> origins(contract.requirements.size());
       for (const auto &r : p.requirements) {
         std::vector<std::string> stack;
-        if (!expandRequirement(r, contract.requirements, origins, stack))
+        if (!expandRequirement(commonRequirement(r), contract.requirements,
+                               origins, stack))
           return;
       }
       checkRequirements(contract, scope, origins);
@@ -547,7 +614,7 @@ class Checker {
                "constructor");
       }
       for (const auto &dependency : p.dependencies) {
-        auto target = id(dependency.protocol);
+        auto target = id(encode(dependency.protocol));
         if (!target.valid() || model.declarations[target.index].kind !=
                                    Declaration::Kind::Protocol) {
           fail(dependency, "source-call-target",
@@ -569,7 +636,7 @@ class Checker {
       auto body = [&](auto &&self, const syntax::Body &body) -> void {
         for (const auto &instruction : body) {
           if (const auto *call = std::get_if<Call>(&instruction.value)) {
-            auto target = id(call->callee);
+            auto target = id(encode(call->callee));
             if (!target.valid() || (model.declarations[target.index].kind !=
                                         Declaration::Kind::Function &&
                                     model.declarations[target.index].kind !=
@@ -822,7 +889,7 @@ class Checker {
            "expected a nominal domain, not a type application");
       return {};
     }
-    if (!isDomainRoot(type.name, type.quoted)) {
+    if (!isDomainRoot(type.name, type.quoted())) {
       fail(type, "source-type-domain",
            "unknown domain root; use :: for associated members");
       return {};
@@ -835,7 +902,7 @@ class Checker {
   std::string type(const syntax::Type &t, const Sorts &scope,
                    bool generic = false) {
     if (t.name == "ResourceUnit" && t.members.empty()) {
-      if (generic || t.arguments.size() != 1 || !t.arguments.front().quoted ||
+      if (generic || t.arguments.size() != 1 || !t.arguments.front().quoted() ||
           !t.arguments.front().arguments.empty() ||
           !t.arguments.front().members.empty()) {
         fail(t, "source-resource-unit",
@@ -851,7 +918,7 @@ class Checker {
       }
       return model.spelling(model.logical(spelling, activeScope));
     }
-    if (t.arguments.empty() && t.members.empty() && !t.quoted &&
+    if (t.arguments.empty() && t.members.empty() && !t.quoted() &&
         scope.count(t.name) && scope.at(t.name) == "Type")
       return t.name;
     std::string kind, identity;
@@ -911,7 +978,7 @@ class Checker {
         if (sort == "Type")
           value = type(argument, scope, generic);
         else if (sort == "Nat") {
-          if (argument.quoted || !argument.arguments.empty() ||
+          if (argument.quoted() || !argument.arguments.empty() ||
               !argument.members.empty() ||
               sortOf(argument.name, scope) != "Nat") {
             fail(argument, "source-type-natural",
@@ -1032,7 +1099,7 @@ class Checker {
       sub.emplace(parameter, argument);
     stack.push_back(bundle.name);
     for (const auto &inner : bundle.requirements) {
-      source::Requirement substituted = inner;
+      auto substituted = commonRequirement(inner);
       substituted.location = requirement.location;
       bool rooted = false;
       for (auto &argument : substituted.arguments)
@@ -1054,8 +1121,7 @@ class Checker {
       }
       std::map<std::string, std::string> identity;
       for (const auto &parameter : bundle.parameters)
-        if (StringRef(parameter).contains('.') ||
-            !protocol::installedIdentitySort(parameter).empty() ||
+        if (!representableStaticBinder(parameter) ||
             !identity.emplace(parameter, parameter).second) {
           fail(bundle, "source-bundle-name",
                "bundle parameters must be unique undotted names distinct from "
@@ -1063,7 +1129,8 @@ class Checker {
           return;
         }
       for (const auto &requirement : bundle.requirements)
-        for (const auto &argument : requirement.arguments) {
+        for (const auto &term : requirement.arguments) {
+          auto argument = staticSpelling(term);
           bool rooted = false;
           bundleTerm(argument, identity, &rooted);
           if (!rooted) {
@@ -1075,8 +1142,8 @@ class Checker {
           }
         }
       bundles.emplace(bundle.name, &bundle);
-      for (const auto &terms : bundle.requirementTerms)
-        for (const auto &term : terms)
+      for (const auto &requirement : bundle.requirements)
+        for (const auto &term : requirement.arguments)
           if (term.root.kind == Atom::Kind::String ||
               !isDomainRoot(term.root.value, false)) {
             fail(term.root, "source-bundle-term",
@@ -1232,9 +1299,9 @@ class Checker {
       fail(t, "source-type-depth", "aggregate type nesting exceeds 64");
       return {};
     }
-    if (t.name == "Array" && !t.product && !t.quoted && t.members.empty()) {
+    if (t.name == "Array" && !t.product && !t.quoted() && t.members.empty()) {
       uint64_t count;
-      if (t.arguments.size() != 2 || !t.arguments[1].natural ||
+      if (t.arguments.size() != 2 || !t.arguments[1].natural() ||
           !t.arguments[1].arguments.empty() ||
           !t.arguments[1].members.empty() ||
           StringRef(t.arguments[1].name).getAsInteger(10, count)) {
@@ -1364,13 +1431,14 @@ class Checker {
         arrayConstraints(left.second, right.second, constraints);
   }
   /// Select by nominal operand heads before ordinary call instantiation.
-  std::optional<OperatorTarget> resolveOperator(const Expression &expression,
+  std::optional<OperatorTarget> resolveOperator(const source::Node &node,
+                                                StringRef symbol,
                                                 ArrayRef<std::string> types) {
     std::vector<std::string> heads;
     for (const auto &type : types)
       heads.push_back(operatorHead(type, *model.resolution));
     return operators.resolve(
-        expression, expression.name, heads, *model.resolution,
+        node, symbol, heads, *model.resolution,
         [&](const source::Node &node, StringRef code, const Twine &message) {
           fail(node, code, message);
         });
@@ -1384,7 +1452,8 @@ class Checker {
   /// input of an entry protocol; messages already refuse every struct.
   void checkCheckedStructs() {
     for (const auto &declaration : syntax.structs)
-      for (const auto &name : declaration.constructors) {
+      for (const auto &constructor : declaration.constructors) {
+        auto name = encode(constructor);
         auto function = llvm::find_if(functions, [&](const auto *candidate) {
           return candidate->name == name;
         });
@@ -1423,13 +1492,14 @@ class Checker {
           }
     for (const auto &entry : syntax.entries)
       for (const auto &instance : syntax.instances)
-        if (instance.name == entry.instance)
-          for (const auto &[name, shape] : structParameters[instance.protocol])
+        if (instance.name == encode(entry.instance))
+          for (const auto &[name, shape] :
+               structParameters[encode(instance.protocol)])
             if (containsChecked(shape)) {
               fail(entry, "source-checked-input",
-                   "entry protocol '" + instance.protocol + "' receives '" +
-                       name + "' from the host, so its " + shape.name +
-                       " would not come from a constructor");
+                   "entry protocol '" + encode(instance.protocol) +
+                       "' receives '" + name + "' from the host, so its " +
+                       shape.name + " would not come from a constructor");
               return;
             }
   }
@@ -1467,7 +1537,8 @@ class Checker {
     module.location = syntax.location;
     module.bindings = syntax.bindings;
     module.relations = syntax.relations;
-    module.relationViews = syntax.relationViews;
+    for (const auto &view : syntax.relationViews)
+      module.relationViews.push_back(commonView(view));
     if (!syntax.imports.empty()) {
       fail(syntax.imports.front(), "relation-unresolved",
            "use the explicit dependency loader or protocol-resolve");
@@ -1515,12 +1586,21 @@ class Checker {
     }
     module.bindings.insert(module.bindings.end(), generated.bindings.begin(),
                            generated.bindings.end());
-    module.configurations = syntax.configurations;
-    for (auto &configuration : module.configurations)
-      for (auto &argument : configuration.arguments)
-        argument.second = normalize(argument.second, {});
-    module.instances = syntax.instances;
-    module.entries = syntax.entries;
+    for (const auto &configuration : syntax.configurations) {
+      source::Configuration common;
+      common.location = configuration.location;
+      common.name = configuration.name;
+      common.base = encode(configuration.base);
+      for (const auto &[name, term] : configuration.arguments)
+        common.arguments.emplace_back(name,
+                                      normalize(staticSpelling(term), {}));
+      common.implementations = configuration.implementations;
+      module.configurations.push_back(std::move(common));
+    }
+    for (const auto &instance : syntax.instances)
+      module.instances.push_back(commonInstance(instance));
+    for (const auto &entry : syntax.entries)
+      module.entries.push_back(commonEntry(entry));
     for (const auto &b : module.bindings)
       declare(b.name, b);
     for (const auto &c : syntax.configurations) {
@@ -1554,7 +1634,8 @@ class Checker {
       Sorts scope;
       for (const auto &p : f.parameters) {
         std::string sort = p.sort.value_or("");
-        for (const auto &bound : p.bounds) {
+        for (const auto &reference : p.bounds) {
+          auto bound = encode(reference);
           if (bound == "nat" || bound == "Nat" || bound == "Type") {
             auto candidate = bound == "Type" ? "Type" : "Nat";
             if (!sort.empty() && sort != candidate)
@@ -1583,8 +1664,8 @@ class Checker {
         model.declarations[model.lookup(activeScope, p.name).index].sort = sort;
       }
       std::vector<std::string> origins(generic.requirements.size());
-      for (const auto &terms : f.requirementTerms)
-        for (const auto &term : terms)
+      for (const auto &requirement : f.requirements)
+        for (const auto &term : requirement.arguments)
           if (term.root.kind == Atom::Kind::String ||
               !isDomainRoot(term.root.value, false)) {
             fail(term.root, "source-generic-term",
@@ -1594,8 +1675,8 @@ class Checker {
           }
       for (const auto &requirement : f.requirements) {
         std::vector<std::string> stack;
-        if (!expandRequirement(requirement, generic.requirements, origins,
-                               stack))
+        if (!expandRequirement(commonRequirement(requirement),
+                               generic.requirements, origins, stack))
           return;
       }
       Signature sig;
@@ -1657,7 +1738,8 @@ class Checker {
       out.name = p.name;
       out.roles = p.roles;
       out.parameters = p.parameters;
-      out.dependencies = p.dependencies;
+      for (const auto &dependency : p.dependencies)
+        out.dependencies.push_back(commonDependency(dependency));
       Signature sig;
       for (const auto &a : p.arguments) {
         auto shape = flattenType(
@@ -1741,19 +1823,20 @@ class Checker {
     }
     auto clearResolving = scope_exit([&] { resolving.erase(name.str()); });
     const auto &c = *record->second;
-    auto base = configuration(c.base, c, depth + 1);
+    const auto baseName = encode(c.base);
+    auto base = configuration(baseName, c, depth + 1);
     if (!base)
       return nullptr;
-    if (!genericAlgorithms.count(c.base)) {
+    if (!genericAlgorithms.count(baseName)) {
       fail(c, "generic-configuration-reference",
            "configuration requires a generic definition");
       return nullptr;
     }
     std::map<std::string, std::string> sub;
-    auto metadata = syntax.configurationTerms.find(c.name);
     for (size_t i = 0; i < c.arguments.size(); ++i) {
       const auto &key = c.arguments[i].first;
-      auto value = c.arguments[i].second;
+      const auto &term = c.arguments[i].second;
+      auto value = staticSpelling(term);
       auto p = llvm::find_if(base->parameters, [key = key](const auto &p) {
         return p.name == key;
       });
@@ -1762,9 +1845,8 @@ class Checker {
              "duplicate or unknown configuration parameter");
         return nullptr;
       }
-      if (p->sort == "Type" && metadata != syntax.configurationTerms.end() &&
-          i < metadata->second.size())
-        value = type(syntax::typeExpression(metadata->second[i]), {}, false);
+      if (p->sort == "Type")
+        value = type(syntax::typeExpression(term), {}, false);
       if (!good())
         return nullptr;
       if (sortOf(value, {}) != p->sort) {
@@ -1803,7 +1885,7 @@ class Checker {
       sig.requirements.push_back(std::move(specialized));
     }
     retainSignature(id(name), sig);
-    auto baseId = id(c.base);
+    auto baseId = id(baseName);
     std::map<DeclId, StaticArgument> bindings;
     Instantiation instantiation;
     instantiation.definition = baseId;
@@ -2114,27 +2196,26 @@ class Checker {
     return good();
   }
   std::optional<source::Instruction::Value>
-  call(const Call &call, const Sorts &scope,
+  call(const CallRequest &call, const Sorts &scope,
        ArrayRef<source::Requirement> assumptions, Values &values, bool generic,
        StringRef owner, StringRef site, CallShapes &shapes) {
-    if (call.role) {
-      fail(call, "source-local-control",
-           "participant-owned calls belong in protocol bodies");
-      return {};
-    }
     Signature signature;
-    bool algorithm = !call.qualified && algorithms.count(call.callee);
+    const auto callee = encode(call.target);
+    const bool direct = call.target.kind == Target::Kind::Declaration &&
+                        call.target.members.empty();
+    bool algorithm = direct && algorithms.count(callee);
     const generic::Operation *operation = nullptr;
-    for (const auto &op : protocol::boundOperationContracts())
-      if (op.name == call.callee)
-        operation = &op;
-    if (call.qualified && !operation) {
+    if (call.target.kind == Target::Kind::Operation)
+      for (const auto &op : protocol::boundOperationContracts())
+        if (op.name == call.target.symbol)
+          operation = &op;
+    if (!direct && !operation) {
       fail(call, "source-call-target",
-           "qualified calls name installed operation contracts; use the exact "
-           "declaration name for helpers");
+           "an ordinary call names a helper, configuration, binding or "
+           "installed operation, not a member");
       return {};
     }
-    if (!algorithm && operation && !model.resolution->carrier &&
+    if (!algorithm && operation &&
         protocol::authoringStage(operation->name) !=
             protocol::AuthoringStage::Source) {
       fail(call, "source-operation-stage",
@@ -2142,31 +2223,29 @@ class Checker {
       return {};
     }
     if (algorithm) {
-      if (generic && !genericAlgorithms.count(call.callee)) {
+      if (generic && !genericAlgorithms.count(callee)) {
         fail(call, "generic-call-target",
              "generic bodies require a generic helper or configuration");
         return {};
       }
-      signature = getSignature(call.callee);
+      signature = getSignature(callee);
       if (!call.attributes.empty()) {
         fail(call, "algorithm-call-syntax",
              "algorithm calls do not accept operation attributes");
         return {};
       }
-    } else if (operation && (generic || call.qualified)) {
+    } else if (operation) {
       signature = operationSignature(operation->signature);
     } else if (!generic) {
-      auto it = llvm::find_if(module.bindings, [&](const auto &b) {
-        return b.name == call.callee;
-      });
+      auto it = llvm::find_if(module.bindings,
+                              [&](const auto &b) { return b.name == callee; });
       if (it == module.bindings.end()) {
         fail(call, "binding-reference",
-             "unknown bound operation or helper '" + call.callee + "'");
+             "unknown bound operation or helper '" + callee + "'");
         return {};
       }
-      if (!model.resolution->carrier &&
-          protocol::authoringStage(it->application.contract) !=
-              protocol::AuthoringStage::Source) {
+      if (protocol::authoringStage(it->application.contract) !=
+          protocol::AuthoringStage::Source) {
         fail(call, "source-operation-stage",
              "operation is not available to ordinary source bindings");
         return {};
@@ -2182,7 +2261,7 @@ class Checker {
         signature.outputs.push_back(t.spelling());
     } else {
       fail(call, generic ? "generic-operation" : "source-call-target",
-           "unknown callable '" + call.callee + "'");
+           "unknown callable '" + callee + "'");
       return {};
     }
     // Operands and results are counted as authored: a struct is one of each,
@@ -2227,7 +2306,7 @@ class Checker {
     }
     if (shapes.operands.size() != inputShapes.size()) {
       fail(call, "source-call-arity",
-           "callee '" + call.callee + "' expects " + Twine(inputShapes.size()) +
+           "callee '" + callee + "' expects " + Twine(inputShapes.size()) +
                " inputs, received " + Twine(shapes.operands.size()));
       return {};
     }
@@ -2235,7 +2314,7 @@ class Checker {
       const auto &[operand, declared] = pair;
       if (bool(operand) != bool(declared)) {
         fail(call, "source-struct-value",
-             "input " + Twine(index + 1) + " of '" + call.callee + "' is " +
+             "input " + Twine(index + 1) + " of '" + callee + "' is " +
                  (declared ? "the struct " + declared->name
                            : std::string("a single value")) +
                  ", but the operand is " +
@@ -2245,17 +2324,15 @@ class Checker {
       }
       if (operand && !sameAggregateStructure(*operand, *declared)) {
         fail(call, "source-struct-mismatch",
-             "input " + Twine(index + 1) + " of '" + call.callee +
-                 "' declares " + declared->name + ", received " +
-                 operand->name);
+             "input " + Twine(index + 1) + " of '" + callee + "' declares " +
+                 declared->name + ", received " + operand->name);
         return {};
       }
     }
     if (call.outputs.size() != outputShapes.size()) {
       fail(call, "source-call-arity",
-           "callee '" + call.callee + "' produces " +
-               Twine(outputShapes.size()) + " results, bound " +
-               Twine(call.outputs.size()) +
+           "callee '" + callee + "' produces " + Twine(outputShapes.size()) +
+               " results, bound " + Twine(call.outputs.size()) +
                "; bare calls require zero results");
       return {};
     }
@@ -2268,8 +2345,11 @@ class Checker {
           outputs.push_back(name + "." + path);
     }
     std::map<std::string, std::string> sub;
-    if (!writtenStatics(signature.parameters, call.staticArguments,
-                        call.staticTerms, scope, generic, call, sub))
+    const auto statics =
+        spelledStatics(call.staticArguments, call.suppliedStatics);
+    if (!writtenStatics(signature.parameters, statics,
+                        writtenTerms(call.staticArguments), scope, generic,
+                        call, sub))
       return {};
     std::vector<std::pair<std::string, std::string>> constraints;
     for (auto [name, expected] : zip(call.inputs, signature.inputs)) {
@@ -2316,17 +2396,17 @@ class Checker {
           constraints.emplace_back(signature.outputs[flat++], leaf);
       }
     }
-    source::Names statics;
-    if (!solveStatics(signature.parameters, signature.outputs,
-                      bool(call.staticArguments), constraints, scope,
-                      assumptions, call, call.callee, sub, statics))
+    source::Names solved;
+    if (!solveStatics(signature.parameters, signature.outputs, bool(statics),
+                      constraints, scope, assumptions, call, callee, sub,
+                      solved))
       return {};
     for (auto [operand, declared] : zip(shapes.operands, inputShapes))
       if (operand && !sameAggregate(instantiate(*declared, sub, scope),
                                     *operand, scope, assumptions, call)) {
         fail(call, "source-struct-mismatch",
-             "the operand's static arguments differ from those '" +
-                 call.callee + "' declares for " + declared->name);
+             "the operand's static arguments differ from those '" + callee +
+                 "' declares for " + declared->name);
         return {};
       }
     for (auto [shape, annotation] : zip(outputShapes, annotationShapes))
@@ -2345,7 +2425,7 @@ class Checker {
     shapes.outputs = outputs;
     if (!good())
       return {};
-    retainCall(call, owner, site, signature, sub, statics, shapes, outputs,
+    retainCall(call, owner, site, signature, sub, solved, shapes, outputs,
                algorithm, operation);
     for (auto [name, result] : zip(outputs, signature.outputs))
       if (!values.emplace(name, substituteType(result, sub, scope)).second) {
@@ -2354,14 +2434,14 @@ class Checker {
         return {};
       }
     if (algorithm)
-      return source::AlgorithmCall{call.callee, call.inputs, outputs,
-                                   std::move(statics)};
-    std::string target = call.callee;
-    if (!generic && call.qualified && operation) {
+      return source::AlgorithmCall{callee, call.inputs, outputs,
+                                   std::move(solved)};
+    std::string target = callee;
+    if (!generic && operation) {
       std::string implementation;
       auto binding = llvm::find_if(module.bindings, [&](const auto &b) {
-        return b.application.contract == call.callee &&
-               b.application.arguments == statics &&
+        return b.application.contract == callee &&
+               b.application.arguments == solved &&
                b.application.implementation == implementation;
       });
       if (binding == module.bindings.end()) {
@@ -2373,15 +2453,15 @@ class Checker {
         source::OperationBinding generated;
         generated.location = call.location;
         generated.name = target;
-        generated.application.contract = call.callee;
-        generated.application.arguments = statics;
+        generated.application.contract = callee;
+        generated.application.arguments = solved;
         generated.application.implementation = implementation;
         module.bindings.push_back(std::move(generated));
       } else
         target = binding->name;
-      statics.clear();
+      solved.clear();
     }
-    return source::Operation{target, std::move(statics), call.attributes,
+    return source::Operation{target, std::move(solved), call.attributes,
                              call.inputs, outputs};
   }
   /// Flat names of authored protocol-level names. At this level a struct
@@ -2400,19 +2480,20 @@ class Checker {
                         : model.logical(types.at(values.front()), activeScope);
     };
     callbacks.argumentOrder =
-        [&](const Call &call) -> std::optional<std::vector<unsigned>> {
+        [&](const CallRequest &call) -> std::optional<std::vector<unsigned>> {
       std::vector<unsigned> order;
-      auto target = id(call.callee);
+      const bool operation = call.target.kind == Target::Kind::Operation;
+      auto target = operation ? DeclId{} : id(encode(call.target));
       library::Signature signature;
-      if (call.qualified) {
+      if (operation) {
         for (const auto &exported : protocol::sourceOperationExports())
-          if (exported.contract == call.callee) {
+          if (exported.contract == call.target.symbol) {
             signature.inputLabels = exported.inputLabels;
             signature.inputs.resize(exported.inputLabels.size());
             break;
           }
       }
-      if (call.qualified || !target.valid() ||
+      if (operation || !target.valid() ||
           (model.declarations[target.index].kind !=
                Declaration::Kind::Function &&
            model.declarations[target.index].kind !=
@@ -2468,7 +2549,7 @@ class Checker {
           return {};
         result.name = "Array";
         syntax::Type count;
-        count.natural = true;
+        count.kind = Atom::Kind::Number;
         count.name = std::to_string(t.count);
         result.arguments = {std::move(*element), std::move(count)};
         return result;
@@ -2498,7 +2579,8 @@ class Checker {
               return {};
             syntax::Type natural;
             natural.name = model.spelling(argument);
-            natural.natural = !argument.parameter.valid();
+            if (!argument.parameter.valid())
+              natural.kind = Atom::Kind::Number;
             result.arguments.push_back(std::move(natural));
             continue;
           }
@@ -2509,8 +2591,8 @@ class Checker {
             return {};
           syntax::Type domain;
           domain.name = model.spelling(root);
-          domain.quoted =
-              model.domains.at(root.index).kind == Domain::Kind::Identity;
+          if (model.domains.at(root.index).kind == Domain::Kind::Identity)
+            domain.kind = Atom::Kind::String;
           for (auto member = argument.domain; member != root;
                member = model.domains.at(member.index).parent)
             domain.members.insert(domain.members.begin(),
@@ -2524,11 +2606,14 @@ class Checker {
       }
       return result;
     };
-    callbacks.argumentTypes = [&](const Call &call, const LocalTypes &types,
+    callbacks.argumentTypes = [&](const CallRequest &call,
+                                  const LocalTypes &types,
                                   const Shapes &shapes) {
       std::vector<std::optional<syntax::Type>> result;
-      auto target = id(call.callee);
-      if (call.qualified || !target.valid())
+      if (call.target.kind != Target::Kind::Declaration)
+        return result;
+      auto target = id(encode(call.target));
+      if (!target.valid())
         return result;
       const auto d = model.declarations.at(target.index);
       if (d.kind != Declaration::Kind::Function &&
@@ -2541,10 +2626,10 @@ class Checker {
         for (size_t i = 0; i < d.parameters.size(); ++i) {
           auto parameter = d.parameters[i];
           const auto &sort = model.declarations[parameter.index].sort;
-          auto argument = (*call.staticArguments)[i];
-          if (sort == "Type" && i < call.staticTerms.size())
-            argument = type(syntax::typeExpression(call.staticTerms[i]), scope,
-                            generic);
+          auto argument = staticSpelling((*call.staticArguments)[i]);
+          if (sort == "Type")
+            argument = type(syntax::typeExpression((*call.staticArguments)[i]),
+                            scope, generic);
           if (!good())
             return result;
           if (sortOf(argument, scope) != sort) {
@@ -2622,7 +2707,7 @@ class Checker {
         [&](const Expression &expression,
             const std::optional<std::vector<syntax::Type>> &annotation) {
           std::vector<std::optional<syntax::Type>> result;
-          auto target = id(expression.name);
+          auto target = id(encode(expression.reference));
           if (!target.valid() || model.declarations[target.index].kind !=
                                      Declaration::Kind::Record)
             return result;
@@ -2644,11 +2729,11 @@ class Checker {
             for (size_t i = 0; i < d.parameters.size(); ++i) {
               auto parameter = d.parameters[i];
               const auto &sort = model.declarations[parameter.index].sort;
-              auto argument = (*expression.staticArguments)[i];
-              if (sort == "Type" && i < expression.staticTerms.size())
-                argument =
-                    type(syntax::typeExpression(expression.staticTerms[i]),
-                         scope, generic);
+              auto argument = staticSpelling((*expression.staticArguments)[i]);
+              if (sort == "Type")
+                argument = type(
+                    syntax::typeExpression((*expression.staticArguments)[i]),
+                    scope, generic);
               if (!good())
                 return result;
               if (sortOf(argument, scope) != sort) {
@@ -2687,13 +2772,13 @@ class Checker {
                                   const source::Node &node) {
       return sameAggregate(a, b, scope, assumptions, node);
     };
-    callbacks.resolveOperator = [&](const Expression &expression,
+    callbacks.resolveOperator = [&](const source::Node &node, StringRef symbol,
                                     ArrayRef<std::string> types) {
-      return resolveOperator(expression, types);
+      return resolveOperator(node, symbol, types);
     };
-    callbacks.call = [&](const Call &callSyntax, LocalTypes &types,
+    callbacks.call = [&](const CallRequest &request, LocalTypes &types,
                          StringRef site, CallShapes &shapes) {
-      return call(callSyntax, scope, assumptions, types, generic, owner, site,
+      return call(request, scope, assumptions, types, generic, owner, site,
                   shapes);
     };
     callbacks.product = [&](ArrayRef<ConstructedField> fields,
@@ -2727,11 +2812,14 @@ class Checker {
     const auto &declared = info.shape;
     // A checked struct is built only where its checks are written. Everywhere
     // else its values can be passed, returned and read, but not made.
+    source::Names constructors;
+    for (const auto &constructor : info.declaration->constructors)
+      constructors.push_back(encode(constructor));
     if (info.declaration->checked &&
-        !llvm::is_contained(info.declaration->constructors, owner.str())) {
+        !llvm::is_contained(constructors, owner.str())) {
       fail(expression, "source-checked-construction",
            "'" + declared.name + "' is constructed only in " +
-               llvm::join(info.declaration->constructors, ", ") +
+               llvm::join(constructors, ", ") +
                "; call a constructor to obtain a value");
       return false;
     }
@@ -2818,10 +2906,10 @@ class Checker {
             const LocalTypes &types, const Sorts &scope,
             ArrayRef<source::Requirement> assumptions, bool generic,
             StringRef owner) {
-    auto found = structs.find(expression.name);
+    auto found = structs.find(encode(expression.reference));
     if (found == structs.end()) {
       fail(expression, "source-type",
-           "unknown struct '" + expression.name + "'");
+           "unknown struct '" + encode(expression.reference) + "'");
       return {};
     }
     const auto &info = found->second;
@@ -2883,9 +2971,10 @@ class Checker {
     }
     std::map<std::string, std::string> sub;
     source::Names statics;
-    if (!writtenStatics(info.parameters, expression.staticArguments,
-                        expression.staticTerms, scope, generic, expression,
-                        sub) ||
+    if (!writtenStatics(info.parameters,
+                        spelledStatics(expression.staticArguments),
+                        writtenTerms(expression.staticArguments), scope,
+                        generic, expression, sub) ||
         !solveStatics(info.parameters, {}, bool(expression.staticArguments),
                       constraints, scope, assumptions, expression,
                       declared.name, sub, statics))

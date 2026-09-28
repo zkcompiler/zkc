@@ -33,7 +33,7 @@ carrier module {
     IndexTranscript(D)
   ) {
     [__site_0] let (value, after) = transcript::draw_index::<D>(coins, bound) attributes (
-      oracle-query,
+      "oracle-query",
       main,
       query,
       V,
@@ -45,9 +45,9 @@ carrier module {
   fn Observe<T: domain Transcript, C: domain Commitment, E: domain Codec>(
     coins: Transcript<T>,
     root: Commitment<C>
-  ) -> Transcript<T> requires (Transcript(T), Encodes.commitment(E, C)) {
+  ) -> Transcript<T> requires (Transcript(T), "Encodes.commitment"(E, C)) {
     [__site_0] let after = transcript::observe::commitment::<T, C, E>(coins, root) attributes (
-      oracle-query,
+      "oracle-query",
       main,
       root,
       P,
@@ -94,10 +94,10 @@ carrier module {
 
   fn ObserveIndex<T: domain Transcript, E: domain Codec>(coins: Transcript<T>, value: index) -> Transcript<T> requires (
     Transcript(T),
-    Encodes.index(E)
+    "Encodes.index"(E)
   ) {
     [__site_0] let after = transcript::observe::index::<T, E>(coins, value) attributes (
-      oracle-query,
+      "oracle-query",
       main,
       statistic,
       P,
@@ -109,9 +109,9 @@ carrier module {
   fn ObserveList<T: domain Transcript, C: domain Commitment, E: domain Codec>(
     coins: Transcript<T>,
     roots: Commitments<C>
-  ) -> Transcript<T> requires (Transcript(T), Encodes.commitments(E, C)) {
+  ) -> Transcript<T> requires (Transcript(T), "Encodes.commitments"(E, C)) {
     [__site_0] let after = transcript::observe::commitments::<T, C, E>(coins, roots) attributes (
-      oracle-query,
+      "oracle-query",
       main,
       roots,
       P,
@@ -147,7 +147,7 @@ carrier module {
   protocol Main {
     roles (P, V);
     inputs (
-      P values: Vector<koala-bear::Element>,
+      P values: Vector<"koala-bear"::Element>,
       P width: index,
       V height: index,
       V expected_width: index,

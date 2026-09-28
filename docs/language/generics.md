@@ -40,7 +40,7 @@ previously chosen by the same profile string.
 
 ## Generic definitions and closed selections
 
-Ordinary `module { ... }` authoring supports generic definitions and explicit
+Ordinary file-level authoring supports generic definitions and explicit
 semantic and implementation bindings. Source APIs resolve through explicit
 imports from the installed modules. Historical BLS module headings and their
 defaults are removed. [Interactive carrier admission](../compiler/carrier-consolidation.md#authoring-and-admission)

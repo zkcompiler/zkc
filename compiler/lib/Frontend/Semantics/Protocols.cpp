@@ -1,5 +1,6 @@
 #include "Protocols.h"
 #include "../Static/Domains.h"
+#include "Places.h"
 #include "zkc/Contracts/Bindings.h"
 #include "llvm/ADT/STLExtras.h"
 #include <functional>
@@ -19,7 +20,24 @@ class ProtocolChecker {
   bool valid = true;
   unsigned instructions = 0;
   using Substitution = std::map<DeclId, StaticArgument>;
-  using Environment = std::map<std::string, Port>;
+  // A captured place a loop region reads under its checked flat key.
+  struct Alias {
+    syntax::Place place;
+    std::string key;
+  };
+  // Protocol values by flat key: each aggregate port also binds its
+  // components under `name.field` or `name.N`.
+  struct Environment {
+    std::map<std::string, Port> ports;
+    std::vector<Alias> captured;
+  };
+  // A place checked against its ports' nominal types. `complete` is false
+  // when an inferred capture stopped at an index into one collection value.
+  struct Selected {
+    syntax::Place place;
+    std::string key;
+    bool complete = true;
+  };
   std::set<std::string> roles;
   std::map<DeclId, Substitution> dependencyBindings;
 
@@ -153,7 +171,7 @@ class ProtocolChecker {
   bool bind(Environment &environment, StringRef name, Port port,
             const source::Node &node) {
     port.name = name.str();
-    if (!environment.emplace(port.name, port).second)
+    if (!environment.ports.emplace(port.name, port).second)
       return fail(node, "source-value-duplicate",
                   "duplicate protocol value '" + name + "'");
     const auto t = model.types.at(port.type.index);
@@ -179,20 +197,127 @@ class ProtocolChecker {
     }
     return true;
   }
-  const Port *value(const Environment &environment, StringRef name,
-                    const source::Node &node) {
-    auto it = environment.find(name.str());
-    if (it != environment.end())
+  const Port *port(const Environment &environment, StringRef key,
+                   const source::Node &node) {
+    auto it = environment.ports.find(key.str());
+    if (it != environment.ports.end())
       return &it->second;
     fail(node, "source-value-reference",
-         "unknown protocol value '" + name + "'");
+         "unknown protocol value '" + key + "'");
     return nullptr;
+  }
+  /// Check a reference-only place against the nominal types of its ports. A
+  /// region reads a captured place through its longest captured ancestor.
+  std::optional<Selected> select(const Environment &environment,
+                                 const syntax::Place &place,
+                                 const source::Node &node,
+                                 bool captureCollection = false) {
+    Selected result;
+    const auto &at =
+        place.location ? static_cast<const source::Node &>(place) : node;
+    const auto *root = syntax::localRoot(place);
+    const auto *alias =
+        places::capturedAncestor(ArrayRef(environment.captured), place);
+    size_t begin = 0;
+    if (alias) {
+      result.place = alias->place;
+      result.key = alias->key;
+      begin = alias->place.steps.size();
+    } else if (root && environment.ports.count(*root)) {
+      result.place.root = place.root;
+      result.place.location = place.location;
+      result.key = *root;
+    } else {
+      fail(at, "source-value-reference",
+           "unknown protocol value '" + syntax::spelling(place) + "'");
+      return std::nullopt;
+    }
+    for (size_t i = begin; i < place.steps.size(); ++i) {
+      const auto &step = place.steps[i];
+      const auto t =
+          model.types.at(environment.ports.at(result.key).type.index);
+      auto kind = places::AggregateKind::Scalar;
+      size_t arity = 0;
+      source::Names fields;
+      if (t.kind == Type::Kind::Product) {
+        kind = places::AggregateKind::Product;
+        arity = t.elements.size();
+      } else if (t.kind == Type::Kind::Array) {
+        kind = places::AggregateKind::Array;
+        arity = t.count;
+      } else if (t.kind == Type::Kind::Record) {
+        kind = places::AggregateKind::Record;
+        for (const auto &field : model.declarations[t.declaration.index].fields)
+          fields.push_back(field.name);
+        arity = fields.size();
+      } else if (captureCollection &&
+                 step.kind == syntax::Projection::Kind::Index) {
+        // An element of one collection value: capture the whole value.
+        result.complete = false;
+        return result;
+      }
+      auto selection = places::select(step, kind, arity, fields);
+      if (!selection) {
+        fail(step.location ? static_cast<const source::Node &>(step) : at,
+             "source-projection",
+             kind == places::AggregateKind::Scalar
+                 ? "projection requires the corresponding aggregate kind"
+                 : "invalid projection kind, field, or static index");
+        return std::nullopt;
+      }
+      auto checked = step;
+      checked.key = selection->key;
+      result.place.steps.push_back(std::move(checked));
+      result.key += "." + selection->key;
+      if (!environment.ports.count(result.key)) {
+        fail(at, "source-value-reference",
+             "unknown protocol value '" + syntax::spelling(place) + "'");
+        return std::nullopt;
+      }
+    }
+    return result;
+  }
+  /// Check captured places before flattening. An inferred index into one
+  /// collection value captures that value; inferred captures keep first use
+  /// and a whole value subsumes its selections. Explicit lists stay as written.
+  std::optional<std::vector<Selected>> captures(const Environment &environment,
+                                                const syntax::Places &places,
+                                                bool explicitCaptures,
+                                                const source::Node &node) {
+    std::vector<Selected> result;
+    for (const auto &place : places) {
+      auto selected = select(environment, place, node, !explicitCaptures);
+      if (!selected)
+        return std::nullopt;
+      if (explicitCaptures)
+        result.push_back(std::move(*selected));
+      else
+        syntax::unite(
+            result, std::move(*selected),
+            [](const Selected &a, const Selected &b) {
+              return syntax::ancestor(a.place, b.place);
+            },
+            [](Selected &, Selected &&) {});
+    }
+    return result;
+  }
+  std::optional<source::Names> keys(const Environment &environment,
+                                    const syntax::Places &places,
+                                    const source::Node &node) {
+    source::Names result;
+    for (const auto &place : places) {
+      auto selected = select(environment, place, node);
+      if (!selected)
+        return std::nullopt;
+      result.push_back(std::move(selected->key));
+    }
+    return result;
   }
   source::Names flatten(const source::Names &names,
                         const Environment &environment) const {
     source::Names result;
     for (const auto &name : names)
-      for (const auto &leaf : model.leaves(environment.at(name)))
+      for (const auto &leaf : model.leaves(environment.ports.at(name)))
         result.push_back(leaf.name);
     return result;
   }
@@ -283,9 +408,9 @@ class ProtocolChecker {
     }
     return StaticArgument(selected);
   }
-  bool arguments(DeclId target, const std::optional<source::Names> &written,
-                 ArrayRef<syntax::StaticTerm> terms, const source::Node &node,
-                 Substitution &sub) {
+  bool arguments(DeclId target,
+                 const std::optional<syntax::StaticTerms> &written,
+                 const source::Node &node, Substitution &sub) {
     const auto d = model.declarations.at(target.index);
     if (!d.parameters.empty() && !written)
       return fail(node, "source-local-generic",
@@ -293,19 +418,17 @@ class ProtocolChecker {
                   "closed configuration");
     if (written && written->size() != d.parameters.size())
       return fail(node, "generic-static-arity", "supply every static argument");
-    size_t position = 0;
     if (written)
       for (auto [parameter, term] : zip(d.parameters, *written)) {
-        auto selected = argument(
-            model.declarations[parameter.index].sort, term,
-            position < terms.size() ? &terms[position] : nullptr, node);
-        ++position;
+        auto selected = argument(model.declarations[parameter.index].sort,
+                                 syntax::staticSpelling(term), &term, node);
         if (!selected)
           return false;
         sub.emplace(parameter, *selected);
       }
     return true;
   }
+  // `inputs` are checked flat keys; `outputs` are the names bound.
   bool apply(DeclId target, const Substitution &sub,
              const source::Names &inputs, const source::Names &outputs,
              StringRef localRole, const source::Node &node, StringRef site,
@@ -325,7 +448,7 @@ class ProtocolChecker {
       return fail(node, "source-call-arity",
                   "protocol call has incorrect authored operand/result arity");
     for (auto [name, input] : zip(inputs, d.inputs)) {
-      const auto *actual = value(environment, name, node);
+      const auto *actual = port(environment, name, node);
       if (!actual)
         return false;
       if (!requireType(
@@ -369,28 +492,23 @@ class ProtocolChecker {
     model.uses.push_back(std::move(use));
     return true;
   }
-  bool dependency(const source::Dependency &dependency, DeclId alias,
+  bool dependency(const syntax::Dependency &dependency, DeclId alias,
                   DeclId target) {
     const auto d = model.declarations[target.index];
     Substitution sub;
-    auto written = protocol.dependencyArguments.find(dependency.name);
-    if (written != protocol.dependencyArguments.end()) {
-      size_t position = 0;
-      for (const auto &[name, term] : written->second.arguments) {
+    if (dependency.arguments)
+      for (const auto &[name, term] : *dependency.arguments) {
         auto parameter = model.lookup(d.members, name);
         if (!is_contained(d.parameters, parameter) || sub.count(parameter))
           return fail(dependency, "source-static-parameter",
                       "unknown or duplicate dependency parameter");
-        const auto &terms = written->second.terms;
-        auto selected = argument(
-            model.declarations[parameter.index].sort, term,
-            position < terms.size() ? &terms[position] : nullptr, dependency);
-        ++position;
+        auto selected =
+            argument(model.declarations[parameter.index].sort,
+                     syntax::staticSpelling(term), &term, dependency);
         if (!selected)
           return false;
         sub.emplace(parameter, *selected);
       }
-    }
     if (sub.size() != d.parameters.size())
       return fail(dependency, "source-static-required",
                   "dependency must bind every protocol static parameter");
@@ -439,38 +557,45 @@ class ProtocolChecker {
       if (++instructions > 32768)
         return fail(instruction, "source-limit",
                     "protocol body exceeds the instruction budget");
-      auto *ret = std::get_if<source::Return>(&instruction.value);
-      std::optional<source::Return> finished;
-      if (auto *finish = std::get_if<syntax::Finish>(&instruction.value)) {
-        if (loop)
-          return fail(instruction, "source-output-port",
-                      "finish terminates a protocol, not a loop region");
-        source::Names keys, values;
-        for (const auto &[key, value] : finish->values) {
-          keys.push_back(key);
-          values.push_back(value);
-        }
-        auto ordered = orderPorts(keys, values, results, instruction);
-        if (!ordered)
-          return false;
-        finished = source::Return{std::move(*ordered)};
-        ret = &*finished;
-      }
-      auto *yield = std::get_if<source::Yield>(&instruction.value);
-      auto *stop = std::get_if<source::Stop>(&instruction.value);
-      if (bool(ret || yield || stop) != (&instruction == &body.back()))
+      const auto *finish = std::get_if<syntax::Finish>(&instruction.value);
+      const auto *ret = std::get_if<syntax::Return>(&instruction.value);
+      const auto *yield = std::get_if<syntax::Yield>(&instruction.value);
+      const auto *stop = std::get_if<source::Stop>(&instruction.value);
+      if (finish && loop)
+        return fail(instruction, "source-output-port",
+                    "finish terminates a protocol, not a loop region");
+      if (bool(finish || ret || yield || stop) !=
+          (&instruction == &body.back()))
         return fail(instruction, "source-protocol-terminator",
                     "protocol regions end in a return, yield or stop");
-      if (ret || yield) {
-        const auto &names = ret ? ret->values : yield->values;
-        for (const auto &name : names)
-          if (!value(environment, name, instruction))
+      if (finish || ret || yield) {
+        // Checked keys of the returned places, in declared result order.
+        source::Names names;
+        if (finish) {
+          source::Names ports, values;
+          for (const auto &[key, value] : finish->values) {
+            auto selected = select(environment, value, instruction);
+            if (!selected)
+              return false;
+            ports.push_back(key);
+            values.push_back(std::move(selected->key));
+          }
+          auto ordered = orderPorts(ports, values, results, instruction);
+          if (!ordered)
             return false;
+          names = std::move(*ordered);
+        } else {
+          auto selected =
+              keys(environment, ret ? ret->values : yield->values, instruction);
+          if (!selected)
+            return false;
+          names = std::move(*selected);
+        }
         if (bool(yield) != loop || names.size() != results.size())
           return fail(instruction, "source-protocol-return",
                       "return/yield has the wrong region or result arity");
         for (auto [name, expected] : zip(names, results)) {
-          const auto *actual = value(environment, name, instruction);
+          const auto *actual = port(environment, name, instruction);
           if (!actual)
             return false;
           if (actual->role != expected.role)
@@ -484,10 +609,10 @@ class ProtocolChecker {
         }
         if (out) {
           auto values = flatten(names, environment);
-          if (ret)
-            lowered.value = source::Return{std::move(values)};
-          else
+          if (yield)
             lowered.value = source::Yield{std::move(values)};
+          else
+            lowered.value = source::Return{std::move(values)};
         }
       } else if (stop) {
         if (!role(stop->role, instruction))
@@ -498,15 +623,15 @@ class ProtocolChecker {
         if (!role(placement->role, instruction))
           return false;
         std::vector<Port> available;
-        for (const auto &[name, port] : environment) {
+        for (const auto &[name, port] : environment.ports) {
           if (port.role != placement->role)
             continue;
           bool child = false;
           auto prefix = StringRef(name);
           while (prefix.contains('.')) {
             prefix = prefix.rsplit('.').first;
-            auto parent = environment.find(prefix.str());
-            if (parent != environment.end() &&
+            auto parent = environment.ports.find(prefix.str());
+            if (parent != environment.ports.end() &&
                 model.types[parent->second.type.index].kind !=
                     Type::Kind::Logical) {
               child = true;
@@ -545,7 +670,9 @@ class ProtocolChecker {
                                 flatten(placement->outputs, environment)};
       } else if (const auto *call =
                      std::get_if<syntax::Call>(&instruction.value)) {
-        auto target = model.lookup({0}, call->callee);
+        auto target = call->operatorSymbol
+                          ? DeclId{}
+                          : model.lookup({0}, syntax::encode(call->callee));
         if (!target.valid() || (model.declarations[target.index].kind !=
                                     Declaration::Kind::Function &&
                                 model.declarations[target.index].kind !=
@@ -576,9 +703,9 @@ class ProtocolChecker {
           return fail(*call, "source-local-configuration",
                       "emitted protocol locals require a closed configuration");
         Substitution sub;
-        if (!arguments(target, call->staticArguments, call->staticTerms, *call,
-                       sub) ||
-            !apply(target, sub, call->inputs, call->outputs, *call->role, *call,
+        auto inputs = keys(environment, call->inputs, *call);
+        if (!inputs || !arguments(target, call->staticArguments, *call, sub) ||
+            !apply(target, sub, *inputs, call->outputs, *call->role, *call,
                    instruction.site, environment, ResolvedUse::Kind::Call,
                    bool(call->staticArguments), call->destructure))
           return false;
@@ -595,7 +722,7 @@ class ProtocolChecker {
             auto expected = resolveType(type);
             if (!expected.valid())
               return false;
-            if (!same(environment.at(name).type, expected, *call))
+            if (!same(environment.ports.at(name).type, expected, *call))
               return fail(
                   *call, "source-call-type",
                   "result annotation differs from the resolved nominal type");
@@ -604,7 +731,7 @@ class ProtocolChecker {
         if (out)
           lowered.value = source::LocalCall{
               *call->role, model.declarations[target.index].name,
-              flatten(call->inputs, environment),
+              flatten(*inputs, environment),
               flatten(call->outputs, environment)};
       } else if (const auto *call =
                      std::get_if<syntax::Invocation>(&instruction.value)) {
@@ -619,7 +746,14 @@ class ProtocolChecker {
           return fail(instruction, "source-call-target",
                       "dependency target is not a protocol");
         const auto &sub = dependencyBindings.at(alias);
-        auto written = protocol.dependencyArguments.find(call->callee);
+        const bool written =
+            llvm::any_of(protocol.dependencies, [&](const auto &dependency) {
+              return dependency.name == call->callee &&
+                     bool(dependency.arguments);
+            });
+        auto inputs = keys(environment, call->inputs, instruction);
+        if (!inputs)
+          return false;
         auto outputs = call->outputs;
         if (!call->resultNames.empty()) {
           auto ordered =
@@ -629,20 +763,20 @@ class ProtocolChecker {
             return false;
           outputs = std::move(*ordered);
         }
-        if (!apply(target, sub, call->inputs, outputs, {}, instruction,
+        if (!apply(target, sub, *inputs, outputs, {}, instruction,
                    instruction.site, environment, ResolvedUse::Kind::Invoke,
-                   written != protocol.dependencyArguments.end()))
+                   written))
           return false;
         if (out)
-          lowered.value =
-              source::ProtocolCall{model.declarations[alias.index].name,
-                                   flatten(call->inputs, environment),
-                                   flatten(outputs, environment)};
+          lowered.value = source::ProtocolCall{
+              model.declarations[alias.index].name,
+              flatten(*inputs, environment), flatten(outputs, environment)};
       } else if (const auto *message =
-                     std::get_if<source::Message>(&instruction.value)) {
-        const auto *input = value(environment, message->input, instruction);
-        if (!input)
+                     std::get_if<syntax::Message>(&instruction.value)) {
+        auto selected = select(environment, message->input, instruction);
+        if (!selected)
           return false;
+        const auto *input = &environment.ports.at(selected->key);
         if (!role(message->sender, instruction) ||
             !role(message->receiver, instruction))
           return false;
@@ -656,24 +790,27 @@ class ProtocolChecker {
         output.role = message->receiver;
         if (!bind(environment, message->output, output, instruction))
           return false;
-        lowered.value = *message;
+        lowered.value =
+            source::Message{message->schema, message->sender, message->receiver,
+                            selected->key, message->output};
       } else if (const auto *region =
                      std::get_if<syntax::Loop>(&instruction.value)) {
-        if (region->countAtom &&
-            region->countAtom->kind == syntax::Atom::Kind::String)
+        if (region->count.kind == syntax::Atom::Kind::String)
           return fail(instruction, "source-protocol-count",
                       "quoted data is not a natural parameter reference");
-        if (region->count.kind == source::LoopCount::Kind::Parameter &&
-            !is_contained(protocol.parameters, region->count.value)) {
-          auto declaration = model.lookup({0}, region->count.value);
-          bool constant =
-              declaration.valid() &&
-              model.declarations[declaration.index].kind ==
-                  Declaration::Kind::Constant &&
-              !environment.count(region->count.value) &&
-              !model.lookup(scope, region->count.value).valid() &&
-              (!region->countAtom ||
-               region->countAtom->kind != syntax::Atom::Kind::String);
+        source::LoopCount count;
+        count.kind = region->count.kind == syntax::Atom::Kind::Number
+                         ? source::LoopCount::Kind::Constant
+                         : source::LoopCount::Kind::Parameter;
+        count.value = region->count.value;
+        if (count.kind == source::LoopCount::Kind::Parameter &&
+            !is_contained(protocol.parameters, count.value)) {
+          auto declaration = model.lookup({0}, count.value);
+          bool constant = declaration.valid() &&
+                          model.declarations[declaration.index].kind ==
+                              Declaration::Kind::Constant &&
+                          !environment.ports.count(count.value) &&
+                          !model.lookup(scope, count.value).valid();
           if (!constant)
             return fail(instruction, "source-protocol-count",
                         "loop count requires a natural parameter or unshadowed "
@@ -682,28 +819,36 @@ class ProtocolChecker {
         Environment inner;
         std::vector<Port> carried;
         source::Loop loweredLoop;
-        loweredLoop.count = region->count;
+        loweredLoop.count = count;
         for (const auto &[name, initial] : region->carried) {
-          const auto *port = value(environment, initial, instruction);
-          if (!port)
+          auto selected = select(environment, initial, instruction);
+          if (!selected)
             return false;
-          carried.push_back(*port);
-          if (!bind(inner, name, *port, instruction))
+          const auto &port = environment.ports.at(selected->key);
+          carried.push_back(port);
+          if (!bind(inner, name, port, instruction))
             return false;
           if (out) {
             auto arguments = flatten({name}, inner);
-            auto inputs = flatten({initial}, environment);
+            auto inputs = flatten({selected->key}, environment);
             for (auto [argument, input] : zip(arguments, inputs))
               loweredLoop.carried.emplace_back(argument, input);
           }
         }
-        for (const auto &name : region->captures) {
-          const auto *port = value(environment, name, instruction);
-          if (!port || !bind(inner, name, *port, instruction))
+        auto captured = captures(environment, region->captures,
+                                 region->explicitCaptures, instruction);
+        if (!captured)
+          return false;
+        source::Names capturedKeys;
+        for (const auto &capture : *captured) {
+          if (!bind(inner, capture.key, environment.ports.at(capture.key),
+                    instruction))
             return false;
+          inner.captured.push_back({capture.place, capture.key});
+          capturedKeys.push_back(capture.key);
         }
         if (out)
-          loweredLoop.captures = flatten(region->captures, environment);
+          loweredLoop.captures = flatten(capturedKeys, environment);
         if (region->outputs.size() != carried.size())
           return fail(instruction, "source-call-arity",
                       "loop outputs must match carried values");

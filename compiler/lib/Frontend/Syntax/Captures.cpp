@@ -5,59 +5,30 @@ using namespace llvm;
 namespace zkc::frontend::syntax {
 namespace {
 using Names = std::set<std::string>;
+// Collects capture candidates syntactically: a place with its field, product
+// and literal-index steps, or the free inputs of a computed selection. Only the
+// owning typed checker decides whether an index selects a structural array
+// element or reads one bulk collection value.
 class FreePlaces {
-  Names available, seen;
-  source::Names places;
+  Names available;
+  Places places;
 
-  void use(StringRef name, const Names &bound) {
-    auto root = name.split('.').first.str();
-    if (bound.count(root) || !available.count(root) ||
-        !seen.insert(name.str()).second)
-      return;
-    // Capture the union of inferred places. A whole aggregate subsumes its
-    // projections, but occupies their earliest first-use position. This does
-    // not relax the body checker: repeated affine reads still refuse there.
-    size_t first = places.size();
-    for (size_t i = 0; i < places.size(); ++i) {
-      if (name == places[i] || name.starts_with(places[i] + "."))
-        return;
-      if (StringRef(places[i]).starts_with(name.str() + "."))
-        first = std::min(first, i);
-    }
-    if (first == places.size())
-      places.push_back(name.str());
-    else {
-      places[first] = name.str();
-      for (size_t i = places.size(); i-- > first + 1;)
-        if (StringRef(places[i]).starts_with(name.str() + "."))
-          places.erase(places.begin() + i);
-    }
+  void use(const Place &place, const Names &bound) {
+    const auto *root = localRoot(place);
+    if (root && !bound.count(*root) && available.count(*root))
+      unite(places, place);
   }
-  void uses(const source::Names &names, const Names &bound) {
+  void uses(const Places &names, const Names &bound) {
     for (const auto &n : names)
       use(n, bound);
   }
-  void expression(const syntax::Expression &e, const Names &bound) {
-    // Retain literal place paths until typed resolution. The ordinary checker
-    // distinguishes aggregate projections from runtime collection indexing.
-    auto place = [&](auto &&self, const syntax::Expression &v) -> std::string {
-      if (v.kind == syntax::Expression::Kind::Name && !v.quoted)
-        return v.name;
-      if (v.kind != syntax::Expression::Kind::Get || v.operands.size() != 2 ||
-          v.operands[1].kind != syntax::Expression::Kind::Index)
-        return {};
-      auto base = self(self, v.operands.front());
-      return base.empty() ? std::string{} : base + "." + v.operands[1].name;
-    };
-    if (e.kind == syntax::Expression::Kind::Get) {
-      auto p = place(place, e);
-      if (!p.empty()) {
-        use(p, bound);
-        return;
-      }
+  void expression(const Expression &e, const Names &bound) {
+    if (auto place = placeCandidate(e)) {
+      use(*place, bound);
+      return;
     }
-    if (e.kind == syntax::Expression::Kind::Name && !e.quoted)
-      use(e.name, bound);
+    // A computed selection depends on its receiver's free inputs and those of
+    // its index operand.
     for (const auto &o : e.operands)
       expression(o, bound);
     if (e.traversal) {
@@ -77,20 +48,17 @@ public:
           [&](const auto &v) {
             using T = std::decay_t<decltype(v)>;
             if constexpr (std::is_same_v<T, syntax::Call>) {
-              for (size_t i = 0; i < v.inputs.size(); ++i)
-                if (i >= v.inputAtoms.size() ||
-                    v.inputAtoms[i].kind == syntax::Atom::Kind::Name)
-                  use(v.inputs[i], bound);
+              uses(v.inputs, bound);
               bound.insert(v.outputs.begin(), v.outputs.end());
             } else if constexpr (std::is_same_v<T, syntax::Binding>) {
               expression(v.expression, bound);
               if (v.assignment)
-                uses(v.outputs, bound);
+                use(*v.assignment, bound);
               bound.insert(v.outputs.begin(), v.outputs.end());
             } else if constexpr (std::is_same_v<T, syntax::Exit>) {
               expression(v.expression, bound);
-            } else if constexpr (std::is_same_v<T, source::Return> ||
-                                 std::is_same_v<T, source::Yield>) {
+            } else if constexpr (std::is_same_v<T, syntax::Return> ||
+                                 std::is_same_v<T, syntax::Yield>) {
               uses(v.values, bound);
             } else if constexpr (std::is_same_v<T, syntax::Conditional>) {
               expression(v.condition, bound);
@@ -129,7 +97,7 @@ public:
             } else if constexpr (std::is_same_v<T, syntax::Invocation>) {
               uses(v.inputs, bound);
               bound.insert(v.outputs.begin(), v.outputs.end());
-            } else if constexpr (std::is_same_v<T, source::Message>) {
+            } else if constexpr (std::is_same_v<T, syntax::Message>) {
               use(v.input, bound);
               bound.insert(v.output);
             } else if constexpr (std::is_same_v<T, syntax::Finish>) {
@@ -139,7 +107,7 @@ public:
           },
           i.value);
   }
-  source::Names take() { return std::move(places); }
+  Places take() { return std::move(places); }
 };
 void infer(syntax::Body &body, Names bound);
 void inferExpression(syntax::Expression &e, const Names &bound) {
@@ -219,7 +187,7 @@ void infer(syntax::Body &body, Names bound) {
                         std::is_same_v<T, syntax::Placement> ||
                         std::is_same_v<T, syntax::Invocation>)
             bound.insert(v.outputs.begin(), v.outputs.end());
-          else if constexpr (std::is_same_v<T, source::Message>)
+          else if constexpr (std::is_same_v<T, syntax::Message>)
             bound.insert(v.output);
         },
         i.value);

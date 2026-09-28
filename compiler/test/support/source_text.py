@@ -24,11 +24,12 @@ def unlocated(value):
     return value
 
 
-# A helper whose name is exactly an operation's. Which category the frontend
-# chooses is reported on two surfaces -- the elaboration report's `kind` and
-# the encoded record's node tag -- and a test of either wants the same module,
-# so it is written here rather than twice.
-COLLISION = """module {
-  fn "bool.and"<>(x: bool, y: bool) -> bool { return x; }
-  fn Use<>(x: bool) -> bool { let y = bool::and(x, x); return y; }
-}"""
+# A helper whose name is exactly an installed operation's member name. The
+# qualified path selects the operation; replacing it with the bare name selects
+# the helper. Which category the frontend chooses is reported on two surfaces
+# -- the elaboration report's `kind` and the encoded record's node tag -- and a
+# test of either wants the same module, so it is written here rather than twice.
+COLLISION = """ use zkc::core;
+  fn and<>(x: bool, y: bool) -> bool { return x; }
+  fn Use<>(x: bool) -> bool { let y = zkc::core::and(x, x); return y; }
+"""

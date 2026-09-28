@@ -41,8 +41,8 @@ template <typename T> void refuses(Expected<T> result, StringRef code) {
 } // namespace
 
 int main() {
-  auto document = take(frontend::parseProtocolDocument(R"pir(module {
-    bind require = control.require();
+  auto document = take(frontend::parseProtocolDocument(R"pir(
+    bind require = "control.require"();
     fn Check(ok: bool) -> (bool) {
       require(ok);
       return (ok);
@@ -56,7 +56,7 @@ int main() {
     }
     instance checked: Checked { roles (Verifier = Validator); }
     entry main = checked;
-  })pir"));
+  )pir"));
   const auto &source = *document.module();
   auto catalog = take(claims::inspect(source, "main"));
   claims::Contract contract;

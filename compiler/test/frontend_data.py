@@ -25,9 +25,20 @@ def common(text):
     return json.loads(run("protocol-source", text))
 
 
-def same(authored, expanded):
+def rename_flat_values(value, names):
+    """Compare explicit alpha-renamed value ports after strict binder migration.
+
+    The map lists only this fixture's leaf binders; contract, site, schema and
+    origin identities are not normalized.
+    """
+    if isinstance(value, list):
+        return [rename_flat_values(item, names) for item in value]
+    return names.get(value, value) if isinstance(value, str) else value
+
+
+def same(authored, expanded, names=None):
     left, right = common(authored), common(expanded)
-    assert left == right, (json.dumps(left), json.dumps(right))
+    assert rename_flat_values(left, names or {}) == right, (json.dumps(left), json.dumps(right))
     # Formatting is a syntax-only operation and must keep the meaning.
     assert common(run("protocol-format", authored)) == left
     return left
@@ -40,32 +51,32 @@ BODY = '''{
   }'''
 HEAD = ("fn Scale<F: PairingField>(p: F::PairingG1::Element, k: F::Element)"
         " -> F::PairingG1::Element")
-bundled = f'''module {{
+bundled = f'''
   use zkc::curve;
   bundle Scalars(G) = (ScalarAction(G), Field(G::Scalar));
   bundle PairingArithmetic(F) = (
-    Scalars(F::PairingG1), Scalars(F::PairingG2), "="(F::PairingG1::Scalar, F)
+    Scalars(F::PairingG1), Scalars(F::PairingG2), F::PairingG1::Scalar == F
   );
   {HEAD} requires (PairingArithmetic(F)) {BODY}
-}}'''
-expanded = f'''module {{
+'''
+expanded = f'''
   use zkc::curve;
   {HEAD} requires (
     ScalarAction(F::PairingG1), Field(F::PairingG1::Scalar),
     ScalarAction(F::PairingG2), Field(F::PairingG2::Scalar),
-    "="(F::PairingG1::Scalar, F)
+    F::PairingG1::Scalar == F
   ) {BODY}
-}}'''
+'''
 record = same(bundled, expanded)
 # The header bound comes first, then the expansion in declared order.
 assert [r[0] for r in record[1][0][3]] == [
     "PairingField", "ScalarAction", "Field", "ScalarAction", "Field", "="]
 
 # A use is a position, not a set member: order and duplicates are the author's.
-IDENTITY = """module {
+IDENTITY = """
   bundle Scalars(G) = (ScalarAction(G), Field(G::Scalar));
   fn Id<F: PairingField>(x: F::Element) -> F::Element CLAUSE { return x; }
-}"""
+"""
 twice = IDENTITY.replace("CLAUSE", "requires (Field(F), Scalars(F::PairingG1), Field(F))")
 assert [r[0] for r in common(twice)[1][0][3]] == [
     "PairingField", "Field", "ScalarAction", "Field", "Field"]
@@ -105,16 +116,16 @@ assert "from bundle 'PairingArithmetic'" in error, error
 wide = "bundle Wide(F) = (" + ", ".join(["Field(F)"] * 40) + ");"
 huge = "bundle Huge(F) = (" + ", ".join(["Wide(F)"] * 40) + ");"
 run("protocol-source",
-    f"module {{ {wide} {huge} fn Id<F: domain Field>(x: F::Element) -> F::Element"
-    " requires (Huge(F)) { return x; } }", "requirements-limit")
+    f"{wide} {huge} fn Id<F: domain Field>(x: F::Element) -> F::Element"
+    " requires (Huge(F)) { return x; }", "requirements-limit")
 # Bundles are authoring syntax: syntax inspection shows them, common source does not.
 assert json.loads(run("protocol-parse", bundled))["content"]["bundles"][0]["name"] == "Scalars"
 assert "bundle" not in json.dumps(record)
 
 # --- Structs ----------------------------------------------------------------
 STRUCTS = """
-  struct Pair<F: domain Field>(x: F::Element, y: F::Element);
-  struct Sums<F: domain Field>(input: Pair<F>, sum: F::Element);
+  struct Pair<F: domain Field> { x: F::Element, y: F::Element }
+  struct Sums<F: domain Field> { input: Pair<F>, sum: F::Element }
 """
 TAIL = """
   configure Make = MakePair(F = "koala-bear");
@@ -131,15 +142,15 @@ TAIL = """
   instance concrete: Demo { roles (P = P, V = V); }
   entry main = concrete;
 """
-struct_source = "module { use zkc::algebra;" + STRUCTS + """
+struct_source = "use zkc::algebra;" + STRUCTS + """
   fn MakePair<F: Field>(a: F::Element, b: F::Element) -> Pair<F> {
     let doubled = zkc::algebra::add(b, b);
-    let p = Pair(y = doubled, x = a);
+    let p = Pair{ y: doubled, x: a };
     return p;
   }
   fn Sum<F: Field>(p: Pair<F>) -> Sums<F> {
     let total = zkc::algebra::add(p.x, p.y);
-    let s = Sums(input = p, sum = total);
+    let s = Sums{ input: p, sum: total };
     return s;
   }
   fn First<F: Field>(p: Pair<F>) -> F::Element { return p.x; }
@@ -151,59 +162,59 @@ struct_source = "module { use zkc::algebra;" + STRUCTS + """
 """ + TAIL.replace("SEED", 'seed: Pair<"koala-bear">').replace("LOCALS", """
     local P: let p = Make(seed.x, seed.y);
     local P: let s = Add(p);
-    local P: let t = Final(s);""") + "}"
-struct_expanded = """module {
+    local P: let t = Final(s);""")
+struct_expanded = """
   use zkc::algebra;
   fn MakePair<F: Field>(a: F::Element, b: F::Element) -> (F::Element, F::Element) {
     let doubled = zkc::algebra::add(b, b);
     return (a, doubled);
   }
-  fn Sum<F: Field>(p.x: F::Element, p.y: F::Element)
+  fn Sum<F: Field>(p_x: F::Element, p_y: F::Element)
       -> (F::Element, F::Element, F::Element) {
-    let total = zkc::algebra::add(p.x, p.y);
-    return (p.x, p.y, total);
+    let total = zkc::algebra::add(p_x, p_y);
+    return (p_x, p_y, total);
   }
-  fn First<F: Field>(p.x: F::Element, p.y: F::Element) -> F::Element { return p.x; }
-  fn Total<F: Field>(s.input.x: F::Element, s.input.y: F::Element, s.sum: F::Element)
+  fn First<F: Field>(p_x: F::Element, p_y: F::Element) -> F::Element { return p_x; }
+  fn Total<F: Field>(s_input_x: F::Element, s_input_y: F::Element, s_sum: F::Element)
       -> F::Element {
-    let first = First(s.input.x, s.input.y);
-    let again = zkc::algebra::add(first, s.sum);
+    let first = First(s_input_x, s_input_y);
+    let again = zkc::algebra::add(first, s_sum);
     return again;
   }
-""" + TAIL.replace("SEED", 'seed.x: "koala-bear"::Element, P seed.y: "koala-bear"::Element'
+""" + TAIL.replace("SEED", 'seed_x: "koala-bear"::Element, P seed_y: "koala-bear"::Element'
         ).replace("LOCALS", """
-    local P: let (p.x, p.y) = Make(seed.x, seed.y);
-    local P: let (s.input.x, s.input.y, s.sum) = Add(p.x, p.y);
-    local P: let t = Final(s.input.x, s.input.y, s.sum);""") + "}"
-struct_record = same(struct_source, struct_expanded)
+    local P: let (p_x, p_y) = Make(seed_x, seed_y);
+    local P: let (s_input_x, s_input_y, s_sum) = Add(p_x, p_y);
+    local P: let t = Final(s_input_x, s_input_y, s_sum);""")
+struct_record = same(struct_source, struct_expanded, {name: name.replace(".", "_") for name in ("p.x", "p.y", "s.input.x", "s.input.y", "s.sum", "seed.x", "seed.y")})
 assert '"Pair"' not in json.dumps(struct_record) and "Sums" not in json.dumps(struct_record)
 # The whole pipeline accepts the flattened source.
 run("protocol-compile", struct_source)
 
 
 def struct_module(body, structs=STRUCTS):
-    return "module { use zkc::algebra;" + structs + body + "}"
+    return "use zkc::algebra;" + structs + body
 
 
 # Written and inferred static arguments, and a struct result annotation, agree.
 inferred = struct_module("""
-  fn Make<F: Field>(a: F::Element) -> Pair<F> { let p = Pair(x = a, y = a); return p; }
+  fn Make<F: Field>(a: F::Element) -> Pair<F> { let p = Pair{ x: a, y: a }; return p; }
   fn Use<F: Field>(a: F::Element) -> F::Element { let p = Make(a); return p.y; }
 """)
-for text in (inferred.replace("Pair(x = a", "Pair::<F>(x = a"),
+for text in (inferred.replace("Pair{ x: a", "Pair::<F>{ x: a"),
              inferred.replace("let p = Make(a)", "let p: Pair<F> = Make(a)")):
     assert common(text) == common(inferred)
 # A struct without parameters names closed domains.
 closed = struct_module("""
   fn Id(p: Fixed) -> Fixed { return p; }
-""", 'struct Fixed(x: "koala-bear"::Element);')
-assert common(closed) == common(
-    'module { fn Id(p.x: "koala-bear"::Element) -> "koala-bear"::Element { return p.x; } }')
+""", 'struct Fixed { x: "koala-bear"::Element }')
+assert rename_flat_values(common(closed), {"p.x": "p_x"}) == common(
+    ' fn Id(p_x: "koala-bear"::Element) -> "koala-bear"::Element { return p_x; } ')
 
 # An affine leaf keeps its own rule: one read, or one whole-struct use.
 draws = """
   use zkc::random::{Rng};
-  struct Draws<F: domain Field>(coins: Rng<F>, scale: F::Element);
+  struct Draws<F: domain Field> { coins: Rng<F>, scale: F::Element }
   fn Spend<F: Field>(d: Draws<F>) -> F::Element { let (r, rest) = zkc::random::draw(d.coins); return r; }
   fn Twice<F: Field>(d: Draws<F>) -> F::Element { BODY }
 """
@@ -218,7 +229,7 @@ common(struct_module(draws.replace("BODY", "let s = Spend(d); return s;"), ""))
 # Loops carry and yield structs leaf by leaf, and an invoke passes them whole.
 looped = struct_module("""
   fn Step<F: Field>(p: Pair<F>) -> Pair<F> {
-    let q = Pair(x = p.y, y = zkc::algebra::add(p.x, p.y));
+    let q = Pair{ x: p.y, y: zkc::algebra::add(p.x, p.y) };
     return q;
   }
   configure Advance = Step(F = "koala-bear");
@@ -227,11 +238,11 @@ looped = struct_module("""
     parameters (n);
     inputs (P start: Pair<"koala-bear">);
     outputs (P Pair<"koala-bear">);
-    loop n carry (state = start) -> (finish) {
+    loop n carry (state = start) -> (last) {
       local P: let next = Advance(state);
       yield (next);
     }
-    return finish;
+    return last;
   }
   protocol Outer {
     roles (P, V);
@@ -239,8 +250,8 @@ looped = struct_module("""
     inputs (P start: Pair<"koala-bear">);
     outputs (V "koala-bear"::Element);
     dependencies (walk: Walk(n = n));
-    invoke walk(start) -> (finish);
-    message result: P(finish.y) -> V(received);
+    invoke walk(start) -> (last);
+    message result: P(last.y) -> V(received);
     return received;
   }
   instance walk: Walk { parameters (n = 2); roles (P = P, V = V); }
@@ -249,7 +260,7 @@ looped = struct_module("""
 """)
 looped_record = common(looped)
 text = json.dumps(looped_record)
-for leaf in ("state.x", "state.y", "finish.x", "finish.y", "next.x", "start.y"):
+for leaf in ("state.x", "state.y", "last.x", "last.y", "next.x", "start.y"):
     assert json.dumps(leaf) in text, leaf
 run("protocol-compile", looped)
 
@@ -259,51 +270,51 @@ def refuse(body, code, structs=STRUCTS):
 
 
 USE = "fn Use<F: Field>(p: Pair<F>, a: F::Element) -> F::Element { BODY }"
-refuse(USE.replace("BODY", "let q = Missing(x = a, y = a); return a;"), "source-name-unresolved")
+refuse(USE.replace("BODY", "let q = Missing { x: a, y: a }; return a;"), "source-name-unresolved")
 refuse("fn Bad<F: Field>(p: Pair<F, F>) -> F::Element { return p.x; }", "source-type-arity")
 refuse("fn Bad<G: domain Group>(p: Pair<G>) -> G::Element { return p.x; }", "source-type-domain")
-refuse("", "source-struct-field", "struct Twice<F: domain Field>(x: F::Element, x: F::Element);")
-refuse("", "source-struct-field", "struct Dotted<F: domain Field>(a.b: F::Element);")
-refuse("", "source-struct-field", "struct Empty();")
-refuse(USE.replace("BODY", "let q = Pair(x = a); return a;"), "source-struct-field")
-refuse(USE.replace("BODY", "let q = Pair(x = a, y = a, z = a); return a;"), "source-struct-field")
-refuse(USE.replace("BODY", "let q = Pair(x = a, x = a); return a;"), "source-struct-field")
+refuse("", "source-struct-field", "struct Twice<F: domain Field> { x: F::Element, x: F::Element }")
+refuse("", "source-syntax", "struct Dotted<F: domain Field> { a.b: F::Element }")
+refuse("", "source-struct-field", "struct Empty {  }")
+refuse(USE.replace("BODY", "let q = Pair{ x: a }; return a;"), "source-struct-field")
+refuse(USE.replace("BODY", "let q = Pair{ x: a, y: a, z: a }; return a;"), "source-struct-field")
+refuse(USE.replace("BODY", "let q = Pair{ x: a, x: a }; return a;"), "source-struct-field")
 refuse("", "source-struct-cycle",
-       "struct A<F: domain Field>(b: B<F>); struct B<F: domain Field>(a: A<F>);")
-refuse("", "source-struct-bound", "struct Bounded<F: Field>(x: F::Element);")
+       "struct A<F: domain Field> { b: B<F> } struct B<F: domain Field> { a: A<F> }")
+refuse("", "source-struct-bound", "struct Bounded<F: Field> { x: F::Element }")
 # Resolved nominal identities no longer share the installed type's symbol.
 # A local declaration is selected explicitly in its scope; it cannot capture
 # installed types in separately resolved dependency code.
 for name in ("Proof", "Vector", "Rng"):
     common(struct_module(
         f"fn Keep<F: Field>(x: {name}<F>) -> {name}<F> {{ return x; }}",
-        f"struct {name}<F: domain Field>(x: F::Element);"))
-wide = "struct Wide<F: domain Field>(" + ", ".join(f"f{i}: F::Element" for i in range(4097)) + ");"
+        f"struct {name}<F: domain Field> {{ x: F::Element }}"))
+wide = "struct Wide<F: domain Field> {" + ", ".join(f"f{i}: F::Element" for i in range(4097)) + "}"
 refuse("", "source-struct-limit", wide)
 # A struct is not a single value, and a single value is not a struct.
 refuse(USE.replace("BODY", "let b = zkc::algebra::add(p, a); return b;"), "source-struct-value")
 refuse(USE.replace("BODY", "let b = Use(a, a); return b;"), "source-struct-value")
 refuse(USE.replace("BODY", "return p;"), "source-annotation-type")
 refuse("fn Bad<F: Field>(a: F::Element) -> Pair<F> { return a; }", "source-struct-value")
-refuse(USE.replace("BODY", "let q = Sums(input = a, sum = a); return a;"), "source-struct-value")
+refuse(USE.replace("BODY", "let q = Sums{ input: a, sum: a }; return a;"), "source-struct-value")
 refuse(USE.replace("BODY", "let v = [p]; return a;"), "source-struct-value")
 refuse(USE.replace("BODY", "let q: F::Element = p; return a;"), "source-annotation-type")
 # Struct identity is nominal, including static arguments.
-OTHER = STRUCTS + "struct Other<F: domain Field>(x: F::Element, y: F::Element);"
-refuse(USE.replace("BODY", "let q = Other(x = a, y = a); let b = Use(q, a); return b;"),
+OTHER = STRUCTS + "struct Other<F: domain Field> { x: F::Element, y: F::Element }"
+refuse(USE.replace("BODY", "let q = Other{ x: a, y: a }; let b = Use(q, a); return b;"),
        "source-struct-mismatch", OTHER)
 refuse("fn Bad<F: Field>(q: Other<F>) -> Pair<F> { return q; }", "source-annotation-type", OTHER)
-refuse(USE.replace("BODY", "let q = Other(x = a, y = a); let s = Sums(input = q, sum = a); return a;"),
+refuse(USE.replace("BODY", "let q = Other{ x: a, y: a }; let s = Sums{ input: q, sum: a }; return a;"),
        "source-struct-mismatch", OTHER)
 refuse("""fn Two<F: Field, E: Field>(p: Pair<F>, a: E::Element) -> E::Element {
-    let q = Pair(x = a, y = a); let s = Sums::<E>(input = p, sum = a); return a; }""",
+    let q = Pair{ x: a, y: a }; let s = Sums::<E>{ input: p, sum: a }; return a; }""",
        "source-annotation-type")
 # Bindings are immutable, and a message carries one explicit value.
-refuse(USE.replace("BODY", "let mut q = Pair(x = a, y = a); return a;"), "source-struct-mutable")
+refuse(USE.replace("BODY", "let mut q = Pair{ x: a, y: a }; return a;"), "source-struct-mutable")
 refuse(USE.replace("BODY", "let mut b = a; b = p; return a;"), "source-struct-mutable")
-refuse(USE.replace("BODY", "let q = Pair(x = a, y = a); let a.z = a; let p = q; return a;"),
-       "source-value-duplicate")
-refuse(USE.replace("BODY", "let p.x = a; return a;"), "source-value-duplicate")
+refuse(USE.replace("BODY", "let q = Pair{ x: a, y: a }; let a.z = a; let p = q; return a;"),
+       "source-syntax")
+refuse(USE.replace("BODY", "let p.x = a; return a;"), "source-syntax")
 refuse("""
   protocol Send {
     roles (P, V);
@@ -337,7 +348,7 @@ COMBINE = """
 
 
 def operators(body):
-    return "module { use zkc::algebra; use zkc::curve;" + COMBINE.replace("BODY", body) + "}"
+    return "use zkc::algebra; use zkc::curve;" + COMBINE.replace("BODY", body)
 
 
 with_operators = operators("""
@@ -361,7 +372,7 @@ SPELLINGS = [
     ("*", "zkc::algebra::index_mul(i, j)", "i", "j"),
 ]
 UNARY = [("zkc::algebra::neg(x)", "x"), ("zkc::curve::neg(p)", "p")]
-EVERY = """module {
+EVERY = """
   use zkc::curve;
   use zkc::algebra::{Vector};
   fn Every<G: ScalarAction>(x: G::Scalar::Element, y: G::Scalar::Element, p: G::Element,
@@ -370,7 +381,7 @@ EVERY = """module {
     BODY
     return i;
   }
-}"""
+"""
 infix = "\n".join(f"    let r{n} = {a} {symbol} {b};"
                   for n, (symbol, _, a, b) in enumerate(SPELLINGS))
 infix += "\n" + "\n".join(f"    let n{n} = -{a};" for n, (_, a) in enumerate(UNARY))
@@ -396,24 +407,25 @@ run("protocol-source", operators("let d = alpha * base;"), "source-operator-unre
 run("protocol-source", operators("let d = alpha - base;"), "source-operator-unresolved")
 hadamard = EVERY.replace("BODY", "let r = v * w;")
 run("protocol-source", hadamard, "source-operator-unresolved")
-mixed = """module {
+mixed = """
   use zkc::curve;
   use zkc::algebra;
   fn Mixed<G: ScalarAction, H: ScalarAction>(p: G::Element, k: H::Scalar::Element)
       -> G::Element { let d = p * k; return d; }
-}"""
+"""
 run("protocol-source", mixed, "source-type-mismatch")
-error = run("protocol-source", operators("let d = alpha-base;"), "source-name-unresolved")
-assert "alpha - base" in error, error
+# Subtraction does not depend on spacing, in both acceptance and refusal.
+run("protocol-source", operators("let d = alpha-base;"), "source-operator-unresolved")
+assert common(operators("let d = alpha * (r-s);")) == common(operators("let d = alpha * (r - s);"))
 # No source declares an operator, and none reaches portable source.
-run("protocol-source", "module { use zkc::algebra; operator + (a, b) = zkc::algebra::add(a, b); }", "source-syntax")
+run("protocol-source", " use zkc::algebra; operator + (a, b) = zkc::algebra::add(a, b); ", "source-syntax")
 assert "operator" not in json.dumps(common(with_operators))
-run("protocol-source", "module { use zkc::algebra;" + STRUCTS + """
+run("protocol-source", "use zkc::algebra;" + STRUCTS + """
   fn Bad<F: Field>(p: Pair<F>, a: F::Element) -> F::Element { let d = a + p; return d; }
-}""", "source-operator-unresolved")
+""", "source-operator-unresolved")
 
 # In a closed module an operator is the qualified call, with its default binding.
-CLOSED = """module {
+CLOSED = """
   use zkc::curve;
   fn Check(base: "bls12-381.g1"::Element, image: "bls12-381.g1"::Element,
       c: "bls12-381.fr"::Element, z: "bls12-381.fr"::Element) -> "bls12-381.g1"::Element {
@@ -421,20 +433,20 @@ CLOSED = """module {
     [sum] let sum = SUM;
     return sum;
   }
-}"""
+"""
 same(CLOSED.replace("LEFT", "base * z").replace("SUM", "left + image * c"),
      CLOSED.replace("LEFT", "zkc::curve::scale(base, z)").replace(
          "SUM", "zkc::curve::add(left, zkc::curve::scale(image, c))"))
 
 # --- Checked structs --------------------------------------------------------
 CHECKED = """
-  checked struct Bound<F: domain Field>(
+  checked struct Bound<F: domain Field> {
     assignment: Vector<F::Element>, statement: Vector<F::Element>
-  ) constructors (Bind);
+  } constructors(Bind);
   fn Bind<F: Field>(assignment: Vector<F::Element>, statement: Vector<F::Element>)
       -> Bound<F> {
     zkc::core::require(zkc::algebra::index_equal(assignment.len(), statement.len()));
-    let bound = Bound(assignment = assignment, statement = statement);
+    let bound = Bound{ assignment: assignment, statement: statement };
     return bound;
   }
   fn Prove<F: Field>(bound: Bound<F>) -> Vector<F::Element> {
@@ -457,8 +469,8 @@ PROTOCOL = """
   instance run: Run { roles (P = P, V = V); }
   entry main = run;
 """
-checked_source = "module { use zkc::algebra::{Vector}; use zkc::core;" + CHECKED + PROTOCOL + "}"
-checked_expanded = """module {
+checked_source = "use zkc::algebra::{Vector}; use zkc::core;" + CHECKED + PROTOCOL
+checked_expanded = """
   use zkc::algebra::{Vector};
   use zkc::algebra;
   use zkc::core;
@@ -467,25 +479,25 @@ checked_expanded = """module {
     zkc::core::require(zkc::algebra::index_equal(assignment.len(), statement.len()));
     return (assignment, statement);
   }
-  fn Prove<F: Field>(bound.assignment: Vector<F::Element>, bound.statement: Vector<F::Element>)
+  fn Prove<F: Field>(bound_assignment: Vector<F::Element>, bound_statement: Vector<F::Element>)
       -> Vector<F::Element> {
-    let sum = zkc::algebra::vector_add(bound.assignment, bound.statement);
+    let sum = zkc::algebra::vector_add(bound_assignment, bound_statement);
     return sum;
   }
-""" + PROTOCOL.replace("let bound = Binding", "let (bound.assignment, bound.statement) = Binding"
-        ).replace("Proving(bound)", "Proving(bound.assignment, bound.statement)") + "}"
-same(checked_source, checked_expanded)
+""" + PROTOCOL.replace("let bound = Binding", "let (bound_assignment, bound_statement) = Binding"
+        ).replace("Proving(bound)", "Proving(bound_assignment, bound_statement)")
+same(checked_source, checked_expanded, {"bound.assignment": "bound_assignment", "bound.statement": "bound_statement"})
 run("protocol-compile", checked_source)
 
 
 def checked(extra, base=CHECKED):
-    return "module { use zkc::algebra::{Vector}; use zkc::core;" + base + extra + "}"
+    return "use zkc::algebra::{Vector}; use zkc::core;" + base + extra
 
 
 # The value is built only where its checks are written.
 forge = """
   fn Forge<F: Field>(a: Vector<F::Element>) -> Vector<F::Element> {
-    let forged = Bound(assignment = a, statement = a);
+    let forged = Bound{ assignment: a, statement: a };
     let sum = Prove(forged);
     return sum;
   }"""
@@ -503,17 +515,17 @@ run("protocol-source", checked("""
   }"""), "source-struct-value")
 # A struct of the same fields is a different type.
 run("protocol-source", checked("""
-  struct Loose<F: domain Field>(assignment: Vector<F::Element>, statement: Vector<F::Element>);
+  struct Loose<F: domain Field> { assignment: Vector<F::Element>, statement: Vector<F::Element> }
   fn Skip<F: Field>(a: Vector<F::Element>) -> Vector<F::Element> {
-    let loose = Loose(assignment = a, statement = a);
+    let loose = Loose{ assignment: a, statement: a };
     let sum = Prove(loose);
     return sum;
   }"""), "source-struct-mismatch")
 # Fields stay readable, and a plain struct may carry a checked value.
 common(checked("""
-  struct Job<F: domain Field>(bound: Bound<F>, scale: F::Element);
+  struct Job<F: domain Field> { bound: Bound<F>, scale: F::Element }
   fn Pack<F: Field>(bound: Bound<F>, scale: F::Element) -> Job<F> {
-    let job = Job(bound = bound, scale = scale);
+    let job = Job{ bound: bound, scale: scale };
     return job;
   }
   fn Size<F: Field>(job: Job<F>) -> index { let n = job.bound.statement.len(); return n; }
@@ -523,9 +535,9 @@ for constructors in ("Missing", "Prove", "Opaque"):
     run("protocol-source", checked("""
   fn Opaque<F: Field>(a: Vector<F::Element>) -> Bound<F> external;
 """ if constructors == "Opaque" else "", CHECKED.replace(
-        "constructors (Bind)", f"constructors (Bind, {constructors})")),
+        "constructors(Bind)", f"constructors(Bind, {constructors})")),
         "source-name-unresolved" if constructors == "Missing" else "source-checked-constructor")
-run("protocol-source", "module { checked struct Bare(x: bool); }", "source-syntax")
+run("protocol-source", " checked struct Bare { x: bool } ", "source-syntax")
 # A value would arrive without its constructor from a bodiless function or the host.
 run("protocol-source", checked("""
   fn Opaque<F: Field>(a: Vector<F::Element>) -> Bound<F> external;
@@ -547,7 +559,7 @@ entry = """
 run("protocol-source", checked(hosted.replace("INPUT", 'Bound<"koala-bear">') + entry),
     "source-checked-input")
 run("protocol-source", checked("""
-  struct Job<F: domain Field>(bound: Bound<F>, scale: F::Element);
+  struct Job<F: domain Field> { bound: Bound<F>, scale: F::Element }
   fn Unpack<F: Field>(job: Job<F>) -> Vector<F::Element> { let s = Prove(job.bound); return s; }
   configure Proving = Unpack(F = "koala-bear");
 """ + hosted.replace("INPUT", 'Job<"koala-bear">').replace(
@@ -588,8 +600,12 @@ def materialized(source):
 
 
 readable = examples / "groth16.pir"
-assert materialized(readable) == materialized(
-    ROOT / "tests/fixtures/groth16-expanded.pir")
+# The expanded fixture uses strict scalar binders; compare its deliberate
+# alpha-renaming while retaining every operation, site, type and origin.
+flat_names = ('bound.assignment', 'bound.private_assignment', 'bound.statement', 'key.a_query', 'key.alpha', 'key.b_g1_query', 'key.b_g2_query', 'key.beta_g1', 'key.beta_g2', 'key.delta_g1', 'key.delta_g2', 'key.h_query', 'key.private_query', 'proof.a', 'proof.b', 'proof.c', 'qap.coset', 'qap.domain_size', 'qap.matrix_a', 'qap.matrix_b', 'relation.a', 'relation.b', 'relation.c', 'satisfied.bound.assignment', 'satisfied.bound.private_assignment', 'satisfied.bound.statement', 'vk.alpha', 'vk.beta', 'vk.delta', 'vk.gamma', 'vk.input_query')
+assert rename_flat_values(json.loads(materialized(readable)),
+                          {name: name.replace(".", "_") for name in flat_names}) == json.loads(
+    materialized(ROOT / "tests/fixtures/groth16-expanded.pir"))
 text = readable.read_text()
 for form in ("bundle ", " + ", "struct ", "constructors (BindAssignment)"):
     assert form in text, form

@@ -1,10 +1,12 @@
 #include "../Syntax/Tree.h"
+#include "zkc/Frontend/Input.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Source/Codec.h"
+#include "llvm/Support/FormatVariadic.h"
 using namespace llvm;
 namespace zkc::frontend {
 Error checkProtocolSyntax(StringRef text, StringRef filename) {
-  if (text.ltrim().starts_with("[")) {
+  if (isCommonDocument(classifyDocument(text))) {
     auto document = parseProtocolDocument(text, filename);
     return document ? Error::success() : document.takeError();
   }
@@ -14,14 +16,16 @@ Error checkProtocolSyntax(StringRef text, StringRef filename) {
 
 Expected<json::Value> inspectProtocolSyntax(StringRef text,
                                             StringRef filename) {
-  if (text.ltrim().starts_with("[")) {
+  const auto form = classifyDocument(text);
+  if (isCommonDocument(form)) {
     auto document = parseProtocolDocument(text, filename);
     if (!document)
       return document.takeError();
-    return json::Value(
-        json::Object{{"kind", "syntax-inspection"},
-                     {"format", "common-source-json"},
-                     {"content", source::encode(document->root())}});
+    return json::Value(json::Object{
+        {"kind", "syntax-inspection"},
+        {"format", form == SourceForm::CommonJSON ? "common-source-json"
+                                                  : "common-source-text"},
+        {"content", source::encode(document->root())}});
   }
   auto content = syntax::parse(text, filename);
   if (!content)
@@ -42,32 +46,101 @@ json::Array inspectAssignments(const source::Assignments &pairs) {
     result.push_back(json::Object{{"name", name}, {"value", value}});
   return result;
 }
-json::Array inspectAssignments(const source::ParameterBindings &pairs) {
+// Presentation spellings preserve source path separators and exact identities.
+// They never serialize unresolved syntax into the common symbol namespace.
+std::string written(const syntax::Reference &reference) {
+  return syntax::spelling(reference.path);
+}
+json::Array inspectReferences(const std::vector<syntax::Reference> &references,
+                              StringRef separator = "::") {
   json::Array result;
-  for (const auto &[name, value] : pairs) {
-    if (const auto *constant = std::get_if<std::string>(&value))
-      result.push_back(json::Object{{"name", name}, {"value", *constant}});
-    else {
-      const auto &ingress = std::get<source::FamilyIngress>(value);
-      json::Array selectors;
-      for (const auto &s : ingress.selectors)
-        selectors.push_back(
-            json::Object{{"role", s.role},
-                         {"function", s.function},
-                         {"arguments", inspectNames(s.arguments)}});
-      result.push_back(json::Object{
-          {"name", name},
-          {"ingress", json::Object{{"bound", ingress.bound},
-                                   {"selectors", std::move(selectors)}}}});
+  for (const auto &reference : references)
+    result.push_back(llvm::join(reference.path.segments, separator));
+  return result;
+}
+json::Array inspectPlaces(const syntax::Places &places) {
+  json::Array result;
+  for (const auto &place : places)
+    result.push_back(syntax::spelling(place));
+  return result;
+}
+json::Array inspectPlaces(const syntax::PlaceAssignments &pairs) {
+  json::Array result;
+  for (const auto &[name, place] : pairs)
+    result.push_back(
+        json::Object{{"name", name}, {"value", syntax::spelling(place)}});
+  return result;
+}
+json::Array inspectAtoms(const std::vector<syntax::Atom> &atoms) {
+  json::Array result;
+  for (const auto &atom : atoms)
+    result.push_back(atom.value);
+  return result;
+}
+std::string written(const syntax::StaticTerm &term) {
+  std::string result = term.root.kind == syntax::Atom::Kind::String
+                           ? formatv("{0}", json::Value(term.root.value)).str()
+                           : term.root.value;
+  for (const auto &member : term.members)
+    result += "::" + member;
+  if (!term.arguments.empty()) {
+    result += "<";
+    for (const auto &argument : term.arguments) {
+      if (result.back() != '<')
+        result += ",";
+      result += written(argument);
     }
+    result += ">";
   }
   return result;
+}
+json::Array inspectTerms(const syntax::StaticTerms &terms) {
+  json::Array result;
+  for (const auto &term : terms)
+    result.push_back(written(term));
+  return result;
+}
+json::Array inspectTerms(const syntax::StaticAssignments &pairs) {
+  json::Array result;
+  for (const auto &[name, term] : pairs)
+    result.push_back(json::Object{{"name", name}, {"value", written(term)}});
+  return result;
+}
+json::Value inspectStatics(const std::optional<syntax::StaticTerms> &terms) {
+  // Null distinguishes omission from an explicitly authored empty ::<>.
+  return terms ? json::Value(inspectTerms(*terms)) : json::Value(nullptr);
 }
 json::Object located(json::Object object, const source::Node &node) {
   if (node.location)
     object["span"] = json::Object{{"offset", int64_t(node.location->offset)},
                                   {"length", int64_t(node.location->length)}};
   return object;
+}
+json::Array
+inspectRequirements(const std::vector<syntax::Requirement> &requirements) {
+  json::Array result;
+  for (const auto &requirement : requirements)
+    result.push_back(located(
+        json::Object{
+            {"predicate",
+             requirement.predicate
+                 ? llvm::join(requirement.predicate->path.segments, "::")
+                 : std::string("=")},
+            {"arguments", inspectTerms(requirement.arguments)}},
+        requirement));
+  return result;
+}
+json::Array
+inspectParameters(const std::vector<syntax::StaticParameter> &parameters) {
+  json::Array result;
+  for (const auto &p : parameters)
+    result.push_back(
+        located(json::Object{{"name", p.name},
+                             {"sort", p.sort ? json::Value(*p.sort)
+                                             : json::Value(nullptr)},
+                             {"bounds", inspectReferences(p.bounds, "::")}},
+                p));
+  return result;
 }
 json::Object inspectType(const syntax::Type &type) {
   json::Array arguments;
@@ -76,9 +149,13 @@ json::Object inspectType(const syntax::Type &type) {
   return located(
       json::Object{{"kind", type.product ? "product-type" : "type-expression"},
                    {"name", type.name},
+                   {"rootKind", type.kind == syntax::Atom::Kind::String
+                                    ? "identity"
+                                : type.natural() ? "natural"
+                                                 : "reference"},
                    {"arguments", std::move(arguments)},
                    {"members", inspectNames(type.members)},
-                   {"natural", type.natural}},
+                   {"natural", type.natural()}},
       type);
 }
 json::Array inspectTypes(const std::vector<syntax::Type> &types) {
@@ -89,11 +166,11 @@ json::Array inspectTypes(const std::vector<syntax::Type> &types) {
 }
 json::Array inspectBody(const syntax::Body &body);
 json::Object inspectExpression(const syntax::Expression &expression) {
+  using K = syntax::Expression::Kind;
   json::Array operands;
   for (const auto &operand : expression.operands)
     operands.push_back(inspectExpression(operand));
-  auto kind = [](syntax::Expression::Kind kind) -> StringRef {
-    using K = syntax::Expression::Kind;
+  auto kind = [](K kind) -> StringRef {
     switch (kind) {
     case K::Name:
       return "name";
@@ -107,6 +184,10 @@ json::Object inspectExpression(const syntax::Expression &expression) {
       return "vector";
     case K::Get:
       return "get";
+    case K::Field:
+      return "field";
+    case K::TupleField:
+      return "tuple-field";
     case K::Length:
       return "length";
     case K::Struct:
@@ -122,24 +203,25 @@ json::Object inspectExpression(const syntax::Expression &expression) {
     }
     llvm_unreachable("unhandled expression kind");
   };
-  json::Object result{{"kind", kind(expression.kind)},
-                      {"name", expression.name},
-                      {"qualified", expression.qualified},
-                      {"argumentNames", inspectNames(expression.argumentNames)},
-                      {"operands", std::move(operands)},
-                      {"attributes", inspectNames(expression.attributes)}};
-  if (expression.kind == syntax::Expression::Kind::Struct)
+  const bool reference = expression.kind == K::Name ||
+                         expression.kind == K::Call ||
+                         expression.kind == K::Struct;
+  json::Object result{
+      {"kind", kind(expression.kind)},
+      {"name", reference ? written(expression.reference) : expression.name},
+      {"qualified", reference && expression.reference.path.segments.size() > 1},
+      {"argumentNames", inspectNames(expression.argumentNames)},
+      {"operands", std::move(operands)},
+      {"attributes", inspectAtoms(expression.attributes)}};
+  if (expression.kind == K::Struct)
     result["fields"] = inspectNames(expression.fields);
   if (expression.traversal)
-    result["traversal"] =
-        json::Object{{"state", expression.traversal->state},
-                     {"element", expression.traversal->element},
-                     {"captures", inspectNames(expression.traversal->captures)},
-                     {"body", inspectBody(expression.traversal->body)}};
-  result["staticArguments"] =
-      expression.staticArguments
-          ? json::Value(inspectNames(*expression.staticArguments))
-          : json::Value(nullptr);
+    result["traversal"] = json::Object{
+        {"state", expression.traversal->state},
+        {"element", expression.traversal->element},
+        {"captures", inspectPlaces(expression.traversal->captures)},
+        {"body", inspectBody(expression.traversal->body)}};
+  result["staticArguments"] = inspectStatics(expression.staticArguments);
   return located(std::move(result), expression);
 }
 json::Array inspectBody(const syntax::Body &body) {
@@ -150,26 +232,22 @@ json::Array inspectBody(const syntax::Body &body) {
         [&](const auto &value) {
           using T = std::decay_t<decltype(value)>;
           if constexpr (std::is_same_v<T, syntax::Call>) {
-            object["kind"] =
-                value.isOperator ? "unresolved-operator" : "unresolved-call";
-            object["callee"] = value.callee;
+            object["kind"] = value.operatorSymbol ? "unresolved-operator"
+                                                  : "unresolved-call";
+            object["callee"] = value.operatorSymbol ? *value.operatorSymbol
+                                                    : written(value.callee);
             object["destructure"] = value.destructure;
             object["argumentNames"] = inspectNames(value.argumentNames);
-            object["qualified"] = value.qualified;
-            // Null distinguishes omission from an explicitly authored empty
-            // ::<>.
-            object["staticArguments"] =
-                value.staticArguments
-                    ? json::Value(inspectNames(*value.staticArguments))
-                    : json::Value(nullptr);
+            object["qualified"] = value.callee.path.segments.size() > 1;
+            object["staticArguments"] = inspectStatics(value.staticArguments);
             object["annotation"] =
                 value.annotation ? json::Value(inspectTypes(*value.annotation))
                                  : json::Value(nullptr);
             object["role"] =
                 value.role ? json::Value(*value.role) : json::Value(nullptr);
-            object["inputs"] = inspectNames(value.inputs);
+            object["inputs"] = inspectPlaces(value.inputs);
             object["outputs"] = inspectNames(value.outputs);
-            object["attributes"] = inspectNames(value.attributes);
+            object["attributes"] = inspectAtoms(value.attributes);
             if (value.location)
               object["callSpan"] =
                   json::Object{{"offset", int64_t(value.location->offset)},
@@ -179,19 +257,18 @@ json::Array inspectBody(const syntax::Body &body) {
             object["outputs"] = inspectNames(value.outputs);
             object["destructure"] = value.destructure;
             object["mutable"] = value.mutableBinding;
-            object["assignment"] = value.assignment;
+            object["assignment"] =
+                value.assignment
+                    ? json::Value(syntax::spelling(*value.assignment))
+                    : json::Value(nullptr);
             object["expression"] = inspectExpression(value.expression);
-            if (value.annotation) {
-              json::Array types;
-              for (const auto &type : *value.annotation)
-                types.push_back(inspectType(type));
-              object["annotation"] = std::move(types);
-            }
+            if (value.annotation)
+              object["annotation"] = inspectTypes(*value.annotation);
           } else if constexpr (std::is_same_v<T, syntax::Conditional>) {
             object["kind"] = "if";
             object["condition"] = inspectExpression(value.condition);
             object["explicitRegion"] = value.explicitRegion;
-            object["captures"] = inspectNames(value.captures);
+            object["captures"] = inspectPlaces(value.captures);
             object["outputs"] = inspectNames(value.outputs);
             object["then"] = inspectBody(value.thenBody);
             object["else"] = inspectBody(value.elseBody);
@@ -201,14 +278,14 @@ json::Array inspectBody(const syntax::Body &body) {
             object["lower"] = inspectExpression(value.lower);
             object["upper"] = inspectExpression(value.upper);
             object["explicitRegion"] = value.explicitRegion;
-            object["carried"] = inspectAssignments(value.carried);
-            object["captures"] = inspectNames(value.captures);
+            object["carried"] = inspectPlaces(value.carried);
+            object["captures"] = inspectPlaces(value.captures);
             object["outputs"] = inspectNames(value.outputs);
             object["body"] = inspectBody(value.body);
           } else if constexpr (std::is_same_v<T, syntax::Match>) {
             object["kind"] = "match";
-            object["input"] = value.input;
-            object["captures"] = inspectNames(value.captures);
+            object["input"] = syntax::spelling(value.input);
+            object["captures"] = inspectPlaces(value.captures);
             object["outputs"] = inspectNames(value.outputs);
             json::Array arms;
             for (const auto &arm : value.arms)
@@ -221,26 +298,26 @@ json::Array inspectBody(const syntax::Body &body) {
           } else if constexpr (std::is_same_v<T, syntax::ArrayTraversal>) {
             object["kind"] = "array_traversal";
             object["element"] = value.element;
-            object["input"] = value.input;
-            object["carried"] = inspectAssignments(value.carried);
-            object["captures"] = inspectNames(value.captures);
+            object["input"] = syntax::spelling(value.input);
+            object["carried"] = inspectPlaces(value.carried);
+            object["captures"] = inspectPlaces(value.captures);
             object["outputs"] = inspectNames(value.outputs);
             object["body"] = inspectBody(value.body);
           } else if constexpr (std::is_same_v<T, syntax::Invocation>) {
             object["kind"] = "invoke";
             object["callee"] = value.callee;
-            object["inputs"] = inspectNames(value.inputs);
+            object["inputs"] = inspectPlaces(value.inputs);
             object["outputs"] = inspectNames(value.outputs);
             object["resultNames"] = inspectNames(value.resultNames);
           } else if constexpr (std::is_same_v<T, syntax::Finish>) {
             object["kind"] = "finish";
-            object["ports"] = inspectAssignments(value.values);
-          } else if constexpr (std::is_same_v<T, source::Message>) {
+            object["ports"] = inspectPlaces(value.values);
+          } else if constexpr (std::is_same_v<T, syntax::Message>) {
             object["kind"] = "message";
             object["schema"] = value.schema;
             object["sender"] = value.sender;
             object["receiver"] = value.receiver;
-            object["input"] = value.input;
+            object["input"] = syntax::spelling(value.input);
             object["output"] = value.output;
           } else if constexpr (std::is_same_v<T, syntax::Placement>) {
             object["kind"] = "placement";
@@ -254,11 +331,11 @@ json::Array inspectBody(const syntax::Body &body) {
           } else if constexpr (std::is_same_v<T, syntax::Exit>) {
             object["kind"] = "return";
             object["expression"] = inspectExpression(value.expression);
-          } else if constexpr (std::is_same_v<T, source::Return> ||
-                               std::is_same_v<T, source::Yield>) {
+          } else if constexpr (std::is_same_v<T, syntax::Return> ||
+                               std::is_same_v<T, syntax::Yield>) {
             object["kind"] =
-                std::is_same_v<T, source::Return> ? "return" : "yield";
-            object["values"] = inspectNames(value.values);
+                std::is_same_v<T, syntax::Return> ? "return" : "yield";
+            object["values"] = inspectPlaces(value.values);
           } else if constexpr (std::is_same_v<T, source::Stop>) {
             object["kind"] = "stop";
             object["role"] = value.role;
@@ -266,12 +343,12 @@ json::Array inspectBody(const syntax::Body &body) {
           } else if constexpr (std::is_same_v<T, syntax::Loop>) {
             object["kind"] = "loop";
             object["count"] = json::Object{
-                {"kind", value.count.kind == source::LoopCount::Kind::Constant
+                {"kind", value.count.kind == syntax::Atom::Kind::Number
                              ? "constant"
                              : "parameter"},
                 {"value", value.count.value}};
-            object["carried"] = inspectAssignments(value.carried);
-            object["captures"] = inspectNames(value.captures);
+            object["carried"] = inspectPlaces(value.carried);
+            object["captures"] = inspectPlaces(value.captures);
             object["outputs"] = inspectNames(value.outputs);
             object["body"] = inspectBody(value.body);
           }
@@ -366,16 +443,8 @@ json::Object inspectModule(const syntax::Module &module) {
     libraryInterfaces.push_back(libraryMembers(i));
   for (const auto &c : module.libraryComponents) {
     auto object = libraryMembers(c);
-    object["interface"] = c.interface;
-    json::Array parameters;
-    for (const auto &p : c.parameters)
-      parameters.push_back(
-          located(json::Object{{"name", p.name},
-                               {"sort", p.sort ? json::Value(*p.sort)
-                                               : json::Value(nullptr)},
-                               {"bounds", inspectNames(p.bounds)}},
-                  p));
-    object["parameters"] = std::move(parameters);
+    object["interface"] = written(c.interface);
+    object["parameters"] = inspectParameters(c.parameters);
     libraryComponents.push_back(std::move(object));
   }
   for (const auto &a : module.librarySelections)
@@ -389,7 +458,7 @@ json::Object inspectModule(const syntax::Module &module) {
     for (const auto &a : l.arguments)
       args.push_back(inspectLibraryTerm(a));
     libraryLinks.push_back(located(json::Object{{"name", l.name},
-                                                {"client", l.client},
+                                                {"client", written(l.client)},
                                                 {"arguments", std::move(args)}},
                                    l));
   }
@@ -403,7 +472,7 @@ json::Object inspectModule(const syntax::Module &module) {
     for (const auto &parameter : enumeration.parameters)
       parameters.push_back(
           json::Object{{"name", parameter.name},
-                       {"bounds", inspectNames(parameter.bounds)},
+                       {"bounds", inspectReferences(parameter.bounds, "::")},
                        {"sort", parameter.sort ? json::Value(*parameter.sort)
                                                : json::Value(nullptr)}});
     enums.push_back(
@@ -423,13 +492,17 @@ json::Object inspectModule(const syntax::Module &module) {
     imports.push_back(located(
         json::Object{{"name", r.name}, {"family", r.family}, {"path", r.path}},
         r));
-  for (const auto &v : module.relationViews)
+  for (const auto &v : module.relationViews) {
+    uint32_t height = 0;
+    if (v.height && v.height->kind == syntax::Atom::Kind::Number)
+      StringRef(v.height->value).getAsInteger(10, height);
     views.push_back(located(json::Object{{"name", v.name},
-                                         {"relation", v.relation},
+                                         {"relation", written(v.relation)},
                                          {"kind", v.kind},
                                          {"staging", v.staging},
-                                         {"height", v.height}},
+                                         {"height", int64_t(height)}},
                             v));
+  }
   for (const auto &binding : module.bindings)
     bindings.push_back(located(
         json::Object{
@@ -439,60 +512,36 @@ json::Object inspectModule(const syntax::Module &module) {
             {"implementation", binding.application.implementation}},
         binding));
   for (const auto &structure : module.structs) {
-    json::Array parameters, fields;
-    for (const auto &parameter : structure.parameters)
-      parameters.push_back(located(
-          json::Object{{"name", parameter.name},
-                       {"sort", parameter.sort ? json::Value(*parameter.sort)
-                                               : json::Value(nullptr)},
-                       {"bounds", inspectNames(parameter.bounds)}},
-          parameter));
+    json::Array fields;
     for (const auto &field : structure.fields)
       fields.push_back(json::Object{{"name", field.name},
                                     {"type", inspectType(field.type)}});
     structs.push_back(located(
-        json::Object{{"name", structure.name},
-                     {"checked", structure.checked},
-                     {"parameters", std::move(parameters)},
-                     {"fields", std::move(fields)},
-                     {"constructors", inspectNames(structure.constructors)}},
+        json::Object{
+            {"name", structure.name},
+            {"checked", structure.checked},
+            {"parameters", inspectParameters(structure.parameters)},
+            {"fields", std::move(fields)},
+            {"constructors", inspectReferences(structure.constructors)}},
         structure));
   }
-  for (const auto &bundle : module.bundles) {
-    json::Array requirements;
-    for (const auto &requirement : bundle.requirements)
-      requirements.push_back(located(
-          json::Object{{"predicate", requirement.predicate},
-                       {"arguments", inspectNames(requirement.arguments)}},
-          requirement));
+  for (const auto &bundle : module.bundles)
     bundles.push_back(
         located(json::Object{{"name", bundle.name},
                              {"parameters", inspectNames(bundle.parameters)},
-                             {"requirements", std::move(requirements)}},
+                             {"requirements",
+                              inspectRequirements(bundle.requirements)}},
                 bundle));
-  }
   for (const auto &function : module.functions) {
-    json::Array parameters, requirements, arguments;
-    for (const auto &parameter : function.parameters)
-      parameters.push_back(located(
-          json::Object{{"name", parameter.name},
-                       {"sort", parameter.sort ? json::Value(*parameter.sort)
-                                               : json::Value(nullptr)},
-                       {"bounds", inspectNames(parameter.bounds)}},
-          parameter));
-    for (const auto &requirement : function.requirements)
-      requirements.push_back(located(
-          json::Object{{"predicate", requirement.predicate},
-                       {"arguments", inspectNames(requirement.arguments)}},
-          requirement));
+    json::Array arguments;
     for (const auto &argument : function.arguments)
       arguments.push_back(json::Object{{"name", argument.name},
                                        {"type", inspectType(argument.type)}});
     json::Object object{
         {"kind", function.generic ? "generic-function" : "function"},
         {"name", function.name},
-        {"parameters", std::move(parameters)},
-        {"requirements", std::move(requirements)},
+        {"parameters", inspectParameters(function.parameters)},
+        {"requirements", inspectRequirements(function.requirements)},
         {"arguments", std::move(arguments)},
         {"results", inspectTypes(function.results)},
         {"effects", inspectNames(function.effects)},
@@ -509,20 +558,7 @@ json::Object inspectModule(const syntax::Module &module) {
     functions.push_back(located(std::move(object), function));
   }
   for (const auto &protocol : module.protocols) {
-    json::Array arguments, results, dependencies, staticParameters,
-        requirements;
-    for (const auto &p : protocol.staticParameters)
-      staticParameters.push_back(
-          located(json::Object{{"name", p.name},
-                               {"sort", p.sort ? json::Value(*p.sort)
-                                               : json::Value(nullptr)},
-                               {"bounds", inspectNames(p.bounds)}},
-                  p));
-    for (const auto &r : protocol.requirements)
-      requirements.push_back(
-          located(json::Object{{"predicate", r.predicate},
-                               {"arguments", inspectNames(r.arguments)}},
-                  r));
+    json::Array arguments, results, dependencies;
     for (const auto &argument : protocol.arguments)
       arguments.push_back(json::Object{{"name", argument.name},
                                        {"role", argument.role},
@@ -534,61 +570,79 @@ json::Object inspectModule(const syntax::Module &module) {
     for (const auto &dependency : protocol.dependencies) {
       json::Object object{
           {"name", dependency.name},
-          {"protocol", dependency.protocol},
+          {"protocol", written(dependency.protocol)},
           {"agreements", inspectAssignments(dependency.agreements)}};
-      if (auto it = protocol.dependencyArguments.find(dependency.name);
-          it != protocol.dependencyArguments.end())
-        object["domainArguments"] = inspectAssignments(it->second.arguments);
+      if (dependency.arguments)
+        object["domainArguments"] = inspectTerms(*dependency.arguments);
       dependencies.push_back(located(std::move(object), dependency));
     }
     protocols.push_back(located(
-        json::Object{{"name", protocol.name},
-                     {"generic", protocol.generic},
-                     {"staticParameters", std::move(staticParameters)},
-                     {"requirements", std::move(requirements)},
-                     {"roles", inspectNames(protocol.roles)},
-                     {"parameters", inspectNames(protocol.parameters)},
-                     {"arguments", std::move(arguments)},
-                     {"results", std::move(results)},
-                     {"dependencies", std::move(dependencies)},
-                     {"body", protocol.body
-                                  ? json::Value(inspectBody(*protocol.body))
-                                  : json::Value(nullptr)}},
+        json::Object{
+            {"name", protocol.name},
+            {"generic", protocol.generic},
+            {"staticParameters", inspectParameters(protocol.staticParameters)},
+            {"requirements", inspectRequirements(protocol.requirements)},
+            {"roles", inspectNames(protocol.roles)},
+            {"parameters", inspectNames(protocol.parameters)},
+            {"arguments", std::move(arguments)},
+            {"results", std::move(results)},
+            {"dependencies", std::move(dependencies)},
+            {"body", protocol.body ? json::Value(inspectBody(*protocol.body))
+                                   : json::Value(nullptr)}},
         protocol));
   }
   for (const auto &configuration : module.configurations)
     configurations.push_back(located(
         json::Object{{"name", configuration.name},
-                     {"base", configuration.base},
-                     {"arguments", inspectAssignments(configuration.arguments)},
+                     {"base", written(configuration.base)},
+                     {"arguments", inspectTerms(configuration.arguments)},
                      {"implementations",
                       inspectAssignments(configuration.implementations)}},
         configuration));
   for (const auto &instance : module.instances) {
-    json::Object object{
-        {"name", instance.name},
-        {"protocol", instance.protocol},
-        {"parameters", inspectAssignments(instance.parameters)},
-        {"dependencies", inspectAssignments(instance.dependencies)},
-        {"roles", inspectAssignments(instance.roles)}};
-    auto term = module.instanceProtocolTerms.find(instance.name);
-    if (term != module.instanceProtocolTerms.end() &&
-        !term->second.members.empty())
-      object["protocolPath"] =
-          json::Object{{"root", term->second.root.value},
-                       {"members", inspectNames(term->second.members)}};
+    json::Array parameters, instanceDependencies;
+    for (const auto &[name, parameter] : instance.parameters) {
+      if (!parameter.ingress) {
+        parameters.push_back(
+            json::Object{{"name", name}, {"value", parameter.value.value}});
+        continue;
+      }
+      json::Array selectors;
+      for (const auto &s : *parameter.ingress)
+        selectors.push_back(
+            json::Object{{"role", s.role},
+                         {"function", written(s.function)},
+                         {"arguments", inspectNames(s.arguments)}});
+      parameters.push_back(json::Object{
+          {"name", name},
+          {"ingress", json::Object{{"bound", parameter.value.value},
+                                   {"selectors", std::move(selectors)}}}});
+    }
+    for (const auto &[alias, target] : instance.dependencies)
+      instanceDependencies.push_back(
+          json::Object{{"name", alias}, {"value", written(target)}});
+    const auto &path = instance.protocol.path.segments;
+    json::Object object{{"name", instance.name},
+                        {"protocol", written(instance.protocol)},
+                        {"parameters", std::move(parameters)},
+                        {"dependencies", std::move(instanceDependencies)},
+                        {"roles", inspectAssignments(instance.roles)}};
+    if (path.size() > 1)
+      object["protocolPath"] = json::Object{
+          {"root", path.front()},
+          {"members",
+           inspectNames(source::Names(path.begin() + 1, path.end()))}};
     instances.push_back(located(std::move(object), instance));
   }
   for (const auto &entry : module.entries) {
-    json::Object object{{"name", entry.name}, {"instance", entry.instance}};
-    auto args = module.entryArguments.find(entry.name);
-    if (args != module.entryArguments.end())
-      object["arguments"] = inspectAssignments(args->second.arguments);
+    json::Object object{{"name", entry.name},
+                        {"instance", written(entry.instance)}};
+    if (entry.arguments)
+      object["arguments"] = inspectTerms(*entry.arguments);
     entries.push_back(located(std::move(object), entry));
   }
   return located(
       json::Object{{"kind", "module"},
-                   {"carrier", module.carrier},
                    {"modules", std::move(modules)},
                    {"dependencies", std::move(dependencies)},
                    {"uses", std::move(uses)},

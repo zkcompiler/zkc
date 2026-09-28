@@ -35,7 +35,7 @@ def digest(field, matrix):
 
 
 def source(field, attrs, requirements="requires (Field(F))"):
-    return f'''module {{
+    return f'''
   use zkc::algebra::{{Matrix}};
   use zkc::algebra;
       fn Check<F: domain Field>(m:Matrix<F::Element>) -> (bool) {requirements} {{
@@ -47,7 +47,7 @@ def source(field, attrs, requirements="requires (Field(F))"):
         outputs (P bool); local [call] P: let ok = Concrete(m); return (ok);
       }}
       instance concrete: Main {{roles (P=P);}} entry main = concrete;
-    }}'''
+    '''
 
 
 for field in [*fields, "koala-bear.ext8-binomial3"]:
@@ -132,10 +132,10 @@ for field, view in views:
     with case(f"{field} {view} matrix identity"):
         prime = fields[field]
         dimensions = ["4", "8"] if view == "multilinear" else ["3", "5"]
-        source_path.write_text(f"""module {{
+        source_path.write_text(f"""
           relation Circuit = r1cs("relation.r1cs");
           derive Rows = {view}(Circuit, public_matrices);
-        }}""")
+        """)
         rows = [
             [[(1, 7)], [(3, 11)], [(2, 13)]],
             [[(0, 2)], [(4, 5)], [(2, 17)]],
