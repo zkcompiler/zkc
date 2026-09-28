@@ -1,3 +1,5 @@
+#include "zkc/Mathematical/Codec.h"
+#include "zkc/Mathematical/Registry.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Source/Relations.h"
 #include "zkc/Source/Snapshot.h"
@@ -42,5 +44,32 @@ int main() {
   // The lower-only library must retain exact generated-body validation.
   module.functions[1].body->erase(module.functions[1].body->begin());
   auto rejected = zkc::protocol::admit(module, false);
-  return llvm::toString(std::move(rejected)) != "relation-generated-function";
+  if (llvm::toString(std::move(rejected)) != "relation-generated-function")
+    return 7;
+
+  // The mathematical carrier is available through the same MLIR-free package.
+  auto mathematical =
+      zkc::mathematical::parseValue(R"({"inputs":[1,2],"ok":true})");
+  if (!mathematical) {
+    llvm::consumeError(mathematical.takeError());
+    return 8;
+  }
+  auto bytes = zkc::mathematical::encodeValue(*mathematical);
+  if (!bytes) {
+    llvm::consumeError(bytes.takeError());
+    return 9;
+  }
+  auto restored = zkc::mathematical::decodeValue(*bytes);
+  if (!restored) {
+    llvm::consumeError(restored.takeError());
+    return 10;
+  }
+  zkc::mathematical::TypeShape field{
+      zkc::mathematical::TypeShape::Kind::Nominal, 0, "field", {}, {}};
+  if (auto error =
+          zkc::mathematical::checkInstalledDomainType("bls12-381.fr", field)) {
+    llvm::consumeError(std::move(error));
+    return 11;
+  }
+  return *mathematical != *restored;
 }

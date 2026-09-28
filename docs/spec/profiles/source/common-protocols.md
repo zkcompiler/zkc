@@ -55,6 +55,9 @@ For a current context `Γ` and final result ports `R`, the constructors mean:
 | `ret operands` | Return the actual ordered values at their declared ports |
 | `stop site role reason` | Stop the joint reference with this role/site origin |
 | `localCall site role callee args next` | Execute the stored local body, then bind its result at that role |
+| `pure site role captures body next` | Evaluate the closed total region and bind its immutable results at that role, without a local-service action |
+| `query site role root args next` | Perform one ordered service query against the closed root's current state and bind its reply at that role |
+| `guard site role condition next` | Continue when the role's Boolean condition is true; otherwise stop with rejection at that role/site |
 | `message site schema sender receiver value next` | Send the sender's value, receive independently, then bind the actual received value at the receiver |
 | `invoke site instance args next` | Execute the actual stored protocol and bind its ordered result ports |
 | `repeat site count initial body next` | Retain one body; feed its returned accumulator ports into each succeeding iteration |
@@ -81,6 +84,60 @@ identity or a cryptographic transcript encoding.
 states complete child execution followed by ordered result binding;
 `run_invoke_stopped` retains the stopped child's actual state and events and
 does not execute the parent's normal suffix.
+
+## Inline pure regions
+
+A pure region has explicit typed captures and typed output bindings. Captures
+refer to existing values at its role and are the complete region environment.
+Its operations resolve to positively total logical contracts. Every input,
+intermediate and output type must permit copying and dropping. Its terminal
+yield must match the declared output types and order. No query, message, guard,
+opaque call, release or stop is a pure instruction. The initial executable
+subset uses attribute-free closed operations; broader graph constructors retain
+their separate mathematical admission obligations.
+
+The denotation is ordinary total evaluation, followed by the continuation with
+the resulting values. Replication at available roles uses the same operation
+interpretation. Native allocation, codecs, group kernels and entropy providers
+have separate adequacy and resource premises. Mathematical totality does not
+classify their physical failures as impossible.
+
+Placement and projection retain the inline body. Outlining at realization is
+governed by the [pure-call folding relation](../compiler/mathematical-placement.md#inline-pure-regions-and-outlining),
+which checks the actual introduced helper. An original opaque call cannot be
+treated as pure merely because it has the same signature or name.
+
+## Closed roots and ordered guards
+
+A closed root fixes a service declaration and its permitted roles. It is a
+semantic identity, not a data operand. Every occurrence naming one root accesses
+that root's current state, including occurrences reached through aliased
+capability parameters. Two queries are two ordered occurrences even if their
+arguments and replies agree. Distinct root identities do not by themselves
+establish probabilistic independence.
+
+The located form uses actual module roles and already resolved roots. A query
+must name an admitted service, use an authorized role, and match the service's
+request/reply signature. The initial entropy service has no request operands
+and one immutable scalar reply. Full-field nonce sampling and nonzero-field
+challenge sampling are different declarations and result types. The service
+interpretation supplies its sampling law; admission alone does not prove that
+law or a native implementation's distribution.
+
+Projection retains the root identity table and emits each query only at its
+owner. It preserves occurrence order and binds the actual service reply. The
+root table does not grant access to another role's query result. Native
+realization must relate each root to its actual authenticated state interface,
+thread every successful successor exactly once, and retain the stopped
+post-state after a failed query. Hidden state lookup cannot replace that
+interface obligation.
+
+A guard reads an available Boolean at its owner. It neither returns a Boolean
+result nor requests an arbitrary service reply. False stops before the normal
+suffix; true runs that suffix. Projection erases a foreign guard from an
+independent participant. Any joint cancellation of peers after rejection is a
+separate host policy. Guards cannot occur inside total pure regions or be
+removed by pure-call folding.
 
 ## Runtime boundary
 

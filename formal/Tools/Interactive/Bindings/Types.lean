@@ -117,6 +117,7 @@ def defaultRepresentation (kind identity : String) : String :=
     if kind == "group" then "dalek.ristretto/1" else "dalek.ristretto-vector/1"
   else match kind with
     | "field" => "arkworks.fr/1"
+    | "nonzero_field" => "arkworks.nonzero-fr/1"
     | "matrix" => "arkworks.fr-sparse-coo/1"
     | "vector" => "arkworks.fr-vector/1"
     | "polynomial" => "arkworks.polynomial/1"
@@ -181,7 +182,7 @@ def codec (kind identity : String) : String :=
   else "zkcv." ++ kind ++ "." ++ identity ++ "/1"
 
 def serializableKinds : List String :=
-  ["index", "indices", "field", "matrix", "vector", "polynomial", "table", "point", "round", "bool", "group", "groups", "commitment", "commitments", "proof"]
+  ["index", "indices", "field", "nonzero_field", "matrix", "vector", "polynomial", "table", "point", "round", "bool", "group", "groups", "commitment", "commitments", "proof"]
 
 def staticIdentity (identity : String) : Bool :=
   let domains := [bn254Fr, bn254G1, bn254G2, fr, ristrettoScalar, koalaBear, koalaBearExt8, g1, ristrettoGroup, pcs, rowBase, rowExtension, transcriptIdentity, ristrettoTranscript, spongefishTranscript, extensionTranscript]

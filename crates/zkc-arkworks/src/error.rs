@@ -41,6 +41,8 @@ pub enum Error {
     InvalidKey,
     /// OS entropy could not seed the random source.
     EntropyUnavailable,
+    /// The bounded rejection sampler exhausted its candidate budget.
+    SamplingLimit,
 }
 
 impl Error {
@@ -63,6 +65,7 @@ impl Error {
             Self::KeyMismatch => "key-mismatch",
             Self::InvalidKey => "invalid-key",
             Self::EntropyUnavailable => "entropy-unavailable",
+            Self::SamplingLimit => "sampling-limit",
         }
     }
 }

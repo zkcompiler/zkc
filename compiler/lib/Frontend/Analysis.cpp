@@ -99,9 +99,13 @@ Analysis analyzeProject(const ProjectInput &input, WorkLimits limits) {
                                        syntax::Protocol>) {
             auto &stub = model->declarations[id.index];
             stub.generic = d.generic;
-            stub.hasBody = bool(d.body);
-            stub.bodyState = d.body ? Declaration::BodyState::Deferred
-                                    : Declaration::BodyState::External;
+            if constexpr (std::is_same_v<std::decay_t<decltype(d)>,
+                                         syntax::Protocol>)
+              stub.hasBody = bool(d.instructions());
+            else
+              stub.hasBody = bool(d.body);
+            stub.bodyState = stub.hasBody ? Declaration::BodyState::Deferred
+                                          : Declaration::BodyState::External;
           }
         }
       });
@@ -171,9 +175,9 @@ Analysis analyzeProject(const ProjectInput &input, WorkLimits limits) {
     recordFailure(staged.takeError());
     return failure();
   }
-  auto checked = semantics::checkStaged(content, *staged, linked,
-                                        retainedLibraries, resolved.context,
-                                        text, filename, resolutionComplete);
+  auto checked = semantics::checkStaged(
+      content, *staged, linked, retainedLibraries, resolved.context, text,
+      filename, resolutionComplete, budget);
   if (auto *partial = std::get_if<std::unique_ptr<model::Module>>(&checked))
     return failure(std::move(*partial));
   auto source = std::get<model::CheckedSource>(std::move(checked));

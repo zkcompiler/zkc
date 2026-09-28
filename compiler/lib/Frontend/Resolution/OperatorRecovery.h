@@ -371,7 +371,9 @@ public:
     for (const auto &f : module.functions)
       function(f.body, f.arguments, sorts(f.parameters));
     for (const auto &p : module.protocols)
-      function(p.body, p.arguments, sorts(p.staticParameters));
+      if (const auto *ordinary =
+              std::get_if<std::optional<syntax::Body>>(&p.body))
+        function(*ordinary, p.arguments, sorts(p.staticParameters));
     for (const auto &c : module.libraryComponents)
       for (const auto &f : c.functions) {
         auto scope = sorts(c.parameters);

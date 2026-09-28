@@ -53,6 +53,7 @@ TOOLS = {
     "service_optimizer": ("zkc-service-opt", "ZKC_CTEST_SERVICE_OPTIMIZER", "examples/service"),
     "requirements_test": ("zkc-requirements-test", "ZKC_CTEST_REQUIREMENTS_TEST", "test"),
     "construction_test": ("zkc-construction-test", "ZKC_CTEST_CONSTRUCTION_TEST", "test"),
+    "mathematical_codec": ("zkc-mathematical_codec-test", "ZKC_CTEST_MATHEMATICAL_CODEC", "test"),
 }
 
 

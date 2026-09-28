@@ -21,6 +21,7 @@ pub(super) fn field_type(kind: Type, field: Identity) -> Result<LogicalType> {
     let identity = match kind {
         Type::Bool | Type::Index | Type::Indices => Identity::None,
         Type::Field
+        | Type::NonzeroField
         | Type::Matrix
         | Type::Vector
         | Type::Polynomial

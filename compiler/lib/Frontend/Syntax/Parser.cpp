@@ -365,11 +365,16 @@ class Parser {
   }
   std::vector<syntax::OwnedParameter> ownedArguments() {
     return list("(", ")", [&] {
-      auto role = name();
+      source::Names availability;
+      std::string role;
+      if (token().is("("))
+        availability = names();
+      else
+        role = name();
       auto argument = name();
       expect(":");
       return syntax::OwnedParameter{std::move(argument), std::move(role),
-                                    type()};
+                                    type(), std::move(availability)};
     });
   }
   std::vector<syntax::Type> results() { return {type()}; }
@@ -743,13 +748,19 @@ class Parser {
   }
   std::vector<syntax::OwnedResult> ownedResults() {
     return list("(", ")", [&] {
-      auto role = name();
+      source::Names availability;
+      std::string role;
+      if (token().is("("))
+        availability = names();
+      else
+        role = name();
       std::string port;
       if (nextToken().is(":")) {
         port = name();
         expect(":");
       }
-      return syntax::OwnedResult{std::move(role), type(), std::move(port)};
+      return syntax::OwnedResult{std::move(role), type(), std::move(port),
+                                 std::move(availability)};
     });
   }
   std::vector<syntax::Dependency> dependencies() {
@@ -766,9 +777,13 @@ class Parser {
       return record(std::move(result), start);
     });
   }
-  syntax::Instruction instruction(bool local, unsigned depth) {
+  syntax::Instruction instruction(bool local, unsigned depth,
+                                  bool mathematical = false) {
     size_t start = token().offset;
     syntax::Instruction result;
+    if (mathematical && !token().is("message") && !token().is("query") &&
+        !token().is("guard") && !token().is("return") && !token().is("stop"))
+      return localInstruction(depth);
     if (!local && eat("let")) {
       result.site = site();
       result.explicitSite = !anonymousSites.back();
@@ -856,6 +871,20 @@ class Parser {
       message.output = name();
       expect(")");
       result.value = std::move(message);
+    } else if (tag == "query" && mathematical) {
+      syntax::Query query;
+      query.role = name();
+      query.root = name();
+      expect("->");
+      query.outputs = names();
+      result.value = std::move(query);
+    } else if (tag == "guard" && mathematical) {
+      syntax::Guard guard;
+      guard.role = name();
+      expect("(");
+      guard.condition = place();
+      expect(")");
+      result.value = std::move(guard);
     } else if (tag == "invoke") {
       syntax::Invocation call;
       call.callee = name();
@@ -899,7 +928,7 @@ class Parser {
     expect(";");
     return record(std::move(result), start);
   }
-  syntax::Body body(bool local, unsigned depth = 0) {
+  syntax::Body body(bool local, unsigned depth = 0, bool mathematical = false) {
     syntax::Body result;
     if (depth == 0) {
       explicitSites.clear();
@@ -914,7 +943,7 @@ class Parser {
         fail("source-syntax", "expected '}' before end of file");
         break;
       }
-      result.push_back(instruction(local, depth));
+      result.push_back(instruction(local, depth, mathematical));
       if (result.size() > 32768)
         fail("source-limit", "body exceeds 32768 instructions");
     }
@@ -1056,8 +1085,9 @@ class Parser {
     }
     module.functions.push_back(record(std::move(result), start));
   }
-  syntax::Protocol protocol(size_t start) {
+  syntax::Protocol protocol(size_t start, bool mathematical = false) {
     syntax::Protocol result;
+    syntax::Protocol::MathematicalBody graph;
     result.name = name();
     result.generic = token().is("<");
     if (result.generic)
@@ -1073,7 +1103,8 @@ class Parser {
         break;
       StringRef key = token().spelling;
       if (key != "roles" && key != "parameters" && key != "inputs" &&
-          key != "outputs" && key != "dependencies")
+          key != "outputs" && key != "dependencies" &&
+          !(mathematical && key == "roots"))
         break;
       if (!headers.insert(key.str()).second)
         fail("source-duplicate", "duplicate protocol clause '" + key + "'");
@@ -1086,6 +1117,17 @@ class Parser {
         result.arguments = ownedArguments();
       else if (key == "outputs")
         result.results = ownedResults();
+      else if (key == "roots")
+        graph.roots = list("(", ")", [&] {
+          size_t rootStart = token().offset;
+          syntax::Protocol::Root root;
+          root.name = name();
+          expect("=");
+          root.service = reference();
+          expect("owners");
+          root.owners = names();
+          return record(std::move(root), rootStart);
+        });
       else
         result.dependencies = dependencies();
       expect(";");
@@ -1093,10 +1135,16 @@ class Parser {
     if (!headers.count("roles"))
       fail("source-syntax", "protocol requires an explicit roles clause");
     if (eat("external")) {
+      if (mathematical)
+        fail("source-mathematical-body",
+             "mathematical protocols require a body");
       expect(";");
       expect("}");
+    } else if (mathematical) {
+      graph.instructions = body(false, 0, true);
+      result.body = std::move(graph);
     } else
-      result.body = body(false);
+      result.body = std::optional<syntax::Body>(body(false));
     return record(std::move(result), start);
   }
   syntax::Instance instance(size_t start) {
@@ -1575,6 +1623,9 @@ class Parser {
       } else if (tag == "fn") {
         function(declaration, start);
         declaration.functions.back().operatorHook = std::move(operatorHook);
+      } else if (tag == "mathematical") {
+        expect("protocol");
+        declaration.protocols.push_back(protocol(start, true));
       } else if (tag == "protocol")
         declaration.protocols.push_back(protocol(start));
       else if (tag == "instance")

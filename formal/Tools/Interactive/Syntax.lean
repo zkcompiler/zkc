@@ -43,6 +43,10 @@ inductive Count where
 inductive Instruction where
   | op (site kernel : Name) (attributes inputs outputs : List String)
   | localCall (site owner function : Name) (inputs outputs : List Name)
+  | pureRegion (site owner : Name) (captures : List (Name × Ty))
+      (body : List Instruction) (outputs : List (Name × Ty))
+  | query (site owner root : Name) (inputs outputs : List Name)
+  | guard (site owner condition : Name)
   | message (site schema sender receiver input output : Name)
   | send (site schema peer input : Name)
   | receive (site schema peer output : Name) (ty : Ty)
@@ -69,6 +73,14 @@ structure Function where
   results : List Ty
   body : Option (List Instruction)
   deriving BEq, Repr
+
+/-- Adapter for executing/checking an admitted pure body with the shared local
+SSA machinery. This constructs the actual body; it performs no service lookup
+and does not identify an open local-call action with mathematical purity. -/
+def pureFunction (name : Name) (captures : List (Name × Ty))
+    (body : List Instruction) (outputs : List (Name × Ty)) : Function :=
+  ⟨name, captures, outputs.map Prod.snd, some (body.map fun instruction =>
+    match instruction with | .yield values => .ret values | other => other)⟩
 
 structure Dependency where
   name : Name
@@ -124,12 +136,21 @@ inductive Environment where
   | explicit (bindings : List OperationBinding)
   deriving BEq, Repr
 
+/-- Closed semantic identity. State is threaded only by service realization;
+multiple query occurrences naming this root share that state. -/
+structure Root where
+  name : Name
+  service : Name
+  owners : List Name
+  deriving BEq, Repr
+
 structure Source where
   environment : Environment
   functions : List Function
   protocols : List Protocol
   instances : List Instance
   entries : List (Name × Name)
+  roots : List Root := []
   deriving BEq, Repr
 
 structure Participant where
@@ -148,6 +169,7 @@ structure Candidate where
   functions : List Function
   participants : List Participant
   entries : List (Name × List (Name × Name))
+  roots : List Root := []
   deriving BEq, Repr
 
 def ensure (condition : Bool) (code : String) : Result Unit :=
@@ -207,7 +229,7 @@ private def structural (ty : Ty) : Bool := ty.contains '<' || typeKind ty == "va
 
 def serializable (ty : Ty) : Bool :=
   if structural ty then (Logical.permissions ty).isPublic
-  else ["index", "indices", "matrix", "vector", "polynomial", "field", "table", "point", "round", "bool",
+  else ["index", "indices", "matrix", "vector", "polynomial", "field", "nonzero_field", "table", "point", "round", "bool",
     "commitment", "commitments", "proof", "scalar", "group", "groups"].contains (typeKind ty)
 
 /-- Checked local discard is independent of public serialization. -/

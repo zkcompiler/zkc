@@ -124,6 +124,31 @@ class Structure {
               }
               return fields({tag, text(i.site), text(op.role), text(op.callee),
                              names(op.inputs), names(op.outputs)});
+            } else if constexpr (std::is_same_v<T, Query>) {
+              if (generic || (projected && !op.role.empty()))
+                fail("source-model-shape");
+              if (projected)
+                return fields({tag, text(i.site), text(op.root),
+                               names(op.inputs), names(op.outputs)});
+              return fields({tag, text(i.site), text(op.role), text(op.root),
+                             names(op.inputs), names(op.outputs)});
+            } else if constexpr (std::is_same_v<T, Guard>) {
+              if (generic || (projected && !op.role.empty()))
+                fail("source-model-shape");
+              if (projected)
+                return fields({tag, text(i.site), text(op.condition)});
+              return fields(
+                  {tag, text(i.site), text(op.role), text(op.condition)});
+            } else if constexpr (std::is_same_v<T, Pure>) {
+              if (generic || (projected && !op.role.empty()))
+                fail("source-model-shape");
+              if (projected)
+                return fields({tag, text(i.site), parameters(op.captures),
+                               body(op.body, depth + 1),
+                               parameters(op.outputs)});
+              return fields({tag, text(i.site), text(op.role),
+                             parameters(op.captures), body(op.body, depth + 1),
+                             parameters(op.outputs)});
             } else if constexpr (std::is_same_v<T, AlgorithmCall>)
               return fields({tag, text(i.site), text(op.callee),
                              names(op.staticArguments), names(op.inputs),
@@ -269,6 +294,8 @@ class Structure {
          list(m.entries, [&](const Entry &e) {
            return fields({text("entry"), text(e.name), text(e.instance)});
          })});
+    if (!m.roots.empty())
+      common = add(common, add(1, roots(m.roots)));
     if (!m.isLibrary())
       return common;
     return fields(
@@ -286,7 +313,7 @@ class Structure {
     if (m.stage != Participants::Stage::Logical &&
         m.stage != Participants::Stage::Physical)
       fail("source-model-shape");
-    return fields(
+    size_t result = fields(
         {text("zkc.participants/1"), environment(m),
          text(m.stage == Participants::Stage::Physical ? "physical"
                                                        : "logical"),
@@ -301,6 +328,15 @@ class Structure {
          list(m.entries, [&](const ParticipantEntry &e) {
            return fields({text("entry"), text(e.name), pairs(e.participants)});
          })});
+    if (!m.roots.empty())
+      result = add(result, add(1, roots(m.roots)));
+    return result;
+  }
+  size_t roots(const std::vector<Root> &values) {
+    return list(values, [&](const Root &root) {
+      return fields({text("root"), text(root.name), text(root.service),
+                     names(root.owners)});
+    });
   }
   size_t measure(const Construction &c) {
     if (c.identity != Construction::Identity::Exact &&

@@ -279,6 +279,10 @@ class Qualifier {
             } else if constexpr (std::is_same_v<T, syntax::Message>) {
               place(v.input, i, locals);
               locals.values.insert(v.output);
+            } else if constexpr (std::is_same_v<T, syntax::Query>) {
+              locals.values.insert(v.outputs.begin(), v.outputs.end());
+            } else if constexpr (std::is_same_v<T, syntax::Guard>) {
+              place(v.condition, i, locals);
             } else if constexpr (std::is_same_v<T, syntax::Return> ||
                                  std::is_same_v<T, syntax::Yield>) {
               places(v.values, i, locals);
@@ -358,13 +362,17 @@ public:
       for (auto &r : p.results)
         type(r.type, locals);
       signature = false;
+      if (auto *graph =
+              std::get_if<syntax::Protocol::MathematicalBody>(&p.body))
+        for (auto &root : graph->roots)
+          reference(root.service, root, {}, ReferenceKind::Declaration);
       for (auto &d : p.dependencies) {
         reference(d.protocol, d, {}, ReferenceKind::Declaration);
         if (d.arguments)
           terms(*d.arguments, locals);
       }
-      if (p.body)
-        body(*p.body, locals);
+      if (auto *instructions = p.instructions())
+        body(*instructions, locals);
     }
     for (auto &i : m.libraryInterfaces)
       interface(i, {});

@@ -51,6 +51,12 @@ impl Drop for Forging {
     }
 }
 impl Value for V {
+    fn control_bool(&self) -> Result<bool, BackendError> {
+        match self {
+            Self::Bool(value) => Ok(*value),
+            _ => Err(BackendError::new("control-type")),
+        }
+    }
     fn pack_variant(
         descriptor: std::sync::Arc<VariantDescriptor>,
         alternative: usize,
@@ -857,6 +863,75 @@ fn entry_inputs_are_exact_and_role_owned() {
     assert!(r.backend().frames.is_empty());
 }
 #[test]
+fn checked_root_maps_cover_exact_resource_interfaces() {
+    let j = one(
+        json!([]),
+        json!([["ok", "bool"], ["a", "rng"], ["b", "rng"]]),
+        json!(["bool", "rng", "rng"]),
+        json!([["return", ["ok", "a", "b"]]]),
+    );
+    let program = admitted(&j).program;
+    let rng = PhysicalType::parse(&fixture_type("rng")).unwrap();
+    let mapping = SourceMap {
+        ports: vec![PortMapping {
+            instance: "root".into(),
+            role: "P".into(),
+            participant: "mainP".into(),
+            arguments: vec![("condition".into(), "ok".into())],
+        }],
+        calls: vec![],
+        roots: ["a", "b"]
+            .iter()
+            .enumerate()
+            .map(|(i, name)| RootMapping {
+                instance: "root".into(),
+                role: "P".into(),
+                root: (*name).into(),
+                service: "random.draw".into(),
+                state_type: rng.clone(),
+                input: (*name).into(),
+                output: i + 1,
+            })
+            .collect(),
+    };
+    mapping.validate(&program).unwrap();
+    let mut bad = Vec::new();
+    let mut missing = mapping.clone();
+    missing.roots.pop();
+    bad.push(missing);
+    let mut duplicate = mapping.clone();
+    duplicate.roots[1].root = "a".into();
+    bad.push(duplicate);
+    let mut input = mapping.clone();
+    input.roots[1].input = "a".into();
+    bad.push(input);
+    let mut output = mapping.clone();
+    output.roots[1].output = 1;
+    bad.push(output);
+    let mut owner = mapping.clone();
+    owner.roots[1].role = "V".into();
+    bad.push(owner);
+    let mut instance = mapping.clone();
+    instance.roots[1].instance = "other".into();
+    bad.push(instance);
+    let mut kind = mapping.clone();
+    kind.roots[0].state_type = PhysicalType::parse(&fixture_type("bool")).unwrap();
+    bad.push(kind);
+    let mut service = mapping.clone();
+    service.roots[0].service = "nonce.commit".into();
+    bad.push(service);
+    let mut overlap = mapping.clone();
+    overlap.ports[0].arguments[0].1 = "a".into();
+    bad.push(overlap);
+    for map in bad {
+        assert_eq!(
+            map.validate(&program).unwrap_err().code,
+            ErrorCode::Correspondence
+        );
+    }
+}
+
+#[test]
 fn immutable_custody_and_explicit_source_checker() {
     struct Exact {
         source: Vec<u8>,
@@ -885,6 +960,7 @@ fn immutable_custody_and_explicit_source_checker() {
                     arguments: vec![("x".into(), "x".into())],
                 }],
                 calls: vec![],
+                roots: vec![],
             }))
         }
     }
@@ -929,6 +1005,55 @@ fn local_is_one_whole_function_and_pending_is_stable() {
     assert_eq!(r.poll(), Action::Returned(vec![V::Field(12)]));
     assert_eq!(r.backend().domains.len(), 2);
 }
+#[test]
+fn guard_waits_for_its_cut_and_rejection_preserves_the_site() {
+    let j = one(
+        json!([add_fn()]),
+        json!([["ok", "bool"], ["x", "field"]]),
+        json!(["field"]),
+        json!([
+            ["guard", "accept", "ok"],
+            ["local", "suffix", "add", ["x", "x"], ["y"]],
+            ["return", ["y"]]
+        ]),
+    );
+    for accepted in [false, true] {
+        let mut r = runner(&j, "P", Mock::new(), vec![V::Bool(accepted), V::Field(7)]);
+        let Action::Guard(cut) = r.poll() else {
+            panic!("expected guard")
+        };
+        let usage = r.usage();
+        let trace = r.backend().trace.clone();
+        for _ in 0..10 {
+            assert_eq!(r.poll(), Action::Guard(cut.clone()));
+        }
+        assert_eq!(r.usage(), usage);
+        assert_eq!(r.backend().trace, trace);
+        let mut wrong = cut.clone();
+        wrong.site = "suffix".into();
+        assert!(matches!(
+            r.execute_guard(&wrong),
+            Err(RuntimeError::WrongCut)
+        ));
+        assert_eq!(r.poll(), Action::Guard(cut.clone()));
+        r.execute_guard(&cut).unwrap();
+        assert!(r.backend().domains.is_empty());
+        if accepted {
+            local(&mut r);
+            assert_eq!(r.poll(), Action::Returned(vec![V::Field(14)]));
+        } else {
+            let Action::Stopped(stop) = r.poll() else {
+                panic!("expected rejection")
+            };
+            assert_eq!(stop.site.as_deref(), Some("accept"));
+            assert_eq!(stop.kind, StopKind::Explicit("reject".into()));
+        }
+    }
+    let mut bad = j;
+    bad[4][0][7][0][2] = json!("x");
+    reject(&bad, ErrorCode::Type);
+}
+
 #[test]
 fn send_receive_pending_delivery_and_type_checks() {
     let j = exchange();

@@ -51,7 +51,7 @@ pub(crate) fn ark(error: zkc_arkworks::Error) -> BackendError {
     use zkc_arkworks::Error::*;
     match error {
         ArityLimit | ElementLimit | ByteLimit | SetupLimit | CapacityOverflow | Allocation
-        | EntropyUnavailable => exhausted(error.code()),
+        | EntropyUnavailable | SamplingLimit => exhausted(error.code()),
         _ => refused(error.code()),
     }
 }

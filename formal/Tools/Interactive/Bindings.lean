@@ -41,6 +41,24 @@ checked even at logical stages, while their ports retain logical types. -/
 def resolve (physical : Bool) (binding : Declaration) : Result Signature := do
   (← installation).resolve physical binding
 
+/-- Positive classification of the installed mathematical subset. Signature
+resolution and its nominal domain checks are still required. This flag is an
+admission fact; operation interpretations supply the totality laws. -/
+def totalContract (contract : String) : Bool :=
+  ["field.add", "field.mul", "field.from_nonzero", "curve.generator",
+   "curve.add", "curve.scale", "curve.equal"].contains contract
+
+/-- Independently installed nullary entropy services. Ordinary operation
+formation does not grant permission to use arbitrary kernels as root services. -/
+def entropyService (binding : Declaration) : Result (ValueType × ValueType) := do
+  ensure (binding.implementation.isEmpty &&
+    ["random.draw", "random.draw_nonzero"].contains binding.contract) "entropy-service-contract"
+  let signature ← resolve false binding
+  let [state] := signature.inputs | throw "entropy-service-signature"
+  let [reply, successor] := signature.outputs | throw "entropy-service-signature"
+  ensure (state.kind == "rng" && state == successor) "entropy-service-signature"
+  return (state, reply)
+
 /-- Finite implementation names for a partially configured definition. Exact
 nominal applicability is checked again by resolve at specialization. -/
 def implementationName (contract implementation : String) : Bool :=

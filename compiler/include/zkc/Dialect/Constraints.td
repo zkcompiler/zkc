@@ -8,7 +8,7 @@ def Zkc_Flow : Type<CPred<"::llvm::isa<::zkc::FlowType>($_self)">,
 // Role membership is explicit and independent of adapter coverage. Keep the
 // broad RankedTensor carrier: exact tensor admission belongs to the verifier.
 defvar Zkc_KernelDataHeads = [
-  "::zkc::FieldType", "::zkc::MultilinearType", "::zkc::QuadraticType",
+  "::zkc::FieldType", "::zkc::NonzeroFieldType", "::zkc::MultilinearType", "::zkc::QuadraticType",
   "::zkc::PointType", "::zkc::GroupType", "::zkc::UnivariateType",
   "::zkc::MatrixType", "::zkc::FixedVectorType", "::mlir::RankedTensorType",
   "::zkc::ObjectType", "::zkc::OracleObjectType", "::zkc::CapabilityType"

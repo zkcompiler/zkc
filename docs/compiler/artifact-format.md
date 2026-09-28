@@ -389,6 +389,14 @@ payloads are:
 | 22 | KoalaBear quadratic round | exactly three canonical u32 LE residues |
 | 23, 24, 25 | Fr, Ristretto scalar, KoalaBear matrix | canonical sparse COO; dimensions and entries as below |
 
+The BLS12-381 nonzero-field codec uses tag 50 and exactly one canonical
+32-byte Fr payload. Zero, a value at or above the modulus, trailing bytes and
+ordinary-field framing refuse. The codec identity is
+`zkcv.nonzero_field.bls12-381.fr/1`; its represented type is
+`nonzero_field:bls12-381.fr@arkworks.nonzero-fr/1`. Host input documents may use
+`["nonzero_field", decimal]` with a canonical nonzero decimal value. No other
+field domain currently installs this constructor.
+
 Polynomial coefficients are in ascending degree, with no trailing zero; zero
 has no coefficients. Sequence limits and exact lengths are checked before
 allocation. Domain tags, noncanonical scalars/points, normalization and trailing

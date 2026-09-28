@@ -230,14 +230,14 @@ class Checker {
         model.declarations[owner.index].roles = p.roles;
         model.declarations[owner.index].naturalParameters = p.parameters;
         model.declarations[owner.index].generic = true;
-        model.declarations[owner.index].hasBody = bool(p.body);
+        model.declarations[owner.index].hasBody = bool(p.instructions());
         model.declarations[owner.index].bodyState =
-            p.body ? Declaration::BodyState::Deferred
-                   : Declaration::BodyState::External;
+            p.instructions() ? Declaration::BodyState::Deferred
+                             : Declaration::BodyState::External;
       }
     for (const auto &d : syntax.protocols) {
       auto owner = id(d.name);
-      model.declarations[owner.index].hasBody = bool(d.body);
+      model.declarations[owner.index].hasBody = bool(d.instructions());
       model.declarations[owner.index].bodyState =
           model.declarations[owner.index].hasBody
               ? Declaration::BodyState::Deferred
@@ -608,7 +608,7 @@ class Checker {
         auto type = sourceType(port.type, shape, scope, false);
         model.declarations[owner.index].outputs.push_back(
             {port.name, port.role, type, port.type.location});
-        if (!p.body && shape && model.containsChecked(type))
+        if (!p.instructions() && shape && model.containsChecked(type))
           fail(p, "source-checked-external",
                "bodiless protocol returns a checked aggregate without a "
                "constructor");
@@ -658,8 +658,8 @@ class Checker {
             self(self, loop->body);
         }
       };
-      if (p.body)
-        body(body, *p.body);
+      if (const auto *instructions = p.instructions())
+        body(body, *instructions);
       model.declarations[owner.index].signatureChecked = good();
     }
   }
@@ -1482,7 +1482,7 @@ class Checker {
             return;
           }
     for (const auto &protocol : syntax.protocols)
-      if (!protocol.body)
+      if (!protocol.instructions())
         for (const auto &shape : protocolSignature(protocol.name).outputShapes)
           if (shape && model.containsChecked(shape->type)) {
             fail(protocol, "source-checked-external",
@@ -3207,6 +3207,8 @@ public:
     }
     if (good())
       for (auto [p, out] : zip(syntax.protocols, module.protocols)) {
+        if (std::holds_alternative<syntax::Protocol::MathematicalBody>(p.body))
+          continue;
         activeScope = model.declarations[id(p.name).index].members;
         auto resolve = [&](const syntax::Type &t) {
           auto shape = aggregateType(t, {}, false);

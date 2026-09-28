@@ -69,9 +69,9 @@ mod table_msb;
 pub use ark_bls12_381::Fr as Scalar;
 pub use bounds::Bounds;
 pub use error::Error;
-pub use field::{SCALAR_BYTES, decode_scalar, encode_scalar, parse_decimal};
+pub use field::{NonzeroScalar, SCALAR_BYTES, decode_scalar, encode_scalar, parse_decimal};
 pub use pcs::{Commitment, CommittedTable, Keys, Metadata, OpeningProof, ProverKey, VerifierKey};
-pub use random::RandomSource;
+pub use random::{NONZERO_SAMPLING_ATTEMPTS, RandomSource};
 pub use table::Table;
 pub use table_msb::MsbTable;
 

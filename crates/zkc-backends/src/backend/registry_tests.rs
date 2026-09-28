@@ -471,6 +471,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "FrDiagonal" => R::FrDiagonal,
             "RistrettoDiagonal" => R::RistrettoDiagonal,
             "Field" => R::Fr,
+            "NonzeroField" => R::NonzeroFr,
             "Table" => R::TableLsb,
             "TableMsb" => R::TableMsb,
             "Point" => R::Point,
@@ -576,6 +577,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         KoalaBearExt8Round,
         KoalaBearExt8Matrix,
         32
+    );
+    check(
+        Value::NonzeroField(zkc_arkworks::NonzeroScalar::new(Scalar::from(1)).unwrap()),
+        Type::NonzeroField,
+        I::Bls12381Fr,
+        512,
     );
     macro_rules! group_family {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{

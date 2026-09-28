@@ -24,7 +24,9 @@ def TypeOpeningState : ZKC_Type<"opening_state", [CommitmentDomain], PrivateImmu
 def TypeScalar : ZKC_Type<"scalar", [], PublicValue, 1, 1> { let commonGeneric = 0; int ordinal = 22; }
 def TypeCapability : ZKC_Type<"capability", [], Affine, 0, 0> { let commonGeneric = 0; int ordinal = 23; }
 def TypeResourceUnit : ZKC_Type<"resource_unit", [], Affine, 0, 1> { let commonGeneric = 0; int ordinal = 24; }
+def TypeNonzeroField : ZKC_Type<"nonzero_field", [FieldDomain], PublicValue, 1, 1> { int ordinal = 25; }
 def ExportTypeField : ZKC_TypeExport<"zkc::algebra", "Element", TypeField>;
+def ExportTypeNonzeroField : ZKC_TypeExport<"zkc::algebra", "NonzeroElement", TypeNonzeroField>;
 def ExportTypeVector : ZKC_TypeExport<"zkc::algebra", "FieldVector", TypeVector>;
 def ExportTypeMatrix : ZKC_TypeExport<"zkc::algebra", "FieldMatrix", TypeMatrix>;
 def ExportTypePolynomial : ZKC_TypeExport<"zkc::poly", "Polynomial", TypePolynomial>;

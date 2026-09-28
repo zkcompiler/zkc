@@ -46,7 +46,7 @@ def main():
         role = records["Zkc_ProtocolData"]
         predicate = records[role["predicate"]["def"]]["predExpr"]
         # Independent baseline text: tensor rank/shape remains unrestricted here.
-        expected = ("::llvm::isa<::zkc::FieldType, ::zkc::MultilinearType, "
+        expected = ("::llvm::isa<::zkc::FieldType, ::zkc::NonzeroFieldType, ::zkc::MultilinearType, "
                     "::zkc::QuadraticType, ::zkc::PointType, ::zkc::GroupType, "
                     "::zkc::UnivariateType, ::zkc::MatrixType, ::zkc::FixedVectorType, "
                     "::mlir::RankedTensorType, ::zkc::ObjectType, ::zkc::OracleObjectType, "

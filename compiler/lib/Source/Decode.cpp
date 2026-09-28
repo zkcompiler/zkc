@@ -207,6 +207,30 @@ class Decoder {
       if (fields(6, "interactive-receive"))
         out.value = Receive{string((*r)[2]), string((*r)[3]), string((*r)[4]),
                             string((*r)[5])};
+    } else if (tag == "query") {
+      if (generic)
+        fail("interactive-query-context");
+      if (fields(projected ? 5 : 6, "interactive-query-shape")) {
+        size_t offset = projected ? 2 : 3;
+        out.value =
+            Query{projected ? "" : string((*r)[2]), string((*r)[offset]),
+                  names((*r)[offset + 1]), names((*r)[offset + 2])};
+      }
+    } else if (tag == "guard") {
+      if (generic)
+        fail("interactive-guard-context");
+      if (fields(projected ? 3 : 4, "interactive-guard-shape"))
+        out.value = Guard{projected ? "" : string((*r)[2]), string(r->back())};
+    } else if (tag == "pure") {
+      if (generic)
+        fail("generic-operation");
+      if (fields(projected ? 5 : 6, "interactive-pure-shape")) {
+        size_t offset = projected ? 2 : 3;
+        out.value = Pure{
+            projected ? "" : string((*r)[2]), parameters((*r)[offset]),
+            at(offset + 1, [&] { return body((*r)[offset + 1], depth + 1); }),
+            parameters((*r)[offset + 2])};
+      }
     } else if (tag == "stop") {
       if (fields(projected ? 3 : 4, "interactive-stop"))
         out.value = Stop{projected ? "" : string((*r)[2]), string(r->back())};
@@ -399,18 +423,39 @@ class Decoder {
     out.bindings = at(
         1, [&] { return list(r[1], [&](const V &v) { return binding(v); }); });
   }
+  std::vector<Root> roots(const V &value) {
+    return list(value, [&](const V &v) {
+      Root out;
+      origin(out);
+      if (const auto *r = record(v, "root", 4)) {
+        out.name = string((*r)[1]);
+        out.service = string((*r)[2]);
+        out.owners = names((*r)[3]);
+      }
+      return out;
+    });
+  }
   Module module(const V &v) {
     locate(v);
     Module out;
     origin(out);
-    const auto *r = array(v, 6);
+    const auto *r = array(v);
     if (!r)
       return out;
+    if (r->size() != 6 && r->size() != 7) {
+      fail("source-record");
+      return out;
+    }
     if (string((*r)[0]) != "zkc.protocol/1") {
       fail("interactive-format");
       return out;
     }
     environment(*r, out);
+    if (r->size() == 7) {
+      out.roots = at(6, [&] { return roots((*r)[6]); });
+      if (out.roots.empty())
+        fail("interactive-empty-roots");
+    }
     out.functions = at(2, [&] {
       return list((*r)[2], [&](const V &x) { return function(x); });
     });
@@ -427,9 +472,13 @@ class Decoder {
   Participants participants(const V &v) {
     Participants out;
     origin(out);
-    const auto *r = array(v, 6);
+    const auto *r = array(v);
     if (!r)
       return out;
+    if (r->size() != 6 && r->size() != 7) {
+      fail("source-record");
+      return out;
+    }
     projected = true;
     std::string stage = string((*r)[2]);
     if (stage != "logical" && stage != "physical")
@@ -437,6 +486,11 @@ class Decoder {
     out.stage = stage == "physical" ? Participants::Stage::Physical
                                     : Participants::Stage::Logical;
     environment(*r, out);
+    if (r->size() == 7) {
+      out.roots = at(6, [&] { return roots((*r)[6]); });
+      if (out.roots.empty())
+        fail("interactive-empty-roots");
+    }
     out.functions = at(3, [&] {
       return list((*r)[3], [&](const V &x) { return function(x); });
     });

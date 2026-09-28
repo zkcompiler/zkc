@@ -2,6 +2,7 @@
 #include "../Instantiation/Select.h"
 #include "../Resolution/Project.h"
 #include "Check.h"
+#include "Mathematical.h"
 #include "Provenance.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
@@ -18,7 +19,7 @@ SourceCheck checkStaged(const syntax::Content &original,
                         std::shared_ptr<const model::LibraryReport> libraries,
                         std::shared_ptr<const resolution::Context> context,
                         StringRef text, StringRef filename,
-                        bool resolutionComplete) {
+                        bool resolutionComplete, WorkBudget &budget) {
   auto model = std::make_unique<model::Module>();
   model->text = text.str();
   model->filename = filename.str();
@@ -26,7 +27,10 @@ SourceCheck checkStaged(const syntax::Content &original,
   model->resolution = std::move(context);
   model->resolutionComplete = resolutionComplete;
   model->libraries = std::move(libraries);
-  const bool checked = check(*model, staged.content, original, linked);
+  bool checked = check(*model, staged.content, original, linked);
+  if (checked)
+    if (const auto *syntax = std::get_if<syntax::Module>(&staged.content))
+      checked = buildMathematical(*model, *syntax, model->metadata, budget);
   for (const auto &[name, value] : staged.constants) {
     auto id = model->lookup({0}, name);
     if (id.valid() &&

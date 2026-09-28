@@ -42,7 +42,7 @@ pub(super) fn text(v: &Json) -> Result<&str> {
 pub(super) fn natural(v: &Json) -> Result<u64> {
     zkc_runtime::logical::natural_index(text(v)?).map_err(|e| e.to_string())
 }
-pub(super) fn unhex(v: &Json) -> Result<Vec<u8>> {
+pub(crate) fn unhex(v: &Json) -> Result<Vec<u8>> {
     let s = text(v)?;
     if s.len() > INPUT_LIMIT * 2
         || !s.len().is_multiple_of(2)

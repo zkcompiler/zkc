@@ -171,6 +171,7 @@ value_inventory! {
         Arc<crate::diagonal::Diagonal<crate::RistrettoScalar, crate::RistrettoPoint>>,
     ),
     Field(Scalar),
+    NonzeroField(zkc_arkworks::NonzeroScalar),
     Table(Arc<Table>),
     TableMsb(Arc<zkc_arkworks::MsbTable>),
     Point(Arc<[Scalar]>),
@@ -374,6 +375,11 @@ impl Value {
                 Representation::RistrettoDiagonal,
             ),
             Self::Field(_) => (Type::Field, Identity::Bls12381Fr, Representation::Fr),
+            Self::NonzeroField(_) => (
+                Type::NonzeroField,
+                Identity::Bls12381Fr,
+                Representation::NonzeroFr,
+            ),
             Self::Table(_) => (Type::Table, Identity::Bls12381Fr, Representation::TableLsb),
             Self::TableMsb(_) => (Type::Table, Identity::Bls12381Fr, Representation::TableMsb),
             Self::Point(_) => (Type::Point, Identity::Bls12381Fr, Representation::Point),
@@ -451,6 +457,7 @@ impl Value {
             | Type::Variant
             | Type::ResourceUnit
             | Type::Field
+            | Type::NonzeroField
             | Type::Matrix
             | Type::Round
             | Type::Group
@@ -523,6 +530,7 @@ impl Value {
                 | Type::Variant
                 | Type::ResourceUnit
                 | Type::Field
+                | Type::NonzeroField
                 | Type::Matrix
                 | Type::Round
                 | Type::Table
@@ -602,6 +610,7 @@ impl Value {
             | Self::FrDiagonal(..)
             | Self::RistrettoDiagonal(..)
             | Self::Field(..)
+            | Self::NonzeroField(..)
             | Self::Table(..)
             | Self::TableMsb(..)
             | Self::Point(..)
@@ -771,6 +780,7 @@ impl RuntimeValue for Value {
             | Self::RistrettoRound(_)
             | Self::RistrettoGroup(_)
             | Self::Field(_)
+            | Self::NonzeroField(_)
             | Self::Round(_)
             | Self::Bool(_)
             | Self::Index(_)
@@ -795,6 +805,7 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         | Type::Variant
         | Type::ResourceUnit
         | Type::Field
+        | Type::NonzeroField
         | Type::Matrix
         | Type::Round
         | Type::Group

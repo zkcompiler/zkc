@@ -3,11 +3,13 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Relations.h"
 #include "llvm/ADT/StringExtras.h"
+#include <algorithm>
 #include <set>
 
 using namespace llvm;
@@ -47,6 +49,11 @@ class Admission {
   const source::Node *current = nullptr;
   const source::Node **failureLocation;
   std::map<std::string, source::OperationBinding> bindings;
+  struct Root {
+    source::Names owners;
+    EntropyService service;
+  };
+  std::map<std::string, Root> roots;
   bool target = false, physical = false, executable;
   size_t instructions = 0;
   std::map<std::string, Definition> functions, protocols;
@@ -84,6 +91,8 @@ class Admission {
     return naturalString(value, limit) || fail(limitReason);
   }
   bool type(StringRef s) {
+    if (!roots.empty() && typeKind(s) == "rng")
+      return fail("interactive-root-affine-mixing");
     auto parsed = parseBoundType(s, physical);
     if (!parsed) {
       consumeError(parsed.takeError());
@@ -352,8 +361,8 @@ class Admission {
             const std::vector<Port> &returns, const Definition &def,
             StringRef owner, bool local, std::set<std::string> &sites,
             unsigned depth = 0, bool loop = false,
-            std::vector<Port> *inferredReturns = nullptr,
-            bool inMatch = false) {
+            std::vector<Port> *inferredReturns = nullptr, bool inMatch = false,
+            bool pureRegion = false) {
     if (instructionsBody.empty() || depth > 64)
       return fail("interactive-body");
     std::set<std::string> consumed;
@@ -362,6 +371,9 @@ class Admission {
       current = &instruction;
       if (++instructions > 32768)
         return fail("interactive-instruction-limit");
+      if (pureRegion && !instruction.get<source::Operation>() &&
+          !instruction.get<source::Yield>())
+        return fail("interactive-pure-instruction");
       if (instruction.isTerminator() !=
           (&instruction == &instructionsBody.back()))
         return fail("interactive-terminator");
@@ -419,6 +431,11 @@ class Admission {
         auto binding = bindings.find(key.str());
         if (binding == bindings.end())
           return fail("binding-reference");
+        if (pureRegion &&
+            (operationPurity(binding->second.application.contract) !=
+                 OperationPurity::Total ||
+             !op->attributes.empty()))
+          return fail("interactive-pure-operation");
         if (inMatch &&
             isHistoryTransition(binding->second.application.contract))
           return fail("local-match-challenge");
@@ -434,6 +451,12 @@ class Admission {
           expected.push_back({"", t.spelling()});
         for (const auto &t : selected->outputs)
           outputs.push_back({"", t.spelling()});
+        if (pureRegion && (!all_of(expected, [](const Port &p) {
+              return duplicable(p.type) && discardable(p.type);
+            }) || !all_of(outputs, [](const Port &p) {
+              return duplicable(p.type) && discardable(p.type);
+            })))
+          return fail("interactive-pure-type");
         if (!operands(op->inputs, env, inputs, consumed) ||
             inputs != expected || !bind(op->outputs, outputs, env))
           return fail("binding-operation-signature");
@@ -465,6 +488,67 @@ class Admission {
             !bind(call->outputs, f->second.outputs, env))
           return fail("algorithm-call-signature");
         edges[owner.str()].insert(call->callee);
+      } else if (const auto *query = instruction.get<source::Query>()) {
+        if (local || physical ||
+            (target ? !query->role.empty()
+                    : !is_contained(def.roles, query->role)))
+          return fail("interactive-query-context");
+        auto root = roots.find(query->root);
+        if (root == roots.end())
+          return fail("interactive-query-root");
+        const auto &role = target ? def.role : query->role;
+        if (!is_contained(root->second.owners, role))
+          return fail("interactive-query-permission");
+        // The current installed entropy profile is nullary with one reply.
+        if (!query->inputs.empty() || query->outputs.size() != 1)
+          return fail("interactive-query-signature");
+        if (!bind(query->outputs,
+                  {{query->role, root->second.service.reply.spelling()}}, env))
+          return false;
+      } else if (const auto *guard = instruction.get<source::Guard>()) {
+        if (local || (target ? !guard->role.empty()
+                             : !is_contained(def.roles, guard->role)))
+          return fail("interactive-guard-context");
+        std::vector<Port> inputs;
+        if (!operands({guard->condition}, env, inputs, consumed) ||
+            inputs.size() != 1 || inputs[0].role != guard->role ||
+            typeKind(inputs[0].type) != "bool")
+          return fail("interactive-guard-condition");
+      } else if (const auto *region = instruction.get<source::Pure>()) {
+        if (local || physical ||
+            (target ? !region->role.empty()
+                    : !is_contained(def.roles, region->role)))
+          return fail("interactive-pure-context");
+        if (region->captures.size() > 1024 || region->outputs.size() > 1024)
+          return fail("interactive-ports");
+        Env inner;
+        for (const auto &capture : region->captures) {
+          if (!type(capture.type) || !duplicable(capture.type) ||
+              !discardable(capture.type))
+            return fail("interactive-pure-type");
+          auto found = env.find(capture.name);
+          if (found == env.end() || consumed.count(capture.name) ||
+              found->second.role != region->role ||
+              found->second.type != capture.type ||
+              !inner.emplace(capture.name, Port{"", capture.type}).second)
+            return fail("interactive-pure-capture");
+        }
+        source::Names names;
+        std::vector<Port> localResults, ownedResults;
+        for (const auto &output : region->outputs) {
+          if (!type(output.type) || !duplicable(output.type) ||
+              !discardable(output.type))
+            return fail("interactive-pure-type");
+          names.push_back(output.name);
+          localResults.push_back({"", output.type});
+          ownedResults.push_back({region->role, output.type});
+        }
+        if (!body(region->body, std::move(inner), localResults, def, owner,
+                  true, sites, depth + 1, true, nullptr, false, true))
+          return false;
+        current = &instruction;
+        if (!bind(names, ownedResults, env))
+          return false;
       } else if (const auto *call = instruction.get<source::LocalCall>()) {
         if (local)
           return fail("interactive-instruction");
@@ -800,6 +884,55 @@ class Admission {
     }
     return true;
   }
+  bool rootDeclarations(const std::vector<source::Root> &declarations) {
+    if (declarations.size() > 4096)
+      return fail("interactive-root-limit");
+    if (physical && !declarations.empty())
+      return fail("interactive-unrealized-roots");
+    for (const auto &declaration : declarations) {
+      current = &declaration;
+      source::Names owners;
+      if (!symbol(declaration.name, declaration) ||
+          !names(declaration.owners, owners) || owners.empty() ||
+          !std::is_sorted(owners.begin(), owners.end()))
+        return fail("interactive-root-declaration");
+      auto binding = bindings.find(declaration.service);
+      if (binding == bindings.end())
+        return fail("interactive-root-service");
+      auto service = resolveEntropyService(binding->second.application);
+      if (!service)
+        return fail(toString(service.takeError()));
+      roots.emplace(declaration.name,
+                    Root{std::move(owners), std::move(*service)});
+    }
+    return true;
+  }
+  bool closedRoots(const source::Module &module) {
+    if (roots.empty())
+      return true;
+    if (module.entries.size() != 1 ||
+        module.protocols.size() != module.instances.size())
+      return fail("interactive-roots-closed-module");
+    std::set<std::string> used, roles;
+    for (const auto &protocol : module.protocols) {
+      if (!protocol.parameters.empty())
+        return fail("interactive-roots-closed-module");
+      roles.insert(protocol.roles.begin(), protocol.roles.end());
+    }
+    for (const auto &instance : module.instances) {
+      if (!instance.parameters.empty() ||
+          !used.insert(instance.protocol).second)
+        return fail("interactive-roots-closed-module");
+      for (const auto &[formal, actual] : instance.roles)
+        if (formal != actual)
+          return fail("interactive-roots-role-binding");
+    }
+    for (const auto &[name, root] : roots)
+      for (const auto &owner : root.owners)
+        if (!roles.count(owner))
+          return fail("interactive-root-owner");
+    return true;
+  }
   bool familyBindings(const source::ParameterBindings &parameters,
                       const Definition &def,
                       const std::map<std::string, std::string> &roles) {
@@ -921,6 +1054,20 @@ class Admission {
       if (!instances.count(entry.instance))
         return fail("interactive-entry-instance");
     }
+    if (!roots.empty()) {
+      std::set<std::string> reached;
+      std::vector<std::string> pending{m.entries.front().instance};
+      while (!pending.empty()) {
+        auto name = std::move(pending.back());
+        pending.pop_back();
+        if (!reached.insert(name).second)
+          continue;
+        for (const auto &[alias, child] : instances.at(name)->dependencies)
+          pending.push_back(child);
+      }
+      if (reached.size() != instances.size())
+        return fail("interactive-roots-unreachable-instance");
+    }
     return true;
   }
   bool cycles() {
@@ -946,7 +1093,8 @@ class Admission {
     }
     if (m.isLibrary())
       return fail("interactive-format");
-    if (!environment(m.bindings))
+    if (!environment(m.bindings) || !rootDeclarations(m.roots) ||
+        !closedRoots(m))
       return false;
     if (m.functions.size() + m.protocols.size() > 4096)
       return fail("interactive-definition-limit");
@@ -963,8 +1111,15 @@ class Admission {
     current = &m;
     target = true;
     physical = m.stage == source::Participants::Stage::Physical;
-    if (!environment(m.bindings))
+    if (physical && !m.roots.empty())
+      return fail("interactive-unrealized-roots");
+    if (!environment(m.bindings) || !rootDeclarations(m.roots))
       return false;
+    for (const auto &[name, root] : roots)
+      for (const auto &owner : root.owners)
+        if (!any_of(m.participants,
+                    [&](const auto &p) { return p.role == owner; }))
+          return fail("interactive-root-owner");
     if (m.functions.size() + m.participants.size() > 4096)
       return fail("interactive-definition-limit");
     for (const auto &f : m.functions)

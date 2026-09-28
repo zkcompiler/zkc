@@ -93,11 +93,14 @@ struct Parameter {
 struct OwnedParameter {
   std::string name, role;
   Type type;
+  // Mathematical availability; ordinary located ports use the single role.
+  source::Names availability = {};
 };
 struct OwnedResult {
   std::string role;
   Type type;
   std::string name;
+  source::Names availability = {};
 };
 struct StaticParameter : source::Node {
   std::string name;
@@ -309,12 +312,20 @@ struct Return {
 struct Yield {
   Places values;
 };
+struct Query {
+  std::string role, root;
+  source::Names outputs;
+};
+struct Guard {
+  std::string role;
+  Place condition;
+};
 struct Instruction : source::Node {
   bool explicitSite = false;
   std::string site;
   std::variant<Call, Invocation, Finish, Message, Return, Yield, source::Stop,
                Exit, Placement, Loop, Binding, Conditional, For, Match,
-               ArrayTraversal>
+               ArrayTraversal, Query, Guard>
       value;
 };
 struct Function : source::Node {
@@ -348,7 +359,28 @@ struct Protocol : source::Node {
   std::vector<OwnedParameter> arguments;
   std::vector<OwnedResult> results;
   std::vector<Dependency> dependencies;
-  std::optional<Body> body;
+  struct Root : source::Node {
+    std::string name;
+    Reference service;
+    source::Names owners;
+  };
+  struct MathematicalBody {
+    std::vector<Root> roots;
+    Body instructions;
+  };
+  // Distinct body kinds prevent ordinary ownership/lowering from accepting a
+  // mathematical graph implicitly. Syntax-only visitors may use instructions.
+  std::variant<std::optional<Body>, MathematicalBody> body;
+  Body *instructions() {
+    if (auto *ordinary = std::get_if<std::optional<Body>>(&body))
+      return *ordinary ? &**ordinary : nullptr;
+    return &std::get<MathematicalBody>(body).instructions;
+  }
+  const Body *instructions() const {
+    if (auto *ordinary = std::get_if<std::optional<Body>>(&body))
+      return *ordinary ? &**ordinary : nullptr;
+    return &std::get<MathematicalBody>(body).instructions;
+  }
 };
 struct RelationImport : source::Node {
   std::string name, family, path;

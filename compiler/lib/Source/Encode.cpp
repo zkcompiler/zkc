@@ -84,6 +84,29 @@ class Encoder {
             result.push_back(names(op.inputs));
             result.push_back(names(op.outputs));
             return result;
+          } else if constexpr (std::is_same_v<T, Query>) {
+            A result{"query", i.site};
+            if (!projected)
+              result.push_back(op.role);
+            result.push_back(op.root);
+            result.push_back(names(op.inputs));
+            result.push_back(names(op.outputs));
+            return result;
+          } else if constexpr (std::is_same_v<T, Guard>) {
+            A result{"guard", i.site};
+            if (!projected)
+              result.push_back(op.role);
+            result.push_back(op.condition);
+            return result;
+          } else if constexpr (std::is_same_v<T, Pure>) {
+            A result{"pure", i.site};
+            if (!projected)
+              result.push_back(op.role);
+            result.push_back(parameters(op.captures));
+            result.push_back(
+                at(projected ? 3 : 4, [&] { return body(op.body); }));
+            result.push_back(parameters(op.outputs));
+            return result;
           } else if constexpr (std::is_same_v<T, AlgorithmCall>) {
             return A{"apply",          i.site,
                      op.callee,        names(op.staticArguments),
@@ -239,7 +262,7 @@ class Encoder {
   V common(const Module &m, bool root = true) {
     if (root)
       origin(m);
-    return A{"zkc.protocol/1",
+    A result{"zkc.protocol/1",
              environment(m),
              at(2,
                 [&] {
@@ -259,6 +282,16 @@ class Encoder {
              at(5, [&] {
                return list(m.entries, [&](const auto &e) { return entry(e); });
              })};
+    if (!m.roots.empty())
+      result.push_back(at(6, [&] { return roots(m.roots); }));
+    return result;
+  }
+
+  V roots(const std::vector<Root> &values) {
+    return list(values, [&](const Root &root) -> V {
+      origin(root);
+      return A{"root", root.name, root.service, names(root.owners)};
+    });
   }
 
 public:
@@ -317,7 +350,7 @@ public:
         return A{"entry", e.name, pairs(e.participants)};
       });
     });
-    return A{"zkc.participants/1",
+    A result{"zkc.participants/1",
              environment(m),
              m.stage == Participants::Stage::Physical ? "physical" : "logical",
              at(3,
@@ -327,6 +360,9 @@ public:
                 }),
              std::move(participants),
              std::move(entries)};
+    if (!m.roots.empty())
+      result.push_back(at(6, [&] { return roots(m.roots); }));
+    return result;
   }
   V run(const Construction &c) {
     origin(c);

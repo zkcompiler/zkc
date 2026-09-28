@@ -205,6 +205,7 @@ fn disabled_trace_preserves_backend_failures_and_custody_but_omits_observer_budg
                 },
             )]),
             source_map: Some(zkc_runtime::interactive::SourceMap {
+                roots: vec![],
                 ports: vec![],
                 calls: vec![zkc_runtime::interactive::CallMapping {
                     instance: "instance".into(),
@@ -340,6 +341,7 @@ fn diagnostic_and_transcript_exhaustion_have_distinct_consumption_boundaries() {
                     },
                 )]),
                 source_map: Some(zkc_runtime::interactive::SourceMap {
+                    roots: vec![],
                     ports: vec![],
                     calls: vec![zkc_runtime::interactive::CallMapping {
                         instance: "instance".into(),

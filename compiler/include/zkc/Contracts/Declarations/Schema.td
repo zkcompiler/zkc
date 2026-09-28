@@ -82,6 +82,10 @@ def Source : ZKC_Stage<"Source">;
 def Construction : ZKC_Stage<"Construction">;
 def CompilerGenerated : ZKC_Stage<"CompilerGenerated">;
 def Physical : ZKC_Stage<"Physical">;
+// Positive logical meaning, independent of physical execution failures.
+class ZKC_OperationPurity<string value> : ZKC_Declaration { string name = value; }
+def TotalOperation : ZKC_OperationPurity<"Total">;
+def OrderedOperation : ZKC_OperationPurity<"Ordered">;
 class ZKC_Parameters<string value, int min, int max> : ZKC_Declaration {
   string name = value;
   int minimum = min;
@@ -117,6 +121,7 @@ def Entropy : ZKC_Provider<"Entropy">;
 def TranscriptProvider : ZKC_Provider<"Transcript">;
 class ZKC_SampleDomain<string value> : ZKC_Declaration { string name = value; }
 def FieldSample : ZKC_SampleDomain<"Field">;
+def NonzeroFieldSample : ZKC_SampleDomain<"NonzeroField">;
 def VectorSample : ZKC_SampleDomain<"FieldVector">;
 def IndexSample : ZKC_SampleDomain<"BoundedIndex">;
 class ZKC_Sampling<ZKC_Provider p, ZKC_SampleDomain d, int bound = -1>
@@ -167,6 +172,8 @@ class ZKC_Operation<string value, list<ZKC_Term> terms,
   list<ZKC_Apply> outputs = outs;
   list<ZKC_Holds> requirements = needs;
   ZKC_Stage stage = Source;
+  // Unclassified operations retain their ordered local-call meaning.
+  ZKC_OperationPurity purity = OrderedOperation;
   ZKC_Parameters parameters = NoParameters;
   // Field-literal validation uses this scoped domain, never a default modulus.
   ZKC_Term parameterField = ?;

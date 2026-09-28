@@ -54,6 +54,30 @@ def Inputs.available [DecidableEq Role] (parties : List Role)
   | .nil => parties
   | .cons input rest => (Inputs.available parties rest).filter (fun role => role ∈ input.1)
 
+/-- Intersect availability as operands are visited, without unwinding a filter
+for each operand. Filtering preserves participant order and multiplicity. -/
+def Inputs.availableIterative [DecidableEq Role] (parties : List Role)
+    {Γ : List (Port Role Ty)} {types : List Ty} (inputs : Inputs Γ types) : List Role :=
+  match inputs with
+  | .nil => parties
+  | .cons input rest => availableIterative (parties.filter (fun role => role ∈ input.1)) rest
+
+theorem Inputs.available_filter [DecidableEq Role] (parties : List Role) (keep : Role → Bool)
+    {Γ : List (Port Role Ty)} {types : List Ty} (inputs : Inputs Γ types) :
+    available (parties.filter keep) inputs = (available parties inputs).filter keep := by
+  induction inputs with
+  | nil => rfl
+  | cons first rest ih => simp only [available, ih, List.filter_filter, Bool.and_comm]
+
+@[csimp] theorem Inputs.available_eq_availableIterative :
+    @Inputs.available = @Inputs.availableIterative := by
+  funext Role Ty inst parties Γ types inputs
+  induction inputs generalizing parties with
+  | nil => rfl
+  | cons first rest ih =>
+    rw [availableIterative, ← ih, available_filter]
+    rfl
+
 def Inputs.read [DecidableEq Role] {Value : Ty → Type} {self : Role}
     (parties : List Role) {Γ : List (Port Role Ty)} {types : List Ty}
     (inputs : Inputs Γ types) (env : Environment Value self Γ)

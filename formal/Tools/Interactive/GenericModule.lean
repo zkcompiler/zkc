@@ -121,14 +121,16 @@ private def prepareCode (library : Library) : Nat → Json → StateT Demand Res
     return Json.arr body.toArray
 
 private def prepareCommon (library : Library) (json : Json) : StateT Demand Result Explicit.Module := do
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array json
+  let (fields, _) ← Decode.rootedEnvelope json
+  let [.str "zkc.protocol/1", _, functions, _, _, _] := fields
     | throw "binding-common-source"
   let functions ← (← Decode.array functions limits.definitions).mapM fun function => do
     let [.str "function", name, args, results, body, origin] ← Decode.array function
       | throw "binding-function"
     let body ← prepareCode library limits.depth body
     return Json.arr #[.str "function", name, args, results, body, origin]
-  Explicit.common (.arr #[.str "zkc.protocol/1", bindings, .arr functions.toArray, protocols, instances, entries])
+  let original ← Decode.array json
+  Explicit.common (.arr (original.toArray.set! 2 (.arr functions.toArray)))
 
 /-- Prepare a library's common source. `executable` is what the caller is
 asking about and is carried through to admission: a declaration is admitted
@@ -136,7 +138,8 @@ without an entry, an external body or an opaque port, and an executable
 source is not. -/
 def prepare (library : Library) (additionalCalls : List Name := [])
     (executable : Bool := true) : Result Prepared := do
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array library.common
+  let (fields, roots) ← Decode.rootedEnvelope library.common
+  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] := fields
     | throw "binding-common-source"
   let bindingNames ← (← Decode.array bindings).mapM fun j => do
     let name :: _ ← Decode.array j | throw "binding-declaration"
@@ -145,7 +148,7 @@ def prepare (library : Library) (additionalCalls : List Name := [])
     (← Decode.array j).mapM fun record => do
       let _ :: name :: _ ← Decode.array record | throw "generic-common-declaration"
       Decode.name name)
-  let declared := bindingNames ++ names.flatten ++ library.configurations.map Configuration.name ++
+  let declared := bindingNames ++ names.flatten ++ roots.map Root.name ++ library.configurations.map Configuration.name ++
     library.definitions.map (fun d => d.definition.name)
   ensure (unique declared) "generic-common-name-conflict"
   let action : StateT Demand Result Explicit.Module := do

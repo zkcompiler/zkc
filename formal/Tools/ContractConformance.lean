@@ -80,7 +80,8 @@ def respond (resolve : Resolver) (text : String) : Except String Json := do
     if arguments.size > 16 then throw "envelope"
     let _ ← resolve false ⟨"conformance", contract, arguments.toList, ""⟩
     return Json.mkObj [("accepted", toJson true),
-      ("facets", Json.mkObj [("history", toJson (Bindings.historyContract contract))]),
+      ("facets", Json.mkObj [("history", toJson (Bindings.historyContract contract)),
+        ("total", toJson (Bindings.totalContract contract))]),
       ("unsupported", toJson (["publicReplay", "sampling", "observation", "acceptanceGuard",
         "conjunction", "unclassifiedProviderEffect"] : List String))]
   if size != 4 then throw "envelope"

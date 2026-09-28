@@ -40,6 +40,12 @@ def Matrix : TypeDef<AlgebraDialect, "Matrix"> {
   let parameters = (ins StringRefParameter<"Field domain">:$domain);
   let assemblyFormat = "`<` $domain `>`";
 }
+def NonzeroField : TypeDef<AlgebraDialect, "NonzeroField"> {
+  let mnemonic = "nonzero_field";
+  let summary = "an admitted nonzero element of the named field";
+  let parameters = (ins StringRefParameter<"Field domain">:$domain);
+  let assemblyFormat = "`<` $domain `>`";
+}
 def FixedVector : TypeDef<AlgebraDialect, "FixedVector"> {
   let mnemonic = "fixed_vector";
   let summary = "one logical bulk value with an exact element type and length";

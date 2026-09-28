@@ -267,7 +267,7 @@ private def artifactDescriptor : Tools.Artifact.Descriptor :=
 private def artifactSource : Source :=
   ⟨.explicit [⟨"eval", "poly.univariate_evaluate", [Bindings.ristrettoScalar], ""⟩,
     ⟨"draw", "random.draw", [Bindings.ristrettoScalar], ""⟩,
-    ⟨"mask", "random.vector", [Bindings.ristrettoScalar], ""⟩], [], [], [], []⟩
+    ⟨"mask", "random.vector", [Bindings.ristrettoScalar], ""⟩], [], [], [], [], []⟩
 private def artifactResult (outcome : Except Tools.Artifact.Failure (List Tools.Artifact.Value)) : String :=
   match outcome with
   | .error error => error.reason ++ ":" ++ error.detail

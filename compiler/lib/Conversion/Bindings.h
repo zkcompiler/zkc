@@ -8,6 +8,8 @@ namespace zkc::target {
 class CheckedPhysicalPlan;
 }
 namespace zkc::protocol {
+// Realize closed entropy roots as explicit participant inputs and state chains.
+llvm::Error realizeRoots(mlir::ModuleOp);
 // Internal in-place application; refuses stale inputs before any mutation.
 llvm::Error materializePhysical(mlir::ModuleOp,
                                 const target::CheckedPhysicalPlan &);

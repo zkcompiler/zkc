@@ -9,6 +9,10 @@
 #include "llvm/Support/Error.h"
 #include <memory>
 
+namespace zkc::mathematical {
+struct Placement;
+}
+
 namespace zkc::frontend {
 namespace model {
 struct AnalysisAccess;
@@ -58,6 +62,9 @@ public:
   /// Emit structurally checked common source; callers independently admit it
   /// with checkProtocolDocument. Partial/failed analysis cannot emit.
   llvm::Expected<source::Content> lower() const;
+  /// Retained actual graph and emitted common target. The placement witness
+  /// remains untrusted correspondence data for the independent checker.
+  const mathematical::Placement *mathematicalPlacement() const;
 };
 /// Own text, parse, stage exactly once and analyze. Errors retain query data.
 Analysis analyzeProtocol(llvm::StringRef text,

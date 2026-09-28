@@ -38,6 +38,9 @@ against explicit common source, then executes their role-local programs. Compile
 The [interactive example](../../examples/protocols/README.md#compile-and-run-an-interactive-source)
 owns the complete command sequence. Successful execution alone does not certify
 protocol acceptance: inspect the returned outcomes and declared acceptance result.
+For a mathematical placement capture, append the caller-selected subject digest
+as a fifth argument. The [capture contract](../../docs/runtime/inputs.md#mathematical-placement-captures)
+defines the source pin, independent checks and reported identities.
 
 ## Finite table execution
 

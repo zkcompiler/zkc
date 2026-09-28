@@ -29,15 +29,254 @@ A general theorem of dynamic location uniqueness is not yet supplied.
 calls while forwarding original effects; classifying actual compiler-introduced
 calls and proving their definitions correct remains a checker obligation.
 
-[Examples](../docs/guides/mathematical-protocols.md) include a source-derived
-Sigma prover/verifier formula and positional delivery of the prover's actual
-emitted messages under a common supplied challenge, a structured quadratic
-Sumcheck family with hostile/zero-round controls, and shared-state helper calls.
+[Examples](../docs/guides/mathematical-protocols.md) include canonical Sigma prefix
+laws, a structured quadratic Sumcheck family with hostile/zero-round controls,
+and shared-state helper calls. Sigma uses the canonical graph/protocol path
+below; the other small examples still use the earlier mathematical model.
 These cover the declared fragment. General honest-joint coincidence, native
 admission, placement, role remapping, checked outlining and protocol security transport
 remain separate obligations. The optional integration's `simulate_encode`
 establishes VCVio handler-execution equality, including stopped state/events;
 its polynomial bridge establishes ArkLib query-answer equality only.
+
+The canonical graph/protocol path now has a bounded
+[BLS installation](Zkc/Source/Mathematical/BlsInstallation.lean) and
+[actual-carrier meanings](Zkc/Source/Mathematical/BlsMeaning.lean). The scalar is
+`ZMod` of the BLS12-381 scalar modulus; challenges are its nonzero subtype.
+The group carrier is the curve's scalar-order torsion subgroup under the named
+base-primality premise. Admission needs only the carrier type; concrete group
+interpretation adds that premise and a generator. Package-selection and type
+agreement lemmas connect each admitted operation to its actual installed
+function. Generator agreement, subgroup decoding, randomness distributions and
+native refinement remain separate premises.
+
+The [placement consumer](Tools/Mathematical/Placement.lean) derives its body
+from certified closed assembly, independently computes role demand, and checks
+the actual target and witness. `interactive-protocol --check-mathematical`
+then checks the same target against the participant artifact. Its `pending-hashes`
+result requires the host to verify source, target and fifteen installation pins;
+the native development host performs all seventeen SHA256 checks, checks their
+domain prefixes, and compares the source identity with a caller-supplied pin
+before accepting correspondence. The pin must come from the intended subject,
+not an untrusted capture. This executable check has no general placement
+preservation theorem. The canonical Sigma source is compared byte-for-byte with
+fresh frontend output. Its [prefix laws](Examples/Mathematical/SigmaPrefix.lean)
+use [semantic induction](Zkc/Source/Mathematical/ClosedMeaning.lean) over the actual
+certified execution table. They prove fresh reception and query/pure/send
+sequencing from the actual entry inputs, source captures and installed scale
+identity. The pure graph has no action. Both laws quantify over every admission
+certificate; executable controls supply non-vacuity evidence, without a kernel
+proof that admission succeeds. The only audited axioms are the standard
+`propext`, `Classical.choice` and `Quot.sound`. Full trace honesty, fully
+normalized scalar/group equations for the admitted trace and native/provider
+agreement remain future work. The exported standalone honest algebra theorem
+uses the actual carriers and is not a complete execution theorem.
+
+[Scoped statics](Zkc/Source/Mathematical/Static.lean) have an exact decoder
+erasure law, substitution semantics and checked u64 evaluation at every
+subexpression. [Static normalization](Zkc/Source/Mathematical/StaticNormalization.lean)
+proves coefficient collection, distribution and meaning preservation under
+every natural assignment. Closed normalization uses precharged checked word
+evaluation and carries a general literal-result theorem; every intermediate
+overflow is still refused before powers can allocate oversized values.
+Single parameters retain their syntax without arithmetic wrappers. Resource
+refusal grants no inequality fact.
+[Type scopes](Zkc/Source/Mathematical/TypeSyntax.lean) preserve the authored
+declarations and type uses while enforcing earlier references and static
+arities. [Expansion](Zkc/Source/Mathematical/TypeExpansion.lean) produces
+structural types with a proof of equality to the selected template's meaning
+for every assignment, plus a formation proof indexed by the selected domain
+checker. [Type admission](Zkc/Source/Mathematical/TypeAdmission.lean)
+checks unused declarations and rejects duplicate authored templates.
+[Type capacity](Zkc/Source/Mathematical/TypeCapacity.lean) keeps finite consumer
+limits separate from the semantic algebra. The
+[structural walker](Zkc/Source/Mathematical/DataBounds.lean) stops at its node and
+height allowances and certifies its computed measurements. Its certificate
+builder accepts exactly the types within those structural limits. Expansion, graph
+formation and ordered-body formation propagate these certificates. Products
+count repeated children repeatedly; vector lengths remain compact. A proved
+product view selects one certified child. Constructed products retain their
+operand certificates directly; boundary products measure only the selected child
+after checking its index, without retaining unrelated components. Boundary
+selection work still needs metering. Accumulator walks preserve exact
+measurement and completeness, including cached aggregation and product formation.
+[Wide traversal controls](Tests/MathematicalTypeTraversal.lean) cover exact size
+and depth boundaries, list assembly and external contexts on an 8 MiB stack.
+[Operand traversal controls](Tests/MathematicalOperandTraversal.lean) cover wide
+tuples, outputs, operation arguments and map results, deep component indices,
+and exact scope/type/arity/resource refusals. Compiler rewrites for these
+accumulator traversals are proved equal to the recursive functions, including
+operand order and availability. Typed variable allocation still depends on
+lookup depth. [Typed prefixes](Zkc/Source/Mathematical/GraphPrefix.lean) support
+iterative flat graph construction with a proved decoder equality.
+[Graph traversal controls](Tests/MathematicalGraphTraversal.lean) cover selected
+20,000-node flat and 25,000-node mixed graphs, nested map/fold bodies and late
+refusals on an 8 MiB stack. Whole-subject and ordered-body stack capacity remain
+separate obligations.
+Constructor/view laws are proved separately from successful-admission
+soundness. This bounds
+each structural type, with 65,536 constructors and root depth at most 64;
+it does not bound leaf payloads, repeated comparisons or installed callback work.
+[Shared work](Zkc/Source/Mathematical/AdmissionWork.lean) supplies pure budget
+charges and a bounded list-length scan, with exact residual equations. Carrier
+graph and body resolution use that scan before processing operand lists.
+Intrinsic admission still needs to share that allowance and charge its operations.
+[Port admission](Zkc/Source/Mathematical/PortAdmission.lean) adds bounded,
+strictly ordered role availability and a no-duplicates proof. Instantiated ports
+carry the exact image of local availability under an injective positional role
+binding, together with the substituted type and its certificates. The reference
+consumer uses conservative work limits; this is not a proof of native type
+interning or equal resource refusals.
+
+[Manifest admission](Zkc/Source/Mathematical/ManifestAdmission.lean) selects
+actual installed payloads at the authored manifest indices. Its result retains
+registration, exact identity equality, valid digest spelling, unique name/version
+keys and the presence of every selected package prerequisite. Interpretation
+implementations belong to the consumer; hashes alone supply no laws.
+[Signature admission](Zkc/Source/Mathematical/SignatureAdmission.lean) substitutes
+actual static tuples into service, operation and wire declarations while retaining
+their selected source indices and type-formation certificates.
+[Registry admission](Zkc/Source/Mathematical/RegistryAdmission.lean) joins those
+signatures to actual selected packages, checks authored purity and distinctness
+against installed facts, and checks attributes at each operation use.
+[Header admission](Zkc/Source/Mathematical/DeclarationAdmission.lean) applies these
+checks to every declaration, including unused ones, and admits closed literal
+capability roots with canonical permissions. Domain meaning and type formation
+come from the same admitted package selection. The independent
+[installed-domain adapter](Tools/Mathematical/InstalledDomains.lean) reuses nominal
+value formation and field-family registration; it imports no operation totality
+or legacy program semantics.
+
+[Pure graphs](Zkc/Source/Mathematical/Graph.lean) use one count-parametric syntax
+for symbolic templates and closed instances. They retain explicit captures,
+products, projections, compact maps and ascending left folds.
+[Elaboration](Zkc/Source/Mathematical/GraphAdmission.lean) produces intrinsic
+typed references and exact resolved-graph erasure; fold invariants include
+availability. [Structural values](Zkc/Source/Mathematical/Data.lean) supply the
+product construction/projection laws used by that interpretation.
+
+The extended [ordered syntax](Zkc/Source/Mathematical/Protocol.lean) indexes
+each body by its dense effect-site interval. `sites_dense` includes dormant
+repeat bodies. [Ordered admission](Zkc/Source/Mathematical/ProtocolAdmission.lean)
+separates template formation from closed root discharge. Formation checks service
+identity, permission weakening, captures, canonical message availability and exact
+erasure, and retains registered distinct-root requirements. Closed admission
+checks those requirements on actual root identities, including dormant repeats.
+Its [open-role meaning](Zkc/Source/Mathematical/ProtocolMeaning.lean) executes
+graphs and ordered effects through `Proc`. Tests check zero and repeated
+service transitions, iteration paths, and two ports observing the same state.
+[Graph resolution](Zkc/Source/Mathematical/GraphResolution.lean) and
+[body resolution](Zkc/Source/Mathematical/ProtocolResolution.lean) connect raw
+carrier syntax to these elaborators. They retain exact authored erasure and
+declaration-selection witnesses. [Role resolution](Zkc/Source/Mathematical/RoleResolution.lean)
+preserves positional, injective role bindings, including non-monotone maps;
+body participants must equal the canonical image of the binding.
+[Static resolution](Zkc/Source/Mathematical/StaticResolution.lean)
+provides such a witness under an explicit parameter tuple. Integration controls
+check agreement between a raw port's normalized type and a symbolic map type,
+and execute raw bodies with shared state and compact repeats.
+[The registered vocabulary](Zkc/Source/Mathematical/RegisteredVocabulary.lean)
+now supplies operation, wire, static and port resolution from an admitted header.
+It separates registered total operations from ordered locals and retains their
+exact caller-parameter instantiation. Operation and wire objects contain normalized
+keys, proof-irrelevant admission evidence and exact runtime root measurements.
+The measurements are subsingletons: their counters are fixed by the indexed type.
+Operation/wire extensionality and the service wrapper's equality therefore still
+depend only on canonical keys. Intrinsic formation accepts retained measurements
+for pure/local signatures, queries and wires; generic callers use bounded walks.
+Ten controls disable those walks, including through carrier resolution, accepting
+each path with retained measurements and refusing without them. Template expansion,
+argument/result port remeasurement and boundary child walks remain separate costs.
+Kernel extensionality lemmas show
+that any interpretation gives equal results for equal keys; compiled controls
+compare different authored spellings, dimensions, declarations and attributes.
+[Attribute admission](Zkc/Source/Mathematical/AttributeAdmission.lean) charges
+finite trees and checks scalar bounds, UTF-8 and strictly increasing object keys
+before callbacks. Serialized encoders canonicalize field order; direct raw
+operation resolution requires canonical input and retains that proof in its key
+certificate. Registered distinctness is exported against the key's actual
+capability-signature length.
+Concrete controls combine this vocabulary
+with intrinsic body admission, including registered service dimensions, root
+aliases, guards and dormant repeat bodies.
+[Relation admission](Zkc/Source/Mathematical/RelationAdmission.lean) checks symbolic
+and instantiated predicates through the same vocabulary. It retains public and
+witness signatures, actual selected law assumptions, exact region erasure and a
+single condition result. Controls start from serialized subject bytes; a listed
+law identity is an assumption, not a proof of its proposition.
+[Definition admission](Zkc/Source/Mathematical/DefinitionAdmission.lean) checks
+signatures, relation operands and bodies with the same port and permission
+substitution rules. Binding a relation retains its selected predicate and ordered
+typed arguments; it does not establish that the relation holds. Capability binding
+restricts permissions and provably preserves the selected root tuple, including
+aliases. Authored root table positions distinguish roots with equal signatures.
+[Root certificates](Zkc/Source/Mathematical/CapabilityRoots.lean) tie every selected
+capability to the actual table service and permitted module roles. The header
+provides this certificate, and binding preserves it. Kernel controls rule out
+forged services, widened permissions and out-of-table roots while allowing aliases
+and empty permission sets. Closed storage retains the certificate and consumes
+checked call-root equalities at execution. Invalid entry roots are refused at
+admission; stored denotation has no runtime root-mismatch branch.
+[Source call selection](Zkc/Source/Mathematical/DefinitionCalls.lean) checks every
+symbolic definition, including unused definitions. Each call selects an actual
+earlier declaration, substitutes statics and positional roles, and provides its
+signature at the exact intrinsic call-scope index. The earlier bound uses the
+actual caller's authored index. Serialized controls cover these checks and
+malformed calls inside zero repeats. The resulting template retains deferred
+root requirements; it does not claim that parameter names are distinct state.
+[Stored definitions](Zkc/Source/Mathematical/StoredDefinitions.lean) supply an
+executable call environment with exact root tuples, discharged local root
+requirements and acyclic typed bodies.
+`call_roots` extracts the selected target's root equality from the closure
+check. Tests exercise aliased repeated calls and reject wrong roots, including
+dormant calls.
+[Closed instances](Zkc/Source/Mathematical/ClosedInstances.lean) retain exact
+definition/static/role/root keys, actual declaration selection and complete
+syntactic call coverage. Certification checks unique keys, exact edge targets,
+entry reachability and source preorder, refusing extra or reordered instances.
+[Instance provenance](Zkc/Source/Mathematical/InstanceProvenance.lean) proves that
+the parent instance and authored call use determine one target key, independently
+of certificate construction or call-site number. It also proves that two nodes
+for the same key retain the same call sites and target keys.
+[Closed provenance](Zkc/Source/Mathematical/ClosedProvenance.lean) connects each
+invocation in the actual stored executable bodies to its authored call edge at
+the mapped source-graph ID. The theorem preserves the site and capability-port
+indices, selects the complete closed target key, and proves that the stored
+callee precedes the caller. A full-list theorem also preserves edge order and
+multiplicity. Invocation sites are unique, and certified child references have
+the unique graph ID of their target key. Entry mapping selects the graph's
+certified entry and retains its actual root tuple.
+The proof follows exact erasure through resolution and intrinsic lowering;
+repeat bodies contribute their syntactic calls once, including zero repeats.
+[Closed assembly](Zkc/Source/Mathematical/ClosedAssembly.lean) binds every reached
+body against the admitted header roots, retains source and intrinsic erasure,
+and derives the execution table from those checked bodies. Its exact-key call
+resolver selects earlier stored records; the source-ID/stored-position maps have
+proved roundtrip laws. The source graph retains its original preorder IDs.
+[Subject admission](Zkc/Source/Mathematical/SubjectAdmission.lean) combines all
+header, relation and symbolic-definition checks with closed discovery, assembly
+and entry formation. Controls begin with serialized source bytes and cover
+shared roots, same-signature different bodies, arithmetic static arguments in
+vector/service interfaces, unused malformed declarations, and dormant callee
+root violations. The earlier minimal fixtures and bridges remain separate until
+their conservative transport is proved.
+
+The independent [binary codec](Tools/Mathematical/Codec.lean) and
+[source schema](Tools/Mathematical/Schema.lean) enforce finite carrier bounds
+and exact field/tag shapes. Differential controls compare Python, Lean and
+native readers. Separate serialized subject controls now connect declaration
+resolution to an intrinsic closed protocol object. Cross-language typed-admission
+agreement remains unfinished, and neither suite proves the native reader correct.
+[Formation depth controls](Tests/MathematicalFormationLimits.lean) cover the
+native body/region boundary (32 nested repeat/map bodies), independent pure-region
+depth, and long serialized flat bodies. Sibling traversal no longer consumes
+nesting depth. Whole-subject stack capacity and intrinsic work accounting remain
+as separate obligations. Graph/protocol selection rejects callbacks that return
+more allowance than they received; this does not bound callback-internal work.
+Registered signature acceptance still needs the package's
+operational interpretation. A common bounded acceptance
+envelope remains unfinished; in particular, intrinsic type equality
+and installed callback work are not yet covered by one admission-work theorem.
 
 ## Protocol families and controllers
 

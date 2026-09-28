@@ -274,6 +274,56 @@ class Exporter {
                        source::AlgorithmCall{call.getCallee().str(),
                                              names(op->getOperands(), env),
                                              results(op, env)}});
+      } else if (auto query = dyn_cast<ServiceQueryOp>(op)) {
+        if (local || physical || !attributes(op, {"site", "role", "root"})) {
+          fail("interactive-query-context");
+          return {};
+        }
+        auto root = op->getAttrOfType<FlatSymbolRefAttr>("root");
+        auto role = op->getAttrOfType<StringAttr>("role");
+        if (!root || (common ? !role : static_cast<bool>(role))) {
+          fail("interactive-query-context");
+          return {};
+        }
+        out.push_back(
+            {{},
+             site,
+             source::Query{common ? role.getValue().str() : "",
+                           root.getValue().str(), names(op->getOperands(), env),
+                           results(op, env)}});
+      } else if (auto guard = dyn_cast<ProtocolGuardOp>(op)) {
+        if (local || !attributes(op, {"site", "role"}) ||
+            failed(guard.verify())) {
+          fail("interactive-guard-context");
+          return {};
+        }
+        out.push_back({{},
+                       site,
+                       source::Guard{common ? attr(op, "role").str() : "",
+                                     name(guard.getCondition(), env)}});
+      } else if (auto pure = dyn_cast<PureRegionOp>(op)) {
+        if (local || physical || !attributes(op, {"site", "role"}) ||
+            (!common && op->hasAttr("role")) ||
+            (common && !op->getAttrOfType<StringAttr>("role")) ||
+            failed(pure.verifyRegions())) {
+          fail("interactive-pure-context");
+          return {};
+        }
+        source::Pure region;
+        region.role = common ? attr(op, "role").str() : "";
+        auto &inner = pure.getBody().front();
+        Env nested;
+        for (auto [input, arg] : zip(op->getOperands(), inner.getArguments())) {
+          auto n = name(input, env);
+          region.captures.push_back({n, type(input.getType())});
+          nested[arg] = n;
+        }
+        region.body = body(inner, std::move(nested), op->getResultTypes(),
+                           definition, true, true);
+        auto resultNames = results(op, env);
+        for (auto [n, t] : zip(resultNames, op->getResultTypes()))
+          region.outputs.push_back({n, type(t)});
+        out.push_back({{}, site, std::move(region)});
       } else if (isa<LocalCallOp, ParticipantCallOp, ProtocolCallOp>(op)) {
         if (!attributes(op, {"site", "role", "callee", "dependency"}))
           return {};
@@ -696,6 +746,7 @@ public:
                                   : source::Participants::Stage::Logical;
     auto &bindings = common ? module.bindings : participants.bindings;
     auto &functions = common ? module.functions : participants.functions;
+    auto &roots = common ? module.roots : participants.roots;
     for (auto &op : root->getRegion(0).front()) {
       if (isa<R1CSRelationOp, AIRRelationOp>(op)) {
         if (!common)
@@ -714,6 +765,17 @@ public:
           r.value = std::make_shared<const relation::AIR>(std::move(*value));
         }
         module.relations.push_back(std::move(r));
+      } else if (auto root = dyn_cast<ServiceRootOp>(op)) {
+        if (physical || !attributes(&op, {"sym_name", "service", "owners"}))
+          return error("interactive-root-declaration");
+        auto service = op.getAttrOfType<FlatSymbolRefAttr>("service");
+        auto owners = op.getAttrOfType<ArrayAttr>("owners");
+        if (!service || !owners)
+          return error("interactive-root-declaration");
+        roots.push_back({{},
+                         attr(&op, "sym_name").str(),
+                         service.getValue().str(),
+                         strings(owners, "interactive-root-owner")});
       } else if (isa<OperationBindingOp>(op)) {
         if (!attributes(
                 &op, {"sym_name", "contract", "arguments", "implementation"}))

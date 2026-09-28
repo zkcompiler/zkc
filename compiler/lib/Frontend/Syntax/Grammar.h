@@ -33,7 +33,8 @@ inline bool declarationStart(llvm::StringRef word) {
       .Cases({"association", "interface", "component", "select", "seal"}, true)
       .Cases({"link", "const", "bind", "relation", "derive"}, true)
       .Cases({"configure", "bundle", "struct", "checked", "enum"}, true)
-      .Cases({"fn", "protocol", "instance", "entry"}, true)
+      .Cases({"fn", "protocol", "instance", "entry", "root"}, true)
+      .Case("mathematical", true)
       .Default(false);
 }
 /// These clauses own a parenthesized list rather than calling a declaration.
@@ -41,7 +42,8 @@ inline bool listPrefix(llvm::StringRef word) {
   return llvm::StringSwitch<bool>(word)
       .Cases({"roles", "parameters", "dependencies", "inputs", "outputs"}, true)
       .Cases({"carry", "capture", "return", "yield", "at", "requires"}, true)
-      .Cases({"using", "attributes", "let", "constructors"}, true)
+      .Cases({"using", "attributes", "let", "constructors", "owners"}, true)
+      .Case("roots", true)
       .Default(false);
 }
 inline bool expressionPrefix(llvm::StringRef word) {

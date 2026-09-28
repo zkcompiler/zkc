@@ -24,7 +24,7 @@ inline const source::Node *excessiveDepth(const source::Body &body,
         instruction.get<source::Conditional>() ||
         instruction.get<source::For>() ||
         instruction.get<source::VariantConstruct>() ||
-        instruction.get<source::Match>();
+        instruction.get<source::Match>() || instruction.get<source::Pure>();
     if (recordDepth >= 64 || (lists && recordDepth + 1 >= 64))
       return &instruction;
     if (auto *match = instruction.get<source::Match>()) {
@@ -33,6 +33,13 @@ inline const source::Node *excessiveDepth(const source::Body &body,
       for (const auto &arm : match->arms)
         if (auto *failure = excessiveDepth(arm.body, recordDepth + 3))
           return failure;
+    }
+    if (auto *pure = instruction.get<source::Pure>()) {
+      if ((!pure->captures.empty() || !pure->outputs.empty()) &&
+          recordDepth + 2 >= 64)
+        return &instruction;
+      if (auto *failure = excessiveDepth(pure->body, recordDepth + 1))
+        return failure;
     }
     if (auto *branch = instruction.get<source::Conditional>()) {
       if (auto *failure = excessiveDepth(branch->thenBody, recordDepth + 1))

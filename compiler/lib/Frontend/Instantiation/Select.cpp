@@ -698,10 +698,18 @@ class Selector {
       } else if (auto *message =
                      std::get_if<syntax::Message>(&instruction.value)) {
         locals.insert(message->output);
+      } else if (auto *query = std::get_if<syntax::Query>(&instruction.value)) {
+        locals.insert(query->outputs.begin(), query->outputs.end());
       }
     }
   }
   void protocolBody(Protocol &p, const Substitution &sub) {
+    if (std::holds_alternative<Protocol::MathematicalBody>(p.body) &&
+        p.generic) {
+      fail(p, "source-mathematical-profile",
+           "mathematical protocol requires a closed header in this profile");
+      return;
+    }
     Names locals, parameters(p.parameters.begin(), p.parameters.end());
     for (const auto &entry : sub)
       locals.insert(entry.first);
@@ -711,8 +719,8 @@ class Selector {
     }
     for (auto &result : p.results)
       type(result.type, sub);
-    if (p.body)
-      body(*p.body, sub, locals, parameters, p.name);
+    if (auto *instructions = p.instructions())
+      body(*instructions, sub, locals, parameters, p.name);
     for (auto &dep : p.dependencies) {
       auto found = protocols.find(symbol(dep.protocol));
       if (!dep.arguments) {

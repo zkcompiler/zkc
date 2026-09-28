@@ -69,6 +69,23 @@ def randomDraw (location : Location) (identity : Name) (generation : Nat)
   updateResource identity fun r => { r with payload := rngPayload domain tape }
   return [Value.fromArithmetic domain.scalar (.field value), rngValue domain identity (generation + 1)]
 
+/-- The finite reference tape contains canonical scalar candidates, not native
+entropy bytes. One query consumes one generation and debit; zero candidates
+advance the tape, including on bounded failure. Provider correspondence remains
+an explicit premise. Distinct queries may return equal nonzero values. -/
+def randomNonzeroDraw (location : Location) (identity : Name)
+    (generation : Nat) : RunM (List Value) := do
+  let .rng initial ← consumeResource location "rng" identity generation
+    | failAt location "refused" "capability-kind"
+  let mut tape := initial
+  for _ in [:128] do
+    let value :: rest := tape | failAt location "exhausted" "test-tape"
+    tape := rest
+    updateResource identity fun r => { r with payload := .rng rest }
+    if h : value ≠ 0 then
+      return [.nonzeroField ⟨value, h⟩, .rng identity (generation + 1)]
+  failAt location "exhausted" "sampling-limit"
+
 /-- One atomic vector transition: all capability and total-budget checks precede
 the generation advance and length-sized debit. Entropy failure keeps that full
 transition and any consumed tape prefix. Logical storage is bounded here; native

@@ -44,6 +44,7 @@ pub fn execute<B: WireBackend, R, A>(
             let action = runner.poll();
             match action {
                 Action::Local(local) => runner.execute_local(&local.cut)?,
+                Action::Guard(cut) => runner.execute_guard(&cut)?,
                 Action::Send(_) => {
                     let cut = action
                         .cut()

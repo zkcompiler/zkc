@@ -192,6 +192,56 @@ binding, branches, bounded repetition and stopped execution. The concrete MLIR
 review must decide which information to preserve in each native level; the
 owned Lean source calculus does not require a one-dialect transcription.
 
+### 3.2 Mathematical language consolidation
+
+The target mathematical API uses the admitted graph/protocol syntax and its
+independent role interpretation. The initial small mathematical syntax remains a
+migration input until its examples and external-adapter clients move. Migrate
+Sigma with the first generated path, then Sumcheck and shared services; do not
+require all example migrations before the first execution. Prefer rewriting a
+small fixture and reproving its properties directly on canonical terms. A general
+embedding of the retiring language is not a prerequisite. Transferring an old
+theorem does require its exact embedding or meaning correspondence. Retain
+convenient notation as builders, then retire the duplicated interpreter after
+its last maintained consumer moves.
+
+Keep semantic syntax, evaluation and constructor laws separate from raw codecs,
+admission budgets and efficient decoder implementations. Extract common algebra,
+indexed iteration and location/action support below the consumers that use it.
+Graph evaluation should not import an older protocol interpreter merely for a
+loop helper or location record. This is a dependency refactor of the mathematical
+models, not a requirement to merge every existing source grammar.
+Extract small dependencies with the client; broad import cleanup does not block
+Sigma. Its remaining dependency reversals have an explicit retirement condition
+at consolidation.
+
+Mathematical availability, located ownership and participant-local binding retain
+their own judgments. Their independent interpreters can share pure evaluation
+and effect signatures when the contracts agree. Preserve actual reply types,
+root aliases, entry/invocation identity, failures and observations in any common
+interface. Keep the existing generic `Source.Program` and `Source.Region` APIs
+where their independent clients need them.
+Dense mathematical site intervals remain stage-specific. Target effects preserve
+their correspondence through explicit mappings rather than source interval
+density. A shared vocabulary does not require identical source and target ASTs.
+
+Independently interpret the captured mathematical input and actual generated
+target. Do not reconstruct the former from the latter. A theorem for that
+transformation does not establish the separate frontend text-elaboration or
+native execution correspondence.
+
+External FV adapters consume this common execution foundation and actual source
+interpretations. VCVio is the primary oracle/probabilistic connection; ArkLib
+protocol and polynomial interfaces are used under their exact correspondence
+premises. These adapters stay in the separately resolved integration package.
+Source, compiler, runtime and property clients do not gain separate private
+copies of the probability or security framework.
+
+The [roadmap](../docs/roadmap.md#2-what-closing-a-unit-requires) keeps detailed
+proof closure separate from executable integration. Consolidation removes
+competing definitions while preserving existing claims through their stated
+correspondences; it does not erase an open obligation.
+
 ## 4. Contracts, analyses and checking
 
 Phase admission now uses one compact-region checker, including explicit

@@ -7,6 +7,7 @@ namespace Tools.Interactive.Bindings.Random
 private def resolve (physical : Bool) (binding : Declaration) (shape : Support.Shape) : Result Signature := do
   let field ← Support.scalarArgument binding
   if binding.contract == "random.index" then ensure (field == koalaBearExt8) "binding-index-randomness"
+  if binding.contract == "random.draw_nonzero" then ensure (field == fr) "binding-nonzero-field"
   Support.realize physical binding (Support.signature shape field) (Support.scalarBackend field)
 
 /-- Independently authored installed contracts for this domain. -/
@@ -15,6 +16,7 @@ def contribution : Contribution :=
   ⟨[
     Operation.ofShape "random.vector" ["rng"] ["vector", "rng"] resolve,
     Operation.ofShape "random.index" ["rng", "index"] ["index", "rng"] resolve,
+    Operation.ofShape "random.draw_nonzero" ["rng"] ["nonzero_field", "rng"] resolve,
     Operation.ofShape "random.draw" ["rng"] ["field", "rng"] resolve]⟩
   (fun contract => Support.implementations ["arkworks", "dalek", "plonky3"] contract)
 

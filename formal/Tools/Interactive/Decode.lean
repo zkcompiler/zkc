@@ -118,6 +118,26 @@ def body (depth : Nat) (kind : BodyKind) (json : Json)
           ensure (kind == .common) "message-outside-source"
           return .message (← name site) (← name schema) (← name sender) (← name receiver)
             (← name input) (← name output)
+      | [.str "query", site, owner, root, inputs, outputs] =>
+          ensure (kind == .common && !allowRelease) "interactive-query-context"
+          return .query (← name site) (← name owner) (← name root) (← names inputs) (← names outputs)
+      | [.str "query", site, root, inputs, outputs] =>
+          ensure (kind == .role && !allowRelease) "interactive-query-context"
+          return .query (← name site) "" (← name root) (← names inputs) (← names outputs)
+      | [.str "guard", site, owner, condition] =>
+          ensure (kind == .common && !allowRelease) "interactive-guard-context"
+          return .guard (← name site) (← name owner) (← name condition)
+      | [.str "guard", site, condition] =>
+          ensure (kind == .role) "interactive-guard-context"
+          return .guard (← name site) "" (← name condition)
+      | [.str "pure", site, owner, captures, nested, outputs] =>
+          ensure (kind == .common && !allowRelease) "interactive-pure-context"
+          return .pureRegion (← name site) (← name owner) (← pairs name readType captures)
+            (← body depth .localFunction nested readType false true) (← pairs name readType outputs)
+      | [.str "pure", site, captures, nested, outputs] =>
+          ensure (kind == .role && !allowRelease) "interactive-pure-context"
+          return .pureRegion (← name site) "" (← pairs name readType captures)
+            (← body depth .localFunction nested readType false false) (← pairs name readType outputs)
       | [.str "send", site, schema, peer, input] =>
           ensure (kind == .role) "send-outside-participant"
           return .send (← name site) (← name schema) (← name peer) (← name input)
@@ -213,6 +233,22 @@ def entry (json : Json) : Result (Name × Name) := do
   match ← array json with
   | [.str "entry", symbol, selected] => return (← name symbol, ← name selected)
   | _ => throw "invalid-entry"
+
+def root (json : Json) : Result Root := do
+  let [.str "root", symbol, service, owners] ← array json | throw "interactive-root-shape"
+  return ⟨← name symbol, ← name service, ← names owners⟩
+
+/-- The optional seventh field must be nonempty. Returning the six-field
+envelope keeps every preparation path responsible for retaining its roots. -/
+def rootedEnvelope (json : Json) : Result (List Json × List Root) := do
+  let fields ← array json
+  match fields with
+  | [a, b, c, d, e, f] => return ([a, b, c, d, e, f], [])
+  | [a, b, c, d, e, f, roots] =>
+      let roots ← (← array roots limits.definitions).mapM root
+      ensure (!roots.isEmpty) "interactive-empty-roots"
+      return ([a, b, c, d, e, f], roots)
+  | _ => throw "interactive-module-shape"
 
 def participant (json : Json) (readType : Json → Result Ty := ty) : Result Participant := do
   match ← array json with

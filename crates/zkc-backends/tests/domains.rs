@@ -14,3 +14,6 @@ mod public_msm;
 mod resources;
 #[path = "domains/support.rs"]
 mod support;
+
+#[path = "domains/nonzero.rs"]
+mod nonzero;

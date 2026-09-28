@@ -36,6 +36,9 @@ structure Services (Value : Type) (m : Type → Type) where
   charge : Scope → m Unit
   iteration : Scope → m Unit
   executeLocal : Scope → Function → List Value → m (List Value)
+  executePure : Scope → Function → List Value → m (List Value)
+  guard : Scope → Value → m Unit
+  query : Scope → Name → m Value
   send : Scope → Name → Name → Value → m Unit
   received : Scope → Name → Name → Value → m Unit
   receive : Scope → Name → Name → Ty → m Value
@@ -97,6 +100,29 @@ def executeBody {Value : Type} {m : Type → Type} [Monad m]
     for instruction in body do
       services.charge origin
       match instruction with
+      | .query site owner root _ outputs =>
+          let owner ← services.checked origin (binding.role owner)
+          let location := { origin with site := site, role := owner }
+          let (_, reply) ← services.checked location (source.rootService root)
+          if active selected owner then
+            let value ← services.query location root
+            env ← services.checked location (bindPorts services.typeOf selected env outputs [(owner, reply)] [value])
+          context ← services.checked location (context.bind outputs [(owner, reply)])
+      | .guard site owner condition =>
+          let owner ← services.checked origin (binding.role owner)
+          let location := { origin with site := site, role := owner }
+          if active selected owner then
+            let value ← services.checked location (lookup condition (roleStore env owner))
+            services.guard location value
+      | .pureRegion site owner captures nested outputs =>
+          let owner ← services.checked origin (binding.role owner)
+          let location := { origin with site := site, role := owner }
+          let resultPorts := outputs.map fun p => (owner, p.2)
+          if active selected owner then
+            let values ← services.checked location (readValues (roleStore env owner) (captures.map Prod.fst))
+            let values ← services.executePure location (pureFunction site captures nested outputs) values
+            env ← services.checked location (bindPorts services.typeOf selected env (outputs.map Prod.fst) resultPorts values)
+          context ← services.checked location (context.bind (outputs.map Prod.fst) resultPorts)
       | .localCall site owner callee inputs outputs =>
           let owner ← services.checked origin (binding.role owner)
           let location := { origin with site := site, role := owner }

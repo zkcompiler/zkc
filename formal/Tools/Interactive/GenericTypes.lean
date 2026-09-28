@@ -136,7 +136,7 @@ def relationSorts (name : String) : Result (List StaticSort) := do
   | _ =>
       ensure (name.startsWith "Encodes.") "generic-declared-predicate"
       let kind := (name.drop "Encodes.".length).toString
-      ensure (["bool", "index", "indices", "matrix", "vector", "polynomial", "field", "table", "point", "round", "group", "groups", "commitment", "commitments", "proof"].contains kind)
+      ensure (["bool", "index", "indices", "matrix", "vector", "polynomial", "field", "nonzero_field", "table", "point", "round", "group", "groups", "commitment", "commitments", "proof"].contains kind)
         "generic-declared-predicate"
       return [.codec] ++ (← kindSort kind).toList
 
@@ -273,7 +273,7 @@ def signature (parameters : Parameters) (contract : String) (arguments : List Te
   else
     let [f] := arguments | throw "generic-static-arity"
     ensure ((← termSort parameters f) == .field) "generic-static-sort"
-    roots := ["field", "matrix", "vector", "polynomial", "table", "point", "round", "rng", "nonce"].map fun kind => (kind, f)
+    roots := ["field", "nonzero_field", "matrix", "vector", "polynomial", "table", "point", "round", "rng", "nonce"].map fun kind => (kind, f)
     needs := [.relation (if contract == "random.index" then "IndexRandomness" else if Bindings.numericalContract contract then "TwoAdicField" else if contract.startsWith "poly." then "CommRing" else "Field") [f]]
     if contract == "poly.even_odd_fold" then
       needs := needs ++ [.relation "CharacteristicNotTwo" [f]]

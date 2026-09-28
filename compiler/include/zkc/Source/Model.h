@@ -99,6 +99,18 @@ struct Receive {
   std::string output;
   std::string type;
 };
+/// Ordered access to a closed semantic root. A root is not an affine value;
+/// native handle threading is a later realization step.
+struct Query {
+  std::string role; // Empty in a projected participant.
+  std::string root;
+  Names inputs;
+  Names outputs;
+};
+struct Guard {
+  std::string role; // Empty in a projected participant.
+  std::string condition;
+};
 struct Release {
   Names values;
 };
@@ -116,6 +128,16 @@ struct Incomplete {};
 
 struct Instruction;
 using Body = std::vector<Instruction>;
+/// Located total computation. Captures name enclosing values and the region's
+/// closed arguments; outputs name fresh enclosing bindings. Admission checks
+/// their types and permits only positively total operations followed by yield.
+/// This region has no local-service action in its mathematical meaning.
+struct Pure {
+  std::string role; // Empty only in a projected participant.
+  std::vector<Parameter> captures;
+  Body body;
+  std::vector<Parameter> outputs;
+};
 struct LoopCount {
   enum class Kind { Constant, Parameter };
   Kind kind = Kind::Constant;
@@ -163,10 +185,10 @@ struct Match {
 };
 
 struct Instruction : Node {
-  using Value =
-      std::variant<Operation, LocalCall, ProtocolCall, Message, Send, Receive,
-                   Return, Yield, Stop, Incomplete, Loop, Release,
-                   AlgorithmCall, Conditional, For, VariantConstruct, Match>;
+  using Value = std::variant<Operation, LocalCall, ProtocolCall, Message, Send,
+                             Receive, Return, Yield, Stop, Incomplete, Loop,
+                             Release, AlgorithmCall, Conditional, For,
+                             VariantConstruct, Match, Pure, Query, Guard>;
   std::string site; // Empty for return/yield/release; scoped to its definition
                     // otherwise.
   Value value;
@@ -243,6 +265,14 @@ struct OperationBinding : Node {
   std::string name;
   protocol::BindingApplication application;
 };
+/// Closed service identity shared by every referencing query. The service
+/// names an installed entropy binding; owners are actual module roles.
+/// Aliasing is root identity, never equality of replies or host seeds.
+struct Root : Node {
+  std::string name;
+  std::string service;
+  Names owners;
+};
 
 struct StaticParameter {
   std::string name;
@@ -295,6 +325,7 @@ struct Module : Node {
   std::vector<Configuration> configurations;
   std::vector<RelationDeclaration> relations;
   std::vector<RelationView> relationViews;
+  std::vector<Root> roots;
   // Preserve an explicitly empty library envelope at the interchange boundary.
   bool library = false;
   bool isLibrary() const {
@@ -324,6 +355,7 @@ struct Participants : Node {
   std::vector<Function> functions;
   std::vector<Participant> participants;
   std::vector<ParticipantEntry> entries;
+  std::vector<Root> roots;
 };
 
 struct PublicBinding : Node {

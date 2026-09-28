@@ -23,8 +23,9 @@ Start in a prepared checkout with 'just demo'; see docs/getting-started.md.
 fn command_help(command: &str) -> Option<&'static str> {
     match command {
         "run-protocol" => Some(
-            "Usage: zkc run-protocol SOURCE PARTICIPANTS INPUTS CHECKER\n\n\
-             SOURCE is explicit common JSON from zkc-compile protocol-source.\n\
+            "Usage: zkc run-protocol SOURCE PARTICIPANTS INPUTS CHECKER [SUBJECT_SHA256]\n\n\
+             SOURCE is explicit common JSON or a mathematical placement capture.\n\
+             Captures require SUBJECT_SHA256 from the caller's retained subject.\n\
              PARTICIPANTS is JSON from protocol-compile; INPUTS is a zkc.run carrier.\n\
              CHECKER is the independent Lean interactive-protocol executable.\n",
         ),

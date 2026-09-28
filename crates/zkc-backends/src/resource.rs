@@ -128,6 +128,22 @@ enum Source {
     Tape(std::collections::VecDeque<Scalar>),
 }
 impl Source {
+    fn nonzero_scalar(&mut self) -> Result<zkc_arkworks::NonzeroScalar> {
+        match self {
+            Self::Os(r) => r.nonzero_scalar().map_err(ark),
+            #[cfg(feature = "test-utils")]
+            Self::Tape(t) => {
+                for _ in 0..zkc_arkworks::NONZERO_SAMPLING_ATTEMPTS {
+                    let value = t.pop_front().ok_or_else(|| exhausted("test-tape"))?;
+                    if let Some(nonzero) = zkc_arkworks::NonzeroScalar::new(value) {
+                        return Ok(nonzero);
+                    }
+                }
+                Err(exhausted("sampling-limit"))
+            }
+        }
+    }
+
     fn scalar(&mut self) -> Result<Scalar> {
         match self {
             Self::Os(r) => Ok(r.scalar()),
@@ -648,6 +664,19 @@ impl Resources {
         let mut next = t.clone();
         next.generation = slot.generation;
         Ok((value, next))
+    }
+    pub fn draw_nonzero(&mut self, f: &Frame, t: &Capability) -> Result<(Value, Capability)> {
+        if t.identity != Identity::Bls12381Fr {
+            return Err(refused("capability-identity"));
+        }
+        let slot = self.consume(f, t, Type::Rng)?;
+        let State::Rng(source) = &mut slot.state else {
+            unreachable!("validated kind")
+        };
+        let value = source.nonzero_scalar()?;
+        let mut next = t.clone();
+        next.generation = slot.generation;
+        Ok((Value::NonzeroField(value), next))
     }
     pub fn commit_ristretto_nonce(
         &mut self,

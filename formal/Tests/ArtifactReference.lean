@@ -18,7 +18,7 @@ example : (decodeValue "group:bls12-381.g1" fieldWire).isOk = false := by native
 example : (decodeValue "field" fieldWire).isOk = false := by native_decide
 
 private def source : Source :=
-  ⟨.explicit [⟨"selected_draw", "random.draw", ["bls12-381.fr"], ""⟩], [], [], [], []⟩
+  ⟨.explicit [⟨"selected_draw", "random.draw", ["bls12-381.fr"], ""⟩], [], [], [], [], []⟩
 private def descriptor : Descriptor :=
   ⟨"main", "P", "V", [], "coins", [("ConfiguredDraw", "draw")], 0, .null⟩
 private def location : Location := {
@@ -145,7 +145,7 @@ private def fixture (count : Nat) : Source × Instance × Protocol := Id.run do
     some [.loop "visits" (.constant count) [] ["payload"]
       [.message "commit" "commit" "P" "V" "payload" "received", .yield []] [], .ret []]⟩
   let binding : Instance := ⟨"policy", "Policy", [], [], [("P", "P"), ("V", "V")]⟩
-  return (⟨.explicit [], [], [definition], [binding], [("main", "policy")]⟩, binding, definition)
+  return (⟨.explicit [], [], [definition], [binding], [("main", "policy")], []⟩, binding, definition)
 
 private def sites (count : Nat) : Result (List ReceiveSite) :=
   let (source, binding, _) := fixture count

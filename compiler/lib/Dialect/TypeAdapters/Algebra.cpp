@@ -5,6 +5,7 @@ using namespace mlir;
 namespace zkc::protocol::type_adapters {
 namespace {
 using FieldAdapter = DomainAdapter<FieldType>;
+using NonzeroFieldAdapter = DomainAdapter<NonzeroFieldType>;
 using MatrixAdapter = DomainAdapter<MatrixType>;
 using FixedVectorAdapter =
     TypeNatAdapter<FixedVectorType, &FixedVectorType::getElementType,

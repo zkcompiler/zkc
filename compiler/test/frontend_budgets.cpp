@@ -96,6 +96,36 @@ library::CheckedBody directBody(unsigned emptyFields) {
 int main() {
   Cases cases;
   cases.run(
+      "mathematical elaboration and placement share invocation accounts", [&] {
+        const char *text = R"(
+      bind equal = "curve.equal"("bls12-381.g1");
+      mathematical protocol Compare {
+        roles (A, B);
+        inputs ((A, B) g: "bls12-381.g1"::Element);
+        outputs (A bool, B bool);
+        let same = equal(g, g);
+        return (same, same);
+      }
+      instance compare: Compare { roles (A = A, B = B); }
+      entry main = compare;
+    )";
+        auto baseline = analyze(text);
+        complete(baseline);
+        auto expected = source::encode(take(baseline.lower()));
+        for (auto account : accounts) {
+          auto limits = exact(baseline.workUsage());
+          require(limit(limits, account) > 1, "mathematical work is charged");
+          complete(analyze(text, limits));
+          --limit(limits, account);
+          stopped(analyze(text, limits), account);
+          limit(limits, account) += 21;
+          auto larger = analyze(text, limits);
+          complete(larger);
+          require(source::encode(take(larger.lower())) == expected,
+                  "budget does not change placed meaning");
+        }
+      });
+  cases.run(
       "operator discovery cannot hide work exhaustion or publish clients", [&] {
         auto source = [](unsigned count) {
           std::string text = R"(

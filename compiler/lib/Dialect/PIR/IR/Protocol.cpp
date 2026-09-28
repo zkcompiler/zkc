@@ -1,5 +1,6 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -360,6 +361,94 @@ LogicalResult ProtocolLoopOp::verifyRegions() {
   return success();
 }
 
+namespace {
+LogicalResult logicalOwner(Operation *op, StringAttr declared, StringRef &owner,
+                           bool allowPhysical = false) {
+  auto module = op->getParentOfType<ProtocolModuleOp>();
+  if (!module || !module.getStageAttr())
+    return diagnostics::emit(op->emitOpError(), "interactive-logical-owner");
+  if (auto protocol = op->getParentOfType<ProtocolOp>()) {
+    llvm::StringSet<> roles;
+    if (failed(names(op, protocol.getRolesAttr(), roles)))
+      return failure();
+    if (module.getStage() != "common" || !declared ||
+        !roles.contains(declared.getValue()))
+      return diagnostics::emit(op->emitOpError(), "interactive-logical-owner");
+    owner = declared.getValue();
+  } else {
+    auto participant = op->getParentOfType<ParticipantOp>();
+    if ((module.getStage() != "logical" &&
+         !(allowPhysical && module.getStage() == "physical")) ||
+        !participant || !participant.getRoleAttr() || declared)
+      return diagnostics::emit(op->emitOpError(), "interactive-logical-owner");
+    owner = participant.getRole();
+  }
+  return success();
+}
+} // namespace
+
+LogicalResult ServiceRootOp::verifySymbolUses(SymbolTableCollection &tables) {
+  auto module = (*this)->getParentOfType<ProtocolModuleOp>();
+  if (!module || !module.getStageAttr() ||
+      (module.getStage() != "common" && module.getStage() != "logical"))
+    return diagnostics::emit(emitOpError(), "interactive-unrealized-roots");
+  llvm::StringSet<> owners;
+  if (failed(names(*this, getOwnersAttr(), owners)) || owners.empty())
+    return diagnostics::emit(emitOpError(), "interactive-root-owner");
+  auto binding = resolve<OperationBindingOp>(*this, getServiceAttr(), tables);
+  if (!binding)
+    return failure();
+  auto declaration = protocol::readBinding(binding);
+  if (!declaration)
+    return diagnostics::emit(emitOpError(), declaration.takeError());
+  auto service = protocol::resolveEntropyService(declaration->application);
+  if (!service)
+    return diagnostics::emit(emitOpError(), service.takeError());
+  return success();
+}
+
+LogicalResult ServiceQueryOp::verifySymbolUses(SymbolTableCollection &tables) {
+  StringRef owner;
+  if (failed(logicalOwner(*this, getRoleAttr(), owner)))
+    return failure();
+  auto root = resolve<ServiceRootOp>(*this, getRootAttr(), tables);
+  if (!root)
+    return failure();
+  llvm::StringSet<> owners;
+  if (failed(names(*this, root.getOwnersAttr(), owners)) ||
+      !owners.contains(owner))
+    return diagnostics::emit(emitOpError(), "interactive-query-permission");
+  auto binding =
+      resolve<OperationBindingOp>(*this, root.getServiceAttr(), tables);
+  if (!binding)
+    return failure();
+  auto declaration = protocol::readBinding(binding);
+  if (!declaration)
+    return diagnostics::emit(emitOpError(), declaration.takeError());
+  auto service = protocol::resolveEntropyService(declaration->application);
+  if (!service)
+    return diagnostics::emit(emitOpError(), service.takeError());
+  if (getNumOperands() != 0 || getNumResults() != 1 ||
+      getResult(0).getType() !=
+          protocol::decodeBoundType(getContext(), service->reply))
+    return diagnostics::emit(emitOpError(), "interactive-query-signature");
+  return success();
+}
+
+LogicalResult ProtocolGuardOp::verify() {
+  StringRef owner;
+  if (failed(logicalOwner(*this, getRoleAttr(), owner, true)))
+    return failure();
+  auto module = (*this)->getParentOfType<ProtocolModuleOp>();
+  auto type = protocol::encodeBoundType(getCondition().getType(),
+                                        module.getStage() == "physical");
+  if (!type)
+    return diagnostics::emit(emitOpError(), type.takeError());
+  if (type->kind != "bool")
+    return diagnostics::emit(emitOpError(), "interactive-guard-condition");
+  return success();
+}
+
 LogicalResult LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
   auto callee = resolve<func::FuncOp>(*this, getCalleeAttr(), tables);
   if (!callee)
@@ -695,6 +784,74 @@ void LocalMatchOp::getSuccessorRegions(
     if (end && isa<LocalYieldOp>(end.getOperation()))
       regions.emplace_back(getOperation());
   }
+}
+LogicalResult PureRegionOp::verifyRegions() {
+  auto root = (*this)->getParentOfType<ProtocolModuleOp>();
+  if (!root || !root.getStageAttr() ||
+      (root.getStage() != "common" && root.getStage() != "logical"))
+    return diagnostics::emit(emitOpError(), "interactive-pure-context");
+  if (auto caller = (*this)->getParentOfType<ProtocolOp>()) {
+    llvm::StringSet<> roles;
+    if (failed(names(*this, caller.getRolesAttr(), roles)))
+      return failure();
+    if (root.getStage() != "common" || !getRoleAttr() ||
+        !roles.contains(getRoleAttr().getValue()))
+      return diagnostics::emit(emitOpError(), "interactive-pure-context");
+  } else if (root.getStage() != "logical" ||
+             !(*this)->getParentOfType<ParticipantOp>() || getRoleAttr()) {
+    return diagnostics::emit(emitOpError(), "interactive-pure-context");
+  }
+  if (failed(
+          localRegion(*this, getBody(), getOperandTypes(), getResultTypes())))
+    return failure();
+  auto &block = getBody().front();
+  if (!isa<LocalYieldOp>(block.back()))
+    return diagnostics::emit(emitOpError(), "interactive-pure-instruction");
+  auto immutable = [&](Type type) {
+    auto bound = protocol::encodeBoundType(type, false);
+    if (!bound) {
+      consumeError(bound.takeError());
+      return false;
+    }
+    return protocol::duplicable(bound->spelling()) &&
+           protocol::discardable(bound->spelling());
+  };
+  if (!llvm::all_of(getOperandTypes(), immutable) ||
+      !llvm::all_of(getResultTypes(), immutable))
+    return diagnostics::emit(emitOpError(), "interactive-pure-type");
+  for (auto &op : block.without_terminator()) {
+    if (op.getNumRegions() ||
+        failed(protocol::verifyBoundOperation(&op, false)))
+      return diagnostics::emit(op.emitOpError(), "interactive-pure-operation");
+    auto binding = protocol::operationBinding(&op);
+    if (!binding)
+      return diagnostics::emit(op.emitOpError(), binding.takeError());
+    auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
+    if (protocol::operationPurity(binding->application.contract) !=
+            protocol::OperationPurity::Total ||
+        !parameters || !parameters.empty())
+      return diagnostics::emit(op.emitOpError(), "interactive-pure-operation");
+    if (!llvm::all_of(op.getOperandTypes(), immutable) ||
+        !llvm::all_of(op.getResultTypes(), immutable))
+      return diagnostics::emit(op.emitOpError(), "interactive-pure-type");
+  }
+  return success();
+}
+OperandRange PureRegionOp::getEntrySuccessorOperands(RegionSuccessor) {
+  return getOperands();
+}
+ValueRange PureRegionOp::getSuccessorInputs(RegionSuccessor successor) {
+  if (successor.isOperation())
+    return getResults();
+  return getBody().empty() ? ValueRange{}
+                           : ValueRange(getBody().front().getArguments());
+}
+void PureRegionOp::getSuccessorRegions(
+    RegionBranchPoint point, SmallVectorImpl<RegionSuccessor> &regions) {
+  if (point.isParent())
+    regions.emplace_back(&getBody());
+  else
+    regions.emplace_back(getOperation());
 }
 LogicalResult LocalIfOp::verifyRegions() {
   if (failed(localControlContext(*this)))

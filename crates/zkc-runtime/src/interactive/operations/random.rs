@@ -12,6 +12,10 @@ pub(super) const CONTRACTS: &[Contract] = &[
         (&[Rng, Index], &[Index, Rng], AttributeRule::None),
     ),
     Contract::new("random.draw", (&[Rng], &[Field, Rng], AttributeRule::None)),
+    Contract::new(
+        "random.draw_nonzero",
+        (&[Rng], &[NonzeroField, Rng], AttributeRule::None),
+    ),
 ];
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {

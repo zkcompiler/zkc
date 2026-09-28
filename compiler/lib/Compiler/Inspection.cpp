@@ -1,7 +1,9 @@
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Frontend/Analysis.h"
 #include "zkc/Frontend/Protocol.h"
+#include "zkc/Mathematical/Placement.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Snapshot.h"
@@ -112,6 +114,19 @@ Expected<json::Value> inspectSource(const source::Document &document,
   if (!calls)
     return calls.takeError();
   (*report->getAsObject())["elaborated_calls"] = std::move(*calls);
+  if (analysis)
+    if (const auto *placement = analysis->mathematicalPlacement()) {
+      auto digest = mathematical::placementTargetDigest(*module);
+      if (!digest)
+        return digest.takeError();
+      if (*digest != placement->witness.target)
+        return error("math-placement-target-custody");
+      auto captured = mathematical::encode(*placement);
+      if (!captured)
+        return captured.takeError();
+      (*report->getAsObject())["mathematical_placement"] = std::move(*captured);
+      (*report->getAsObject())["mathematical_correspondence"] = "unchecked";
+    }
   json::Array requirementOrigins;
   for (const auto &definition : module->definitions)
     for (const auto &requirement : definition.requirements) {

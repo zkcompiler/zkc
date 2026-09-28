@@ -79,6 +79,19 @@ source, without reading a native candidate. `--generic-role SOURCE INPUTS ROLE`
 retains only the selected role's inputs and consumes explicitly supplied peer
 replies.
 
+Closed-root fixtures append a ninth field to `zkc.reference-inputs/1`:
+`[[root_name, budget, [canonical_scalar_candidate, ...]], ...]`. The eighth field
+remains the optional setup context; use `[]` there when only roots are supplied.
+Root records cover exactly the used roots owned by the selected role(s). The
+source fixes each root's owner and sampler domain. The interpreter allocates
+separate internal state; root handles cannot be supplied as ordinary arguments
+or aliased through the fixture's legacy resource names. Source queries consume
+the current state and record their actual reply and site. Nonzero sampling skips
+zero candidates, with a 128-candidate bound; failed draws retain the consumed
+generation and debit. Equal replies do not merge occurrences. These finite
+canonical-scalar tapes do not model native byte sampling without an explicit
+provider correspondence premise.
+
 [Control](../../../formal/Tools/Interactive/Control.lean) shares common-source
 traversal with the portable interactive interpreter: role stores, subprotocol instances, loop
 captures/carries and stopping cuts. It is parameterized by values and services,

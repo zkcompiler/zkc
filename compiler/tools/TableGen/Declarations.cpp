@@ -294,6 +294,9 @@ void Model::validateOperation(const Record *op) {
           op, "unknown authoring stage");
   require(op->getValueAsString("effect") == "local", op,
           "unsupported effect envelope");
+  const auto purity = name(op->getValueAsDef("purity"));
+  require(purity == "Total" || purity == "Ordered", op,
+          "unknown operation purity");
   auto scope = op->getValueAsListOfDefs("scope");
   require(scope.size() <= 128, op, "static scope limit");
   std::set<const Record *> available;
@@ -362,6 +365,11 @@ void Model::validateOperation(const Record *op) {
       auto args = app->getValueAsListOfDefs("arguments");
       scoped(args);
       auto *constructor = app->getValueAsDef("constructor");
+      if (purity == "Total")
+        require(name(constructor->getValueAsDef("custody")) != "Affine" &&
+                    constructor->getValueAsBit("copy") &&
+                    constructor->getValueAsBit("drop"),
+                op, "total operation has a resource port");
       validateParameters(op, constructor->getValueAsListOfDefs("parameters"),
                          args);
       if (op->getValueAsBit("commonGeneric"))
@@ -407,6 +415,13 @@ void Model::validateOperation(const Record *op) {
             "parameter field must have Field sort");
   }
   validateFacets(op);
+  if (purity == "Total")
+    for (const auto *facet : op->getValueAsListOfDefs("facets"))
+      require(!facet->isSubClassOf("ZKC_History") &&
+                  !facet->isSubClassOf("ZKC_Observation") &&
+                  !facet->isSubClassOf("ZKC_Sampling") &&
+                  facet->getName() != "AcceptanceGuard",
+              op, "total operation has an ordered facet");
 }
 std::string facetKind(const Record *r) {
   for (auto kind : {"History", "Observation", "Sampling", "Diagonal",
@@ -460,17 +475,18 @@ void Model::validateFacets(const Record *op) {
       auto domain = name(r->getValueAsDef("domain"));
       require(provider == "Entropy" || provider == "Transcript", op,
               "unknown sampling provider");
-      require(domain == "Field" || domain == "FieldVector" ||
-                  domain == "BoundedIndex",
+      require(domain == "Field" || domain == "NonzeroField" ||
+                  domain == "FieldVector" || domain == "BoundedIndex",
               op, "unknown sample domain");
       auto state = provider == "Entropy" ? "rng" : "transcript";
       require(sameType(port(r, "stateInput", false, state),
                        port(r, "stateOutput", true, state)),
               op, "sampling successor type mismatch");
       port(r, "valueOutput", true,
-           domain == "Field"         ? "field"
-           : domain == "FieldVector" ? "vector"
-                                     : "index");
+           domain == "Field"          ? "field"
+           : domain == "NonzeroField" ? "nonzero_field"
+           : domain == "FieldVector"  ? "vector"
+                                      : "index");
       require(r->getValueAsInt("valueOutput") !=
                   r->getValueAsInt("stateOutput"),
               op, "sampling result ports overlap");
@@ -772,7 +788,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
   os << "}; return values; }\n";
   os << "namespace {\nstruct OperationDeclaration { llvm::StringRef name; "
         "AuthoringStage stage; ParameterContract parameters; "
-        "llvm::StringRef effect; };\n"
+        "llvm::StringRef effect; OperationPurity purity; };\n"
         "const OperationDeclaration *declaration(llvm::StringRef name) {\n"
         "static const OperationDeclaration values[] = {\n";
   for (const auto *op : m.operations) {
@@ -785,7 +801,8 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << (field ? std::to_string(
                        termIndex(op->getValueAsListOfDefs("scope"), field))
                  : "std::nullopt")
-       << "}, " << quote(op->getValueAsString("effect")) << "},\n";
+       << "}, " << quote(op->getValueAsString("effect"))
+       << ", OperationPurity::" << name(op->getValueAsDef("purity")) << "},\n";
   }
   os << "}; for (const auto &v : values) if (v.name == name) return &v; return "
         "nullptr; }\n}\n"
@@ -796,7 +813,10 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
         "auto *d = declaration(key); return d ? &d->parameters : nullptr; }\n"
         "llvm::StringRef operationEffect(llvm::StringRef key) { "
         "auto *d = declaration(key); return d ? d->effect : llvm::StringRef{}; "
-        "}\n";
+        "}\n"
+        "std::optional<OperationPurity> operationPurity(llvm::StringRef key) { "
+        "auto *d = declaration(key); return d ? std::optional{d->purity} : "
+        "std::nullopt; }\n";
   os << "llvm::ArrayRef<SourceTypeExport> sourceTypeExports() {\nstatic const "
         "std::vector<SourceTypeExport> values = {\n";
   for (const auto *r : m.typeExports)
@@ -909,6 +929,7 @@ json::Object inventory(const Model &m) {
         {"scope", std::move(terms)},
         {"stage", name(op->getValueAsDef("stage"))},
         {"effect", op->getValueAsString("effect")},
+        {"purity", name(op->getValueAsDef("purity"))},
         {"commonGeneric", op->getValueAsBit("commonGeneric")},
         {"parameters", json::Object{{"validator", name(p)},
                                     {"minimum", p->getValueAsInt("minimum")},

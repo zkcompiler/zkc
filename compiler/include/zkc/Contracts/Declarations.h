@@ -103,5 +103,11 @@ struct ParameterContract {
 const ParameterContract *parameterContract(llvm::StringRef contract);
 /// The existing conservative envelope. It does not promise totality.
 llvm::StringRef operationEffect(llvm::StringRef contract);
+/// Total means a deterministic, total mathematical function on admitted values.
+/// It makes no promise about physical allocation, decoding or kernel failures.
+/// Ordered is conservative: it includes operations without a totality contract.
+enum class OperationPurity { Total, Ordered };
+/// Unknown contracts have no classification and cannot enter a pure graph.
+std::optional<OperationPurity> operationPurity(llvm::StringRef contract);
 } // namespace zkc::protocol
 #endif

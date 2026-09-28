@@ -15,6 +15,7 @@ pub(crate) fn apply(
         "random.index"
             | "transcript.draw_index"
             | "random.draw"
+            | "random.draw_nonzero"
             | "random.vector"
             | "curve.commit"
             | "curve.response"
@@ -37,6 +38,10 @@ pub(crate) fn apply(
                     .map_err(|_| refused("transcript-origin"))?;
                 let (v, t) = r.transcript_index(i.frame, t, &origin, *bound)?;
                 Ok(vec![v, Transcript(t)])
+            }
+            ("random.draw_nonzero", [Rng(t)]) => {
+                let (v, t) = r.draw_nonzero(i.frame, t)?;
+                Ok(vec![v, Rng(t)])
             }
             ("random.draw", [Rng(t)]) => {
                 let (v, t) = r.draw_value(i.frame, t)?;
@@ -147,6 +152,12 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             AttributeRule::ChallengeOrigin,
         ),
         random::operation("random.draw", &[Rng], &[Field, Rng], AttributeRule::None),
+        random::operation(
+            "random.draw_nonzero",
+            &[Rng],
+            &[NonzeroField, Rng],
+            AttributeRule::None,
+        ),
         random::operation(
             "random.vector",
             &[Rng],

@@ -31,3 +31,15 @@ def OpRandomDraw : ZKC_Operation<"random.draw", [OpRandomDrawF],
 }
 def ExportRandomDraw : ZKC_OperationExport<"zkc::random", "draw",
     OpRandomDraw, ["rng"]>;
+
+// No transcript counterpart is installed for this nonzero challenge domain.
+def OpRandomDrawNonzeroF : ZKC_Root<"F", FieldDomain>;
+def OpRandomDrawNonzero : ZKC_Operation<"random.draw_nonzero", [OpRandomDrawNonzeroF],
+    [ZKC_Apply<TypeRng, [OpRandomDrawNonzeroF]>],
+    [ZKC_Apply<TypeNonzeroField, [OpRandomDrawNonzeroF]>, ZKC_Apply<TypeRng, [OpRandomDrawNonzeroF]>],
+    [ZKC_Holds<CapabilityField, [OpRandomDrawNonzeroF]>]> {
+  int ordinal = 155;
+  let facets = [ZKC_Sampling<Entropy, NonzeroFieldSample, -1>];
+}
+def ExportRandomDrawNonzero : ZKC_OperationExport<"zkc::random", "draw_nonzero",
+    OpRandomDrawNonzero, ["rng"]>;

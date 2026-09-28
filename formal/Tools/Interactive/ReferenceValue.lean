@@ -37,6 +37,7 @@ inductive Value where
   | rrng (identity : Name) (generation : Nat)
   | rnonce (identity : Name) (generation : Nat)
   | field (value : Math.Fr)
+  | nonzeroField (value : {x : Math.Fr // x ≠ 0})
   | table (value : Math.Table)
   | point (coordinates : List Math.Fr)
   | round (value : Math.Round Math.Fr)
@@ -67,6 +68,7 @@ def Value.ty : Value → Bindings.ValueType
   | .rrng .. => ⟨"rng", Bindings.ristrettoScalar, "", []⟩
   | .rnonce .. => ⟨"nonce", Bindings.ristrettoScalar, "", []⟩
   | .field _ => ⟨"field", "bls12-381.fr", "", []⟩
+  | .nonzeroField _ => ⟨"nonzero_field", "bls12-381.fr", "", []⟩
   | .table _ => ⟨"table", "bls12-381.fr", "", []⟩
   | .point _ => ⟨"point", "bls12-381.fr", "", []⟩
   | .round _ => ⟨"round", "bls12-381.fr", "", []⟩
@@ -122,6 +124,7 @@ def Value.json (value : Value) : Json :=
     | .arithmetic d value => ScalarReference.json d value
     | .bnGroup _ _ b | .rgroup b | .rgroups b => .str (Tools.Artifact.hex b)
     | .field f => scalarJson f
+    | .nonzeroField f => scalarJson f.val
     | .table t => .arr #[natural t.rank, fields t.cells]
     | .point p => fields p
     | .round r => .arr #[scalarJson r.constant, scalarJson r.linear, scalarJson r.quadratic]
@@ -229,6 +232,10 @@ def decodeValue (json : Json) : Result Value := do
     return if ty.kind == "group" then .rgroup bytes else .rgroups bytes
   let value ← match ty.kind with
     | "field" => return Value.field (← decodeScalar payload)
+    | "nonzero_field" => do
+        let f ← decodeScalar payload
+        if h : f ≠ 0 then return .nonzeroField ⟨f, h⟩
+        else throw "nonzero-field-zero"
     | "table" => do
         let [rank, cells] ← Decode.array payload | throw "reference-table"
         return .table (← Math.Table.admit (← Decode.natural rank) (← decodeScalars cells))
@@ -299,6 +306,7 @@ def Value.wire (value : Value) : Result ByteArray :=
   | .rgroup bytes => do Tools.Artifact.checkRistrettoWire "group" bytes; return bytes
   | .rgroups bytes => do Tools.Artifact.checkRistrettoWire "groups" bytes; return bytes
   | .field f => (Tools.Artifact.Value.field f).wire
+  | .nonzeroField f => (Tools.Artifact.Value.nonzeroField f).wire
   | .table t => (Tools.Artifact.Value.table t).wire
   | .point p => (Tools.Artifact.Value.point p).wire
   | .round r => (Tools.Artifact.Value.round r).wire

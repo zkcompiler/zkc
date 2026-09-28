@@ -7,7 +7,7 @@
 namespace zkc::protocol {
 
 enum class RandomnessProvider { Entropy, Transcript };
-enum class SampleDomain { Field, FieldVector, BoundedIndex };
+enum class SampleDomain { Field, NonzeroField, FieldVector, BoundedIndex };
 
 /// Port roles for an installed sampling operation. These facts describe
 /// structural dataflow, not independence, uniformity, or Fiat-Shamir security.

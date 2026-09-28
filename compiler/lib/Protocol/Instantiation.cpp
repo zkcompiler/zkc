@@ -888,6 +888,9 @@ class Elaborator {
           return false;
         call->callee = *callee;
         call->staticArguments.clear();
+      } else if (auto *pure = item.get<source::Pure>()) {
+        if (!rewrite(pure->body, input.get<source::Pure>()->body, depth + 1))
+          return false;
       } else if (auto *match = item.get<source::Match>()) {
         const auto *before = input.get<source::Match>();
         for (size_t i = 0; i < match->arms.size(); ++i)
@@ -915,6 +918,8 @@ class Elaborator {
   void remember(const source::Body &copy, const source::Body &input) {
     for (auto [a, b] : zip(copy, input)) {
       origins.emplace(&a, &b);
+      if (auto *pure = a.get<source::Pure>())
+        remember(pure->body, b.get<source::Pure>()->body);
       if (auto *match = a.get<source::Match>())
         for (size_t i = 0; i < match->arms.size(); ++i)
           remember(match->arms[i].body, b.get<source::Match>()->arms[i].body);
@@ -975,7 +980,7 @@ class Elaborator {
     };
     if (!reserve(value.bindings) || !reserve(value.functions) ||
         !reserve(value.protocols) || !reserve(value.instances) ||
-        !reserve(value.entries))
+        !reserve(value.entries) || !reserve(value.roots))
       return error(problem);
     source::Module result;
     result.location = value.location;
@@ -984,6 +989,7 @@ class Elaborator {
     result.protocols = value.protocols;
     result.instances = value.instances;
     result.entries = value.entries;
+    result.roots = value.roots;
     origins.emplace(&result, &value);
     functions = value.functions;
     bindings = value.bindings;
@@ -994,6 +1000,7 @@ class Elaborator {
     remember(result.protocols, value.protocols);
     remember(result.instances, value.instances);
     remember(result.entries, value.entries);
+    remember(result.roots, value.roots);
     for (size_t i = 0; i < value.functions.size(); ++i) {
       auto copy = functions[i];
       const auto &input = value.functions[i];

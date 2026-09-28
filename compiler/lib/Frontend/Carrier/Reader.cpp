@@ -256,6 +256,33 @@ class Reader {
       call.callee = atom();
       call.inputs = names();
       result.value = std::move(call);
+    } else if (eat("query")) {
+      result.site = site();
+      source::Query query;
+      query.role = atom();
+      expect(":");
+      query.outputs = outputs();
+      query.root = atom();
+      query.inputs = names();
+      result.value = std::move(query);
+    } else if (eat("guard")) {
+      result.site = site();
+      source::Guard guard;
+      guard.role = atom();
+      expect(":");
+      guard.condition = atom();
+      result.value = std::move(guard);
+    } else if (eat("pure")) {
+      result.site = site();
+      source::Pure pure;
+      pure.role = atom();
+      expect("capture");
+      pure.captures = arguments();
+      expect("->");
+      pure.outputs = arguments();
+      pure.body = body(depth + 1);
+      result.value = std::move(pure);
+      region = true;
     } else if (eat("message")) {
       result.site = site();
       source::Message message;
@@ -604,6 +631,15 @@ public:
         entry.instance = atom();
         expect(";");
         module.entries.push_back(record(std::move(entry), offset));
+      } else if (eat("root")) {
+        source::Root root;
+        root.name = atom();
+        expect("=");
+        root.service = atom();
+        expect("owners");
+        root.owners = names();
+        expect(";");
+        module.roots.push_back(record(std::move(root), offset));
       } else if (eat("bind")) {
         source::OperationBinding binding;
         binding.name = atom();

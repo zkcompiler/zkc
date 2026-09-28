@@ -108,7 +108,17 @@ bool chargeDeclarationCopy(WorkBudget &budget, const Declaration &d) {
       } else if (!chargeTypeCopy(budget, result.type))
         return false;
     }
-    if (d.body && !chargeBodyCopy(budget, *d.body))
+    if constexpr (std::is_same_v<Declaration, syntax::Protocol>) {
+      if (const auto *instructions = d.instructions())
+        if (!chargeBodyCopy(budget, *instructions))
+          return false;
+      if (const auto *graph =
+              std::get_if<syntax::Protocol::MathematicalBody>(&d.body))
+        for (const auto &root : graph->roots)
+          if (!budget.charge(WorkAccount::AuthoredStatic,
+                             1 + root.owners.size()))
+            return false;
+    } else if (d.body && !chargeBodyCopy(budget, *d.body))
       return false;
   } else if constexpr (std::is_same_v<Declaration, syntax::Struct>) {
     for (const auto &field : d.fields)

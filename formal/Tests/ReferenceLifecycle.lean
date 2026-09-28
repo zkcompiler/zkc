@@ -57,6 +57,9 @@ private def scheduleServices (base : Location) : Control.Services Value RunM whe
   charge scope := charge { base with scope }
   iteration _ := pure ()
   executeLocal _ _ inputs := pure inputs
+  executePure scope _ _ := failAt { base with scope } "refused" "unexpected-test-pure"
+  guard scope _ := failAt { base with scope } "refused" "unexpected-test-guard"
+  query scope _ := failAt { base with scope } "refused" "unexpected-test-query"
   send _ _ _ _ := pure ()
   received _ _ _ _ := pure ()
   receive scope _ _ _ := failAt { base with scope } "refused" "unexpected-test-receive"

@@ -18,6 +18,7 @@ const MAGIC: &[u8] = b"ZKCV\x01";
 fn tag(ty: Type) -> Result<u8> {
     Ok(match ty {
         Type::Field => 1,
+        Type::NonzeroField => 50,
         Type::Table => 2,
         Type::Point => 3,
         Type::Round => 4,
@@ -48,7 +49,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
         return encoded;
     }
     let encoded_size = match value {
-        Value::Field(_) => Some(38),
+        Value::Field(_) | Value::NonzeroField(_) => Some(38),
         Value::Bool(_) => Some(7),
         Value::Curve(_) => Some(54),
         Value::Groups(p) => p.len().checked_mul(48).and_then(|n| n.checked_add(10)),
@@ -85,6 +86,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     }
     let body = match value {
         Value::Field(s) => encode_scalar(s).map_err(ark)?.to_vec(),
+        Value::NonzeroField(s) => s.to_bytes().map_err(ark)?.to_vec(),
         Value::Curve(p) => p.to_bytes().map_err(ark)?.to_vec(),
         Value::Groups(points) => {
             policy.groups(points.len())?;
@@ -194,6 +196,9 @@ fn decode(
     let body = &bytes[6..];
     let value = match ty {
         Type::Field => Value::Field(decode_scalar(body).map_err(ark)?),
+        Type::NonzeroField => {
+            Value::NonzeroField(zkc_arkworks::NonzeroScalar::from_bytes(body).map_err(ark)?)
+        }
         Type::Group => Value::Curve(crate::GroupPoint::from_bytes(body).map_err(ark)?),
         Type::Groups => {
             let (n, body) = length(body)?;
@@ -418,6 +423,10 @@ fn input_json<B: Backend<Value = Value>>(
                 .cloned()
                 .ok_or_else(|| refused("input-host-handle"))?,
             "wire" => wire(name, ty.clone(), &hex(string(&record[1])?, policy)?)?,
+            "nonzero_field" if ty.kind() == Type::NonzeroField => Value::NonzeroField(
+                zkc_arkworks::NonzeroScalar::new(decimal(&record[1])?)
+                    .ok_or_else(|| refused("zero-nonzero-field"))?,
+            ),
             "field" if ty.kind() == Type::Field => match ty.logical().identity() {
                 Identity::Bn254Fr => {
                     Value::Bn254Field(crate::parse_bn254_decimal(string(&record[1])?).map_err(ark)?)

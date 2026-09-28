@@ -23,6 +23,7 @@ def CapabilityEncodesBool : ZKC_Capability<"Encodes.bool", [CodecDomain]>;
 def CapabilityEncodesCommitment : ZKC_Capability<"Encodes.commitment", [CodecDomain, CommitmentDomain]>;
 def CapabilityEncodesCommitments : ZKC_Capability<"Encodes.commitments", [CodecDomain, CommitmentDomain]>;
 def CapabilityEncodesField : ZKC_Capability<"Encodes.field", [CodecDomain, FieldDomain]>;
+def CapabilityEncodesNonzeroField : ZKC_Capability<"Encodes.nonzero_field", [CodecDomain, FieldDomain]>;
 def CapabilityEncodesGroup : ZKC_Capability<"Encodes.group", [CodecDomain, GroupDomain]>;
 def CapabilityEncodesGroups : ZKC_Capability<"Encodes.groups", [CodecDomain, GroupDomain]>;
 def CapabilityEncodesIndex : ZKC_Capability<"Encodes.index", [CodecDomain]>;

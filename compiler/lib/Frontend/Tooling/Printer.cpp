@@ -265,6 +265,32 @@ class Printer {
         binding(call->outputs);
         name(call->callee);
         names(call->inputs);
+      } else if (const auto *query = instruction.get<source::Query>()) {
+        out << "query ";
+        site(instruction.site);
+        name(query->role);
+        out << ": ";
+        binding(query->outputs);
+        name(query->root);
+        names(query->inputs);
+      } else if (const auto *guard = instruction.get<source::Guard>()) {
+        out << "guard ";
+        site(instruction.site);
+        name(guard->role);
+        out << ": ";
+        name(guard->condition);
+      } else if (const auto *pure = instruction.get<source::Pure>()) {
+        out << "pure ";
+        site(instruction.site);
+        name(pure->role);
+        out << " capture ";
+        arguments(pure->captures);
+        out << " -> ";
+        arguments(pure->outputs);
+        out << " {\n";
+        this->body(pure->body);
+        out << "}\n";
+        continue;
       } else if (const auto *message = instruction.get<source::Message>()) {
         out << "message ";
         site(instruction.site);
@@ -463,6 +489,15 @@ class Printer {
     }
     for (const auto &function : module.functions)
       this->function(function);
+    for (const auto &root : module.roots) {
+      out << "root ";
+      name(root.name);
+      out << " = ";
+      name(root.service);
+      out << " owners ";
+      names(root.owners);
+      out << ";\n";
+    }
     for (const auto &protocol : module.protocols)
       this->protocol(protocol);
     for (const auto &instance : module.instances) {

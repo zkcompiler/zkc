@@ -319,6 +319,15 @@ json::Array inspectBody(const syntax::Body &body) {
             object["receiver"] = value.receiver;
             object["input"] = syntax::spelling(value.input);
             object["output"] = value.output;
+          } else if constexpr (std::is_same_v<T, syntax::Query>) {
+            object["kind"] = "query";
+            object["role"] = value.role;
+            object["root"] = value.root;
+            object["outputs"] = inspectNames(value.outputs);
+          } else if constexpr (std::is_same_v<T, syntax::Guard>) {
+            object["kind"] = "guard";
+            object["role"] = value.role;
+            object["condition"] = syntax::spelling(value.condition);
           } else if constexpr (std::is_same_v<T, syntax::Placement>) {
             object["kind"] = "placement";
             object["destructure"] = value.destructure;
@@ -558,15 +567,28 @@ json::Object inspectModule(const syntax::Module &module) {
     functions.push_back(located(std::move(object), function));
   }
   for (const auto &protocol : module.protocols) {
-    json::Array arguments, results, dependencies;
+    json::Array arguments, results, dependencies, roots;
+    const auto *graph =
+        std::get_if<syntax::Protocol::MathematicalBody>(&protocol.body);
+    if (graph)
+      for (const auto &root : graph->roots)
+        roots.push_back(
+            located(json::Object{{"name", root.name},
+                                 {"service", written(root.service)},
+                                 {"owners", inspectNames(root.owners)}},
+                    root));
     for (const auto &argument : protocol.arguments)
-      arguments.push_back(json::Object{{"name", argument.name},
-                                       {"role", argument.role},
-                                       {"type", inspectType(argument.type)}});
+      arguments.push_back(
+          json::Object{{"name", argument.name},
+                       {"role", argument.role},
+                       {"availability", inspectNames(argument.availability)},
+                       {"type", inspectType(argument.type)}});
     for (const auto &result : protocol.results)
-      results.push_back(json::Object{{"role", result.role},
-                                     {"name", result.name},
-                                     {"type", inspectType(result.type)}});
+      results.push_back(
+          json::Object{{"role", result.role},
+                       {"availability", inspectNames(result.availability)},
+                       {"name", result.name},
+                       {"type", inspectType(result.type)}});
     for (const auto &dependency : protocol.dependencies) {
       json::Object object{
           {"name", dependency.name},
@@ -579,6 +601,8 @@ json::Object inspectModule(const syntax::Module &module) {
     protocols.push_back(located(
         json::Object{
             {"name", protocol.name},
+            {"kind", graph ? "mathematical" : "located"},
+            {"roots", std::move(roots)},
             {"generic", protocol.generic},
             {"staticParameters", inspectParameters(protocol.staticParameters)},
             {"requirements", inspectRequirements(protocol.requirements)},
@@ -587,8 +611,9 @@ json::Object inspectModule(const syntax::Module &module) {
             {"arguments", std::move(arguments)},
             {"results", std::move(results)},
             {"dependencies", std::move(dependencies)},
-            {"body", protocol.body ? json::Value(inspectBody(*protocol.body))
-                                   : json::Value(nullptr)}},
+            {"body", protocol.instructions()
+                         ? json::Value(inspectBody(*protocol.instructions()))
+                         : json::Value(nullptr)}},
         protocol));
   }
   for (const auto &configuration : module.configurations)

@@ -5,9 +5,10 @@ using namespace llvm;
 namespace zkc::source {
 StringRef Instruction::kind() const {
   static constexpr const char *names[] = {
-      "op",     "local", "call", "message",    "send", "receive",
-      "return", "yield", "stop", "incomplete", "loop", "release",
-      "apply",  "if",    "for",  "variant",    "match"};
+      "op",      "local",   "call",  "message", "send",
+      "receive", "return",  "yield", "stop",    "incomplete",
+      "loop",    "release", "apply", "if",      "for",
+      "variant", "match",   "pure",  "query",   "guard"};
   return names[value.index()];
 }
 bool Instruction::isTerminator() const {
@@ -34,6 +35,8 @@ template <typename B, typename F> void walkBody(B &body, F callback) {
         push(it->body);
     if (auto *loop = instruction->template get<Loop>())
       push(loop->body);
+    if (auto *pure = instruction->template get<Pure>())
+      push(pure->body);
     if (auto *loop = instruction->template get<For>())
       push(loop->body);
     if (auto *branch = instruction->template get<Conditional>()) {

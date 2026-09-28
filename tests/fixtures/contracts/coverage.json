@@ -13,6 +13,7 @@
       "vector.fill",
       "vector.geometric",
       "field.from_index",
+      "field.from_nonzero",
       "poly.coefficient_count",
       "poly.coset_evaluate",
       "poly.coset_interpolate",
@@ -75,6 +76,7 @@
       "poly.append_point",
       "random.index",
       "random.draw",
+      "random.draw_nonzero",
       "curve.response",
       "vector.embed",
       "field.embed"
@@ -181,6 +183,7 @@
       "index",
       "indices",
       "field",
+      "nonzero_field",
       "vector",
       "matrix",
       "polynomial",

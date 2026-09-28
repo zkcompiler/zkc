@@ -33,6 +33,18 @@ def projectBody (source : Source) (definition : Protocol) (binding : Instance) (
           let function ← source.function callee
           if owner == self then result := result ++ [.localCall site "" callee inputs outputs]
           env ← env.bind outputs (function.results.map fun ty => (owner, ty))
+      | .pureRegion site owner captures nested outputs =>
+          let owner ← binding.role owner
+          if owner == self then result := result ++ [.pureRegion site "" captures nested outputs]
+          env ← env.bind (outputs.map Prod.fst) (outputs.map fun p => (owner, p.2))
+      | .query site owner root inputs outputs =>
+          let owner ← binding.role owner
+          let (_, reply) ← source.rootService root
+          if owner == self then result := result ++ [.query site "" root inputs outputs]
+          env ← env.bind outputs [(owner, reply)]
+      | .guard site owner condition =>
+          let owner ← binding.role owner
+          if owner == self then result := result ++ [.guard site "" condition]
       | .message site schema sender receiver input output =>
           let sender ← binding.role sender
           let receiver ← binding.role receiver
@@ -115,7 +127,22 @@ def normalizeBody (symbols : Renaming) : Nat → Renaming → List Instruction �
           let (outputs, next) ← renameBind env outputs
           result := result ++ [.localCall site owner callee inputs outputs]
           env := next
+      | .pureRegion site owner captures nested outputs =>
+          let captured ← renameRead env (captures.map Prod.fst)
+          let (_, inner) ← renameBind [] (captures.map Prod.fst)
+          let nested ← normalizeBody symbols depth inner nested
+          let (returned, next) ← renameBind env (outputs.map Prod.fst)
+          result := result ++ [.pureRegion site owner (captured.zip (captures.map Prod.snd))
+            nested (returned.zip (outputs.map Prod.snd))]
+          env := next
       | .send site schema peer input => result := result ++ [.send site schema peer (← lookup input env)]
+      | .query site owner root inputs outputs =>
+          let inputs ← renameRead env inputs
+          let (outputs, next) ← renameBind env outputs
+          result := result ++ [.query site owner root inputs outputs]
+          env := next
+      | .guard site owner condition =>
+          result := result ++ [.guard site owner (← lookup condition env)]
       | .receive site schema peer output ty =>
           let (outputs, next) ← renameBind env [output]
           let [output] := outputs | throw "internal-binding-arity"
@@ -137,8 +164,9 @@ def normalizeBody (symbols : Renaming) : Nat → Renaming → List Instruction �
           let outerCaptures ← renameRead env captures
           let arms ← arms.mapM fun (label, payload, nested) => do
             let (payload, inner) ← renameBind [] payload
-            -- Capture names in the instruction also name the isolated ports.
-            let inner := inner ++ captures.zip outerCaptures
+            -- Isolated ports need fresh positional names. Reusing an outer
+            -- canonical name can collide with a later inner result binder.
+            let (_, inner) ← renameBind inner captures
             return (label, payload, ← normalizeBody symbols depth inner nested)
           let (outputs, next) ← renameBind env outputs
           result := result ++ [.localMatch site input outerCaptures arms outputs]

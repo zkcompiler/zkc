@@ -383,6 +383,13 @@ impl Decoder {
             self.charge()?;
             let a = array(v)?;
             let i = match a.first().and_then(Json::as_str) {
+                Some("guard") => {
+                    let a = record(v, "guard", 3)?;
+                    Instruction::Guard {
+                        site: name(&a[1])?,
+                        condition: name(&a[2])?,
+                    }
+                }
                 Some("local") => {
                     let a = record(v, "local", 5)?;
                     Instruction::Local {

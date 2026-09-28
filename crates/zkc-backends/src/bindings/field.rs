@@ -8,7 +8,16 @@ pub(crate) const fn operation(
     outputs: &'static [Type],
     attributes: AttributeRule,
 ) -> Contract {
-    Contract::new(name, inputs, outputs, attributes, resolve).selectable()
+    fixed(name, inputs, outputs, attributes).selectable()
+}
+
+pub(crate) const fn fixed(
+    name: &'static str,
+    inputs: &'static [Type],
+    outputs: &'static [Type],
+    attributes: AttributeRule,
+) -> Contract {
+    Contract::new(name, inputs, outputs, attributes, resolve)
 }
 fn resolve(
     binding: &OperationBinding,

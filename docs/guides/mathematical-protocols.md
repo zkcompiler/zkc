@@ -3,8 +3,9 @@
 The mathematical layer lets an author write algebra and post-message updates
 once, while retaining a separate meaning for each role. Its
 [profile](../spec/profiles/source/mathematical-protocols.md) defines the
-contract. The following notation is explanatory; the current parser does not
-accept this proposed spelling.
+contract. The compact examples below are explanatory. The existing frontend
+accepts the closed scalar/group spelling shown in the
+[authored Sigma fixture](../../tests/fixtures/mathematical/sigma.pir).
 
 ```text
 mathematical source
@@ -39,6 +40,14 @@ The mathematical layer combines explicit role components, capabilities, complete
 stopping semantics, checked transformation boundaries and connections to Lean
 probability libraries.
 
+The graph becomes useful when these consumers use its mathematical structure.
+Authoring, analysis and placement share one admitted subject; projection retains
+pure operations for later polynomial and kernel decisions. The implementation
+sequence first connects an actual generated protocol, then structured polynomial
+and component clients, while completing formal guarantees in the
+[roadmap's stated order](../roadmap.md#1-the-remaining-sequence). The capabilities
+above remain foundation requirements throughout that sequence.
+
 ## A closed Sigma fixture
 
 ```text
@@ -61,10 +70,45 @@ The verifier cannot query the prover's nonce capability: its action signature
 requires a role-permission proof.
 
 The maintained [Lean Sigma fixture](../../formal/Examples/Mathematical/Sigma.lean)
-uses separate scalar/group sorts over the additive group of `F₅`.
-`verifier_openMeaning` exposes the actual receives. `verifier_uses_received_values`
-and `honest_verifier_accepts` establish the selected execution formula and
-honest algebraic acceptance. This small group supplies no discrete-log security.
+uses the canonical subject produced by `sigma.pir` and the actual installed BLS
+carriers. `verifier_fresh_receive` exposes an arbitrary reply entering the
+continuation's fresh binding. `prover_pure_commitment` connects the entry's
+query, captured scale region and send, preserving the actual input environment.
+These are prefix laws over every admission certificate of that exact subject.
+Standalone honest algebra is proved separately; full trace honesty, native
+provider agreement and protocol security remain open.
+
+## Current authored profile
+
+The frontend uses `mathematical protocol` to distinguish its body from located
+role instructions. `inputs ((P, V) g: "bls12-381.g1"::Element, P x:
+"bls12-381.fr"::Element);` declares the independent components available at each
+role. This does not assert equality of shared inputs supplied by different roles.
+A closed `bind` selects each total operation or entropy service. Flat `let` calls
+and immutable aliases form pure regions; query, message and guard statements
+remain ordered occurrences. A message result aliases the sender's operand at the
+sender and denotes the actual received value at the receiver.
+
+`roots (nonce = nonce_draw owners (P));` grants a service to its named owners;
+`query [sample] P nonce -> (r);` creates a fresh reply occurrence.
+`guard [verification] V(accepted);` rejects before either participant's suffix
+executes. Repeated calls to a root consume that same root's state.
+
+This first profile requires one closed protocol, instance and entry, a bijection
+of roles, and scalar, group, nonzero scalar or Boolean values. It rejects helper
+functions, extra executable declarations, generic bodies, structured expressions,
+operators, products, loops and calls. Bind declarations may be unused; they do
+not create executable bodies. All message schema labels, explicit effect sites,
+root names and argument names are retained in the placed presentation. Each
+schema has one payload type. Distinct labels remain distinct even with the same
+payload. Name collisions refuse at common admission.
+
+`protocol-inspect` returns a `mathematical_placement` object containing the
+captured raw term, actual common target and untrusted witness. Its separate
+`mathematical_correspondence: "unchecked"` status is deliberate: current native
+execution and common-to-participant Lean checks do not establish this earlier
+translation boundary. Authored text correspondence is also a distinct frontend
+obligation.
 
 ## Structured Sumcheck
 

@@ -23,12 +23,202 @@ candidate. The reference byte codec has independent Python/Lean golden checks.
 Sumcheck and repeated shared-service calls. The optional VCVio bridge preserves
 complete handler execution; the ArkLib bridge covers polynomial query answers.
 
-The C++ common mathematical carrier, native readers, automatic placement,
-extended located/participant grammars, pure outlining checker and polynomial
-representation/schedule transformations remain implementation work. Static
-family admission and role remapping are contracts, not native support added by
-these fixtures. The existing compiler continues to use its existing located
-path. No new end-to-end compiler or whole-protocol security theorem is claimed.
+The MLIR-independent C++ mathematical API now has a bounded canonical codec,
+raw structural reader/writer and immutable typed subject admission. Native
+controls exercise scoped static normalization, acyclic regions, compact indexed
+bodies, local-role bindings, closed call reuse and capability-root distinctness.
+Registry contracts are an explicit consumer-supplied interface. A native closed
+installation now resolves positively total operations through the existing
+logical contracts and wire payloads through the existing domain catalog.
+Its descriptor pins cover resolved declarations; they do not prove kernel or
+codec correctness. Controls check forged pins, wrong signatures and payloads,
+private availability and role-local pure operands. Nullary field and nonzero-field
+entropy services now resolve through shared sampling contracts; admission retains
+root aliases and query occurrences. Independent Lean descriptors now reproduce
+all fifteen installed package pins. The BLS consumer supplies seven operation
+meanings over the actual scalar, nonzero-scalar and curve torsion carriers;
+admitted operation keys are proved to select the package that checked them.
+Concrete group interpretation keeps base-field primality and generator premises
+explicit. Native arithmetic, wire decoding and entropy-provider refinement remain
+separate obligations. General law installation remains unfinished.
+Other admission controls still use an explicitly selected finite test registry.
+
+The existing common/participant carriers now retain typed inline pure regions,
+closed root declarations, ordered queries and guards. C++ and Lean independently
+form these records; logical projection preserves root identities, fresh query
+bindings and guard ownership. Pure regions are outlined only at physical
+realization, and the independent checker compares the actual introduced helper
+bodies. A field/nonzero-field example executes natively and in the source
+reference; arbitrary receive replies remain independent of the sender's input.
+Negative controls cover altered algebra, roots, sampler declarations, merged
+queries and removed guards. Guards now remain explicit physical runtime cuts:
+polling does not evaluate them, and the joint host stops before a rejected guard's
+peer suffix. Eight guard correspondence/execution cases and the affected native
+unit suites pass. Closed-root realization now threads explicit RNG inputs and
+successors through distinct sampler calls. The independent checker reconstructs
+and checks those interfaces and bodies; the native host issues roots separately
+from ordinary value inputs. Forty-three root checks cover admission, projection,
+actual realization, same-owner root identity, tampering, failed draws and stopped
+peer suffixes. The source reference uses independent finite root tapes, including
+equal replies on repeated queries. OS randomness is not compared to fixture tapes.
+The native mathematical placement API now re-admits the captured source under
+the concrete installation, computes role demand, and emits the existing common
+carrier with explicit component/site/result witnesses. It preserves each ordered
+effect, keeps sender aliases separate from fresh receiver bindings, and retains
+total algebra in inline regions. The bounded profile requires one authored
+definition, one closed instance and no relations anywhere in the module,
+covering all module roles, scalar/group/Boolean values, closed installed operations
+and wires, nullary queries, messages, guards and return/stop. Products, loops,
+invokes, ordered local operations and relation bindings remain unsupported.
+Forty-two native placement assertions and sixty-eight downstream cases cover demand,
+duplicate yields, role permutation, root aliases, concrete-installation
+re-admission, native BLS group comparison and altered receive-operand refusal.
+The existing frontend now accepts a closed `mathematical protocol` body with
+explicit shared/private input availability, root declarations, flat total calls,
+aliases, messages, queries, guards and return/stop. The authored
+[Sigma fixture](../tests/fixtures/mathematical/sigma.pir) uses native BLS arithmetic,
+a full-field nonce and nonzero challenge, three messages and a verifier guard:
+a matching statement returns and a fixed mismatched statement rejects. The same
+checks cover renamed/permuted roles and pure computation demanded at both roles.
+Message schema labels survive placement. Elaboration and placement share compiler
+work accounts; admission errors carry coordinates back to source instructions.
+The completed frontend retains the actual mathematical input, actual common
+output and correspondence witness. Inspection exposes these together, and both
+inspection and compilation verify target custody. Inspection reports the witness
+as unchecked until a consumer runs the independent checker. The Lean consumer
+admits the retained mathematical source, derives demand from its actual stored
+intrinsic body, and checks the complete generated common target. It passes that
+same target to common admission and participant correspondence. The native host
+accepts a retained capture as `run-protocol` input with a caller-selected subject
+digest. It verifies all seventeen source, target and installation hash obligations
+and the external subject pin before accepting correspondence, then reports the
+checked source and target identities. Source selection relies on the caller
+retaining the intended mathematical subject independently of the capture.
+Controls include missing/duplicate components, wrong scopes, altered operations,
+roots, guards, receive operands, role/wire mappings, duplicate JSON keys and
+target substitution, a self-consistent substituted subject and invalid Unicode
+surrogates. This is bounded executable correspondence; a general
+placement preservation theorem and general pure-call folding remain unfinished.
+The canonical Lean Sigma fixture now uses the exact authored subject and its
+admitted stored entry on the installed BLS carriers. Kernel-checked prefix laws
+establish fresh receiver binding and query/pure/send sequencing, including the
+source captures and selected scale identity. They quantify over admission
+certificates; executable controls establish successful admission. Full honest
+trace, native provider agreement and security are separate obligations.
+
+Mathematical type handles
+retain subject ownership and carry no legacy physical representation metadata.
+Native and independent Lean adapters reuse the installed nominal domain catalog
+for closed value constructors and polynomial/residual coefficient fields. They
+exclude affine resources and grant no operation totality or legacy program lift.
+Graph operands retain stable region-local binding IDs as well as their written
+lexical indices; parameters precede result blocks in source order.
+The independent Lean static decoder returns scoped expressions with exact
+erasure and checked evaluation; polynomial normalization carries a proof of
+meaning preservation for every parameter assignment. Scoped type tables reject
+self/forward references and duplicate declarations. Type expansion checks all
+declarations, retains the authored type uses, and proves the expanded type has
+the selected template's meaning under every assignment. It also retains a
+formation proof for every domain-owned leaf under the selected checker. Port
+admission checks canonical bounded role sets; instantiated ports retain their
+exact image under composed positional role bindings and their substituted type.
+One graph syntax and elaborator support symbolic and closed counts, products, projections, maps and
+folds. The ordered elaborator adds explicit repeat captures, canonical message
+availability and finite capability bindings. Template formation retains registered
+root requirements; closed admission discharges them against actual roots, even
+inside zero-iteration bodies. Its intrinsic site intervals imply dense preorder sites. Both elaborators return
+exact erasure to their resolved input syntax. Carrier resolution now connects
+raw regions and bodies to those elaborators, retaining exact source erasure and
+witnesses supplied by declaration selection. The value model supplies
+product/vector laws, and execution controls check iteration paths and shared
+service state. The independent Lean byte and full source-schema readers agree
+with Python/native controls. Lean manifest admission selects actual installed
+payloads and retains identity equality, registration and prerequisite evidence.
+Header admission now checks every service, operation and wire declaration in its
+own symbolic scope, including unused declarations, and checks closed capability
+roots. Domain interpretation and formation use the same selected package;
+operation signatures, purity, distinctness and use attributes are checked against
+that installation. The resulting vocabulary connects actual registry selection
+to intrinsic graphs and bodies. Operation and wire objects now use normalized
+data keys; admission evidence lives in propositions, so equal keys give equal
+objects independently of authored static spelling. Opaque attribute trees are
+charged and checked for canonical field order before registry callbacks; direct
+raw callers must supply canonical attributes. Relation admission uses this vocabulary, retains
+listed law assumptions and requires one condition result; controls cover the
+serialized subject path through symbolic and closed relation checking.
+Definition admission checks instantiated signatures, relation operands, capability
+permissions and bodies. Symbolic formation checks every definition, including
+unused ones; calls select actual earlier declarations with checked static and
+positional role substitutions. Bound bodies restrict capability permissions while
+preserving actual root identities and aliases. Root-table certificates prove
+service identity is functional at each root and that binding cannot widen the
+root's permissions. Closed storage retains these certificates and consumes checked
+call-root equalities before execution. Source admission now checks every relation
+and symbolic definition, discovers exact closed instances in source preorder,
+and assembles typed bodies with callees before callers. Each stored body retains
+its source declaration and substitution evidence. Instance keys include the
+definition, statics, positional roles and roots; equal signatures cannot replace
+body identity. A checked mapping has proved roundtrip laws between source IDs and
+stored positions. A further theorem connects each actual stored invocation to
+its authored source-graph edge through this mapping, retaining the site,
+capability-port indices and complete target key. The ordered invocation and
+source-edge lists correspond exactly, including multiplicity. Each callee
+precedes its caller. Entry admission binds the actual header roots and maps to
+the certified source entry. Serialized
+controls include shared callees, different bodies with equal signatures, closed
+arithmetic in interfaces, and dormant root violations.
+The bounded BLS installation has independent package records and operational
+interpretations; other mathematical families and general installed laws remain
+unfinished. Resolution passes share conservative
+work budgets, and selection callbacks cannot increase the returned allowance.
+Source resolution, intrinsic formation and call collection use
+independent nesting limits; sibling steps preserve the nesting allowance and
+pure regions start at depth zero. Serialized controls cover 5,000 flat siblings
+and a nested graph after 4,070 siblings. Native and Lean admission now bound
+expanded types to 65,536 constructors and structural depth 64. Repeated children
+count repeatedly. Native interning caches the measurements; Lean expansion and
+intrinsic formation carry certificates with cached child decompositions alongside
+the context. Constructed products reuse child certificates. Boundary products
+retain only root measurements and measure the selected child after checking its
+index. The bounded
+certificate builder accepts exactly the types within the structural limits.
+Controls cover exact size/depth limits,
+derived tuples and vectors, repeated projection without another type walk, and
+serialized whole-subject acceptance/refusal. Carrier resolution charges list
+measurement incrementally and refuses before scanning an unaffordable remainder.
+Intrinsic lookup and repeated-comparison costs remain unmetered; leaf payloads,
+service identity comparisons and installed callback work need explicit bounds.
+Installed operation, wire and service values retain exact root measurements
+from type expansion. Intrinsic formation reuses them; equality remains determined
+by the canonical key because these measurements are provably unique. Controls
+disable generic type walks to verify this reuse in pure/local operations,
+queries and messages. Boundary child selection and repeated template expansion
+still need to be covered by the shared allowance.
+Structural measurement, cached size aggregation and type/port list assembly now
+use accumulators. Proved compiler rewrites also make operand/index selection,
+typed argument selection, availability intersection and vector-result measurement
+iterative. Wide exact-limit and limit-plus-one controls pass on an 8 MiB
+interpreter and compiled runtime stack, including a 65,535-operand tuple and
+projection of component 65,534. Operand order, availability and exact refusal
+outcomes are preserved. Unary typed variables still allocate in proportion to
+the selected index; repeated deep selections require work precharges. A proved
+prefix-construction rewrite now handles the selected 20,000-node flat and
+25,000-node mixed pure graphs. Eight graph-formation controls, including late
+refusal and nested map/fold cases, pass with `LEAN_STACK_SIZE_KB=8192` in the
+interpreter. A prebuilt focused runner also passes with a measured
+8,519,680-byte runtime stack; its build inputs have not been verified against
+the working tree. Rebuild affected tools and rerun before relying on that compiled
+result for a merge. This does not establish whole-subject or ordered-body stack
+safety. Structural
+node limits alone do not bound total work or memory.
+Native/Lean typed-admission parity and a common total-work envelope remain unfinished.
+
+Complete bounded native/Lean admission agreement, installed service/law registries,
+automatic placement, extended located/participant grammars, pure outlining
+checking and polynomial representation/schedule transformations remain
+implementation work. The existing compiler continues to use its existing
+located path. No new end-to-end compiler or whole-protocol security theorem is
+claimed.
 
 ## 1. By implementation area
 

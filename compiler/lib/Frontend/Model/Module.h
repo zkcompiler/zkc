@@ -10,9 +10,13 @@
 namespace zkc::frontend::resolution {
 struct Context;
 }
+namespace zkc::mathematical {
+struct Placement;
+}
 
 namespace zkc::frontend::model {
 struct LibraryReport;
+struct MathematicalInput;
 /// A checked definition body; call targets are scoped references, not strings
 /// or positional entries in a parallel table.
 struct DefinitionBody {
@@ -43,6 +47,8 @@ struct Module {
   std::vector<Diagnostic> diagnostics;
   std::vector<SemanticDependency> dependencies;
   std::vector<DefinitionBody> bodies;
+  std::shared_ptr<const MathematicalInput> mathematical;
+  std::shared_ptr<const mathematical::Placement> mathematicalPlacement;
   /// Carrier-only metadata; callable headers and bodies are emitted from the
   /// typed declarations/plans, never recovered from these records.
   source::Module metadata;

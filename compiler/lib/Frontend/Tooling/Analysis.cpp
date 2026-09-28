@@ -6,6 +6,9 @@
 
 using namespace llvm;
 namespace zkc::frontend {
+const mathematical::Placement *Analysis::mathematicalPlacement() const {
+  return completed ? completed->model.mathematicalPlacement.get() : nullptr;
+}
 Analysis::Analysis(std::shared_ptr<const model::Module> model)
     : model(std::move(model)) {}
 Analysis::Analysis(std::shared_ptr<const model::CompletedAnalysis> value)

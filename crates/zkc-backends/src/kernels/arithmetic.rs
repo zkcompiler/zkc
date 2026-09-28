@@ -307,6 +307,15 @@ pub(crate) fn apply(
             Ok(vec![Value::KoalaBearExt8Vector(out.into())])
         })());
     }
+    if name == "field.from_nonzero" {
+        return Some((|| {
+            p.output(512, i.max_output_bytes)?;
+            match args {
+                [Value::NonzeroField(x)] => Ok(vec![Value::Field(x.scalar())]),
+                _ => Err(refused("kernel-operands")),
+            }
+        })());
+    }
     if name == "field.embed" {
         return Some((|| {
             p.output(512, i.max_output_bytes)?;
@@ -841,6 +850,12 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             AttributeRule::None,
         ),
         field::operation("field.from_index", &[Index], &[Field], AttributeRule::None),
+        field::fixed(
+            "field.from_nonzero",
+            &[NonzeroField],
+            &[Field],
+            AttributeRule::None,
+        ),
         poly::operation(
             "poly.coefficient_count",
             &[Polynomial],

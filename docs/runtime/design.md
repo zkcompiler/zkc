@@ -365,3 +365,14 @@ and two materially different clients
 using the same preparation contract. Measure dispatch, kernel work, memory, wire
 bytes, compilation and proof replay separately against the same algorithm/backend.
 No performance advantage is claimed by the present foundation or probes.
+
+## Nonzero scalar draws
+
+The BLS12-381 native `random.draw_nonzero` consumes one RNG generation and one
+logical draw budget before sampling. It tests at most 128 uniformly generated
+32-byte candidates with the canonical nonzero decoder. It uses no modular
+reduction. Successful samples are uniform over nonzero Fr under the CSPRNG
+sampling premise. Exhaustion is an execution stop and retains the consumed
+generation and draw debit. The counter measures logical calls, not raw candidate
+bytes. Test-only scalar tapes exercise zero rejection and exhaustion separately
+from the production byte sampler.

@@ -53,11 +53,17 @@ Expected<std::string> formatTokens(ArrayRef<Token> tokens) {
   // depth without relying on a fictitious outer module brace.
   std::vector<size_t> close(tokens.size(), tokens.size()), stack;
   std::vector<bool> member(tokens.size(), false);
+  std::vector<bool> siteIntroducer(tokens.size(), false);
   const Token *significant = nullptr;
   for (size_t i = 0; i < tokens.size(); ++i) {
     if (tokens[i].kind == TokenKind::Comment)
       continue;
     member[i] = significant && (significant->is("::") || significant->is("."));
+    siteIntroducer[i] = tokens[i].kind == TokenKind::Name &&
+                        (tokens[i].is("pure") || tokens[i].is("query") ||
+                         tokens[i].is("guard")) &&
+                        (!significant || significant->is("{") ||
+                         significant->is("}") || significant->is(";"));
     significant = &tokens[i];
     if (tokens[i].is("(") || tokens[i].is("[") || tokens[i].is("<") ||
         tokens[i].is("{"))
@@ -156,8 +162,10 @@ Expected<std::string> formatTokens(ArrayRef<Token> tokens) {
                    endsExpression(*previous, member[previous - tokens.data()]));
     emit(token.spelling,
          !afterUnaryMinus &&
-             spaceBetween(previous, token,
-                          previous && member[previous - tokens.data()]));
+             ((previous && token.is("[") &&
+               siteIntroducer[previous - tokens.data()]) ||
+              spaceBetween(previous, token,
+                           previous && member[previous - tokens.data()])));
     previous = &token;
     if (attributeEnd && *attributeEnd == i) {
       attributeEnd.reset();

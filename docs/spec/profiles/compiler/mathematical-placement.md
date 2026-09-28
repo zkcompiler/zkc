@@ -11,8 +11,11 @@ and public indexed iteration; participant projection needs the same cases.
 The [format owner](../../../compiler/mathematical-format.md) defines the
 serialized witness. Its semantic obligations are:
 
-- Every mathematical role component required by the format's exact coverage rule maps to a typed located binding.
-  Availability and backward demand are checked against the actual source.
+- Every mathematical role component in the independently computed demand domain
+  maps to a typed located binding. The domain includes argument interfaces,
+  ordered results, declared results and the backward closure of effect/result
+  operands through total nodes. The witness cannot select its own coverage.
+  Availability is checked against the actual source.
 - Each message's sender component renames its existing sent operand. Its
   receiver component maps to a fresh receive binding. The schema, peer,
   origin and effect order agree. No received value is replaced by an honest

@@ -17,9 +17,11 @@ LogicalResult verifyKernel(Operation *op, bool physical) {
   auto *owner = op->getParentOp();
   while (owner && isa<LocalIfOp, LocalForOp, LocalMatchOp>(owner))
     owner = owner->getParentOp();
-  if (!module || !isa_and_nonnull<func::FuncOp>(owner))
-    return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",
-                             "expected a local function in pir.module");
+  if (!module || (!isa_and_nonnull<func::FuncOp>(owner) &&
+                  (physical || !isa_and_nonnull<PureRegionOp>(owner))))
+    return diagnostics::emit(
+        op->emitOpError(), "interactive-kernel-context",
+        "expected a local function or logical pure region in pir.module");
   auto stage = module.getStageAttr();
   if (!stage)
     return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",

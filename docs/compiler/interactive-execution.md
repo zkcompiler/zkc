@@ -54,6 +54,69 @@ stop projects to a distinct incomplete leaf, without reporting that foreign
 role's stop site or reason. A dynamic failure inside erased foreign work does
 not silently stop an independent participant that still has a local continuation.
 
+## Closed-root logical carriers
+
+The common and logical participant arrays may append a nonempty seventh field
+of closed root declarations:
+
+```text
+["root", rootName, operationBindingName, [ownerRole, ...]]
+```
+
+Names share the module symbol namespace. Owners are nonempty, unique and sorted.
+The service binding must have no selected physical implementation and resolve
+to the installed nullary entropy service: `random.draw` or
+`random.draw_nonzero`, with one RNG state input and reply/state outputs.
+Its domain remains explicit in the binding. The empty root list is omitted.
+
+The common instruction forms are:
+
+```text
+["query", site, owner, rootName, [], [replyName]]
+["guard", site, owner, conditionName]
+```
+
+Projected forms omit `owner`. Their root table is unchanged. Two query records
+remain distinct, including repeated access to the same root. Guards require
+an available owner-local Boolean. Carrier text uses `root NAME = SERVICE
+owners (...);`, `query [site] ROLE: result = ROOT();` and
+`guard [site] ROLE: condition;`.
+
+Root-form common modules contain one entry and one parameterless protocol per
+closed instance, and every instance is entry-reachable. Instance role bindings
+are identities over actual role names.
+They refuse mixed affine RNG value ports. Existing modules without roots retain
+their explicit resource-port behavior. Physical carriers must contain realized
+resource interfaces and refuse any remaining root declarations or queries.
+Independent C++/Lean formation and logical projection correspondence cover these
+records. Runtime realization and the typed preservation law have their own
+coverage entries in [status](../status.md#mathematical-protocol-foundation).
+
+The bounded native realization accepts one closed instance, no protocol calls
+or loops, and exactly one owner per root. It appends an RNG input and result
+for each syntactically used root, in root-table order within its owner. It
+replaces each query by a local sampler call at the original site, threads the
+current state to the next call, and returns the final successor. One helper may
+serve all queries of one root; every occurrence remains separate. Unused roots
+introduce no ports or helpers. Root declarations are removed only after this
+realization. These are implementation restrictions, not restrictions on the
+mathematical root semantics.
+
+The independent Lean checker reconstructs the expected interfaces and sampler
+bodies from the retained source, then checks the actual target. It emits a
+separate root map alongside the original value-port and call maps. Each root
+record is `[instance, role, root, serviceContract, physicalStateType, inputName,
+resultIndex]`; the result index is a canonical decimal string. The native loader
+checks that value maps cover the target input prefix and root maps cover exactly
+the resource input/result suffixes, with unique root identities. This structural
+check still relies on the installed checker for source correspondence.
+
+Guards remain explicit in physical participants. `poll()` exposes a stable
+`Guard` cut; `execute_guard` evaluates its Boolean only when that exact cut is
+advanced. False produces `Explicit("reject")` at the authored site. The joint
+driver checks the stop before advancing another participant. It does not turn
+the rejected role's condition into data available to its peer.
+
 ## Compiler and runtime responsibilities
 
 The C++ compiler owns MLIR values, definitions, symbols, formation and conversion.
@@ -65,7 +128,7 @@ input to these checks; textual MLIR is not a byte-identity source format.
 
 Rust owns artifact admission, resumable participant execution, backend services,
 resource custody, codecs and the host driver. A runner owns one role and one
-backend. Polling exposes a stable local action, send, receive, return or stop.
+backend. Polling exposes a stable local action, guard, send, receive, return or stop.
 The host must explicitly advance actions and deliver admitted packets. It cannot
 advance a role by supplying a peer's completion flag.
 

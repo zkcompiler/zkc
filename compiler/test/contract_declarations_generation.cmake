@@ -26,6 +26,29 @@ function(declaration_case name definitions expected_error)
   set(failures "${failures}" PARENT_SCOPE)
 endfunction()
 declaration_case(valid "" "")
+declaration_case(total-operation [=[
+def Good : ZKC_Operation<"good.total", [F],
+    [ZKC_Apply<Element, [F]>], [ZKC_Apply<Element, [F]>]> {
+  let purity = TotalOperation;
+}
+]=] "")
+declaration_case(unknown-purity [=[
+def Unknown : ZKC_OperationPurity<"UsuallyTotal">;
+def Bad : ZKC_Operation<"bad.purity", [], [], []> { let purity = Unknown; }
+]=] "unknown operation purity")
+declaration_case(total-resource [=[
+def Resource : ZKC_Type<"resource", [], Affine, 0, 0>;
+def Bad : ZKC_Operation<"bad.resource", [], [ZKC_Apply<Resource>], []> {
+  let purity = TotalOperation;
+}
+]=] "total operation has a resource port")
+declaration_case(total-guard [=[
+def Bool : ZKC_Type<"bool">;
+def Bad : ZKC_Operation<"bad.guard", [], [ZKC_Apply<Bool>], []> {
+  let purity = TotalOperation;
+  let facets = [AcceptanceGuard];
+}
+]=] "total operation has an ordered facet")
 declaration_case(duplicate-type [=[
 def Duplicate : ZKC_Type<"field", [FDomain]>;
 ]=] "duplicate type ownership")

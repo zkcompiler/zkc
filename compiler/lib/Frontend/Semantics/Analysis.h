@@ -22,6 +22,6 @@ SourceCheck checkStaged(const syntax::Content &original,
                         std::shared_ptr<const model::LibraryReport> libraries,
                         std::shared_ptr<const resolution::Context> context,
                         llvm::StringRef text, llvm::StringRef filename,
-                        bool resolutionComplete);
+                        bool resolutionComplete, WorkBudget &);
 } // namespace zkc::frontend::semantics
 #endif

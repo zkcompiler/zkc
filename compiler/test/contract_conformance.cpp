@@ -149,6 +149,8 @@ json::Object respond(StringRef line, Resolver resolve) {
         {"facets",
          json::Object{
              {"history", isHistoryTransition(binding.contract)},
+             {"total",
+              operationPurity(binding.contract) == OperationPurity::Total},
              {"publicReplay", isPublicReplay(binding.contract)},
              {"sampling", samplingContract(binding.contract) != nullptr},
              {"observation", facets->observation.has_value()},

@@ -40,7 +40,7 @@ def contribution : Contribution :=
   Contribution.withImplementations
   ⟨[
     Operation.ofShape "transcript.draw_index" ["transcript", "index"] ["index", "transcript"] resolve,
-    Operation.ofShape "transcript.challenge" ["transcript"] ["field", "transcript"] resolve] ++ serializableKinds.map (fun kind =>
+    Operation.ofShape "transcript.challenge" ["transcript"] ["field", "transcript"] resolve] ++ (serializableKinds.filter (· != "nonzero_field")).map (fun kind =>
     Operation.ofShape ("transcript.observe." ++ kind) ["transcript", kind] ["transcript"] resolve)⟩
   (fun contract => Support.implementations ["arkworks", "dalek", "plonky3", "spongefish"] contract)
 

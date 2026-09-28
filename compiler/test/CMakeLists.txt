@@ -19,6 +19,11 @@ add_zkc_test(compilation CompilerCore compilation-api)
 add_zkc_test(construction CompilerCore)
 target_link_libraries(zkc-construction-test PRIVATE ZkcFrontendLoading)
 add_zkc_test(json Support json-carrier)
+add_zkc_test(mathematical_codec Protocol mathematical-codec)
+add_zkc_test(mathematical_static Protocol mathematical-static)
+add_zkc_test(mathematical_admission Protocol mathematical-admission)
+add_zkc_test(mathematical_installation Protocol mathematical-installation)
+add_zkc_test(mathematical_placement Protocol mathematical-placement)
 add_zkc_test(requirements Contracts)
 add_zkc_test(generic Contracts generic-signatures)
 add_zkc_test(contract_declarations Contracts contract-declarations)
@@ -118,6 +123,7 @@ set(zkc_script_environment
   ZKC_CTEST_SERVICE_OPTIMIZER=$<TARGET_FILE:zkc-service-opt>
   ZKC_CTEST_REQUIREMENTS_TEST=$<TARGET_FILE:zkc-requirements-test>
   ZKC_CTEST_CONSTRUCTION_TEST=$<TARGET_FILE:zkc-construction-test>
+  ZKC_CTEST_MATHEMATICAL_CODEC=$<TARGET_FILE:zkc-mathematical_codec-test>
   PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../tests/support)
 
 # Every Python file in this directory is a test, and its name is the test's

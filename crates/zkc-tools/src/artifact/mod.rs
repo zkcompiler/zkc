@@ -34,6 +34,7 @@ pub use host::run;
 pub use identity::inspect as inspect_identity;
 pub use inputs::admission::LoadLimits as InputLimits;
 pub use io::hex;
+pub(crate) use io::unhex;
 pub use material::{CacheLimits, CacheUsage};
 pub use observe::{Observed, TraceMode};
 pub use prepared::{

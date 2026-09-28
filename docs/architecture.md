@@ -108,6 +108,85 @@ oracle-computation connection; ArkLib interfaces are used where actual query
 and protocol correspondences have been established. External theorems still
 require their own experiment and premise connections.
 
+### Integrated ownership
+
+The target implementation extends the existing frontend, declaration libraries,
+located/participant owners and runtime. It replaces duplicated responsibilities
+as each client migrates. The mathematical path shares the following foundations:
+
+| Responsibility | Shared owner | Distinction retained |
+|---|---|---|
+| Notation, imports, name/static resolution and library linking | Existing frontend and source-library machinery | Surface syntax and admitted semantic subjects have different APIs |
+| Logical types, domains, operations, wires and capabilities | Existing contract/declaration owners, extended with mathematical interpretations and positive purity contracts | Logical declaration identity differs from a physical kernel or representation |
+| Pure operations, captures, tuple/projection and map/fold | Shared algebra vocabulary, region utilities and interpretation laws | Mathematical availability, placed role bindings and participant-local bindings have different formation rules |
+| Messages, queries, calls and indexed control | Existing protocol/participant owners with explicit effects, roots and invocation paths | Stage-specific syntax and independent source/target meanings |
+| Physical storage, kernels and execution | Existing realization plans and native runtime | Logical value equality does not establish physical resource or failure correspondence |
+| Execution and FV connections | Common `Proc`/complete-execution foundation and explicit external adapters | Each imported theorem keeps its own experiment and premises |
+
+Resolved libraries supply exact declaration identities and prerequisites to typed
+consumer views. Mathematical installation must not grow a second catalog with
+independently maintained meanings. Where existing declarations do not cover a
+wire, service or package/law identity, extend the library/contract owner explicitly.
+Preserve package-qualified identities and named premises. Native law-reference
+resolution does not prove the law. Pure classification belongs to logical
+contracts and requires a total interpretation on all admitted arguments. Raw
+purity labels are checked claims; effect annotations and copy/drop permissions
+are insufficient. Unknown identities are refused; a known operation without
+totality remains ordered under its existing contract.
+
+Frontend construction and byte decoding feed the same native formation checks.
+The frontend can use structured input in memory, without a JSON roundtrip or a
+second admission implementation. Independent Lean and runtime consumers still
+perform their own admission.
+
+Mathematical, located and participant subjects remain separate admitted stages.
+Reuse pure-region machinery without encoding every stage in one universal AST
+with mode flags. Each stage has its own invariants. Source and target meanings
+are defined independently, sharing algebra evaluation and effect interfaces where
+their contracts coincide. Defining target meaning by running the compiler would
+make the preservation check circular.
+Mathematical availability is computed per node from used operands, not every
+region capture. A participant need not carry mathematical role-set indices merely
+to reuse pure operation definitions. Dense source site intervals remain a source
+formation rule; target effects retain correspondence through explicit mappings.
+
+The mathematical subject is the common input to analysis, optimization and
+placement. Located and participant forms retain inspectable algebra and
+polynomial shapes until representation and kernel decisions no longer need them.
+Pure helper calls retain their actual definitions. Turning a retained body into
+an opaque service call requires the
+[outlining law](spec/profiles/compiler/mathematical-placement.md#inline-pure-regions-and-outlining)
+and completion of the analyses that need its body. Local operations without a
+totality contract keep their ordered interpretation.
+
+Only one compiler representation is editable during a pass. Immutable source and
+candidate snapshots retain their checked mappings at transformation boundaries;
+ordinary in-process passes need no serialized roundtrip. Demand, reverse edges,
+interning and schedule caches belong to a particular subject and are invalidated
+or rebuilt when it changes. Scoped node/type ordinals do not become global
+semantic identities.
+Translation validation independently admits the retained input from before the
+transformation and the actual output. It never reconstructs the source from that
+output. Correspondence from authored text to the retained mathematical input is
+a separate frontend obligation.
+
+Pure-region order specifies references, while the ordered protocol body fixes
+effects. Dependency views retain both constraints, including actual shared
+service identities and transcript operations. Initial scheduling stays within
+pure regions. Moving pure work across regions is a separate checked transformation
+with scope, totality, effect-order, alias/lifetime and physical resource obligations.
+A region boundary need not become a permanent scheduling barrier.
+
+The [roadmap](roadmap.md#2-what-closing-a-unit-requires) separates an executable
+engineering handoff from completion of its formal guarantees. Meanings and proof
+obligations are defined early; detailed admission and transformation proofs are
+completed against representations exercised by real compiler clients. Each client
+migration also identifies replaced responsibilities and the retirement condition
+of temporary adapters. The [formal design](../formal/DESIGN.md#32-mathematical-language-consolidation)
+applies the same discipline to the initial and admitted mathematical languages.
+
+### Semantic levels and compiler representations
+
 The reference distinguishes protocol interaction P, participant algorithm Aρ,
 and execution plan Lρ. P constrains a participant algorithm; it is not simply
 an earlier representation of that algorithm. A supplied endpoint needs an

@@ -80,7 +80,7 @@ fn respond(line: &[u8], resolve: LogicalResolver) -> Option<Value> {
         resolve(&binding).ok()?;
         return Some(json!({"accepted": true,
             "facets": {"history": installed_model::observes_or_samples_history(&binding.contract)},
-            "unsupported": ["publicReplay", "sampling", "observation", "acceptanceGuard",
+            "unsupported": ["total", "publicReplay", "sampling", "observation", "acceptanceGuard",
                             "conjunction", "unclassifiedProviderEffect"]}));
     }
     let physical = request.get("physical")?.as_bool()?;

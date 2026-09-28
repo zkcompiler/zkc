@@ -148,7 +148,7 @@ private def initRequest (attributes : List String) : Result TypedLocal.Request :
   | .ok signature => .ok ⟨"k", "external.monero.init", [], attributes, signature, h⟩
   | .error code => .error code
 private def variantKernel : String → List String → Result KernelSignature :=
-  fun _ _ => .ok ⟨[choice.spelling], ["index"], true⟩
+  fun _ _ => .ok ⟨[choice.spelling], ["index"], true, false⟩
 private def usesVariantKernel : Function :=
   ⟨"F", [("v", choice.spelling)], ["index"], some [.op "k" "kernel" [] ["v"] ["out"], .ret ["out"]]⟩
 private def aborted : Explicit.Function := function
@@ -157,7 +157,7 @@ private def packing (alternative : Name) (payload : List Name) : Explicit.Functi
   ⟨⟨"Pack", [("x", "index")], [choice.spelling], some
     [.variant "pack" choice.spelling alternative payload "v", .ret ["v"]]⟩, none⟩
 private def closedAgainst (source candidate : Explicit.Function) (name : Name) : String :=
-  refusal (Generic.validateClosed source bindings ⟨false, bindings, [candidate], .arr #[], .arr #[]⟩ name)
+  refusal (Generic.validateClosed source bindings ⟨false, bindings, [candidate], .arr #[], .arr #[], []⟩ name)
 
 def run : IO Unit := do
   let checks ← Tests.Checks.start
@@ -239,11 +239,11 @@ def run : IO Unit := do
     | .ok (.error fault, state) => fault.reason == "exhausted" && state.events.size == 1
     | _ => false
   checks.holds exhausted "resource exhaustion not caught by match"
-  let candidate : Explicit.CandidateLocals := ⟨false, bindings, [good], .arr #[], .arr #[]⟩
+  let candidate : Explicit.CandidateLocals := ⟨false, bindings, [good], .arr #[], .arr #[], []⟩
   checks.holds ((Generic.validateClosed good bindings candidate "Select").isOk) "logical correspondence"
   let physicalBindings := bindings.map fun b => {b with implementation :=
     (if b.contract.startsWith "resource_unit." then "logical/" else if b.contract.startsWith "index." then "native/" else "arkworks/") ++ b.contract}
-  let candidate : Explicit.CandidateLocals := ⟨true, physicalBindings, [physical good], .arr #[], .arr #[]⟩
+  let candidate : Explicit.CandidateLocals := ⟨true, physicalBindings, [physical good], .arr #[], .arr #[], []⟩
   checks.holds ((Generic.validateClosed good bindings candidate "Select").isOk) "physical correspondence"
   -- A private tag must not schedule a protocol transcript effect. The external
   -- duplex states carry the same history as the internal transcript family and

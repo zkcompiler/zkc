@@ -55,6 +55,7 @@ pub enum Type {
     Vector,
     Polynomial,
     Field,
+    NonzeroField,
     Table,
     Point,
     Round,
@@ -84,6 +85,7 @@ impl Type {
             Self::Vector => "vector",
             Self::Polynomial => "polynomial",
             Self::Field => "field",
+            Self::NonzeroField => "nonzero_field",
             Self::Table => "table",
             Self::Point => "point",
             Self::Round => "round",
@@ -120,6 +122,7 @@ impl Type {
             | Self::Vector
             | Self::Polynomial
             | Self::Field
+            | Self::NonzeroField
             | Self::Table
             | Self::Point
             | Self::Round
@@ -153,6 +156,7 @@ impl Type {
             | Self::Vector
             | Self::Polynomial
             | Self::Field
+            | Self::NonzeroField
             | Self::Table
             | Self::Point
             | Self::Round
@@ -186,6 +190,7 @@ impl Type {
             | Self::Vector
             | Self::Polynomial
             | Self::Field
+            | Self::NonzeroField
             | Self::Table
             | Self::Point
             | Self::Round
@@ -211,6 +216,7 @@ impl Type {
             "vector" => Self::Vector,
             "polynomial" => Self::Polynomial,
             "field" => Self::Field,
+            "nonzero_field" => Self::NonzeroField,
             "table" => Self::Table,
             "point" => Self::Point,
             "round" => Self::Round,
@@ -440,6 +446,10 @@ pub(crate) struct Participant {
 }
 #[derive(Debug)]
 pub(crate) enum Instruction {
+    Guard {
+        site: String,
+        condition: String,
+    },
     Local {
         site: String,
         function: String,

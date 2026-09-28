@@ -867,6 +867,12 @@ impl Check<'_> {
                 ));
             }
             match instruction {
+                Instruction::Guard { site: s, condition } => {
+                    site(&mut self.sites, s)?;
+                    if lookup(&env, condition)?.logical().kind() != Type::Bool {
+                        return Err(err(ErrorCode::Type, "interactive-guard-condition"));
+                    }
+                }
                 Instruction::Local {
                     site: s,
                     function,

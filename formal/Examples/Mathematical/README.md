@@ -1,18 +1,19 @@
 # Mathematical protocol fixtures
 
-These examples use the independently defined mathematical source, before a
-native carrier or placement checker. From `formal/`:
+Sigma uses the canonical admitted mathematical source and the installed BLS
+carriers. The remaining small examples still exercise the earlier independent
+model. From `formal/`:
 
 ```sh
 lake build Examples.Mathematical.Formation Examples.Mathematical.Encoding
 ```
 
-- [Sigma](Sigma.lean) constructs an interactive Schnorr-shaped source over the
-  additive group of F₅ with distinct nominal scalar/group sorts. All-reply
-  prover/verifier characterizations expose received messages. Honest delivery
-  uses the actual prover's emitted messages under a common supplied challenge
-  and proves verifier acceptance.
-  The finite algebra is not a discrete-log security claim.
+- [Sigma](Sigma.lean) exports the canonical authored source, executable admission
+  and actual stored entry meaning. Its [prefix laws](SigmaPrefix.lean) prove
+  fresh reception and query/pure/send sequencing using the admitted body, actual
+  entry arguments and installed scale identity. The source encoding is compared
+  with fresh frontend output. Standalone honest algebra uses the actual scalar
+  modulus and curve subgroup; full trace honesty and security remain open.
 - [Sumcheck](Sumcheck.lean) stores one indexed body for arbitrary dimension,
   with a prover-private quadratic polynomial and fixed-capacity challenge state.
   Its verifier queries a separately bound terminal evaluator. Concrete controls

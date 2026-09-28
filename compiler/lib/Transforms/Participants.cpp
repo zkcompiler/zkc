@@ -75,6 +75,27 @@ class Projector {
             local.getCalleeAttr(), local.getSiteAttr(), StringAttr());
         for (auto [old, value] : zip(op->getResults(), copy->getResults()))
           values.map(old, value);
+      } else if (isa<ServiceQueryOp, ProtocolGuardOp>(op)) {
+        auto owner = op->getAttrOfType<StringAttr>("role").getValue();
+        for (auto value : op->getResults())
+          owners[value] = owner.str();
+        if (owner != role)
+          continue;
+        if (!llvm::all_of(op->getOperands(),
+                          [&](Value value) { return values.contains(value); }))
+          return missingBinding(op);
+        auto *copy = b.clone(*op, values);
+        copy->removeAttr("role");
+      } else if (auto pure = dyn_cast<PureRegionOp>(op)) {
+        for (auto value : op->getResults())
+          owners[value] = pure.getRoleAttr().getValue().str();
+        if (pure.getRoleAttr().getValue() != role)
+          continue;
+        if (!llvm::all_of(op->getOperands(),
+                          [&](Value value) { return values.contains(value); }))
+          return missingBinding(op);
+        auto copy = cast<PureRegionOp>(b.clone(*op, values));
+        copy->removeAttr("role");
       } else if (auto message = dyn_cast<MessageOp>(op)) {
         owners[message.getOutput()] = message.getReceiver().str();
         auto *sender = lookup(roles, message.getSender().str());
@@ -173,7 +194,8 @@ class Projector {
                          StringAttr());
         else
           IncompleteOp::create(b, op->getLoc(), halt.getSite());
-      }
+      } else
+        return error("interactive-projection-instruction");
     }
     return Error::success();
   }
@@ -232,7 +254,7 @@ public:
         symbols[{name, actual}] = std::move(symbol);
       }
     for (auto &op : source.getBody().front())
-      if (isa<func::FuncOp, OperationBindingOp>(op)) {
+      if (isa<func::FuncOp, OperationBindingOp, ServiceRootOp>(op)) {
         auto *copy = b.clone(op);
         // Source relation ownership was checked before this explicit lowering
         // boundary. Exact matrix checks remain ordinary executable operations.

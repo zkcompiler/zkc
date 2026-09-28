@@ -5,6 +5,33 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 /// Compressed canonical Fr encoding size (little-endian integer, below p).
 pub const SCALAR_BYTES: usize = 32;
 
+/// An admitted nonzero Fr value. The private payload prevents unchecked
+/// construction; conversion to an ordinary scalar is total and explicit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NonzeroScalar(Scalar);
+
+impl NonzeroScalar {
+    /// Check the nonzero predicate on an already admitted field value.
+    pub fn new(value: Scalar) -> Option<Self> {
+        (value != Scalar::from(0u64)).then_some(Self(value))
+    }
+
+    /// Forget the nonzero refinement without changing the field value.
+    pub fn scalar(self) -> Scalar {
+        self.0
+    }
+
+    /// The payload has the ordinary canonical Fr encoding.
+    pub fn to_bytes(self) -> Result<[u8; SCALAR_BYTES], Error> {
+        encode_scalar(&self.0)
+    }
+
+    /// Admit exactly one canonical, nonzero scalar. Zero is a wire refusal.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        Self::new(decode_scalar(bytes)?).ok_or(Error::InvalidEncoding)
+    }
+}
+
 /// Encode one Fr scalar using the upstream canonical codec.
 pub fn encode_scalar(value: &Scalar) -> Result<[u8; SCALAR_BYTES], Error> {
     let mut bytes = [0; SCALAR_BYTES];
@@ -45,4 +72,41 @@ pub fn parse_decimal(text: &str) -> Result<Scalar, Error> {
     // Upstream big-integer parsing is exact; Fr::from_str would reduce modulo p.
     let integer: BigInt<4> = text.parse().map_err(|_| Error::InvalidEncoding)?;
     Scalar::from_bigint(integer).ok_or(Error::InvalidEncoding)
+}
+
+#[cfg(test)]
+mod nonzero_tests {
+    use super::*;
+
+    #[test]
+    fn nonzero_codec_and_inclusion_agree() {
+        for value in [1u64, 2, 17, u64::MAX] {
+            let field = Scalar::from(value);
+            let refined = NonzeroScalar::new(field).unwrap();
+            let bytes = refined.to_bytes().unwrap();
+            assert_eq!(bytes, encode_scalar(&field).unwrap());
+            assert_eq!(NonzeroScalar::from_bytes(&bytes).unwrap().scalar(), field);
+        }
+    }
+
+    #[test]
+    fn zero_and_noncanonical_replies_are_refused() {
+        assert!(NonzeroScalar::new(Scalar::from(0u64)).is_none());
+        for bytes in [
+            &[0u8; SCALAR_BYTES][..],
+            &[255u8; SCALAR_BYTES][..],
+            &[1u8; 31][..],
+        ] {
+            assert_eq!(
+                NonzeroScalar::from_bytes(bytes),
+                Err(Error::InvalidEncoding)
+            );
+        }
+        let mut trailing = encode_scalar(&Scalar::from(1u64)).unwrap().to_vec();
+        trailing.push(0);
+        assert_eq!(
+            NonzeroScalar::from_bytes(&trailing),
+            Err(Error::InvalidEncoding)
+        );
+    }
 }

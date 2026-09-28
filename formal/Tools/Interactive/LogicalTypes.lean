@@ -54,6 +54,7 @@ def leafLogicalIdentity (kind identity : String) : Bool :=
   if domainIndependent kind then identity.isEmpty
   else if ["field", "matrix", "vector", "polynomial", "round"].contains kind then scalarDomain identity
   else if kind == "rng" then identity == fr || identity == bn254Fr || identity == ristrettoScalar || identity == koalaBearExt8
+  else if kind == "nonzero_field" then identity == fr
   else if kind == "nonce" then identity == fr || identity == ristrettoScalar
   else if ["table", "point"].contains kind then identity == fr
   else if ["group", "groups"].contains kind then groupDomain identity
@@ -91,7 +92,7 @@ inductive ParameterKind where
 /-- This table is local installation, never a protocol declaration. -/
 def parameterKinds (head : String) : Except String (List ParameterKind) :=
   if domainIndependent head then .ok []
-  else if ["matrix", "vector", "polynomial", "field", "table", "point", "round", "rng", "nonce"].contains head then
+  else if ["matrix", "vector", "polynomial", "field", "nonzero_field", "table", "point", "round", "rng", "nonce"].contains head then
     .ok [.domain "Field"]
   else if ["group", "groups"].contains head then .ok [.domain "Group"]
   else if ["prover_key", "verifier_key", "commitment", "commitments", "proof", "opening_state", "opening_states"].contains head then
@@ -252,7 +253,7 @@ def parse (text : String) : Except String GroundType := parseWithDepth depthLimi
 
 /-- Public serialization is an explicit finite codec installation. -/
 def publicKind (kind : String) : Bool :=
-  ["index", "indices", "matrix", "vector", "polynomial", "field", "table", "point", "round", "bool",
+  ["index", "indices", "matrix", "vector", "polynomial", "field", "nonzero_field", "table", "point", "round", "bool",
    "commitment", "commitments", "proof", "group", "groups"].contains kind
 
 structure Permissions where

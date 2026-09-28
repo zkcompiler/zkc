@@ -32,6 +32,11 @@ fn pairs(value: &Value) -> Result<BTreeMap<String, String>> {
 /// Calls and fixed public loops remain shared definitions and bounded cursors.
 #[derive(Clone, Debug)]
 pub enum ScheduledAction {
+    Guard {
+        origin: Origin,
+        site: String,
+        role: String,
+    },
     Local {
         origin: Origin,
         site: String,
@@ -75,6 +80,7 @@ pub struct Schedule {
     cursors: Vec<Cursor>,
     remaining_work: u64,
     call_mappings: Option<CallMappings>,
+    service_roots: BTreeMap<String, usize>,
 }
 impl Schedule {
     pub fn new(admitted: &Admitted, entry: &str, session: &str) -> Result<Self> {
@@ -123,6 +129,17 @@ impl Schedule {
             root: root.clone(),
             cursors: Vec::new(),
             remaining_work: 1_000_000,
+            service_roots: source
+                .get(6)
+                .map(|roots| -> Result<_> {
+                    array(roots)?
+                        .iter()
+                        .enumerate()
+                        .map(|(index, root)| Ok((name(root, 1)?, index)))
+                        .collect()
+                })
+                .transpose()?
+                .unwrap_or_default(),
             call_mappings: admitted.source_map().map(|mapping| {
                 mapping
                     .calls
@@ -245,6 +262,67 @@ impl Schedule {
             current.pc += 1;
             let origin = current.origin.clone();
             match text(at(&instruction, 0)?)? {
+                "query" => {
+                    let role = self.role(&origin.instance, text(at(&instruction, 2)?)?)?;
+                    let site = name(&instruction, 1)?;
+                    let root = self
+                        .service_roots
+                        .get(text(at(&instruction, 3)?)?)
+                        .ok_or("source-query-root")?;
+                    let (expected, function) = self
+                        .call_mappings
+                        .as_ref()
+                        .and_then(|maps| {
+                            maps.get(&(origin.instance.clone(), role.clone(), site.clone()))
+                        })
+                        .ok_or("source-query-map")?;
+                    if expected != &format!("@query_{root}") {
+                        return Err("source-query-map-origin".into());
+                    }
+                    return Ok(Some(ScheduledAction::Local {
+                        role,
+                        origin,
+                        site,
+                        function: function.clone(),
+                    }));
+                }
+                "guard" => {
+                    return Ok(Some(ScheduledAction::Guard {
+                        role: self.role(&origin.instance, text(at(&instruction, 2)?)?)?,
+                        site: name(&instruction, 1)?,
+                        origin,
+                    }));
+                }
+                "pure" => {
+                    let role = self.role(&origin.instance, text(at(&instruction, 2)?)?)?;
+                    let site = name(&instruction, 1)?;
+                    let key = [&origin.instance, &role, &site].iter().fold(
+                        String::from("@pure"),
+                        |mut key, part| {
+                            key.push_str(&format!("_{}_{}", part.len(), part));
+                            key
+                        },
+                    );
+                    let (expected, function) = self
+                        .call_mappings
+                        .as_ref()
+                        .and_then(|mappings| {
+                            mappings.get(&(origin.instance.clone(), role.clone(), site.clone()))
+                        })
+                        .ok_or("source-pure-map")?;
+                    if expected != &key {
+                        return Err("source-pure-map-origin".into());
+                    }
+                    // At this physical checkpoint the independently checked
+                    // inline body has been outlined. Scheduling its local cut
+                    // does not make that cut a mathematical source event.
+                    return Ok(Some(ScheduledAction::Local {
+                        role,
+                        origin,
+                        site,
+                        function: function.clone(),
+                    }));
+                }
                 "local" => {
                     let role = self.role(&origin.instance, text(at(&instruction, 2)?)?)?;
                     let site = name(&instruction, 1)?;

@@ -63,6 +63,7 @@ pub fn produce<B: WireBackend>(
         let action = runner.poll();
         match action {
             Action::Local(local) => runner.execute_local(&local.cut)?,
+            Action::Guard(cut) => runner.execute_guard(&cut)?,
             Action::Send(_) => {
                 let cut = action
                     .cut()
@@ -137,6 +138,7 @@ pub fn validate_with_decoder<B: WireBackend>(
     let outcome = (|| loop {
         match runner.poll() {
             Action::Local(local) => runner.execute_local(&local.cut)?,
+            Action::Guard(cut) => runner.execute_guard(&cut)?,
             Action::Receive(request) => {
                 let bytes = reader.message()?;
                 let value = decoder.decode(runner.backend(), &request, bytes)?;

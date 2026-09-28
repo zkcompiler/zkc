@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Registry.h"
@@ -139,6 +140,7 @@ class Importer {
   bool target, physical;
   std::map<std::string, FunctionType> signatures;
   std::map<std::string, source::OperationBinding> bindings;
+  std::map<std::string, std::string> rootServices;
   llvm::function_ref<Location(const source::Node &)> locations;
   Location location;
   using Env = std::map<std::string, mlir::Value>;
@@ -268,6 +270,41 @@ class Importer {
             operands(call->inputs, env), ArrayAttr(), ArrayAttr(), UnitAttr());
         op->setAttr("site", text(b, instruction.site));
         bind(call->outputs, op->getResults(), env);
+      } else if (const auto *query = instruction.get<source::Query>()) {
+        auto service = cantFail(resolveEntropyService(
+            bindings.at(rootServices.at(query->root)).application));
+        auto op = ServiceQueryOp::create(
+            b, location, TypeRange{type(service.reply.spelling())},
+            operands(query->inputs, env), query->root, instruction.site,
+            !target ? text(b, query->role) : StringAttr());
+        bind(query->outputs, op->getResults(), env);
+      } else if (const auto *guard = instruction.get<source::Guard>()) {
+        ProtocolGuardOp::create(b, location, env.at(guard->condition),
+                                instruction.site,
+                                !target ? text(b, guard->role) : StringAttr());
+      } else if (const auto *region = instruction.get<source::Pure>()) {
+        SmallVector<mlir::Value> inputs;
+        SmallVector<Type> outputs;
+        for (const auto &capture : region->captures)
+          inputs.push_back(env.at(capture.name));
+        for (const auto &output : region->outputs)
+          outputs.push_back(type(output.type));
+        auto op = PureRegionOp::create(
+            b, location, outputs, inputs, instruction.site,
+            !target ? text(b, region->role) : StringAttr());
+        auto *block = new Block();
+        op.getBody().push_back(block);
+        Env inner;
+        for (auto [capture, input] : zip(region->captures, inputs))
+          inner.emplace(capture.name,
+                        block->addArgument(input.getType(), location));
+        {
+          OpBuilder::InsertionGuard guard(b);
+          b.setInsertionPointToEnd(block);
+          body(region->body, std::move(inner), definition, true, {}, true);
+        }
+        for (auto [output, value] : zip(region->outputs, op->getResults()))
+          env.emplace(output.name, value);
       } else if (const auto *call = instruction.get<source::LocalCall>()) {
         auto op = LocalCallOp::create(
             b, location, signatures.at(call->callee).getResults(),
@@ -536,6 +573,12 @@ class Importer {
                                  strings(binding.application.arguments),
                                  binding.application.implementation);
       bindings.emplace(binding.name, binding);
+    }
+    for (const auto &root : m.roots) {
+      locate(root);
+      ServiceRootOp::create(b, location, root.name, root.service,
+                            strings(root.owners));
+      rootServices.emplace(root.name, root.service);
     }
     for (const auto &f : m.functions)
       signature(f);

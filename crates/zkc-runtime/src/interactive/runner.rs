@@ -513,6 +513,14 @@ impl<B: Backend> Runner<B> {
             let instruction = &body[execution.pc];
             let origin = execution.frame.origin.clone();
             match instruction {
+                Instruction::Guard { site, .. } => {
+                    self.pending = Some(Action::Guard(Cut {
+                        origin,
+                        role: self.role.clone(),
+                        site: site.clone(),
+                        kind: CutKind::Guard,
+                    }));
+                }
                 Instruction::Local { site, function, .. } => {
                     self.pending = Some(Action::Local(LocalAction {
                         cut: Cut {
@@ -798,6 +806,30 @@ impl<B: Backend> Runner<B> {
         if let Err(e) = self.local() {
             self.failed(e, Some(expected.site.clone()), None);
         }
+        Ok(())
+    }
+    /// Evaluate exactly the pending guard. Polling alone never rejects or
+    /// advances its suffix; the joint driver owns scheduling across roles.
+    pub fn execute_guard(&mut self, expected: &Cut) -> Result<()> {
+        self.require_cut(expected, CutKind::Guard)?;
+        if let Err(e) = self.guard() {
+            self.failed(e, Some(expected.site.clone()), None);
+        }
+        Ok(())
+    }
+    fn guard(&mut self) -> Result<()> {
+        self.tick()?;
+        let execution = self.stack.last().expect("guard parent");
+        let Instruction::Guard { condition, .. } = &execution.body[execution.pc] else {
+            unreachable!("checked guard cut")
+        };
+        let value = &execution.env[condition];
+        self.backend.validate_value(value)?;
+        if !value.control_bool()? {
+            return Err(RuntimeError::ExplicitStop("reject".into()));
+        }
+        self.stack.last_mut().expect("guard parent").pc += 1;
+        self.pending = None;
         Ok(())
     }
     fn local(&mut self) -> Result<()> {

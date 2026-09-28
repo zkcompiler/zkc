@@ -110,7 +110,8 @@ def check_mutation(change, code):
     file.write_text(json.dumps(altered))
     run(compiler, "protocol-admit", file, ok=False, code=code)
 
-check_mutation(lambda m: m.append([]), "interactive-shape")
+check_mutation(lambda m: m.append([]), "interactive-empty-roots")
+check_mutation(lambda m: m.extend([[], []]), "source-record")
 check_mutation(lambda m: m[2][0][4][0].__setitem__(2, "uninstalled.kernel"), "binding-reference")
 check_mutation(lambda m: m[3][2][7][0].__setitem__(2, "V"), "interactive-local-signature")
 check_mutation(lambda m: m[3][2][7][1].__setitem__(4, "P"), "interactive-message-availability")

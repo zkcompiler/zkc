@@ -50,7 +50,7 @@ private def retryFixture (exhaust : Bool) : Result State := do
 
 #eval show IO Unit from do
   let checks ← start
-  let source : Source := ⟨.explicit [], [], [], [], []⟩
+  let source : Source := ⟨.explicit [], [], [], [], [], []⟩
   let descriptor : Descriptor := {
     entry := "main", producer := "P", validator := "V", publicBindings := []
     rng := "coins", draws := [("Draw", "draw")], acceptance := 0

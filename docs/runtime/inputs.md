@@ -26,6 +26,35 @@ generic proving and checking functions for two dynamic setup/rank instances.
 The [input file](../../tests/fixtures/generic-openings.inputs.json)
 selects those instances explicitly. Its shape is documented below.
 
+### Mathematical placement captures
+
+The source argument can instead be a `zkc.mathematical-placement/1` capture.
+This form requires a fifth argument, `SUBJECT_SHA256`, chosen by the caller:
+
+```sh
+zkc run-protocol capture.json participants.json inputs.json \
+  formal/.lake/build/bin/interactive-protocol "$SUBJECT_SHA256"
+```
+
+The pin is lowercase SHA256 of `zkc.math.subject.v1`, a NUL byte, and the
+[canonical mathematical subject bytes](../compiler/mathematical-format.md).
+Compute it from the independently retained subject that the caller intends to
+run. Copying the pin from an untrusted capture does not protect against replacing
+both its subject and witness. The authored-source frontend remains a separate
+trust boundary; this pin selects its mathematical result.
+
+Lean admits that subject, checks its actual placed target, and passes the same
+target to participant correspondence. The host verifies all seventeen hash
+obligations, their ordered domain prefixes, and the caller's subject pin before
+execution. A successful check adds `mathematical: {source, target}` to the result
+and reports `mathematical-structural-correspondence` in `assurance`. These are
+identities of the checked values, independent of their JSON spelling.
+
+The host limits each input to 1 MiB and checker output to 4 MiB. Oversized
+responses fail with `checker-response-limit`; support for larger admissible
+subjects is separate from this bounded development path. Ordinary array sources
+use the original four arguments and reject an extra subject pin.
+
 ## Input format
 
 ```text
@@ -42,6 +71,26 @@ them using OS randomness. Inputs retain the existing tagged values, including
 `["host", handle_name]`, fields, tables, points, booleans and canonical public wire
 bytes. An explicitly bound Boolean or arithmetic-only protocol can use no setups.
 Transcript-resource issuance is not yet exposed by this host command.
+
+For closed-root protocols, append a nonempty seventh field containing
+`[[role, root_name, budget], ...]`. It must cover exactly the checked used roots;
+missing, extra, repeated or wrong-owner records are refused. Omit this field
+when there are no used roots. The checked service determines the nominal RNG
+type. The host issues each resource directly, bound to the entry instance, and
+places it in the checked target input port. These handles are unavailable through
+`["host", handle_name]` and cannot alias a user value input. Roots with no query
+have no issuance record.
+
+Introduced resource results are omitted from the ordinary `outcome` values.
+The `root_resources` result field records `[role, root_name, generation,
+draw_count, remaining_budget, stage]` from the issuer after success or failure.
+On success the host also checks that the returned successor belongs to the
+issued root. A failed draw retains its consumed generation and debit; query
+counts are distinct from raw rejection-sampler candidate counts.
+An error interpreting returned values becomes a reported host failure while
+resource observation continues. `observation_errors` identifies any issuer
+observation that failed; other available observations remain in the result.
+Unavailable observations are never replaced by zero counters.
 
 A port constraint is `[source_port, arity_or_null, setup_name_or_null]`. At least
 one constraint must be present in each record. The host resolves the original

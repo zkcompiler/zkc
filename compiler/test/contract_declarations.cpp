@@ -256,6 +256,14 @@ int main() {
         "Type/Nat fixture installed in production");
   check(operationEffect("unknown.call").empty(),
         "unknown operation acquired an effect envelope");
+  check(!operationPurity("unknown.call"),
+        "unknown operation acquired a purity contract");
+  for (auto name : {"field.add", "field.mul", "curve.generator", "curve.add",
+                    "curve.scale", "curve.equal"})
+    check(operationPurity(name) == OperationPurity::Total, name);
+  for (auto name : {"field.inverse", "curve.get", "control.require",
+                    "curve.commit", "curve.response"})
+    check(operationPurity(name) == OperationPurity::Ordered, name);
   for (const auto &kernel : kernels())
     check(operationEffect(kernel.key) == "local", kernel.key);
   auto unsupported = parseBoundType("fixture_array:anything", false);

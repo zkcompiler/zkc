@@ -192,6 +192,7 @@ impl Core {
             | Value::RistrettoRound(..)
             | Value::RistrettoGroup(..)
             | Value::Field(..)
+            | Value::NonzeroField(..)
             | Value::Round(..)
             | Value::Bool(..)
             | Value::Rng(..)

@@ -87,6 +87,9 @@ def compute (location : Location) (request : TypedLocal.Request)
       let values ← checked location (inputs.mapM Value.toExtension)
       let outputs ← checked location (ExtensionReference.compute request.contract request.attributes values)
       pure (outputs.map Value.fromExtension)
+    else if request.contract == "field.from_nonzero" then do
+      let [.nonzeroField x] := inputs | failAt location "refused" "runtime-kernel-types"
+      pure [.field x.val]
     else if ScalarReference.supported request.contract then do
       let domain ← checked location (ScalarReference.Domain.parse (request.arguments.headD Bindings.fr))
       let values ← checked location (inputs.mapM (Value.toArithmetic domain))
@@ -162,6 +165,7 @@ def compute (location : Location) (request : TypedLocal.Request)
         let .field challenge ← checked location (challenge.toArithmetic .ristretto) | failAt location "refused" "runtime-kernel-types"
         nonceResponseFor location .ristretto secret challenge identity generation
     | "random.draw", [.rng identity generation] => randomDraw location identity generation
+    | "random.draw_nonzero", [.rng identity generation] => randomNonzeroDraw location identity generation
     | "curve.commit", [.groups bases, .nonce identity generation] =>
         nonceCommit location bases identity generation
     | "curve.response", [.field secret, .field challenge, .nonce identity generation] =>

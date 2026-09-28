@@ -20,6 +20,7 @@ defaultTargets = [
   "artifact-reference",
   "relation-reference",
   "iteration-reference",
+  "mathematical-reference",
 ]
 
 [leanOptions]
@@ -58,7 +59,7 @@ globs = ["Examples.+"]
 [[lean_lib]]
 name = "ZkcToolSupport"
 roots = ["Tools.SourceConsumer", "Tools.TableAdmission", "Tools.JsonSupport", "Tools.BlockChecker", "Tools.DeclarationAudit", "Tools.ImportHeaders", "Tools.RelationReference", "Tools.Interactive", "Tools.Artifact"]
-globs = ["Tools.SourceConsumer", "Tools.TableAdmission", "Tools.JsonSupport", "Tools.BlockChecker", "Tools.DeclarationAudit", "Tools.ImportHeaders", "Tools.RelationReference", "Tools.Interactive.*", "Tools.Artifact.*", "Tools.Crypto.+", "Tools.RequirementChecker.+"]
+globs = ["Tools.SourceConsumer", "Tools.TableAdmission", "Tools.JsonSupport", "Tools.BlockChecker", "Tools.DeclarationAudit", "Tools.ImportHeaders", "Tools.RelationReference", "Tools.Interactive.*", "Tools.Artifact.*", "Tools.Crypto.+", "Tools.RequirementChecker.+", "Tools.Mathematical.*"]
 
 [[lean_exe]]
 name = "source-plan-example"
@@ -107,3 +108,7 @@ root = "Tools.RelationReference"
 [[lean_exe]]
 name = "iteration-reference"
 root = "Tools.Iteration"
+
+[[lean_exe]]
+name = "mathematical-reference"
+root = "Tools.Mathematical"

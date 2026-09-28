@@ -87,6 +87,7 @@ impl Origin {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CutKind {
     Local,
+    Guard,
     Send,
     Receive,
 }
@@ -172,6 +173,7 @@ pub struct Stop {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action<V> {
     Local(LocalAction),
+    Guard(Cut),
     Send(Packet<V>),
     Receive(Receive),
     Returned(Vec<V>),
@@ -181,6 +183,7 @@ impl<V> Action<V> {
     pub fn cut(&self) -> Option<Cut> {
         match self {
             Self::Local(local) => Some(local.cut.clone()),
+            Self::Guard(cut) => Some(cut.clone()),
             Self::Send(packet) => Some(packet.envelope.cut(CutKind::Send)),
             Self::Receive(request) => Some(request.cut()),
             Self::Returned(_) | Self::Stopped(_) => None,

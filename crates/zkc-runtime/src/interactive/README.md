@@ -155,7 +155,7 @@ normal-result contract.
 
 ## Actions, packets and origins
 
-`poll()` exposes `Action::Local`, `Send`, `Receive`, `Returned`, or `Stopped`.
+`poll()` exposes `Action::Local`, `Guard`, `Send`, `Receive`, `Returned`, or `Stopped`.
 Repeated polling of the same pending/terminal action is stable: it performs no
 instructions, frame calls, capability transitions or draws. Initial polling may
 perform bounded administrative call/loop/return transitions until it reaches the
@@ -168,6 +168,9 @@ next cut. Those transitions do not run kernels.
   succeeded. Wrong action/cut returns an error without executing a kernel.
 - `take_send(&cut)` consumes one pending outgoing packet and transfers custody to
   the caller. It does not observe or advance a peer.
+- `execute_guard(&cut)` evaluates one pending Boolean guard. False becomes an
+  explicit `reject` stop at that site. True advances past the guard without
+  polling its suffix. Polling alone never evaluates the condition.
 - `deliver(packet)` advances exactly one matching receive. Envelope/type/value
   mismatch leaves the request and execution counters unchanged. `check_delivery`
   provides a non-consuming preflight for the controller.
@@ -201,7 +204,8 @@ typed values and does not guess an encoding for arkworks objects.
 
 ## Source-order driver
 
-`zkc-tools::protocol::Schedule` traverses the admitted common source and selects `DriverCut::Local(cut)` or
+`zkc-tools::protocol::Schedule` traverses the admitted common source; the lower
+level controller supports `DriverCut::Local(cut)`, `DriverCut::Guard(cut)` and
 `DriverCut::Message { send, receive }`. `drive_cut(left, right, &cut)` processes
 exactly that cut, after verifying pair and expected pending origins. A message
 preflights both ends before consuming the send. The helper does not infer source

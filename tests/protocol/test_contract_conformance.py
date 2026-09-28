@@ -689,6 +689,7 @@ def test_bounded_json_lines_protocol(physical_drivers, directory):
 def expected_facets(operation, group, declarations, policy):
     """Expected classifications from inert declarations, never consumer authority."""
     result = {name: False for name in policy["declared_fields"].values()}
+    result["total"] = operation["purity"] == "Total"
     for facet in operation["facets"]:
         kind = facet["kind"]
         assert kind in policy["declared_fields"] or kind in policy["uncompared_declarations"], (

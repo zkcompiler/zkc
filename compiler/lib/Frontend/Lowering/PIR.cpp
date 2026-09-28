@@ -1,8 +1,11 @@
 #include "PIR.h"
+#include "../Model/Mathematical.h"
 #include "../Resolution/Project.h"
 #include "OutputWork.h"
 #include "zkc/Frontend/Diagnostic.h"
+#include "zkc/Mathematical/Diagnostic.h"
 #include "zkc/Source/Codec.h"
+#include "zkc/Support/Refusal.h"
 #include <map>
 #include <set>
 #include <type_traits>
@@ -105,10 +108,16 @@ Expected<source::Body> lowerBody(const model::Module &module,
 struct SourceEmitter {
   static model::EmittedSource
   finish(model::CheckedSource checked, source::Content content,
-         const std::map<DeclId, std::string> &names) {
+         const std::map<DeclId, std::string> &names,
+         std::shared_ptr<const mathematical::Placement> mathematical = {}) {
     auto model = std::move(checked).takeModel();
+    model->mathematicalPlacement = std::move(mathematical);
     for (const auto &[id, name] : names)
       model->declarations.at(id.index).loweredName = name;
+    if (model->mathematicalPlacement)
+      for (auto &declaration : model->declarations)
+        if (declaration.kind == Declaration::Kind::Protocol)
+          declaration.bodyState = Declaration::BodyState::Checked;
     return model::EmittedSource(std::move(model), std::move(content));
   }
 };
@@ -118,6 +127,79 @@ Expected<model::EmittedSource> lower(model::CheckedSource &&checked,
   constexpr auto account = WorkAccount::Output;
   if (auto error = work::charge(budget, account))
     return error;
+  if (model.mathematical) {
+    const auto &input = *model.mathematical;
+    auto charge = [&](size_t amount) {
+      return work::charge(budget, WorkAccount::LibraryFormation, amount);
+    };
+    mathematical::AdmissionBudget admission;
+    admission.charge = charge;
+    auto placed = mathematical::place(input.source, input.installation,
+                                      admission, input.names);
+    if (!placed) {
+      auto failure = placed.takeError();
+      std::string code = "source-mathematical-admission";
+      auto owner = model.lookup({0}, input.names.protocol);
+      auto location = model.declarations.at(owner.index).location;
+      visitErrors(failure, [&](const ErrorInfoBase &info) {
+        if (info.isA<Refusal>())
+          code = static_cast<const Refusal &>(info).code;
+        if (info.isA<mathematical::AdmissionRefusal>()) {
+          const auto &path =
+              static_cast<const mathematical::AdmissionRefusal &>(info).path;
+          using C = mathematical::AdmissionCoordinate;
+          // This frontend emits exactly one closed definition and flat pure
+          // regions. Longer paths belong to unsupported nested syntax.
+          if (path.size() >= 2 && path[0].kind == C::Definition &&
+              path[0].index == 0) {
+            std::optional<uint32_t> node;
+            if (path.size() == 3 && path[2].kind == C::Node)
+              node = path[2].index;
+            for (const auto &written : input.locations)
+              if ((path[1].kind == C::Terminal && written.terminal) ||
+                  (path[1].kind == C::Step && !written.terminal &&
+                   written.step == path[1].index && written.node == node)) {
+                location = written.location;
+                break;
+              }
+          }
+        }
+      });
+      return diagnostic(model.resolution->input,
+                        location.value_or(source::Span{}), code,
+                        toString(std::move(failure)));
+    }
+    const auto &target = *placed->target.module();
+    for (auto count :
+         {target.bindings.size(), target.roots.size(), target.protocols.size(),
+          target.instances.size(), target.entries.size()})
+      if (auto failure = work::charge(budget, account, count))
+        return failure;
+    for (const auto &binding : target.bindings)
+      if (auto failure = work::charge(budget, account,
+                                      binding.application.arguments.size()))
+        return failure;
+    for (const auto &root : target.roots)
+      if (auto failure = work::charge(budget, account, root.owners.size()))
+        return failure;
+    for (const auto &protocol : target.protocols) {
+      for (auto count : {protocol.roles.size(), protocol.arguments.size(),
+                         protocol.results.size()})
+        if (auto failure = work::charge(budget, account, count))
+          return failure;
+      if (auto failure = chargeBody(budget, account, *protocol.body))
+        return failure;
+    }
+    auto retained =
+        std::make_shared<const mathematical::Placement>(std::move(*placed));
+    // Consume this exact immutable target; ordinary body lowering and name
+    // rewriting cannot manufacture a second common meaning for the graph.
+    auto content = retained->target.root();
+    return SourceEmitter::finish(
+        std::move(checked), std::move(content),
+        {{model.lookup({0}, input.names.protocol), input.names.protocol}},
+        std::move(retained));
+  }
   if (model.construction) {
     for (auto count : {model.construction->publicBindings.size(),
                        model.construction->draws.size()})

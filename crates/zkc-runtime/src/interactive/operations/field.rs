@@ -3,6 +3,10 @@ use super::*;
 use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
+    Contract::new(
+        "field.from_nonzero",
+        (&[NonzeroField], &[Field], AttributeRule::None),
+    ),
     Contract::selectable(
         "field.from_index",
         (&[Index], &[Field], AttributeRule::None),

@@ -99,7 +99,7 @@ example : admitted ⟨⟨"Bad", [("lo", "index"), ("hi", "index"), ("r", rng)], 
     .error "interactive-resource-reuse" := by native_decide
 
 private def candidate (function : Explicit.Function) : Explicit.CandidateLocals :=
-  ⟨false, bindings, [function], .arr #[], .arr #[]⟩
+  ⟨false, bindings, [function], .arr #[], .arr #[], []⟩
 example : (Generic.validateClosed sum bindings (candidate sum) "Sum").isOk = true := by native_decide
 example : (Generic.validateClosed branch bindings (candidate branch) "Branch").isOk = true := by native_decide
 -- Type-correct candidate mutations in dormant regions and dynamic bounds must fail correspondence.
@@ -133,14 +133,14 @@ example : ([Bindings.g1, Bindings.ristrettoGroup, Bindings.bn254G1, Bindings.bn2
       (if group == Bindings.ristrettoGroup then "dalek/" else "arkworks/") ++ "curve.get"⟩).isOk) = true := by native_decide
 
 private def controlledArtifactResource : Result Unit :=
-  Tools.Artifact.admitArtifactProfile ⟨.explicit bindings, [resourceBranch.code], [], [], []⟩
+  Tools.Artifact.admitArtifactProfile ⟨.explicit bindings, [resourceBranch.code], [], [], [], []⟩
     ⟨"main", "P", "V", [], "coins", [], 0, .null⟩
 example : controlledArtifactResource = .error "construction-local-control-resource" := by native_decide
 
 -- Artifact source validator uses the same finite typed control combinators,
 -- with its own values/arithmetic and request transcript.
 private def artifactSum : Bool := Id.run do
-  let source : Source := ⟨.explicit bindings, [sum.code], [], [], []⟩
+  let source : Source := ⟨.explicit bindings, [sum.code], [], [], [], []⟩
   let descriptor : Tools.Artifact.Descriptor := ⟨"main", "P", "V", [], "coins", [], 0, .null⟩
   let location : Tools.Artifact.Location := { entry := "main", binding := "root", path := [], protocol := "Main", role := "V" }
   let initial : Tools.Artifact.State := {

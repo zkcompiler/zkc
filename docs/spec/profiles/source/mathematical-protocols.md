@@ -36,7 +36,8 @@ The order of pure nodes is a topological reference order, not a physical
 schedule. References point to preceding bindings or explicit captures.
 Reverse edges, interning tables and demand sets are derived data. Region
 boundaries, typed captures, operations and outputs belong to the subject.
-Pure map/fold bodies are structured and finite; a fold specifies its order.
+Pure map/fold bodies are structured and finite; the v1 fold visits indices in
+ascending order and threads its accumulator as a left fold.
 Parallel reduction requires an associativity law for the selected operation.
 
 | Constructor | Formation and availability | Open-role meaning |
@@ -50,6 +51,9 @@ Parallel reduction requires an associativity law for the selected operation.
 | Repeat | Public finite count; invariant carried port types; checked initial/yield coverage; bounded public index | Execute the same body at each actual index with its role-local carried state and captures |
 | Guard | Participating owner; available condition | Continue when true; owner stops with reject when false |
 | Stop | Participating owner and reason | Owner issues its terminal stop action; a foreign terminal leaf has no continuation and is incomplete |
+
+The concrete v1 encoding uses `Fin 2` for conditions, with `1` true and `0`
+false. The abstract independent language exposes this as its condition parameter.
 
 An owned operation may contain local conditional computation. General
 effectful branch syntax is outside the version-1 encoding; this profile has
@@ -105,6 +109,9 @@ existing effectful interpretation, the required law is
 Checked inverse, decoding, bounds access and dynamic degree checks remain
 ordered when they can stop. Sampling, queries, messages and guards are
 ordered effects. Absence of effect metadata is not evidence of purity.
+Static algebraic requirements such as Field or ScalarAction constrain the
+interpreted domains; they are distinct from stateful service capabilities.
+Replay metadata likewise neither establishes nor contradicts totality.
 Resource allocation, mutable caches and opaque handles have their own
 realization contracts. Mathematical sharing alone grants no physical
 copy/drop permission or unchanged resource failure behavior.

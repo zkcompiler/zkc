@@ -2,7 +2,7 @@ use crate::{Bounds, Error, Scalar, bounds::vector};
 use ark_std::{
     UniformRand,
     rand::{
-        SeedableRng,
+        RngCore, SeedableRng,
         rngs::{OsRng, StdRng},
     },
 };
@@ -37,6 +37,17 @@ impl RandomSource {
         Scalar::rand(&mut self.rng)
     }
 
+    /// Rejection sampling from canonical 256-bit encodings. Every nonzero Fr
+    /// value has one accepted encoding; no modular reduction biases the draw.
+    /// The cap is a physical stop, not an alternative mathematical outcome.
+    pub fn nonzero_scalar(&mut self) -> Result<crate::NonzeroScalar, Error> {
+        nonzero_scalar_with(|| {
+            let mut bytes = [0; 32];
+            self.rng.fill_bytes(&mut bytes);
+            bytes
+        })
+    }
+
     /// Draw a uniformly sampled BN254 scalar from this advancing OS-seeded source.
     pub fn bn254_scalar(&mut self) -> crate::bn254::Scalar {
         crate::bn254::Scalar::rand(&mut self.rng)
@@ -56,5 +67,48 @@ impl RandomSource {
             point.push(self.scalar());
         }
         Ok(point)
+    }
+}
+
+/// Maximum candidate encodings per nonzero scalar draw.
+pub const NONZERO_SAMPLING_ATTEMPTS: usize = 128;
+
+fn nonzero_scalar_with(mut bytes: impl FnMut() -> [u8; 32]) -> Result<crate::NonzeroScalar, Error> {
+    for _ in 0..NONZERO_SAMPLING_ATTEMPTS {
+        if let Ok(value) = crate::NonzeroScalar::from_bytes(&bytes()) {
+            return Ok(value);
+        }
+    }
+    Err(Error::SamplingLimit)
+}
+
+#[cfg(test)]
+mod nonzero_sampling_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_zero_and_noncanonical_candidates_without_reduction() {
+        let expected = crate::NonzeroScalar::new(Scalar::from(7)).unwrap();
+        let mut candidates = [[0; 32], [255; 32], expected.to_bytes().unwrap()].into_iter();
+        assert_eq!(
+            nonzero_scalar_with(|| candidates.next().unwrap()),
+            Ok(expected)
+        );
+        assert!(candidates.next().is_none());
+    }
+
+    #[test]
+    fn rejection_is_bounded_and_never_returns_a_sentinel() {
+        for bytes in [[0; 32], [255; 32]] {
+            let mut count = 0;
+            assert_eq!(
+                nonzero_scalar_with(|| {
+                    count += 1;
+                    bytes
+                }),
+                Err(Error::SamplingLimit)
+            );
+            assert_eq!(count, NONZERO_SAMPLING_ATTEMPTS);
+        }
     }
 }

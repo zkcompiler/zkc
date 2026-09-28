@@ -81,7 +81,7 @@ private def candidate (body := code) : Explicit.CandidateLocals :=
   ⟨true, [⟨"mul", "vector.mul", [fr], "arkworks-diagonal/vector.mul"⟩,
     ⟨"dot", "vector.dot", [fr], "arkworks-diagonal/vector.dot"⟩],
     [⟨⟨"Pair", logical.code.arguments.map (fun (n, ty) => (n, ty ++ "@arkworks.fr-vector/1")),
-      [scalarTy ++ "@arkworks.fr/1"], some body⟩, none⟩], .null, .null⟩
+      [scalarTy ++ "@arkworks.fr/1"], some body⟩, none⟩], .null, .null, []⟩
 
 -- Both logical operations, their sites and intermediate correspondence survive.
 example : (Generic.validateClosed logical bindings candidate "Pair").isOk = true := by native_decide
@@ -99,7 +99,7 @@ private def ristrettoCandidate : Explicit.CandidateLocals :=
     [⟨⟨"GroupPair", [("f", "vector:ristretto255.scalar@dalek.scalar-vector/1"),
       ("v", "groups:ristretto255.group@dalek.ristretto-vector/1"),
       ("w", "vector:ristretto255.scalar@dalek.scalar-vector/1")],
-      ["group:ristretto255.group@dalek.ristretto/1"], some code⟩, none⟩], .null, .null⟩
+      ["group:ristretto255.group@dalek.ristretto/1"], some code⟩, none⟩], .null, .null, []⟩
 example : (Generic.validateClosed ristrettoLogical ristrettoBindings ristrettoCandidate "GroupPair").isOk = true := by native_decide
 
 private def sharedCode : List Instruction :=

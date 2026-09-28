@@ -38,7 +38,7 @@ pub use model::{
 };
 pub use noninteractive::{NoninteractiveEntry, NoninteractiveError};
 pub use runner::Runner;
-pub use source::{CallMapping, PortMapping, SourceMap};
+pub use source::{CallMapping, PortMapping, RootMapping, SourceMap};
 pub use transport::{
     Action, Cut, CutKind, Envelope, LoadError, LocalAction, Origin, Packet, PathElement, Receive,
     RuntimeError, Stop, StopKind, Usage, ValueBudget,

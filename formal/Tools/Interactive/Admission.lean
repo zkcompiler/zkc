@@ -11,6 +11,7 @@ structure KernelSignature where
   inputs : List Ty
   outputs : List Ty
   matchSafe : Bool := true
+  total : Bool := false
   deriving BEq, Repr
 
 abbrev Context := List Port
@@ -46,10 +47,12 @@ def sites : Nat → List Instruction → Result (List Name)
     for instruction in body do
       match instruction with
       | .op site .. | .localCall site .. | .message site .. | .send site .. | .receive site ..
+      | .query site .. | .guard site ..
       | .call site .. | .variant site .. | .stop site .. | .incomplete site => result := result ++ [site]
       | .localMatch site _ _ arms _ =>
           result := result ++ [site] ++ (← arms.mapM fun arm => sites depth arm.2.2).flatten
       | .loop site _ _ _ nested _ => result := result ++ [site] ++ (← sites depth nested)
+      | .pureRegion site _ _ nested _ => result := result ++ [site] ++ (← sites depth nested)
       | .conditional site _ _ yes no _ => result := result ++ [site] ++ (← sites depth yes) ++ (← sites depth no)
       | .forLoop site _ _ _ _ _ nested _ => result := result ++ [site] ++ (← sites depth nested)
       | .ret _ | .yield _ | .release _ => pure ()
@@ -67,6 +70,7 @@ def instructionCount : Nat → List Instruction → Nat
   | 0, _ => limits.instructions + 1
   | fuel + 1, body => body.length + (body.map fun i => match i with
       | .loop _ _ _ _ nested _ | .forLoop _ _ _ _ _ _ nested _ => instructionCount fuel nested
+      | .pureRegion _ _ _ nested _ => instructionCount fuel nested
       | .localMatch _ _ _ arms _ => (arms.map fun arm => instructionCount fuel arm.2.2).sum
       | .conditional _ _ _ yes no _ => instructionCount fuel yes + instructionCount fuel no
       | _ => 0).sum
@@ -260,12 +264,45 @@ def environmentSignature (environment : Environment) (stage kernel : String)
             else "interactive-kernel-parameters"
           else reason
       return ⟨signature.inputs.map Bindings.ValueType.spelling, signature.outputs.map Bindings.ValueType.spelling,
-        !Bindings.historyContract binding.contract⟩
+        !Bindings.historyContract binding.contract, Bindings.totalContract binding.contract⟩
+
+/-- A closed inline region uses the ordinary local SSA and binding checker.
+The additional predicate forbids every effect, control, call and release. -/
+def admitPure (environment : Environment) (env : Context) (owner : Name)
+    (captures : List (Name × Ty)) (body : List Instruction)
+    (outputs : List (Name × Ty)) (consumed : List Name := []) : Result Context := do
+  ensure (captures.length ≤ limits.ports && outputs.length ≤ limits.ports) "port-limit"
+  for (_, ty) in captures ++ outputs do
+    let _ ← Bindings.valueType false ty
+    ensure (duplicable ty && discardable ty) "interactive-pure-type"
+  let (actual, _) ← consumeOperands env (captures.map Prod.fst) consumed
+  ensure (portsMatch actual (captures.map fun p => (owner, p.2))) "interactive-pure-capture"
+  let inner ← Context.bind [] (captures.map Prod.fst) (captures.map fun p => ("", p.2))
+  let signature := environmentSignature environment "logical"
+  for instruction in body do
+    match instruction with
+    | .op _ kernel attrs _ _ =>
+        let selected ← signature kernel attrs
+        ensure (selected.total && attrs.isEmpty) "interactive-pure-operation"
+        ensure ((selected.inputs ++ selected.outputs).all fun ty => duplicable ty && discardable ty)
+          "interactive-pure-type"
+    | .yield _ => pure ()
+    | _ => throw "interactive-pure-instruction"
+  let _ ← admitLocalBody signature false [] limits.depth true inner
+    (some (outputs.map Prod.snd)) body
+  env.bind (outputs.map Prod.fst) (outputs.map fun p => (owner, p.2))
 
 def mapped (binding : Option Instance) (role : Name) : Result Name :=
   match binding with
   | none => .ok role
   | some binding => binding.role role
+
+def Source.rootService (source : Source) (name : Name) : Result (Root × Ty) := do
+  let some root := source.roots.find? (·.name == name) | throw "interactive-query-root"
+  let .explicit bindings := source.environment
+  let binding ← lookup root.service (bindings.map fun b => (b.name, b))
+  let (_, reply) ← Bindings.entropyService binding
+  return (root, reply.spelling)
 
 def callSignature (source : Source) (definition : Protocol) (binding : Option Instance)
     (dependency : Name) : Result (List (Name × Ty) × List (Name × Ty)) := do
@@ -304,6 +341,22 @@ def admitBody (source : Source) (definition : Protocol) (binding : Option Instan
           ensure (portsMatch actual (function.arguments.map fun p => (owner, p.2)))
             "local-input-ownership-or-types"
           env ← env.bind outputs (function.results.map fun ty => (owner, ty))
+      | .pureRegion _ owner captures nested outputs =>
+          ensure (definition.roles.contains owner) "unknown-role"
+          let owner ← mapped binding owner
+          env ← admitPure source.environment env owner captures nested outputs consumed
+      | .query _ owner root inputs outputs =>
+          ensure (definition.roles.contains owner) "interactive-query-context"
+          let owner ← mapped binding owner
+          let (root, reply) ← source.rootService root
+          ensure (root.owners.contains owner) "interactive-query-permission"
+          ensure (inputs.isEmpty && outputs.length == 1) "interactive-query-signature"
+          env ← env.bind outputs [(owner, reply)]
+      | .guard _ owner condition =>
+          ensure (definition.roles.contains owner) "interactive-guard-context"
+          let owner ← mapped binding owner
+          let (actual, _) ← consumeOperands env [condition] consumed
+          ensure (portsMatch actual [(owner, "bool")]) "interactive-guard-condition"
       | .message _ schema sender receiver input output =>
           ensure (definition.roles.contains sender && definition.roles.contains receiver) "unknown-role"
           let sender ← mapped binding sender
@@ -406,7 +459,33 @@ def Source.reachable (source : Source) : Result (List Name) := do
   let closures ← source.entries.mapM fun (_, name) => reachableFrom source name
   return closures.flatten.eraseDups
 
+def admitRoots (source : Source) : Result Unit := do
+  if source.roots.isEmpty then return
+  ensure (source.roots.length ≤ limits.definitions) "definition-limit"
+  let .explicit bindings := source.environment
+  let names := bindings.map OperationBinding.name ++ source.functions.map Function.name ++
+    source.protocols.map Protocol.name ++ source.instances.map Instance.name ++
+    source.entries.map Prod.fst ++ source.roots.map Root.name
+  ensure (unique names) "duplicate-symbol"
+  ensure (source.entries.length == 1 && source.protocols.length == source.instances.length &&
+    unique (source.instances.map Instance.protocol)) "interactive-roots-closed-module"
+  for p in source.protocols do
+    ensure p.parameters.isEmpty "interactive-roots-closed-module"
+  for i in source.instances do
+    ensure i.parameters.isEmpty "interactive-roots-closed-module"
+    ensure (i.roles.all fun (formal, actual) => formal == actual) "interactive-roots-role-binding"
+  let roles := (source.protocols.map Protocol.roles).flatten
+  for root in source.roots do
+    ensure (!root.owners.isEmpty && unique root.owners &&
+      root.owners == root.owners.mergeSort (· ≤ ·)) "interactive-root-owners"
+    ensure (root.owners.all roles.contains) "interactive-root-owner"
+    let _ ← source.rootService root.name
+  let types := (source.functions.map fun f => f.arguments.map Prod.snd ++ f.results).flatten ++
+    (source.protocols.map fun p => p.arguments.map Port.ty ++ p.results.map Prod.snd).flatten
+  ensure (!(types.any fun ty => typeKind ty == "rng")) "interactive-root-affine-mixing"
+
 def admitSource (source : Source) (executable : Bool := true) : Result Unit := do
+  admitRoots source
   let checkType ← match source.environment with
     | .explicit bindings => do
         ensure (bindings.length ≤ limits.definitions && unique (bindings.map OperationBinding.name)) "binding-declarations"
@@ -497,6 +576,8 @@ def admitSource (source : Source) (executable : Bool := true) : Result Unit := d
       let results ← definition.results.mapM fun (owner, ty) => return (← binding.role owner, ty)
       let _ ← admitBody source definition (some binding) executable limits.depth false arguments results [] body
   let selected ← source.reachable
+  ensure (source.roots.isEmpty || selected.length == source.instances.length)
+    "interactive-roots-unreachable-instance"
   if executable then
     ensure (!source.entries.isEmpty) "no-entry"
     for name in selected do

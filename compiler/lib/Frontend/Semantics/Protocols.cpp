@@ -882,6 +882,19 @@ public:
         resolveType(resolveType), emitted(emitted),
         checkPlacement(checkPlacement) {}
   bool run() {
+    const auto *ordinary =
+        std::get_if<std::optional<syntax::Body>>(&protocol.body);
+    if (!ordinary)
+      return fail(protocol, "source-mathematical-lowering",
+                  "mathematical source requires its admitted graph lowering");
+    for (const auto &port : protocol.arguments)
+      if (!port.availability.empty())
+        return fail(protocol, "source-protocol-availability",
+                    "shared availability requires a mathematical protocol");
+    for (const auto &port : protocol.results)
+      if (!port.availability.empty())
+        return fail(protocol, "source-protocol-availability",
+                    "shared availability requires a mathematical protocol");
     if (protocol.roles.empty())
       return fail(protocol, "source-protocol-role",
                   "protocol requires at least one role");
@@ -925,10 +938,10 @@ public:
         return fail(protocol, "source-output-port",
                     "output ports must have distinct names");
     }
-    if (!protocol.body)
+    if (!*ordinary)
       return true;
     source::Body lowered;
-    if (!body(*protocol.body, std::move(environment), d.outputs, false, 0,
+    if (!body(**ordinary, std::move(environment), d.outputs, false, 0,
               emitted ? &lowered : nullptr))
       return false;
     if (emitted)

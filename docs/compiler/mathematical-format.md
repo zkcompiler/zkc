@@ -21,7 +21,8 @@ by UTF-8 bytes. Convert each value to a logical tree:
 | Array | `["array", converted element, ...]` |
 | Object | `["object", key, converted value, ...]`, strictly increasing keys |
 
-Decimals are `0` or a nonzero ASCII digit followed by ASCII digits. The
+Decimals are `0` or a nonzero ASCII digit followed by ASCII digits. Binary
+`natural` payloads have the same u64 bound as JSON integers. The
 [existing logical encoding](artifact-format.md#canonical-logical-encoding)
 encodes strings with tag byte 0, u64 little-endian UTF-8 length, then bytes;
 arrays with tag byte 1, u64 little-endian count, then children. Converted trees
@@ -39,6 +40,10 @@ these budgets while traversing, before constructing an intermediate full tree.
 The Python JSON entry point separately caps transport text at 1 MiB before
 parsing; whitespace can affect that safeguard, but never the subject digest or
 binary admission. JSON and binary resource admission are distinct interfaces.
+The independent Lean capture reader accepts at most 16 MiB of JSON text and
+checks the same canonical codec limits. It retains object keys until duplicate
+checking and bounds decimal tokens before numeric conversion. The development
+runtime host retains its smaller 1 MiB input ceiling.
 
 The subject digest is SHA-256 of ASCII `zkc.math.subject.v1`, a zero byte,
 then these canonical bytes of `{profile:"zkc.math.v1", manifest, module}`.
@@ -48,6 +53,25 @@ remains inside. Digests identify captured artifacts; checking takes actual
 admitted terms and their interpretations.
 
 ## Declarations and scopes
+
+The native closed installation adapter reads totality from the common logical
+declarations. Only positively classified operations can be installed as pure;
+unknown identities and known Ordered contracts are refused. Its current subset
+has one result, no natural parameters or attributes, and closed unary nominal
+value types plus Fin 2 (the common bool type). Exact common binding resolution
+checks associated domains, including a group's scalar field. Wire payloads use
+the existing nominal codec catalog. Nullary entropy services resolve existing
+sampling contracts with one RNG input, one reply and one RNG successor. The
+service descriptor retains the exact field or nonzero-field reply domain; it
+does not establish a distribution or native-provider adequacy theorem. Root
+parameter aliases remain explicit in admitted instances. Physical implementations
+are selected later.
+
+The adapter derives package pins from canonical descriptor bytes under
+the prefix `zkc.math.installation.v1` followed by a zero byte. These descriptors
+identify the resolved logical binding or codec payload and the adapter version.
+They are not implementation hashes. The selected registry still checks every
+signature and type; independent interpretations supply their own meanings.
 
 Records have exactly the following fields. Lists preserve order unless stated
 otherwise. References and arities are unsigned integers. Unknown fields and
@@ -101,8 +125,32 @@ arity. A `typeUse` explicitly substitutes arguments from its user's scope into
 an earlier type template. Nested type uses refer only to earlier templates;
 exact duplicate templates are refused. Substituted types need no extra table
 entry. Equality expands templates and uses the profile's checked static equality.
+The v1 admission envelope limits each expanded mathematical type to 65,536
+constructors and structural depth 64, with root depth zero. Nominal,
+polynomial, residual and finite-index types count as one constructor. A product
+counts one plus the sum of its children, counting repeated references each
+time; an empty product counts one. A vector counts one plus its element type,
+independently of the vector length. These limits apply to declared and derived
+types, including unused declarations and unused node results. Shared storage
+does not reduce the expanded count. Type-template traversal, syntax nesting,
+leaf payloads and total admission work have separate limits. Template traversal
+counts a referenced constructor at the current depth and advances once for
+each product/vector child; it refuses beyond depth 64 before expansion.
+Cached instances still obey the complete structural bound. Native traversal
+and structural-depth refusals use `math-type-template-depth` and
+`math-type-depth`, respectively. Both report the same depth-capacity violation
+at different checking phases; cache state can change which detects it first.
+Expanded node overflow uses `math-type-size`. A resource refusal
+does not establish that two mathematical types are unequal.
+
 Operations, wires, relations and capability types each have their own scope.
 Declared `purity` and `distinct` must equal the resolved registry contract.
+The registry also checks the complete signature: static arity and ordering,
+capability uses, argument and result types, and attribute schema. Mathematical
+registry declarations are natural-parametric over fixed domain identities;
+an adapter must explicitly specialize any existing Domain/Type parameters.
+The same requirement applies to service signatures, wire payload types and
+nominal type families. Polynomial and residual domains must be registered fields.
 Operation capability uses and argument/result uses share its static scope.
 Definition ports and capability parameters share its scope. Source roots are closed and normalized: every static argument is exactly
 `["literal",n]`; parameter references and arithmetic expressions are refused there. Entry statics are closed
@@ -111,13 +159,18 @@ numerals. Input values are supplied separately in the admitted entry binding.
 Definitions declare local role parameters `0 .. roles-1`. Entry and invoke role
 bindings are injective ordered lists of exactly the callee's arity. Capability
 bindings are ordered lists and may repeat: ports are names, resolved roots are
-identities. Types must match after substitution; each mapped callee permission
+identities. Capability signature equality compares the resolved service identity,
+normalized static arguments and expanded argument/result types. A duplicate
+capability-type declaration does not create a new service or root identity.
+Types must match after substitution; each mapped callee permission
 set must be a subset of the caller port's permission set. Root resolution
 composes entry bindings with all invoke bindings on the dynamic path. Distinct
 root ordinals mean separate state components, without implying random
 independence. Operations must define behavior under aliasing except for pairs
 in their registered `distinct` requirement, which admission discharges on every
-reachable instance. `distinct` lists strictly increasing pairs in lexicographic
+syntactically reachable instance, including calls inside zero-count repeats.
+Unused templates retain their requirements without discharging them. `distinct`
+lists strictly increasing pairs in lexicographic
 order; pure operations have no capabilities or such requirements. Fresh setup
 is not encoded in v1; future allocated roots need explicit site/path identity.
 
@@ -160,6 +213,9 @@ A message selects the wire instantiated by its static arguments; sender and
 receiver differ. Calls name only earlier stored definitions. Dynamic effectful
 branches, runtime-derived counts and setup allocation are refused by v1.
 Public counts must be resolved into the closed entry before this interface.
+The v1 condition type for guards and relation results is `Fin 2`, with `1`
+meaning true and `0` false. This fixes the concrete serialized language's
+condition interpretation; the independent abstract Lean core remains parametric.
 
 Primitive operation/query results are single mathematical values; products are
 explicit types. Regions and protocol calls have ordered multiple outputs.
@@ -196,7 +252,19 @@ to the outer context; count zero returns the initial block. Pure node
 availability follows the profile's intersection rule, including the index.
 Captures alone do not create dependencies on unused values.
 
-A relation has the context public ports followed by witness ports, represented
+Fold visits indices in ascending order, threading the accumulator as a left
+fold. Its exact availability invariant rejects both narrower and wider body
+outputs. In particular, a public initial accumulator cannot become private by
+reading a private capture. Repeat provides explicit carried ports when a
+narrower invariant is required. A repeat body may stop instead of returning;
+its complete syntax is still checked when its count is zero.
+
+Empty availability is allowed: such a value supplies no role component. A
+definition's participating roles are its own role parameters, mapped to module
+roles by the closed instance. Entry bindings may omit module roles; omitted
+roles do not gain source components from nullary nodes or public indices.
+
+A relation has one context block of public ports followed by witness ports, represented
 as mathematical types at one abstract evaluator role. Its region captures that
 context explicitly and returns one condition. A relation binding selects only
 definition arguments, with matching substituted types; theorem use must supply
@@ -208,154 +276,183 @@ ordinals within a definition; pure nodes have no effect site. Dynamic origins
 append invocation `(site)` and iteration `(site,index)` frames. Site numbering
 is checked independently of binder references and root identity.
 
-## Located subject
+## Located target
 
-A placed subject has exactly `{profile:"zkc.math.located.v1", manifest, module}`.
-Its digest uses ASCII `zkc.math.located.v1`, a zero byte, then the same canonical
-codec. It is a new finite encoding of the extended located carrier; the old
-common-protocol JSON does not implicitly acquire this format.
+Placement targets the existing admitted `source::Module`, encoded as
+`zkc.protocol/1` by the [common carrier](interactive-execution.md). It uses
+inline `pure`, closed `root` declarations, ordered `query`, `guard`, messages,
+and the existing instance and entry declarations. There is no separate
+`zkc.math.located.v1` grammar or copied mathematical declaration registry.
+The mathematical input, its manifest and relation bindings remain in captured
+source custody. The target is independently admitted from its actual contents.
 
-The located module copies `manifest`, `roles`, `types`, `operations`, `wires`,
-`capabilityTypes`, `roots` and `relations` verbatim; the checker verifies equality.
-Only `definitions` and `entry` change, and the located module additionally has
-`pureLocals`. Thus role and root ordinals have one shared numbering space, and
-all declaration templates retain their scopes.
-Definitions have `statics:0`, `roles:module.roles.length`, no capability
-parameters and the same port/body record syntax. All uses in definition bodies
-are closed, and every port has exactly one role. Closed static expressions
-are canonical `["literal",n]`, including source roots. Type-template bodies
-remain generic as declared. Roots are the module's explicit
-closed service instances. Local/query capability references name those roots.
-Calls have empty static/capability lists and the literal identity role list
-`[0,...,module.roles.length-1]`; the reference equals the selected callee
-instance's target definition. The entry has those same empty lists and role
-list, with `definition = instances[0].targetDefinition`. Referenced definitions
-have already been instantiated. Located relation operands are `{argument:uint64,path:[uint64]}`, selecting
-argument product subtrees. Bindings replicate exactly at each role where all
-selected source inputs are available, ordered by source binding index then
-role. Each is instantiated through the checked argument map. A zero-operand binding
-is replicated once per role; its ordered position determines that role.
+Each closed source instance maps to one parameterless target protocol and one
+instance. Local source roles resolve to actual module-role names; target
+instance role assignments are identities. Root parameter aliases resolve to
+closed source root identities before placement. The complete source root table
+maps injectively to target root names; projection retains that table. Operation
+and service bindings resolve through the installed common logical contracts.
+The witness checks their actual applications against the mathematical packages;
+names and hashes alone do not establish this correspondence.
 
-Located pure regions contain only single-role values. Nullary pure nodes use
-the enclosing region owner, so a placed pure step is `["pure", owner, region]`.
-Its inline meaning is the registered pure evaluation without an external reply.
-Located messages use the same message syntax, but bind only a receiver-owned
-value: the sender keeps the old operand. Repeat supplies **one index port per
-module role**, in role order, before carried ports and captures. This replaces
-the shared source index while retaining one common iteration frame. Remaining
-steps use the syntax above. Definitions/regions remain flat; typed folding into
-the existing continuation representation is a separate correspondence.
+The target digest is SHA-256 of ASCII `zkc.math.placement.target.v1`, a zero
+byte, then the existing canonical logical encoding of the actual common carrier
+array. It includes target names as custody data. Binding names do not acquire
+semantic significance merely because they occur in a digest.
 
-Inline placement introduces no local service to evaluate pure operations.
-An outlined candidate uses `["outlined", site, owner, localDefinitionRef,
-[valueRef]]` and adds a `pureLocals` array to its module. Each local definition
-is `{arguments:[typeUse], results:[typeUse], body:region}` with no static scope
-and captures into its argument context. Inline subjects have `pureLocals:[]`
-as well. These actual closed bodies and their result packing are checked before
-folding introduced calls; an arbitrary local service remains arbitrary.
+The initial executable placement profile has one closed instance, nominal
+field/group/nonzero-field values and Boolean values, attribute-free total
+operation graphs, messages, nullary entropy queries, guards and return/stop.
+The entry role map covers every module role. Operations and wires have no
+natural parameters in this installation. Placement re-admits the retained raw
+subject against that concrete installation, including unused manifest entries.
+The profile uses the common carrier's implicit default codec for each payload
+type. Placement resolves the full pinned wire identity through the same
+installation as operations and services. Agreement between that installed codec
+and the runtime codec remains an external native realization premise; the target
+carrier does not encode an explicit codec identity on each message.
+It explicitly refuses unsupported products, map/fold, ordered local operations,
+invokes, repeats and relation bindings. Those constructs remain in the
+mathematical language and later foundation requirements. No unsupported
+constructor is silently erased or recoded as an unrelated legacy construct.
+In particular, mathematical relations are not R1CS/AIR source declarations.
+A future relation adapter must check their actual public/witness input mapping.
+Implementation coverage belongs in [status](../status.md#mathematical-protocol-foundation).
 
 ## Placement witness
 
 ```text
 witness = {profile:"zkc.math.placement.v1", source:digest, target:digest,
-           instances:[instance],
-           components:[component], sites:[siteMap], results:[result],
-           introducedPureCalls:[outlined]}
-instance = {sourceDefinition:uint64, targetDefinition:uint64,
+           instances:[instance], roots:[rootMap], operations:[operationMap],
+           wires:[wireMap], components:[component], sites:[siteMap],
+           results:[result]}
+instance = {sourceDefinition:uint64, targetProtocol:string, targetInstance:string,
             statics:[uint64], roles:[uint64], capabilities:[uint64]}
-address = {definition:uint64, regions:[uint64], binding:uint64}
-regionAddress = {definition:uint64, regions:[uint64]}
-placedValue = {address:address, path:[uint64]}
-component = {instance:uint64, source:address, role:uint64, target:placedValue}
-siteMap = {instance:uint64, site:uint64, targetSite:uint64,
+rootMap = {source:uint64, target:string}
+operationMap = {source:uint64, target:string}
+wireMap = {source:uint64, schema:string}
+sourceAddress = {definition:uint64, regions:[uint64], binding:uint64}
+placedValue = {regions:[uint64], name:string, path:[uint64]}
+component = {instance:uint64, source:sourceAddress, role:uint64,
+             target:placedValue}
+siteMap = {instance:uint64, site:uint64, targetSite:string,
            kind:"message"|"invoke"|"repeat"|"guard"|"stop"|"local"|"query",
            callee:[uint64]}
 result = {instance:uint64, role:uint64, sourcePort:uint64,
           targetPort:uint64, path:[uint64]}
-outlined = {instance:uint64, sourceRegion:regionAddress, role:uint64,
-            targetSite:uint64, localDefinition:uint64,
-            arguments:[placedValue]}
 ```
 
-All witness role and root indices use the shared module numbering. A source
-`component.role` or `result.role` names the **module role** obtained by applying
-its instance's role binding to the source definition's local role. Instance
-zero is the entry. Instances are discovered depth-first, visiting calls in site
-order, including calls syntactically inside zero-count loops. Equal (source
-definition, closed statics, module roles, roots) tuples reuse the earliest
-instance. Instance records and target definitions are in bijection.
-`capabilities` contains resolved root indices in source parameter order. Each
-call site's `callee` is a singleton instance reference with exactly the composed
-static/role/root binding; every other kind has an empty list. Unreachable extra
-instances and target definitions are refused. Target definition order must also
-satisfy earlier-callee formation; it need not equal instance order.
+A witness role is a module-role ordinal obtained by applying the closed
+instance's role binding. Source root ordinals likewise name actual closed
+roots, including aliases in `capabilities`. Instance zero is the entry.
+Instances are independently discovered depth-first in source site order,
+including dormant bodies. Equal definition/static/role/root tuples reuse the
+first instance. The witness cannot choose a different closure. Target protocol
+and instance names are bijective with that closure; extra declarations are
+refused. Each invoke's `callee` is its exact composed instance reference; other
+site kinds have no callee. The initial profile refuses invokes and repeats.
 
-`regions` is an even sequence of `(statementOrdinal,childOrdinal)` pairs from
-a definition body. Child zero is a pure/repeat body; inside a pure region the
-pair is `(nodeOrdinal,0)` for map/fold. Calls reference stored definitions, not
-child regions. Target addresses follow the same rule over flat target bodies.
-`binding` counts region parameters, then all result blocks in source order.
-Terminal nodes bind nothing. Outer outputs of a **pure-step region** are the canonical addresses for its
-output values. A node selected as such an output may also have an internal
-address; a component entry for that internal alias is omitted. This exclusion
-does not apply to map/fold body outputs, whose values differ from their outer
-vector/accumulator results. Multiple outer outputs aliasing the
-same node have equal mapped values.
-A `path` means repeated built-in `project` on a product-typed value; an empty
-path selects the whole value. Every projection is type checked.
+Source addresses retain the mathematical format's scoped binding ordinals.
+`regions` is an even sequence of `(statementOrdinal, childOrdinal)` pairs;
+child zero enters a pure/repeat region, and `(nodeOrdinal,0)` enters map/fold.
+Parameters precede result bindings in each region. Every demanded scoped binding has its own component record, including region
+parameters, node results, and outer pure-step outputs. Captures and yields check
+their actual alias edges. A yielded capture or repeated yield remains explicit;
+there is no alias exemption or synthetic identity operation.
 
-The component map covers exactly every source binding/available-role pair,
-except pairs `(address,r)` strictly inside a region outlined at that same
-module role `r` of the same instance, and the pure-step internal output aliases described above.
-Inlining one role while outlining another does not remove the inlined role's
-internal entries. No liveness exemption changes this v1 domain. The
-located graph may retain unused pure bindings; demand analysis and later checked
-rewrites can eliminate their execution without making witness coverage ambiguous.
-For an outlined region, outer output component entries give the actual outlined
-call result subtrees. Original source effects always remain represented.
+Target value addresses are resolved in the actual mapped protocol. Their
+`regions` traverse actual Source instruction positions and child regions;
+`name` selects an SSA binding in that scope. An empty path names a whole value.
+A nonempty path selects a product subtree and requires matching typed projection
+in the target; the initial profile accepts only empty paths. Target site names
+are actual Source site strings, not reconstructed dense numeric ordinals.
+Mathematical dense preorder sites remain a source formation invariant.
 
-For a message, the sender entry equals the sent operand's entry; the receiver
-entry is the fresh result of the mapped message. Other source values may alias
-that result only through subsequent explicit source references/computation.
-A received value cannot be replaced by an honest sender expression.
+### Independently computed demand
 
-A product leaf is a non-product type or an empty product. For each role, mapped
-source result subtrees partition every target result port's leaves exactly once.
-Each source result occupies a single subtree of the same type; splitting it
-across target ports is refused. Port indices use the complete result lists,
-before filtering by role. The argument block's component entries obey the same
-coverage rule for target argument ports. Entry inputs use instance zero's
-argument map. At every invoke, each target operand subtree equals the caller's
-component of the corresponding source operand; caller invoke-result components
-use the callee instance's result map and the actual target invoke result block.
-These obligations also apply to carried values across repeat initial/yield edges.
+The checker derives the required `(source address, module role)` domain from
+actual source terms. The witness cannot nominate live values or omit effects.
+The domain contains:
 
-For each instance, site entries are total on source sites and injective into
-target sites. Their image and the introduced outlined-call sites are disjoint
-and partition the target definition's dense site ordinals. Extra, duplicated or
-missing target effects are refused.
+- Every argument-interface component at each role in that argument's availability.
+- Every ordered-result component and every declared result component at its role.
+- Every effect operand at the role that performs that effect, including sent
+  values, guard conditions, ordered local inputs and supported call boundaries.
+- The backward closure of those components through total graph operations and
+  explicit region captures, for the same role.
 
-Components sort by `(instance,source.regions,source.binding,role)`; sites by
-`(instance,site)`; results by `(instance,role,sourcePort)`; outlined entries by
-`(instance,sourceRegion.regions,role)`. Numeric
-lexicographic ordering compares arrays elementwise, shorter prefix first.
-Keys are unique, so each map is a function. Addresses' definition fields must
-match their instance's source or target definition as appropriate.
+A message result is available at exactly its sender and receiver; both ordered
+components are in the domain even if subsequently unused. The sender aliases
+the sent operand; the receiver names the actual message output.
 
-Placement preserves calls and repeats one-to-one: it does not unroll, fuse,
-peel or inline them. Dynamic paths map frame by frame using the site/instance
-maps; only checked introduced pure-call frames may be erased by outlining.
-An outlined source region must be the body of a pure step; nested map/fold
-bodies are not separately outlined in v1. Inline witnesses have no introduced calls. Outlined arguments contain exactly
-one entry for each source capture available at that module role, in capture
-order. Every entry has an empty path and its address equals the actual target
-operand's address. That value must equal the corresponding capture component;
-if its component map uses a product path, the operand must be the result of the
-matching explicit projection chain. Local argument `j` receives target operand
-`j`. Capture positions, including duplicate values, determine correspondence. Its actual output arity/types and
-packing must match the region's outer component entries, in output order. The [placement law](../spec/profiles/compiler/mathematical-placement.md)
-checks the common interpretation tables and maps dynamic site identities.
-Digest fields are 64 lower-case hexadecimal characters. The canonical codec's
-same byte/node/depth limits govern witnesses: large component maps can exhaust
-the node budget before their array limit. Exhaustion refuses the whole check;
-partial witness coverage is never accepted. Custody hashes alone discharge none of this.
+Only unobserved total computation can be omitted. A demanded pure output demands
+its defining operation and operands; unused captures do not reduce the
+availability of an independent node. Message demand follows two different
+rules: the sender component aliases the existing sent operand, while the
+receiver component is the fresh received value. The receiver's component never
+induces demand for an honest sender expression. Query results remain results of
+their specific occurrence and root, even when supplied replies happen to agree.
+
+Components cover exactly this computed domain. Each component resolves to the
+actual output of its defining target construct or argument port; matching only
+its name, type and owner is insufficient. Each target pure node must implement the mapped demanded source
+node at that role using its actual mapped operands. This placement boundary does
+not accept additional algebra rewrites; later checked optimization can do so
+under its own laws. Target pure regions introduce no arbitrary local-service
+reply. Pure algebra stays inspectable through participant projection. At each source
+pure step, the target emits one region for each role demanding an output, in
+ascending module-role order at that step position. Demanded nodes, captures and
+outputs retain source order; duplicate captures may share the same actual
+enclosing SSA name, and duplicate yields remain separate output ports. A
+pass-through region contains a yield without introducing an identity operation.
+
+### Interface and effect coverage
+
+Argument components partition the target argument ports by role and source
+order. Result records similarly cover the target result ports, in source port
+order within each role. More general product packing requires every target leaf
+exactly once, including empty products; a source result must occupy one subtree
+of its exact type. The initial profile uses whole scalar/group/Boolean ports.
+Results remain declared and mapped in stop-terminated bodies. Target result
+ports are grouped by ascending module role, then source port; `targetPort` is
+the port index within that role. Every actual operand and result type is checked against the installed logical
+view of its source type; a spelling alone is not a type proof.
+
+Each source effect site has exactly one mapped target effect with the same
+owner(s), root or wire, operands and outcome shape. Their actual instruction-position order is preserved, so two queries on the
+same root cannot be swapped merely by permuting witness entries.
+The mapped sites partition all target effect sites; additional, missing or
+merged target effects refuse. Pure region wrapper sites are structural labels
+and do not count as mathematical effects. Original ordered local operations
+cannot be hidden inside those wrappers. A guard remains reject-on-false at its
+own mapped site, independently of later native realization.
+
+Root mappings biject the entire source and target root tables in table order. Target root
+service applications, result domains and permitted owners agree with the actual
+source capability signatures and installed service packages. Distinct source
+roots cannot alias one target root. Operation mappings cover exactly the source
+operations demanded by the placed graph; wire mappings cover the used wire
+declarations. The checker validates actual target bindings and message payload
+types, and refuses extra executable bindings or functions in this initial slice.
+Each demanded source operation declaration gets its own target binding; service
+bindings are shared exactly by source manifest service index and include those
+needed by unused roots. These bindings together cover all target bindings. Each
+used source wire declaration gets its own schema. Unused mathematical
+declarations remain in source custody. Restated instance, definition and site
+fields are checked against their actual source values.
+
+Components sort by `(instance,source.regions,source.binding,role)`, sites by
+`(instance,site)`, and results by `(instance,role,sourcePort)`. Root, operation and
+wire maps sort by source index. Keys are unique. Numeric array ordering is
+lexicographic with shorter prefixes first. All record keys and arities are
+exact. The canonical codec's byte/node/depth bounds apply to witnesses, and
+exhaustion refuses the entire check.
+
+Placement witnesses cover the inline located checkpoint. Physical pure
+outlining and root state threading are subsequent transformations with their own
+checked actual-body and interface maps. Their relations preserve distinct
+obligations: total pure-call folding, ordered service realization, and physical
+resource adequacy. An introduced sampler call cannot be erased by pure-call
+folding. The [placement law](../spec/profiles/compiler/mathematical-placement.md)
+compares independently defined meanings of the retained mathematical input and
+actual located target; custody digests discharge none of its premises.

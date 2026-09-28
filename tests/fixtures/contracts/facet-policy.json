@@ -1,9 +1,9 @@
 {
   "profile": "zkc.contract-facet-comparison/1",
   "consumer_fields": {
-    "cpp": ["history", "publicReplay", "sampling", "observation", "acceptanceGuard", "conjunction", "unclassifiedProviderEffect"],
+    "cpp": ["history", "total", "publicReplay", "sampling", "observation", "acceptanceGuard", "conjunction", "unclassifiedProviderEffect"],
     "rust": ["history"],
-    "lean": ["history"]
+    "lean": ["history", "total"]
   },
   "declared_fields": {
     "History": "history",

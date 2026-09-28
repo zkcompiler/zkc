@@ -90,6 +90,7 @@ inductive Value where
   | arithmetic (domain : ScalarReference.Domain) (value : ScalarReference.Data (ScalarReference.Scalar domain))
   | nominalBytes (identity kind : String) (bytes : ByteArray)
   | field (value : Math.Fr)
+  | nonzeroField (value : {x : Math.Fr // x ≠ 0})
   | table (value : Math.Table)
   | point (value : List Math.Fr)
   | round (value : Math.Round Math.Fr)
@@ -105,12 +106,14 @@ def Value.ty : Value → Ty
   | .extension value => value.kind
   | .arithmetic _ value => value.kind
   | .nominalBytes _ kind _ => kind
+  | .nonzeroField _ => "nonzero_field"
   | .field _ => "field" | .table _ => "table" | .point _ => "point"
   | .round _ => "round" | .boolean _ => "bool" | .publicBytes ty _ => ty
   | .verifierKey _ => "verifier_key" | .selectedRng _ | .ristrettoRng _ | .extensionRng _ => "rng"
 
 def tag (ty : Ty) : Result UInt8 := do
   match ty with
+  | "nonzero_field" => return 50
   | "field" => return 1 | "table" => return 2 | "point" => return 3
   | "round" => return 4 | "bool" => return 5 | "commitment" => return 6
   | "proof" => return 7 | "group" => return 9 | "groups" => return 10
@@ -341,6 +344,7 @@ def Value.wire (v : Value) : Result ByteArray := do
   let header := magic.push t
   match v with
   | .field f => return header ++ fieldBytes f
+  | .nonzeroField f => return header ++ fieldBytes f.val
   | .table t => return header ++ little 4 t.rank ++ fieldsBytes t.cells
   | .point p => return header ++ little 4 p.length ++ fieldsBytes p
   | .round r => return header ++ fieldsBytes [r.constant, r.linear, r.quadratic]
@@ -366,6 +370,10 @@ def decodeWire (ty : Ty) (bytes : ByteArray) : Result Value := do
   let payload := bytes.extract 6 bytes.size
   match ty with
   | "field" => return .field (← fieldFromBytes payload)
+  | "nonzero_field" =>
+      let f ← fieldFromBytes payload
+      if h : f ≠ 0 then return .nonzeroField ⟨f, h⟩
+      else throw "nonzero-field-zero"
   | "bool" =>
       ensure (payload.size == 1 && (payload[0]! == 0 || payload[0]! == 1)) "wire-bool"
       return .boolean (payload[0]! == 1)

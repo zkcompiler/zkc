@@ -17,7 +17,10 @@ structure RoleState where
 abbrev RoleM := StateT RoleState RunM
 
 inductive Cut where
+  | query (scope : Scope) (root : Name)
+  | guard (scope : Scope) (condition : Value)
   | local (scope : Scope) (function : Function) (inputs : List Value)
+  | pureRegion (scope : Scope) (function : Function) (inputs : List Value)
   | send (scope : Scope) (schema receiver : Name) (value : Value)
   | receive (scope : Scope) (schema sender : Name) (ty : Ty)
 
@@ -54,6 +57,12 @@ def services (base : Location) (underlying : Services Value RunM) : Services Val
     set { state with iterations := state.iterations + 1 }
     pure ()) .done
   executeLocal scope function inputs := .cut (.local scope function inputs) .done
+  executePure scope function inputs := .cut (.pureRegion scope function inputs) .done
+  guard scope condition := .cut (.guard scope condition) (fun _ => .done ())
+  query scope root := .cut (.query scope root) fun values =>
+    match values with
+    | [value] => .done value
+    | _ => .failed scope "refused" "reference-query-arity"
   send scope schema receiver value := .cut (.send scope schema receiver value) (fun _ => .done ())
   received scope schema sender value := lift (underlying.received scope schema sender value)
   receive scope schema sender ty := .cut (.receive scope schema sender ty) fun values =>
@@ -107,7 +116,10 @@ def poll (base : Location) : Nat → Participant → RunM Participant
       | _ => return p
 
 inductive Action where
+  | query (scope : Scope) (root : Name)
+  | guard (scope : Scope)
   | local (scope : Scope) (function : Name)
+  | pureRegion (scope : Scope) (function : Function)
   | message (scope : Scope) (schema receiver : Name)
   | stop (scope : Scope) (reason : String)
 
@@ -139,6 +151,16 @@ def next (base : Location) (source : Source) : Nat → List Cursor →
       | instruction :: tail =>
           let rest := { cursor with body := tail } :: outer
           match instruction with
+          | .query site owner root _ _ =>
+              let role ← checked location (cursor.binding.role owner)
+              return (some (.query { cursor.scope with site := site, role := role } root), rest, fuel)
+          | .guard site owner _ =>
+              let role ← checked location (cursor.binding.role owner)
+              return (some (.guard { cursor.scope with site := site, role := role }), rest, fuel)
+          | .pureRegion site owner captures nested outputs =>
+              let role ← checked location (cursor.binding.role owner)
+              return (some (.pureRegion { cursor.scope with site := site, role := role }
+                (pureFunction site captures nested outputs)), rest, fuel)
           | .localCall site owner function _ _ =>
               let role ← checked location (cursor.binding.role owner)
               return (some (.local { cursor.scope with site := site, role := role } function), rest, fuel)
@@ -187,6 +209,27 @@ private def replace (participants : List Participant) (p : Participant) : List P
 private def runAction (base : Location) (underlying : Services Value RunM)
     (participants : List Participant) (action : Action) : RunM (List Participant) := do
   match action with
+  | .query scope root =>
+      let p ← getRole base participants scope.role
+      let .cut (.query actual name) resume := p.script
+        | failAt { base with scope } "refused" "reference-schedule-query"
+      require base (matching actual scope && name == root) "reference-schedule-query"
+      let value ← underlying.query actual name
+      return replace participants { p with script := resume [value] }
+  | .guard scope =>
+      let p ← getRole base participants scope.role
+      let .cut (.guard actual condition) resume := p.script
+        | failAt { base with scope } "refused" "reference-schedule-guard"
+      require base (matching actual scope) "reference-schedule-guard"
+      underlying.guard actual condition
+      return replace participants { p with script := resume [] }
+  | .pureRegion scope function =>
+      let p ← getRole base participants scope.role
+      let .cut (.pureRegion actual f inputs) resume := p.script
+        | failAt { base with scope } "refused" "reference-schedule-pure"
+      require base (matching actual scope && f == function) "reference-schedule-pure"
+      let values ← underlying.executePure actual f inputs
+      return replace participants { p with script := resume values }
   | .local scope function =>
       let p ← getRole base participants scope.role
       let .cut (.local actual f inputs) resume := p.script

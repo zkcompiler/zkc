@@ -112,6 +112,18 @@ class Expansion {
             at,
             ExecutionInvocation{call->callee, instance.name, inputs, outputs});
         bind(call->outputs, outputs, env);
+      } else if (const auto *region = ins.get<source::Pure>()) {
+        Env inner;
+        for (const auto &capture : region->captures)
+          inner.emplace(capture.name, env.at(capture.name));
+        const auto owner = participant(instance, region->role);
+        auto outputs = this->body(region->body, std::move(inner), instance,
+                                  owner, at, depth + 1);
+        source::Names names;
+        for (const auto &output : region->outputs)
+          names.push_back(output.name);
+        // Pure evaluation creates no opaque local invocation.
+        bind(names, outputs, env);
       } else if (const auto *call = ins.get<source::LocalCall>()) {
         auto inputs = get(call->inputs, env);
         if (!problem.empty())

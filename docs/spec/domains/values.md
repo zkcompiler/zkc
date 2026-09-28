@@ -39,6 +39,31 @@ polymorphic selection contract is installed. A successful Boolean calculation
 does not authorize erasing its execution costs or operations that produced its
 arguments.
 
+## Nonzero field values
+
+`nonzero_field:F` denotes the subtype `{x : F | x ≠ 0}` for a selected field
+interpretation. It is immutable and supports copying and discarding. Its
+public codec must reject zero as well as malformed field encodings. Equal
+native widths do not identify it with `field:F`.
+
+`field.from_nonzero<F> : nonzero_field:F → field:F` is the total subtype
+inclusion, with no attributes. It forgets the nonzero proof and preserves the
+field value. There is no implicit conversion in either direction.
+
+`random.draw_nonzero<F> : rng:F → (nonzero_field:F, rng:F)` consumes the selected
+randomness state and returns its successor. Its mathematical sampling domain is
+the nonzero field. Each call is a separate ordered occurrence, including when
+two returned values coincide. Sampling state is not an operand of a pure graph
+operation. A finite physical rejection limit may stop execution; it cannot
+produce zero or substitute a default value for a failed draw.
+
+The current installation supports this subtype and these operations for
+`bls12-381.fr`. Its canonical payload is the existing 32-byte scalar encoding
+restricted to nonzero values, with a distinct wire tag and
+`arkworks.nonzero-fr/1` representation. No transcript-derived counterpart of
+`random.draw_nonzero` is installed. This type expresses a chosen challenge
+domain; it does not assert that every Sigma protocol requires nonzero challenges.
+
 ## Nominal field extensions
 
 An extension field `E` declares an associated `E.BaseField`. The capability

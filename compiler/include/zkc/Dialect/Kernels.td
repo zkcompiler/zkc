@@ -209,6 +209,7 @@ def PairingCheckOp : KernelOp<AlgebraDialect, "pairing_check", [OpPairingCheck]>
 def FieldConstantOp : KernelOp<AlgebraDialect, "constant", [OpFieldConstant]>;
 def FieldSumOp : KernelOp<AlgebraDialect, "sum", [OpFieldAdd]>;
 def FieldProductOp : KernelOp<AlgebraDialect, "product", [OpFieldMul]>;
+def FieldFromNonzeroOp : KernelOp<AlgebraDialect, "from_nonzero", [OpFieldFromNonzero]>;
 def FieldCompareOp : KernelOp<AlgebraDialect, "compare", [OpFieldEqual]>;
 def BooleanAndOp : KernelOp<PIRDialect, "and", [OpBoolAnd]>;
 def BooleanNotOp : KernelOp<PIRDialect, "not", [OpBoolNot]>;
@@ -228,6 +229,7 @@ def PCSCheckOp : KernelOp<PCSDialect, "check", [OpPcsCheck]>;
 def RandomIndexOp : KernelOp<PIRDialect, "random_index", [OpRandomIndex]>;
 def TranscriptDrawIndexOp : KernelOp<PIRDialect, "transcript_draw_index", [OpTranscriptDrawIndex]>;
 def RandomDrawOp : KernelOp<PIRDialect, "random_draw", [OpRandomDraw]>;
+def RandomDrawNonzeroOp : KernelOp<PIRDialect, "random_draw_nonzero", [OpRandomDrawNonzero]>;
 
 def PCSEqualOp : KernelOp<PCSDialect, "equal", [OpPcsEqual]>;
 def TranscriptObserveOp : KernelOp<PIRDialect, "transcript_observe", []> {

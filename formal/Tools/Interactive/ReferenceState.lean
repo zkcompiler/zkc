@@ -103,6 +103,7 @@ structure State where
   setupKeys : List (Name × List CommitmentIdentity) := []
   receivingKeys : List (Json × CommitmentIdentity) := []
   resources : List Resource := []
+  rootResources : List (Name × Name) := []
   nextResourceUnit : Nat := 0
   answers : Std.HashMap String Json := {}
   usedAnswers : Std.HashSet String := {}

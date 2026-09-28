@@ -6,6 +6,7 @@ namespace Tools.Interactive.Bindings.Field
 
 private def resolve (physical : Bool) (binding : Declaration) (shape : Support.Shape) : Result Signature := do
   let field ← Support.scalarArgument binding
+  if binding.contract == "field.from_nonzero" then ensure (field == fr) "binding-nonzero-field"
   let logical := Support.signature shape field
   let logical ← if binding.contract == "field.embed" then do
       let base ← associatedIdentity field "BaseField"
@@ -17,6 +18,7 @@ private def resolve (physical : Bool) (binding : Declaration) (shape : Support.S
 def contribution : Contribution :=
   Contribution.withImplementations
   ⟨[
+    Operation.ofShape "field.from_nonzero" ["nonzero_field"] ["field"] resolve,
     Operation.ofShape "field.from_index" ["index"] ["field"] resolve,
     Operation.ofShape "field.constant" [] ["field"] resolve,
     Operation.ofShape "field.add" ["field", "field"] ["field"] resolve,

@@ -1,4 +1,16 @@
 // Logical contracts and curated exports owned by this domain.
+def OpFieldFromNonzeroF : ZKC_Root<"F", FieldDomain>;
+def OpFieldFromNonzero : ZKC_Operation<"field.from_nonzero", [OpFieldFromNonzeroF],
+    [ZKC_Apply<TypeNonzeroField, [OpFieldFromNonzeroF]>],
+    [ZKC_Apply<TypeField, [OpFieldFromNonzeroF]>],
+    [ZKC_Holds<CapabilityField, [OpFieldFromNonzeroF]>]> {
+  int ordinal = 154;
+  let purity = TotalOperation;
+  let facets = [PublicReplay];
+}
+def ExportFieldFromNonzero : ZKC_OperationExport<"zkc::algebra", "from_nonzero",
+    OpFieldFromNonzero, ["value"]>;
+
 def OpVectorGetF : ZKC_Root<"F", FieldDomain>;
 def OpVectorGet : ZKC_Operation<"vector.get", [OpVectorGetF],
     [ZKC_Apply<TypeVector, [OpVectorGetF]>, ZKC_Apply<TypeIndex, []>],
@@ -428,6 +440,7 @@ def OpFieldAdd : ZKC_Operation<"field.add", [OpFieldAddF],
     [ZKC_Apply<TypeField, [OpFieldAddF]>, ZKC_Apply<TypeField, [OpFieldAddF]>],
     [ZKC_Apply<TypeField, [OpFieldAddF]>], [ZKC_Holds<CapabilityField, [OpFieldAddF]>]> {
   int ordinal = 94;
+  let purity = TotalOperation;
   let facets = [PublicReplay];
 }
 def ExportFieldAdd : ZKC_OperationExport<"zkc::algebra", "add",
@@ -438,6 +451,7 @@ def OpFieldMul : ZKC_Operation<"field.mul", [OpFieldMulF],
     [ZKC_Apply<TypeField, [OpFieldMulF]>, ZKC_Apply<TypeField, [OpFieldMulF]>],
     [ZKC_Apply<TypeField, [OpFieldMulF]>], [ZKC_Holds<CapabilityField, [OpFieldMulF]>]> {
   int ordinal = 95;
+  let purity = TotalOperation;
   let facets = [PublicReplay, ZKC_DomainValue<MultiplyValue, 0, 0, 1>];
 }
 def ExportFieldMul : ZKC_OperationExport<"zkc::algebra", "mul",

@@ -57,10 +57,11 @@ def Module.names (module : Module) : List Name :=
   (match module.source.environment with
     | .explicit bindings => bindings.map OperationBinding.name) ++ module.source.functions.map Tools.Interactive.Function.name ++
     module.source.protocols.map Protocol.name ++ module.source.instances.map Instance.name ++
-    module.source.entries.map Prod.fst
+    module.source.entries.map Prod.fst ++ module.source.roots.map Root.name
 
 def common (json : Json) : Result Module := do
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array json
+  let (fields, roots) ← Decode.rootedEnvelope json
+  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] := fields
     | throw "binding-common-source"
   let bindings ← (← Decode.array bindings limits.definitions).mapM (declaration false)
   let functions ← (← Decode.array functions limits.definitions).mapM (fun j => function false j true)
@@ -68,7 +69,7 @@ def common (json : Json) : Result Module := do
   let source : Source := ⟨.explicit bindings, functions.map Function.code,
     ← (← Decode.array protocols limits.definitions).mapM (fun j => Decode.protocol j (typeName false)),
     ← (← Decode.array instances limits.definitions).mapM Decode.binding,
-    ← (← Decode.array entries limits.definitions).mapM Decode.entry⟩
+    ← (← Decode.array entries limits.definitions).mapM Decode.entry, roots⟩
   let result : Module := ⟨source, functions⟩
   ensure (unique result.names) "duplicate-symbol"
   return result
@@ -79,20 +80,23 @@ structure CandidateLocals where
   functions : List Function
   participants : Json
   entries : Json
+  roots : List Root := []
 
 /-- Local decoding alone does not admit participant control or source meaning. -/
 def candidateLocals (json : Json) : Result CandidateLocals := do
-  let [.str "zkc.participants/1", bindings, stage, functions, participants, entries] ← Decode.array json
+  let (fields, roots) ← Decode.rootedEnvelope json
+  let [.str "zkc.participants/1", bindings, stage, functions, participants, entries] := fields
     | throw "binding-candidate"
   let stage ← Decode.string stage
   ensure (stage == "logical" || stage == "physical") "unknown-stage"
   let physical := stage == "physical"
+  ensure (!physical || roots.isEmpty) "interactive-unrealized-roots"
   let bindings ← (← Decode.array bindings limits.definitions).mapM (declaration physical)
   let functions ← (← Decode.array functions limits.definitions).mapM (function physical)
   if physical then
     for function in functions do PhysicalFormation.check bindings function.code
   ensure (unique (bindings.map OperationBinding.name ++ functions.map (fun f => f.code.name)))
     "duplicate-symbol"
-  return ⟨physical, bindings, functions, participants, entries⟩
+  return ⟨physical, bindings, functions, participants, entries, roots⟩
 
 end Tools.Interactive.Explicit

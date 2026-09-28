@@ -98,6 +98,7 @@ def OpCurveGenerator : ZKC_Operation<"curve.generator", [OpCurveGeneratorG, OpCu
     [],
     [ZKC_Apply<TypeGroup, [OpCurveGeneratorG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveGeneratorG]>]> {
   int ordinal = 127;
+  let purity = TotalOperation;
   let facets = [PublicReplay];
 }
 def ExportCurveGenerator : ZKC_OperationExport<"zkc::curve", "generator",
@@ -109,6 +110,7 @@ def OpCurveAdd : ZKC_Operation<"curve.add", [OpCurveAddG, OpCurveAddScalar],
     [ZKC_Apply<TypeGroup, [OpCurveAddG]>, ZKC_Apply<TypeGroup, [OpCurveAddG]>],
     [ZKC_Apply<TypeGroup, [OpCurveAddG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveAddG]>]> {
   int ordinal = 128;
+  let purity = TotalOperation;
   let facets = [PublicReplay];
 }
 def ExportCurveAdd : ZKC_OperationExport<"zkc::curve", "add",
@@ -120,6 +122,7 @@ def OpCurveScale : ZKC_Operation<"curve.scale", [OpCurveScaleG, OpCurveScaleScal
     [ZKC_Apply<TypeGroup, [OpCurveScaleG]>, ZKC_Apply<TypeField, [OpCurveScaleScalar]>],
     [ZKC_Apply<TypeGroup, [OpCurveScaleG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveScaleG]>]> {
   int ordinal = 129;
+  let purity = TotalOperation;
   let facets = [PublicReplay];
 }
 def ExportCurveScale : ZKC_OperationExport<"zkc::curve", "scale",
@@ -131,6 +134,7 @@ def OpCurveEqual : ZKC_Operation<"curve.equal", [OpCurveEqualG, OpCurveEqualScal
     [ZKC_Apply<TypeGroup, [OpCurveEqualG]>, ZKC_Apply<TypeGroup, [OpCurveEqualG]>],
     [ZKC_Apply<TypeBool, []>], [ZKC_Holds<CapabilityScalarAction, [OpCurveEqualG]>]> {
   int ordinal = 130;
+  let purity = TotalOperation;
   let facets = [PublicReplay];
 }
 def ExportCurveEqual : ZKC_OperationExport<"zkc::curve", "equal",

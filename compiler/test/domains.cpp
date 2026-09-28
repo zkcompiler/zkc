@@ -313,8 +313,8 @@ void installedInventory() {
   const std::map<std::string, std::vector<std::string>> expected{
       {"", {"bool", "index", "indices"}},
       {"bls12-381.fr",
-       {"field", "vector", "polynomial", "round", "matrix", "table", "point",
-        "rng", "nonce"}},
+       {"field", "nonzero_field", "vector", "polynomial", "round", "matrix",
+        "table", "point", "rng", "nonce"}},
       {"ristretto255.scalar",
        {"field", "vector", "polynomial", "round", "matrix", "rng", "nonce"}},
       {"bn254.fr", {"field", "vector", "polynomial", "round", "matrix", "rng"}},
@@ -345,8 +345,9 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 63 && actual == pairs,
-          "the complete installed logical inventory is unchanged");
+  require(
+      pairs.size() == 64 && actual == pairs,
+      "the complete installed logical inventory matches the declared pairs");
 
   std::vector<std::string> identities{"", "missing"};
   for (const auto &domain : catalog.allDomains())
@@ -407,6 +408,8 @@ const ExpectedType types[] = {
     {"index", "", "native.index/1", "zkcv.index/1"},
     {"indices", "", "native.indices/1", "zkcv.indices/1"},
     {"field", "bls12-381.fr", "arkworks.fr/1", "zkcv.field.bls12-381.fr/1"},
+    {"nonzero_field", "bls12-381.fr", "arkworks.nonzero-fr/1",
+     "zkcv.nonzero_field.bls12-381.fr/1"},
     {"vector", "bls12-381.fr", "arkworks.fr-vector/1",
      "zkcv.vector.bls12-381.fr/1"},
     {"matrix", "bls12-381.fr", "arkworks.fr-sparse-coo/1",

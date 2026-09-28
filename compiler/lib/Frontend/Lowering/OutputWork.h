@@ -32,8 +32,18 @@ llvm::Error chargeBody(WorkBudget &budget, WorkAccount account,
             return slots({value.inputs.size(), value.outputs.size(),
                           value.staticArguments.size()});
           } else if constexpr (std::is_same_v<T, source::LocalCall> ||
-                               std::is_same_v<T, source::ProtocolCall>) {
+                               std::is_same_v<T, source::ProtocolCall> ||
+                               std::is_same_v<T, source::Query>) {
             return slots({value.inputs.size(), value.outputs.size()});
+          } else if constexpr (std::is_same_v<T, source::Pure>) {
+            if (auto error =
+                    slots({value.captures.size(), value.outputs.size()}))
+              return error;
+            return chargeBody(budget, account, value.body);
+          } else if constexpr (std::is_same_v<T, source::Message>) {
+            return slots({2});
+          } else if constexpr (std::is_same_v<T, source::Guard>) {
+            return slots({1});
           } else if constexpr (std::is_same_v<T, source::Return> ||
                                std::is_same_v<T, source::Yield> ||
                                std::is_same_v<T, source::Release>) {

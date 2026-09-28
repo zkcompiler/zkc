@@ -193,12 +193,21 @@ void infer(syntax::Body &body, Names bound) {
         i.value);
 }
 template <class Function> void function(Function &f) {
-  if (!f.body)
-    return;
+  Body *instructions = nullptr;
+  if constexpr (std::is_same_v<Function, Protocol>) {
+    const auto *ordinary = std::get_if<std::optional<Body>>(&f.body);
+    if (!ordinary || !*ordinary)
+      return;
+    instructions = f.instructions();
+  } else {
+    if (!f.body)
+      return;
+    instructions = &*f.body;
+  }
   Names bound;
   for (const auto &a : f.arguments)
     bound.insert(a.name);
-  infer(*f.body, std::move(bound));
+  infer(*instructions, std::move(bound));
 }
 } // namespace
 void inferCaptures(syntax::Module &m) {

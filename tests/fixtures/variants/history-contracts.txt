@@ -39,6 +39,7 @@ field.constant 0
 field.embed 0
 field.equal 0
 field.from_index 0
+field.from_nonzero 0
 field.inverse 0
 field.mul 0
 field.neg 0
@@ -99,6 +100,7 @@ poly.round_evaluate 0
 poly.univariate_boundary 0
 poly.univariate_evaluate 0
 random.draw 0
+random.draw_nonzero 0
 random.index 0
 random.vector 0
 resource_unit.consume 0

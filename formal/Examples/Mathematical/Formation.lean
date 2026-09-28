@@ -13,12 +13,6 @@ example : doubleMessage.Formed := by
   · decide
   · simp [Program.participates, PortsParticipate, doubleMessage, privateInput, shared, parties]
 
-example : Sigma.protocol.Formed := by
-  constructor
-  · decide
-  · decide
-  · simp [Program.participates, PortsParticipate, Sigma.protocol, Sigma.inputs, Sigma.parties]
-
 example (n : Nat) : (Sumcheck.protocol n).Formed := by
   constructor
   · decide
@@ -26,7 +20,6 @@ example (n : Nat) : (Sumcheck.protocol n).Formed := by
   · simp [Program.participates, PortsParticipate, Sumcheck.protocol, Sumcheck.inputs,
       Sumcheck.statePort, Sumcheck.parties]
 
-example : Sigma.protocol.sites = [0, 1, 2, 3, 4, 5] := rfl
 example (n : Nat) : (Sumcheck.protocol n).sites = [0, 1, 2, 3, 4, 5, 6] := rfl
 
 def duplicateSites : Program parties language [counter] [] [] [] :=

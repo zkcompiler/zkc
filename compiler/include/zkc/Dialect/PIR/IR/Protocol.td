@@ -17,6 +17,11 @@ def OperationBindingOp : Op<PIRDialect, "operation_binding", [Symbol, HasParent<
     ArrayAttr:$arguments, StrAttr:$implementation);
   let hasVerifier = 1;
 }
+def ServiceRootOp : Op<PIRDialect, "root", [Symbol, HasParent<"ProtocolModuleOp">,
+    DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$service,
+    ArrayAttr:$owners);
+}
 class CallableProtocolOp<string name> : Op<PIRDialect, name,
     [Symbol, IsolatedFromAbove,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
@@ -41,6 +46,31 @@ def LocalCallOp : Op<PIRDialect, "local_call",
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
     StrAttr:$site, OptionalAttr<StrAttr>:$role);
   let results = (outs Variadic<AnyType>:$outputs);
+}
+// An inline total region remains inspectable through role projection. Logical
+// admission checks the positively total binding of every contained operation.
+def PureRegionOp : Op<PIRDialect, "pure", [IsolatedFromAbove, SingleBlock,
+    DeclareOpInterfaceMethods<RegionBranchOpInterface,
+      ["getEntrySuccessorOperands", "getSuccessorInputs"]>,
+    ParentOneOf<["ProtocolOp", "ParticipantOp", "ProtocolLoopOp"]>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site,
+    OptionalAttr<StrAttr>:$role);
+  let results = (outs Variadic<AnyType>:$outputs);
+  let regions = (region AnyRegion:$body);
+  let hasRegionVerifier = 1;
+}
+def ServiceQueryOp : Op<PIRDialect, "query", [
+    ParentOneOf<["ProtocolOp", "ParticipantOp", "ProtocolLoopOp"]>,
+    DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$root,
+    StrAttr:$site, OptionalAttr<StrAttr>:$role);
+  let results = (outs Variadic<AnyType>:$outputs);
+}
+def ProtocolGuardOp : Op<PIRDialect, "guard", [
+    ParentOneOf<["ProtocolOp", "ParticipantOp", "ProtocolLoopOp"]>,
+    MemoryEffects<[MemWrite]>]> {
+  let arguments = (ins AnyType:$condition, StrAttr:$site, OptionalAttr<StrAttr>:$role);
+  let hasVerifier = 1;
 }
 def MessageOp : Op<PIRDialect, "message",
     [SameOperandsAndResultType, ParentOneOf<["ProtocolOp", "ProtocolLoopOp"]>]> {
@@ -135,7 +165,7 @@ def LocalForOp : LocalControlOp<"local_for"> {
   let regions = (region AnyRegion:$body);
 }
 def LocalYieldOp : Op<PIRDialect, "local_yield",
-    [Terminator, ParentOneOf<["LocalIfOp", "LocalForOp", "LocalMatchOp"]>,
+    [Terminator, ParentOneOf<["LocalIfOp", "LocalForOp", "LocalMatchOp", "PureRegionOp"]>,
      DeclareOpInterfaceMethods<RegionBranchTerminatorOpInterface,
        ["getMutableSuccessorOperands"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs);

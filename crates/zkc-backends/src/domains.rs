@@ -88,6 +88,7 @@ impl NativeDomain {
             (Identity::Ristretto255Scalar, Round) => (self.field, R::DalekRound),
             (Identity::Ristretto255Scalar, Group) => (self.group?, R::Ristretto),
             (Identity::Ristretto255Scalar, Groups) => (self.group?, R::RistrettoVector),
+            (Identity::Bls12381Fr, NonzeroField) => (self.field, R::NonzeroFr),
             (Identity::Bls12381Fr, Field) => (self.field, R::Fr),
             (Identity::Bls12381Fr, Vector) => (self.field, R::FrVector),
             (Identity::Bls12381Fr, Polynomial) => (self.field, R::Polynomial),

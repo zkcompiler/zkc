@@ -153,6 +153,27 @@ fn execute<B: WireBackend, T: Transport<B::Value>, D: MessageDecoder<B>>(
     } {
         wire.cuts += 1;
         match action {
+            ScheduledAction::Guard { origin, site, role } => {
+                let runner = runners.get_mut(&role).ok_or("driver-role")?;
+                let expected = Cut {
+                    origin,
+                    role,
+                    site,
+                    kind: CutKind::Guard,
+                };
+                match runner.poll() {
+                    Action::Guard(cut) if cut == expected => {
+                        runner.execute_guard(&expected).map_err(|e| e.to_string())?;
+                        if runner.is_terminal()
+                            && let Action::Stopped(stop) = runner.poll()
+                        {
+                            return Ok(JointOutcome::Stopped(stop));
+                        }
+                    }
+                    Action::Stopped(stop) => return Ok(JointOutcome::Stopped(stop)),
+                    _ => return Err("driver-guard-cut".into()),
+                }
+            }
             ScheduledAction::Local {
                 origin,
                 site,

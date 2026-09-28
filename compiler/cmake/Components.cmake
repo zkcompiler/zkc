@@ -36,6 +36,7 @@ add_zkc_component(Contracts
   lib/Contracts/TypeRepresentations.cpp
   lib/Contracts/Implementations.cpp
   lib/Contracts/Operations.cpp
+  lib/Contracts/Services.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
   lib/Contracts/Representations.cpp
@@ -48,6 +49,20 @@ add_zkc_component(Relation
   lib/Relation/Matrices.cpp
 )
 add_zkc_component(Protocol
+  lib/Mathematical/Admission.cpp
+  lib/Mathematical/Bodies.cpp
+  lib/Mathematical/Closure.cpp
+  lib/Mathematical/Codec.cpp
+  lib/Mathematical/Decode.cpp
+  lib/Mathematical/Demand.cpp
+  lib/Mathematical/Encode.cpp
+  lib/Mathematical/InstalledDomains.cpp
+  lib/Mathematical/Installation.cpp
+  lib/Mathematical/Placement.cpp
+  lib/Mathematical/PlacementEncoding.cpp
+  lib/Mathematical/Regions.cpp
+  lib/Mathematical/Static.cpp
+  lib/Mathematical/Types.cpp
   lib/Analysis/Obligations.cpp
   lib/Analysis/OracleAccess.cpp
   lib/Analysis/PolynomialDomains.cpp
@@ -144,6 +159,7 @@ add_zkc_component(Frontend
   lib/Frontend/Semantics/Libraries.cpp
   lib/Frontend/Semantics/LibraryEntries.cpp
   lib/Frontend/Semantics/Local.cpp
+  lib/Frontend/Semantics/Mathematical.cpp
   lib/Frontend/Semantics/Protocols.cpp
   lib/Frontend/Semantics/Provenance.cpp
   lib/Frontend/Static/Naturals.cpp
@@ -168,6 +184,7 @@ add_zkc_component(Transforms
   lib/Conversion/PIRToPlan.cpp
   lib/Conversion/PlanToPhysical.cpp
   lib/Conversion/Bindings.cpp
+  lib/Conversion/Roots.cpp
   lib/Conversion/Participants.cpp
   lib/Transforms/Algorithms.cpp
   lib/Transforms/Participants.cpp

@@ -75,7 +75,7 @@ example : failedAttempt = true := by native_decide
 -- The artifact reference also reads sequences itself; no primitive response is
 -- supplied, so an accidental external request would make these checks fail.
 private def artifact (b : OperationBinding) (inputs : List Tools.Artifact.Value) : Result (List Json) := do
-  let source : Source := ⟨.explicit [b], [], [], [], []⟩
+  let source : Source := ⟨.explicit [b], [], [], [], [], []⟩
   let descriptor : Tools.Artifact.Descriptor := ⟨"main", "P", "V", [], "rng", [], 0, .null⟩
   let loc : Tools.Artifact.Location := { entry := "main", binding := "root", path := [], protocol := "Main", role := "V" }
   let state : Tools.Artifact.State := { cursor := ⟨ByteArray.empty, 0⟩, root := ByteArray.empty, configuration := .null, answers := #[] }

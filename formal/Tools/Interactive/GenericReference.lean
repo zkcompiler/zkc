@@ -77,7 +77,10 @@ private def records (json : Json) : Result (List (Json × Json)) := do
 
 def invocation (prepared : Generic.Prepared) (selected : Option Name) (json : Json) : Result Invocation := do
   let parts ← Decode.array json
-  let (parts, setups) := if parts.length == 8 then (parts.take 7, parts[7]!) else (parts, .arr #[])
+  ensure (parts.length ≥ 7 && parts.length ≤ 9) "reference-inputs"
+  let roots := parts[8]?.getD (.arr #[])
+  let setups := parts[7]?.getD (.arr #[])
+  let parts := parts.take 7
   let [.str "zkc.reference-inputs/1", entry, session, supplied, resources, answers, replies] := parts
     | throw "reference-inputs"
   let entry ← Decode.name entry
@@ -87,17 +90,44 @@ def invocation (prepared : Generic.Prepared) (selected : Option Name) (json : Js
   let definition ← source.protocol binding.protocol
   if let some role := selected then ensure ((binding.roles.map Prod.snd).contains role) "unknown-role"
   let roles := (binding.roles.map Prod.snd).filter (Control.active selected)
-  let resources ← (← Decode.array resources).mapM decodeResource
+  let mut resources ← (← Decode.array resources).mapM decodeResource
   ensure (unique (resources.map Resource.identity)) "duplicate-resource"
   ensure (resources.all (fun r => roles.contains r.owner &&
     r.boundInstance.all (fun name => source.instances.any (·.name == name)))) "resource-domain"
+  let mut rootResources := []
+  let rootRecords ← (← Decode.array roots 4096).mapM fun record => do
+    let [root, budget, tape] ← Decode.array record | throw "reference-root-record"
+    return (← Decode.name root, (budget, tape))
+  ensure (unique (rootRecords.map Prod.fst)) "reference-duplicate-root"
+  let mut usedRoots := []
+  if !source.roots.isEmpty then
+    ensure (source.instances.length == 1) "interactive-root-realization-instances"
+    let some body := definition.body | throw "external-protocol"
+    ensure (body.all fun i => !(i matches .call ..) && !(i matches .loop ..))
+      "interactive-root-realization-control"
+    let .explicit bindings := source.environment
+    for (root, index) in source.roots.zipIdx do
+      let [owner] := root.owners | throw "interactive-root-realization-owners"
+      if !roles.contains owner || !(body.any fun i =>
+          match i with | .query _ _ name _ _ => name == root.name | _ => false) then continue
+      let (budget, tape) ← lookup root.name rootRecords
+      let service ← lookup root.service (bindings.map fun b => (b.name, b))
+      let (stateType, _) ← Bindings.entropyService service
+      let initializer := if stateType.identity == Bindings.fr then "rng" else "rng:" ++ stateType.identity
+      let resource ← decodeResource (.arr #[.str "root", .str owner, .str binding.name,
+        budget, .arr #[.str initializer, tape]])
+      let identity := "@root_" ++ toString index
+      resources := resources ++ [{ resource with identity }]
+      rootResources := rootResources ++ [(root.name, identity)]
+      usedRoots := usedRoots ++ [root.name]
+  ensure (exactKeys rootRecords (usedRoots.map fun root => (root, ()))) "reference-root-set"
   let answers := Std.HashMap.ofList ((← records answers).map fun (request, response) => (request.compress, response))
   let replies ← (← records replies).mapM fun (request, response) => do
     let value ← decodeValue response
     ensure value.public "nonserializable-reply"
     return (request, value)
   let (setupKeys, receivingKeys) ← setupContext roles setups
-  let state : State := { resources, answers, replies, setupKeys, receivingKeys }
+  let state : State := { resources, rootResources, answers, replies, setupKeys, receivingKeys }
   let supplied ← Decode.pairs Decode.name (Decode.pairs Decode.name decodeValue) supplied
   ensure (exactKeys supplied (roles.map fun r => (r, ()))) "input-roles"
   let context ← definition.arguments.mapM fun p => return { p with owner := ← binding.role p.owner }
@@ -148,6 +178,38 @@ private def services (prepared : Generic.Prepared) (base : Location) : Control.S
     recordBoundary location values
     activateRole scope.role
     return values
+  executePure scope function inputs := do
+    let location := { base with scope }
+    activateRole scope.role
+    let .explicit bindings := prepared.source.environment
+    let typed ← checked location (TypedLocal.elaborate bindings ⟨function, none⟩)
+    -- This bounded execution uses the retained body and logical kernels. Its
+    -- resource charges/events belong to the reference realization, not to the
+    -- event-free mathematical denotation of the pure region.
+    let path ← checked location (interactionPath prepared.source location)
+    executeFunction { location with interactionPath := path } typed inputs
+  guard scope condition := do
+    let location := { base with scope }
+    activateRole scope.role
+    let .boolean accepted := condition | failAt location "refused" "interactive-guard-condition"
+    if !accepted then failAt location "reject" "source-guard"
+  query scope root := do
+    let location := { base with scope }
+    activateRole scope.role
+    let state ← get
+    let identity ← checked location (lookup root state.rootResources)
+    let resource ← checked location (lookup identity (state.resources.map fun r => (r.identity, r)))
+    let declaration ← checked location (lookup root (prepared.source.roots.map fun r => (r.name, r)))
+    let .explicit bindings := prepared.source.environment
+    let service ← checked location (lookup declaration.service (bindings.map fun b => (b.name, b)))
+    let values ← if service.contract == "random.draw_nonzero" then
+      randomNonzeroDraw location identity resource.generation
+    else do
+      let domain ← checked location (RandomDomain.parse resource.payload.domain)
+      randomDraw location identity resource.generation domain
+    let [reply, _] := values | failAt location "refused" "reference-query-arity"
+    event location (.arr #[.str "query", location.json, .str root, reply.json]) (1 + reply.size)
+    return reply
   send scope schema receiver value := do
     let location := { base with scope }
     activateRole scope.role
