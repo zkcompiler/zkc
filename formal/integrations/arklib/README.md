@@ -47,6 +47,30 @@ per-coordinate degree at most two, with bound `2*n/card F`. Its proof uses
 Mathlib's polynomial root bound and does not rely on an admitted ArkLib knowledge
 proof. This integration does not identify those two protocols without a theorem.
 
+## Mathematical source adapters
+
+[Mathematical.Execution](ZkcArkLib/Mathematical/Execution.lean) maps the actual
+`Proc` tree into VCVio `OracleComp`, using source operations and reply types as
+the oracle signature. `decode_encode`, `encode_decode` and `encode_bind` state
+the structural connection. `simulate_encode` uses VCVio's `simulateQ` with a
+stopping state/event monad with checked `LawfulMonad` laws, and proves equality with complete `Proc.run`.
+[Controls](TestsArkLib/Mathematical.lean) exercise a typed mathematical source
+that queries shared state twice before rejection.
+
+Stops with empty reply types remain structural oracle queries. The supplied
+simulator can stop without producing a reply, retaining residual state and
+earlier events. An ordinary total reply sampler cannot interpret that signature;
+this adapter does not manufacture such a sampler or a probability law. A
+probabilistic monadic correspondence and its initialization/observer premises
+remain separate work.
+
+[Mathematical.PolynomialQueries](ZkcArkLib/Mathematical/PolynomialQueries.lean)
+connects coefficient-message evaluation and selected multivariate polynomial
+queries to ArkLib's actual `OracleInterface.answer`. Selecting the polynomial
+by service identity preserves the query's object association. These answer laws
+do not identify an entire stateful protocol with an ArkLib reduction or import
+its security theorem automatically.
+
 ## Exact external status
 
 The [manifest](lake-manifest.json) pins ArkLib

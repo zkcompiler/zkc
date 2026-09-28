@@ -30,6 +30,7 @@ The following links identify the definitions and selected scope of each profile.
 
 | Group | Profile | Selected scope |
 |---|---|---|
+| Source | [Mathematical protocols](source/mathematical-protocols.md) | Shared pure regions, role components, capability identity, indexed loops and independent meaning |
 | Source | [Named inputs and role stores](source/named-inputs.md) | Exact ordered string-named binding, diagnostics, permitted views and local runs |
 | Source | [Public dimensions](source/public-dimensions.md) | Scoped natural expressions, formation, actual public values and substitution |
 | Source | [Invocation-selected families](source/families.md) | Public input selection, dependent protocol shapes, complete outcomes and bounded admission |
@@ -41,6 +42,7 @@ The following links identify the definitions and selected scope of each profile.
 | Source | [Closed operation bindings](source/operation-bindings.md) | Native nominal types, explicit operation applications and per-value physical selection |
 | Source | [Located calls and shared control](source/located-execution.md) | Role-local execution/admission, complete stop origins, peer-state frames and actual guard/count agreement |
 | Source | [Resolved common protocols](source/common-protocols.md) | Role-owned ports, shared protocol bodies, selected bindings, independent reception and fixed public loops with complete stopping |
+| Compiler | [Mathematical placement](compiler/mathematical-placement.md) | Actual candidate/witness correspondence, inline pure regions and introduced-call folding |
 | Compiler | [Direct plans](compiler/direct-plan.md) | Evaluator, exact direct checking, version-1 grammar and separate phase sidecar |
 | Compiler | [Scheduled participant lowering](compiler/scheduled-participants.md) | Role-local operands, distinct send/receive instructions, shared calls/loops and complete source-to-target execution equality |
 | Compiler | [Finite phase certificates](compiler/finite-phases.md) | All-reply summaries, finite covers, structural checking and realized admission |

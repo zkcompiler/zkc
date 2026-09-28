@@ -39,7 +39,9 @@ cargo test -p zkc-runtime --lib --all-features
 Rebuild affected tools before testing their behavior. Pytest accepts a file,
 `::test_name` or `-k` selection; CTest accepts a test-name regex; Cargo accepts a
 package, test target and name filter. Lean modules can be rebuilt individually
-with `lake build Module.Name` from `formal/`.
+with `lake build Module.Name` from `formal/`. Mathematical subject codec changes
+also run `python3 formal/checks/check_mathematical.py`; it compares saved bytes
+with the independent Lean encoder and is included in `just test-lean`.
 
 Broaden verification when the change crosses a boundary, a failure exposes a
 wider issue, or a release needs integration evidence. `just test` includes

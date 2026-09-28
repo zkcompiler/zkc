@@ -8,47 +8,49 @@ section 3 rather than through the sequence in section 1.
 
 ## 1. The remaining sequence
 
-The compiler runs authored protocols through common source, participant
-generation, physical lowering and Rust execution, with checked candidates in
-between. The captured-project frontend and checked component/library foundation
-are implemented at the scopes in [status](status.md). The next implementation
-program should use them to complete contrasting protocol clients: BP+ component
-composition and a zkVM proof path, with shared changes justified by both clients.
-Existing archived BP+/OpenVM controls validate specific interfaces; they are not
-complete implementations of either protocol.
+The immediate program is the [mathematical protocol foundation](guides/mathematical-protocols.md):
+shared typed mathematical graphs, checked placement, polynomial representations,
+analyses and scheduling, connected to independent execution meanings. The
+captured-project frontend, notation, component/library support and existing
+native routes remain the migration base. Protocol research resumes on this
+foundation after its core representation and semantic boundaries are stable.
 
-Choose exact upstream revisions, accepted inputs, proof-byte compatibility and
-verifier acceptance before expanding either client. First close the supported
-client's blocking library/provenance and kernel gaps; then measure reusable
-optimizations against the matching direct library. Reopen source or semantic
-contracts only for a demonstrated expressiveness or correctness gap. Repository
-packaging and publication do not settle these protocol acceptance criteria.
+1. **Mathematical contracts and independent meaning.** Define role components,
+   total pure regions, capability identity, indexed control, polynomial/static
+   shapes and canonical source/placement contracts. Exercise Sigma, Sumcheck and
+   component reuse in Lean, and establish scoped VCVio/ArkLib connections.
+2. **Shared typed carrier and admission.** Implement the MLIR-independent C++
+   representation, scoped tables and canonical readers/writers. Independently
+   admit the same actual subjects in Lean; test malformed and adversarial inputs.
+3. **Placement and executable correspondence.** Elaborate the mathematical source,
+   check actual placed candidates, support inline pure regions and indexed
+   iteration through participant projection, and compare complete executions.
+   Outlined pure calls require their separate folding law.
+4. **Polynomial and kernel representations.** Add virtual/materialized views,
+   residual polynomials, canonical wires and kernel/loop laws. Validate fixed
+   mathematical objects across their representations, including failures and bytes.
+5. **Useful graph transformation and scheduling.** Implement checked rewrites,
+   algebraic analyses and physical schedule selection. Measure contrasting
+   protocol clients against equally capable direct implementations.
+6. **Families and component coherence.** Generalize static families, local role
+   and capability parameters, reusable definitions and external library adapters.
+   Distinguish each concrete instance from a universally quantified family law.
+7. **Migration and foundation acceptance.** Move maintained clients through the
+   common representation, remove duplicate paths where coverage is established,
+   and reproduce the full authoring/checking/execution chain with explicit limits.
 
-The capability work below is ordered by dependency, not by size.
+Each unit has its own completion gate and review. Research changes a frozen
+contract only when a concrete client, failed law or stronger alternative
+justifies that change. The [status page](status.md) records the currently
+implemented portions; the sequence is not a claim that they already work.
 
-1. **Broader backend coverage and resource guarantees.** Real Arkworks, Dalek
-   and Plonky3 paths already execute. Extend the required kernels, layouts and
-   resource accounting for the next supported clients; keep their actual
-   adapter and memory/progress assumptions explicit.
-2. **Shared demand and preparation reuse.** Discovered across contrasting
-   clients, checked against retained source, and measured against an equally
-   capable library that uses the same algorithms and cache policy.
-3. **Broader endpoint admission and checked transformations.** Bounded phase,
-   physical interpolation and linear-contraction routes exist. Extend their
-   supported subjects and candidate checks without treating those instances
-   as general endpoint or transformation coverage.
-4. **Separately deployable role modules.** Participant lowering produces
-   role-local instructions today and supported native routes execute them.
-   Independent deployment and its coordination interface remain open.
-5. **Verifier lowering, resource accounting and general relation-to-argument
-   elaboration.** The AIR and oracle route is authored per protocol; arbitrary
-   elaboration and host accounting for larger runs are not implemented.
-6. **The artifact ABI and the authoring language.** Both stay deliberately
-   unfixed until their consumers exist.
-
-Component security correspondence, production hiding, sparse matrix commitments
-and additional protocol families are separate programs. They enter this sequence
-only when a specific obligation makes part of them necessary.
+BP+ composition and a zkVM proof path remain contrasting downstream consumers.
+Existing archived BP+/OpenVM controls validate particular interfaces, not full
+protocols. Their next expansion first fixes upstream revisions, accepted inputs,
+proof-byte compatibility and verifier acceptance. General relation-to-argument
+elaboration, independently deployed role modules and a stable deployment ABI
+remain later consumers of the foundation. Fixing canonical mathematical subject
+bytes does not fix every runtime artifact ABI or frontend syntax.
 
 ## 2. What closing a unit requires
 

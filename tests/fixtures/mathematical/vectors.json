@@ -1,0 +1,27 @@
+[
+  {
+    "name": "scalar-kinds",
+    "bytes": 336,
+    "digest": ""
+  },
+  {
+    "name": "ordered-keys",
+    "bytes": 188,
+    "digest": ""
+  },
+  {
+    "name": "message.subject",
+    "bytes": 3276,
+    "digest": "fe2b463a3c438c1d71533949a7eaa8162a5952f1d4b1ed7416c110defece83d7"
+  },
+  {
+    "name": "indexed.subject",
+    "bytes": 3299,
+    "digest": "2c155e2392d60b0cac8b8894374e0af9a61e79dcb09a5319b252aef09519b258"
+  },
+  {
+    "name": "message.located",
+    "bytes": 3546,
+    "digest": "fb51752e6fee85b146c087ec663932e338ee587c57e580c21abc2e4ad2ace79c"
+  }
+]

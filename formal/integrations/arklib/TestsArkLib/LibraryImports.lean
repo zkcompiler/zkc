@@ -9,6 +9,8 @@ import ZkcArkLib.LocalProver.Probability
 import ZkcArkLib.LocalProver.Provider
 import ZkcArkLib.LocalProver.Security
 import ZkcArkLib.LocalProver.Source
+import ZkcArkLib.Mathematical.Execution
+import ZkcArkLib.Mathematical.PolynomialQueries
 import ZkcArkLib.PolyFun.Blocks
 import ZkcArkLib.PolyFun.Failure
 import ZkcArkLib.PolyFun.Reads
@@ -28,5 +30,6 @@ import ZkcArkLib.Sumcheck.Stopping
 import TestsArkLib.BytecodeStopping
 import TestsArkLib.CorrelatedChallenge
 import TestsArkLib.FreeFailure
+import TestsArkLib.Mathematical
 import TestsArkLib.TypedReads
 import TestsArkLib.UpstreamStatus

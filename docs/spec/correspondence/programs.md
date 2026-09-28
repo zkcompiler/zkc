@@ -110,3 +110,14 @@ modules prove functor laws and both projection commuting laws, including stored
 callees. `nodeCount_mapCounts` proves substitution does not unroll. Counts remain
 natural numbers at execution; runtime-symbolic native admission is not proved or
 installed by these typed-syntax theorems.
+
+## Shared mathematical profile
+
+| Contract | Implemented correspondence | Limit |
+|---|---|---|
+| [Role components](../profiles/source/mathematical-protocols.md#role-components-and-statements) | `Zkc.Source.Mathematical.Component`, `Program.denote`; `Examples.Mathematical.receiver_is_fresh`, `sender_aliases_operand` | Independent open-role meaning; no automatic placement theorem |
+| [Capabilities and indices](../profiles/source/mathematical-protocols.md#purity-and-capability-identity) | `Definitions.denote`, `Definitions.entry`, `indexed_succ`, `indexed_constant`, `Program.denote_repeat_succ`; component alias/separate-root and stopped-state fixtures | Shared module role/capability vocabulary; definition-local remapping and static admission remain outside this fragment |
+| [Formation](../profiles/source/mathematical-protocols.md#subjects-and-formation) | `Program.Formed`, `Definitions.Formed`; duplicate-site and foreign-owner controls | Extrinsic proposition over typed syntax; canonical wire/table admission is not supplied |
+| [Honest execution](../profiles/source/mathematical-protocols.md#role-components-and-statements) | `Examples.Mathematical.Sigma.honest_delivery_accepts` | Actual prover messages, common statement and one delivered challenge over F₅; no general joint scheduler, security or arbitrary stopping composition |
+| [Pure outlining](../profiles/compiler/mathematical-placement.md#inline-pure-regions-and-outlining) | `Zkc.Source.Mathematical.Outlining.fold_original`, `fold_introduced`, `fold_halt`, `fold_bind`, `fold_embed` | Explicit tagged interface and supplied total evaluator; native classification, actual local definitions and packing still need checking |
+| [External correspondence](../../guides/mathematical-protocols.md#fv-connections) | `ZkcArkLib.Mathematical.simulate_encode`, polynomial query-answer laws | Complete deterministic VCVio handler execution; selected ArkLib answers only |

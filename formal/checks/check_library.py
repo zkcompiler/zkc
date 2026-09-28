@@ -34,7 +34,9 @@ BOUNDARIES = {
     "source_definitions": {
         "roots": ["Zkc.Source.DefinitionRenaming", "Zkc.Source.LocatedExecution",
                   "Zkc.Source.ControlAgreement", "Zkc.Source.Protocol.Execution",
-                  "Zkc.Source.Family", "Zkc.Source.Protocol.Family"],
+                  "Zkc.Source.Family", "Zkc.Source.Protocol.Family",
+                  "Zkc.Source.Mathematical.Meaning", "Zkc.Source.Mathematical.Formation",
+                  "Zkc.Source.Mathematical.Outlining"],
         "external": ["Init", "Lean", "Std"],
         "forbidden": ["Zkc.Compiler", "Zkc.Protocols", "ZkcArkLib", "Tests", "Examples", "Tools"],
     },

@@ -81,6 +81,33 @@ also consume checked plans; code generation is not the only product interface.
 
 ## 2. Shared meaning and representation levels
 
+The adopted mathematical path adds an MLIR-independent typed carrier before
+located common protocols:
+
+~~~text
+mathematical source -> shared pure graph + ordered protocol structure
+                    -> checked role placement
+                    -> located common protocol with inline pure regions
+                    -> participant projection
+                    -> polynomial representation and kernel lowering
+                    -> physical schedule and runtime
+~~~
+
+The [mathematical profile](spec/profiles/source/mathematical-protocols.md)
+owns role-indexed values, explicit capabilities and indexed control. The
+[placement profile](spec/profiles/compiler/mathematical-placement.md) owns the
+all-reply correspondence. Canonical subjects retain structured calls and loops;
+demand, reverse edges and interning are derived compiler data. This is the
+extension being implemented in [roadmap order](roadmap.md#1-the-remaining-sequence);
+the native route in section 1 remains the current migration base.
+
+Pure graph structure supports algebraic rewrites, virtual polynomials and
+materialization/scheduling decisions. Separate Proc interpretations preserve
+messages, arbitrary replies, state and stop behavior. VCVio supplies the primary
+oracle-computation connection; ArkLib interfaces are used where actual query
+and protocol correspondences have been established. External theorems still
+require their own experiment and premise connections.
+
 The reference distinguishes protocol interaction P, participant algorithm Aρ,
 and execution plan Lρ. P constrains a participant algorithm; it is not simply
 an earlier representation of that algorithm. A supplied endpoint needs an

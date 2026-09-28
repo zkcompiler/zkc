@@ -10,6 +10,7 @@ work.
 
 | Question | Guide |
 |---|---|
+| How does shared algebra become role-local code? | [Shared mathematical protocols](mathematical-protocols.md) |
 | What are the protocol, participant algorithm and plan? | [Subjects and scope](protocol-model.md) |
 | What does running a program preserve, including failure? | [Execution, observation and refinement](execution.md) |
 | How are source values, captures and permissions bound? | [Source formation and inputs](source-and-inputs.md) |

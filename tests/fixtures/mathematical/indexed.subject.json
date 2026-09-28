@@ -1,0 +1,122 @@
+{
+  "profile": "zkc.math.v1",
+  "manifest": {
+    "domains": [
+      {
+        "name": "fixture.natural",
+        "version": "1",
+        "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "operations": [],
+    "wires": [],
+    "services": [],
+    "laws": []
+  },
+  "module": {
+    "roles": [
+      "prover",
+      "verifier"
+    ],
+    "types": [
+      {
+        "statics": 0,
+        "body": [
+          "nominal",
+          0,
+          "natural",
+          []
+        ]
+      }
+    ],
+    "operations": [],
+    "wires": [],
+    "capabilityTypes": [],
+    "roots": [],
+    "relations": [],
+    "definitions": [
+      {
+        "statics": 0,
+        "roles": 2,
+        "capabilities": [],
+        "arguments": [
+          {
+            "roles": [
+              0,
+              1
+            ],
+            "type": {
+              "type": 0,
+              "statics": []
+            }
+          }
+        ],
+        "results": [
+          {
+            "roles": [
+              0,
+              1
+            ],
+            "type": {
+              "type": 0,
+              "statics": []
+            }
+          }
+        ],
+        "relations": [],
+        "body": {
+          "steps": [
+            [
+              "repeat",
+              0,
+              [
+                "literal",
+                3
+              ],
+              [
+                {
+                  "roles": [
+                    0,
+                    1
+                  ],
+                  "type": {
+                    "type": 0,
+                    "statics": []
+                  }
+                }
+              ],
+              [
+                0
+              ],
+              [],
+              {
+                "steps": [],
+                "terminal": [
+                  "return",
+                  [
+                    1
+                  ]
+                ]
+              }
+            ]
+          ],
+          "terminal": [
+            "return",
+            [
+              0
+            ]
+          ]
+        }
+      }
+    ],
+    "entry": {
+      "definition": 0,
+      "statics": [],
+      "roles": [
+        0,
+        1
+      ],
+      "capabilities": []
+    }
+  }
+}

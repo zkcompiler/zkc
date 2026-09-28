@@ -9,6 +9,27 @@ Every capability below is bounded. Passing controls establish behavior within an
 implemented subset; they do not establish that the complete target architecture
 is realized, and no entry is a cryptographic security theorem.
 
+## Mathematical protocol foundation
+
+The [mathematical profile](spec/profiles/source/mathematical-protocols.md) adds a
+shared language before placement. Its independent Lean fragment implements
+role-indexed values, checked pure availability, fresh receive components,
+role-restricted capability queries, guards, stored acyclic helpers with explicit
+root capability aliases, indexed loops and ordered multiple result ports.
+Extrinsic formation checks participant membership and unique sites. Pure-call
+folding laws apply to explicitly tagged calls; they do not classify a native
+candidate. The reference byte codec has independent Python/Lean golden checks.
+[Maintained fixtures](guides/mathematical-protocols.md) exercise Sigma,
+Sumcheck and repeated shared-service calls. The optional VCVio bridge preserves
+complete handler execution; the ArkLib bridge covers polynomial query answers.
+
+The C++ common mathematical carrier, native readers, automatic placement,
+extended located/participant grammars, pure outlining checker and polynomial
+representation/schedule transformations remain implementation work. Static
+family admission and role remapping are contracts, not native support added by
+these fixtures. The existing compiler continues to use its existing located
+path. No new end-to-end compiler or whole-protocol security theorem is claimed.
+
 ## 1. By implementation area
 
 | Area | What runs | What is not claimed |

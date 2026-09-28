@@ -14,6 +14,31 @@ security claims.
 The semantic adoption adds the component, acceptance, input-binding,
 observation-summary and contextual preparation APIs below.
 
+## Shared mathematical protocols
+
+[The mathematical source](Zkc/Source/Mathematical/Meaning.lean) defines its
+open-role meaning independently of placement. Each value supplies only its
+available role components. Pure availability is checked against the operand
+intersection, receiver replies remain arbitrary, and query actions require
+permission for the interpreting role. Stored helper calls retain root service
+identity and invocation paths. Indexed loops bind an actual `Fin count` and
+have zero/successor unfolding laws. [Formation](Zkc/Source/Mathematical/Formation.lean)
+checks party membership and syntactic site uniqueness separately from denotation.
+A general theorem of dynamic location uniqueness is not yet supplied.
+[Outlining](Zkc/Source/Mathematical/Outlining.lean) folds explicitly tagged pure
+calls while forwarding original effects; classifying actual compiler-introduced
+calls and proving their definitions correct remains a checker obligation.
+
+[Examples](../docs/guides/mathematical-protocols.md) include a source-derived
+Sigma prover/verifier formula and positional delivery of the prover's actual
+emitted messages under a common supplied challenge, a structured quadratic
+Sumcheck family with hostile/zero-round controls, and shared-state helper calls.
+These cover the declared fragment. General honest-joint coincidence, native
+admission, placement, role remapping, checked outlining and protocol security transport
+remain separate obligations. The optional integration's `simulate_encode`
+establishes VCVio handler-execution equality, including stopped state/events;
+its polynomial bridge establishes ArkLib query-answer equality only.
+
 ## Protocol families and controllers
 
 Count-parametric common/participant/role syntax retains resolved `Nat` meaning.

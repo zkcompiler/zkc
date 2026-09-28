@@ -1,0 +1,112 @@
+{
+  "profile": "zkc.math.v1",
+  "manifest": {
+    "domains": [
+      {
+        "name": "fixture.natural",
+        "version": "1",
+        "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "operations": [],
+    "wires": [
+      {
+        "name": "fixture.natural-wire",
+        "version": "1",
+        "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "services": [],
+    "laws": []
+  },
+  "module": {
+    "roles": [
+      "prover",
+      "verifier"
+    ],
+    "types": [
+      {
+        "statics": 0,
+        "body": [
+          "nominal",
+          0,
+          "natural",
+          []
+        ]
+      }
+    ],
+    "operations": [],
+    "wires": [
+      {
+        "identity": 0,
+        "statics": 0,
+        "type": {
+          "type": 0,
+          "statics": []
+        }
+      }
+    ],
+    "capabilityTypes": [],
+    "roots": [],
+    "relations": [],
+    "definitions": [
+      {
+        "statics": 0,
+        "roles": 2,
+        "capabilities": [],
+        "arguments": [
+          {
+            "roles": [
+              0
+            ],
+            "type": {
+              "type": 0,
+              "statics": []
+            }
+          }
+        ],
+        "results": [
+          {
+            "roles": [
+              0,
+              1
+            ],
+            "type": {
+              "type": 0,
+              "statics": []
+            }
+          }
+        ],
+        "relations": [],
+        "body": {
+          "steps": [
+            [
+              "message",
+              0,
+              0,
+              [],
+              0,
+              1,
+              0
+            ]
+          ],
+          "terminal": [
+            "return",
+            [
+              0
+            ]
+          ]
+        }
+      }
+    ],
+    "entry": {
+      "definition": 0,
+      "statics": [],
+      "roles": [
+        0,
+        1
+      ],
+      "capabilities": []
+    }
+  }
+}
