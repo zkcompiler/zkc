@@ -129,7 +129,7 @@ This uses the existing capability/entailment engine. Constructor authority can b
 written `struct Prepared<F: domain Field> constructors(Make) { ... }`; the
 restriction is not a proof that `Make` establishes an arbitrary mathematical
 predicate. The explicit `requires (...)` and common-source record spelling are
-still accepted by the same parser, without a migration adapter.
+also accepted.
 
 ## Projections and temporary values
 

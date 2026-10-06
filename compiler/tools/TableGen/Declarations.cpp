@@ -359,6 +359,16 @@ void Model::validateOperation(const Record *op) {
   };
   for (auto port : {"inputs", "outputs"}) {
     for (const auto *app : op->getValueAsListOfDefs(port)) {
+      if (!app->isSubClassOf("ZKC_Apply")) {
+        require(stage == "Construction" &&
+                    !op->getValueAsBit("commonGeneric") &&
+                    (StringRef(port) == "inputs" ||
+                     op->isSubClassOf("SequenceOperation")) &&
+                    available.count(app) && app->isSubClassOf("ZKC_Root") &&
+                    parameter(app->getValueAsDef("parameter")).first == "Type",
+                op, "direct Type ports require a scoped construction type");
+        continue;
+      }
       auto args = app->getValueAsListOfDefs("arguments");
       scoped(args);
       auto *constructor = app->getValueAsDef("constructor");
@@ -369,6 +379,19 @@ void Model::validateOperation(const Record *op) {
                 "common operation uses unsupported constructor");
     }
   }
+  auto inputs = op->getValueAsListOfDefs("inputs");
+  for (auto [i, input] : enumerate(inputs))
+    if (!input->isSubClassOf("ZKC_Apply"))
+      // Sequence kernels expose their declared element type directly. Other
+      // complete-type input ports retain the observation-only restriction.
+      require(op->isSubClassOf("SequenceOperation") ||
+                  any_of(op->getValueAsListOfDefs("facets"),
+                         [i = i](const Record *f) {
+                           return f->isSubClassOf("ZKC_Observation") &&
+                                  f->getValueAsInt("payloadInput") ==
+                                      int64_t(i);
+                         }),
+              op, "complete-type port must be an observation payload");
   for (const auto *p : op->getValueAsListOfDefs("requirements")) {
     auto args = p->getValueAsListOfDefs("arguments");
     scoped(args);
@@ -388,7 +411,8 @@ void Model::validateOperation(const Record *op) {
       {"MatrixVector", {3, 3}},
       {"GatherIndices", {0, -1}},
       {"ScatterIndices", {1, -1}},
-      {"TranscriptOrigin", {5, 5}}};
+      {"TranscriptOrigin", {5, 5}},
+      {"NativeOrigin", {1, 1}}};
   auto found = schemas.find(name(parameters).str());
   require(found != schemas.end() &&
               found->second ==
@@ -426,11 +450,14 @@ void Model::validateFacets(const Record *op) {
             "facet port outside signature");
     auto *app = ports[index];
     require(constructor.empty() ||
-                name(app->getValueAsDef("constructor")) == constructor,
+                (app->isSubClassOf("ZKC_Apply") &&
+                 name(app->getValueAsDef("constructor")) == constructor),
             op, "facet port constructor mismatch");
     return app;
   };
   auto sameType = [](const Record *a, const Record *b) {
+    if (!a->isSubClassOf("ZKC_Apply") || !b->isSubClassOf("ZKC_Apply"))
+      return a == b;
     return a->getValueAsDef("constructor") == b->getValueAsDef("constructor") &&
            a->getValueAsListOfDefs("arguments") ==
                b->getValueAsListOfDefs("arguments");
@@ -514,10 +541,12 @@ void Model::validateFacets(const Record *op) {
               op, "unsupported semantic facet");
       if (kind == "AcceptanceGuard")
         require(inputs.size() == 1 && outputs.empty() &&
+                    inputs[0]->isSubClassOf("ZKC_Apply") &&
                     name(inputs[0]->getValueAsDef("constructor")) == "bool",
                 op, "acceptance guard signature mismatch");
       if (kind == "Conjunction")
         require(inputs.size() == 2 && outputs.size() == 1 &&
+                    inputs[0]->isSubClassOf("ZKC_Apply") &&
                     name(inputs[0]->getValueAsDef("constructor")) == "bool" &&
                     sameType(inputs[0], inputs[1]) &&
                     sameType(inputs[0], outputs[0]),
@@ -560,8 +589,10 @@ void Model::validateFacets(const Record *op) {
           StringRef(field) == "inputs" ? "stateInput" : "stateOutput");
       for (auto [i, app] : enumerate(left))
         if (int64_t(i) != state)
-          require(app->getValueAsDef("constructor") ==
-                      right[i]->getValueAsDef("constructor"),
+          require(app->isSubClassOf("ZKC_Apply") &&
+                      right[i]->isSubClassOf("ZKC_Apply") &&
+                      app->getValueAsDef("constructor") ==
+                          right[i]->getValueAsDef("constructor"),
                   op, "construction counterpart payload mismatch");
     }
   }
@@ -713,58 +744,70 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
          << quote(result.second) << ";\n";
   }
   os << "return {}; }\n";
-  os << "llvm::ArrayRef<generic::Operation> boundOperationContracts() {\n"
-        "static const std::vector<generic::Operation> values = {\n";
-  for (const auto *op : m.operations) {
-    if (!op->getValueAsBit("commonGeneric"))
-      continue;
-    auto scope = op->getValueAsListOfDefs("scope");
-    os << "{" << quote(name(op)) << ", {{{";
-    for (const auto *t : scope) {
-      os << "{" << quote(name(t)) << ", ";
-      auto *parent = optionalDef(t, "parent");
-      os << (parent ? std::to_string(termIndex(scope, parent)) : "std::nullopt")
-         << ", ";
-      if (t->isSubClassOf("ZKC_Apply"))
-        os << "std::vector<unsigned>" << arguments(scope, t);
-      else
-        os << "std::nullopt";
-      os << "},";
-    }
-    std::vector<StringRef> sorts;
-    for (const auto *t : scope) {
-      auto [kind, sort] = parameter(t->getValueAsDef("parameter"));
-      sorts.push_back(kind == "Domain" ? sort : kind);
-    }
-    os << "}, " << strings(sorts) << ", {";
-    for (auto [i, t] : enumerate(scope))
-      if (t->isSubClassOf("ZKC_Natural"))
-        os << "{" << i << ", " << quote(number(t, "number")) << "},";
-    os << "}}, ";
-    for (auto field : {"inputs", "outputs"}) {
+  for (bool construction : {false, true}) {
+    os << "llvm::ArrayRef<generic::Operation> "
+       << (construction ? "nonGenericOperationContracts"
+                        : "boundOperationContracts")
+       << "() {\nstatic const std::vector<generic::Operation> values = {\n";
+    for (const auto *op : m.operations) {
+      if (construction ? op->getValueAsBit("commonGeneric")
+                       : !op->getValueAsBit("commonGeneric"))
+        continue;
+      auto scope = op->getValueAsListOfDefs("scope");
+      os << "{" << quote(name(op)) << ", {{{";
+      for (const auto *t : scope) {
+        os << "{" << quote(name(t)) << ", ";
+        auto *parent = optionalDef(t, "parent");
+        os << (parent ? std::to_string(termIndex(scope, parent))
+                      : "std::nullopt")
+           << ", ";
+        if (t->isSubClassOf("ZKC_Apply"))
+          os << "std::vector<unsigned>" << arguments(scope, t);
+        else
+          os << "std::nullopt";
+        os << "},";
+      }
+      std::vector<StringRef> sorts;
+      for (const auto *t : scope) {
+        auto [kind, sort] = parameter(t->getValueAsDef("parameter"));
+        sorts.push_back(kind == "Domain" ? sort : kind);
+      }
+      os << "}, " << strings(sorts) << ", {";
+      for (auto [i, t] : enumerate(scope))
+        if (t->isSubClassOf("ZKC_Natural"))
+          os << "{" << i << ", " << quote(number(t, "number")) << "},";
+      os << "}}, ";
+      for (auto field : {"inputs", "outputs"}) {
+        os << "{";
+        for (const auto *app : op->getValueAsListOfDefs(field)) {
+          if (app->isSubClassOf("ZKC_Apply"))
+            os << "{" << quote(name(app->getValueAsDef("constructor"))) << ", "
+               << arguments(scope, app) << "},";
+          else
+            os << "{\"\", {}, " << termIndex(scope, app) << "},";
+        }
+        os << "}, ";
+      }
       os << "{";
-      for (const auto *app : op->getValueAsListOfDefs(field))
-        os << "{" << quote(name(app->getValueAsDef("constructor"))) << ", "
-           << arguments(scope, app) << "},";
-      os << "}, ";
+      for (const auto *r : op->getValueAsListOfDefs("requirements"))
+        os << "requirements::Predicate::holds("
+           << quote(name(r->getValueAsDef("capability"))) << ", "
+           << arguments(scope, r) << "),";
+      os << "}}},\n";
     }
-    os << "{";
-    for (const auto *r : op->getValueAsListOfDefs("requirements"))
-      os << "requirements::Predicate::holds("
-         << quote(name(r->getValueAsDef("capability"))) << ", "
-         << arguments(scope, r) << "),";
-    os << "}}},\n";
+    os << "}; return values; }\n";
   }
-  os << "}; return values; }\n";
   os << "llvm::ArrayRef<Kernel> kernels() {\nstatic const std::vector<Kernel> "
         "values = {\n";
   for (const auto *op : m.operations) {
     os << "{" << quote(name(op)) << ", ";
     for (auto field : {"inputs", "outputs"}) {
-      Records heads;
+      std::vector<StringRef> heads;
       for (const auto *a : op->getValueAsListOfDefs(field))
-        heads.push_back(a->getValueAsDef("constructor"));
-      os << names(heads) << ", ";
+        heads.push_back(a->isSubClassOf("ZKC_Apply")
+                            ? name(a->getValueAsDef("constructor"))
+                            : "data");
+      os << strings(heads) << ", ";
     }
     emitFacets(os, op);
     os << "},\n";
@@ -858,7 +901,7 @@ json::Array stringsJSON(ArrayRef<StringRef> values) {
   return result;
 }
 json::Object inventory(const Model &m) {
-  json::Object result{{"format", "zkc.contract-declarations/1"}};
+  json::Object result{{"format", "zkc.contract-declarations/2"}};
   json::Array sorts;
   for (const auto *sort : m.sorts)
     sorts.push_back(name(sort));
@@ -919,6 +962,11 @@ json::Object inventory(const Model &m) {
     for (auto field : {"inputs", "outputs", "requirements"}) {
       json::Array apps;
       for (const auto *a : op->getValueAsListOfDefs(field)) {
+        if (StringRef(field) != "requirements" &&
+            !a->isSubClassOf("ZKC_Apply")) {
+          apps.push_back(json::Object{{"term", termIndex(scope, a)}});
+          continue;
+        }
         json::Array args;
         for (const auto *t : a->getValueAsListOfDefs("arguments"))
           args.push_back(termIndex(scope, t));

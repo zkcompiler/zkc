@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 
@@ -12,7 +13,7 @@ Error checkParameters(const BindingApplication &binding,
   std::string field;
   const auto *schema = parameterContract(binding.contract);
   if (schema && schema->fieldTerm) {
-    const auto operations = boundOperationContracts();
+    const auto operations = executableOperationContracts();
     auto found = llvm::find_if(operations, [&](const auto &operation) {
       return operation.name == binding.contract;
     });
@@ -54,6 +55,10 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
       return error("interactive-kernel-parameters");
     return Error::success();
   }
+  if (validator == ParameterValidator::NativeOrigin)
+    return checkNativeOrigin(parameters.front(),
+                             key.ends_with(".challenge") ? "query" : "message",
+                             key.starts_with("transcript.native.indexed."));
   if (validator == ParameterValidator::TranscriptOrigin) {
     for (const auto &p : parameters)
       if (p.empty() || p.size() > 128 || !all_of(p, [](char c) {

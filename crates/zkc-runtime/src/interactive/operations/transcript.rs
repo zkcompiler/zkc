@@ -3,6 +3,118 @@ use super::*;
 use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
+    Contract {
+        alternatives: true,
+        ..Contract::custom("transcript.native.indexed.observe.data").history()
+    },
+    Contract::new(
+        "transcript.native.indexed.challenge",
+        (
+            &[Transcript, Indices],
+            &[Field, Transcript],
+            AttributeRule::NativeChallengeTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.bool",
+        (
+            &[Transcript, Bool, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.field",
+        (
+            &[Transcript, Field, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.group",
+        (
+            &[Transcript, Group, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.commitment",
+        (
+            &[Transcript, Commitment, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.proof",
+        (
+            &[Transcript, Proof, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.index",
+        (
+            &[Transcript, Index, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.indexed.observe.field_array",
+        (
+            &[Transcript, FieldArray, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+    )
+    .history(),
+    Contract::new(
+        "transcript.native.challenge",
+        (
+            &[Transcript],
+            &[Field, Transcript],
+            AttributeRule::NativeChallengeOrigin,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.observe.bool",
+        (
+            &[Transcript, Bool],
+            &[Transcript],
+            AttributeRule::NativeMessageOrigin,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.observe.field",
+        (
+            &[Transcript, Field],
+            &[Transcript],
+            AttributeRule::NativeMessageOrigin,
+        ),
+    )
+    .history(),
+    Contract::selectable(
+        "transcript.native.observe.group",
+        (
+            &[Transcript, Group],
+            &[Transcript],
+            AttributeRule::NativeMessageOrigin,
+        ),
+    )
+    .history(),
     Contract::new(
         "transcript.challenge",
         (
@@ -10,7 +122,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Field, Transcript],
             AttributeRule::ChallengeOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::new(
         "transcript.draw_index",
         (
@@ -18,7 +131,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Index, Transcript],
             AttributeRule::ChallengeOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.bool",
         (
@@ -26,7 +140,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.index",
         (
@@ -34,7 +149,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.indices",
         (
@@ -42,7 +158,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.field",
         (
@@ -50,7 +167,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.matrix",
         (
@@ -58,7 +176,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.vector",
         (
@@ -66,7 +185,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.polynomial",
         (
@@ -74,7 +194,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.round",
         (
@@ -82,7 +203,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.table",
         (
@@ -90,7 +212,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.point",
         (
@@ -98,7 +221,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.group",
         (
@@ -106,7 +230,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.groups",
         (
@@ -114,7 +239,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.commitment",
         (
@@ -122,7 +248,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.proof",
         (
@@ -130,7 +257,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
     Contract::selectable(
         "transcript.observe.commitments",
         (
@@ -138,7 +266,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Transcript],
             AttributeRule::MessageOrigin,
         ),
-    ),
+    )
+    .history(),
 ];
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
@@ -156,12 +285,38 @@ fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
 ) -> Result<KernelSignature<LogicalType>> {
+    if binding.contract == "transcript.native.indexed.observe.data" {
+        if binding.arguments.len() != 2 {
+            return Err(support::failure());
+        }
+        let primary = support::primary(binding)?;
+        if primary.transcript() != Some(primary) {
+            return Err(support::failure());
+        }
+        let payload = LogicalType::parse(&binding.arguments[1])?;
+        if !payload.is_native_message_data() {
+            return Err(support::failure());
+        }
+        let state = LogicalType::new(Transcript, primary)?;
+        return Ok(KernelSignature {
+            inputs: vec![
+                state.clone(),
+                payload,
+                LogicalType::new(Indices, Identity::None)?,
+            ],
+            outputs: vec![state],
+            attributes: AttributeRule::NativeMessageTemplate,
+        });
+    }
     let shape = contract.shape()?;
     let primary = support::primary(binding)?;
     let field = primary.scalar_field().ok_or_else(support::failure)?;
     let challenge = matches!(
         binding.contract.as_str(),
-        "transcript.challenge" | "transcript.draw_index"
+        "transcript.challenge"
+            | "transcript.draw_index"
+            | "transcript.native.challenge"
+            | "transcript.native.indexed.challenge"
     );
     let payload = if challenge {
         if binding.arguments.len() != 1 {
@@ -182,12 +337,24 @@ fn resolve(
         } else {
             Identity::parse(binding.arguments.get(1).ok_or_else(support::failure)?)?
         };
-        let ty = LogicalType::new(kind, identity)?;
-        if binding.arguments.len() != if domain_free { 2 } else { 3 }
-            || binding.arguments.last() != ty.codec().as_ref()
-        {
-            return Err(support::failure());
-        }
+        let ty = if kind == FieldArray {
+            if binding.arguments.len() != 3 {
+                return Err(support::failure());
+            }
+            LogicalType::field_array(
+                identity,
+                crate::logical::natural_index(&binding.arguments[2])
+                    .map_err(|_| support::failure())?,
+            )?
+        } else {
+            let ty = LogicalType::new(kind, identity)?;
+            if binding.arguments.len() != if domain_free { 2 } else { 3 }
+                || binding.arguments.last() != ty.codec().as_ref()
+            {
+                return Err(support::failure());
+            }
+            ty
+        };
         Some(ty)
     };
     if binding.contract == "transcript.draw_index" && primary != Identity::Merlin3KoalaBearExt8 {
@@ -199,6 +366,8 @@ fn resolve(
         }
         if kind == Transcript {
             LogicalType::new(kind, primary)
+        } else if kind == Indices {
+            LogicalType::new(kind, Identity::None)
         } else {
             support::field_type(kind, field)
         }
@@ -212,15 +381,30 @@ fn select(
 ) -> Result<BoundSignature> {
     let primary = support::primary(binding)?;
     let field = primary.scalar_field().ok_or_else(support::failure)?;
+    // Older per-kind observation operations retain their original profile.
+    // The complete-type operation selects its codec independently of the suite.
+    if binding.contract.starts_with("transcript.native.indexed.")
+        && !matches!(
+            binding.contract.as_str(),
+            "transcript.native.indexed.challenge" | "transcript.native.indexed.observe.data"
+        )
+        && field != Identity::Bls12381Fr
+    {
+        return Err(support::failure());
+    }
+
     if !matches!(
         binding.contract.as_str(),
-        "transcript.challenge" | "transcript.draw_index"
+        "transcript.native.indexed.observe.data"
+            | "transcript.challenge"
+            | "transcript.draw_index"
+            | "transcript.native.challenge"
+            | "transcript.native.indexed.challenge"
     ) {
-        let identity = logical
-            .inputs
-            .get(1)
-            .ok_or_else(support::failure)?
-            .identity();
+        let payload = logical.inputs.get(1).ok_or_else(support::failure)?;
+        let identity = payload
+            .field_array_parts()
+            .map_or(payload.identity(), |(field, _)| field);
         // The extension suite admits its base field and row commitments too.
         let supported = if primary == Identity::Merlin3KoalaBearExt8 {
             matches!(

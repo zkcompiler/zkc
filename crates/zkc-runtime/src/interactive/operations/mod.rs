@@ -29,6 +29,7 @@ pub(super) struct Contract {
     name: &'static str,
     shape: Option<(&'static [Type], &'static [Type], AttributeRule)>,
     alternatives: bool,
+    history: bool,
 }
 impl Contract {
     pub(super) const fn new(
@@ -39,6 +40,7 @@ impl Contract {
             name,
             shape: Some(shape),
             alternatives: false,
+            history: false,
         }
     }
     pub(super) const fn selectable(
@@ -55,7 +57,14 @@ impl Contract {
             name,
             shape: None,
             alternatives: false,
+            history: false,
         }
+    }
+    /// A transition of protocol-visible observation or sampling history.
+    /// This facet does not imply purity, totality, or a sampling law.
+    pub(super) const fn history(mut self) -> Self {
+        self.history = true;
+        self
     }
     fn shape(&self) -> Result<KernelSignature> {
         let (inputs, outputs, attributes) = self
@@ -216,6 +225,8 @@ fn installed() -> Result<&'static Registry> {
                 &vector::CONTRIBUTION,
                 &table::CONTRIBUTION,
                 &super::fixed_vector::CONTRIBUTION,
+                &super::sequence::CONTRIBUTION,
+                &super::field_array::CONTRIBUTION,
                 &super::resource_unit::CONTRIBUTION,
             ])?;
             Ok(registry)
@@ -229,6 +240,10 @@ pub(super) fn installed_implementations() -> Result<Vec<(String, &'static str)>>
         .iter()
         .map(|(implementation, (contract, _))| (implementation.clone(), *contract))
         .collect())
+}
+
+pub(super) fn observes_history(contract: &str) -> Result<bool> {
+    installed()?.observes_history(contract)
 }
 
 pub(super) fn logical_signature(
@@ -271,6 +286,14 @@ pub(super) fn select_signature(
     installed()?.select(binding, logical)
 }
 impl Registry {
+    fn observes_history(&self, contract: &str) -> Result<bool> {
+        self.logical
+            .get(contract)
+            .map(|(row, _)| row.history)
+            .ok_or_else(|| {
+                AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding")
+            })
+    }
     fn select(
         &self,
         binding: &OperationBinding,

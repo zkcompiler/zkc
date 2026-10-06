@@ -40,20 +40,31 @@ example : (resolve "field.inverse" ristrettoScalar "arkworks/field.inverse").isO
 example : (resolve "poly.univariate_evaluate" fr "arkworks-msb/poly.univariate_evaluate").isOk = false := by native_decide
 example : (resolve "vector.not_installed" fr "arkworks/vector.not_installed").isOk = false := by native_decide
 example : (resolve "curve.scale_each" ristrettoGroup).map (·.inputs) =
-    .ok [⟨"vector", ristrettoScalar, ""⟩, ⟨"groups", ristrettoGroup, ""⟩] := by native_decide
+    .ok [.mk "vector" ristrettoScalar, .mk "groups" ristrettoGroup] := by native_decide
 example : (resolve "curve.vector_scale" ristrettoGroup).map (·.inputs) =
-    .ok [⟨"groups", ristrettoGroup, ""⟩, ⟨"field", ristrettoScalar, ""⟩] := by native_decide
+    .ok [.mk "groups" ristrettoGroup, .mk "field" ristrettoScalar] := by native_decide
 example : (resolve "vector.mul" fr "arkworks-diagonal/vector.mul" true).map (·.outputs) =
-    .ok [⟨"vector", fr, "arkworks.fr-diagonal/1"⟩] := by native_decide
+    .ok [.mk "vector" fr "arkworks.fr-diagonal/1"] := by native_decide
 example : (resolve "curve.msm" ristrettoGroup "dalek-diagonal/curve.msm" true).map (·.inputs) =
-    .ok [⟨"vector", ristrettoScalar, "dalek.scalar-vector/1"⟩,
-      ⟨"groups", ristrettoGroup, "dalek.ristretto-diagonal/1"⟩] := by native_decide
+    .ok [.mk "vector" ristrettoScalar "dalek.scalar-vector/1",
+      .mk "groups" ristrettoGroup "dalek.ristretto-diagonal/1"] := by native_decide
 example : (resolve "curve.msm" g1 "dalek-diagonal/curve.msm" true).isOk = false := by native_decide
 example : (resolve "vector.mul" ristrettoScalar "arkworks-diagonal/vector.mul" true).isOk = false := by native_decide
 example : (Bindings.resolve false ⟨"o", "transcript.observe.vector",
     [ristrettoTranscript, ristrettoScalar, codec "vector" ristrettoScalar], "dalek/transcript.observe.vector"⟩).isOk = true := by native_decide
+-- Logical observation uses the payload codec independently of the draw field.
 example : (Bindings.resolve false ⟨"o", "transcript.observe.vector",
-    [ristrettoTranscript, fr, codec "vector" fr], ""⟩).isOk = false := by native_decide
+    [ristrettoTranscript, fr, codec "vector" fr], ""⟩).isOk = true := by native_decide
+-- The installed provider retains its narrower physical payload contract.
+example : (Bindings.resolve true ⟨"o", "transcript.observe.vector",
+    [ristrettoTranscript, ristrettoScalar, codec "vector" ristrettoScalar],
+    "dalek/transcript.observe.vector"⟩).isOk = true := by native_decide
+example : (Bindings.resolve true ⟨"o", "transcript.observe.vector",
+    [ristrettoTranscript, fr, codec "vector" fr], "dalek/transcript.observe.vector"⟩).map (fun _ => ()) =
+    .error "binding-static-arguments" := by native_decide
+example : (Bindings.resolve false ⟨"o", "transcript.observe.vector",
+    [ristrettoTranscript, fr, codec "vector" fr], "dalek/transcript.observe.vector"⟩).map (fun _ => ()) =
+    .error "binding-static-arguments" := by native_decide
 example : attributes false "field.constant" [toString ristrettoModulus] ristrettoScalar =
     .error "noncanonical-field" := by native_decide
 example : attributes true "field.constant" [toString ristrettoModulus] = .ok () := by native_decide

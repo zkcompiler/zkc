@@ -26,9 +26,9 @@ int main() {
   unsigned checked = 0, failures = 0;
   for (auto name : context.getRegisteredOperations()) {
     if (!llvm::is_contained(
-            llvm::ArrayRef<llvm::StringRef>{"pir", "plan", "algebra", "poly",
-                                            "pcs", "oracle", "claim",
-                                            "relation"},
+            llvm::ArrayRef<llvm::StringRef>{
+                "protocol", "local", "crypto", "table", "plan", "algebra",
+                "poly", "pcs", "oracle", "claim", "relation"},
             name.getDialectNamespace()) ||
         name.getOpPropertyByteSize() == 0)
       continue;

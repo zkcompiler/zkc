@@ -66,6 +66,48 @@ mod tests {
     }
 
     #[test]
+    fn extension_checks_word_order_mask_and_rejected_coordinates() {
+        // The characteristic is rejected; the high bit is removed from the
+        // next word. Distinct bytes distinguish little- from big-endian input.
+        let words: [u32; 9] = [
+            2_130_706_433,
+            0x8000_0001,
+            0x0403_0201,
+            2_130_706_432,
+            3,
+            4,
+            5,
+            6,
+            7,
+        ];
+        let mut bytes = [255; 64];
+        for (slot, word) in bytes.as_chunks_mut::<4>().0.iter_mut().zip(words) {
+            slot.copy_from_slice(&word.to_le_bytes());
+        }
+        let mut calls = 0;
+        let value = extension(|| {
+            calls += 1;
+            bytes
+        })
+        .unwrap();
+        let expected = [1, 67_305_985, 2_130_706_432, 3, 4, 5, 6, 7].map(KoalaBear::from_u32);
+        assert_eq!(calls, 1);
+        assert_eq!(
+            <KoalaBearExt8 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(&value),
+            &expected,
+        );
+    }
+
+    #[test]
+    fn index_uses_the_first_little_endian_word() {
+        let mut bytes = [255; 64];
+        bytes[..8].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(index(&bytes, 256).unwrap(), 1);
+        assert_eq!(index(&bytes, 65_536).unwrap(), 513);
+        assert_eq!(index(&bytes, 1u64 << 63).unwrap(), 0x0807_0605_0403_0201);
+    }
+
+    #[test]
     fn index_bounds_and_endpoints() {
         for power in 0..64 {
             let bound = 1u64 << power;

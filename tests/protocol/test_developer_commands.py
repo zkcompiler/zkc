@@ -1,5 +1,6 @@
 """Exercise user-facing commands and the actual published first-run instructions."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -43,7 +44,8 @@ def test_discovery_without_protocol_inputs(toolchain, directory, tool):
 
 
 @pytest.mark.parametrize("command", ["run-protocol", "produce-artifact", "validate-artifact",
-                                    "inspect-artifact-identity", "run", "run-physical"])
+                                    "inspect-artifact-identity", "run", "run-physical",
+                                    "run-bundle", "produce-native-proof", "validate-native-proof"])
 def test_runtime_command_help(toolchain, directory, command):
     result = run_process([toolchain.runtime, command, "--help"], cwd=directory,
                             capture_output=True, text=True, timeout=15)
@@ -137,3 +139,38 @@ def test_published_walkthrough_and_invalid_proofs(toolchain, directory, journal)
     wrong_statement.write_text(json.dumps(inputs))
     report = validate(output / "proof.bin", wrong_statement)
     assert report["code"] == "proof-header"
+
+
+@pytest.mark.parametrize("marker", ["native-bundle", "native-proof"])
+def test_published_mathematical_walkthrough(marker, toolchain, directory, journal):
+    document = (ROOT / "docs/runtime/bundles.md").read_text()
+    match = re.search(rf"<!-- executable: {marker} -->\s*```sh\n(.*?)\n```", document, re.S)
+    assert match, f"the maintained executable walkthrough is missing: {marker}"
+    env = dict(os.environ, TMPDIR=str(directory),
+               ZKC_COMPILER_BIN=str(toolchain.directories["compiler"]),
+               ZKC_NATIVE_BIN=str(toolchain.directories["native"]))
+    result = run_process(["bash", "-euo", "pipefail", "-c", match[1]], cwd=ROOT,
+                         env=env, capture_output=True, text=True, timeout=120)
+    (directory / "walkthrough.stdout").write_text(result.stdout)
+    (directory / "walkthrough.stderr").write_text(result.stderr)
+    assert result.returncode == 0, result.stdout + result.stderr
+    if marker == "native-bundle":
+        report = json.loads(result.stdout)
+        assert report["status"] == "executed" and report["outcome"] == ["completed"]
+        assert report["acceptance"] is None
+        assert report["roles"][1]["outputs"] == [["wire", "bool@native.bool/1", "5a4b4356010500"]]
+        return
+    output = Path(result.stdout.rsplit("Proof files: ", 1)[1].strip())
+    assert output.parent == directory
+    assert json.loads((output / "producer.json").read_text())["status"] == "produced"
+    assert json.loads((output / "validator.json").read_text())["status"] == "accepted"
+    deployment = output / "deployment.json"
+    pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
+    proof = (output / "proof.bin").read_bytes()
+    for data, code, expected in [(proof[:-1], "proof-truncated", pin),
+                                 (proof + b"x", "proof-trailing", pin),
+                                 (proof, "native-proof-deployment-binding", "00" * 32)]:
+        candidate = output / "invalid.bin"
+        candidate.write_bytes(data)
+        journal.json([toolchain.runtime, "validate-native-proof", deployment, expected,
+                      output / "validator-inputs.json", candidate], refuses=code)

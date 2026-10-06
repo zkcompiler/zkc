@@ -11,6 +11,7 @@ def g1 := "bls12-381.g1"
 def bn254Fr := "bn254.fr"
 def bn254G1 := "bn254.g1"
 def bn254G2 := "bn254.g2"
+def bn254GT := "bn254.gt"
 def bn254Modulus : Nat := 21888242871839275222246405745257275088548364400416034343698204186575808495617
 def pcs := "multilinear.kzg.bls12-381/1"
 def extensionTranscript := "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
@@ -32,7 +33,7 @@ def koalaBearModulus : Nat := 2^31 - 2^24 + 1
 
 def scalarDomain (identity : String) : Bool :=
   identity == fr || identity == bn254Fr || identity == ristrettoScalar || identity == koalaBear || identity == koalaBearExt8
-def groupDomain (identity : String) : Bool := identity == g1 || identity == bn254G1 || identity == bn254G2 || identity == ristrettoGroup
+def groupDomain (identity : String) : Bool := identity == g1 || identity == bn254G1 || identity == bn254G2 || identity == bn254GT || identity == ristrettoGroup
 def transcriptDomain (identity : String) : Bool :=
   identity == transcriptIdentity || identity == ristrettoTranscript || identity == spongefishTranscript || identity == extensionTranscript
 
@@ -56,7 +57,8 @@ def leafLogicalIdentity (kind identity : String) : Bool :=
   else if kind == "rng" then identity == fr || identity == bn254Fr || identity == ristrettoScalar || identity == koalaBearExt8
   else if kind == "nonce" then identity == fr || identity == ristrettoScalar
   else if ["table", "point"].contains kind then identity == fr
-  else if ["group", "groups"].contains kind then groupDomain identity
+  else if kind == "group" then groupDomain identity
+  else if kind == "groups" then groupDomain identity && identity != bn254GT
   else if ["commitments", "opening_states"].contains kind then rowDomain identity
   else if ["commitment", "proof", "opening_state"].contains kind then identity == pcs || rowDomain identity
   else if ["prover_key", "verifier_key"].contains kind then identity == pcs
@@ -208,7 +210,7 @@ private def parseAt (depth : Nat) (text : String) : StateT Nat (Except String) G
   require (!text.contains '@') "binding-type"
   if text.startsWith "variant:" then
     let depth + 1 := depth | throw "binding-type-depth"
-    let descriptor ← Variant.parse text
+    let descriptor ← (Variant.parse text).mapError fun _ => "binding-type"
     for (_, payload) in descriptor.alternatives do
       for child in payload do
         let _ ← parseAt depth child

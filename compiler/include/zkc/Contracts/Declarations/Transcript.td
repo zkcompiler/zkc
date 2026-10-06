@@ -197,3 +197,153 @@ def OpTranscriptObserveCommitments : ZKC_Operation<"transcript.observe.commitmen
   let parameters = TranscriptOrigin;
   let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
 }
+
+def OpNativeTranscriptChallengeT : ZKC_Root<"T", TranscriptDomain>;
+def OpNativeTranscriptChallengeChallengeField : ZKC_Project<OpNativeTranscriptChallengeT, TranscriptChallengeField>;
+def OpNativeTranscriptChallenge : ZKC_Operation<"transcript.native.challenge", [OpNativeTranscriptChallengeT, OpNativeTranscriptChallengeChallengeField],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptChallengeT]>],
+    [ZKC_Apply<TypeField, [OpNativeTranscriptChallengeChallengeField]>, ZKC_Apply<TypeTranscript, [OpNativeTranscriptChallengeT]>], [ZKC_Holds<CapabilityFieldTranscript, [OpNativeTranscriptChallengeT]>]> {
+  int ordinal = 154;
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Sampling<TranscriptProvider, FieldSample, -1>, ZKC_History<0, 1>];
+}
+
+def OpNativeTranscriptObserveBoolT : ZKC_Root<"T", TranscriptDomain>;
+def OpNativeTranscriptObserveBoolE : ZKC_Root<"E", CodecDomain>;
+def OpNativeTranscriptObserveBool : ZKC_Operation<"transcript.native.observe.bool", [OpNativeTranscriptObserveBoolT, OpNativeTranscriptObserveBoolE],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptObserveBoolT]>, ZKC_Apply<TypeBool, []>],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptObserveBoolT]>], [ZKC_Holds<CapabilityTranscript, [OpNativeTranscriptObserveBoolT]>, ZKC_Holds<CapabilityEncodesBool, [OpNativeTranscriptObserveBoolE]>]> {
+  int ordinal = 155;
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpNativeTranscriptObserveFieldT : ZKC_Root<"T", TranscriptDomain>;
+def OpNativeTranscriptObserveFieldF : ZKC_Root<"F", FieldDomain>;
+def OpNativeTranscriptObserveFieldE : ZKC_Root<"E", CodecDomain>;
+def OpNativeTranscriptObserveField : ZKC_Operation<"transcript.native.observe.field", [OpNativeTranscriptObserveFieldT, OpNativeTranscriptObserveFieldF, OpNativeTranscriptObserveFieldE],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptObserveFieldT]>, ZKC_Apply<TypeField, [OpNativeTranscriptObserveFieldF]>],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptObserveFieldT]>], [ZKC_Holds<CapabilityTranscript, [OpNativeTranscriptObserveFieldT]>, ZKC_Holds<CapabilityEncodesField, [OpNativeTranscriptObserveFieldE, OpNativeTranscriptObserveFieldF]>]> {
+  int ordinal = 156;
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpNativeTranscriptObserveGroupT : ZKC_Root<"T", TranscriptDomain>;
+def OpNativeTranscriptObserveGroupG : ZKC_Root<"G", GroupDomain>;
+def OpNativeTranscriptObserveGroupE : ZKC_Root<"E", CodecDomain>;
+def OpNativeTranscriptObserveGroup : ZKC_Operation<"transcript.native.observe.group", [OpNativeTranscriptObserveGroupT, OpNativeTranscriptObserveGroupG, OpNativeTranscriptObserveGroupE],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptObserveGroupT]>, ZKC_Apply<TypeGroup, [OpNativeTranscriptObserveGroupG]>],
+    [ZKC_Apply<TypeTranscript, [OpNativeTranscriptObserveGroupT]>], [ZKC_Holds<CapabilityTranscript, [OpNativeTranscriptObserveGroupT]>, ZKC_Holds<CapabilityEncodesGroup, [OpNativeTranscriptObserveGroupE, OpNativeTranscriptObserveGroupG]>]> {
+  int ordinal = 157;
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+// Native source templates receive explicit dynamic occurrence coordinates.
+def OpIndexedTranscriptChallengeT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptChallengeChallengeField : ZKC_Project<OpIndexedTranscriptChallengeT, TranscriptChallengeField>;
+def OpIndexedTranscriptChallenge : ZKC_Operation<"transcript.native.indexed.challenge", [OpIndexedTranscriptChallengeT, OpIndexedTranscriptChallengeChallengeField],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptChallengeT]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeField, [OpIndexedTranscriptChallengeChallengeField]>, ZKC_Apply<TypeTranscript, [OpIndexedTranscriptChallengeT]>], [ZKC_Holds<CapabilityFieldTranscript, [OpIndexedTranscriptChallengeT]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Sampling<TranscriptProvider, FieldSample, -1>, ZKC_History<0, 1>];
+}
+
+def OpIndexedTranscriptObserveBoolT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptObserveBoolE : ZKC_Root<"E", CodecDomain>;
+def OpIndexedTranscriptObserveBool : ZKC_Operation<"transcript.native.indexed.observe.bool", [OpIndexedTranscriptObserveBoolT, OpIndexedTranscriptObserveBoolE],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveBoolT]>, ZKC_Apply<TypeBool, []>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveBoolT]>], [ZKC_Holds<CapabilityTranscript, [OpIndexedTranscriptObserveBoolT]>, ZKC_Holds<CapabilityEncodesBool, [OpIndexedTranscriptObserveBoolE]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpIndexedTranscriptObserveFieldT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptObserveFieldF : ZKC_Root<"F", FieldDomain>;
+def OpIndexedTranscriptObserveFieldE : ZKC_Root<"E", CodecDomain>;
+def OpIndexedTranscriptObserveField : ZKC_Operation<"transcript.native.indexed.observe.field", [OpIndexedTranscriptObserveFieldT, OpIndexedTranscriptObserveFieldF, OpIndexedTranscriptObserveFieldE],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveFieldT]>, ZKC_Apply<TypeField, [OpIndexedTranscriptObserveFieldF]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveFieldT]>], [ZKC_Holds<CapabilityTranscript, [OpIndexedTranscriptObserveFieldT]>, ZKC_Holds<CapabilityEncodesField, [OpIndexedTranscriptObserveFieldE, OpIndexedTranscriptObserveFieldF]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpIndexedTranscriptObserveGroupT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptObserveGroupG : ZKC_Root<"G", GroupDomain>;
+def OpIndexedTranscriptObserveGroupE : ZKC_Root<"E", CodecDomain>;
+def OpIndexedTranscriptObserveGroup : ZKC_Operation<"transcript.native.indexed.observe.group", [OpIndexedTranscriptObserveGroupT, OpIndexedTranscriptObserveGroupG, OpIndexedTranscriptObserveGroupE],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveGroupT]>, ZKC_Apply<TypeGroup, [OpIndexedTranscriptObserveGroupG]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveGroupT]>], [ZKC_Holds<CapabilityTranscript, [OpIndexedTranscriptObserveGroupT]>, ZKC_Holds<CapabilityEncodesGroup, [OpIndexedTranscriptObserveGroupE, OpIndexedTranscriptObserveGroupG]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpIndexedTranscriptObserveIndexT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptObserveIndexE : ZKC_Root<"E", CodecDomain>;
+def OpIndexedTranscriptObserveIndex : ZKC_Operation<"transcript.native.indexed.observe.index", [OpIndexedTranscriptObserveIndexT, OpIndexedTranscriptObserveIndexE],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveIndexT]>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveIndexT]>], [ZKC_Holds<CapabilityTranscript, [OpIndexedTranscriptObserveIndexT]>, ZKC_Holds<CapabilityEncodesIndex, [OpIndexedTranscriptObserveIndexE]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+// A closed, shape-bound native frame; no common field-array codec is implied.
+def IndexedArrayTranscript : ZKC_Root<"T", TranscriptDomain>;
+def IndexedArrayField : ZKC_Root<"F", FieldDomain>;
+def IndexedArrayLength : ZKC_Root<"N", NatParameter>;
+def OpIndexedTranscriptObserveFieldArray : ZKC_Operation<"transcript.native.indexed.observe.field_array",
+    [IndexedArrayTranscript, IndexedArrayField, IndexedArrayLength],
+    [ZKC_Apply<TypeTranscript, [IndexedArrayTranscript]>, ZKC_Apply<TypeFieldArray, [IndexedArrayField, IndexedArrayLength]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [IndexedArrayTranscript]>],
+    [ZKC_Holds<CapabilityTranscript, [IndexedArrayTranscript]>, ZKC_Holds<CapabilityField, [IndexedArrayField]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpIndexedTranscriptObserveCommitmentT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptObserveCommitmentC : ZKC_Root<"C", CommitmentDomain>;
+def OpIndexedTranscriptObserveCommitmentE : ZKC_Root<"E", CodecDomain>;
+def OpIndexedTranscriptObserveCommitment : ZKC_Operation<"transcript.native.indexed.observe.commitment", [OpIndexedTranscriptObserveCommitmentT, OpIndexedTranscriptObserveCommitmentC, OpIndexedTranscriptObserveCommitmentE],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveCommitmentT]>, ZKC_Apply<TypeCommitment, [OpIndexedTranscriptObserveCommitmentC]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveCommitmentT]>], [ZKC_Holds<CapabilityTranscript, [OpIndexedTranscriptObserveCommitmentT]>, ZKC_Holds<CapabilityEncodesCommitment, [OpIndexedTranscriptObserveCommitmentE, OpIndexedTranscriptObserveCommitmentC]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+def OpIndexedTranscriptObserveProofT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptObserveProofC : ZKC_Root<"C", CommitmentDomain>;
+def OpIndexedTranscriptObserveProofE : ZKC_Root<"E", CodecDomain>;
+def OpIndexedTranscriptObserveProof : ZKC_Operation<"transcript.native.indexed.observe.proof", [OpIndexedTranscriptObserveProofT, OpIndexedTranscriptObserveProofC, OpIndexedTranscriptObserveProofE],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveProofT]>, ZKC_Apply<TypeProof, [OpIndexedTranscriptObserveProofC]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptObserveProofT]>], [ZKC_Holds<CapabilityTranscript, [OpIndexedTranscriptObserveProofT]>, ZKC_Holds<CapabilityEncodesProof, [OpIndexedTranscriptObserveProofE, OpIndexedTranscriptObserveProofC]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}
+
+// The complete payload type is a static argument; codecs are not peer-selected.
+def IndexedDataTranscript : ZKC_Root<"T", TranscriptDomain>;
+def IndexedDataPayload : ZKC_Root<"D", TypeParameter>;
+def OpIndexedTranscriptObserveData : ZKC_Operation<"transcript.native.indexed.observe.data",
+    [IndexedDataTranscript, IndexedDataPayload],
+    [ZKC_Apply<TypeTranscript, [IndexedDataTranscript]>, IndexedDataPayload,
+     ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeTranscript, [IndexedDataTranscript]>],
+    [ZKC_Holds<CapabilityTranscript, [IndexedDataTranscript]>]> {
+  let commonGeneric = 0;
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Observation<0, 1, 0>, ZKC_History<0, 0>];
+}

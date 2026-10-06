@@ -5,10 +5,10 @@ checked Rust execution. The
 [compact region profile](../spec/profiles/compiler/direct-plan.md#compact-region-profile)
 owns its formation, meaning and format.
 
-## Why this boundary needed work
+## Motivation
 
-`PIR.Proc.bind` already supplied sequential composition. `Source.Program.seq`
-proved the right substitution meaning, but represented a continuation by
+`PIR.Proc.bind` supplies sequential composition. `Source.Program.seq`
+has a proved substitution meaning, but represents a continuation by
 inserting it at every returning leaf. Repeated branching can therefore grow the
 source tree exponentially before an optimization even runs. A correct denotation
 alone does not give a useful compiler representation.
@@ -63,8 +63,7 @@ do not advertise an unimplemented `RegionBranchOpInterface`.
 
 Intrinsic typing and renaming provide the binding proof. Algebraic effect
 sequencing gives stopped execution and composition. Compositional bounds avoid
-expansion during analysis. These are established tools applied here; the new
-carrier is engineering progress, not a proposed new PL calculus.
+expansion during analysis. These established tools support the compact carrier; no new calculus is proposed.
 
 ## Implemented connection and proofs
 
@@ -74,14 +73,14 @@ carrier is engineering progress, not a proposed new PL calculus.
 | Formation | `Zkc.Source.RegionEncoding`: complete structural elaboration, typed erasure, `Region.elaborate_erase` |
 | Semantic cost | `Zkc.Source.RegionBounds`: `Region.denote_within` under all-argument operation-call bounds; no native cost claim |
 | Artifact | `Zkc.Compiler.RegionArtifact`: consumer-bound metadata, actual-body direct checking, `Checked.correct` for any decoding of that candidate |
-| MLIR | `pir.bind` / `plan.bind`: isolated body, explicit capture operands/block arguments, flow and value results; actual export reconstructs references |
+| MLIR | `table.source.bind` / `table.plan.bind`: isolated body, explicit capture operands/block arguments, flow and value results; actual export reconstructs references |
 | Execution | Rust decodes and executes the compact body directly, joins resource bounds, and preserves stopped body effects without executing its suffix |
 | Correspondence | Independent Lean execution plus generated native comparisons, independent expectations and malformed/changed-candidate controls |
 
 `Program.toRegion` preserves the meaning of existing finite source.
 `Region.flatten` maps back through proved source sequencing. **The decoder,
-checker and runtime never flatten.** The old carrier continues to support its
-existing clients and proofs; its finite wire profile is unchanged. Metadata
+checker and runtime never flatten.** `Source.Program` supports its clients and
+proofs; its finite wire profile is unchanged. Metadata
 policy is shared explicitly rather than duplicating its admission conditions.
 
 This adds a carrier API that existing source-specific analyses do not yet accept.

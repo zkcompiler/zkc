@@ -417,7 +417,9 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     let mut check = |value: Value, kind: Type, identity: I, bytes: usize| {
         assert_eq!(value.ty(), kind, "{value:?}");
         let logical = match kind {
+            Type::Sequence => LogicalType::parse("sequence<index>").unwrap(),
             Type::FixedVector => LogicalType::parse("fixed_vector<field:koala-bear,2>").unwrap(),
+            Type::FieldArray => LogicalType::field_array(I::Bls12381Fr, 2).unwrap(),
             Type::Variant => LogicalType::parse(&zkc_test_support::variants::logical(
                 "Bulk",
                 json!([["some", ["fixed_vector<field:koala-bear,2>"]]]),
@@ -429,7 +431,9 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             _ => LogicalType::new(kind, identity).unwrap(),
         };
         let representation = match value.payload_name() {
+            "Sequence" => R::Sequence,
             "FixedVector" => R::FixedVector,
+            "FieldArray" => R::FieldArray,
             "Variant" => R::Variant,
             "ResourceUnit" => R::ResourceUnit,
             "Bn254Field" => R::Bn254Fr,
@@ -438,6 +442,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "Bn254Round" => R::Bn254Round,
             "Bn254Matrix" => R::Bn254SparseCoo,
             "Bn254G1" => R::Bn254G1,
+            "Bn254Gt" => R::Bn254Gt,
             "Bn254G1Vector" => R::Bn254G1Vector,
             "Bn254G2" => R::Bn254G2,
             "Bn254G2Vector" => R::Bn254G2Vector,
@@ -617,6 +622,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         RistrettoGroups,
         std::mem::size_of::<crate::RistrettoPoint>()
     );
+    check(
+        Value::Bn254Gt(crate::Bn254Gt::generator()),
+        Type::Group,
+        I::Bn254Gt,
+        512,
+    );
     check(Value::Bool(true), Type::Bool, I::None, 512);
     check(Value::Index(3), Type::Index, I::None, 512);
     check(Value::Indices([1, 2].into()), Type::Indices, I::None, 272);
@@ -740,6 +751,18 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         crate::FixedVector::new(logical, [KoalaBear::new(1); 2].into()).unwrap(),
     );
     check(fixed.clone(), Type::FixedVector, I::None, 1288);
+    check(
+        Value::FieldArray(
+            crate::FieldArray::new(
+                LogicalType::field_array(I::Bls12381Fr, 2).unwrap(),
+                [Scalar::from(1); 2].into(),
+            )
+            .unwrap(),
+        ),
+        Type::FieldArray,
+        I::None,
+        1344,
+    );
     let descriptor = LogicalType::parse(&zkc_test_support::variants::logical(
         "Bulk",
         json!([["some", ["fixed_vector<field:koala-bear,2>"]]]),
@@ -749,6 +772,20 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     .unwrap()
     .clone();
     let variant_bytes = descriptor.retained_bytes() + 256 + 512 + 1288;
+    let sequence_type = LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap();
+    check(
+        Value::Sequence(
+            crate::Sequence::new(
+                LogicalType::parse("index").unwrap(),
+                vec![Value::Index(7)],
+                &Policy::default(),
+            )
+            .unwrap(),
+        ),
+        Type::Sequence,
+        I::None,
+        256 + sequence_type.descriptor_bytes() + 512 + 512,
+    );
     check(
         Value::pack_variant(descriptor, 0, vec![fixed]).unwrap(),
         Type::Variant,
@@ -1203,6 +1240,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "field.neg",
         "field.sub",
         "matrix.bilinear",
+        "matrix.dimension",
         "matrix.identity_check",
         "matrix.mul_vector",
         "matrix.shape_check",
@@ -1231,9 +1269,21 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "poly.opening_quotient",
         "poly.product_round",
         "poly.product_sum",
+        "poly.table_arity",
         "poly.round_evaluate",
         "poly.univariate_boundary",
         "poly.univariate_evaluate",
+        "transcript.native.indexed.observe.bool",
+        "transcript.native.indexed.observe.commitment",
+        "transcript.native.indexed.observe.field",
+        "transcript.native.indexed.observe.field_array",
+        "transcript.native.indexed.observe.data",
+        "transcript.native.indexed.observe.group",
+        "transcript.native.indexed.observe.index",
+        "transcript.native.indexed.observe.proof",
+        "transcript.native.observe.bool",
+        "transcript.native.observe.field",
+        "transcript.native.observe.group",
         "transcript.observe.bool",
         "transcript.observe.commitment",
         "transcript.observe.commitments",
@@ -1256,6 +1306,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "vector.constant",
         "vector.dot",
         "vector.empty",
+        "vector.equal",
         "vector.fill",
         "vector.from_point",
         "vector.from_table",

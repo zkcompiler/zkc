@@ -8,7 +8,7 @@ if((ZKC_DOMAIN_RUNTIME AND NOT ZKC_DOMAIN_CHECKER) OR (ZKC_DOMAIN_CHECKER AND NO
   message(FATAL_ERROR "Independent execution requires both ZKC_DOMAIN_RUNTIME and ZKC_DOMAIN_CHECKER")
 endif()
 add_executable(envelope-consumer main.cpp)
-target_link_libraries(envelope-consumer PRIVATE Zkc::Frontend Zkc::IR MLIRParser)
+target_link_libraries(envelope-consumer PRIVATE Zkc::Frontend Zkc::Translation MLIRParser)
 target_compile_features(envelope-consumer PRIVATE cxx_std_17)
 target_compile_options(envelope-consumer PRIVATE -Wall -Wextra -Werror)
 target_compile_definitions(envelope-consumer PRIVATE EXPECT_ENVELOPE=$<BOOL:${EXPECT_ENVELOPE}>)

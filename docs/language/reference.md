@@ -266,8 +266,8 @@ transcript contracts cannot be reached through `bind` or imports. The readable
 common `carrier module` is a separate representation, whose admission alone does
 not establish a checked transcript construction.
 
-Write file-level declarations with explicit imports and domain choices. Historical BLS
-profile headings and their default domains are removed. The source installation
+Write file-level declarations with explicit imports and domain choices. The
+source installation
 exports `zkc::algebra`, `poly`, `curve`, `random`, `pcs`, `oracle`, `external`,
 `core` and `transcript`; the last exports vocabulary but no source operations.
 See [installed modules](projects.md#installed-domain-modules) for project rules.

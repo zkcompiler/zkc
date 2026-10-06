@@ -218,7 +218,7 @@ fn explicit_and_foreign_stops_preserve_message_prefix() {
         );
     }
     let mut schedule = Schedule::new(&admitted, "main", "test").unwrap();
-    let report = drive(&mut schedule, &mut runners, &mut trace);
+    let report = drive(&mut schedule, &mut runners, &mut trace, Default::default());
     let JointOutcome::Stopped(stop) = report.outcome else {
         panic!("explicit stop")
     };

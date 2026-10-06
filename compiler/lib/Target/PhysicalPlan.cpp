@@ -109,8 +109,11 @@ bool sameLogical(const BindingApplication &a, const BindingApplication &b) {
   return a.contract == b.contract && a.arguments == b.arguments;
 }
 bool interfaceOperation(Operation *op) {
-  return isa<func::ReturnOp, HaltOp, VariantInjectOp, LocalMatchOp, LocalIfOp,
-             LocalForOp, LocalYieldOp>(op);
+  return isa<zkc::local::BoolConstantOp, zkc::local::ReturnOp,
+             zkc::local::StopOp, zkc::local::VariantInjectOp,
+             zkc::local::LocalMatchOp, zkc::local::LocalIfOp,
+             zkc::local::LocalForOp, zkc::local::LocalYieldOp,
+             zkc::local::LocalConditionOp>(op);
 }
 using Indices = llvm::DenseMap<Operation *, OperationIndex>;
 Indices indexOperations(ArrayRef<Operation *> operations) {
@@ -185,7 +188,7 @@ Expected<BindingApplication> chooseConversion(Type from, Type to,
 
 class Proposer {
   ModuleOp module;
-  ProtocolModuleOp root;
+  zkc::protocol_ir::ProtocolModuleOp root;
   const CandidateCatalog &catalog;
   SmallVector<Operation *> operations;
   Indices indices;
@@ -244,24 +247,32 @@ class Proposer {
       auto &decision = plan.operations[index];
       if (decision.binding)
         continue;
-      if (isa<func::ReturnOp>(op)) {
-        auto function = op->getParentOfType<func::FuncOp>();
+      if (isa<zkc::local::ReturnOp>(op)) {
+        auto function = op->getParentOfType<zkc::local::FuncOp>();
         append_range(decision.inputs, plan.operations[indices.lookup(function)]
                                           .functionType.getResults());
-      } else if (isa<LocalIfOp>(op)) {
+      } else if (isa<zkc::local::LocalIfOp>(op)) {
         auto condition = defaultPort(IntegerType::get(module.getContext(), 1));
         if (!condition)
           return condition.takeError();
         decision.inputs.push_back(*condition);
         append_range(decision.inputs, decision.blockArguments[0]);
-      } else if (isa<LocalForOp>(op)) {
+      } else if (isa<zkc::local::LocalForOp>(op)) {
         decision.inputs.push_back(decision.blockArguments[0][0]);
         append_range(decision.inputs, decision.blockArguments[0]);
-      } else if (isa<LocalYieldOp>(op)) {
+      } else if (isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
+                     op)) {
         auto *parent = op->getParentOp();
+        if (isa<zkc::local::LocalConditionOp>(op)) {
+          auto condition =
+              defaultPort(IntegerType::get(module.getContext(), 1));
+          if (!condition)
+            return condition.takeError();
+          decision.inputs.push_back(*condition);
+        }
         append_range(decision.inputs,
                      plan.operations[indices.lookup(parent)].outputs);
-        if (isa<LocalForOp>(parent))
+        if (isa<zkc::local::LocalForOp>(parent))
           append_range(
               decision.inputs,
               ArrayRef(
@@ -282,8 +293,8 @@ class Proposer {
 public:
   Proposer(ModuleOp module, const CandidateCatalog &catalog,
            Location *failureLocation)
-      : module(module),
-        root(cast<ProtocolModuleOp>(&module.getBody()->front())),
+      : module(module), root(cast<zkc::protocol_ir::ProtocolModuleOp>(
+                            &module.getBody()->front())),
         catalog(catalog), operations(physicalPlanOperations(module)),
         indices(indexOperations(operations)), failureLocation(failureLocation) {
   }
@@ -298,7 +309,7 @@ public:
       locate(failureLocation, &op);
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         symbols.insert(name.getValue().str());
-      if (!isa<OperationBindingOp>(op))
+      if (!isa<zkc::local::OperationBindingOp>(op))
         continue;
       auto binding = readBinding(&op);
       if (!binding)
@@ -324,7 +335,7 @@ public:
       return error("binding-unknown-selection");
     if (contractions) {
       LinearContractionStats ignored;
-      for (auto function : root.getBody().front().getOps<func::FuncOp>())
+      for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
         append_range(eligible, findLinearContractions(function, ignored));
     }
     return Error::success();
@@ -345,7 +356,8 @@ public:
         if (found == names.end())
           return error("binding-reference");
         decision.binding = found->second;
-      } else if (op->getParentOfType<func::FuncOp>() && !interfaceOperation(op))
+      } else if (op->getParentOfType<zkc::local::FuncOp>() &&
+                 !interfaceOperation(op))
         return error("binding-reference");
       plan.operations.push_back(std::move(decision));
     }
@@ -406,7 +418,7 @@ public:
       return e;
     std::map<Operation *, std::set<std::string>> sites;
     for (auto *op : operations)
-      if (auto function = op->getParentOfType<func::FuncOp>())
+      if (auto function = op->getParentOfType<zkc::local::FuncOp>())
         if (auto site = op->getAttrOfType<StringAttr>("site"))
           sites[function].insert(site.getValue().str());
     for (auto [index, op] : enumerate(operations)) {
@@ -435,7 +447,7 @@ public:
                                    false,
                                    index});
         }
-        auto function = op->getParentOfType<func::FuncOp>();
+        auto function = op->getParentOfType<zkc::local::FuncOp>();
         if (!function)
           return error("binding-no-conversion");
         decision.conversions.push_back(
@@ -454,10 +466,11 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                 bool linearContractions, Location *failureLocation) {
   locate(failureLocation, module);
   if (failed(verify(module)) || module.getBody()->empty() ||
-      !isa<ProtocolModuleOp>(module.getBody()->front()))
+      !isa<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front()))
     return error("binding-operation");
-  auto root = cast<ProtocolModuleOp>(&module.getBody()->front());
-  if (root.getStage() != "logical")
+  auto root =
+      cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+  if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return error("interactive-physical-stage");
   PhysicalPlan plan;
   plan.input = std::make_shared<InputSnapshot>(
@@ -530,7 +543,7 @@ Expected<SmallVector<OperationIndex>> checkAllUses(Operation *op,
                                                    const Indices &indices,
                                                    Location *failureLocation) {
   locate(failureLocation, op);
-  auto function = op->getParentOfType<func::FuncOp>();
+  auto function = op->getParentOfType<zkc::local::FuncOp>();
   auto producer = dyn_cast<DiagonalProducerInterface>(op);
   if (!function || function.isDeclaration() ||
       !hasSingleElement(function.getBody()) ||
@@ -622,7 +635,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // Verify the unchanged logical subject, not a mutated physical candidate.
   if (failed(verify(module)))
     return error("binding-operation");
-  auto root = cast<ProtocolModuleOp>(&module.getBody()->front());
+  auto root =
+      cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
   auto operations = physicalPlanOperations(module);
   auto indices = indexOperations(operations);
   if (plan.operations.size() != operations.size())
@@ -640,12 +654,13 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       return error("binding-duplicate-selection");
   std::set<std::string> symbols;
   for (auto &op : root.getBody().front())
-    if (!isa<OperationBindingOp>(op))
+    if (!isa<zkc::local::OperationBindingOp>(op))
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         symbols.insert(name.getValue().str());
   std::map<std::string, BindingIndex> originals;
   size_t declarationIndex = 0;
-  for (auto declaration : root.getBody().front().getOps<OperationBindingOp>()) {
+  for (auto declaration :
+       root.getBody().front().getOps<zkc::local::OperationBindingOp>()) {
     locate(failureLocation, declaration);
     if (declarationIndex >= plan.bindings.size())
       return error("binding-plan-coverage");
@@ -759,8 +774,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       if (auto e = checkInstalledPorts(decision.outputs, installed->outputs))
         return e;
     } else {
-      if (decision.binding ||
-          (op->getParentOfType<func::FuncOp>() && !interfaceOperation(op)))
+      if (decision.binding || (op->getParentOfType<zkc::local::FuncOp>() &&
+                               !interfaceOperation(op)))
         return error("binding-plan-coverage");
       if (auto e = checkDefaultPorts(op->getOperandTypes(), decision.inputs))
         return e;
@@ -773,7 +788,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // No sharing, hoisting, path search, or inferred purity is permitted here.
   std::map<Operation *, std::set<std::string>> sites;
   for (auto *op : operations)
-    if (auto function = op->getParentOfType<func::FuncOp>())
+    if (auto function = op->getParentOfType<zkc::local::FuncOp>())
       if (auto site = op->getAttrOfType<StringAttr>("site"))
         sites[function].insert(site.getValue().str());
   SmallVector<unsigned> references(plan.bindings.size(), 0);
@@ -811,7 +826,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
             return sameApplication(candidate, binding.binding.application);
           }))
         return error("binding-no-conversion");
-      auto function = op->getParentOfType<func::FuncOp>();
+      auto function = op->getParentOfType<zkc::local::FuncOp>();
       StringRef site = conversion.site;
       const bool validSite =
           !site.empty() && site.size() <= 512 &&
@@ -871,7 +886,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     // Explicit diagonal implementations also require all-uses preflight; they
     // do not have to be automatic, freshly cloned contraction groups.
     for (auto type : decision.outputs)
-      if (auto physical = dyn_cast<DataType>(type))
+      if (auto physical = dyn_cast<zkc::plan::DataType>(type))
         if (isDiagonalRepresentation(physical.getRepresentation())) {
           auto uses = checkAllUses(op, plan, indices, failureLocation);
           if (!uses)
@@ -884,7 +899,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // Statistics use the existing opportunity analysis, never as the validator's
   // all-uses or group-completeness oracle above.
   if (plan.input->linearContractions)
-    for (auto function : root.getBody().front().getOps<func::FuncOp>())
+    for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
       (void)findLinearContractions(function, stats);
   return CheckedPhysicalPlan(plan, stats);
 }

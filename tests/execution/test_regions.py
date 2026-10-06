@@ -353,7 +353,7 @@ def main(tools=None, layout=None):
         (directory / "source.mlir").write_text(imported.stdout)
         journal.check(f"size-{n}/import", imported.returncode == 0, imported.stderr or None)
         journal.check(
-            f"size-{n}/one-bind-per-decision", imported.stdout.count('"pir.bind"') == n
+            f"size-{n}/one-bind-per-decision", imported.stdout.count('"table.source.bind"') == n
         )
         sizes.append(
             {

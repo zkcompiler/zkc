@@ -217,8 +217,6 @@ def replay(source, desc, inputs=INPUTS, *, exe=EXE, tail=b""):
             response = digest
         elif request[0] == "zkc.transcript-request/3":
             response = ["ok", "00" * 63 + "07"]
-        elif request[0] == "zkc.transcript-request/1":
-            response = ["field", (b"ZKCV\1\1" + (7).to_bytes(32, "little")).hex()]
         else:
             raise AssertionError(("unplanned primitive", request))
         replies[1].append([request, response])

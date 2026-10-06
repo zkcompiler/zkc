@@ -128,19 +128,22 @@ fn receiver_selections(
     Ok(selections)
 }
 
+struct Constraint {
+    arity: Option<usize>,
+    setup: Option<String>,
+}
 fn entry_ports(
     admitted: &Admitted,
     role: &EntryRole,
     record: &[Json],
-    keys: &BTreeMap<String, Keys>,
-) -> Result<BTreeMap<String, PortConstraint>> {
+    ranks: &BTreeMap<String, usize>,
+) -> Result<BTreeMap<String, Constraint>> {
     let mapping = admitted.source_map().ok_or("host-source-map")?;
     let mut result = BTreeMap::new();
     for declaration in list(&record[3])? {
         let d = array(declaration, 3)?;
-        let source = label(&d[0])?;
         let target = mapping
-            .port(&role.instance, &role.role, source)
+            .port(&role.instance, &role.role, label(&d[0])?)
             .ok_or("host-constraint-port")?;
         let arity = if d[1].is_null() {
             None
@@ -150,12 +153,11 @@ fn entry_ports(
         let setup = if d[2].is_null() {
             None
         } else {
-            Some(
-                keys.get(label(&d[2])?)
-                    .ok_or("host-constraint-setup")?
-                    .verifier_key()
-                    .metadata(),
-            )
+            let name = label(&d[2])?;
+            if !ranks.contains_key(name) {
+                return Err("host-constraint-setup".into());
+            }
+            Some(name.to_owned())
         };
         if arity.is_none() && setup.is_none() {
             return Err("host-empty-constraint".into());
@@ -187,12 +189,14 @@ fn entry_ports(
         );
         if arity.is_some() && !has_shape
             || setup.is_some() && !has_setup
-            || setup.is_some_and(|s| arity.is_some_and(|n| n != s.arity()))
+            || setup
+                .as_ref()
+                .is_some_and(|s| arity.is_some_and(|n| n != ranks[s]))
         {
             return Err("host-constraint-type-or-rank".into());
         }
         if result
-            .insert(target.into(), PortConstraint { arity, setup })
+            .insert(target.into(), Constraint { arity, setup })
             .is_some()
         {
             return Err("host-duplicate-constraint".into());
@@ -224,6 +228,17 @@ pub(super) fn run(
     let admission_seconds = start.elapsed().as_secs_f64();
     let ranks = setup_ranks(cfg, &policy)?;
     let receives = receiver_selections(&admitted, cfg, &ranks)?;
+    let declarations = inputs::declarations(&admitted, cfg, &ranks)?;
+    let constraints = declarations
+        .roles
+        .iter()
+        .map(|d| {
+            Ok((
+                d.role.role.clone(),
+                entry_ports(&admitted, &d.role, cfg.roles[&d.role.role], &ranks)?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
     let setup_start = Instant::now();
     let keys = ranks
         .iter()
@@ -261,9 +276,23 @@ pub(super) fn run(
         cfg,
         &keys,
         (admission_seconds, setup_seconds),
+        declarations,
         |role| {
-            let record = cfg.roles.get(&role.role).ok_or("host-role")?;
-            let ports = entry_ports(&admitted, role, record, &keys)?;
+            let ports = constraints[&role.role]
+                .iter()
+                .map(|(name, constraint)| {
+                    (
+                        name.clone(),
+                        PortConstraint {
+                            arity: constraint.arity,
+                            setup: constraint
+                                .setup
+                                .as_ref()
+                                .map(|name| keys[name].verifier_key().metadata()),
+                        },
+                    )
+                })
+                .collect();
             NativeBackend::with_setups(
                 policy,
                 EntryPolicy::new(

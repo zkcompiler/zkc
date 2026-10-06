@@ -44,6 +44,7 @@ pub struct EntryRole {
     pub parameters: BTreeMap<String, u64>,
     pub inputs: Vec<(String, PhysicalType)>,
     pub outputs: Vec<PhysicalType>,
+    pub services: Vec<super::ServicePort>,
 }
 /// Static receiving port in the admitted participant graph. A loop or repeated
 /// call may visit it many times; those dynamic origins remain in each envelope.
@@ -84,13 +85,20 @@ impl Admitted {
                         parameters: p.parameters.clone(),
                         inputs: p.inputs.clone(),
                         outputs: p.outputs.clone(),
+                        services: p.services.clone(),
                     }
                 })
                 .collect()
         })
     }
 
-    /// Installed implementations and the actual roles that may reach them from
+    /// Whether this artifact requires the native Boolean constructor, including
+    /// retained unused definitions. This is separate from bound kernel names.
+    pub fn requires_boolean_literals(&self) -> bool {
+        requires_boolean_literals(&self.program)
+    }
+
+    /// Bound kernel implementations and the actual roles that may reach them from
     /// this entry. Traverses admitted participant calls and local functions,
     /// excluding fixed zero-trip loop bodies without unrolling other loops.
     /// Conservative after guards/stops: does not assume a prefix will fail.
@@ -99,6 +107,26 @@ impl Admitted {
         &self,
         entry: &str,
     ) -> Option<BTreeMap<String, BTreeSet<String>>> {
+        // A local body is scanned once, even when thousands of cuts call it.
+        let function_uses: BTreeMap<_, BTreeSet<_>> = self
+            .program
+            .functions
+            .iter()
+            .map(|(name, function)| {
+                let implementations = LocalInstruction::walk(&function.body)
+                    .into_iter()
+                    .filter_map(|op| {
+                        if let LocalInstruction::Op { binding, .. } = op {
+                            Some(binding.implementation())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                (name, implementations)
+            })
+            .collect();
+        let mut used_functions = BTreeSet::new();
         let mut pending = self
             .program
             .entries
@@ -114,9 +142,9 @@ impl Admitted {
             let participant = &self.program.participants[symbol];
             for family in participant.families.values() {
                 let selector = &family.selectors[&participant.role];
-                for op in LocalInstruction::walk(&self.program.functions[&selector.function].body) {
-                    if let LocalInstruction::Op { binding, .. } = op {
-                        uses.entry(binding.implementation().to_owned())
+                if used_functions.insert((&selector.function, &participant.role)) {
+                    for implementation in &function_uses[&selector.function] {
+                        uses.entry((*implementation).to_owned())
                             .or_default()
                             .insert(participant.role.clone());
                     }
@@ -127,10 +155,9 @@ impl Admitted {
                 for instruction in body {
                     match instruction {
                         Instruction::Local { function, .. } => {
-                            for op in LocalInstruction::walk(&self.program.functions[function].body)
-                            {
-                                if let LocalInstruction::Op { binding, .. } = op {
-                                    uses.entry(binding.implementation().to_owned())
+                            if used_functions.insert((function, &participant.role)) {
+                                for implementation in &function_uses[function] {
+                                    uses.entry((*implementation).to_owned())
                                         .or_default()
                                         .insert(participant.role.clone());
                                 }
@@ -228,6 +255,12 @@ pub fn admit_physical<B: Backend, C: Correspondence>(
         return Err(err(ErrorCode::Limit, "source byte ceiling"));
     }
     let mut admitted = admit_supplied(candidate, backend)?;
+    if admitted.format().is_program() {
+        return Err(err(
+            ErrorCode::Correspondence,
+            "native-participant-correspondence-unsupported",
+        ));
+    }
     let mapping = checker
         .check_with_mapping(source, admitted.bytes(), admitted.format())
         .map_err(|e| err(ErrorCode::Correspondence, e.to_string()))?;
@@ -242,7 +275,33 @@ pub fn admit_physical<B: Backend, C: Correspondence>(
     Ok(admitted)
 }
 
+fn requires_boolean_literals(p: &Program) -> bool {
+    p.functions.values().any(|f| {
+        LocalInstruction::walk(&f.body)
+            .iter()
+            .any(|op| matches!(op, LocalInstruction::BoolConstant { .. }))
+    })
+}
 pub(crate) fn installed<B: Backend>(p: &Program, backend: &B) -> Result<()> {
+    if requires_boolean_literals(p) && !backend.supports_boolean_literals() {
+        return Err(err(ErrorCode::Backend, "native-boolean-unsupported"));
+    }
+    for participant in p.participants.values() {
+        for port in &participant.services {
+            let expected = port.contract.signature("draw").expect("installed method");
+            if !backend
+                .service_signature(port.contract, "draw")
+                .is_some_and(|(signature, bytes)| {
+                    signature == expected && bytes <= Limits::VALUE_BYTES
+                })
+            {
+                return Err(err(
+                    ErrorCode::Backend,
+                    "installed service signature mismatch",
+                ));
+            }
+        }
+    }
     for f in p.functions.values() {
         for op in LocalInstruction::walk(&f.body) {
             if let LocalInstruction::Op { binding, .. } = op {
@@ -418,6 +477,26 @@ fn attributes(
         {
             Ok(())
         }
+        AttributeRule::NativeMessageTemplate
+            if crate::logical::native_origin_template(attrs, "message").is_ok() =>
+        {
+            Ok(())
+        }
+        AttributeRule::NativeChallengeTemplate
+            if crate::logical::native_origin_template(attrs, "query").is_ok() =>
+        {
+            Ok(())
+        }
+        AttributeRule::NativeMessageOrigin
+            if crate::logical::native_origin(attrs, "message").is_ok() =>
+        {
+            Ok(())
+        }
+        AttributeRule::NativeChallengeOrigin
+            if crate::logical::native_origin(attrs, "query").is_ok() =>
+        {
+            Ok(())
+        }
         AttributeRule::MessageOrigin | AttributeRule::ChallengeOrigin
             if crate::logical::validate_source_attributes(attrs).is_ok() =>
         {
@@ -505,6 +584,17 @@ fn local_body(
             ));
         }
         match op {
+            LocalInstruction::BoolConstant {
+                site: s, output, ..
+            } => {
+                site(sites, s)?;
+                define(
+                    &mut env,
+                    &mut seen,
+                    output,
+                    PhysicalType::parse("bool@native.bool/1")?,
+                )?;
+            }
             LocalInstruction::Stop { site: s, .. } => {
                 site(sites, s)?;
                 returned = Some(None);
@@ -574,7 +664,7 @@ fn local_body(
                     // The contract decides this, not the attribute rule: the
                     // external duplex states are ordinary checked data and carry
                     // no origin attribute, yet they hold the same history.
-                    if LocalInstruction::walk(&arm.body).iter().any(|op| matches!(op, LocalInstruction::Op { binding, .. } if observes_or_samples_history(&binding.declaration().contract))) {
+                    if LocalInstruction::walk(&arm.body).iter().any(|op| matches!(op, LocalInstruction::Op { binding, .. } if binding.observes_history())) {
                         return Err(err(ErrorCode::Signature, "match-protocol-effect"));
                     }
                     if arm.alternative != declared.label()
@@ -646,6 +736,7 @@ fn local_body(
                 results(&mut env, &mut seen, outputs, &types)?;
             }
             LocalInstruction::For {
+                conditional,
                 site: s,
                 induction,
                 lower,
@@ -694,7 +785,14 @@ fn local_body(
                     }
                     define(&mut child, &mut child_seen, name, ty.clone())?;
                 }
-                local_body(body, child, sites, true, Some(&types))?;
+                let mut yielded = types.clone();
+                if *conditional {
+                    if !matches!(body.last(), Some(LocalInstruction::Yield(_))) {
+                        return Err(err(ErrorCode::Record, "local-control-yield"));
+                    }
+                    yielded.insert(0, PhysicalType::parse("bool@native.bool/1")?);
+                }
+                local_body(body, child, sites, true, Some(&yielded))?;
                 results(&mut env, &mut seen, outputs, &types)?;
             }
             LocalInstruction::Op {
@@ -818,7 +916,9 @@ struct Check<'a> {
     program: &'a Program,
     role: &'a str,
     instance: &'a str,
+    entry_outputs: &'a [PhysicalType],
     sites: BTreeSet<String>,
+    services: &'a [super::ServicePort],
     seen: BTreeSet<String>,
     schemas: &'a mut BTreeMap<(String, String), PhysicalType>,
 }
@@ -827,7 +927,7 @@ impl Check<'_> {
         if peer == self.role {
             return Err(err(ErrorCode::Role, "self message"));
         }
-        if !ty.is_serializable() {
+        if !ty.is_message_type(self.program.format) {
             return Err(err(ErrorCode::Type, "nonserializable message type"));
         }
         if let Some(old) = self
@@ -853,6 +953,26 @@ impl Check<'_> {
             return Err(err(ErrorCode::Terminal, "empty body"));
         }
         for (i, instruction) in body.iter().enumerate() {
+            let format = self.program.format;
+            if format.is_program()
+                && matches!(
+                    instruction,
+                    Instruction::Stop { .. } | Instruction::Incomplete { .. }
+                )
+            {
+                return Err(err(ErrorCode::Record, "native-participant-terminal"));
+            }
+            if format.is_program() && matches!(instruction, Instruction::Call { .. }) {
+                return Err(err(
+                    ErrorCode::Record,
+                    "service-participant-composition-unsupported",
+                ));
+            }
+            if format.is_program()
+                && matches!(instruction, Instruction::Loop { count, .. } if !matches!(count, Count::Value { .. }))
+            {
+                return Err(err(ErrorCode::Record, "interactive-loop-count"));
+            }
             let terminal = matches!(
                 instruction,
                 Instruction::Return(_)
@@ -867,6 +987,29 @@ impl Check<'_> {
                 ));
             }
             match instruction {
+                Instruction::Query {
+                    site: s,
+                    port,
+                    method,
+                    inputs,
+                    outputs,
+                } => {
+                    if !self.program.format.is_program() {
+                        return Err(err(ErrorCode::Record, "service-query-context"));
+                    }
+                    site(&mut self.sites, s)?;
+                    let port = self
+                        .services
+                        .iter()
+                        .find(|p| &p.name == port)
+                        .ok_or_else(|| err(ErrorCode::Symbol, "unknown service port"))?;
+                    let signature = port
+                        .contract
+                        .signature(method)
+                        .ok_or_else(|| err(ErrorCode::Type, "unsupported service method"))?;
+                    operands(&mut env, inputs, &signature.inputs)?;
+                    results(&mut env, &mut self.seen, outputs, &signature.outputs)?;
+                }
                 Instruction::Local {
                     site: s,
                     function,
@@ -952,6 +1095,27 @@ impl Check<'_> {
                             return Err(err(ErrorCode::Parameters, "interactive-loop-parameter"));
                         }
                     }
+                    let induction = if let Instruction::Loop {
+                        count:
+                            Count::Value {
+                                value,
+                                maximum,
+                                induction,
+                            },
+                        ..
+                    } = instruction
+                    {
+                        if !self.program.format.is_program() || *maximum > Limits::LOOP_COUNT {
+                            return Err(err(ErrorCode::Record, "interactive-loop-count"));
+                        }
+                        let ty = lookup(&env, value)?;
+                        if ty != PhysicalType::parse("index@native.index/1")? {
+                            return Err(err(ErrorCode::Type, "interactive-loop-count"));
+                        }
+                        Some((induction, ty))
+                    } else {
+                        None
+                    };
                     let types = carried
                         .iter()
                         .map(|p| lookup(&env, &p.1))
@@ -962,6 +1126,9 @@ impl Check<'_> {
                         &types,
                     )?;
                     let mut child = Env::new();
+                    if let Some((name, ty)) = induction {
+                        define(&mut child, &mut self.seen, name, ty)?;
+                    }
                     for ((arg, _), ty) in carried.iter().zip(&types) {
                         define(&mut child, &mut self.seen, arg, ty.clone())?;
                     }
@@ -988,6 +1155,30 @@ impl Check<'_> {
                     }
                     self.body(body, child, &types, true)?;
                     results(&mut env, &mut self.seen, outputs, &types)?;
+                }
+                Instruction::ReturnIf {
+                    site: s,
+                    condition,
+                    values,
+                    continuations,
+                } => {
+                    if !format.is_program() {
+                        return Err(err(ErrorCode::Record, "program-return-required"));
+                    }
+                    site(&mut self.sites, s)?;
+                    operands(
+                        &mut env,
+                        std::slice::from_ref(condition),
+                        &[PhysicalType::parse("bool@native.bool/1")?],
+                    )?;
+                    operands(&mut env, values, self.entry_outputs)?;
+                    let types: Vec<_> = self
+                        .entry_outputs
+                        .iter()
+                        .filter(|ty| ty.is_affine())
+                        .cloned()
+                        .collect();
+                    results(&mut env, &mut self.seen, continuations, &types)?;
                 }
                 Instruction::Return(names) if !in_loop => operands(&mut env, names, expected)?,
                 Instruction::Yield(names) if in_loop => operands(&mut env, names, expected)?,
@@ -1118,15 +1309,46 @@ fn validate(p: &Program) -> Result<()> {
             .iter()
             .map(|(_, ty)| ty)
             .chain(&participant.outputs)
-            .any(|ty| ty.kind() == Type::Variant)
+            .any(|ty| {
+                if p.format.is_program() {
+                    !ty.logical().is_program_port()
+                } else {
+                    ty.kind() == Type::Variant
+                }
+            })
         {
             return Err(err(ErrorCode::Type, "variant-participant-boundary"));
         }
-        let (env, seen) = environment(&participant.inputs)?;
+        if p.format.is_program()
+            && (!participant.parameters.is_empty() || !participant.families.is_empty())
+        {
+            return Err(err(
+                ErrorCode::Record,
+                "service-participant-composition-unsupported",
+            ));
+        }
+        if !p.format.is_program() && !participant.services.is_empty() {
+            return Err(err(ErrorCode::Record, "service-profile-required"));
+        }
+        if participant.inputs.len() + participant.services.len() > Limits::PORTS {
+            return Err(err(ErrorCode::Limit, "interactive-port-limit"));
+        }
+        let (env, mut seen) = environment(&participant.inputs)?;
+        let mut indices = BTreeSet::new();
+        for port in &participant.services {
+            if !seen.insert(port.name.clone())
+                || !indices.insert(port.input_index)
+                || port.input_index >= participant.inputs.len() + participant.services.len()
+            {
+                return Err(err(ErrorCode::Type, "service-port-interface"));
+            }
+        }
         Check {
             program: p,
             role: &participant.role,
             instance: &participant.instance,
+            entry_outputs: &participant.outputs,
+            services: &participant.services,
             sites: BTreeSet::new(),
             seen,
             schemas: &mut schemas,

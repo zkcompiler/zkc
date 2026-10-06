@@ -33,6 +33,10 @@ pub(super) const CONTRACTS: &[Contract] = &[
         (&[Groups], &[Groups, Groups], AttributeRule::None),
     ),
     Contract::new(
+        "pairing.apply",
+        (&[Group, Group], &[Group], AttributeRule::None),
+    ),
+    Contract::new(
         "pairing.check",
         (&[Groups, Groups], &[Bool], AttributeRule::None),
     ),
@@ -89,17 +93,23 @@ fn resolve(
     contract: &Contract,
 ) -> Result<KernelSignature<LogicalType>> {
     let fail = || AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding");
-    if binding.contract == "pairing.check" {
+    if matches!(binding.contract.as_str(), "pairing.check" | "pairing.apply") {
         if binding.arguments != ["bn254.fr"] {
             return Err(fail());
         }
+        let apply = binding.contract == "pairing.apply";
+        let kind = if apply { Type::Group } else { Type::Groups };
         let make = LogicalType::new;
         return Ok(KernelSignature {
             inputs: vec![
-                make(Type::Groups, Identity::Bn254G1)?,
-                make(Type::Groups, Identity::Bn254G2)?,
+                make(kind, Identity::Bn254G1)?,
+                make(kind, Identity::Bn254G2)?,
             ],
-            outputs: vec![make(Type::Bool, Identity::None)?],
+            outputs: vec![if apply {
+                make(Type::Group, Identity::Bn254Gt)?
+            } else {
+                make(Type::Bool, Identity::None)?
+            }],
             attributes: AttributeRule::None,
         });
     }
@@ -128,8 +138,8 @@ fn select(
     logical: &KernelSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
-    if binding.contract == "pairing.check" {
-        if binding.implementation != "arkworks/pairing.check" {
+    if matches!(binding.contract.as_str(), "pairing.check" | "pairing.apply") {
+        if binding.implementation != format!("arkworks/{}", binding.contract) {
             return Err(AdmissionError::new(
                 ErrorCode::Signature,
                 "uninstalled operation binding",

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("ZkcSupport", "ZkcContracts", "ZkcRelation", "ZkcProtocol", "ZkcIR", "ZkcFrontend", "ZkcFrontendLoading", "ZkcClaims", "ZkcClaimTranslation", "ZkcTransforms", "ZkcCompilerCore", "ZkcDriver")
+COMPONENTS = ("ZkcSupport", "ZkcContracts", "ZkcRelation", "ZkcProtocol", "ZkcIR", "ZkcTranslation", "ZkcFrontend", "ZkcFrontendLoading", "ZkcClaims", "ZkcClaimTranslation", "ZkcTransforms", "ZkcCompilerCore", "ZkcDriver")
 ALLOWED = {
     "ZkcFrontend": {"ZkcProtocol"},
     "ZkcFrontendLoading": {"ZkcFrontend"},
@@ -17,14 +17,15 @@ ALLOWED = {
     "ZkcClaims": {"ZkcProtocol"},
     "ZkcClaimTranslation": {"ZkcClaims", "ZkcIR"},
     "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils"},
-    "ZkcCompilerCore": {"ZkcTransforms", "ZkcFrontend", "ZkcClaimTranslation"},
+    "ZkcCompilerCore": {"ZkcTransforms", "ZkcTranslation", "ZkcFrontend", "ZkcClaimTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompilerCore", "ZkcFrontendLoading", "MLIRParser"},
-    "ZkcIR": {"ZkcProtocol", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect"},
+    "ZkcTranslation": {"ZkcIR"},
+    "ZkcIR": {"ZkcProtocol", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect", "MLIRTensorDialect"},
 }
 HEADER_ROOTS = {
     "ZkcFrontend": ["Frontend"],
     "ZkcFrontendLoading": ["Frontend/Loading.h"],
-    "ZkcSupport": ["Support/Refusal.h", "Support/Json.h", "Support/MLIRInput.h"],
+    "ZkcSupport": ["Support/Refusal.h", "Support/Json.h", "Support/LogicalTree.h", "Support/MLIRInput.h"],
     "ZkcContracts": ["Contracts"],
     "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Matrices")],
     "ZkcProtocol": ["Source", "Analysis", "Protocol/Admission.h", "Protocol/Instantiation.h", "Protocol/PhysicalOptions.h"],
@@ -33,7 +34,8 @@ HEADER_ROOTS = {
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompilerCore": ["Compiler"],
     "ZkcDriver": ["Driver"],
-    "ZkcIR": ["Dialect", "Interfaces", "Translation"],
+    "ZkcIR": ["Dialect", "Interfaces"],
+    "ZkcTranslation": ["Translation"],
 }
 
 # Private frontend headers are phase contracts. The model and syntax owners
@@ -60,7 +62,7 @@ def header_set(entries):
     result = set()
     for entry in entries:
         path = ROOT / "include/zkc" / entry
-        result.update(path.rglob("*.h") if path.is_dir() else [path])
+        result.update((p for p in path.rglob("*") if p.suffix in (".h", ".def")) if path.is_dir() else [path])
     return result
 
 
@@ -173,7 +175,9 @@ def main():
     for source, owner in {
         "lib/ClaimTranslation/Claims.cpp": "ZkcClaimTranslation",
         "lib/Dialect/Claim/IR/ClaimDialect.cpp": "ZkcIR",
-        "lib/Dialect/PIR/IR/Protocol.cpp": "ZkcIR",
+        "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
+        "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
+        "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     assert targets["ZkcCompiler"] == (set(), {"ZkcCompilerCore", "ZkcDriver"}, []), "aggregate must not compile sources"
@@ -182,15 +186,24 @@ def main():
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h"},
         "ZkcProtocol": {ROOT / "lib/Protocol/EncodingLimits.h", ROOT / "lib/Protocol/ConstructionState.h", ROOT / "lib/Protocol/Construction.h"},
-        "ZkcIR": {ROOT / "lib/Dialect/Plan/IR/PhysicalEncoding.h", ROOT / "lib/Dialect/Verification.h"},
+        "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h", ROOT / "lib/Dialect/Table/IR/PhysicalEncoding.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
+    private_headers["ZkcProtocol"].add(ROOT / "lib/Source/Structure.h")
+    private_headers["ZkcTranslation"] = set()
     private_headers["ZkcClaims"] = {ROOT / "lib/Claims/Internal.h", ROOT / "lib/Claims/Admission.h"}
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
     private_headers["ZkcClaimTranslation"] = set()
     private_headers["ZkcTransforms"] = {
-        ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h"
+        ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
+        ROOT / "lib/Transforms/MathematicalSupport.h",
+        ROOT / "lib/Transforms/MathematicalValues.h",
+        ROOT / "lib/Transforms/ProtocolApplications.h"
     }
-    private_headers["ZkcCompilerCore"] = set()
+    private_headers["ZkcCompilerCore"] = {
+        ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
+        ROOT / "lib/Compiler/NativeDeployment.h",
+        ROOT / "lib/Compiler/NativeProofVerification.h",
+    }
     private_headers["ZkcDriver"] = set((ROOT / "lib/Driver").glob("*.h"))
     private_headers["ZkcFrontend"] = set((ROOT / "lib/Frontend").rglob("*.h")) - set((ROOT / "lib/Frontend/Loading").rglob("*.h"))
     private_headers["ZkcFrontendLoading"] = set((ROOT / "lib/Frontend/Loading").rglob("*.h"))
@@ -203,7 +216,7 @@ def main():
             assert path.is_file(), f"nonexistent header: {path}"
             assert path not in header_owners, f"multiple owners: {path}"
             header_owners[path] = name
-    assert set(header_owners) == set((ROOT / "include/zkc").rglob("*.h")) | set((ROOT / "lib").rglob("*.h")), "unowned headers"
+    assert set(header_owners) == {p for p in (ROOT / "include/zkc").rglob("*") if p.suffix in (".h", ".def")} | set((ROOT / "lib").rglob("*.h")), "unowned headers"
     for path, owner in extra_headers.items():
         header_owners[path] = owner
         if path.suffix != ".td":
@@ -247,7 +260,7 @@ def main():
     generated = {Path(line).resolve() for line in (manifest.parent / "ir-generated-files.txt").read_text().splitlines()}
     registration_fragments = {
         (manifest.parent / "include/zkc/Dialect" / filename).resolve()
-        for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc",
+        for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc", "NativeDialects.inc",
                          "ContributionHeaders.h.inc", "ContributionDialects.inc")
     }
     assert registration_fragments <= generated, "missing private registration inventory"
@@ -291,8 +304,10 @@ def main():
                         "filesystem", "fstream", "cstdio", "stdio.h", "llvm/Support/FileSystem.h",
                         "llvm/Support/MemoryBuffer.h", "llvm/Support/Program.h",
                     ), f"{name}: input loading belongs to FrontendLoading: {path}"
-                if name != "ZkcDriver":
-                    assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to Driver: {path}"
+                # Invocation owns in-memory MLIR parsing; Driver additionally
+                # owns command-line file loading. Lower layers consume IR.
+                if name not in ("ZkcCompilerCore", "ZkcDriver"):
+                    assert not include.startswith("mlir/Parser/"), f"{name}: parsing belongs to CompilerCore or Driver: {path}"
                 if name == "ZkcIR":
                     assert not include.startswith(("mlir/Pass/", "mlir/Transforms/")), f"{name}: transformation dependency {include}"
                 elif "ZkcIR" not in closure(name):

@@ -291,3 +291,21 @@ under the enclosing law; it does not condition on false-instance selection.
 The samplewise contract and event inclusion still require a separate bound on
 `Pr[p : bad]` for the allowed strategies. This connection supplies no extractor
 or honest-prover completeness theorem.
+
+
+## Native public-table reduction instance
+
+The [structured native profile](../profiles/compiler/structured-mathematics.md)
+instantiates a Boolean-sum-to-point requirement. For retained recipe `R`, input
+validity is `sum_{x in {0,1}^n} R(T,U)(x) = c` and residual validity is
+`R(T,U)(p) = v`, with unit witness. Subject, point and scalar refer to actual
+verifier values and are connected to the terminal's inputs and decision.
+
+For true round polynomial `h_i`, received `q_i` and actual draw `r_i`, define
+`Bad_i` as a passed guard with formal `q_i != h_i` and `q_i(r_i) = h_i(r_i)`.
+Then `S_(i+1) implies S_i or Bad_i`, where `S_i` is the remaining-sum predicate
+after the actual verifier prefix. The terminal establishes `S_n`.
+Quantitative bounds additionally require degree and challenge-experiment
+assumptions. Honest completeness requires agreeing role inputs, faithful
+delivery and execution resources. Private subjects need another terminal
+contract with public commitments and existential witnesses.

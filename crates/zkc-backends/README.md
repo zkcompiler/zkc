@@ -378,7 +378,7 @@ implementation names and take no nominal arguments.
 operands are trusted host inputs, entry keys must agree, and an optional verifier
 pins PCS bytes and values. `with_setups(policy, entry, registry)` additionally
 requires prior authorization of every setup, including distinct per-port and
-per-receive selections used by `/2` hosts. These are setup trust policies within
+per-receive selections used by `zkc.run/2` source hosts. These are setup trust policies within
 the same native backend, not source interpretation alternatives. `Setups::InputKeys`
 is the internal name for the first policy; no participant format chooses it.
 BLS issuance conveniences (`issue_rng`, `issue_nonce`, `issue_transcript`) have
@@ -462,7 +462,7 @@ The explicit BLS12-381 Fr installation also supports
 `spongefish0.7.4.keccak.bls12-381.fr64be/1` through `issue_transcript_for` and
 `spongefish/transcript.*` bindings. `domains::TRANSCRIPTS` records suite/provider/
 challenge-domain facts separately from `domains::INSTALLED` arithmetic facts.
-`Identity::transcript()` recognizes a selected suite; fields no longer select
+`Identity::transcript()` recognizes a selected suite; fields do not select
 one implicit transcript. The existing convenience `issue_transcript` retains
 its documented Merlin behavior. Each issued state has the same fresh affine
 custody and failure accounting. See the [construction contract](../../docs/compiler/artifact-format.md#second-construction-over-bls12-381-fr).
@@ -572,3 +572,15 @@ ceiling of 16777216. `with_external_work_limit` selects a deployment ceiling;
 `external_work_spent` reports actual consumed units. Each hash call, hashed byte,
 permutation, observation and sample costs one unit. This is neither wall-clock
 cost nor a security parameter. Validating/copying a state does not restore work.
+
+
+Hosts preparing several roles use `prepare_inputs` to decode ordinary values and
+check declared host-reference types before issuing resources. `InputPlan::check_entry`
+checks shape/setup/public-input constraints using available data and key handles;
+only pending RNG/nonce/transcript slots may be absent. `InputPlan::bind` consumes
+the plan and validates the actual issued handles. The same pure entry checks run
+again at real frame entry. Missing host names give `input-host-handle`, wrong
+nominal types give `input-type`, and repeated affine references are refused early
+with `input-host-alias`. Preparation does not acquire a frame or issue entropy.
+Native wire hosts can call `native_input_retained_bytes` before payload decoding;
+this framing/retention bound does not replace canonical value decoding.

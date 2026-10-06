@@ -282,6 +282,32 @@ def Wrong : ZKC_Operation<"fixture.wrong", [ElementType, Length],
   let commonGeneric = 0;
 }
 ]=] "parameter kind or sort mismatch")
+# Complete-Type ports are construction observation inputs, never an untyped
+# escape hatch for common programs or generated result types.
+declaration_case(direct-type-common [=[
+def T : ZKC_Root<"T", TypeParameter>;
+def Bad : ZKC_Operation<"bad.direct", [T], [T], []>;
+]=] "direct Type ports require a scoped construction type")
+declaration_case(direct-type-output [=[
+def T : ZKC_Root<"T", TypeParameter>;
+def Bad : ZKC_Operation<"bad.direct", [T], [], [T]> {
+  let stage = Construction; let commonGeneric = 0;
+}
+]=] "direct Type ports require a scoped construction type")
+declaration_case(direct-type-unobserved [=[
+def T : ZKC_Root<"T", TypeParameter>;
+def Bad : ZKC_Operation<"bad.direct", [T], [T], []> {
+  let stage = Construction; let commonGeneric = 0;
+}
+]=] "complete-type port must be an observation payload")
+declaration_case(direct-type-observation [=[
+def T : ZKC_Root<"T", TypeParameter>;
+def State : ZKC_Type<"transcript", [], Affine, 0, 0>;
+def Good : ZKC_Operation<"good.direct", [T], [ZKC_Apply<State>, T], [ZKC_Apply<State>]> {
+  let stage = Construction; let commonGeneric = 0;
+  let facets = [ZKC_Observation<0,1,0>, ZKC_History<0,0>];
+}
+]=] "")
 # Kinded fixture must generate successfully but never become common admission.
 execute_process(COMMAND "${ZKC_TABLEGEN}" -dump-contract-declarations
   -I "${ZKC_DECLARATION_INCLUDE}" "${ZKC_DECLARATION_FIXTURES}/type_nat.td"

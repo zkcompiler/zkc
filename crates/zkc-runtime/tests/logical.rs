@@ -236,3 +236,149 @@ fn public_root_strings_have_separate_tree_ceiling() {
     assert_eq!(decode_tree(&bytes).unwrap(), largest);
     assert!(encode_tree(&json!("x".repeat(TreeLimits::BYTES - 8))).is_err());
 }
+
+#[test]
+fn native_origins_have_exact_shapes_and_distinct_event_kinds() {
+    use zkc_runtime::logical::native_origin;
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+    let query = json!([
+        "zkc.native-origin/1",
+        "main",
+        ["subprotocol"],
+        [],
+        [
+            "query",
+            "Round",
+            "draw",
+            "input_2",
+            "random.bls12-381.fr/1",
+            "draw",
+            "V"
+        ]
+    ]);
+    let bytes = encode_tree(&query).unwrap();
+    let encoded = hex(&bytes);
+    assert_eq!(
+        native_origin(std::slice::from_ref(&encoded), "query").unwrap(),
+        bytes
+    );
+    for port in [
+        "service_2",
+        "input_",
+        "input_01",
+        "input_+1",
+        "input_18446744073709551616",
+    ] {
+        let mut wrong_port = zkc_runtime::logical::decode_tree(&bytes).unwrap();
+        wrong_port[4][3] = json!(port);
+        let encoded = encode_tree(&wrong_port)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>();
+        assert!(native_origin(&[encoded], "query").is_err());
+    }
+    assert!(native_origin(std::slice::from_ref(&encoded), "message").is_err());
+    assert!(native_origin(std::slice::from_ref(&encoded), "unknown").is_err());
+    assert!(native_origin(&[], "query").is_err());
+    assert!(native_origin(&[encoded.clone(), encoded.clone()], "query").is_err());
+    for end in 0..encoded.len() {
+        assert!(native_origin(&[encoded[..end].into()], "query").is_err());
+    }
+    for text in [
+        format!("{encoded}00"),
+        encoded.to_uppercase(),
+        "ff".repeat(2049),
+    ] {
+        assert!(native_origin(&[text], "query").is_err());
+    }
+    for slot in 0..5 {
+        let mut bad = query.clone();
+        bad[slot] = match slot {
+            0 => json!("zkc.logical-origin/1"),
+            1 => json!(""),
+            2 => json!(["contains space"]),
+            3 => json!(["0"]),
+            _ => json!(["query", "Round", "draw", "input_2", "random", "draw"]),
+        };
+        assert!(native_origin(&[hex(&encode_tree(&bad).unwrap())], "query").is_err());
+    }
+    let message = json!([
+        "zkc.native-origin/1",
+        "main",
+        [],
+        [],
+        ["message", "Round", "response", "response", "P", "V"]
+    ]);
+    let bytes = encode_tree(&message).unwrap();
+    assert_eq!(native_origin(&[hex(&bytes)], "message").unwrap(), bytes);
+    // Hostile array counts cannot cause a large allocation through this reader.
+    let mut bad = bytes;
+    bad[1..9].copy_from_slice(&u64::MAX.to_le_bytes());
+    assert!(native_origin(&[hex(&bad)], "message").is_err());
+}
+
+#[test]
+fn indexed_native_origins_require_explicit_coordinates_and_separate_versions() {
+    use zkc_runtime::logical::{indexed_native_origin, native_origin, native_origin_template};
+    let encoded = |v: &serde_json::Value| {
+        encode_tree(v)
+            .unwrap()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+    };
+    let template = json!([
+        "zkc.native-origin-template/1",
+        "main",
+        [
+            ["repeat", "main", "outer"],
+            ["apply", "main", "call"],
+            ["repeat", "step", "inner"]
+        ],
+        [],
+        [
+            "query",
+            "step",
+            "draw",
+            "input_4",
+            "random.bls12-381.fr/1",
+            "draw",
+            "V"
+        ]
+    ]);
+    let attrs = [encoded(&template)];
+    assert!(native_origin(&attrs, "query").is_err());
+    native_origin_template(&attrs, "query").unwrap();
+    for coordinates in [vec![0, 0], vec![2, 7], vec![u64::MAX, u64::MAX]] {
+        let mut expected = template.clone();
+        expected[0] = json!("zkc.native-origin/2");
+        expected[3] = json!(coordinates.iter().map(u64::to_string).collect::<Vec<_>>());
+        assert_eq!(
+            indexed_native_origin(&attrs, "query", &coordinates).unwrap(),
+            encode_tree(&expected).unwrap()
+        );
+    }
+    for coordinates in [vec![], vec![0], vec![0, 1, 2], vec![0; 65]] {
+        assert!(indexed_native_origin(&attrs, "query", &coordinates).is_err());
+    }
+    for slot in [0, 2, 3, 4] {
+        let mut changed = template.clone();
+        changed[slot] = match slot {
+            0 => json!("zkc.native-origin/1"),
+            2 => json!([["loop", "main", "outer"]]),
+            3 => json!(["0"]),
+            _ => json!(["repeat", "main", "outer"]),
+        };
+        assert!(native_origin_template(&[encoded(&changed)], "query").is_err());
+    }
+    for text in [
+        attrs[0].clone() + "00",
+        attrs[0].to_uppercase(),
+        "00".repeat(2049),
+    ] {
+        assert!(native_origin_template(&[text], "query").is_err());
+    }
+}

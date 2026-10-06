@@ -12,6 +12,7 @@ pub mod oracle;
 pub mod representations;
 mod resource;
 mod sampling;
+pub mod services;
 mod setups;
 mod transcript;
 mod value;
@@ -26,7 +27,9 @@ mod public_operands;
 pub use public_operands::{PublicRolePolicy, requires_public_operands};
 
 pub use backend::{EntryPolicy, NativeBackend, PortConstraint, PublicInputs};
-pub use codec::{InputBindings, requires_setup};
+pub use codec::{
+    InputBindings, InputPlan, NativeWireError, has_native_wire, native_wire_size, requires_setup,
+};
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
@@ -82,6 +85,7 @@ pub const RISTRETTO_SCALAR_MODULUS_DECIMAL: &str =
     "7237005577332262213973186563042994240857116359379907606001950938285454250989";
 
 /// BN254 scalar field and checked subgroup points.
+pub use zkc_arkworks::bn254::Gt as Bn254Gt;
 pub use zkc_arkworks::bn254::{
     G1 as Bn254G1, G2 as Bn254G2, Scalar as Bn254Scalar, parse_decimal as parse_bn254_decimal,
 };
@@ -90,3 +94,7 @@ mod variant;
 pub use variant::Variant;
 mod fixed_vector;
 pub use fixed_vector::FixedVector;
+mod sequence;
+pub use sequence::Sequence;
+mod field_array;
+pub use field_array::FieldArray;

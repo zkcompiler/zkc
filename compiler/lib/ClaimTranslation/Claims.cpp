@@ -91,7 +91,7 @@ Expected<OwningOpRef<ModuleOp>> build(const Contract &contract,
     make("claim.loop", {}, {}, {attr("path", path), integer("count", count)});
   for (const auto &claim : contract.claims)
     pending.emplace(claim.name, make("claim.pending", operands(claim.values),
-                                     ClaimPendingType::get(&ctx),
+                                     zkc::claim::ClaimPendingType::get(&ctx),
                                      {ref("kind", "kind_" + claim.kind),
                                       attr("id", claim.name)})
                                     ->getResult(0));
@@ -100,9 +100,9 @@ Expected<OwningOpRef<ModuleOp>> build(const Contract &contract,
   std::map<uint32_t, mlir::Value> evidence;
   for (const auto &terminal : contract.terminals) {
     auto value = values.at(checked.source.guards.at(terminal.guard).value);
-    auto *op =
-        make("claim.terminal", {pending.at(terminal.claim), value},
-             ClaimEvidenceType::get(&ctx), {attr("guard", terminal.guard)});
+    auto *op = make("claim.terminal", {pending.at(terminal.claim), value},
+                    zkc::claim::ClaimEvidenceType::get(&ctx),
+                    {attr("guard", terminal.guard)});
     evidence[checked.claimIds.at(terminal.claim)] = op->getResult(0);
   }
   for (const auto &rule : contract.rules) {
@@ -123,8 +123,9 @@ Expected<OwningOpRef<ModuleOp>> build(const Contract &contract,
     SmallVector<mlir::Value> premises;
     for (const auto &p : rule.premises)
       premises.push_back(evidence.at(checked.claimIds.at(p)));
-    auto *op = make("claim.apply", premises, ClaimEvidenceType::get(&ctx),
-                    {ref("rule", "rule_" + name)});
+    auto *op =
+        make("claim.apply", premises, zkc::claim::ClaimEvidenceType::get(&ctx),
+             {ref("rule", "rule_" + name)});
     evidence[checked.claimIds.at(rule.conclusion)] = op->getResult(0);
   }
   SmallVector<mlir::Value> requirements;
@@ -148,8 +149,10 @@ Expected<OwningOpRef<ModuleOp>> import(const source::Module &module,
     return proof.takeError();
   // Translation initializes the dialects it creates. Candidate checking below
   // never changes its caller's registry or dialect loading state.
-  ctx.loadDialect<ClaimDialect, PIRDialect, AlgebraDialect, PolynomialDialect,
-                  PCSDialect, PlanDialect, OracleDialect>();
+  ctx.loadDialect<zkc::claim::ClaimDialect, zkc::protocol_ir::ProtocolDialect,
+                  zkc::algebra::AlgebraDialect, zkc::poly::PolynomialDialect,
+                  zkc::pcs::PCSDialect, zkc::plan::PlanDialect,
+                  zkc::oracle::OracleDialect>();
   return build(contract, certificate, *checked, ctx);
 }
 Error checkIR(const source::Module &module, const Contract &contract,
@@ -173,7 +176,7 @@ Error checkIR(const source::Module &module, const Contract &contract,
     return error("claim-ir-mismatch");
   Certificate certificate{source.str(), authority.str(), {}};
   for (auto &op : *candidate.getBody())
-    if (auto application = dyn_cast<ClaimApplyOp>(op)) {
+    if (auto application = dyn_cast<zkc::claim::ClaimApplyOp>(op)) {
       auto name = application.getRule();
       if (!name.consume_front("rule_") ||
           certificate.steps.size() >= maxRecords)
@@ -184,7 +187,7 @@ Error checkIR(const source::Module &module, const Contract &contract,
   if (!proof)
     return proof.takeError();
   auto &ctx = *candidate.getContext();
-  if (!ctx.getLoadedDialect<ClaimDialect>())
+  if (!ctx.getLoadedDialect<zkc::claim::ClaimDialect>())
     return error("claim-ir-mismatch");
   auto expected = build(contract, certificate, *checked, ctx);
   if (!expected)

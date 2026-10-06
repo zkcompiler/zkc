@@ -241,8 +241,8 @@ def test_external_operations_keep_failure_effects_and_reject_attributes():
     text=(EXAMPLES/'external-constructions.pir').read_text()
     ir=journal.run([tools.compiler,'protocol-import','-'],text)
     optimized=journal.run([tools.optimizer,'--canonicalize','--cse'],ir)
-    for spelling in ['external_monero_hash','external_monero_update','external_openvm_check_witness']:
-        assert optimized.count('"algebra.'+spelling+'"') == ir.count('"algebra.'+spelling+'"') > 0
+    for spelling in ['monero_hash','monero_update','openvm_check_witness']:
+        assert optimized.count('"crypto.exec.'+spelling+'"') == ir.count('"crypto.exec.'+spelling+'"') > 0
     malformed=text.replace('zkc::external::monero_init(initial);',
                            'zkc::external::monero_init(initial) attributes ("prefix");')
     journal.run([tools.compiler,'protocol-source','-'],malformed,
@@ -268,7 +268,7 @@ def test_unused_external_validation_survives_standard_optimizations():
     journal = Journal(records(case='unused-external-validation'))
     ir = journal.run([tools.compiler, 'protocol-import', '-'], text)
     optimized = journal.run([tools.optimizer, '--canonicalize', '--cse'], ir)
-    assert optimized.count('"algebra.external_monero_hash"') == 1
+    assert optimized.count('"crypto.exec.monero_hash"') == 1
     retained = journal.run([tools.compiler, 'protocol-export', '-'], optimized)
     compiled = compile_source(retained, journal.directory / 'retained')
     document = json.loads(compiled[2].read_text())

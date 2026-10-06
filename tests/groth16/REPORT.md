@@ -1,7 +1,7 @@
 # Groth16 fixture evidence
 
 This record establishes **Circom/snarkjs fixture reproduction and independent
-prover-algebra agreement only**. The later results from the delivered Rust tool
+prover-algebra agreement only**. Results for the Rust tool
 and relation-aware PIR path are recorded separately in
 [INTEGRATION.md](INTEGRATION.md). This fixture record makes no end-to-end zkc
 claim, secure ceremony claim, general backend conformance claim or independent
@@ -102,5 +102,4 @@ are supported paths but were not exercised in these runs. The supplied Circom
 binary's source checkout, version and current hash were checked. Timings in the
 receipt describe this machine and include the named command's startup; they are
 not zkc performance claims. Native binary reproducibility across hosts is not
-claimed. A subsequent `validate` rerun also passed in the existing workdir after
-the read-only staging regression was repaired.
+claimed.

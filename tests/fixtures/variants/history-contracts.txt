@@ -43,6 +43,8 @@ field.inverse 0
 field.mul 0
 field.neg 0
 field.sub 0
+field_array.at 0
+field_array.from_vector 0
 fixed_vector.dot 0
 fixed_vector.from_vector 0
 fixed_vector.to_vector 0
@@ -59,6 +61,7 @@ indices.at 0
 indices.empty 0
 indices.length 0
 matrix.bilinear 0
+matrix.dimension 0
 matrix.identity_check 0
 matrix.mul_vector 0
 matrix.shape_check 0
@@ -71,6 +74,7 @@ oracle.check 0
 oracle.commit 0
 oracle.open 0
 pairing.check 0
+pairing.apply 0
 pcs.check 0
 pcs.commit 0
 pcs.equal 0
@@ -96,6 +100,7 @@ poly.opening_quotient 0
 poly.product_round 0
 poly.product_sum 0
 poly.round_evaluate 0
+poly.table_arity 0
 poly.univariate_boundary 0
 poly.univariate_evaluate 0
 random.draw 0
@@ -104,6 +109,7 @@ random.vector 0
 resource_unit.consume 0
 resource_unit.create 0
 resource_unit.pass 0
+table.relayout 0
 transcript.challenge 1
 transcript.draw_index 1
 transcript.observe.bool 1
@@ -129,6 +135,7 @@ vector.constant 0
 vector.dot 0
 vector.embed 0
 vector.empty 0
+vector.equal 0
 vector.fill 0
 vector.from_point 0
 vector.from_table 0

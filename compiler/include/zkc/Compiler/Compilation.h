@@ -13,6 +13,10 @@ namespace frontend {
 class Analysis;
 }
 struct ConstructedProtocol;
+struct CompiledRun;
+struct RunOptions;
+struct CompiledNativeProof;
+struct NativeProofOptions;
 /// Requested work; import preserves the stage encoded by the source document.
 enum class ProtocolAction { Import, Expand, Project, Plan };
 struct ProtocolOptions {
@@ -26,10 +30,9 @@ struct TableOptions {
 };
 
 /// Owns the context and IR. Protocol compilations also own their original
-/// source spelling; table compilations have no
-/// Document. Borrowed accessors remain valid until this result is
-/// destroyed/reassigned. Mutating module() invalidates any conclusions about
-/// its previous contents.
+/// source spelling; table and native MLIR compilations have no Document.
+/// Borrowed accessors remain valid until this result is destroyed/reassigned.
+/// Mutating module() invalidates any conclusions about its previous contents.
 class Compilation {
   struct Storage;
   std::unique_ptr<Storage> storage;
@@ -40,6 +43,15 @@ class Compilation {
   friend llvm::Expected<Compilation>
   compileTable(const llvm::json::Value &, const TableOptions &,
                const mlir::DialectRegistry &);
+
+  friend llvm::Expected<CompiledRun> compileRun(llvm::StringRef,
+                                                llvm::StringRef,
+                                                const RunOptions &,
+                                                const mlir::DialectRegistry &);
+
+  friend llvm::Expected<CompiledNativeProof>
+  compileNativeProof(llvm::StringRef, llvm::StringRef,
+                     const NativeProofOptions &, const mlir::DialectRegistry &);
 
   friend llvm::Expected<ConstructedProtocol>
   constructProtocol(const frontend::Analysis &, source::Construction,

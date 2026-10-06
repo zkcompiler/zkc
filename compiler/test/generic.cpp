@@ -43,6 +43,10 @@ void constantKinds() {
                       {}};
   const std::vector<TypeConstructor> constructors{
       {"fixed_vector", {"Type", "Nat"}}};
+  auto direct = signature;
+  direct.inputs = {{"", {}, 0}};
+  refuse(check(Function{direct, {}, {0}}, constructors, {}, {}),
+         "generic-type");
   auto instantiated = accept(instantiate(signature, {}, {}));
   require(instantiated.scope.constants.at(0) == spelling,
           "Type constant lost its complete identity");

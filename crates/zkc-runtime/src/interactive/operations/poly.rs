@@ -4,6 +4,10 @@ use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::selectable(
+        "poly.table_arity",
+        (&[Table], &[Index], AttributeRule::None),
+    ),
+    Contract::selectable(
         "poly.coefficient_count",
         (&[Polynomial], &[Index], AttributeRule::None),
     ),

@@ -35,7 +35,7 @@ source.write_text(
 )
 text = imported(commands, source)
 plan_ir = lowered(commands, text, directory)
-assert '"plan.bind"' in plan_ir
+assert '"table.plan.bind"' in plan_ir
 assert exported(commands, plan_ir, directory)[9] == body
 for label, invalid, code in [
     (
@@ -52,7 +52,7 @@ for label, invalid, code in [
     ),
     (
         "stale-flow",
-        text.replace('"pir.return"(%after, %value)', '"pir.return"(%arg0, %value)'),
+        text.replace('"table.source.return"(%after, %value)', '"table.source.return"(%arg0, %value)'),
         "invalid-return",
     ),
     (
@@ -60,8 +60,8 @@ for label, invalid, code in [
         # result type no longer matches, before any pass of ours runs, so what
         # is named is our operation rather than a diagnostic of ours.
         "wrong-result",
-        text.replace('-> (!pir.flow, !algebra.field<"f7">)', "-> (!pir.flow, i1)"),
-        "pir.return",
+        text.replace('-> (!table.flow, !algebra.field<"f7">)', "-> (!table.flow, i1)"),
+        "table.source.return",
     ),
     (
         "extra-attribute",
@@ -72,7 +72,7 @@ for label, invalid, code in [
         # The dialect declares the region isolated, and that is the constraint
         # the verifier names when a body reaches a value defined outside it.
         "implicit-capture",
-        text.replace('"algebra.add"(%arg4, %arg5)', '"algebra.add"(%arg1, %arg5)'),
+        text.replace('"table.field_add"(%arg4, %arg5)', '"table.field_add"(%arg1, %arg5)'),
         "region isolation",
     ),
 ]:
@@ -89,15 +89,15 @@ for captures, returned, index in [
 ]:
     with case(f"captures {captures}, returning operand {returned}"):
         params = ", ".join(f"%c{i}: {FIELD_IR}" for i in range(len(captures)))
-        types = ", ".join(["!pir.flow"] + [FIELD_IR] * len(captures))
+        types = ", ".join(["!table.flow"] + [FIELD_IR] * len(captures))
         mapping = f'''
-  "pir.program"() <{{context = "{ctx}", resultType = {FIELD_IR}, sourceFormat = "region-source-1"}}> ({{
-  ^bb0(%flow: !pir.flow, %x: {FIELD_IR}, %y: {FIELD_IR}):
-    %after, %value = "pir.bind"(%flow, {", ".join(captures)}) ({{
-    ^bb0(%f: !pir.flow, {params}):
-      "pir.return"(%f, %c{returned}) : (!pir.flow, {FIELD_IR}) -> ()
-    }}) : ({types}) -> (!pir.flow, {FIELD_IR})
-    "pir.return"(%after, %value) : (!pir.flow, {FIELD_IR}) -> ()
+  "table.source.program"() <{{context = "{ctx}", resultType = {FIELD_IR}, sourceFormat = "region-source-1"}}> ({{
+  ^bb0(%flow: !table.flow, %x: {FIELD_IR}, %y: {FIELD_IR}):
+    %after, %value = "table.source.bind"(%flow, {", ".join(captures)}) ({{
+    ^bb0(%f: !table.flow, {params}):
+      "table.source.return"(%f, %c{returned}) : (!table.flow, {FIELD_IR}) -> ()
+    }}) : ({types}) -> (!table.flow, {FIELD_IR})
+    "table.source.return"(%after, %value) : (!table.flow, {FIELD_IR}) -> ()
   }}) : () -> ()
 '''
         assert planned(commands, mapping, directory)[9] == [

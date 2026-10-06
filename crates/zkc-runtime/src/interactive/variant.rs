@@ -193,6 +193,12 @@ impl VariantAlternative {
 pub struct VariantDescriptor {
     spelling: String,
     alternatives: Box<[VariantAlternative]>,
+    retained_bytes: usize,
+    duplicable: bool,
+    discardable: bool,
+    native_message_data: bool,
+    program_port: bool,
+    default_representation: Result<()>,
 }
 impl VariantDescriptor {
     pub fn spelling(&self) -> &str {
@@ -205,6 +211,24 @@ impl VariantDescriptor {
     /// This profile deliberately does not expose allocator capacities to the
     /// portable reference machine. Closed arrays use exact-length backing; each node reserves its metadata.
     pub fn retained_bytes(&self) -> usize {
+        self.retained_bytes
+    }
+    pub fn is_duplicable(&self) -> bool {
+        self.duplicable
+    }
+    pub fn is_discardable(&self) -> bool {
+        self.discardable
+    }
+    pub(super) fn is_native_message_data(&self) -> bool {
+        self.native_message_data
+    }
+    pub(super) fn is_program_port(&self) -> bool {
+        self.program_port
+    }
+    pub(super) fn default_representation(&self) -> Result<()> {
+        self.default_representation.clone()
+    }
+    fn compute_retained_bytes(&self) -> usize {
         const {
             assert!(std::mem::size_of::<LogicalType>() <= 256);
         }
@@ -227,18 +251,6 @@ impl VariantDescriptor {
         })();
         size.unwrap_or(usize::MAX)
     }
-    pub fn is_duplicable(&self) -> bool {
-        self.alternatives
-            .iter()
-            .flat_map(|a| &a.payload)
-            .all(LogicalType::is_duplicable)
-    }
-    pub fn is_discardable(&self) -> bool {
-        self.alternatives
-            .iter()
-            .flat_map(|a| &a.payload)
-            .all(LogicalType::is_discardable)
-    }
     pub(super) fn parse(
         spelling: &str,
         depth: usize,
@@ -247,6 +259,9 @@ impl VariantDescriptor {
         // Refuse a ninth constructor before expanding its descriptor graph.
         if depth >= super::TYPE_DEPTH_LIMIT {
             return Err(invalid("limit"));
+        }
+        if let Some(ty) = budget.cached(spelling, depth, true)? {
+            return Ok(ty.variant_descriptor().expect("cached variant").clone());
         }
         let json = unpack(spelling)?;
         Self::from_tree(&json, spelling, depth, budget)
@@ -257,6 +272,10 @@ impl VariantDescriptor {
         depth: usize,
         budget: &mut super::structural::ParseBudget,
     ) -> Result<Arc<Self>> {
+        if let Some(ty) = budget.cached(spelling, depth, false)? {
+            return Ok(ty.variant_descriptor().expect("cached variant").clone());
+        }
+        let before = budget.remaining();
         budget.node(depth)?;
         if depth >= super::TYPE_DEPTH_LIMIT {
             return Err(invalid("limit"));
@@ -272,6 +291,7 @@ impl VariantDescriptor {
             .as_array()
             .filter(|a| !a.is_empty() && a.len() <= 32)
             .ok_or_else(|| invalid("alternatives"))?;
+        budget.allocate(512 + 4 * spelling.len() + 256 * arms.len())?;
         let mut labels = BTreeSet::new();
         let mut alternatives = Vec::new();
         for arm in arms {
@@ -290,6 +310,7 @@ impl VariantDescriptor {
                 .as_array()
                 .filter(|a| a.len() <= 128)
                 .ok_or_else(|| invalid("payload-limit"))?;
+            budget.allocate(256 * payload_json.len())?;
             let mut payload = Vec::new();
             for ty in payload_json {
                 let ty = if let Some(leaf) = ty.as_str() {
@@ -308,10 +329,41 @@ impl VariantDescriptor {
                 payload: payload.into_boxed_slice(),
             });
         }
-        Ok(Arc::new(Self {
+        let mut descriptor = Self {
             spelling: spelling.into(),
+            duplicable: alternatives
+                .iter()
+                .flat_map(|a| &a.payload)
+                .all(LogicalType::is_duplicable),
+            discardable: alternatives
+                .iter()
+                .flat_map(|a| &a.payload)
+                .all(LogicalType::is_discardable),
+            native_message_data: alternatives
+                .iter()
+                .flat_map(|a| &a.payload)
+                .all(|t| t.is_duplicable() && t.is_native_message_data()),
+            program_port: alternatives
+                .iter()
+                .flat_map(|a| &a.payload)
+                .all(|t| t.is_duplicable() && t.is_program_port()),
+            default_representation: alternatives
+                .iter()
+                .flat_map(|a| &a.payload)
+                .try_for_each(|t| super::PhysicalType::default_for(t.clone()).map(|_| ())),
             alternatives: alternatives.into_boxed_slice(),
-        }))
+            retained_bytes: 0,
+        };
+        descriptor.retained_bytes = descriptor.compute_retained_bytes();
+        let descriptor = Arc::new(descriptor);
+        budget.remember(
+            spelling,
+            depth,
+            LogicalType::variant(descriptor.clone()),
+            before - budget.remaining(),
+            false,
+        );
+        Ok(descriptor)
     }
 }
 

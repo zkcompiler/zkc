@@ -13,37 +13,48 @@ using namespace llvm;
 namespace zkc {
 namespace {
 LogicalResult verifyKernel(Operation *op, bool physical) {
-  auto module = op->getParentOfType<ProtocolModuleOp>();
+  auto module = op->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
   auto *owner = op->getParentOp();
-  while (owner && isa<LocalIfOp, LocalForOp, LocalMatchOp>(owner))
+  while (owner && isa<zkc::local::LocalIfOp, zkc::local::LocalForOp,
+                      zkc::local::LocalMatchOp>(owner))
     owner = owner->getParentOp();
-  if (!module || !isa_and_nonnull<func::FuncOp>(owner))
+  if (!module || !isa_and_nonnull<zkc::local::FuncOp>(owner))
     return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",
-                             "expected a local function in pir.module");
-  auto stage = module.getStageAttr();
-  if (!stage)
+                             "expected a local function in protocol.module");
+  auto profile = module.getProfileAttr();
+  if (!profile)
     return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",
-                             "missing stage");
-  if (physical ? stage.getValue() != "physical"
-               : stage.getValue() != "common" && stage.getValue() != "logical")
+                             "missing profile");
+  if (physical ? profile.getValue() != protocol_ir::Profile::Physical
+               : profile.getValue() == protocol_ir::Profile::Physical)
     return diagnostics::emit(op->emitOpError(), "interactive-kernel-stage");
 
   return protocol::verifyBoundOperation(op, physical);
 }
 } // namespace
 
+bool detail::isLogicalKernelData(Type type) {
+  return isa<algebra::FieldType, poly::MultilinearType, poly::QuadraticType,
+             poly::PointType, algebra::GroupType, poly::UnivariateType,
+             algebra::FixedVectorType, data::SequenceType, RankedTensorType,
+             pcs::ObjectType, oracle::OracleObjectType, local::CapabilityType,
+             local::VariantType>(type) ||
+         type.isSignlessInteger(1) || type.isUnsignedInteger(64);
+}
+
 LogicalResult detail::verifyLogicalKernel(Operation *op) {
   return verifyKernel(op, false);
 }
 
-LogicalResult ReleaseOp::verify() {
-  auto root = (*this)->getParentOfType<ProtocolModuleOp>();
+LogicalResult zkc::plan::ReleaseOp::verify() {
+  auto root = (*this)->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
   auto *owner = (*this)->getParentOp();
-  while (owner && isa<LocalIfOp, LocalForOp, LocalMatchOp>(owner))
+  while (owner && isa<zkc::local::LocalIfOp, zkc::local::LocalForOp,
+                      zkc::local::LocalMatchOp>(owner))
     owner = owner->getParentOp();
-  auto function = dyn_cast_or_null<func::FuncOp>(owner);
-  if (!root || root.getStage() != "physical" || !function ||
-      !llvm::hasSingleElement(function.getBody()))
+  auto function = dyn_cast_or_null<zkc::local::FuncOp>(owner);
+  if (!root || root.getProfile() != zkc::protocol_ir::Profile::Physical ||
+      !function || !llvm::hasSingleElement(function.getBody()))
     return diagnostics::emit(emitOpError(), "interactive-release-context");
   if (getValues().empty())
     return diagnostics::emit(emitOpError(), "interactive-release-empty");
@@ -69,5 +80,7 @@ LogicalResult ReleaseOp::verify() {
   }
   return success();
 }
-LogicalResult ExecuteKernelOp::verify() { return verifyKernel(*this, true); }
+LogicalResult zkc::plan::ExecuteKernelOp::verify() {
+  return verifyKernel(*this, true);
+}
 } // namespace zkc

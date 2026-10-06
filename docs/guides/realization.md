@@ -52,7 +52,7 @@ and [assurance policy](../assurance.md#6-implementation-correspondence-policy)
 distinguish differential evidence, explicit trust and optional implementation
 proofs.
 
-## 4. Runtime and OIR
+## 4. Runtime plans and resources
 
 [REAL-08–11](../spec/realization/representations.md#capacity-and-progress) define the
 resource, completion, embedded-exit and custody boundaries. A native plan can
@@ -66,7 +66,7 @@ to resume an outer PIR stop. Host interruptions likewise differ from modeled
 complete results. A private continuation ledger has no implicit crash persistence,
 distributed consistency or hostile-owner authentication.
 
-## 5. First correspondence and regression set
+## 5. Correspondence evidence and regression controls
 
 [REAL-12](../spec/conventions.md#conformance-claims) owns the evidence
 boundary. The maintained native plan and interactive routes have bounded differential

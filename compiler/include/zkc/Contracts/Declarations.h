@@ -91,7 +91,8 @@ enum class ParameterValidator {
   MatrixVector,
   GatherIndices,
   ScatterIndices,
-  TranscriptOrigin
+  TranscriptOrigin,
+  NativeOrigin
 };
 struct ParameterContract {
   ParameterValidator validator;

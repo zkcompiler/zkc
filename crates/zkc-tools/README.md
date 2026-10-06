@@ -39,9 +39,22 @@ The [interactive example](../../examples/protocols/README.md#compile-and-run-an-
 owns the complete command sequence. Successful execution alone does not certify
 protocol acceptance: inspect the returned outcomes and declared acceptance result.
 
+## Native proof execution
+
+`zkc produce-native-proof DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF` and
+`zkc validate-native-proof DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF` independently
+execute roles in a native deployment. Obtain the expected exact-file digest
+from trusted compilation or deployment configuration. Each invocation creates
+fresh transcript/service state, checks public bindings and retires resources.
+Setup-bearing deployments require application-supplied `--key-id=EXPECTED_KEY_ID`
+for one setup or `--setups=AUTHORITY` for several under policy `/4`.
+`--attempts=POLICY` selects bounded retries; `--capacity=LIMITS` sets host capacity.
+The [native proof guide](../../docs/compiler/native-proofs.md#command-line-use)
+describes compilation, authority, formats and supported scope.
+
 ## Finite table execution
 
-The commands below describe the earlier finite table client; their input and
+The commands below describe the finite table client; their input and
 checker profiles are distinct from the protocol artifact path.
 
 `zkc run SOURCE PLAN INPUTS CHECKER` owns the external checking boundary and
@@ -51,9 +64,9 @@ copies retained bytes into a private directory, invokes the installed tool and
 accepts only its canonical complete response for the consumer-selected realization.
 
 `zkc run-physical SOURCE PLAN INPUTS CHECKER [--storage packed|segmented]`
-executes a checked native physical table plan. Install the updated Lean
+executes a checked native physical table plan. Use the Lean
 `table-physical-reference` executable as `CHECKER`; its native candidate response
-must name `table-physical-plan`. The old `zkc-table-physical-reference` candidate
+must name `table-physical-plan`. The Lean-only `zkc-table-physical-reference` candidate
 profile is rejected. Physical runs accept the same `--phase PROFILE CERTIFICATE`
 and `--endpoint PROFILE CERTIFICATE` options as `run`, before trailing `--storage`.
 The checker must acknowledge the original `complete-logical-execution` claim,
@@ -83,7 +96,7 @@ arguments. Both layouts use the same source checker, dispatcher and kernels;
 this is backend installation, not compiler selection of a physical plan.
 
 `--phase PROFILE CERTIFICATE` additionally requests the installed phase check.
-The first profile is `table-round/1`: role `trace`, balanced send/draw ordering
+The installed profile is `table-round/1`: role `trace`, balanced send/draw ordering
 from `ready` back to `ready`. The checker must return both preservation and the
 exact selected profile; a preservation-only response cannot satisfy that request.
 The runtime retains the profile and certificate bytes with the admitted program.
@@ -138,3 +151,36 @@ guard; discarded attempts preserve real RNG/work consumption. This is fault
 oracle evidence, not a discovered Keccak preimage or a complete BP+ protocol.
 `tests/grinding.rs` separates clone-search work from one compiled live witness
 check, including rejected and zero-difficulty checks.
+
+## Joint execution
+
+`protocol::run::Bundle::admit` checks `zkc.run/1` bundles containing
+`zkc.program/1`, using Runtime's own action layout. Flat bodies, compact iteration,
+and structured or variable-size messages share the same format, bounded codecs
+and schedule checks. Superseded native bundle and program tags are refused.
+`protocol::run::run` takes
+exact named `RoleInput`s, a host session ID, `RunLimits` and optional `Hooks`. It
+returns outcomes, all role outputs, reached cuts, pending bytes, observations
+and backend custody after explicit cleanup. Select verifier acceptance by an
+explicit role and result index; `Completed` may contain false results.
+
+The `native_joint` example consumes freshly generated bundles from
+`compiler/test/native_joint.py`. The cross test in
+`tests/protocol/test_native_mathematical.py` compiles and executes them together.
+The [joint execution contract](../../docs/spec/profiles/compiler/run.md)
+defines the synchronous handoff, read-only observer obligations and supplied
+admission boundary.
+
+
+## Mathematical bundles
+
+`zkc run-bundle BUNDLE EXPECTED_SHA256 INPUTS` runs an authenticated mathematical
+bundle through the general joint driver. Its positional data/service inputs,
+setup authority, capacity and failure reports are documented in the
+[bundle walkthrough](../../docs/runtime/bundles.md) and
+[bundle contract](../../docs/spec/profiles/compiler/run.md#installed-host-and-authority).
+The library exports `RunHost`, single-use `PreparedRun` and `HostReport` under
+`protocol::run`. Custom joint-driver callers pass `RunLimits` and receive effective
+limits in `Report`. Retained source-driver callers pass `DriverLimits` to `drive`
+or `drive_with_decoder`; `Schedule::new_with_work_limit` selects source traversal
+capacity. These schedules and byte counters retain distinct contracts.

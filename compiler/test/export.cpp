@@ -53,7 +53,8 @@ int main() {
     OwningOpRef<ModuleOp> copy(cast<ModuleOp>((*projected)->clone()));
     Operation *target = nullptr;
     copy->walk([&](Operation *op) {
-      if (send ? isa<zkc::EmitOp>(op) : isa<zkc::AwaitOp>(op))
+      if (send ? isa<zkc::protocol_ir::EmitOp>(op)
+               : isa<zkc::protocol_ir::AwaitOp>(op))
         target = op;
     });
     if (!target)

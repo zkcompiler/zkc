@@ -42,11 +42,24 @@ The following links identify the definitions and selected scope of each profile.
 | Source | [Located calls and shared control](source/located-execution.md) | Role-local execution/admission, complete stop origins, peer-state frames and actual guard/count agreement |
 | Source | [Resolved common protocols](source/common-protocols.md) | Role-owned ports, shared protocol bodies, selected bindings, independent reception and fixed public loops with complete stopping |
 | Compiler | [Direct plans](compiler/direct-plan.md) | Evaluator, exact direct checking, version-1 grammar and separate phase sidecar |
+| Compiler | [Executable programs](compiler/program.md) | Physical programs, local Boolean literals, structured control and messages, supplied execution and consumer refusals |
+| Compiler | [Joint execution bundles](compiler/run.md) | Supplied schedules, source-order host dispatch, typed wire failure, bounded handoff and explicit cleanup |
+| Compiler | [Native reusable service references](compiler/native-services.md) | Owner-local service ports, explicit query cuts, registry leases and atomic state transitions |
+| Compiler | [Native proof execution](compiler/native-proofs.md) | Independent role deployment, authorized public context, selected challenge construction, explicit transcript state and complete proof consumption |
+| Compiler | [Public-coin views](compiler/public-coin.md) | Actual verifier dependencies, fixed inputs and ordered challenge prefixes on unsimplified native source |
+| Compiler | [Closed mathematical protocols](compiler/mathematical-protocols.md) | Total SSA mathematics, role families, open receives, owner-local guards and retained statement interfaces |
+| Compiler | [Structured mathematics](compiler/structured-mathematics.md) | Formal polynomial SSA, static arrays, degree/axis bounds and checked terminals |
+| Compiler | [Structured iteration](compiler/structured-iteration.md) | Compact counted regions, role availability, affine carries and coordinated scheduling |
+| Compiler | [Polynomial recipes](compiler/polynomial-recipes.md) | Closed polynomial expressions, stable degree bounds and dynamic-arity realization |
+| Compiler | [Protocol composition](compiler/protocol-composition.md) | Static applications, role substitution, bounded expansion and residual-to-terminal bindings |
+| Compiler | [Structured proof messages](compiler/structured-proof-messages.md) | Complete typed frames, installed domains and authorized setups under proof policy `/4` |
+| Compiler | [Nested data](compiler/nested-data.md) | Immutable sequences, ragged matrix frames, recursive permissions and cumulative bounds |
 | Compiler | [Scheduled participant lowering](compiler/scheduled-participants.md) | Role-local operands, distinct send/receive instructions, shared calls/loops and complete source-to-target execution equality |
 | Compiler | [Finite phase certificates](compiler/finite-phases.md) | All-reply summaries, finite covers, structural checking and realized admission |
 | Compiler | [Factor preparation](compiler/factor-preparation.md) | Live facts, guarded typed rule, frames, allocation and immutable preparation |
-| Compiler | [Local algorithms](compiler/local-algorithms.md) | Shared acyclic local calls, bound entailment, expansion and complete stopping |
-| Compiler | [Local control](compiler/local-control.md) | Typed local conditionals and bounded loops, resources and failure behavior |
+| Compiler | [Local algorithms](compiler/local-algorithms.md) | Shared acyclic local calls, bound entailment, expansion and complete stopping; not equivalence to a separately charged call stack |
+| Compiler | [Conditional entry completion](compiler/entry-completion.md) | Owner-local return, affine continuation, nested cleanup, retained prefixes and bounded local termination |
+| Compiler | [Local control](compiler/local-control.md) | Typed local conditionals and bounded loops, resources and failure behavior; no dynamic protocol choice or unbounded loops |
 | Compiler | [Local variants](compiler/local-variants.md) | Nominal variant construction, exhaustive matching and payload/resource bounds |
 | Realization | [Instruction-list execution](realization/instruction-machine.md) | Embedded exits, list execution and justified resumption |
 | Realization | [Scalar bytes](realization/scalar-bytes.md) | Selected width/modulus, prefix decoding and actual failed receive effects |
@@ -153,7 +166,7 @@ The [protocol guide](../../guides/protocols.md)
 locates Sigma, Merkle, cubic opening reduction and full FRI, KZG and ZKBoo
 applications at their actual scopes. A local cache theorem, an opening-reduction
 lemma or finite native controls do not supply a missing whole-protocol join.
-Bounded-machine research likewise does not enlarge the
+A bounded-machine encoding likewise does not enlarge the
 [selected execution envelope](../conventions.md#execution-envelope).
 
 ## Evidence and interpretation scope
@@ -166,12 +179,3 @@ additional interleaving needs an interface and law that exposes that behavior.
 *Note (informative).* The [domain correspondence](../correspondence/domains.md),
 [assurance map](../../assurance.md) and [status](../../status.md) identify proof
 dependencies and achieved support for these definitions.
-
-The native [canonical local algorithm profile](compiler/local-algorithms.md)
-selects a bounded acyclic stored-body subset, an MLIR expansion boundary, and
-explicit accounting and occurrence transport. It does not assert equivalence to
-a separately charged runtime call stack.
-
-The [structured local-control profile](compiler/local-control.md) defines isolated
-branch/loop formation, finite runtime bounds, affine carries and charged regions.
-It does not extend protocol interaction with dynamic choice or unbounded loops.

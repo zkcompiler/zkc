@@ -1,17 +1,18 @@
-# Current interactive carrier
+# Source-route interactive carriers
 
-The executable interactive carrier is `zkc.protocol/1` followed by
+The frontend/common-source route uses `zkc.protocol/1` followed by
 `zkc.participants/1`. It carries nominal logical types, declared operation
 bindings, implementation selection and logical function origins. C++, Rust and
 Lean admit this carrier independently. This is an implementation decision under
 the existing selected model, not a new refinement or cryptographic theorem.
-The finite source/table carrier and its independent checks retain their scope.
+The mathematical MLIR route uses the separate [program format](../spec/profiles/compiler/program.md),
+`zkc.program/1`. The finite source/table carrier and its independent checks retain
+their scope.
 
 ## Authoring and admission
 
 Authored files contain declarations directly, with explicit domain choices and
-imports from the installed source modules. Historical BLS profile headings and their
-implicit type/domain defaults are removed. The [source reference](../language/reference.md)
+imports from the installed source modules. The [source reference](../language/reference.md)
 owns import-based authoring; the common carrier continues to contain exact
 logical types and operation bindings, without source import declarations.
 
@@ -22,8 +23,7 @@ admission does not establish transcript-construction provenance. The
 [group exchange](../../examples/protocols/group-exchange.pir) uses explicit G1
 domains and retains nonce consumption.
 
-The current carrier provides no compatibility guarantee for earlier profile-based
-transcripts, artifact digests or proofs. Current artifact results, inputs,
+Artifact results, inputs,
 configuration, primitive requests and observations each use their documented
 form; a shared version suffix does not imply compatibility across carriers.
 
@@ -34,7 +34,9 @@ Imported operation aliases retain the same installed logical call identity.
 
 The carrier's second field lists explicit bindings. A profile string in that
 position is malformed (`interactive-shape`). The current readers admit only
-this shape, and the MLIR module has no profile attribute.
+this JSON shape. Imported MLIR has a checked IR profile and, for participant
+modules, a separate execution-contract selector. Neither selects implicit
+JSON domain bindings.
 
 ## Evidence and reference material
 
@@ -45,9 +47,8 @@ nominal implementation in this carrier.
 
 Tests preserve malformed admission, distinct stopped outcomes, completed resource
 transitions, unaffected resources, session/origin separation, wrong setup
-selection and fixed-budget boundaries. The real curve tests replace scalar-group
-simulation for executable exchange evidence; mock arithmetic remains labeled as
-mock arithmetic. The independent Lean reference is not generated from Rust or
+selection and fixed-budget boundaries. Real curve tests supply executable
+exchange evidence; mock arithmetic is labeled as mock arithmetic. The independent Lean reference is not generated from Rust or
 C++ contract tables.
 
 ## Integration boundary

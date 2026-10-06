@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/ResourceUnit.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
@@ -40,7 +41,7 @@ bool staticIdentityMatches(StringRef sort, StringRef identity) {
       consumeError(parsed.takeError());
       return false;
     }
-    return true;
+    return parsed->spelling() == identity;
   }
   if (sort == "Nat") {
     uint64_t value;
@@ -89,7 +90,7 @@ Error checkImplementation(StringRef contract, StringRef implementation) {
     return implementation == ("logical/" + contract).str()
                ? Error::success()
                : error("binding-implementation");
-  if (none_of(boundOperationContracts(),
+  if (none_of(executableOperationContracts(),
               [&](const auto &op) { return op.name == contract; }))
     return error("binding-contract");
   return installedImplementations().find(contract, implementation)
@@ -168,6 +169,8 @@ resolveStaticArguments(const generic::Scope &scope,
       auto type = parseBoundType(identity, false);
       if (!type)
         return type.takeError();
+      if (type->spelling() != identity)
+        return error("binding-static-identity");
     } else if (scope.sorts[i] == "Nat") {
       StringRef value = identity;
       uint64_t n;
@@ -247,7 +250,7 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
     return BoundOperation{{*from}, {*to}};
   }
   const generic::Signature *signature = nullptr;
-  for (const auto &op : boundOperationContracts())
+  for (const auto &op : executableOperationContracts())
     if (op.name == binding.contract)
       signature = &op.signature;
   if (!signature)
@@ -275,7 +278,12 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
         return error("binding-static-scope");
       args.push_back((*identities)[argument]);
     }
-    auto application = applyBoundType(t.constructor, args);
+    if (t.term && (!t.constructor.empty() || !t.arguments.empty() ||
+                   *t.term >= identities->size() ||
+                   signature->scope.sorts[*t.term] != "Type"))
+      return error("binding-type-term");
+    auto application = t.term ? parseBoundType((*identities)[*t.term], false)
+                              : applyBoundType(t.constructor, args);
     if (!application)
       return application.takeError();
     BoundType logical = std::move(*application);
@@ -294,6 +302,18 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
     if (!selected)
       return selected.takeError();
     result.outputs.push_back(std::move(*selected));
+  }
+  if (const auto *facets = operationContracts(binding.contract);
+      facets && facets->observation) {
+    auto payload = facets->observation->payloadInput;
+    if (signature->inputs[payload].term) {
+      if (!nativeMessageData(result.inputs[payload]))
+        return error("native-proof-wire-type");
+      // Payload codec domains are independent of the transcript challenge
+      // field.
+      if (implementation && !implementation->representations.empty())
+        return error("binding-implementation");
+    }
   }
   if (implementation)
     if (auto e = applyImplementationRepresentations(*implementation, result))

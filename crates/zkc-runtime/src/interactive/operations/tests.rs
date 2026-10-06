@@ -193,21 +193,25 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
     use std::collections::BTreeSet;
     let expected = "
         field.from_index field.sub field.neg field.inverse field.constant field.add field.mul field.equal
-        vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
+        vector.equal vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
         vector.prefix_sum vector.inverse vector.fill vector.geometric vector.constant vector.scatter_sum
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
         vector.kronecker vector.scale vector.sum vector.dot vector.split vector.at vector.length_check
         vector.gather vector.matvec vector.from_point vector.to_point vector.from_table vector.to_table
-        matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check
+        matrix.mul_vector matrix.transpose_mul_vector matrix.bilinear matrix.identity_check matrix.shape_check matrix.dimension
         poly.coefficient_count poly.coset_evaluate poly.coset_interpolate poly.domain_point poly.domain_root
         poly.domain_points poly.even_odd_fold poly.divide_opening poly.opening_quotient poly.equality_weights
         poly.from_coefficients poly.coefficients poly.degree_check poly.univariate_evaluate poly.univariate_boundary
-        poly.product_sum poly.product_round poly.boundary poly.round_evaluate poly.fold poly.evaluate
+        poly.table_arity poly.product_sum poly.product_round poly.boundary poly.round_evaluate poly.fold poly.evaluate
         poly.empty_point poly.append_point
         curve.neg curve.nonidentity curve.msm curve.scale_each curve.vector_add curve.concat curve.vector_scale
         curve.split curve.generator curve.add curve.scale curve.equal curve.empty curve.append curve.at
         curve.get curve.length curve.commit curve.response
         pcs.commit pcs.open pcs.check pcs.equal
+        transcript.native.indexed.observe.commitment transcript.native.indexed.observe.proof
+        transcript.native.indexed.observe.bool transcript.native.indexed.observe.field
+        transcript.native.indexed.observe.group transcript.native.indexed.observe.index transcript.native.indexed.observe.data transcript.native.indexed.observe.field_array
+        transcript.native.observe.bool transcript.native.observe.field transcript.native.observe.group
         transcript.observe.bool transcript.observe.index transcript.observe.indices transcript.observe.field
         transcript.observe.matrix transcript.observe.vector transcript.observe.polynomial transcript.observe.round
         transcript.observe.table transcript.observe.point transcript.observe.group transcript.observe.groups
@@ -353,4 +357,50 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
         Contract::custom("custom").shape().unwrap_err().detail,
         "contract-shape-missing"
     );
+}
+
+#[test]
+fn independent_history_classification_matches_installed_inventory() {
+    let fixture = include_str!("../../../../../tests/fixtures/variants/history-contracts.txt");
+    let mut seen = std::collections::BTreeSet::new();
+    // Native-only contracts have no portable Lean source interpretation. Keep
+    // the shared portable inventory unchanged and enumerate this extension.
+    let native = "transcript.native.indexed.observe.commitment 1\ntranscript.native.indexed.observe.proof 1\ntranscript.native.indexed.challenge 1\ntranscript.native.indexed.observe.bool 1\ntranscript.native.indexed.observe.field 1\ntranscript.native.indexed.observe.group 1\ntranscript.native.indexed.observe.index 1\ntranscript.native.indexed.observe.field_array 1\ntranscript.native.indexed.observe.data 1\ntranscript.native.challenge 1\ntranscript.native.observe.bool 1\ntranscript.native.observe.field 1\ntranscript.native.observe.group 1";
+    let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
+    for line in fixture
+        .lines()
+        .chain(native.lines())
+        .chain(sequences.lines())
+    {
+        let (contract, expected) = line.split_once(' ').expect("inventory row");
+        assert!(seen.insert(contract), "duplicate inventory contract");
+        assert!(matches!(expected, "0" | "1"));
+        assert_eq!(
+            observes_history(contract).unwrap(),
+            expected == "1",
+            "{contract}"
+        );
+    }
+    for contract in installed().unwrap().logical.keys() {
+        assert!(
+            seen.contains(contract),
+            "missing history contract: {contract}"
+        );
+    }
+}
+
+#[test]
+fn history_follows_the_installed_owner_not_the_contract_spelling() {
+    static OWNER: Contribution = Contribution {
+        contracts: &[
+            Contract::new("independent.absorb", (&[], &[], AttributeRule::None)).history(),
+            Contract::new("transcript.stateless", (&[], &[], AttributeRule::None)),
+        ],
+        ..control::CONTRIBUTION
+    };
+    let registry = Registry::assemble(&[&OWNER]).unwrap();
+    assert!(registry.observes_history("independent.absorb").unwrap());
+    assert!(!registry.observes_history("transcript.stateless").unwrap());
+    assert!(registry.observes_history("transcript.unknown").is_err());
+    assert!(observes_history("transcript.unknown").is_err());
 }

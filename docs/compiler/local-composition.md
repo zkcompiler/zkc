@@ -73,7 +73,7 @@ functions with original definition/static-binding origins, and retains typed
 `AlgorithmCall`s. Both the native compiler and independent Lean preparation bound
 demand visits and newly emitted instructions at 32768, in addition to existing
 4096-definition/binding and module byte limits. The native path imports these
-calls as actual `func.call`s; the existing SSA expansion pass then applies.
+calls as actual `local.apply`s; the existing SSA expansion pass then applies.
 
 The six-field `apply` record is the admitted form for codecs, identity consumers
 and tests. Other arities fail closed. Static
@@ -85,7 +85,7 @@ or additional runtime interpreter.
 Early frontend macro expansion would reuse today's flat executable bodies, but
 would erase callable boundaries before native analysis and transformation.
 Retaining calls all the way into the runtime would preserve a distinct frame
-model, requiring new runner, resource and accounting semantics. This slice
+model, requiring new runner, resource and accounting semantics. zkc
 retains callable structure in common MLIR and makes its expansion an explicit
 native transformation. It neither adds a universal IR nor changes protocol calls
 into ordinary function calls.
@@ -100,20 +100,20 @@ projection. Generic inlining, CSE or DCE does not receive a new preservation
 license; [MLIR inliner interfaces](https://mlir.llvm.org/docs/Interfaces/#dialectinlinerinterface)
 are mechanisms, not a proof of this profile's origin/accounting obligations.
 
-The starting formal model is
+The formal model is
 [`Definitions`](../../formal/Zkc/Source/Definitions.lean).
-[`DefinitionInlining`](../../formal/Zkc/Compiler/DefinitionInlining.lean) already
+[`DefinitionInlining`](../../formal/Zkc/Compiler/DefinitionInlining.lean)
 proves complete execution equality for capture/reference renaming and a single
 retained continuation. It preserves arbitrary primitive handlers, including
 stopped outcomes, state and events. It explicitly excludes independently added
-call-boundary observations. The new bounded raw adapter in
+call-boundary observations. The bounded raw adapter in
 [`Algorithms.lean`](../../formal/Tools/Interactive/Algorithms.lean) independently
 expands admitted source for source-relative checking and reference execution.
 It is not a proof that the C++ pass implements that theorem.
 
 ## Implemented route
 
-`protocol-source` retains applications. `protocol-import` emits `func.call` in
+`protocol-source` retains applications. `protocol-import` emits `local.apply` in
 common algorithm bodies. `protocol-export` round-trips that intermediate form
 with full admission. `protocol-expand` emits expanded common source and
 `protocol-algorithm-map` reports its primitive occurrences. `protocol-prepare`
@@ -190,7 +190,7 @@ compact DAG. There is no expansion cost improvement claim.
 
 Callable effect summaries are conservative: every primitive is retained.
 Connecting the main compiler's shared contract facets to algorithm summaries is
-future work; this change does not define a second contract catalog. Native
+future work. zkc defines no second contract catalog. Native
 elaboration/expansion adequacy, general frame-preserving calls, cross-call
 lifetime optimization and whole-protocol security remain unproved or
 unimplemented. Existing operation and backend limits remain in force.

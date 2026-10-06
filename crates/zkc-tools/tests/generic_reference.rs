@@ -157,7 +157,7 @@ fn mixed_instances_use_independent_math_and_explicit_group_contracts() {
         );
     }
     let mut schedule = Schedule::new(&admitted, "main", "test").unwrap();
-    let report = drive(&mut schedule, &mut runners, &mut trace);
+    let report = drive(&mut schedule, &mut runners, &mut trace, Default::default());
     let JointOutcome::Returned(values) = report.outcome else {
         panic!("native failed")
     };
@@ -290,7 +290,7 @@ fn generic_open_role_reads_only_its_ports_and_exact_peer_replies() {
         );
     }
     let mut schedule = Schedule::new(&admitted, "main", "test").unwrap();
-    let report = drive(&mut schedule, &mut runners, &mut trace);
+    let report = drive(&mut schedule, &mut runners, &mut trace, Default::default());
     let JointOutcome::Returned(values) = report.outcome else {
         panic!("native terminal")
     };

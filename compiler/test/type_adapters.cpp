@@ -86,16 +86,19 @@ int main() {
         auto logical =
             take(parseBoundType("fixed_vector<field:koala-bear,4>", false));
         require(decodeBoundType(&context, logical) ==
-                    zkc::FixedVectorType::get(
-                        &context, FieldType::get(&context, "koala-bear"), 4),
+                    zkc::algebra::FixedVectorType::get(
+                        &context,
+                        zkc::algebra::FieldType::get(&context, "koala-bear"),
+                        4),
                 "structural native type lost its element or length");
         roundTrip(context, take(defaultRepresentation(logical)), true);
-        refuses(
-            encodeBoundType(
-                zkc::FixedVectorType::get(
-                    &context, FieldType::get(&context, "koala-bear"), 1048577),
-                false),
-            "binding-type-limit");
+        refuses(encodeBoundType(
+                    zkc::algebra::FixedVectorType::get(
+                        &context,
+                        zkc::algebra::FieldType::get(&context, "koala-bear"),
+                        1048577),
+                    false),
+                "binding-type-limit");
         logical.arguments[1] = TypeArgument::naturalArgument(1048577);
         require(!decodeBoundType(&context, logical),
                 "malformed aggregate bypassed admission");
@@ -116,42 +119,49 @@ int main() {
       {"index", IntegerType::get(&context, 64, IntegerType::Unsigned)},
       {"indices",
        dynamicVector(IntegerType::get(&context, 64, IntegerType::Unsigned))},
-      {"field:" + field, FieldType::get(&context, field)},
-      {"matrix:" + field, MatrixType::get(&context, field)},
-      {"vector:" + field, dynamicVector(FieldType::get(&context, field))},
-      {"group:" + group, GroupType::get(&context, group)},
-      {"groups:" + group, dynamicVector(GroupType::get(&context, group))},
-      {"polynomial:" + field, UnivariateType::get(&context, field)},
-      {"table:" + field, MultilinearType::get(&context, field)},
-      {"point:" + field, PointType::get(&context, field)},
-      {"round:" + field, QuadraticType::get(&context, field)},
-      {"rng:" + field, CapabilityType::get(&context, "rng:" + field)},
-      {"nonce:" + field, CapabilityType::get(&context, "nonce:" + field)},
+      {"field:" + field, zkc::algebra::FieldType::get(&context, field)},
+      {"matrix:" + field,
+       RankedTensorType::get({ShapedType::kDynamic, ShapedType::kDynamic},
+                             zkc::algebra::FieldType::get(&context, field))},
+      {"vector:" + field,
+       dynamicVector(zkc::algebra::FieldType::get(&context, field))},
+      {"group:" + group, zkc::algebra::GroupType::get(&context, group)},
+      {"groups:" + group,
+       dynamicVector(zkc::algebra::GroupType::get(&context, group))},
+      {"polynomial:" + field, zkc::poly::UnivariateType::get(&context, field)},
+      {"table:" + field, zkc::poly::MultilinearType::get(&context, field)},
+      {"point:" + field, zkc::poly::PointType::get(&context, field)},
+      {"round:" + field, zkc::poly::QuadraticType::get(&context, field)},
+      {"rng:" + field,
+       zkc::local::CapabilityType::get(&context, "rng:" + field)},
+      {"nonce:" + field,
+       zkc::local::CapabilityType::get(&context, "nonce:" + field)},
       {"transcript:" + transcript,
-       CapabilityType::get(&context, "transcript:" + transcript)},
+       zkc::local::CapabilityType::get(&context, "transcript:" + transcript)},
       {"resource_unit:Guard",
-       CapabilityType::get(&context, "resource_unit:Guard")},
+       zkc::local::CapabilityType::get(&context, "resource_unit:Guard")},
   };
   for (StringRef kind :
        {"commitment", "proof", "opening_state", "prover_key", "verifier_key"})
     nativeCases.emplace_back(kind.str() + ":" + pcs,
-                             ObjectType::get(&context, pcs, kind));
+                             zkc::pcs::ObjectType::get(&context, pcs, kind));
   for (StringRef kind : {"commitment", "proof", "opening_state", "commitments",
                          "opening_states"})
-    nativeCases.emplace_back(kind.str() + ":" + oracle,
-                             OracleObjectType::get(&context, oracle, kind));
+    nativeCases.emplace_back(
+        kind.str() + ":" + oracle,
+        zkc::oracle::OracleObjectType::get(&context, oracle, kind));
   cases.run("variant native carrier and physical wrapper", [&] {
     auto descriptor = encodeVariant(
         {"Result", {{"Value", {"bool"}}, {"Guard", {"resource_unit:Guard"}}}});
     require(bool(descriptor), "variant fixture refused");
     auto bound = take(parseBoundType(*descriptor, false));
     require(decodeBoundType(&context, bound) ==
-                VariantType::get(&context, *descriptor),
+                zkc::local::VariantType::get(&context, *descriptor),
             "variant native carrier changed");
     roundTrip(context, bound, false);
     roundTrip(context, take(defaultRepresentation(bound)), true);
-    nativeCases.emplace_back(*descriptor,
-                             VariantType::get(&context, *descriptor));
+    nativeCases.emplace_back(
+        *descriptor, zkc::local::VariantType::get(&context, *descriptor));
   });
   cases.run("resource unit physical wrapper", [&] {
     roundTrip(context,
@@ -200,20 +210,20 @@ int main() {
   });
   cases.run("unloaded physical wrapper", [&] {
     MLIRContext fresh;
-    fresh.loadDialect<AlgebraDialect>();
+    fresh.loadDialect<zkc::algebra::AlgebraDialect>();
     auto bound = take(defaultRepresentation({"field", field, {}}));
     require(!decodeBoundType(&fresh, bound), "unloaded plan dialect accepted");
     require(!fresh.getLoadedDialect("plan"), "plan dialect was initialized");
   });
   cases.run("loaded PCS cannot replace an unloaded oracle dialect", [&] {
     MLIRContext fresh;
-    fresh.loadDialect<PCSDialect>();
+    fresh.loadDialect<zkc::pcs::PCSDialect>();
     require(!decodeBoundType(&fresh, {"proof", oracle, {}}),
             "oracle scheme fell back to PCS");
   });
   cases.run("loaded oracle cannot replace an unloaded PCS dialect", [&] {
     MLIRContext fresh;
-    fresh.loadDialect<OracleDialect>();
+    fresh.loadDialect<zkc::oracle::OracleDialect>();
     require(!decodeBoundType(&fresh, {"proof", pcs, {}}),
             "PCS scheme fell back to oracle");
   });
@@ -223,12 +233,13 @@ int main() {
       require(!decodeBoundType(&context, {"uninstalled", identity, {}}),
               "unknown constructor became an object");
       refuses(encodeBoundType(
-                  ObjectType::get(&context, identity, "uninstalled"), false),
+                  zkc::pcs::ObjectType::get(&context, identity, "uninstalled"),
+                  false),
               "binding-type");
-      refuses(
-          encodeBoundType(
-              OracleObjectType::get(&context, identity, "uninstalled"), false),
-          "binding-type");
+      refuses(encodeBoundType(zkc::oracle::OracleObjectType::get(
+                                  &context, identity, "uninstalled"),
+                              false),
+              "binding-type");
     });
   for (const auto &identity : {field, std::string("uninstalled")})
     cases.run("unknown commitment carrier: " + identity, [&] {
@@ -238,14 +249,18 @@ int main() {
 
   std::vector<std::pair<std::string, Type>> invalidCarriers{
       {"PCS object with oracle scheme",
-       ObjectType::get(&context, oracle, "proof")},
+       zkc::pcs::ObjectType::get(&context, oracle, "proof")},
       {"oracle object with PCS scheme",
-       OracleObjectType::get(&context, pcs, "proof")},
-      {"PCS collection", ObjectType::get(&context, pcs, "commitments")},
-      {"oracle key", OracleObjectType::get(&context, oracle, "prover_key")},
-      {"field as PCS object", ObjectType::get(&context, field, "field")},
-      {"field as capability", CapabilityType::get(&context, "field:" + field)},
-      {"variant prefix", VariantType::get(&context, "invalid:")},
+       zkc::oracle::OracleObjectType::get(&context, pcs, "proof")},
+      {"PCS collection",
+       zkc::pcs::ObjectType::get(&context, pcs, "commitments")},
+      {"oracle key",
+       zkc::oracle::OracleObjectType::get(&context, oracle, "prover_key")},
+      {"field as PCS object",
+       zkc::pcs::ObjectType::get(&context, field, "field")},
+      {"field as capability",
+       zkc::local::CapabilityType::get(&context, "field:" + field)},
+      {"variant prefix", zkc::local::VariantType::get(&context, "invalid:")},
       {"signless index", IntegerType::get(&context, 64)},
       {"signed index", IntegerType::get(&context, 64, IntegerType::Signed)},
       {"unsigned boolean",
@@ -260,11 +275,28 @@ int main() {
 
   for (Type element :
        {Type(IntegerType::get(&context, 64, IntegerType::Unsigned)),
-        Type(FieldType::get(&context, field)),
-        Type(GroupType::get(&context, group))}) {
+        Type(zkc::algebra::FieldType::get(&context, field)),
+        Type(zkc::algebra::GroupType::get(&context, group))}) {
     for (const auto &shape : std::vector<SmallVector<int64_t>>{
              {}, {0}, {2}, {ShapedType::kDynamic, ShapedType::kDynamic}})
       cases.run("noncanonical tensor rank or dimension", [&] {
+        if ((shape == SmallVector<int64_t>{0} ||
+             shape == SmallVector<int64_t>{2}) &&
+            isa<zkc::algebra::FieldType>(element)) {
+          auto encoded =
+              encodeBoundType(RankedTensorType::get(shape, element), false);
+          require(bool(encoded) && encoded->kind == "field_array",
+                  "static field array");
+          return;
+        }
+        if (shape == SmallVector<int64_t>{ShapedType::kDynamic,
+                                          ShapedType::kDynamic} &&
+            isa<zkc::algebra::FieldType>(element)) {
+          auto encoded =
+              encodeBoundType(RankedTensorType::get(shape, element), false);
+          require(bool(encoded) && encoded->kind == "matrix", "dynamic matrix");
+          return;
+        }
         refuses(encodeBoundType(RankedTensorType::get(shape, element), false),
                 "binding-type");
       });
@@ -280,22 +312,23 @@ int main() {
               "binding-type");
     });
   }
-  auto logical = FieldType::get(&context, field);
-  auto physical = DataType::get(&context, logical, "arkworks.fr/1");
+  auto logical = zkc::algebra::FieldType::get(&context, field);
+  auto physical = zkc::plan::DataType::get(&context, logical, "arkworks.fr/1");
   cases.run("fixed-vector native type verifier", [&] {
     ScopedDiagnosticHandler diagnostics(&context,
                                         [](Diagnostic &) { return success(); });
     auto location = UnknownLoc::get(&context);
     auto emit = [&] { return emitError(location); };
-    require(succeeded(zkc::FixedVectorType::verify(emit, logical, 4)),
+    require(succeeded(zkc::algebra::FixedVectorType::verify(emit, logical, 4)),
             "valid logical fixed-vector native type rejected");
-    require(failed(zkc::FixedVectorType::verify(emit, physical, 4)),
+    require(failed(zkc::algebra::FixedVectorType::verify(emit, physical, 4)),
             "fixed-vector element acquired a physical representation");
-    require(failed(zkc::FixedVectorType::verify(emit,
-                                                Float32Type::get(&context), 4)),
+    require(failed(zkc::algebra::FixedVectorType::verify(
+                emit, Float32Type::get(&context), 4)),
             "unadmitted floating-point element accepted");
-    require(failed(zkc::FixedVectorType::verify(emit, logical, 1048577)),
-            "unbounded natural index accepted");
+    require(
+        failed(zkc::algebra::FixedVectorType::verify(emit, logical, 1048577)),
+        "unbounded natural index accepted");
   });
   cases.run("physical carrier at logical stage", [&] {
     refuses(encodeBoundType(physical, false),
@@ -306,54 +339,59 @@ int main() {
             "binding-logical-type-at-physical-stage");
   });
   cases.run("nested physical wrapper", [&] {
-    refuses(encodeBoundType(DataType::get(&context, physical, "arkworks.fr/1"),
-                            true),
+    refuses(encodeBoundType(
+                zkc::plan::DataType::get(&context, physical, "arkworks.fr/1"),
+                true),
             "binding-type");
   });
   cases.run("wrapped noncanonical tensor", [&] {
     auto tensor = RankedTensorType::get({2}, logical);
-    refuses(encodeBoundType(
-                DataType::get(&context, tensor, "arkworks.fr-vector/1"), true),
-            "binding-type");
+    refuses(encodeBoundType(zkc::plan::DataType::get(&context, tensor,
+                                                     "arkworks.fr-vector/1"),
+                            true),
+            "binding-representation");
   });
   for (StringRef representation : {"", "uninstalled", "arkworks.g1/1"})
     cases.run(Twine("wrong physical representation: ") + representation, [&] {
-      refuses(encodeBoundType(DataType::get(&context, logical, representation),
-                              true),
+      refuses(encodeBoundType(
+                  zkc::plan::DataType::get(&context, logical, representation),
+                  true),
               "binding-representation");
     });
   cases.run("wrapped wrong commitment carrier", [&] {
-    auto object = ObjectType::get(&context, oracle, "proof");
+    auto object = zkc::pcs::ObjectType::get(&context, oracle, "proof");
     auto representation = take(defaultRepresentation({"proof", oracle, {}}));
-    refuses(encodeBoundType(
-                DataType::get(&context, object, representation.representation),
-                true),
-            "binding-type");
+    refuses(
+        encodeBoundType(zkc::plan::DataType::get(&context, object,
+                                                 representation.representation),
+                        true),
+        "binding-type");
   });
   cases.run("checked native construction and assembly preserve formation", [&] {
     ScopedDiagnosticHandler diagnostics(&context,
                                         [](Diagnostic &) { return success(); });
     auto emit = [&] { return emitError(UnknownLoc::get(&context)); };
-    auto field = FieldType::getChecked(emit, &context, StringRef("f7"));
+    auto field =
+        zkc::algebra::FieldType::getChecked(emit, &context, StringRef("f7"));
     require(bool(field), "native field formation rejected f7");
     require(parseType("!algebra.field<\"f7\">", &context) == field,
             "native field parser changed f7 formation");
-    auto element = FieldType::get(&context, "koala-bear");
-    auto vector = zkc::FixedVectorType::getChecked(emit, &context,
-                                                   Type(element), uint64_t(4));
+    auto element = zkc::algebra::FieldType::get(&context, "koala-bear");
+    auto vector = zkc::algebra::FixedVectorType::getChecked(
+        emit, &context, Type(element), uint64_t(4));
     require(bool(vector), "checked fixed-vector construction failed");
     require(
         parseType("!algebra.fixed_vector<!algebra.field<\"koala-bear\">, 4>",
                   &context) == vector,
         "fixed-vector parser changed native identity");
-    require(!zkc::FixedVectorType::getChecked(emit, &context, Type(field),
-                                              uint64_t(4)),
+    require(!zkc::algebra::FixedVectorType::getChecked(
+                emit, &context, Type(field), uint64_t(4)),
             "fixed-vector admitted an unadmitted nested field");
     require(!parseType("!algebra.fixed_vector<!algebra.field<\"f7\">, 4>",
                        &context),
             "fixed-vector parser bypassed nested admission");
-    require(!zkc::FixedVectorType::getChecked(emit, &context, Type(element),
-                                              uint64_t(1048577)),
+    require(!zkc::algebra::FixedVectorType::getChecked(
+                emit, &context, Type(element), uint64_t(1048577)),
             "checked fixed-vector accepted an excessive natural");
   });
   cases.run("explicit unavailable native binding decisions", [&] {
@@ -367,8 +405,9 @@ int main() {
             "unavailable capability decoded");
   });
   cases.run("admission still rejects a core-only field", [&] {
-    refuses(encodeBoundType(FieldType::get(&context, "f7"), false),
-            "binding-type-identity");
+    refuses(
+        encodeBoundType(zkc::algebra::FieldType::get(&context, "f7"), false),
+        "binding-type-identity");
   });
   cases.run("null carrier and context", [&] {
     refuses(encodeBoundType({}, false), "binding-type");

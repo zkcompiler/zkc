@@ -17,6 +17,8 @@ serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "unbound
 num-bigint = "=0.4.8"
 num-traits = "=0.2.19"
 tempfile = "=3.27.0"
+# Already locked by the runtime dependencies; used for nonblocking regular-file ingress.
+libc = "=0.2.189"
 zkc-test-support = { path = "crates/zkc-test-support" }
 
 # Native integration versions are owned here; each crate selects its features.

@@ -58,7 +58,7 @@ for mode, simplify in [("", False), ("lazy", False), ("materialized", False),
         ] + ([f"lower-plan-to-physical{{mode={mode}}}"] if mode else [])
         assert pipeline == export(optimize(logical, ",".join(passes)))
         if simplify:
-            assert '"poly.linear"' not in pipeline_ir
+            assert '"table.poly_linear"' not in pipeline_ir
 
 protocol = corpus / "linear-contractions.pir"
 common = commands.run([compiler, "protocol-import", protocol])
@@ -84,7 +84,7 @@ for project_only, flags in [
         assert actual == expected
         passes = "zkc-project-participants"
         if not project_only:
-            passes += ",zkc-plan-participants" + (
+            passes += ",zkc-select-physical" + (
                 "{" + " ".join(options) + "}" if options else ""
             )
         assert actual == export(optimize(common, passes), protocol=True)

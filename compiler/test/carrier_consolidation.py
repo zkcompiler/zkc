@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""Installed source imports elaborate to exact common operation bindings."""
+"""Source imports elaborate to exact common operation bindings."""
 import copy
 import json
-from pathlib import Path
 from commands import Commands
 from tools import compiler, examples, records
 
-root = Path(__file__).resolve().parents[2]
-
-
-commands = Commands(records())
+directory = records()
+commands = Commands(directory)
 
 
 def run(command, path, refuses=None):
@@ -17,8 +14,6 @@ def run(command, path, refuses=None):
     return commands.run([compiler, command, path], refuses=refuses)
 
 
-directory = records()
-directory = Path(directory)
 text = directory / "source.pir"
 text.write_text('''
       use zkc::algebra;

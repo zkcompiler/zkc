@@ -138,7 +138,7 @@ for example in ("two-factor", "committed-two-factor", "dleq"):
     result = json.loads(run("protocol-construct", source, descriptor))
     plan = inspect(source, result)
     ir = run("protocol-construct-ir", source, descriptor)
-    for option in ("--zkc-project-participants", "--zkc-plan-participants"):
+    for option in ("--zkc-project-participants", "--zkc-select-physical"):
         ir = commands.run([optimizer, option, "-"], stdin=ir)
     assert json.loads(run("protocol-export", ir)) == plan
     if example != "dleq":

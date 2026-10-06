@@ -11,10 +11,10 @@ See the [build instructions](../../compiler/README.md) for running this path.
 
 | Carrier | Retained meaning |
 |---|---|
-| `pir.program`, `pir.choose`, `pir.repeat`, `pir.bind`, `pir.return`, `pir.stop` | Typed source, isolated regions, explicit captures, public natural iteration and stopped execution |
+| `table.source.program`, `table.source.choose`, `table.source.repeat`, `table.source.bind`, `table.source.return`, `table.source.stop` | Typed source, isolated regions, explicit captures, public natural iteration and stopped execution |
 | `algebra` | Field sorts and arithmetic/equality operations; F₂ and F₇ remain different domains |
 | `poly` | Immutable original tables, residual views, ordered restriction, points and evaluation |
-| `pir` interaction operations | Sending, drawing, writes and toy ordered-digest operations |
+| `table` interaction operations | Sending, drawing, writes and toy ordered-digest operations |
 | `plan` control | Direct executable control around the same logical domain operations |
 
 The current target is a direct logical plan interpreted by the Rust dispatcher,

@@ -131,6 +131,7 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
     // Public entry bytes use a host-selected port context too. Even a sole
     // registered setup does not implicitly become the input's expected setup.
     let port = zkc_runtime::interactive::EntryRole {
+        services: vec![],
         role: "P".into(),
         participant: "p".into(),
         instance: "root".into(),
@@ -222,4 +223,78 @@ fn both_table_layouts_use_the_same_logical_wire_codec() {
             .decode_typed_value(msb.physical_type(), &wire[..wire.len() - 1])
             .is_err()
     );
+}
+
+#[test]
+fn native_nested_messages_resolve_only_registered_setups() {
+    let policy = Policy::default();
+    let bounds = policy.ark_bounds();
+    let keys: Vec<_> = [1, 2, 1]
+        .into_iter()
+        .map(|n| Keys::setup_for_development(n, &bounds).unwrap())
+        .collect();
+    let host = NativeBackend::with_setups(
+        policy,
+        entry(None),
+        SetupRegistry::new(
+            keys[..2].iter().map(|k| k.verifier_key().clone()).collect(),
+            &policy,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let values: Vec<_> = keys
+        .iter()
+        .map(|k| {
+            let n = 1 << k.verifier_key().metadata().arity();
+            let state = k
+                .prover_key()
+                .commit(
+                    &zkc_arkworks::Table::from_logical_vec(vec![Scalar::from(7); n], &bounds)
+                        .unwrap(),
+                )
+                .unwrap();
+            Value::Commitment(Arc::new(state.commitment().clone()))
+        })
+        .collect();
+    let logical = values[0].physical_type().logical();
+    let value =
+        Value::Sequence(Sequence::new(logical.clone(), values[..2].to_vec(), &policy).unwrap());
+    let bytes = host.encode_native_value(&value).unwrap();
+    let decoded = host
+        .decode_native_value(&value.physical_type(), &bytes)
+        .unwrap();
+    assert_eq!(host.encode_native_value(&decoded).unwrap(), bytes);
+    let empty = NativeBackend::with_setups(
+        policy,
+        entry(None),
+        SetupRegistry::new(vec![], &policy).unwrap(),
+    )
+    .unwrap();
+    for error in [
+        empty.encode_native_value(&values[0]).unwrap_err(),
+        empty
+            .decode_native_value(
+                &values[0].physical_type(),
+                &host.encode_native_value(&values[0]).unwrap(),
+            )
+            .unwrap_err(),
+    ] {
+        assert_eq!(
+            error.to_string(),
+            "native-wire-backend:native-wire-setup-required"
+        );
+    }
+    assert!(host.encode_native_value(&values[2]).is_err());
+    let foreign =
+        NativeBackend::new(policy, entry(None), Some(keys[2].verifier_key().clone())).unwrap();
+    let bytes = foreign.encode_native_value(&values[2]).unwrap();
+    assert!(
+        host.decode_native_value(&values[2].physical_type(), &bytes)
+            .is_err()
+    );
+    let bad = Value::Sequence(
+        Sequence::new(logical, vec![values[0].clone(), values[2].clone()], &policy).unwrap(),
+    );
+    assert!(host.encode_native_value(&bad).is_err());
 }

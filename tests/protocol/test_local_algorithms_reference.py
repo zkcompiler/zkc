@@ -43,8 +43,9 @@ def main():
     # A body changed after the source was read produces a plan that no longer
     # answers to it, even though nothing in the source says so.
     identity_source = with_identity(source)
-    changed = native("protocol-import", identity_source).replace("call @Twice",
-                                                                 "call @Identity")
+    common = native("protocol-import", identity_source)
+    assert common.count("apply @Twice(") == 1
+    changed = common.replace("apply @Twice(", "apply @Identity(")
     changed_plan = json.loads(native("protocol-compile",
                                      native("protocol-export", changed)))
 
@@ -69,6 +70,7 @@ def main():
         journal.run([checker, "--check-generic", source_path, plan_path], refuses=error)
 
     check(source, plan)
+    check(identity_source, json.loads(native("protocol-compile", identity_source)))
     check(nested_source, nested_plan)
     check(cycle(source), plan, error="algorithm-call-cycle-or-symbol")
     check(affine, plan, error="interactive-resource-reuse")

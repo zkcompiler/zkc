@@ -5,6 +5,28 @@ sums of products of those extensions. Table order, factor multiplicity and
 coordinate order are operands of this meaning, independently of a storage plan
 or a proving protocol.
 
+## Formal polynomial SSA
+
+A formal polynomial over a declared field and ordered axes denotes an element
+of `F[X0,...,X(n-1)]`. Zero arity denotes a scalar. Shared operands retain factor
+multiplicity: using one SSA value twice multiplies it twice. Equality means
+coefficient equality, not equality only on a finite evaluation domain.
+
+An ordered length-`2^n` table defines its unique multilinear extension.
+The first coordinate is the high bit in lexicographic Boolean order.
+Fixing substitutes leading variables; Boolean suffix summation sums all
+assignments to trailing variables. Neither implicitly reorders axes.
+
+Ascending coefficients define a univariate polynomial, including trailing zeros.
+Interpolation at distinct points returns the unique polynomial of degree below
+the point count. Evaluation followed by interpolation preserves a polynomial
+only under an adequate degree bound. In particular, `mle(T) * mle(U)` generally
+differs away from the Boolean cube from the MLE of pointwise table products.
+
+The [structured native profile](../profiles/compiler/structured-mathematics.md)
+defines the concrete SSA signatures and bounded realization. Formal values have
+no runtime encoding; they differ from normalized coefficient objects below.
+
 ## Univariate coefficient objects
 
 A univariate polynomial over `F` has a finite ascending coefficient sequence:

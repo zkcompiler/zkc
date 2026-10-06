@@ -27,8 +27,8 @@ recursive calls and loading unknown definitions at runtime require additional
 profiles. An acyclic call graph is not a restriction to acyclic protocols: a
 bounded round loop belongs inside a definition.
 
-The native route uses `func.func` for local algorithms, `pir.protocol` for common
-interaction and `pir.participant` after projection. Their respective local,
+The native route uses `local.func` for local algorithms, `protocol.exec_func` for common
+interaction and `protocol.participant` after projection. Their respective local,
 protocol and participant calls retain the boundaries described by the
 [protocol pipeline](protocol-pipeline.md). The
 [logical-call discussion](calls.md) compares a possible explicit-successor CFG

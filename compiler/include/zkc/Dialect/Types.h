@@ -1,28 +1,15 @@
 #ifndef ZKC_DIALECT_TYPES_H
 #define ZKC_DIALECT_TYPES_H
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/OpImplementation.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraDialect.h"
-#include "zkc/Dialect/Claim/IR/ClaimDialect.h"
-#include "zkc/Dialect/Oracle/IR/OracleDialect.h"
-#include "zkc/Dialect/PCS/IR/PCSDialect.h"
-#include "zkc/Dialect/PIR/IR/PIRDialect.h"
-#include "zkc/Dialect/Plan/IR/PlanDialect.h"
-#include "zkc/Dialect/Polynomial/IR/PolynomialDialect.h"
-#include "zkc/Dialect/Relation/IR/RelationDialect.h"
+// Convenience aggregate of independently usable type headers.
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Claim/IR/ClaimTypes.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Local/IR/LocalTypes.h"
+#include "zkc/Dialect/Oracle/IR/OracleTypes.h"
+#include "zkc/Dialect/PCS/IR/PCSTypes.h"
+#include "zkc/Dialect/Plan/IR/PlanTypes.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
+#include "zkc/Dialect/Table/IR/TableTypes.h"
 
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/PIR/IR/pirTypes.h.inc"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/Algebra/IR/algebraTypes.h.inc"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/Polynomial/IR/polyTypes.h.inc"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/Plan/IR/planTypes.h.inc"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/PCS/IR/pcsTypes.h.inc"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/Oracle/IR/oracleTypes.h.inc"
-#define GET_TYPEDEF_CLASSES
-#include "zkc/Dialect/Claim/IR/claimTypes.h.inc"
 #endif

@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/ResourceUnit.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/TypeRepresentations.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Support/Json.h"
@@ -209,7 +210,18 @@ Expected<BoundType> parseBoundType(StringRef spelling, bool physical,
     }
     if (result.spelling() != spelling)
       return error("binding-type-identity");
-    if (physical && !appliedTypeRepresentation(result, rep))
+    if (head == "sequence") {
+      auto &element = *result.arguments.front().type;
+      if (!duplicable(element) || !discardable(element))
+        return error("sequence-element-permission");
+      if (physical) {
+        if (rep != "logical.sequence/1")
+          return error("binding-representation");
+        auto selected = defaultRepresentation(element);
+        if (!selected)
+          return selected.takeError();
+      }
+    } else if (physical && !appliedTypeRepresentation(result, rep))
       return error("binding-representation");
     return result;
   }
@@ -270,6 +282,8 @@ Expected<BoundType> defaultRepresentation(const BoundType &logical) {
     return checked.takeError();
   if (!(*checked == logical))
     return error("binding-type-identity");
+  if (logical.kind == "sequence")
+    return parseBoundType(logical.spelling() + "@logical.sequence/1", true);
   if (!logical.arguments.empty()) {
     const auto *entry = appliedTypeRepresentation(logical);
     if (!entry)

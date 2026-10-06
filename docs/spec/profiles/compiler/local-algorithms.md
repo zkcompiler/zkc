@@ -39,12 +39,12 @@ unreachable join results before emitting this portable source. The portable
 expander refusal remains for independently authored raw calls without that
 normalization.
 
-Native common IR retains these applications as typed `func.call` operations
-inside isolated `func.func` definitions. Module admission checks the call graph,
+Native common IR retains these applications as typed `local.apply` operations
+inside isolated `local.func` definitions. Module admission checks the call graph,
 local-only scope, complete signatures and affine use as well as MLIR's symbol
 and SSA checks. Arbitrary control-flow regions, indirect calls, external callees
 and calls to protocols are not legal local applications. Participant and physical
-IR require all local applications to have been expanded; residual `func.call`
+IR require all local applications to have been expanded; residual `local.apply`
 operations are refused at export.
 
 ## Expansion and accounting

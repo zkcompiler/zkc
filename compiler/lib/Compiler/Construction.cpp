@@ -1,10 +1,10 @@
 #include "zkc/Compiler/Construction.h"
 #include "../Protocol/Construction.h"
+#include "zkc/Compiler/Algorithms.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Resolution.h"
 #include "zkc/Support/Json.h"
-#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Translation/Protocol.h"
 #include <set>
 using namespace llvm;

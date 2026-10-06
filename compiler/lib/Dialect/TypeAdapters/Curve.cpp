@@ -3,7 +3,7 @@
 
 namespace zkc::protocol::type_adapters {
 namespace {
-using GroupAdapter = DomainAdapter<GroupType>;
+using GroupAdapter = DomainAdapter<zkc::algebra::GroupType>;
 } // namespace
 } // namespace zkc::protocol::type_adapters
 

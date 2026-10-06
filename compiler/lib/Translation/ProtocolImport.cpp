@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Registry.h"
@@ -104,7 +105,7 @@ public:
 
   template <typename Root> Error run(const Root &root) {
     for (const auto &binding : root.bindings) {
-      auto name = physical ? ExecuteKernelOp::getOperationName()
+      auto name = physical ? zkc::plan::ExecuteKernelOp::getOperationName()
                            : boundOperationName(binding.application.contract);
       if (name.empty() || !context.isOperationRegistered(name))
         return fail(error("binding-operation"), binding);
@@ -220,24 +221,51 @@ class Importer {
         if (yield && localRegion)
           llvm::append_range(values, forwarded);
         if (yield && localRegion)
-          LocalYieldOp::create(b, location, values);
+          zkc::local::LocalYieldOp::create(b, location, values);
         else if (local)
-          func::ReturnOp::create(b, location, values);
+          zkc::local::ReturnOp::create(b, location, values);
+        else if (ret && !target)
+          zkc::protocol_ir::MathematicalReturnOp::create(b, location, values);
         else if (ret)
-          FinishOp::create(b, location, values);
+          zkc::protocol_ir::FinishOp::create(b, location, values);
         else
-          ProtocolYieldOp::create(b, location, values);
+          zkc::protocol_ir::ProtocolYieldOp::create(b, location, values);
         continue;
       }
       if (const auto *release = instruction.get<source::Release>()) {
-        ReleaseOp::create(b, location, operands(release->values, env));
+        zkc::plan::ReleaseOp::create(b, location,
+                                     operands(release->values, env));
         continue;
       }
-      if (instruction.get<source::Incomplete>()) {
-        IncompleteOp::create(b, location, instruction.site);
+      if (const auto *completion = instruction.get<source::ReturnIf>()) {
+        SmallVector<mlir::Value> inputs{env.at(completion->condition)};
+        append_range(inputs, operands(completion->values, env));
+        auto *parent = b.getInsertionBlock()->getParentOp();
+        auto participant = dyn_cast<zkc::protocol_ir::ParticipantOp>(parent);
+        if (!participant)
+          participant =
+              parent->getParentOfType<zkc::protocol_ir::ParticipantOp>();
+        SmallVector<Type> types;
+        for (Value value : ArrayRef(inputs).drop_front()) {
+          auto bound =
+              zkc::protocol::encodeBoundType(value.getType(), physical);
+          assert(bound && "admitted return type");
+          if (!zkc::protocol::duplicable(bound->spelling()))
+            types.push_back(value.getType());
+        }
+        auto op = zkc::protocol_ir::FinishIfOp::create(
+            b, location, types, inputs.front(), ArrayRef(inputs).drop_front(),
+            instruction.site, participant.getRole());
+        bind(completion->continuations, op.getResults(), env);
+      } else if (instruction.get<source::Incomplete>()) {
+        zkc::protocol_ir::IncompleteOp::create(b, location, instruction.site);
       } else if (const auto *stop = instruction.get<source::Stop>()) {
-        HaltOp::create(b, location, instruction.site, stop->reason,
-                       !target && !local ? text(b, stop->role) : StringAttr());
+        if (local || target)
+          zkc::local::StopOp::create(b, location, instruction.site,
+                                     stop->reason);
+        else
+          zkc::protocol_ir::HaltOp::create(b, location, instruction.site,
+                                           stop->reason, text(b, stop->role));
       } else if (const auto *op = instruction.get<source::Operation>()) {
         SmallVector<Type> outputs;
         const auto &binding = bindings.at(op->callee);
@@ -249,7 +277,7 @@ class Importer {
         auto bindingRef = FlatSymbolRefAttr::get(b.getContext(), binding.name);
         Operation *created;
         if (physical)
-          created = ExecuteKernelOp::create(
+          created = zkc::plan::ExecuteKernelOp::create(
               b, location, outputs, operands(op->inputs, env), instruction.site,
               binding.application.implementation, parameters, bindingRef);
         else
@@ -261,18 +289,39 @@ class Importer {
                          named(b, "binding", bindingRef)},
                         0, location);
         bind(op->outputs, created->getResults(), env);
+      } else if (const auto *literal =
+                     instruction.get<source::BooleanConstant>()) {
+        auto outputType = type(physical ? "bool@native.bool/1" : "bool");
+        auto *op = operation(
+            b, physical ? "plan.bool_constant" : "local.bool_constant", {},
+            TypeRange{outputType},
+            {named(b, "site", instruction.site),
+             named(b, "value", b.getBoolAttr(literal->value))},
+            0, location);
+        bind({literal->output}, op->getResults(), env);
       } else if (const auto *call = instruction.get<source::AlgorithmCall>()) {
-        auto op = func::CallOp::create(
+        auto op = zkc::local::ApplyOp::create(
             b, location, signatures.at(call->callee).getResults(),
-            FlatSymbolRefAttr::get(b.getContext(), call->callee),
-            operands(call->inputs, env), ArrayAttr(), ArrayAttr(), UnitAttr());
-        op->setAttr("site", text(b, instruction.site));
+            operands(call->inputs, env), call->callee, instruction.site);
         bind(call->outputs, op->getResults(), env);
+      } else if (const auto *query = instruction.get<source::ServiceQuery>()) {
+        auto reply = type(physical ? "field:bls12-381.fr@arkworks.fr/1"
+                                   : "field:bls12-381.fr");
+        auto op = zkc::protocol_ir::ParticipantQueryOp::create(
+            b, location, TypeRange{reply}, operands(query->inputs, env),
+            query->port, query->method, instruction.site);
+        bind(query->outputs, op.getOutputs(), env);
       } else if (const auto *call = instruction.get<source::LocalCall>()) {
-        auto op = LocalCallOp::create(
-            b, location, signatures.at(call->callee).getResults(),
-            operands(call->inputs, env), call->callee, instruction.site,
-            !target ? text(b, call->role) : StringAttr());
+        Operation *op;
+        if (target)
+          op = zkc::local::CallOp::create(
+              b, location, signatures.at(call->callee).getResults(),
+              operands(call->inputs, env), call->callee, instruction.site);
+        else
+          op = zkc::protocol_ir::LocalCallOp::create(
+              b, location, signatures.at(call->callee).getResults(),
+              operands(call->inputs, env), call->callee, instruction.site,
+              text(b, call->role));
         bind(call->outputs, op->getResults(), env);
       } else if (const auto *call = instruction.get<source::ProtocolCall>()) {
         std::string signature = call->callee;
@@ -284,33 +333,34 @@ class Importer {
         }
         Operation *op;
         if (target)
-          op = ParticipantCallOp::create(
+          op = zkc::protocol_ir::ParticipantCallOp::create(
               b, location, signatures.at(signature).getResults(),
               operands(call->inputs, env), instruction.site, call->callee);
         else
-          op = ProtocolCallOp::create(
+          op = zkc::protocol_ir::ProtocolCallOp::create(
               b, location, signatures.at(signature).getResults(),
               operands(call->inputs, env), instruction.site, call->callee);
         bind(call->outputs, op->getResults(), env);
       } else if (const auto *message = instruction.get<source::Message>()) {
         auto input = env.at(message->input);
-        auto op = MessageOp::create(b, location, input.getType(), input,
-                                    instruction.site, message->schema,
-                                    message->sender, message->receiver);
+        auto op = zkc::protocol_ir::MessageOp::create(
+            b, location, input.getType(), input, instruction.site,
+            message->schema, message->sender, message->receiver);
         env.emplace(message->output, op->getResult(0));
       } else if (const auto *send = instruction.get<source::Send>()) {
-        EmitOp::create(b, location, env.at(send->input), instruction.site,
-                       send->schema, send->peer);
+        zkc::protocol_ir::EmitOp::create(b, location, env.at(send->input),
+                                         instruction.site, send->schema,
+                                         send->peer);
       } else if (const auto *receive = instruction.get<source::Receive>()) {
-        auto op =
-            AwaitOp::create(b, location, type(receive->type), instruction.site,
-                            receive->schema, receive->peer);
+        auto op = zkc::protocol_ir::AwaitOp::create(
+            b, location, type(receive->type), instruction.site, receive->schema,
+            receive->peer);
         env.emplace(receive->output, op->getResult(0));
       } else if (const auto *pack =
                      instruction.get<source::VariantConstruct>()) {
-        auto op = VariantInjectOp::create(b, location, type(pack->type),
-                                          operands(pack->payload, env),
-                                          instruction.site, pack->alternative);
+        auto op = zkc::local::VariantInjectOp::create(
+            b, location, type(pack->type), operands(pack->payload, env),
+            instruction.site, pack->alternative);
         env.emplace(pack->output, op->getResult(0));
       } else if (const auto *match = instruction.get<source::Match>()) {
         SmallVector<mlir::Value> inputs{env.at(match->input)};
@@ -348,15 +398,15 @@ class Importer {
             b.setInsertionPointToEnd(block);
             body(arm.body, std::move(inner), definition, true, {}, true);
           }
-          if (isa<LocalYieldOp>(block->back()))
+          if (isa<zkc::local::LocalYieldOp>(block->back()))
             outputs.assign(block->back().getOperandTypes().begin(),
                            block->back().getOperandTypes().end());
           regions.push_back(std::move(region));
         }
         locate(instruction);
-        auto op =
-            LocalMatchOp::create(b, location, outputs, inputs, instruction.site,
-                                 strings(alternatives), regions.size());
+        auto op = zkc::local::LocalMatchOp::create(
+            b, location, outputs, inputs, instruction.site,
+            strings(alternatives), regions.size());
         for (auto [i, region] : enumerate(regions))
           op->getRegion(i).takeBody(*region);
         bind(match->outputs, op->getResults(), env);
@@ -382,10 +432,10 @@ class Importer {
         locate(instruction);
         TypeRange outputs;
         for (auto &region : regions)
-          if (isa<LocalYieldOp>(region.front().back()))
+          if (isa<zkc::local::LocalYieldOp>(region.front().back()))
             outputs = region.front().back().getOperandTypes();
-        auto op =
-            LocalIfOp::create(b, location, outputs, inputs, instruction.site);
+        auto op = zkc::local::LocalIfOp::create(b, location, outputs, inputs,
+                                                instruction.site);
         for (unsigned i = 0; i < 2; ++i)
           op->getRegion(i).takeBody(regions[i]);
         bind(branch->outputs, op->getResults(), env);
@@ -398,8 +448,8 @@ class Importer {
           outputs.push_back(env.at(initial).getType());
         }
         llvm::append_range(inputs, operands(loop->captures, env));
-        auto op =
-            LocalForOp::create(b, location, outputs, inputs, instruction.site);
+        auto op = zkc::local::LocalForOp::create(b, location, outputs, inputs,
+                                                 instruction.site);
         auto *block = new Block();
         op->getRegion(0).push_back(block);
         Env inner;
@@ -419,26 +469,41 @@ class Importer {
           OpBuilder::InsertionGuard guard(b);
           b.setInsertionPointToEnd(block);
           body(loop->body, std::move(inner), definition, true, forwarded, true);
+          if (loop->conditional &&
+              isa<zkc::local::LocalYieldOp>(block->back())) {
+            auto *end = &block->back();
+            b.setInsertionPoint(end);
+            zkc::local::LocalConditionOp::create(
+                b, location, end->getOperand(0),
+                end->getOperands().drop_front());
+            end->erase();
+          }
         }
         bind(loop->outputs, op->getResults(), env);
       } else if (const auto *loop = instruction.get<source::Loop>()) {
         SmallVector<mlir::Value> inputs;
         source::Names names;
+        bool dynamic = loop->count.kind == source::LoopCount::Kind::Value;
+        if (dynamic) {
+          inputs.push_back(env.at(loop->count.value));
+          names.push_back(loop->count.induction);
+        }
         for (const auto &[binding, initial] : loop->carried) {
           names.push_back(binding);
           inputs.push_back(env.at(initial));
         }
         SmallVector<Type> outputs;
-        for (auto value : inputs)
+        for (auto value : llvm::drop_begin(inputs, dynamic ? 1 : 0))
           outputs.push_back(value.getType());
         for (const auto &capture : loop->captures) {
           names.push_back(capture);
           inputs.push_back(env.at(capture));
         }
-        auto op = ProtocolLoopOp::create(
+        auto op = zkc::protocol_ir::ProtocolLoopOp::create(
             b, location, outputs, inputs, instruction.site, outputs.size(),
-            loop->count.value,
-            loop->count.kind == source::LoopCount::Kind::Parameter);
+            dynamic ? "" : loop->count.value,
+            loop->count.kind == source::LoopCount::Kind::Parameter,
+            dynamic ? b.getI64IntegerAttr(loop->count.maximum) : IntegerAttr());
         auto *block = new Block();
         op->getRegion(0).push_back(block);
         Env inner;
@@ -484,7 +549,8 @@ class Importer {
   }
   void definition(const source::Function &f) {
     locate(f);
-    auto op = func::FuncOp::create(b, location, f.name, signatures.at(f.name));
+    auto op =
+        zkc::local::FuncOp::create(b, location, f.name, signatures.at(f.name));
     if (f.origin)
       op->setAttr("logical_origin",
                   b.getArrayAttr({text(b, f.origin->definition),
@@ -503,7 +569,7 @@ class Importer {
       inputRoles.push_back(text(b, arg.role));
     for (const auto &result : p.results)
       outputRoles.push_back(text(b, result.role));
-    auto op = ProtocolOp::create(
+    auto op = zkc::protocol_ir::ExecFuncOp::create(
         b, location, p.name, signatures.at(p.name), b.getArrayAttr(inputRoles),
         b.getArrayAttr(outputRoles), strings(p.roles), strings(p.parameters),
         dependencies(p.dependencies), !p.body, b.getArrayAttr(argumentNames));
@@ -515,26 +581,43 @@ class Importer {
     SmallVector<Attribute> argumentNames;
     for (const auto &arg : p.arguments)
       argumentNames.push_back(text(b, arg.name));
-    auto op = ParticipantOp::create(
+    auto op = zkc::protocol_ir::ParticipantOp::create(
         b, location, p.name, signatures.at(p.name), p.instance, p.role,
         parameterBindings(p.parameters), b.getArrayAttr(argumentNames));
+    if (!p.services.empty()) {
+      SmallVector<Attribute> ports;
+      for (const auto &port : p.services)
+        ports.push_back(
+            b.getArrayAttr({text(b, port.name), text(b, port.contract),
+                            b.getI64IntegerAttr(port.inputIndex)}));
+      op->setAttr("service_ports", b.getArrayAttr(ports));
+    }
     definitionBody(p, op, p.body, false);
   }
   template <typename Root> OwningOpRef<ModuleOp> start(const Root &m) {
     locate(m);
     auto module = ModuleOp::create(location);
     b.setInsertionPointToEnd(module.getBody());
+    using namespace zkc::protocol_ir;
+    auto profile = target ? physical ? Profile::Physical : Profile::Exec
+                          : Profile::ProtocolExec;
+    ExecutionContractAttr contract;
+    if constexpr (std::is_same_v<Root, source::Participants>)
+      contract = ExecutionContractAttr::get(
+          b.getContext(), source::isProgram(m.contract)
+                              ? ExecutionContract::Program
+                              : ExecutionContract::LegacyParticipantsV1);
     auto root = ProtocolModuleOp::create(
-        b, location, target ? physical ? "physical" : "logical" : "common");
+        b, location, ProfileAttr::get(b.getContext(), profile), contract);
     auto *top = new Block();
     root->getRegion(0).push_back(top);
     b.setInsertionPointToEnd(top);
     for (const auto &binding : m.bindings) {
       locate(binding);
-      OperationBindingOp::create(b, location, binding.name,
-                                 binding.application.contract,
-                                 strings(binding.application.arguments),
-                                 binding.application.implementation);
+      zkc::local::OperationBindingOp::create(
+          b, location, binding.name, binding.application.contract,
+          strings(binding.application.arguments),
+          binding.application.implementation);
       bindings.emplace(binding.name, binding);
     }
     for (const auto &f : m.functions)
@@ -543,7 +626,7 @@ class Importer {
   }
   void entry(StringRef name, ArrayAttr targets, const source::Node &node) {
     locate(node);
-    ProtocolEntryOp::create(b, location, name, targets);
+    zkc::protocol_ir::ProtocolEntryOp::create(b, location, name, targets);
   }
 
 public:
@@ -598,10 +681,10 @@ public:
       definition(p);
     for (const auto &instance : m.instances) {
       locate(instance);
-      InstanceOp::create(b, location, instance.name, instance.protocol,
-                         parameterBindings(instance.parameters),
-                         pairs(instance.dependencies, true),
-                         pairs(instance.roles));
+      zkc::protocol_ir::InstanceOp::create(
+          b, location, instance.name, instance.protocol,
+          parameterBindings(instance.parameters),
+          pairs(instance.dependencies, true), pairs(instance.roles));
     }
     for (const auto &e : m.entries)
       entry(

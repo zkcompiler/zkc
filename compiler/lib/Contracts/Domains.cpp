@@ -141,6 +141,12 @@ DomainCatalog::create(std::vector<NominalDomain> domains,
         catalog.associatedIdentity(g1, "Scalar") != d.identity ||
         catalog.associatedIdentity(g2, "Scalar") != d.identity)
       return invalid("invalid pairing group association");
+    StringRef gt = catalog.associatedIdentity(d.identity, "PairingGT");
+    // Predicate-only catalogs need not expose a target representation.
+    if (!gt.empty() &&
+        (gt == g1 || gt == g2 || !catalog.hasFact("ScalarAction", {gt.str()}) ||
+         catalog.associatedIdentity(gt, "Scalar") != d.identity))
+      return invalid("invalid pairing target association");
   }
   std::set<std::tuple<std::string, std::string, std::string>> legal, layouts;
   std::set<std::pair<std::string, std::string>> defaults;
@@ -282,6 +288,7 @@ const DomainCatalog &installedDomains() {
     const std::string bn254 = "bn254.fr";
     const std::string bn254g1 = "bn254.g1";
     const std::string bn254g2 = "bn254.g2";
+    const std::string bn254gt = "bn254.gt";
     const std::string pcs = "multilinear.kzg.bls12-381/1";
     const std::string transcript = "merlin3.bls12-381.fr64be/1";
     const std::string scalar = "ristretto255.scalar";
@@ -319,13 +326,16 @@ const DomainCatalog &installedDomains() {
           "2130706433"},
          {bn254,
           "Field",
-          {{"PairingG1", bn254g1}, {"PairingG2", bn254g2}},
+          {{"PairingG1", bn254g1},
+           {"PairingG2", bn254g2},
+           {"PairingGT", bn254gt}},
           {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo",
            "TwoAdicField", "PairingField"},
           "21888242871839275222246405745257275088548364400416034343698204186575"
           "808495617"},
          {bn254g1, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
          {bn254g2, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
+         {bn254gt, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
          {field,
           "Field",
           {},
@@ -403,6 +413,7 @@ const DomainCatalog &installedDomains() {
          {"group", bn254g1},
          {"groups", bn254g1},
          {"group", bn254g2},
+         {"group", bn254gt},
          {"groups", bn254g2},
          {"transcript", transcript},
          {"transcript", spongefish},
@@ -448,6 +459,7 @@ const DomainCatalog &installedDomains() {
          {"zkcv.group.bn254.g1/1", "group", bn254g1},
          {"zkcv.groups.bn254.g1/1", "groups", bn254g1},
          {"zkcv.group.bn254.g2/1", "group", bn254g2},
+         {"zkcv.group.bn254.gt/1", "group", bn254gt},
          {"zkcv.groups.bn254.g2/1", "groups", bn254g2},
          {"zkcv.matrix.bls12-381.fr/1", "matrix", field},
          {"zkcv.matrix.ristretto255.scalar/1", "matrix", scalar},
@@ -502,6 +514,7 @@ const DomainCatalog &installedDomains() {
          {"arkworks.bn254-g1/1", "group", bn254g1, true, ""},
          {"arkworks.bn254-g1-vector/1", "groups", bn254g1, true, ""},
          {"arkworks.bn254-g2/1", "group", bn254g2, true, ""},
+         {"arkworks.bn254-gt/1", "group", bn254gt, true, ""},
          {"arkworks.bn254-g2-vector/1", "groups", bn254g2, true, ""},
          {"host.resource/1", "rng", bn254, true, ""},
          {"arkworks.fr-sparse-coo/1", "matrix", field, true, ""},
@@ -552,6 +565,7 @@ const DomainCatalog &installedDomains() {
          {bn254, "arkworks"},
          {bn254g1, "arkworks"},
          {bn254g2, "arkworks"},
+         {bn254gt, "arkworks"},
          {pcs, "arkworks"},
          {transcript, "arkworks"},
          {scalar, "dalek"},

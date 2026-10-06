@@ -7,14 +7,14 @@ For declaration syntax, start with
 [compiled relation declarations](reference.md#compiled-relation-declarations)
 and the [maintained relation examples](../../examples/relations/README.md).
 
-## Objective and boundaries
+## Scope
 
 An author supplies a compiled relation and a protocol that consumes its
 declared representation. Import resolves the relation's field, statement
 layout and arithmetic representation. Protocol execution consumes compiled
 algorithms and immutable prepared data; it does not interpret Circom or LLZK.
 
-The principal end-to-end case is BN254 Groth16 for a Circom Poseidon Merkle
+The maintained end-to-end example is BN254 Groth16 for a Circom Poseidon Merkle
 membership circuit, using the original R1CS, witness and snarkjs prepared key.
 The complete prover algorithm must remain visible in PIR: polynomial
 evaluation and interpolation, vector arithmetic, MSMs, blinding and verification
@@ -58,16 +58,7 @@ protocols with no imported relation acquire no relation-specific obligation.
    Cross-verification and controlled-randomness equality test the implementation;
    they do not establish a Groth16 security theorem or ceremony trust.
 
-## Alternatives considered
-
-| Choice | Benefit | Cost or failure to avoid |
-|---|---|---|
-| Opaque runtime relation interpreter | One broad host API | Hides family algorithms and compiler opportunities; not selected |
-| Frontend-generated function text | Quick experiments | Loses typed dependencies, source ownership and robust linking; replace |
-| Typed generated algorithm interfaces | Reuses local-call machinery | Must retain and validate their relation association, not merely origin labels |
-| Family-specific relation operations | Explicit high-level uses and lowering | Requires coordinated source, native IR and independent-reader contracts |
-| Universal relation handle | Convenient nominal reference | Must not imply all relation families offer the same operational interface |
-| External prepared-key adapter | Reuses ecosystem setup | Exact encoding and QAP correspondence are additional checked boundaries |
+## Generated interfaces
 
 Typed generated functions reuse existing call, type, projection and analysis
 machinery. Their signatures and arithmetic bodies are checked against immutable
@@ -112,7 +103,7 @@ flag. The noninteractive path checks the actual reachable endpoint graph,
 requires one-way proof flow and a serializable verifier interface, and selects
 an explicit Boolean acceptance output. This policy is not a security theorem.
 
-## Interoperability experiment
+## Interoperability fixture
 
 The [maintained interoperability fixture](../../tests/groth16/README.md) uses
 Circom 2.2.2, snarkjs 0.7.5 and pinned circomlib Poseidon circuits at depths 2

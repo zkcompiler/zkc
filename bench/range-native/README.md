@@ -7,7 +7,7 @@ executable research prototype, not a replacement compiler and not a production
 cryptographic library. Raw measurement records remain local; retained claims
 follow the [measurement policy](../README.md#reading-and-recording-a-measurement).
 
-## Exact research question
+## Question measured
 
 Can visible range-reduction and recursive-IPA algorithms over the pinned real
 Ristretto implementation produce and consume released Bulletproofs proof bytes,
@@ -29,7 +29,7 @@ Expected gates fixed in the implementation/tests:
 6. Same-equation measurements and the upstream variable-time/randomized baseline
    remain distinct; slowdowns are retained.
 
-These finite gates passed. General security, compiler correspondence and equality
+`src/tests.rs` checks these conditions. General security, compiler correspondence and equality
 of fallible native executions remain separate obligations.
 
 ## Implementation map
@@ -55,7 +55,7 @@ separate code. Upstream cross-verification and literal raw-Merlin replay provide
 additional checks against correlated mistakes in shared primitives. This is
 independent authorship within one crate, not an independent external review.
 
-## Selected research profile
+## Profile
 
 - Profile name: `bp5-wire-strict-nonzero-v1`.
 - Real `curve25519-dalek = 4.1.3`, `merlin = 3.0.0`, `bulletproofs = 5.0.0`; all
@@ -67,7 +67,7 @@ independent authorship within one crate, not an independent external review.
 - Ordered public commitments and public `bits,count` are supplied by the
   validator's caller. Proof bytes contain neither a replacement commitment list
   nor an application context.
-- The application prefix is `Transcript::new(b"zkc-goal3-range-native-v1")` followed by
+- The application prefix is `Transcript::new(b"zkc-range-native-v1")` followed by
   `append_message(b"application-context", context)`. Nonempty context is limited
   to 65536 bytes. Actual transaction canonicalization and ledger semantics remain
   the caller's responsibility; the fixture context is research data.
@@ -98,7 +98,7 @@ chosen output directory. The measurement binary takes an optional trial count,
 defaulting to nine timing trials after warmup:
 
 ```sh
-cargo run --release --manifest-path bench/range-native/Cargo.toml -- 9
+cargo run --locked --release --manifest-path bench/range-native/Cargo.toml -- 9
 ```
 
 Each run also exports one statement and both proof files per profile into an

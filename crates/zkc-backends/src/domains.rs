@@ -17,6 +17,11 @@ pub const BN254_G2: NativeDomain = NativeDomain {
     group: Some(Identity::Bn254G2),
     provider: "arkworks",
 };
+pub const BN254_GT: NativeDomain = NativeDomain {
+    field: Identity::Bn254Fr,
+    group: Some(Identity::Bn254Gt),
+    provider: "arkworks",
+};
 pub const BLS: NativeDomain = NativeDomain {
     field: Identity::Bls12381Fr,
     group: Some(Identity::Bls12381G1),
@@ -44,6 +49,7 @@ pub const INSTALLED: &[NativeDomain] = &[
     KOALA_BEAR_EXT8,
     BN254_G1,
     BN254_G2,
+    BN254_GT,
 ];
 impl NativeDomain {
     pub fn physical(self, kind: Type) -> Option<PhysicalType> {
@@ -62,6 +68,7 @@ impl NativeDomain {
                     (Identity::Bn254G1, Group) => R::Bn254G1,
                     (Identity::Bn254G1, Groups) => R::Bn254G1Vector,
                     (Identity::Bn254G2, Group) => R::Bn254G2,
+                    (Identity::Bn254Gt, Group) => R::Bn254Gt,
                     (Identity::Bn254G2, Groups) => R::Bn254G2Vector,
                     _ => return None,
                 };

@@ -43,7 +43,7 @@ def test_fixed_vector_compiles_and_executes(toolchain, directory, journal, lengt
     source = write(directory, "source.json", source_value)
     common_ir = journal.run([compiler, "protocol-import", source])
     assert f'!algebra.fixed_vector<!algebra.field<"koala-bear">, {length}>' in common_ir
-    assert '"algebra.fixed_vector_dot"' in common_ir
+    assert '"algebra.exec.fixed_vector_dot"' in common_ir
     logical = journal.json([compiler, "protocol-export", "-"], common_ir)
     logical_path = write(directory, "logical.json", logical)
     assert all(binding[2] == ["koala-bear", str(length)] for binding in logical[1])

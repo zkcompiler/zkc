@@ -12,13 +12,15 @@ void printLinearContractionStats(const LinearContractionStats &stats,
 }
 
 llvm::SmallVector<LinearContractionGroup>
-findLinearContractions(func::FuncOp function, LinearContractionStats &stats) {
+findLinearContractions(FunctionOpInterface function,
+                       LinearContractionStats &stats) {
   llvm::SmallVector<LinearContractionGroup> groups;
   // Protocol kernels live directly in one local function block. Do not infer
   // lifetime or observation behavior across regions, loops or function calls.
-  if (function.isDeclaration() || !llvm::hasSingleElement(function.getBody()))
+  if (function.isDeclaration() ||
+      !llvm::hasSingleElement(function.getFunctionBody()))
     return groups;
-  for (auto &op : function.getBody().front()) {
+  for (auto &op : function.getFunctionBody().front()) {
     auto producer = dyn_cast<DiagonalProducerInterface>(&op);
     if (!producer)
       continue;

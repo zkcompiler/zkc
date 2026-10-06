@@ -261,7 +261,19 @@ including contributed sources, without enabling the complete test graph. This
 focused check is separate from the default test suite. Pass both `--runtime`
 (the native `zkc` executable) and `--checker` (Lean `interactive-protocol`) to
 include restored participant admission, correspondence and execution in the
-consumer CTest inventory. Missing explicitly requested tools fail the check.
+consumer CTest inventory. It also runs the restored mathematical bundle through
+`run-bundle`, comparing both routes with independent field arithmetic. The native
+bundle itself has no Lean reader. Missing explicitly requested tools fail the check.
+
+For mathematical compilation, use `compileRun` or `compileNativeProof` from
+`ZkcCompilerCore`. An IR-only composite must decompose to admitted operations
+before these entry points; the installed domain example tests that boundary.
+A new executable primitive still needs independent runtime admission, realization
+and codecs. Compiler contribution registration does not install Rust kernels.
+The installed component project at `tests/consumer` accepts
+`-DZKC_CONSUMER_RUNTIME=/absolute/path/to/zkc` to execute its emitted bundle and
+policy `/4` deployment in separate runtime processes, including wrong-pin and
+malformed-proof controls.
 
 ### Independent execution and reference owners
 
@@ -271,8 +283,11 @@ and Lean families under
 [`Interactive/Bindings`](../../formal/Tools/Interactive/Bindings) author their
 own admission equations. Each assembles an immutable exact registry and rejects
 duplicate owners. Compiler TableGen does not generate either interpretation.
-Runtime families own their domain restrictions and physical selection callbacks;
-shared support constructs typed ports without dispatching on family-name prefixes.
+Runtime families own their domain restrictions, history facets and physical
+selection callbacks. History is explicit per contract, never inferred from its
+name; the fixture inventory must cover every installed owner. This facet does
+not establish purity, publicness or a sampling law. Independent C++/Lean owners
+remain separate. Shared support constructs typed ports without dispatching on family-name prefixes.
 For example, polynomial domain restrictions live in `operations/poly.rs`, and
 transcript payload and codec restrictions live in `operations/transcript.rs`.
 Native backend entries separately bind an implementation identity to its
@@ -325,8 +340,14 @@ declarations; dialect class declarations live in the per-dialect headers.
 Registration and mandatory verification belong to `Zkc::IR`; dialect-local
 transformation passes belong to `Zkc::Transforms`; aggregate pass registration
 belongs to `Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
-Generated operation declarations stay shared because parent traits cross dialect
-boundaries; definitions and registration lists are generated per dialect.
+Operation/type declarations, definitions and registration lists are generated
+per dialect. Cross-dialect ODS constraints use explicit owner includes. Clients
+may include one owner's header or the convenience aggregate. Native-only
+registration excludes the finite-table dialect and installs the closed `arith`
+models; full registration adds Table. Neither entry point registers passes.
+`Zkc::Translation` owns source import/export; IR and Transforms do not depend on
+it. Contribution transform sources should use MLIR verification and core IR
+readers, leaving source-to-IR workflows to CompilerCore.
 Public dialect queries and verifiers remain extension APIs. Raw construction
 helpers under `Dialect/detail/Builders.h` are unsupported same-version details
 and do not establish admission. Claim IR structure belongs to IR; the optional

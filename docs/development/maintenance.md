@@ -22,14 +22,9 @@ compiler, dependency objects and optional integration must use the same release.
 Fixture reproductions still check their named external sources and tool versions
 because those versions identify the evidence being reproduced.
 
-The remaining Lean 4.33.1 selection is a compatibility exception, not the
-default upgrade policy. A Lean/mathlib 4.34.1 trial builds the main formal
-package after updating deprecated theorem names, quoting the `requires`
-identifier and replacing two failing `cbv` proofs with `rfl`. The coordinated
-ArkLib/VCVio trial still rejects the adapters' deprecated scalar probability
-API (`probOutput` and `probEvent`). Move those proofs to the upstream measure
-API and rerun the integration's dependency/axiom audits before adopting the
-new formal dependency graph. Disabling the existing strict checks is not an
+The pinned Lean release has an ArkLib/VCVio compatibility constraint. The
+[upgrade checkpoint](../roadmap.md#design-checkpoints) records the required
+probability-API port and integration audits; relaxing strict checks is not an
 upgrade fix.
 
 | Input | Authority |

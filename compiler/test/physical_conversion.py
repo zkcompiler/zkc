@@ -61,17 +61,17 @@ for mode in ("lazy", "materialized"):
     assert lowered.returncode == 0, lowered.stderr
     text = lowered.stdout
     for expected in (
-        '!plan.scalar<"f7">',
-        '"plan.prepare"',
-        '"plan.invoke"',
-        '"plan.bind"',
-        '"plan.repeat"',
-        '"plan.choose"',
+        '!table.scalar<"f7">',
+        '"table.plan.prepare"',
+        '"table.plan.invoke"',
+        '"table.plan.bind"',
+        '"table.plan.repeat"',
+        '"table.plan.choose"',
     ):
         assert expected in text, (expected, text)
     for excluded in (
         "!algebra.field",
-        '"poly.evaluate"',
+        '"table.poly_evaluate"',
         "unrealized_conversion_cast",
     ):
         assert excluded not in text, (excluded, text)
@@ -104,7 +104,7 @@ for mode in ("lazy", "materialized"):
         ),
         (
             "domain",
-            text.replace('!plan.scalar<"f7">', '!plan.scalar<"f2">'),
+            text.replace('!table.scalar<"f7">', '!table.scalar<"f2">'),
             "invalid-program-region",
         ),
         (
@@ -118,7 +118,7 @@ for mode in ("lazy", "materialized"):
             # What the operation definition says it accepts, which is where
             # the reason for this refusal is written.
             "logical-type",
-            text.replace('!plan.scalar<"f7">', '!algebra.field<"f7">'),
+            text.replace('!table.scalar<"f7">', '!algebra.field<"f7">'),
             "immutable prepared scalar reference",
         ),
         (

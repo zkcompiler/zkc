@@ -138,6 +138,10 @@ connection laws; this is explicitly a trust premise, not an inferred axiom.
 Requirements are independent of certificate steps. An explicitly empty caller
 specification is legal.
 
+Run from the repository root after the
+[native build](../development/README.md). These commands assume
+`build/compiler` is on `PATH` and the named input files are supplied by the caller.
+
 ```sh
 zkc-compile claim-inspect source.pir main > catalog.json
 zkc-compile claim-derive source.pir contract.json > candidate.json

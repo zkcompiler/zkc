@@ -672,3 +672,37 @@ fn dynamic_group_primitive_all_domains_bounds_and_exact_operand_types() {
         );
     }
 }
+
+#[test]
+fn parser_preserves_generated_trees_and_refuses_malformed_json() {
+    use crate::host::json::corpus;
+    for (value, bytes) in corpus::trees() {
+        let bytes = bytes.as_slice();
+        assert_eq!(super::parse_request(bytes).unwrap(), value);
+    }
+    for &bytes in corpus::ESCAPED {
+        assert_eq!(
+            super::parse_request(bytes).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(bytes).unwrap()
+        );
+    }
+    for &bytes in corpus::MALFORMED {
+        assert!(super::parse_request(bytes).is_err(), "{bytes:?}");
+    }
+    for leaf in ["[]", "\"x\""] {
+        for wrappers in [64, 65] {
+            let text = "[".repeat(wrappers) + leaf + &"]".repeat(wrappers);
+            let bytes = text.as_bytes();
+            assert_eq!(super::parse_request(bytes).is_ok(), wrappers == 64);
+        }
+    }
+}
+
+#[test]
+fn parser_retains_its_public_error_codes() {
+    assert_eq!(
+        super::parse_request(&[b'['; 66]),
+        Err("primitive-json-limit")
+    );
+    assert_eq!(super::parse_request(br#"["\q"]"#), Err("primitive-json"));
+}

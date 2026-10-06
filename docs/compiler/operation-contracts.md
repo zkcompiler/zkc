@@ -13,14 +13,21 @@ requirements, parameter-schema selection, type permissions and installed facets.
 Curated source exports refer to those same contracts and add public names and
 argument labels; IR adapters add their representation mapping. Semantic validators,
 implementations and independent Rust/Lean interpretations retain their own work.
+The `zkc.contract-declarations/2` inventory distinguishes constructor application
+ports from an explicit complete-Type input port (`{"term": index}`). The latter
+is restricted to construction-only observation payloads, with exact static-type
+and representation checks. Common generic admission refuses it. The executable
+catalog includes both common and non-generic declarations, including generated
+resource-unit operations; this partition grants no additional source syntax.
+See the [structured observer](../spec/profiles/compiler/structured-proof-messages.md#transcript-observation).
+
 See the [extension procedure](../development/extensions.md#logical-contracts-and-source-exports).
 
 Polynomial interpretation conversions belong to `poly`: `point_to_vector`,
 `point_from_vector`, `table_to_vector` and `table_from_vector`. The logical
 catalog keys `vector.from_point`, `vector.to_point`, `vector.from_table` and
 `vector.to_table` retain their declared meanings. This is a catalog-to-MLIR
-mapping, like `field.add` to `algebra.sum`, with no alternative legacy operation
-or fallback decoder. Coordinate order, dimension and Boolean-table shape are
+mapping, like `field.add` to `algebra.exec.field_add`, without an alternative operation or fallback decoder. Coordinate order, dimension and Boolean-table shape are
 polynomial-domain obligations, even when a backend shares the sequence storage.
 
 `Contracts/Operations.h` attaches these facets to each registered `Kernel`:
@@ -113,7 +120,6 @@ reductions remain separate obligations.
 
 Construction uses `duplicable` to retain a producer-local immutable helper as a
 whole call, including helpers returning private commitment state. Its generated
-source therefore has the canonical whole-helper frame and charges; no equality
-with the old per-operation generated frames is asserted. Artifacts are rebuilt
+source therefore has the canonical whole-helper frame and charges. Artifacts are rebuilt
 and checked against the actual generated source. Private custody gains neither
 a public codec nor a cross-role replay rule through this choice.

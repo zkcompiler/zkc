@@ -2,7 +2,7 @@ use crate::{Dimensions, Error, Result, Statement};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::Transcript;
 
-pub const APP_DOMAIN: &[u8] = b"zkc-goal3-range-native-v1";
+pub const APP_DOMAIN: &[u8] = b"zkc-range-native-v1";
 /// This prefix is shared with the independently invoked upstream baseline.
 pub fn application_transcript(context: &[u8]) -> Transcript {
     let mut t = Transcript::new(APP_DOMAIN);

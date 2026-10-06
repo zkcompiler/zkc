@@ -97,6 +97,9 @@ fn check(
     acceptance: usize,
 ) -> Result<(), NoninteractiveError> {
     use NoninteractiveError as E;
+    if program.format.is_program() {
+        return Err(E::VerifierResource);
+    }
     let roots = program.entries.get(entry).ok_or(E::Entry)?;
     if producer == verifier
         || roots.len() != 2
@@ -194,6 +197,7 @@ mod tests {
 
     fn participant(role: &str, body: Vec<Instruction>) -> Arc<Participant> {
         Arc::new(Participant {
+            services: vec![],
             symbol: role.into(),
             instance: "root".into(),
             role: role.into(),

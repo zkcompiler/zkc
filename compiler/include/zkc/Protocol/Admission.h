@@ -5,6 +5,9 @@
 #include "llvm/Support/Error.h"
 
 namespace zkc::protocol {
+/// Internal logical native locals, without any protocol or entry declarations.
+/// Ordinary source admission never enables native literals in common modules.
+llvm::Error admitNativeLocalDefinitions(const source::Module &);
 /// Formation and executable admission are distinct. On failure, optionally
 /// identify a record borrowed from the immutable input for diagnostics.
 /// This source interface does not require an MLIR context.

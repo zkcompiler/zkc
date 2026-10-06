@@ -592,3 +592,75 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         );
     }
 }
+
+#[test]
+fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+    let message = tree(&json!([
+        "zkc.native-origin/1",
+        "source_entry",
+        ["application"],
+        [],
+        ["message", "Round", "commitment", "commitment", "P", "V"]
+    ]));
+    let query = tree(&json!([
+        "zkc.native-origin/1",
+        "source_entry",
+        ["application"],
+        [],
+        [
+            "query",
+            "Round",
+            "coin",
+            "input_0",
+            "random.bls12-381.fr/1",
+            "draw",
+            "V"
+        ]
+    ]));
+    let mut reference = merlin::Transcript::new(b"zkc.artifact/1");
+    reference.append_message(b"binding", &root());
+    reference.append_message(b"origin", &message);
+    reference.append_message(b"value", &canonical_field(7));
+    reference.append_message(b"origin", &query);
+    let mut wide = [0u8; 64];
+    reference.challenge_bytes(b"challenge", &mut wide);
+    let expected = zkc_arkworks::scalar_from_wide_be(&wide);
+    for role in ["P", "V"] {
+        let d = Domain::new(role, "session", "main", None);
+        let mut backend = NativeBackend::new(
+            Policy::default(),
+            EntryPolicy::new(d.clone(), None, PublicInputs::LocalOnly),
+            None,
+        )
+        .unwrap();
+        let token = backend.issue_transcript(d, 2, &root()).unwrap();
+        let mut program: Json = serde_json::from_slice(&program1()).unwrap();
+        // Fixture binding declarations carry the new contracts, while their
+        // existing type and implementation choices remain explicit.
+        for binding in program[1].as_array_mut().unwrap() {
+            for index in [1, 3] {
+                let text = binding[index].as_str().unwrap();
+                binding[index] = json!(text.replace("transcript.", "transcript.native."));
+            }
+        }
+        program[3][0][4][0][3] = json!([hex(&message)]);
+        program[3][0][4][1][3] = json!([hex(&query)]);
+        program[4][0][3] = json!(role);
+        program[5][0][2][0][0] = json!(role);
+        let admitted = admit_supplied(&serde_json::to_vec(&program).unwrap(), &backend).unwrap();
+        let runner = Runner::new(
+            &admitted,
+            "main",
+            role,
+            "session",
+            backend,
+            vec![token, f(7)],
+        )
+        .unwrap_or_else(|e| panic!("{}", e.error));
+        let (outputs, _) = finish(runner);
+        assert_eq!(scalar(&outputs.unwrap()[0]), expected);
+    }
+}

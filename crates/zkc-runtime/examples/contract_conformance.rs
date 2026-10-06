@@ -2,16 +2,8 @@
 use serde_json::{Value, json};
 use std::io;
 use zkc_runtime::interactive::{
-    AdmissionError, ArtifactFormat, KernelSignature, LogicalType, OperationBinding, PhysicalType,
-    ResolvedBinding,
+    AdmissionError, KernelSignature, LogicalType, OperationBinding, PhysicalType,
 };
-
-// The history classifier is crate-private. Compile its unchanged owning source
-// in this test executable, instead of copying its list or expanding the public
-// runtime API for a test. Admission/signatures still use the linked runtime.
-#[allow(dead_code)]
-#[path = "../src/interactive/model.rs"]
-mod installed_model;
 
 type LogicalResolver =
     fn(&OperationBinding) -> Result<KernelSignature<LogicalType>, AdmissionError>;
@@ -79,7 +71,7 @@ fn respond(line: &[u8], resolve: LogicalResolver) -> Option<Value> {
     if facet_query {
         resolve(&binding).ok()?;
         return Some(json!({"accepted": true,
-            "facets": {"history": installed_model::observes_or_samples_history(&binding.contract)},
+            "facets": {"history": binding.observes_history().ok()?},
             "unsupported": ["publicReplay", "sampling", "observation", "acceptanceGuard",
                             "conjunction", "unclassifiedProviderEffect"]}));
     }

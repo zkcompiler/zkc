@@ -125,9 +125,7 @@ actual evidence. Neither an implementation's convenience nor a theorem about
 a different object decides the intended semantics. The
 [writing rules](writing.md) give the editorial rules. The
 [profile grouping rationale](../rationale/profile-grouping.md)
-explains the grouped profile structure. The optimized artifact and bounded
-rewrite are engineering obligations until their exact profiles and proofs are
-implemented; they are not additional definitions adopted by this index.
+explains the grouped profile structure.
 
 This specification and its Formal correspondence do not establish native
 protocol support; the [status page](../status.md) states what is implemented.

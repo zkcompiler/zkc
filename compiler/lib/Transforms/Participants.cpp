@@ -2,13 +2,13 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
-#include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
 #include <set>
 
@@ -38,13 +38,14 @@ Error missingBinding(Operation *op) {
 }
 class Projector {
   OpBuilder b;
-  ProtocolModuleOp source;
-  std::map<std::string, ProtocolOp> definitions;
-  std::map<std::string, InstanceOp> instances;
+  zkc::protocol_ir::ProtocolModuleOp source;
+  std::map<std::string, zkc::protocol_ir::ExecFuncOp> definitions;
+  std::map<std::string, zkc::protocol_ir::InstanceOp> instances;
   std::map<std::pair<std::string, std::string>, std::string> symbols;
   using Owners = llvm::DenseMap<mlir::Value, std::string>;
-  Error body(Block &block, Owners owners, IRMapping values, InstanceOp instance,
-             StringRef role, StringRef actual) {
+  Error body(Block &block, Owners owners, IRMapping values,
+             zkc::protocol_ir::InstanceOp instance, StringRef role,
+             StringRef actual) {
     auto roles = bindings(instance.getRoles());
     auto deps = bindings(instance.getDependencies(), true);
     std::map<std::string, Attribute> params;
@@ -62,7 +63,7 @@ class Projector {
     };
     for (auto &item : block) {
       Operation *op = &item;
-      if (auto local = dyn_cast<LocalCallOp>(op)) {
+      if (auto local = dyn_cast<zkc::protocol_ir::LocalCallOp>(op)) {
         for (auto v : op->getResults())
           owners[v] = local.getRoleAttr().getValue().str();
         if (local.getRoleAttr().getValue() != role)
@@ -70,27 +71,28 @@ class Projector {
         SmallVector<Type> types;
         for (auto v : op->getResults())
           types.push_back(v.getType());
-        auto copy = LocalCallOp::create(
+        auto copy = zkc::local::CallOp::create(
             b, op->getLoc(), types, inputs(op->getOperands()),
-            local.getCalleeAttr(), local.getSiteAttr(), StringAttr());
+            local.getCalleeAttr(), local.getSiteAttr());
         for (auto [old, value] : zip(op->getResults(), copy->getResults()))
           values.map(old, value);
-      } else if (auto message = dyn_cast<MessageOp>(op)) {
+      } else if (auto message = dyn_cast<zkc::protocol_ir::MessageOp>(op)) {
         owners[message.getOutput()] = message.getReceiver().str();
         auto *sender = lookup(roles, message.getSender().str());
         auto *receiver = lookup(roles, message.getReceiver().str());
         if (!sender || !receiver)
           return missingBinding(op);
         if (message.getSender() == role)
-          EmitOp::create(b, op->getLoc(), values.lookup(message.getInput()),
-                         message.getSite(), message.getSchema(), *receiver);
+          zkc::protocol_ir::EmitOp::create(
+              b, op->getLoc(), values.lookup(message.getInput()),
+              message.getSite(), message.getSchema(), *receiver);
         else if (message.getReceiver() == role) {
-          auto copy =
-              AwaitOp::create(b, op->getLoc(), message.getOutput().getType(),
-                              message.getSite(), message.getSchema(), *sender);
+          auto copy = zkc::protocol_ir::AwaitOp::create(
+              b, op->getLoc(), message.getOutput().getType(), message.getSite(),
+              message.getSchema(), *sender);
           values.map(message.getOutput(), copy->getResult(0));
         }
-      } else if (auto call = dyn_cast<ProtocolCallOp>(op)) {
+      } else if (auto call = dyn_cast<zkc::protocol_ir::ProtocolCallOp>(op)) {
         auto *binding = lookup(deps, call.getDependency().str());
         auto *selected = binding ? lookup(instances, *binding) : nullptr;
         auto *decl = selected
@@ -98,8 +100,8 @@ class Projector {
                          : nullptr;
         if (!selected || !decl)
           return missingBinding(op);
-        InstanceOp child = *selected;
-        ProtocolOp childDef = *decl;
+        zkc::protocol_ir::InstanceOp child = *selected;
+        zkc::protocol_ir::ExecFuncOp childDef = *decl;
         for (auto [value, r] : zip(op->getResults(), childDef.getOutputRoles()))
           owners[value] = cast<StringAttr>(r).str();
         auto childRoles = bindings(child.getRoles());
@@ -113,14 +115,14 @@ class Projector {
             lookup(symbols, {child.getSymName().str(), actual.str()});
         if (!callee)
           return missingBinding(op);
-        auto copy = ParticipantCallOp::create(b, op->getLoc(), outputTypes,
-                                              inputs(op->getOperands()),
-                                              call.getSite(), *callee);
+        auto copy = zkc::protocol_ir::ParticipantCallOp::create(
+            b, op->getLoc(), outputTypes, inputs(op->getOperands()),
+            call.getSite(), *callee);
         unsigned i = 0;
         for (auto v : op->getResults())
           if (owned(v))
             values.map(v, copy->getResult(i++));
-      } else if (auto loop = dyn_cast<ProtocolLoopOp>(op)) {
+      } else if (auto loop = dyn_cast<zkc::protocol_ir::ProtocolLoopOp>(op)) {
         unsigned carried = loop.getCarried();
         for (unsigned i = 0; i < carried; ++i)
           owners[op->getResult(i)] = owners.lookup(op->getOperand(i));
@@ -138,9 +140,9 @@ class Projector {
           if (!symbolic)
             count = cast<StringAttr>(*bound).getValue();
         }
-        auto copy = ProtocolLoopOp::create(
+        auto copy = zkc::protocol_ir::ProtocolLoopOp::create(
             b, op->getLoc(), types, inputs(op->getOperands()), loop.getSite(),
-            types.size(), count, symbolic);
+            types.size(), count, symbolic, IntegerAttr());
         auto *target = new Block();
         copy->getRegion(0).push_back(target);
         Owners innerOwners;
@@ -163,42 +165,51 @@ class Projector {
         for (auto v : op->getResults())
           if (owned(v))
             values.map(v, copy->getResult(i++));
-      } else if (isa<FinishOp>(op)) {
-        FinishOp::create(b, op->getLoc(), inputs(op->getOperands()));
-      } else if (isa<ProtocolYieldOp>(op)) {
-        ProtocolYieldOp::create(b, op->getLoc(), inputs(op->getOperands()));
-      } else if (auto halt = dyn_cast<HaltOp>(op)) {
+      } else if (isa<zkc::protocol_ir::MathematicalReturnOp>(op)) {
+        zkc::protocol_ir::FinishOp::create(b, op->getLoc(),
+                                           inputs(op->getOperands()));
+      } else if (isa<zkc::protocol_ir::ProtocolYieldOp>(op)) {
+        zkc::protocol_ir::ProtocolYieldOp::create(b, op->getLoc(),
+                                                  inputs(op->getOperands()));
+      } else if (auto halt = dyn_cast<zkc::protocol_ir::HaltOp>(op)) {
         if (halt.getRoleAttr().getValue() == role)
-          HaltOp::create(b, op->getLoc(), halt.getSite(), halt.getReason(),
-                         StringAttr());
+          zkc::local::StopOp::create(b, op->getLoc(), halt.getSite(),
+                                     halt.getReason());
         else
-          IncompleteOp::create(b, op->getLoc(), halt.getSite());
+          zkc::protocol_ir::IncompleteOp::create(b, op->getLoc(),
+                                                 halt.getSite());
       }
     }
     return Error::success();
   }
 
 public:
-  explicit Projector(ProtocolModuleOp source)
+  explicit Projector(zkc::protocol_ir::ProtocolModuleOp source)
       : b(source.getContext()), source(source) {}
   Expected<OwningOpRef<ModuleOp>> run() {
     OwningOpRef<ModuleOp> module(ModuleOp::create(source.getLoc()));
     b.setInsertionPointToEnd(module->getBody());
-    auto root = ProtocolModuleOp::create(b, source.getLoc(), "logical");
+    auto root = zkc::protocol_ir::ProtocolModuleOp::create(
+        b, source.getLoc(),
+        zkc::protocol_ir::ProfileAttr::get(b.getContext(),
+                                           zkc::protocol_ir::Profile::Exec),
+        zkc::protocol_ir::ExecutionContractAttr::get(
+            b.getContext(),
+            zkc::protocol_ir::ExecutionContract::LegacyParticipantsV1));
     auto *block = new Block();
     root->getRegion(0).push_back(block);
     b.setInsertionPointToEnd(block);
     for (auto &op : source.getBody().front()) {
-      if (auto d = dyn_cast<ProtocolOp>(op))
+      if (auto d = dyn_cast<zkc::protocol_ir::ExecFuncOp>(op))
         definitions.emplace(d.getSymName().str(), d);
-      if (auto i = dyn_cast<InstanceOp>(op))
+      if (auto i = dyn_cast<zkc::protocol_ir::InstanceOp>(op))
         instances.emplace(i.getSymName().str(), i);
     }
     // Validate the whole source, but emit only the union of entry closures.
     // Unused instances remain legal library declarations, not extra endpoints.
     std::vector<std::string> pending;
     for (auto &op : source.getBody().front())
-      if (auto entry = dyn_cast<ProtocolEntryOp>(op))
+      if (auto entry = dyn_cast<zkc::protocol_ir::ProtocolEntryOp>(op))
         pending.push_back(
             cast<FlatSymbolRefAttr>(entry.getTargets()[0]).getValue().str());
     std::set<std::string> reachable;
@@ -232,7 +243,7 @@ public:
         symbols[{name, actual}] = std::move(symbol);
       }
     for (auto &op : source.getBody().front())
-      if (isa<func::FuncOp, OperationBindingOp>(op)) {
+      if (isa<zkc::local::FuncOp, zkc::local::OperationBindingOp>(op)) {
         auto *copy = b.clone(op);
         // Source relation ownership was checked before this explicit lowering
         // boundary. Exact matrix checks remain ordinary executable operations.
@@ -243,7 +254,7 @@ public:
       auto *decl = lookup(definitions, instance.getProtocol().str());
       if (!decl)
         return missingBinding(instance);
-      ProtocolOp definition = *decl;
+      zkc::protocol_ir::ExecFuncOp definition = *decl;
       auto ft = definition.getFunctionType();
       auto roles = bindings(instance.getRoles());
       for (auto roleAttr : definition.getRoles()) {
@@ -269,7 +280,7 @@ public:
         for (auto [type, r] : zip(ft.getResults(), definition.getOutputRoles()))
           if (cast<StringAttr>(r).getValue() == role)
             outputs.push_back(type);
-        auto op = ParticipantOp::create(
+        auto op = zkc::protocol_ir::ParticipantOp::create(
             b,
             FusedLoc::get(b.getContext(),
                           {definition.getLoc(), instance.getLoc()}),
@@ -295,7 +306,7 @@ public:
       }
     }
     for (auto &op : source.getBody().front())
-      if (auto e = dyn_cast<ProtocolEntryOp>(op)) {
+      if (auto e = dyn_cast<zkc::protocol_ir::ProtocolEntryOp>(op)) {
         std::string instance =
             cast<FlatSymbolRefAttr>(e.getTargets()[0]).getValue().str();
         SmallVector<Attribute> targets;
@@ -316,8 +327,8 @@ public:
               {text(b, *actual),
                FlatSymbolRefAttr::get(b.getContext(), *symbol)}));
         }
-        ProtocolEntryOp::create(b, e.getLoc(), e.getSymName(),
-                                b.getArrayAttr(targets));
+        zkc::protocol_ir::ProtocolEntryOp::create(b, e.getLoc(), e.getSymName(),
+                                                  b.getArrayAttr(targets));
       }
     return module;
   }
@@ -327,6 +338,9 @@ struct ProjectionPass : PassWrapper<ProjectionPass, OperationPass<ModuleOp>> {
   StringRef getArgument() const final { return "zkc-project-participants"; }
   StringRef getDescription() const final {
     return "Project admitted common protocols to independently callable roles";
+  }
+  void getDependentDialects(DialectRegistry &registry) const final {
+    registry.insert<zkc::local::LocalDialect>();
   }
   void runOnOperation() final {
     auto target = project(getOperation());
@@ -339,21 +353,24 @@ struct ProjectionPass : PassWrapper<ProjectionPass, OperationPass<ModuleOp>> {
 };
 } // namespace
 Expected<OwningOpRef<ModuleOp>> project(ModuleOp module) {
+  module.getContext()->getOrLoadDialect<zkc::local::LocalDialect>();
   if (failed(verify(module)))
     return error("interactive-projection-verification");
-  auto source = exportSource(module);
+  auto source = readExecutionModel(module);
   if (!source)
     return source.takeError();
   if (auto e = admit(*source, true))
     return e;
-  auto root = dyn_cast<ProtocolModuleOp>(&module.getBody()->front());
-  if (!root || root.getStage() != "common")
+  auto root =
+      dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+  if (!root || root.getProfile() != zkc::protocol_ir::Profile::ProtocolExec)
     return error("interactive-projection-stage");
   // Expand on a private copy; projection does not mutate its input.
   OwningOpRef<ModuleOp> expanded(cast<ModuleOp>(module->clone()));
   if (failed(expandAlgorithms(*expanded)))
     return error("algorithm-expansion-failed");
-  root = cast<ProtocolModuleOp>(&expanded->getBody()->front());
+  root =
+      cast<zkc::protocol_ir::ProtocolModuleOp>(&expanded->getBody()->front());
   auto target = Projector(root).run();
   if (!target)
     return target.takeError();

@@ -30,7 +30,7 @@ Expected<AIR> read(StringRef path, mlir::MLIRContext &context, bool ir) {
   if (!module || failed(mlir::verify(*module)))
     return zkc::error("air-ir");
   auto &ops = module->getBody()->getOperations();
-  if (!hasSingleElement(ops) || !isa<AIRRelationOp>(ops.front()))
+  if (!hasSingleElement(ops) || !isa<zkc::relation::AIRRelationOp>(ops.front()))
     return zkc::error("air-ir-module");
   return readAIROperation(&ops.front());
 }

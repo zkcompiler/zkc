@@ -28,13 +28,14 @@ def main():
     assert native('protocol-source', native('protocol-format', source)) == source
     assert source[1][1][6][0] == ['apply', 'first', 'Chosen', ['F'], ['x'], ['a']]
     common = native('protocol-import', source)
-    assert common.count('call @') == 5
     closed = native('protocol-export', common)
+    assert sum(i[0] == 'apply' for f in closed[2] for i in f[4]) == 5
     assert len([f for f in closed[2] if f[5][0] == 'Twice']) == 2
     assert all(not i[3] for f in closed[2] for i in f[4] if i[0] == 'apply')
     expanded = journal.run([optimizer, '--zkc-expand-algorithms'], common)
-    assert 'call @' not in expanded
-    assert native('protocol-export', expanded) == native('protocol-expand', source)
+    expanded_source = native('protocol-export', expanded)
+    assert not any(i[0] == 'apply' for f in expanded_source[2] for i in f[4])
+    assert expanded_source == native('protocol-expand', source)
     assert journal.run([optimizer, '--zkc-expand-algorithms'], expanded) == expanded
     candidate = native('protocol-compile', source)
     assert not any(i[0] == 'apply' for f in candidate[3] for i in f[4])
@@ -187,6 +188,7 @@ def main():
     alternate = copy.deepcopy(source)
     alternate[1].append(['generic_function', 'Identity', [['F', 'Field']], [], [['x', 'field:F']],
                          ['field:F'], [['return', ['x']]]])
+    lean(alternate, native('protocol-compile', alternate))
     substituted = copy.deepcopy(alternate)
     substituted[1][1][6][0][2] = 'Identity'
     lean(alternate, native('protocol-compile', substituted), error='source-local-unmatched')

@@ -29,13 +29,13 @@ for file in ["two-factor.json", "group-exchange.json"]:
     logical.write_text(run(optimizer, "--zkc-project-participants", ir))
     logical_json = json.loads(run(compiler, "protocol-export", logical))
     physical = directory / "physical.mlir"
-    physical.write_text(run(optimizer, "--zkc-plan-participants", logical))
+    physical.write_text(run(optimizer, "--zkc-select-physical", logical))
     physical_json = json.loads(run(compiler, "protocol-export", physical))
     direct = json.loads(run(compiler, "protocol-compile", source))
     assert direct == physical_json
     assert logical_json[2] == "logical" and physical_json[2] == "physical"
     assert "plan.kernel" in physical.read_text() and "!plan.data" in physical.read_text()
-    assert '"pir.message"' not in logical.read_text()
+    assert '"protocol.message"' not in logical.read_text()
     if file == "two-factor.json":
         assert len(direct[4]) == 6
         assert sum(p[2] == "opening" for p in direct[4]) == 2
@@ -45,7 +45,7 @@ for file in ["two-factor.json", "group-exchange.json"]:
     else:
         assert "poly." not in logical.read_text()
     run(optimizer, "--zkc-project-participants", physical, ok=False, code="interactive-projection-stage")
-    run(optimizer, "--zkc-plan-participants", physical, ok=False, code="interactive-physical-stage")
+    run(optimizer, "--zkc-select-physical", physical, ok=False, code="interactive-physical-stage")
     tampered = directory / "extra-attribute.mlir"
     tampered.write_text(physical.read_text().replace("}> :", '}> {untrusted = "claim"} :', 1))
     run(compiler, "protocol-export", tampered, ok=False, code="binding-attribute")

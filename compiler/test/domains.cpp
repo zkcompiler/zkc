@@ -325,6 +325,7 @@ void installedInventory() {
       {"ristretto255.group", {"group", "groups"}},
       {"bn254.g1", {"group", "groups"}},
       {"bn254.g2", {"group", "groups"}},
+      {"bn254.gt", {"group"}},
       {"merlin3.bls12-381.fr64be/1", {"transcript"}},
       {"spongefish0.7.4.keccak.bls12-381.fr64be/1", {"transcript"}},
       {"merlin3.ristretto255.scalar64le/1", {"transcript"}},
@@ -345,7 +346,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 63 && actual == pairs,
+  require(pairs.size() == 64 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -376,6 +377,7 @@ void installedInventory() {
       {"bn254.fr", "arkworks"},
       {"bn254.g1", "arkworks"},
       {"bn254.g2", "arkworks"},
+      {"bn254.gt", "arkworks"},
       {"multilinear.kzg.bls12-381/1", "arkworks"},
       {"merlin3.bls12-381.fr64be/1", "arkworks"},
       {"ristretto255.scalar", "dalek"},
@@ -513,10 +515,7 @@ void installedBindings() {
         const auto &sort = operation.signature.scope.sorts[i];
         binding.application.arguments.push_back(
             sort == "Codec"
-                ? codecs.at(
-                      StringRef(operation.name)
-                          .drop_front(StringRef("transcript.observe.").size())
-                          .str())
+                ? codecs.at(StringRef(operation.name).rsplit('.').second.str())
             : sort == "Commitment" &&
                     (oracle ||
                      operation.name == "transcript.observe.commitments")
@@ -527,8 +526,10 @@ void installedBindings() {
                 ? "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
             : sort == "Field" && (embedding || operation.name == "random.index")
                 ? "koala-bear.ext8-binomial3"
-            : sort == "Field" && operation.name == "pairing.check" ? "bn254.fr"
-            : sort == "Nat"                                        ? "4"
+            : sort == "Field" && (operation.name == "pairing.check" ||
+                                  operation.name == "pairing.apply")
+                ? "bn254.fr"
+            : sort == "Nat" ? "4"
             : sort == "Field" &&
                     (twoAdic ||
                      StringRef(operation.name).starts_with("fixed_vector."))
@@ -770,7 +771,7 @@ void bn254Domains() {
       {}, "check", {"pairing.check", {"bn254.fr"}, ""}};
   auto logical = accept(resolveBinding(pairing.application, false));
   require(boundOperationName(pairing.application.contract) ==
-                  "algebra.pairing_check" &&
+                  "algebra.exec.pairing_check" &&
               logical.inputs ==
                   std::vector<BoundType>{{"groups", "bn254.g1", ""},
                                          {"groups", "bn254.g2", ""}} &&
@@ -813,6 +814,22 @@ void bn254Domains() {
       {"g2", "Group", {{"Scalar", "f"}}, {"ScalarAction"}},
       {"other", "Field", {}, {"Field"}}};
   accept(DomainCatalog::create(records, {}, {}, {}));
+  // Target association is optional for existing check-only catalogs.
+  auto withTarget = records;
+  withTarget[0].associated.push_back({"PairingGT", "gt"});
+  withTarget.push_back({"gt", "Group", {{"Scalar", "f"}}, {"ScalarAction"}});
+  accept(DomainCatalog::create(withTarget, {}, {}, {}));
+  for (unsigned mutation = 0; mutation < 3; ++mutation) {
+    auto bad = withTarget;
+    if (mutation == 0)
+      bad[0].associated.back().identity = "g1";
+    else if (mutation == 1)
+      bad.back().associated[0].identity = "other";
+    else
+      bad.back().capabilities.clear();
+    refuse(DomainCatalog::create(bad, {}, {}, {}),
+           "invalid pairing target association");
+  }
   for (unsigned mutation = 0; mutation < 4; ++mutation) {
     auto bad = records;
     if (mutation == 0)

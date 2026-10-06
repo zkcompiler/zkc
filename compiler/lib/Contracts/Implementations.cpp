@@ -24,6 +24,7 @@ constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bn254.fr"},
     {"arkworks", "bn254.g1"},
     {"arkworks", "bn254.g2"},
+    {"arkworks", "bn254.gt"},
     {"arkworks", "multilinear.kzg.bls12-381/1"},
     {"arkworks", "merlin3.bls12-381.fr64be/1"},
     {"dalek", "ristretto255.scalar"},
@@ -55,6 +56,10 @@ struct ContractRow {
   StringRef domain = {};
 };
 constexpr ContractRow contractRows[] = {
+    {"sequence.empty", Native, Compatibility::Independent},
+    {"sequence.append", Native, Compatibility::Independent},
+    {"sequence.length", Native, Compatibility::Independent},
+    {"sequence.at", Native, Compatibility::Independent},
     {"bool.and", Arkworks, Compatibility::Independent},
     {"bool.not", Arkworks, Compatibility::Independent},
     {"bool.or", Arkworks, Compatibility::Independent},
@@ -106,6 +111,7 @@ constexpr ContractRow contractRows[] = {
     {"vector.append", Arithmetic},
     {"vector.splat", Arithmetic},
     {"vector.powers", Arithmetic},
+    {"vector.equal", Arithmetic},
     {"vector.add", Arithmetic},
     {"vector.sub", Arithmetic},
     {"vector.mul", Arithmetic},
@@ -126,6 +132,7 @@ constexpr ContractRow contractRows[] = {
     {"matrix.mul_vector", Arithmetic},
     {"matrix.transpose_mul_vector", Arithmetic},
     {"matrix.bilinear", Arithmetic},
+    {"matrix.dimension", Arithmetic},
     {"matrix.shape_check", Arithmetic},
     {"matrix.identity_check", Arithmetic},
     {"poly.coefficient_count", Arithmetic},
@@ -145,6 +152,7 @@ constexpr ContractRow contractRows[] = {
     {"poly.univariate_boundary", Arithmetic},
     {"poly.product_sum", Arkworks},
     {"poly.product_round", Arkworks},
+    {"poly.table_arity", Arkworks},
     {"poly.boundary", Arithmetic},
     {"poly.round_evaluate", Arithmetic},
     {"poly.fold", Arkworks},
@@ -171,6 +179,7 @@ constexpr ContractRow contractRows[] = {
     {"curve.commit", Arkworks | Dalek},
     {"curve.response", Arkworks | Dalek},
     {"pairing.check", Arkworks},
+    {"pairing.apply", Arkworks},
     {"pcs.commit", Arkworks},
     {"pcs.open", Arkworks},
     {"pcs.check", Arkworks},
@@ -189,6 +198,29 @@ constexpr ContractRow contractRows[] = {
     {"random.vector", Arithmetic},
     {"random.index", Plonky3},
     {"random.draw", Arithmetic},
+    {"transcript.native.indexed.challenge",
+     Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
+    {"transcript.native.indexed.observe.data",
+     Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
+    {"transcript.native.indexed.observe.bool", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.observe.field", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.observe.group", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.observe.index", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.observe.field_array", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.observe.commitment", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.indexed.observe.proof", Arkworks | Spongefish,
+     Compatibility::Transcript},
+    {"transcript.native.challenge", Transcripts, Compatibility::Transcript},
+    {"transcript.native.observe.bool", Transcripts, Compatibility::Transcript},
+    {"transcript.native.observe.field", Transcripts, Compatibility::Transcript},
+    {"transcript.native.observe.group", Arkworks | Dalek | Spongefish,
+     Compatibility::Transcript},
     {"transcript.challenge", Transcripts, Compatibility::Transcript},
     {"transcript.draw_index", Plonky3, Compatibility::Transcript},
     {"transcript.observe.bool", Transcripts, Compatibility::Transcript},
@@ -212,12 +244,15 @@ constexpr ContractRow contractRows[] = {
     {"transcript.observe.proof", Arkworks | Plonky3 | Spongefish,
      Compatibility::Transcript},
     {"transcript.observe.commitments", Plonky3, Compatibility::Transcript},
+    {"field_array.from_vector", Arkworks, Compatibility::Nominal,
+     "bls12-381.fr"},
+    {"field_array.at", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
     {"fixed_vector.from_vector", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"fixed_vector.to_vector", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"fixed_vector.dot", Plonky3, Compatibility::Nominal, "koala-bear"}};
 
 const generic::Operation *declaration(StringRef contract) {
-  for (const auto &operation : boundOperationContracts())
+  for (const auto &operation : executableOperationContracts())
     if (operation.name == contract)
       return &operation;
   return nullptr;

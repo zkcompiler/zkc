@@ -10,28 +10,28 @@ ARK = "arkworks.multilinear.bls12-381/1"
 GROUP = "reference.group/1"
 # Independently stated portable contracts, including the explicit opening state.
 KERNELS = [
-    ("field.constant", "algebra.constant", [], ["field"]),
-    ("field.add", "algebra.sum", ["field", "field"], ["field"]),
-    ("field.mul", "algebra.product", ["field", "field"], ["field"]),
-    ("field.equal", "algebra.compare", ["field", "field"], ["bool"]),
-    ("bool.and", "pir.and", ["bool", "bool"], ["bool"]),
-    ("control.require", "pir.require", ["bool"], []),
-    ("poly.product_sum", "poly.product_sum", ["table", "table"], ["field"]),
-    ("poly.product_round", "poly.product_round", ["table", "table"], ["round"]),
-    ("poly.boundary", "poly.boundary", ["round"], ["field"]),
-    ("poly.round_evaluate", "poly.round_evaluate", ["round", "field"], ["field"]),
-    ("poly.fold", "poly.fold", ["table", "field"], ["table"]),
-    ("poly.evaluate", "poly.mle_evaluate", ["table", "point"], ["field"]),
-    ("poly.empty_point", "poly.empty_point", [], ["point"]),
-    ("poly.append_point", "poly.append_point", ["point", "field"], ["point"]),
-    ("pcs.commit", "pcs.commit", ["prover_key", "table"], ["commitment", "opening_state"]),
-    ("pcs.open", "pcs.open", ["opening_state", "point"], ["field", "proof"]),
-    ("pcs.check", "pcs.check", ["verifier_key", "commitment", "point", "field", "proof"], ["bool"]),
-    ("random.draw", "pir.random_draw", ["rng"], ["field", "rng"]),
-    ("curve.scale", "algebra.curve_scale", ["group", "field"], ["group"]),
-    ("curve.commit", "algebra.curve_commit", ["groups", "nonce"], ["groups", "nonce"]),
-    ("curve.response", "algebra.curve_response", ["field", "field", "nonce"], ["field"]),
-    ("curve.equal", "algebra.curve_equal", ["group", "group"], ["bool"]),
+    ("field.constant", "algebra.exec.field_constant", [], ["field"]),
+    ("field.add", "algebra.exec.field_add", ["field", "field"], ["field"]),
+    ("field.mul", "algebra.exec.field_multiply", ["field", "field"], ["field"]),
+    ("field.equal", "algebra.exec.field_equal", ["field", "field"], ["bool"]),
+    ("bool.and", "algebra.exec.bool_and", ["bool", "bool"], ["bool"]),
+    ("control.require", "local.exec.require", ["bool"], []),
+    ("poly.product_sum", "poly.exec.product_sum", ["table", "table"], ["field"]),
+    ("poly.product_round", "poly.exec.product_round", ["table", "table"], ["round"]),
+    ("poly.boundary", "poly.exec.boundary", ["round"], ["field"]),
+    ("poly.round_evaluate", "poly.exec.round_evaluate", ["round", "field"], ["field"]),
+    ("poly.fold", "poly.exec.fold", ["table", "field"], ["table"]),
+    ("poly.evaluate", "poly.exec.mle_evaluate", ["table", "point"], ["field"]),
+    ("poly.empty_point", "poly.exec.empty_point", [], ["point"]),
+    ("poly.append_point", "poly.exec.append_point", ["point", "field"], ["point"]),
+    ("pcs.commit", "pcs.exec.commit", ["prover_key", "table"], ["commitment", "opening_state"]),
+    ("pcs.open", "pcs.exec.open", ["opening_state", "point"], ["field", "proof"]),
+    ("pcs.check", "pcs.exec.check", ["verifier_key", "commitment", "point", "field", "proof"], ["bool"]),
+    ("random.draw", "crypto.exec.random_draw", ["rng"], ["field", "rng"]),
+    ("curve.scale", "algebra.exec.group_scale", ["group", "field"], ["group"]),
+    ("curve.commit", "crypto.exec.curve_commit", ["groups", "nonce"], ["groups", "nonce"]),
+    ("curve.response", "crypto.exec.curve_response", ["field", "field", "nonce"], ["field"]),
+    ("curve.equal", "algebra.exec.group_equal", ["group", "group"], ["bool"]),
 ]
 TYPES = {
     "bool": "i1", "field": '!algebra.field<"bls12-381.fr">',
@@ -41,7 +41,7 @@ TYPES = {
     "point": '!poly.point<"bls12-381.fr">',
     "group": '!algebra.group<"bls12-381.g1">',
     "groups": 'tensor<?x!algebra.group<"bls12-381.g1">>',
-    **{k: f'!pir.capability<"{k}:bls12-381.fr">' for k in ["rng", "nonce"]},
+    **{k: f'!local.capability<"{k}:bls12-381.fr">' for k in ["rng", "nonce"]},
     **{k: f'!pcs.object<"{PCS}", "{k}">' for k in
        ["prover_key", "verifier_key", "commitment", "proof", "opening_state"]},
 }
@@ -60,7 +60,9 @@ def run(tool, *args, text=None, op=None, code=None):
 
 
 def wrapped(body, profile=ARK, stage="common"):
-    return (f'module {{ "pir.module"() <{{stage = "{stage}"}}> '
+    profile = {"common": "protocol_exec", "logical": "exec", "physical": "physical"}[stage]
+    contract = "" if stage == "common" else ", execution_contract = #protocol.execution_contract<legacy_participants_v1>"
+    return (f'module {{ "protocol.module"() <{{profile = #protocol.profile<{profile}>{contract}}}> '
             f'({{\n{body}\n}}) : () -> () }}')
 
 
@@ -72,7 +74,7 @@ def kernel_ir(op, ins, outs, profile=ARK, physical=False, key=None, parameters="
                     key.removeprefix("arkworks/") if key else "curve.scale")
     if contract not in {k for k, _, _, _ in KERNELS}: contract = "bool.and"
     extra = ', binding = @binding' + (f', kernel = "{key}"' if key is not None else "")
-    code = (f'func.func @f({args}) {{\n'
+    code = (f'local.func @f({args}) {{\n'
             f'  {result}"{op}"({operands}) <{{site = "s", parameters = {parameters}{extra}}}> '
             f': ({", ".join(ins)}) -> ({", ".join(outs)})\n'
             '  return\n}')
@@ -87,8 +89,9 @@ def bad(text, op, code):
 
 def proto(name, deps="[]", body=None, roles='["P"]', ft="(i1) -> i1"):
     external = body is None
+    if body is not None: body = body.replace("protocol.finish", "protocol.return")
     region = "" if external else f"^bb0(%a: i1):\n{body}"
-    return (f'"pir.protocol"() <{{sym_name = "{name}", dependencies = {deps}, '
+    return (f'"protocol.exec_func"() <{{sym_name = "{name}", dependencies = {deps}, '
             f'function_type = {ft}, roles = {roles}, input_roles = ["P"], '
             f'output_roles = ["P"], parameters = [], external = {str(external).lower()}}}> '
             f'({{{region}}}) : () -> ()\n')
@@ -96,24 +99,24 @@ def proto(name, deps="[]", body=None, roles='["P"]', ft="(i1) -> i1"):
 
 def participant(name, body, role="P", instance="i", ft="(i1) -> i1"):
     argument_type = ft.split(")")[0][1:]
-    return (f'"pir.participant"() <{{sym_name = "{name}", function_type = {ft}, '
+    return (f'"protocol.participant"() <{{sym_name = "{name}", function_type = {ft}, '
             f'role = "{role}", instance = "{instance}", parameters = []}}> '
             f'({{^bb0(%a: {argument_type}):\n{body}}}) : () -> ()\n')
 
 
 def instance(name, protocol, deps="[]", roles='[["P", "P"]]'):
-    return (f'"pir.instance"() <{{sym_name = "{name}", protocol = @{protocol}, '
+    return (f'"protocol.instance"() <{{sym_name = "{name}", protocol = @{protocol}, '
             f'dependencies = {deps}, parameters = [], roles = {roles}}}> : () -> ()\n')
 
 
 def entry(targets):
-    return f'"pir.entry"() <{{sym_name = "main", targets = {targets}}}> : () -> ()\n'
+    return f'"protocol.entry"() <{{sym_name = "main", targets = {targets}}}> : () -> ()\n'
 
 
-FINISH = '"pir.finish"(%a) : (i1) -> ()\n'
-CALL = '%r = "pir.local_call"(%a) <{callee = @f, site = "s", role = "P"}> : (i1) -> i1\n' + FINISH
-DEPEND = '%r = "pir.protocol_call"(%a) <{dependency = "alias", site = "s"}> : (i1) -> i1\n' + FINISH
-PARTCALL = '%r = "pir.participant_call"(%a) <{callee = @child, site = "s"}> : (i1) -> i1\n' + FINISH
+FINISH = '"protocol.finish"(%a) : (i1) -> ()\n'
+CALL = '%r = "protocol.local_call"(%a) <{callee = @f, site = "s", role = "P"}> : (i1) -> i1\n' + FINISH
+DEPEND = '%r = "protocol.call"(%a) <{dependency = "alias", site = "s"}> : (i1) -> i1\n' + FINISH
+PARTCALL = '%r = "protocol.participant_call"(%a) <{callee = @child, site = "s"}> : (i1) -> i1\n' + FINISH
 
 directory = records()
 directory = Path(directory)
@@ -136,18 +139,18 @@ for key, op, inputs, outputs in KERNELS:
 
 # Actual type parameters, including PCS scheme, cannot be substituted.
 for t in ['!algebra.field<"f7">', '!algebra.field<"reference.scalar">']:
-    bad(kernel_ir("algebra.sum", [t, t], [t]), "algebra.sum", "binding-operation-signature")
-bad(kernel_ir("pcs.open", ['!pcs.object<"other", "opening_state">', TYPES["point"]],
-              [TYPES["field"], TYPES["proof"]]), "pcs.open", "binding-operation-signature")
-bad(kernel_ir("algebra.curve_scale", [TYPES["group"], TYPES["scalar"]], [TYPES["group"]]),
-    "algebra.curve_scale", "binding-operation-signature")
-bad(kernel_ir("pir.and", ["i1"]*2, ["i1"], ARK, True), "pir.and", "interactive-kernel-stage")
-bad(kernel_ir("pir.and", ["i1"]*2, ["i1"], parameters='["extra"]'), "pir.and", "interactive-kernel-parameters")
-bad(kernel_ir("algebra.constant", [], [TYPES["field"]]), "algebra.constant", "interactive-kernel-parameters")
+    bad(kernel_ir("algebra.exec.field_add", [t, t], [t]), "algebra.exec.field_add", "binding-operation-signature")
+bad(kernel_ir("pcs.exec.open", ['!pcs.object<"other", "opening_state">', TYPES["point"]],
+              [TYPES["field"], TYPES["proof"]]), "pcs.exec.open", "binding-operation-signature")
+bad(kernel_ir("algebra.exec.group_scale", [TYPES["group"], TYPES["scalar"]], [TYPES["group"]]),
+    "algebra.exec.group_scale", "binding-operation-signature")
+bad(kernel_ir("algebra.exec.bool_and", ["i1"]*2, ["i1"], ARK, True), "algebra.exec.bool_and", "interactive-kernel-stage")
+bad(kernel_ir("algebra.exec.bool_and", ["i1"]*2, ["i1"], parameters='["extra"]'), "algebra.exec.bool_and", "interactive-kernel-parameters")
+bad(kernel_ir("algebra.exec.field_constant", [], [TYPES["field"]]), "algebra.exec.field_constant", "interactive-kernel-parameters")
 for p, code in [('[true]', 'binding-parameters'), ('["01"]', 'noncanonical-natural'),
                 ('["-1"]', 'expected-natural'), ('["not_a_number"]', 'expected-natural'),
                 ('["52435875175126190479447740508185965837690552500527637822603658699938581184513"]', 'interactive-constant')]:
-    bad(kernel_ir("algebra.constant", [], [TYPES["field"]], parameters=p), "algebra.constant", code)
+    bad(kernel_ir("algebra.exec.field_constant", [], [TYPES["field"]], parameters=p), "algebra.exec.field_constant", code)
 data = '!plan.data<i1, "native.bool/1">'
 for key in ["bool.and", "reference/bool.and", "arkworks/arkworks/bool.and", "arkworks/missing"]:
     code = "binding-implementation"
@@ -157,70 +160,70 @@ for t in [f'!plan.data<i1, "{GROUP}">', f'!plan.data<{TYPES["field"]}, "{ARK}">'
         "plan.kernel", "binding-operation-signature")
 bad(kernel_ir("plan.kernel", ["i1"]*2, ["i1"], ARK, True, "arkworks/bool.and"),
     "plan.kernel", "must be")
-bad('module { func.func @f(%a: i1) { %r = "pir.and"(%a, %a) <{parameters = [], site = "s"}> : (i1, i1) -> i1\n return } }',
-    "pir.and", "interactive-kernel-context")
+bad('module { local.func @f(%a: i1) { %r = "algebra.exec.bool_and"(%a, %a) <{parameters = [], site = "s"}> : (i1, i1) -> i1\n return } }',
+    "algebra.exec.bool_and", "interactive-kernel-context")
 
-# These native call fixtures have no pir.module, and cannot reach JSON export.
+# These native call fixtures have no protocol.module, and cannot reach JSON export.
 # Exact callee kinds and real SSA signatures must be checked by MLIR itself.
 def bare(text):
     return "module {\n" + text + "\n}"
-f = "func.func private @f(i1) -> i1\n"
+f = "local.func private @f(i1) -> i1\n"
 run(optimizer, text=bare(f + proto("parent", body=CALL)))
-bad(bare(proto("f") + proto("parent", body=CALL)), "pir.local_call", "interactive-symbol-kind")
-bad(bare(proto("parent", body=CALL)), "pir.local_call", "interactive-symbol-kind")
+bad(bare(proto("f") + proto("parent", body=CALL)), "protocol.local_call", "interactive-symbol-kind")
+bad(bare(proto("parent", body=CALL)), "protocol.local_call", "interactive-symbol-kind")
 bad(bare(f + proto("parent", body=CALL.replace('callee = @f, ', ''))),
-    "pir.local_call", "callee")
+    "protocol.local_call", "callee")
 for ft in ["(i32) -> i1", "(i1) -> i32", "() -> i1"]:
-    bad(bare(f"func.func private @f{ft}\n" + proto("parent", body=CALL)),
-        "pir.local_call", "interactive-call-signature")
-bad(bare(f + proto("parent", body=CALL.replace('role = "P"', 'role = "Q"'))), "pir.local_call", "interactive-local-role")
-bad(bare(f + participant("parent", CALL)), "pir.local_call", "interactive-local-role")
-run(optimizer, text=bare(f + participant("parent", CALL.replace(', role = "P"', ''))))
+    bad(bare(f"local.func private @f{ft}\n" + proto("parent", body=CALL)),
+        "protocol.local_call", "interactive-call-signature")
+bad(bare(f + proto("parent", body=CALL.replace('role = "P"', 'role = "Q"'))), "protocol.local_call", "interactive-local-role")
+bad(bare(f + participant("parent", CALL)), "protocol.local_call", "parent")
+run(optimizer, text=bare(f + participant("parent", CALL.replace(', role = "P"', '').replace("protocol.local_call", "local.call"))))
 
 child = proto("child")
 parent = proto("parent", '[["alias", @child, []]]', DEPEND)
 # A global @alias is deliberately a different kind; only the declared alias matters.
-run(optimizer, text=bare(child + "func.func private @alias()\n" + parent))
+run(optimizer, text=bare(child + "local.func private @alias()\n" + parent))
 bad(bare(child + parent.replace('dependency = "alias"', 'dependency = "child"')),
-    "pir.protocol_call", "interactive-dependency")
-bad(bare(proto("child", ft="(i32) -> i1") + parent), "pir.protocol_call", "interactive-call-signature")
-bad(bare(proto("child", ft="(i1) -> i32") + parent), "pir.protocol_call", "interactive-call-signature")
-bad(bare("func.func private @child(i1) -> i1\n" + proto("parent", '[["alias", @child, []]]')),
-    "pir.protocol", "interactive-symbol-kind")
-bad(bare(proto("parent", '[["alias", @missing, []]]')), "pir.protocol", "interactive-symbol-kind")
+    "protocol.call", "interactive-dependency")
+bad(bare(proto("child", ft="(i32) -> i1") + parent), "protocol.call", "interactive-call-signature")
+bad(bare(proto("child", ft="(i1) -> i32") + parent), "protocol.call", "interactive-call-signature")
+bad(bare("local.func private @child(i1) -> i1\n" + proto("parent", '[["alias", @child, []]]')),
+    "protocol.exec_func", "interactive-symbol-kind")
+bad(bare(proto("parent", '[["alias", @missing, []]]')), "protocol.exec_func", "interactive-symbol-kind")
 bad(bare(proto("child", roles='["Q"]') + proto("parent", '[["alias", @child, []]]')),
-    "pir.protocol", "interactive-dependency-role")
+    "protocol.exec_func", "interactive-dependency-role")
 for deps in ['[42 : i64]', '[["a", "child", []]]', '[["a", @child, []], ["a", @child, []]]', '[["a", @child, [true]]]', '[["a", @child]]']:
-    bad(bare(child + proto("parent", deps)), "pir.protocol", "interactive-binding-attribute")
-bad(bare(proto("parent", body=DEPEND)), "pir.protocol_call", "interactive-dependency")
+    bad(bare(child + proto("parent", deps)), "protocol.exec_func", "interactive-binding-attribute")
+bad(bare(proto("parent", body=DEPEND)), "protocol.call", "interactive-dependency")
 
 run(optimizer, text=bare(participant("child", FINISH, instance="different") + participant("parent", PARTCALL)))
-bad(bare(f.replace("@f", "@child") + participant("parent", PARTCALL)), "pir.participant_call", "interactive-symbol-kind")
-bad(bare(participant("parent", PARTCALL)), "pir.participant_call", "interactive-symbol-kind")
-bad(bare(participant("child", FINISH, role="Q") + participant("parent", PARTCALL)), "pir.participant_call", "interactive-call-role")
-bad(bare(participant("child", '"pir.halt"() <{site="stop", reason="incomplete"}> : () -> ()', ft="(i1) -> i32") + participant("parent", PARTCALL)), "pir.participant_call", "interactive-call-signature")
-bad(bare(participant("child", '"pir.halt"() <{site="stop", reason="incomplete"}> : () -> ()', ft="(i32) -> i1") + participant("parent", PARTCALL)), "pir.participant_call", "interactive-call-signature")
+bad(bare(f.replace("@f", "@child") + participant("parent", PARTCALL)), "protocol.participant_call", "interactive-symbol-kind")
+bad(bare(participant("parent", PARTCALL)), "protocol.participant_call", "interactive-symbol-kind")
+bad(bare(participant("child", FINISH, role="Q") + participant("parent", PARTCALL)), "protocol.participant_call", "interactive-call-role")
+bad(bare(participant("child", '"local.stop"() <{site="stop", reason="incomplete"}> : () -> ()', ft="(i1) -> i32") + participant("parent", PARTCALL)), "protocol.participant_call", "interactive-call-signature")
+bad(bare(participant("child", '"local.stop"() <{site="stop", reason="incomplete"}> : () -> ()', ft="(i32) -> i1") + participant("parent", PARTCALL)), "protocol.participant_call", "interactive-call-signature")
 
 # Instance identity and the selected role map are checked, not only signatures.
 defs = child + proto("other") + proto("parent", '[["alias", @child, []]]')
 inst = instance("parent_i", "parent", '[["alias", @child_i]]')
 run(optimizer, text=bare(defs + instance("child_i", "child") + inst))
-bad(bare(f + instance("i", "f")), "pir.instance", "interactive-symbol-kind")
-bad(bare(instance("i", "missing")), "pir.instance", "interactive-symbol-kind")
-bad(bare(defs + instance("child_i", "other") + inst), "pir.instance", "interactive-dependency-protocol")
-bad(bare(defs + inst), "pir.instance", "interactive-symbol-kind")
-bad(bare(defs + inst.replace("@child_i", "@child")), "pir.instance", "interactive-symbol-kind")
+bad(bare(f + instance("i", "f")), "protocol.instance", "interactive-symbol-kind")
+bad(bare(instance("i", "missing")), "protocol.instance", "interactive-symbol-kind")
+bad(bare(defs + instance("child_i", "other") + inst), "protocol.instance", "interactive-dependency-protocol")
+bad(bare(defs + inst), "protocol.instance", "interactive-symbol-kind")
+bad(bare(defs + inst.replace("@child_i", "@child")), "protocol.instance", "interactive-symbol-kind")
 bad(bare(defs + instance("child_i", "child", roles='[["P", "Q"]]') + inst),
-    "pir.instance", "interactive-dependency-role")
-bad(bare(defs + instance("parent_i", "parent")), "pir.instance", "interactive-dependency-binding")
-bad(bare(child + instance("i", "child", roles="[]")), "pir.instance", "interactive-role-binding")
-bad(wrapped(child + entry("[@child]")), "pir.entry", "interactive-symbol-kind")
-bad(wrapped(entry("[@missing]")), "pir.entry", "interactive-symbol-kind")
-bad(wrapped(entry('[["P", @missing]]')), "pir.entry", "interactive-entry-targets")
-bad(wrapped(f + entry('[["P", @f]]'), stage="logical"), "pir.entry", "interactive-symbol-kind")
-bad(wrapped(participant("p", FINISH) + entry('[["Q", @p]]'), stage="logical"), "pir.entry", "interactive-entry-role")
+    "protocol.instance", "interactive-dependency-role")
+bad(bare(defs + instance("parent_i", "parent")), "protocol.instance", "interactive-dependency-binding")
+bad(bare(child + instance("i", "child", roles="[]")), "protocol.instance", "interactive-role-binding")
+bad(wrapped(child + entry("[@child]")), "protocol.entry", "interactive-symbol-kind")
+bad(wrapped(entry("[@missing]")), "protocol.entry", "interactive-symbol-kind")
+bad(wrapped(entry('[["P", @missing]]')), "protocol.entry", "interactive-entry-targets")
+bad(wrapped(f + entry('[["P", @f]]'), stage="logical"), "protocol.entry", "interactive-symbol-kind")
+bad(wrapped(participant("p", FINISH) + entry('[["Q", @p]]'), stage="logical"), "protocol.entry", "interactive-entry-role")
 bad(wrapped(participant("p", FINISH) + participant("q", FINISH, "Q", "j") +
-            entry('[["P", @p], ["Q", @q]]'), stage="logical"), "pir.entry", "interactive-entry-instance")
+            entry('[["P", @p], ["Q", @q]]'), stage="logical"), "protocol.entry", "interactive-entry-instance")
 
 # Each portable contract stated above has a valid import and a complete pass
 # route. The registry holds many more than these; that every registered kernel
@@ -245,7 +248,7 @@ for profile in [ARK, GROUP]:
     path.write_text(json.dumps(source))
     common = run(compiler, "protocol-import", path)
     physical = run(optimizer, "--canonicalize", "--cse", "--zkc-project-participants",
-                   "--zkc-plan-participants", "--canonicalize", "--cse", text=common)
+                   "--zkc-select-physical", "--canonicalize", "--cse", text=common)
     run(optimizer, text=physical)
 
 # The same two examples as interactive_protocols.py, which checks the stages
@@ -254,7 +257,7 @@ for profile in [ARK, GROUP]:
 for name in ["group-exchange.json", "two-factor.json"]:
     common = run(compiler, "protocol-import", examples / name)
     physical = run(optimizer, "--canonicalize", "--cse", "--zkc-project-participants",
-                   "--zkc-plan-participants", "--canonicalize", "--cse", text=common)
+                   "--zkc-select-physical", "--canonicalize", "--cse", text=common)
     path = directory / "physical.mlir"
     path.write_text(physical)
     result = json.loads(run(compiler, "protocol-export", path))
@@ -269,30 +272,30 @@ source = ["zkc.protocol/1", [], [],
 path = directory / "stop.json"
 path.write_text(json.dumps(source))
 common = run(compiler, "protocol-import", path)
-result = run(optimizer, "--zkc-project-participants", "--zkc-plan-participants", text=common)
-assert '"pir.incomplete"' in result and '"pir.halt"' in result
+result = run(optimizer, "--zkc-project-participants", "--zkc-select-physical", text=common)
+assert '"protocol.incomplete"' in result and '"local.stop"' in result
 
 # Standalone declarations retain meaningful local checks even without a
-# pir.module owner. Caller tests above use independently well-formed callees.
+# protocol.module owner. Caller tests above use independently well-formed callees.
 bad(bare(participant("bad", FINISH, ft="(i1) -> i32")),
-    "pir.finish", "interactive-return-signature")
+    "protocol.finish", "interactive-return-signature")
 bad(bare(proto("bad", body=FINISH, ft="(i1) -> i32")),
-    "pir.finish", "interactive-return-signature")
-message = '%m = "pir.message"(%a) <{site="send", schema="message", sender="P", receiver="Q"}> : (i1) -> i32'
-bad(bare(proto("bad", body=message + "\n" + FINISH)), "pir.message", "same type")
+    "protocol.return", "interactive-return-signature")
+message = '%m = "protocol.message"(%a) <{site="send", schema="message", sender="P", receiver="Q"}> : (i1) -> i32'
+bad(bare(proto("bad", body=message + "\n" + FINISH)), "protocol.message", "same type")
 for carried, count, code in [(-1, "1", "interactive-loop-carried"),
                               (0, "nonsense", "interactive-loop-count"),
                               (0, "1048577", "interactive-loop-count")]:
-    loop = f'"pir.loop"() <{{site="loop", carried={carried} : i64, count="{count}", parameter=false}}> ({{"pir.yield"() : () -> ()}}) : () -> ()'
-    bad(bare(proto("bad", body=loop + "\n" + FINISH)), "pir.loop", code)
+    loop = f'"protocol.loop"() <{{site="loop", carried={carried} : i64, count="{count}", parameter=false}}> ({{"protocol.yield"() : () -> ()}}) : () -> ()'
+    bad(bare(proto("bad", body=loop + "\n" + FINISH)), "protocol.loop", code)
 
 # Operations whose contracts rely on an enclosing protocol/program may not
 # appear as standalone builtin.module children and escape region admission.
 for operation, text in [
-    ("pir.loop", '"pir.loop"() <{site="x", carried=-1 : i64, count="nonsense", parameter=false}> ({}) : () -> ()'),
-    ("pir.finish", '"pir.finish"() : () -> ()'),
-    ("pir.yield", '"pir.yield"() : () -> ()'),
-    ("pir.incomplete", '"pir.incomplete"() <{site="x"}> : () -> ()'),
+    ("protocol.loop", '"protocol.loop"() <{site="x", carried=-1 : i64, count="nonsense", parameter=false}> ({}) : () -> ()'),
+    ("protocol.finish", '"protocol.finish"() : () -> ()'),
+    ("protocol.yield", '"protocol.yield"() : () -> ()'),
+    ("protocol.incomplete", '"protocol.incomplete"() <{site="x"}> : () -> ()'),
 ]:
     run(optimizer, text=f" {text} ", op=operation, code="parent")
 

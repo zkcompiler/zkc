@@ -48,22 +48,22 @@ def reject_both(label, text, code=UNKNOWN, export="protocol-export"):
 source = (corpus / "local-control.pir").read_text()
 for mode, import_command, families in (
     ("common", "protocol-import", (
-        ("pir.module", "stage"),
-        ("pir.operation_binding", "contract"),
-        ("pir.protocol", "sym_name"),
-        ("pir.instance", "protocol"),
-        ("pir.entry", "targets"),
-        ("pir.local_call", "callee"),
-        ("algebra.sum", "binding"),
-        ("pir.local_if", "site"),
-        ("pir.local_for", "site"),
+        ("protocol.module", "profile"),
+        ("local.binding", "contract"),
+        ("protocol.exec_func", "sym_name"),
+        ("protocol.instance", "protocol"),
+        ("protocol.entry", "targets"),
+        ("protocol.local_call", "callee"),
+        ("algebra.exec.field_add", "binding"),
+        ("local.if", "site"),
+        ("local.for", "site"),
     )),
     ("physical", "protocol-physical-ir", (
-        ("pir.module", "stage"),
-        ("pir.participant", "instance"),
+        ("protocol.module", "profile"),
+        ("protocol.participant", "instance"),
         ("plan.kernel", "site"),
-        ("pir.local_if", "site"),
-        ("pir.local_for", "site"),
+        ("local.if", "site"),
+        ("local.for", "site"),
     )),
 ):
     ir = commands.source(import_command, source)
@@ -80,7 +80,7 @@ for mode, import_command, families in (
 
     # A namespaced key is still unknown when placed in the owned dictionary.
     reject_both(f"{mode}: namespaced property",
-                extra(ir, "pir.module", "debug.note"))
+                extra(ir, "protocol.module", "debug.note"))
 
     with case(f"{mode}: ordinary unknown module attribute stays refused"):
         prefix, suffix = ir.rsplit("}) : () -> ()", 1)
@@ -91,14 +91,14 @@ for mode, import_command, families in (
     # Property-free terminators already reject nonempty property dictionaries
     # in MLIR itself. The asserted prose here belongs to upstream MLIR, not a
     # stable zkc identifier. Do not turn this into a successful no-op.
-    no_fields = re.sub(r'("pir.local_yield"\([^\n)]*\))',
+    no_fields = re.sub(r'("local.yield"\([^\n)]*\))',
                        r'\1 <{surprise = "must-not-disappear"}>', ir, count=1)
     assert no_fields != ir
     reject_both(f"{mode}: empty property schema", no_fields, "empty properties")
 
 common = commands.source("protocol-import", source)
 with case("discardable debug metadata survives optimizer"):
-    # pir.module already has a closed exporter schema. Use an operation that
+    # protocol.module already has a closed exporter schema. Use an operation that
     # admits discardable metadata so this tests preservation of that policy.
     metadata = '''module {
       "claim.kind"() <{sym_name = "K", types = [], meaning = "example"}>
@@ -107,7 +107,7 @@ with case("discardable debug metadata survives optimizer"):
     assert 'debug.note = "retained"' in commands.verified(metadata)
 
 with case("ordinary unknown operation attribute stays refused"):
-    match = re.search(r'"algebra.sum"[^\n]*?\}>', common)
+    match = re.search(r'"algebra.exec.field_add"[^\n]*?\}>', common)
     assert match
     ordinary = (common[:match.end()] + ' {surprise = "retained"}'
                 + common[match.end():])
@@ -117,7 +117,7 @@ with case("ordinary unknown operation attribute stays refused"):
 # The registration policy also covers dialects absent from this protocol.
 # These deliberately incomplete operations must fail at property conversion,
 # before their operand/type/domain verifiers could reject the incomplete shape.
-for operation in ("poly.fold", "pcs.commit", "oracle.commit", "claim.kind",
+for operation in ("poly.exec.fold", "pcs.exec.commit", "oracle.exec.commit", "claim.kind",
                   "relation.r1cs"):
     malformed = (f'module {{ "{operation}"() '
                  '<{surprise = "must-not-disappear"}> : () -> () }')

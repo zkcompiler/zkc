@@ -32,8 +32,8 @@ template <class T> T accept(Expected<T> result) {
   }
   return std::move(*result);
 }
-ProtocolModuleOp root(ModuleOp module) {
-  return cast<ProtocolModuleOp>(&module.getBody()->front());
+zkc::protocol_ir::ProtocolModuleOp root(ModuleOp module) {
+  return cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
 }
 Operation *symbol(ModuleOp module, StringRef name) {
   return SymbolTable::lookupSymbolIn(root(module), name);
@@ -41,7 +41,8 @@ Operation *symbol(ModuleOp module, StringRef name) {
 Operation *user(ModuleOp module, bool participant) {
   Operation *result = nullptr;
   module.walk([&](Operation *op) {
-    if (!result && (participant ? isa<ParticipantOp>(op) : isa<InstanceOp>(op)))
+    if (!result && (participant ? isa<zkc::protocol_ir::ParticipantOp>(op)
+                                : isa<zkc::protocol_ir::InstanceOp>(op)))
       result = op;
   });
   return result;
@@ -226,7 +227,8 @@ void negatives(ModuleOp module, bool participant) {
          auto ft = cast<FunctionType>(
              def->getAttrOfType<TypeAttr>("function_type").getValue());
          SmallVector<Type> inputs(ft.getInputs());
-         inputs[0] = CapabilityType::get(b.getContext(), "rng:goldilocks");
+         inputs[0] =
+             zkc::local::CapabilityType::get(b.getContext(), "rng:goldilocks");
          def->setAttr("function_type", TypeAttr::get(b.getFunctionType(
                                            inputs, ft.getResults())));
        });
@@ -257,13 +259,19 @@ void negatives(ModuleOp module, bool participant) {
     test("lost sibling", "interactive-family-roles",
          [](ModuleOp m, Operation *op) {
            for (auto p : llvm::make_early_inc_range(
-                    root(m).getBody().front().getOps<ParticipantOp>()))
+                    root(m)
+                        .getBody()
+                        .front()
+                        .getOps<zkc::protocol_ir::ParticipantOp>()))
              if (p.getOperation() != op)
                p.erase();
          });
     test("malformed sibling", "interactive-callable-type",
          [](ModuleOp m, Operation *op) {
-           for (auto p : root(m).getBody().front().getOps<ParticipantOp>())
+           for (auto p : root(m)
+                             .getBody()
+                             .front()
+                             .getOps<zkc::protocol_ir::ParticipantOp>())
              if (p.getOperation() != op)
                p->removeAttr("function_type");
          });

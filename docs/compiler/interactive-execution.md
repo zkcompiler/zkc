@@ -7,8 +7,9 @@ The [pipeline](protocol-pipeline.md) owns the architecture; this guide describes
 the source-to-participant path and its assurance boundaries. The
 [finite table path](table-execution.md) remains a separate tested implementation.
 
-Under the [carrier decision](carrier-consolidation.md) execution uses explicit
-`/1` carriers with explicit operation bindings. The frontend resolves installed
+The [source route](carrier-consolidation.md) uses `zkc.protocol/1` and
+`zkc.participants/1` with explicit operation bindings. The mathematical route
+uses `zkc.program/1`. The frontend resolves installed
 source imports and explicit domains before emitting that carrier.
 
 ## Source, participants and physical execution
@@ -29,8 +30,8 @@ formation checks their concrete agreement before projection.
 
 | Form | Representation | What remains visible |
 |---|---|---|
-| Common protocol | `pir.protocol`, `pir.instance`, local `func.func` bodies | Both sides of each message, role ownership, child dependencies, common loops and local algorithm calls |
-| Independent participants | `pir.participant`, local calls, send/receive actions and participant calls | One role's values, actual selected child roles, pending ingress, its own local effects and failures |
+| Common protocol | `protocol.exec_func`, `protocol.instance`, local `local.func` bodies | Both sides of each message, role ownership, child dependencies, common loops and local algorithm calls |
+| Independent participants | `protocol.participant`, local calls, send/receive actions and participant calls | One role's values, actual selected child roles, pending ingress, its own local effects and failures |
 | Physical participants | Participant control plus `plan.kernel` and `plan.data` | The selected backend, value representation, operation contract and codec; control and origins remain explicit |
 | Execution | Admitted immutable artifact, Rust `Runner`, installed backend and transport | Actual resource state, public bytes, limits, suspension and returned/stopped outcomes |
 
@@ -303,9 +304,9 @@ argument, a complete zkVM or recursive verifier generation.
 
 `protocol-compile` and `protocol-physical-ir` accept opt-in `--release-storage`.
 The equivalent participant planning option is
-`--zkc-plan-participants=release-storage=true`. Physical selection runs first;
+`--zkc-select-physical=release-storage=true`. Physical selection runs first;
 then C++/MLIR computes each value's last SSA use in each admitted one-block
-`func.func`. This applies to retained local definitions, including definitions
+`local.func`. This applies to retained local definitions, including definitions
 that no participant reaches. It does not analyze participant environments,
 callers' lifetimes or unused function outputs that escape to a parent.
 

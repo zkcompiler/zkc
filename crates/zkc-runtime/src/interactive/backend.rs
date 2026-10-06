@@ -28,9 +28,17 @@ pub trait Value: Clone {
     fn control_bool(&self) -> Result<bool, BackendError> {
         Err(BackendError::new("local-control-bool"))
     }
+    /// Pure, stable inspection of a logical natural; repeated reads have no effects.
     fn control_index(&self) -> Result<u64, BackendError> {
         Err(BackendError::new("local-control-index"))
     }
+    /// Construct the native Boolean literal; the runner checks its full type
+    /// and charges the ordinary instruction and retained-value budgets.
+    fn from_control_bool(_value: bool) -> Result<Self, BackendError> {
+        Err(BackendError::new("native-boolean-unsupported"))
+    }
+    /// Construct a native index. The runner validates its declared index type
+    /// before binding an induction variable or entering its body.
     fn from_control_index(_index: u64) -> Result<Self, BackendError> {
         Err(BackendError::new("local-control-index"))
     }
@@ -92,8 +100,15 @@ pub struct Frame {
     pub(crate) parameters: Arc<BTreeMap<String, u64>>,
     pub(crate) kind: FrameKind,
     pub(crate) inputs: Vec<(String, PhysicalType)>,
+    pub(crate) services: Vec<super::ServicePort>,
 }
 impl Frame {
+    /// Entry declarations, inherited read-only by structured loop frames.
+    /// Their input_index refers to the entry interface, never child inputs.
+    /// Only Entry may acquire leases; a loop borrows its active entry authority.
+    pub fn services(&self) -> &[super::ServicePort] {
+        &self.services
+    }
     pub fn id(&self) -> FrameId {
         self.id
     }
@@ -158,6 +173,15 @@ impl Invocation<'_> {
     }
 }
 
+/// One synchronous service transition at an exposed participant cut.
+pub struct ServiceInvocation<'a> {
+    pub frame: &'a Frame,
+    pub site: &'a str,
+    pub port: &'a super::ServicePort,
+    pub method: &'a str,
+    pub max_output_bytes: usize,
+}
+
 /// Installed, trusted implementation. Artifact text never supplies these methods.
 ///
 /// `enter_frame` atomically validates issuance, current generations, actual aliases,
@@ -165,7 +189,9 @@ impl Invocation<'_> {
 /// leave no active child frame. `leave_frame` refuses out-of-order exits without
 /// changing any views. It always removes the top frame, including on output
 /// validation error, and preserves all completed resource transitions. Both hooks must
-/// preserve resources outside the actual argument view. A kernel may access only
+/// preserve resources outside the actual argument view. A Returned exit may
+/// transfer the entry result tuple through an enclosing loop frame. It does not
+/// imply that the loop body reached its yield or completed its iteration. A kernel may access only
 /// resources authorized by its explicit operands AND the active frame, even if
 /// the backend's authoritative store contains other handles.
 ///
@@ -175,6 +201,32 @@ impl Invocation<'_> {
 /// identities and the host's admitted input policy for this exact role/entry.
 pub trait Backend {
     type Value: Value;
+    /// Read-only installation fact. True promises both Boolean constructors
+    /// return native.bool/1 values. Runtime validation still checks each value.
+    /// Admission checks this before any frame, message or backend transition.
+    fn supports_boolean_literals(&self) -> bool {
+        false
+    }
+    /// Installed method signature and conservative retained reply bytes.
+    /// The default refuses native service admission.
+    fn service_signature(
+        &self,
+        _contract: super::ServiceContract,
+        _method: &str,
+    ) -> Option<(super::ServiceSignature, usize)> {
+        None
+    }
+    fn query(
+        &mut self,
+        _invocation: &ServiceInvocation<'_>,
+        _arguments: &[Self::Value],
+    ) -> Result<Vec<Self::Value>, BackendError> {
+        Err(BackendError::new("service-unsupported"))
+    }
+    /// Poison an already consumed service after reply validation/binding fails.
+    /// Implementations supporting queries must override this hook.
+    fn reject_service_reply(&mut self, _invocation: &ServiceInvocation<'_>) {}
+
     /// Independently installed full signature. Unsupported bindings fail closed.
     fn binding_signature(&self, _binding: &OperationBinding) -> Option<BoundSignature> {
         None
@@ -220,6 +272,7 @@ mod domain_tests {
                 function: function.into(),
             },
             inputs: vec![],
+            services: vec![],
         }
     }
 

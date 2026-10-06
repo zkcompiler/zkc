@@ -13,6 +13,7 @@ class Encoder {
   Path path;
   bool projected = false;
   bool generic = false;
+  bool program = false;
 
   void origin(const Node &node) {
     if (records)
@@ -68,6 +69,17 @@ class Encoder {
           if constexpr (std::is_same_v<T, Return> || std::is_same_v<T, Yield> ||
                         std::is_same_v<T, Release>) {
             return A{i.kind().str(), names(op.values)};
+          } else if constexpr (std::is_same_v<T, BooleanConstant>) {
+            if (!program)
+              report_fatal_error(
+                  "native-boolean-context: unchecked source model");
+            return A{"bool_constant", i.site, op.output, op.value};
+          } else if constexpr (std::is_same_v<T, ServiceQuery>) {
+            return A{"query",   i.site,           op.port,
+                     op.method, names(op.inputs), names(op.outputs)};
+          } else if constexpr (std::is_same_v<T, ReturnIf>) {
+            return A{"return_if", i.site, op.condition, names(op.values),
+                     names(op.continuations)};
           } else if constexpr (std::is_same_v<T, Operation>) {
             A result{"op", i.site, op.callee};
             if (generic)
@@ -129,7 +141,7 @@ class Encoder {
                      at(5, [&] { return body(op.elseBody); }),
                      names(op.outputs)};
           } else if constexpr (std::is_same_v<T, For>) {
-            return A{"for",
+            return A{op.conditional ? "for_while" : "for",
                      i.site,
                      op.induction,
                      op.lower,
@@ -139,12 +151,16 @@ class Encoder {
                      at(7, [&] { return body(op.body); }),
                      names(op.outputs)};
           } else {
-            V count = projected && op.count.kind == LoopCount::Kind::Constant
-                          ? V(op.count.value)
-                          : V(A{op.count.kind == LoopCount::Kind::Parameter
-                                    ? "parameter"
-                                    : "constant",
-                                op.count.value});
+            V count =
+                op.count.kind == LoopCount::Kind::Value
+                    ? V(A{"value", op.count.value,
+                          std::to_string(op.count.maximum), op.count.induction})
+                : projected && op.count.kind == LoopCount::Kind::Constant
+                    ? V(op.count.value)
+                    : V(A{op.count.kind == LoopCount::Kind::Parameter
+                              ? "parameter"
+                              : "constant",
+                          op.count.value});
             return A{"loop",
                      i.site,
                      std::move(count),
@@ -300,15 +316,25 @@ public:
              at(3, [&] { return common(m, false); })};
   }
   V run(const Participants &m) {
+    program = isProgram(m.contract);
+    if (program && m.stage != Participants::Stage::Physical)
+      report_fatal_error("native-physical-required: unchecked source model");
     origin(m);
     projected = true;
     auto participants = at(4, [&] {
       return list(m.participants, [&](const Participant &p) -> V {
         origin(p);
-        return A{"participant",       p.name,
+        A record{"participant",       p.name,
                  p.instance,          p.role,
                  pairs(p.parameters), parameters(p.arguments),
                  names(p.results),    at(7, [&] { return body(p.body); })};
+        // Invalid legacy models must not silently erase a service interface.
+        // Retaining the extra row makes ordinary legacy ingress refuse them.
+        if (isProgram(m.contract) || !p.services.empty())
+          record.push_back(list(p.services, [](const ServicePort &port) -> V {
+            return A{port.name, port.contract, std::to_string(port.inputIndex)};
+          }));
+        return record;
       });
     });
     auto entries = at(5, [&] {
@@ -317,7 +343,7 @@ public:
         return A{"entry", e.name, pairs(e.participants)};
       });
     });
-    return A{"zkc.participants/1",
+    return A{participantFormat(m.contract),
              environment(m),
              m.stage == Participants::Stage::Physical ? "physical" : "logical",
              at(3,

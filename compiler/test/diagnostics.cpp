@@ -120,20 +120,20 @@ int main() {
                          make_error<TrackedRefusal>(destroyed));
   require(destroyed, "inactive diagnostic retained its error payload");
 
-  auto type =
-      zkc::TableType::getChecked([&] { return emitError(location); }, &context,
-                                 StringRef("f7"), StringRef("00"));
+  auto type = zkc::poly::TableType::getChecked(
+      [&] { return emitError(location); }, &context, StringRef("f7"),
+      StringRef("00"));
   require(!type && codes.size() == 1 &&
               codes[0].code == "invalid-original-rank",
           "type verifier exposes a structured refusal");
 
-  OperationState state(location, zkc::PIRStopOp::getOperationName());
+  OperationState state(location, zkc::table::PIRStopOp::getOperationName());
   auto *operation = Operation::create(state);
   zkc::diagnostics::emit(operation->emitOpError(), "local", "detail context");
   operation->destroy();
   require(codes.size() == 1 && codes[0].code == "local" &&
               codes[0].detail == "detail context" &&
-              text == "'pir.stop' op local: detail context",
+              text == "'table.source.stop' op local: detail context",
           "operation prefix and complete detail preserved");
 
   // Exercise the verifier callers that previously streamed detail after
@@ -164,8 +164,8 @@ int main() {
          FlatSymbolRefAttr::get(&context, "child"), empty})});
   };
   auto protocol = [&](StringRef name, ArrayAttr dependencies) {
-    return cast<zkc::ProtocolOp>(make(
-        "pir.protocol",
+    return cast<zkc::protocol_ir::ExecFuncOp>(make(
+        "protocol.exec_func",
         {attr("sym_name", builder.getStringAttr(name)),
          attr("function_type", TypeAttr::get(builder.getFunctionType({}, {}))),
          attr("roles", roles), attr("parameters", empty),
@@ -174,8 +174,8 @@ int main() {
   };
   auto child = protocol("child", empty);
   auto parent = protocol("parent", dependency("declared"));
-  auto instance = cast<zkc::InstanceOp>(
-      make("pir.instance",
+  auto instance = cast<zkc::protocol_ir::InstanceOp>(
+      make("protocol.instance",
            {attr("protocol", FlatSymbolRefAttr::get(&context, "child")),
             attr("dependencies", empty), attr("parameters", empty),
             attr("roles", builder.getArrayAttr({mapping, mapping}))}));
@@ -190,7 +190,7 @@ int main() {
          instance.verifySymbolUses(tables));
   instance->setAttr("roles", roleBindings);
   instance->setAttr("protocol", FlatSymbolRefAttr::get(&context, "absent"));
-  expect("interactive-symbol-kind", "expected pir.protocol for @absent",
+  expect("interactive-symbol-kind", "expected protocol.exec_func for @absent",
          instance.verifySymbolUses(tables));
   instance->setAttr("protocol", FlatSymbolRefAttr::get(&context, "parent"));
   instance->setAttr("dependencies",
@@ -202,9 +202,8 @@ int main() {
   auto *body = new Block;
   parent->getRegion(0).push_back(body);
   operations.setInsertionPointToEnd(body);
-  auto call = cast<zkc::ProtocolCallOp>(
-      make("pir.protocol_call",
-           {attr("dependency", builder.getStringAttr("absent"))}));
+  auto call = cast<zkc::protocol_ir::ProtocolCallOp>(make(
+      "protocol.call", {attr("dependency", builder.getStringAttr("absent"))}));
   expect("interactive-dependency", "undeclared alias absent",
          call.verifySymbolUses(tables));
   call->setAttr("dependency", builder.getStringAttr("declared"));

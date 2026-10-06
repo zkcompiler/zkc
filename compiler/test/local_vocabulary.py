@@ -29,7 +29,7 @@ for group in ('bls12-381.g1', 'ristretto255.group'):
     with case(f"{group} local vocabulary"):
         source = base.replace('bls12-381.g1', group)
         logical = compile('protocol-import', source)
-        for name in ('algebra.curve_get', 'algebra.curve_length', 'pir.not', 'pir.or'):
+        for name in ('algebra.exec.group_get', 'algebra.exec.group_length', 'algebra.exec.bool_not', 'algebra.exec.bool_or'):
             assert '"'+name+'"' in logical, name
         run([optimizer, '--verify-each'], logical)
         physical = compile('protocol-physical-ir', source)
@@ -42,9 +42,9 @@ for group in ('bls12-381.g1', 'ristretto255.group'):
         for contract in ('bool.not', 'bool.or'):
             assert providers[contract] == 'arkworks/'+contract
         # Even duplicate unused operations retain their failure/charge positions.
-        for contract, dialect in (('curve.get', 'algebra.curve_get'),
-                                  ('curve.length', 'algebra.curve_length'),
-                                  ('bool.not', 'pir.not'), ('bool.or', 'pir.or')):
+        for contract, dialect in (('curve.get', 'algebra.exec.group_get'),
+                                  ('curve.length', 'algebra.exec.group_length'),
+                                  ('bool.not', 'algebra.exec.bool_not'), ('bool.or', 'algebra.exec.bool_or')):
             module, name = contract.split('.')
             public = 'zkc::' + ('core' if module == 'bool' else module) + '::' + name
             line = next(line for line in source.splitlines() if '= ' + public in line)
@@ -67,7 +67,7 @@ for group in ('bls12-381.g1', 'ristretto255.group'):
         compile('protocol-source', source.replace('zkc::curve::get::<G>(batch, query)', 'zkc::curve::get::<G>(batch, enabled)'), 'source-type-mismatch')
         compile('protocol-source', source.replace('zkc::core::or(disabled, equation)', 'zkc::core::or(disabled)'), 'source-call-arity')
         # Mutated real MLIR cannot substitute another registered operation at a binding.
-        run([optimizer, '--verify-each'], logical.replace('"pir.not"', '"pir.or"'), 'binding-operation')
+        run([optimizer, '--verify-each'], logical.replace('"algebra.exec.bool_not"', '"algebra.exec.bool_or"'), 'binding-operation')
         other = 'ristretto255.group' if group == 'bls12-381.g1' else 'bls12-381.g1'
         bad = copy.deepcopy(candidate)
         next(b for b in bad[1] if b[1] == 'curve.get')[2] = [other]

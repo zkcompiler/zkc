@@ -117,13 +117,13 @@ selection.write_text(json.dumps(template))
 option = f"--implementations={selection}"
 run("protocol-compile", folds, option)
 located_folds = run("protocol-physical-ir", folds, option, "--locations").stdout
-assert operation_locations(located_folds, '"pir.operation_binding"',
+assert operation_locations(located_folds, '"local.binding"',
                            'sym_name = "fold_left"') == [(5, 1)]
 assert operation_locations(located_folds, '"plan.kernel"',
                            'binding = @fold_left') == [(10, 3)]
 assert set(operation_locations(located_folds, '"plan.kernel"',
                                'kernel = "arkworks/table.relayout"')) == {(10, 3), (11, 3)}
-assert operation_locations(located_folds, '"pir.local_call"',
+assert operation_locations(located_folds, 'local.call',
                            'site = "left"') == [(39, 3)]
 swapped = folds.replace("= fold_left(", "= TEMP(").replace(
     "= fold_right(", "= fold_left("
@@ -214,7 +214,7 @@ for stem in ("generic-dleq", "generic-committed-two-factor", "generic-openings")
     assert "declared requirements:" in run("protocol-explain", text).stdout
     if stem == "generic-dleq":
         ir = run("protocol-import", text, "--locations").stdout
-        assert operation_locations(ir, '"pir.operation_binding"',
+        assert operation_locations(ir, '"local.binding"',
                                    'contract = "curve.empty"') == [(21, 3)]
 
 print(f"{commands.save()} source inspection and provenance checks passed")

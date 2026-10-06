@@ -70,7 +70,7 @@ def rejects(name, path, transform, message):
 
 with case("the actual component graph passes in an isolated tree"):
     check()
-for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc",
+for filename in ("BuiltinHeaders.h.inc", "BuiltinDialects.inc", "NativeDialects.inc",
                  "ContributionHeaders.h.inc", "ContributionDialects.inc"):
     for source in ("lib/Dialect/Claim/IR/ClaimDialect.cpp", "include/zkc/Dialect/Registry.h"):
         rejects(f"registration fragment is private: {filename} from {source}",
@@ -116,7 +116,7 @@ def move_source(text, source, destination):
         lines.append(f"{name}|{links}|{interface}|{';'.join(items)}")
     return "\n".join(lines) + "\n"
 
-for source in ("lib/Dialect/Claim/IR/ClaimDialect.cpp", "lib/Dialect/PIR/IR/Protocol.cpp"):
+for source in ("lib/Dialect/Claim/IR/ClaimDialect.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp"):
     rejects(f"mandatory IR source cannot move to optional translation: {source}", manifest,
             lambda text, source=source: move_source(text, source, "ZkcClaimTranslation"),
             "mandatory component ownership")
@@ -293,3 +293,31 @@ contribution_manifest.write_text(contribution_manifest.read_text() +
     f"GENERATED|other_fixture|ZkcIR|{other_definitions}|other_fixture/Other.cpp.inc\n")
 rejects("declared dependencies do not authorize including another package definitions", ir_source,
         lambda text: '#include "other_fixture/Other.cpp.inc"\n' + text, "cross-package generated definitions")
+
+rejects("IR cannot depend on carrier translation",
+        root / "lib/Dialect/Algebra/IR/Mathematical.cpp",
+        lambda text: '#include "zkc/Translation/Protocol.h"\n' + text,
+        "ZkcIR: upward include")
+
+rejects("SSA transforms cannot depend on carrier translation",
+        root / "lib/Transforms/Algorithms.cpp",
+        lambda text: '#include "zkc/Translation/Protocol.h"\n' + text,
+        "ZkcTransforms: upward include")
+
+rejects("IR cannot own transformation preservation checks",
+        root / "lib/Dialect/Protocol/IR/Projection.cpp",
+        lambda text: '#include "zkc/Transforms/Mathematical.h"\n' + text,
+        "ZkcIR: upward include")
+rejects("IR cannot consume private mathematical transform helpers",
+        root / "lib/Dialect/Protocol/IR/Projection.cpp",
+        lambda text: '#include "../../../Transforms/MathematicalSupport.h"\n' + text,
+        "private component dependency")
+
+rejects("IR cannot parse invocation input",
+        root / "lib/Dialect/Protocol/IR/Projection.cpp",
+        lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
+        "parsing belongs to CompilerCore or Driver")
+rejects("transforms cannot parse invocation input",
+        root / "lib/Transforms/Algorithms.cpp",
+        lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
+        "parsing belongs to CompilerCore or Driver")

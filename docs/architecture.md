@@ -35,25 +35,47 @@ absence of MLIR calls in one helper is not a reason to move it to Rust.
 
 ## 1. System map
 
+The mathematical route implements the declared [IR foundation](compiler/ir-foundation.md):
+
 ~~~text
-.pir source projects and captured relation assets
+closed mathematical MLIR
+    protocol -> participant -> exec -> physical
                     |
-          C++ frontend: resolve, type-check, instantiate
+    versioned participant carriers
                     |
-          common PIR source and construction selection
+    Rust admission -> proof host or interactive/test host
                     |
-          C++/MLIR: participant projection and physical lowering
-                    |
-          candidate participant/plan artifact
-                    |
-          independent checking/reference tools <--- Lean libraries
-                    |                               (supported profiles)
-          Rust host: bind source, artifact, policy and inputs
-                    |
-          role runner / proof producer / proof validator
-                    |
-          selected backend adapters and cryptographic libraries
+    role runners -> installed kernels/codecs
 ~~~
+
+Selected transcript construction inserts explicit state into participant
+mathematics and continues through the same lowering. The proof host runs producer
+and validator programs in separate processes; validation requires the authorized
+public context and proof. The interactive/test host uses a compact joint schedule.
+Both hosts use the same runner. [Native proofs](compiler/native-proofs.md) records
+supported proof policies `zkc.native-proof-policy/1`–`/4`.
+
+The [preservation contract](compiler/preservation.md) defines bounded adjacent
+and emitted-artifact checks; the [validation map](compiler/foundation-validation.md#source-to-artifact-checks)
+records their evidence and limits. Native Lean correspondence remains open.
+
+The supported source route remains a migration consumer:
+
+~~~text
+.pir projects + captured relation assets
+    frontend -> finite common source -> construction/projection/planning
+                    |
+    source/candidate checking for supported profiles <--- Lean libraries
+                    |
+    Rust artifact host -> role runners or finite table executor
+                    |
+    installed backend adapters and cryptographic libraries
+~~~
+
+Both routes share operation contracts and execution infrastructure at their
+admitted boundaries. The [status page](status.md) identifies which clients use
+each route. A supported older route is removed only after its last consumer has
+moved with the required behavior and checking evidence.
 
 The [specification](spec/README.md) owns the semantic contracts used throughout
 this architecture. The [rationale records](rationale/README.md) explain the
@@ -66,7 +88,7 @@ implementations. The [checking dossier](../formal/design/compiler-connection.md)
 details the implementation connection required by the
 [transformation specification](spec/verification/refinement.md).
 
-This map describes the native route. The [target design](compiler/targets.md)
+The interpreter is the current execution target. The [target design](compiler/targets.md)
 also branches from retained verifier meaning to acceptance constraints and
 exposed outputs. A relation artifact has its own adequacy checker and consumer;
 it need not inherit a physical allocation schedule. The finite table prototype
@@ -78,6 +100,29 @@ Researchers can use the formal library without building MLIR. An application
 can use a precompiled artifact without installing Lean or the MLIR toolchain,
 subject to the artifact-admission policy in section 6. Library applications can
 also consume checked plans; code generation is not the only product interface.
+
+### Implementation owners
+
+The current foundation follows these concrete boundaries. This map locates
+responsibilities; it is not a proof that all transformations preserve meaning.
+The [evidence baseline](status.md#checking-and-evidence) separates those claims.
+
+| Boundary | Implementation owner | Contract to preserve |
+|---|---|---|
+| Logical operation/type installations | [Contracts](../compiler/include/zkc/Contracts/Declarations/), [Rust operations](../crates/zkc-runtime/src/interactive/operations/) and independently installed formal readers | Declarations identify meaning and installed signatures; they do not automatically admit a mathematical operation or proof codec. |
+| Mathematical formation and resources | [Operation classification](../compiler/lib/Dialect/Protocol/Semantics.cpp), [formation](../compiler/lib/Dialect/Protocol/IR/Mathematical.cpp), [type policy](../compiler/lib/Dialect/Protocol/NativePolicy.cpp) and [resource origins](../compiler/lib/Dialect/Protocol/IR/ResourceOrigins.cpp) | Role availability, admitted total/ordered operations, recursive type permissions, exact roots and bounded helper analysis. |
+| Preparation, projection and lowering | [Mathematical transforms](../compiler/lib/Transforms/Mathematical.cpp), [preservation](../compiler/lib/Transforms/MathematicalPreservation.cpp), [math lowering](../compiler/lib/Transforms/MathLowering.cpp) and [polynomial lowering](../compiler/lib/Transforms/PolynomialLowering.cpp) | Actual source operands, ordered actions, local bodies, interface/statement metadata and explicit lowering budgets. |
+| Physical execution selection | [Physical planner](../compiler/lib/Target/PhysicalPlan.cpp) and [physical conversion](../compiler/lib/Conversion/Participants.cpp) | Admitted operation contracts, implementations, representations, storage lifetimes and actual generated candidates. |
+| Compilation and deployment | [Owned compilation](../compiler/lib/Compiler/Compilation.cpp), [proof construction/checking](../compiler/lib/Compiler/NativeProof.cpp) and [run schedule](../compiler/lib/Compiler/Run.cpp) | Selected entry, original-source/policy authority, port/origin maps and the distinction between construction and later lowering. |
+| Exchange records | [Source model](../compiler/include/zkc/Source/Model.h), [codec](../compiler/lib/Source/Encode.cpp) and [protocol export](../compiler/lib/Translation/ProtocolExport.cpp) | Shared records carry native and older participants. The directory name does not make these native dependencies obsolete. |
+| Runtime admission and control | [Admission](../crates/zkc-runtime/src/interactive/admit.rs), [proof entry checks](../crates/zkc-runtime/src/interactive/native_proof.rs) and [Runner](../crates/zkc-runtime/src/interactive/runner.rs) | Supplied structure versus checked source correspondence, physical bindings, typed control and failure/custody lifecycle. |
+| Concrete values and providers | [Backend implementation](../crates/zkc-backends/src/), [native codec](../crates/zkc-backends/src/codec/native.rs) and [resource registry](../crates/zkc-runtime/src/interactive/services.rs) | Canonical wire values, numerical/provider contracts, capacity and exact resource successors. |
+| Hosts and public consumers | [Native deployment](../crates/zkc-tools/src/artifact/native.rs), [attempts](../crates/zkc-tools/src/artifact/native/attempts.rs), [joint driver](../crates/zkc-tools/src/protocol/) and [prepared host](../crates/zkc-tools/src/artifact/prepared.rs) | Application-authorized deployment/setup identity, inputs, complete proof consumption, publication and invocation state. |
+
+[Component ownership](../compiler/cmake/Components.cmake) and
+[dependency checks](../compiler/test/component_dependencies.py) govern C++ build
+edges. Native registration excluding `table` does not remove the linked source
+record owners or the independently maintained table consumers. Semantic ownership, registration and link dependencies are reviewed separately.
 
 ## 2. Shared meaning and representation levels
 
@@ -91,8 +136,14 @@ capability, not implied by accepting a protocol description.
 |---|---|---|
 | Structured authoring source | Protocol and role declarations, statements, typed inputs/captures, public shapes, algorithm bodies and module requirements | Authoring, composition, elaboration and source admission |
 | Structured compiler IR | Algebraic/domain structure, SSA/regions, loops, branches, calls and interpreted effects | Demand and fact analysis, specialization, rewriting and protocol-aware optimization |
-| Realization plan / OIR carrier | Chosen algorithms and kernels, materialization, storage, schedules and input/error interfaces | Resource planning, execution or further code generation |
+| Physical execution plan | Chosen algorithms and kernels, materialization, storage, schedules and input/error interfaces | Resource planning, execution or further code generation |
 | Native implementation | Actual buffers, values, encodings, state, errors and foreign calls | Execution and implementation correspondence |
+
+For the mathematical compiler, `protocol` retains common interaction and math;
+`participant` retains each role's projected math; `exec` contains ordered local
+recipes; `physical` binds concrete representations and implementations. These
+are checked profiles within the same MLIR infrastructure. Participant programs
+are IR too. There is no second editable mathematical graph.
 
 These are responsibilities, not a commitment to one dialect per row. MLIR may
 mix high- and lower-level operations while progressively lowering selected
@@ -115,7 +166,7 @@ The maintained Formal carriers have narrower, explicit roles:
 | `Source.Program` | Finite typed tree source | Interpreted into `Proc` |
 | `Source.Region` | Finite source with one shared continuation | Direct interpretation and proved tree correspondence; flattening can duplicate syntax |
 | `Compiler.Plan` | Constructor-level direct reference plan | Proved lowering from `Program`; does not select buffers or schedules |
-| Physical plan / OIR | Selected kernels, representations and participant control | Supported interactive physical artifacts exist; broader storage/schedule planning remains open and requires value/state/outcome laws |
+| Physical plan | Selected kernels, representations and participant control | Supported interactive physical artifacts exist; broader storage/schedule planning remains open and requires value/state/outcome laws |
 
 These are not five mandatory compilation stages. In particular, compact region
 checking uses its direct interpretation without first expanding a tree. Similar
@@ -360,3 +411,27 @@ Schema/decoder correspondence, checking cost, foreign-call interfaces and
 execution granularity need evidence from their actual consumers. Read
 [assurance](assurance.md) for what each kind of evidence establishes and
 [roadmap](roadmap.md) for the remaining work.
+
+## Migration ownership
+
+The [capability baseline](compiler/migration.md) records supported ranges,
+checking consumers and comparison/removal conditions. The selected
+[native proof design](compiler/native-proofs.md) adds an independent deployment
+of participant programs while retaining the same four IR profiles. Construction
+analyzes immutable common source and emits into participant mathematics.
+
+The mathematical route uses one program format and one joint bundle for flat
+and structured execution. Superseded native formats are refused. The older
+source and table routes still have live consumers with separate
+migration obligations. Unknown formats remain refused rather than guessed.
+
+The [live-path inventory](compiler/migration.md#live-paths-and-removal-gates)
+names each remaining consumer, current carrier and removal condition. Source-host
+`zkc.run/2` inputs are distinct from native `zkc.run/1` bundles.
+
+`Source/Execution` computes structural expansion for analyses and claims; it does
+not numerically execute the native program. Native dialect registration can
+exclude the old table dialect while the installed library still links shared
+source contracts. API registration, CMake dependencies and executable semantics
+are separate migration boundaries. Dependency removal follows actual consumer
+removal; see [the compiler design](compiler/design.md) and [roadmap](roadmap.md).

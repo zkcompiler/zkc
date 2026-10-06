@@ -20,11 +20,17 @@ drop permissions are independently the conjunction of those permissions over
 every payload in every alternative. A variant has no implicit wire codec or
 disclosure permission, even when each payload is otherwise serializable.
 
-The current executable profile admits variants inside role-local functions and
-their calls, results and captures. It refuses variants at protocol entry ingress,
-protocol output, message, family-selector and installed primitive boundaries. A selected ordinary
-payload can be used by a primitive with that payload's declared signature.
-No operation exposes a tag as a public boolean or family-selection parameter.
+The legacy executable boundary excludes variants recursively from protocol
+entry/result ports. The current [program format](program.md) admits recursively
+copyable variants at those ports; affine variants remain local. It also admits
+the closed [structured message grammar](structured-proof-messages.md).
+Port, representation and codec availability remain independent judgments.
+
+Local functions retain construction, ordered match, results and captures.
+An installed primitive must explicitly accept its complete payload type; local
+variant formation never supplies a wildcard signature. Family selection keeps
+its existing restrictions. Total native data operations include a tag test under
+the separate [structured-data contract](structured-iteration.md).
 This restriction does not prove that a protocol never discloses information
 computed from a private input; ordinary role and disclosure rules still apply.
 An intermediate value can remain in one participant's environment between local
@@ -82,6 +88,26 @@ alternatives 32, and immediate payload entries 128. Bounds are simultaneous;
 none promises every combination fits. The containing artifact retains its
 existing byte and structural limits. Ordinary nontype fields retain their own
 limits; a `variant:` prefix in a literal attribute does not enlarge them.
+
+The Rust runtime additionally limits installed type metadata as an operational
+loading policy. One admission charges at most 64 MiB across distinct physical
+spellings and every resolved binding signature, including unused signatures.
+A variant uses the descriptor charge below; a structural application adds
+`512 + 256 * argumentCount` plus descriptor charges of its type arguments.
+Repeated physical spellings share one installed descriptor charge; binding
+signature positions are charged independently. A single logical parse also
+precharges newly allocated descriptors against 64 MiB before construction.
+Exhaustion reports `ErrorCode::Limit` with `type descriptor byte ceiling`.
+
+Sharing spans graph subtrees and structural type arguments at the same logical
+depth. Cache hits still charge all expanded logical nodes; they cannot bypass
+depth or node admission. An inline graph subtree can satisfy a later text lookup
+only after that spelling passes its own expansion bound; the containing graph's
+bound alone is insufficient. This loading policy is separate from portable formation
+and live-value accounting: C++/Lean formation can accept a carrier that the Rust
+host refuses for loading capacity. The executable value charges below remain
+unchanged. Bounded unpack scratch is additional to installed metadata; concurrent
+loads and allocator overhead are not a process memory guarantee.
 
 The physical spelling appends `@logical.variant/1`; those 18 suffix bytes are
 additional to the logical bound. Payloads still use logical types, whose admitted

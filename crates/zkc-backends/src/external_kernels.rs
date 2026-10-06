@@ -10,6 +10,7 @@ use zkc_runtime::interactive::{
 
 const MAGIC: u64 = 1_514_881_876;
 const VERSION: u64 = 1;
+pub(crate) const DEFAULT_WORK_LIMIT: u64 = 16_777_216;
 
 pub(crate) struct Budget {
     pub limit: u64,
@@ -18,7 +19,7 @@ pub(crate) struct Budget {
 impl Default for Budget {
     fn default() -> Self {
         Self {
-            limit: 16_777_216,
+            limit: DEFAULT_WORK_LIMIT,
             spent: 0,
         }
     }
@@ -466,6 +467,65 @@ mod tests {
             vector(&packed(&expected)).unwrap()
         );
         assert!(matches!(actual[1],Value::Index(x) if x==u64::from(sampled)));
+    }
+
+    #[test]
+    fn every_in_range_duplex_cursor_pair_is_importable() {
+        for absorb in 0..8 {
+            for sample in 0..=8 {
+                let data = [0; 16].into_iter().chain([absorb, sample]);
+                let state = encoded(2, data);
+                let mut budget = Budget::default();
+                let result = run(
+                    "external.openvm.observe",
+                    &[state.clone(), ns(vec![])],
+                    &mut budget,
+                )
+                .unwrap();
+                assert_eq!(vector(&result[0]).unwrap(), vector(&state).unwrap());
+                assert_eq!(budget.spent, 0);
+                run("external.openvm.sample", &[state], &mut budget).unwrap();
+                assert_eq!(budget.spent, 1 + u64::from(absorb != 0 || sample == 0));
+            }
+        }
+        for (absorb, sample) in [(8, 0), (0, 9)] {
+            let state = encoded(2, [0; 16].into_iter().chain([absorb, sample]));
+            let mut budget = Budget::default();
+            assert_eq!(
+                run(
+                    "external.openvm.observe",
+                    &[state.clone(), ns(vec![])],
+                    &mut budget
+                )
+                .unwrap_err()
+                .code,
+                "refused:external-state-index"
+            );
+            assert_eq!(budget.spent, 0);
+            assert_eq!(
+                run("external.openvm.sample", &[state], &mut budget)
+                    .unwrap_err()
+                    .code,
+                "refused:external-state-index"
+            );
+            assert_eq!(budget.spent, 0);
+        }
+        let mut budget = Budget::default();
+        assert_eq!(
+            run(
+                "external.openvm.check_witness",
+                &[
+                    packed(&openvm::Duplex::new()),
+                    Value::Index(0),
+                    Value::Index(openvm::MODULUS.into())
+                ],
+                &mut budget
+            )
+            .unwrap_err()
+            .code,
+            "refused:external-noncanonical-field"
+        );
+        assert_eq!(budget.spent, 0);
     }
     #[test]
     fn zero_difficulty_and_failed_direct_witness_state() {

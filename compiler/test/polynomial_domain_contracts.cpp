@@ -59,8 +59,8 @@ int main() {
   auto *bn254 = protocol::cosetConvention("bn254.fr");
   require(bn254 && bn254->maxLogSize == 28 && bn254->rootField == "bn254.fr" &&
               bn254->identity != base->identity &&
-              bn254->maximalRoot ==
-                  "19103219067921713944291392827692070036145651957329286315305642004821462161904",
+              bn254->maximalRoot == "191032190679217139442913928276920700361456"
+                                    "51957329286315305642004821462161904",
           "BN254 convention pins arkworks' generator-5 two-adic root");
   for (const auto &op : protocol::boundOperationContracts()) {
     if (op.name != "poly.even_odd_fold")

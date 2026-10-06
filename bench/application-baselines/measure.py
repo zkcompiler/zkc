@@ -308,13 +308,18 @@ def main():
     for role, records in native.items():
         if not records:
             continue
+        scopes = {r["report"]["timings"].get("scope") for r in records}
+        if scopes != {"prepared-execution"}:
+            raise ValueError("native CLI timing scope mismatch; do not mix legacy phase timers")
         native_summary[role] = dict(
+            timing_scope="prepared-execution",
             process_seconds=med(records, "wall_seconds"),
             pipeline_seconds=med(records, "pipeline_wall_seconds"),
             max_rss_kib=max(r["max_rss_kib"] for r in records),
             **{
                 key: statistics.median(r["report"]["timings"][key] for r in records)
-                for key in ("run_seconds", "admission_seconds", "key_load_seconds")
+                for key in ("run_seconds", "admission_seconds", "key_load_seconds",
+                            "input_read_seconds", "proof_read_seconds", "publish_seconds")
             },
         )
     result = dict(

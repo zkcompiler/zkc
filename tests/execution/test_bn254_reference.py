@@ -175,8 +175,9 @@ def main(groth16=None, r1cs=None):
     plan = run([args.compiler, "protocol-compile", path])
     pp = save("pairing-physical", plan)
     run([args.lean, "--check-generic", sp, pp])
-    for old, new, refusal in [("bn254.g1", "bn254.g2", "binding-type"),
-                              ("bn254.g2", "bn254.g1", "binding-type"),
+    # Swapping only the nominal group leaves its physical representation stale.
+    for old, new, refusal in [("bn254.g1", "bn254.g2", "binding-representation"),
+                              ("bn254.g2", "bn254.g1", "binding-representation"),
                               ("bn254.fr", "bls12-381.fr", "binding-static-arguments")]:
         mutant = json.loads(json.dumps(plan).replace(old, new))
         run([args.lean, "--check-generic", sp, save("swapped-" + old, mutant)], refusal)

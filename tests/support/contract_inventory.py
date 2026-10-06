@@ -45,7 +45,7 @@ def instantiate(operation, arguments, declarations, catalog):
             values.append(next(supplied))
     assert next(supplied, None) is None, "excess closed arguments"
     return {
-        direction: [spelling(port["constructor"], [values[i] for i in port["arguments"]])
+        direction: [values[port["term"]] if "term" in port else spelling(port["constructor"], [values[i] for i in port["arguments"]])
                     for port in operation[direction]]
         for direction in ("inputs", "outputs")
     }

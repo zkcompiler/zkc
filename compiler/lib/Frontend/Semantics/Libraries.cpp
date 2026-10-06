@@ -192,8 +192,8 @@ public:
     // are lookup candidates, not user-supplied type facts.
     if (sort.kind == lib::Sort::Kind::Domain)
       for (StringRef member :
-           {"Scalar", "BaseField", "PairingG1", "PairingG2", "ValueField",
-            "PointField", "EvaluationField", "ChallengeField"}) {
+           {"Scalar", "BaseField", "PairingG1", "PairingG2", "PairingGT",
+            "ValueField", "PointField", "EvaluationField", "ChallengeField"}) {
         auto associated = protocol::associatedMemberSort(sort.domain, member);
         if (!associated.empty())
           members.emplace(member.str(), lib::Sort::domainOf(associated.str()));

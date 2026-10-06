@@ -161,8 +161,13 @@ and execution plumbing where appropriate; do not replace those checks with
 one comparison that all consumers can get wrong together. Fixture files with
 the same bytes may still represent distinct named cases.
 
-Differential comparison is the evidence these tests supply: the same admitted
-source, run by an executable Lean reference and by the native path, must agree on
+For routes with an executable Lean reference, differential comparison checks that
+the same admitted source, run by that reference and by the native path, agrees on
 the complete outcome, the residual state, the selected observations and the
 failure behavior. That is finite evidence about the implemented subset, not a
 correspondence theorem.
+
+The mathematical `zkc.program/1` route currently uses native admission controls
+and selected direct references; old Lean-reader refusals are not a differential
+execution comparison. Its missing Lean connection remains an
+[explicit assurance obligation](../docs/assurance.md#6-implementation-correspondence-policy).

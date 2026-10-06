@@ -54,8 +54,8 @@ for field in [*fields, "koala-bear.ext8-binomial3"]:
     expected = digest(field, ["4", "8", [["0", "1", "7"], ["1", "3", "11"]]])
     text = source(field, json.dumps(expected))
     logical = run(compiler, "protocol-import", "-", text=text)
-    assert "algebra.matrix_identity_check" in logical and expected in logical
-    assert "algebra.matrix_identity_check" in run(
+    assert "algebra.exec.matrix_identity_check" in logical and expected in logical
+    assert "algebra.exec.matrix_identity_check" in run(
         optimizer, "--verify-each", "--canonicalize", "--cse", text=logical
     )
     physical = run(compiler, "protocol-physical-ir", "-", text=text)

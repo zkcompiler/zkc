@@ -99,11 +99,27 @@ struct Receive {
   std::string output;
   std::string type;
 };
+struct ServiceQuery {
+  std::string port, method;
+  Names inputs, outputs;
+};
+struct ServicePort {
+  std::string name, contract;
+  uint64_t inputIndex = 0;
+};
+struct BooleanConstant {
+  std::string output;
+  bool value = false;
+};
 struct Release {
   Names values;
 };
 struct Return {
   Names values;
+};
+struct ReturnIf {
+  std::string condition;
+  Names values, continuations;
 };
 struct Yield {
   Names values;
@@ -117,9 +133,11 @@ struct Incomplete {};
 struct Instruction;
 using Body = std::vector<Instruction>;
 struct LoopCount {
-  enum class Kind { Constant, Parameter };
+  enum class Kind { Constant, Parameter, Value };
   Kind kind = Kind::Constant;
   std::string value;
+  uint64_t maximum = 0;
+  std::string induction = {};
 };
 struct Loop {
   LoopCount count;
@@ -143,6 +161,7 @@ struct For {
   Names captures;
   Body body;
   Names outputs;
+  bool conditional = false;
 };
 
 struct VariantConstruct {
@@ -166,7 +185,8 @@ struct Instruction : Node {
   using Value =
       std::variant<Operation, LocalCall, ProtocolCall, Message, Send, Receive,
                    Return, Yield, Stop, Incomplete, Loop, Release,
-                   AlgorithmCall, Conditional, For, VariantConstruct, Match>;
+                   AlgorithmCall, Conditional, For, VariantConstruct, Match,
+                   ServiceQuery, BooleanConstant, ReturnIf>;
   std::string site; // Empty for return/yield/release; scoped to its definition
                     // otherwise.
   Value value;
@@ -305,6 +325,7 @@ struct Module : Node {
 /// Projected artifacts reuse local bodies and instruction structure, but are a
 /// distinct input kind. They cannot masquerade as an authored common module.
 struct Participant : Node {
+  std::vector<ServicePort> services;
   std::string name;
   std::string instance;
   std::string role;
@@ -317,7 +338,13 @@ struct ParticipantEntry : Node {
   std::string name;
   Assignments participants;
 };
+enum class ParticipantContract { Legacy = 0, Program = 2 };
+inline bool isProgram(ParticipantContract contract) {
+  return contract == ParticipantContract::Program;
+}
+llvm::StringRef participantFormat(ParticipantContract);
 struct Participants : Node {
+  ParticipantContract contract = ParticipantContract::Legacy;
   enum class Stage { Logical, Physical };
   Stage stage = Stage::Logical;
   std::vector<OperationBinding> bindings;

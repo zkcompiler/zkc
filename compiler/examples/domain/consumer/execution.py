@@ -1,6 +1,7 @@
 """Compare restored participant execution with independent Lean field arithmetic."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -32,6 +33,8 @@ def main():
 
         assert observe([args.checker, "--admit", source])[0] == "checked"
         assert observe([args.checker, "--check", source, candidate])[0] == "checked"
+        bundle = work / "restored.json.bundle"
+        pin = hashlib.sha256(bundle.read_bytes()).hexdigest()
         source_value = json.loads(source.read_text())
         assert {binding[0] for binding in source_value[1]} == {"first_add", "second_add", "unused_mul"}
         names = [port[0] for port in source_value[3][0][4]]
@@ -53,6 +56,13 @@ def main():
             assert expected[3] == ["returned", [["field:koala-bear", str(total)]]]
             assert actual["wire"]["messages"] == 1
             assert actual["resources"] == expected[5] == []
+            invocation = write("bundle-inputs.json", ["zkc.bundle-inputs/1", "domain-example", [
+                ["P", [[str(i), "field:koala-bear@plonky3.koala-bear/1", ["wire", wire(value)]]
+                       for i, value in enumerate(values)], []], ["V", [], []]], []])
+            compiled = observe([args.runtime, "run-bundle", bundle, pin, invocation])
+            assert compiled["outcome"] == ["completed"] and compiled["acceptance"] is None
+            assert compiled["roles"][1]["outputs"] == [["wire", "field:koala-bear@plonky3.koala-bear/1", wire(total)]]
+            assert compiled["resources"] == []
         print("Restored specialization: independent admission, correspondence and execution passed")
 
 

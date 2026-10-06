@@ -2,7 +2,9 @@
 #include "envelope/Envelope.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Compilation.h"
+#include "zkc/Compiler/Run.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Source/Codec.h"
@@ -109,9 +111,9 @@ std::string snapshot(ModuleOp module) {
   return text;
 }
 
-SmallVector<zkc::FieldSumOp> sums(ModuleOp module) {
-  SmallVector<zkc::FieldSumOp> result;
-  module.walk([&](zkc::FieldSumOp op) { result.push_back(op); });
+SmallVector<zkc::algebra::FieldSumOp> sums(ModuleOp module) {
+  SmallVector<zkc::algebra::FieldSumOp> result;
+  module.walk([&](zkc::algebra::FieldSumOp op) { result.push_back(op); });
   return result;
 }
 
@@ -146,6 +148,53 @@ void roundtrip(ModuleOp module) {
           "decomposition changed native IR, metadata, order or locations");
   require(take(zkc::protocol::exportModule(module)) == source,
           "decomposition changed the canonical carrier");
+}
+
+std::string nativeRoundtrip(ModuleOp function) {
+  std::string text;
+  raw_string_ostream stream(text);
+  stream << "module { \"protocol.module\"() ({\n";
+  auto source =
+      cast<zkc::protocol_ir::ProtocolModuleOp>(function.getBody()->front());
+  for (Operation &op : source.getBody().front()) {
+    require(isa<zkc::local::FuncOp, zkc::local::OperationBindingOp>(op),
+            "unexpected local fixture declaration");
+    op.print(stream, OpPrintingFlags().printGenericOpForm());
+    stream << '\n';
+  }
+  stream << R"mlir(
+    "protocol.func"() ({
+    ^entry(%x: !algebra.field<"koala-bear">, %y: !algebra.field<"koala-bear">, %z: !algebra.field<"koala-bear">):
+      %sum = "protocol.local_call"(%x, %y, %z) {callee=@SumThree, role="P", site="sum"} : (!algebra.field<"koala-bear">, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !algebra.field<"koala-bear">
+      %received = protocol.exchange %sum {sender="P", receiver="V", site="message"} : !algebra.field<"koala-bear">
+      "protocol.return"(%received) : (!algebra.field<"koala-bear">) -> ()
+    }) {sym_name="main", function_type=(!algebra.field<"koala-bear">, !algebra.field<"koala-bear">, !algebra.field<"koala-bear">) -> !algebra.field<"koala-bear">,
+        roles=["P", "V"], input_roles=[["P"], ["P"], ["P"]], output_roles=[["V"]]} : () -> ()
+  }) {profile=#protocol.profile<protocol>} : () -> () })mlir";
+  DialectRegistry registry;
+  zkc::registerNativeDialects(registry);
+  MLIRContext context(registry);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "native extension fixture refused");
+  auto before = snapshot(*module);
+  auto baseline = take(zkc::compileRun(before, "extension.mlir", {}, registry));
+  require(succeeded(envelope::specializeFieldSums(*module)) &&
+              composites(*module) == 1 && sums(*module).empty(),
+          "native specialization failed");
+  auto premature =
+      zkc::compileRun(snapshot(*module), "extension.mlir", {}, registry);
+  require(!premature, "native compiler accepted an unlowered composite");
+  auto reason = toString(premature.takeError());
+  require(StringRef(reason).contains("interactive-unknown-attribute"),
+          "native composite refused for an unrelated reason: " + reason);
+  require(succeeded(envelope::decomposeFieldSums(*module)) &&
+              snapshot(*module) == before,
+          "native decomposition did not exactly restore the source");
+  auto restored =
+      take(zkc::compileRun(snapshot(*module), "extension.mlir", {}, registry));
+  require(restored.bundle == baseline.bundle,
+          "restored native bundle differs from direct compilation");
+  return restored.bundle;
 }
 
 void negativePatterns() {
@@ -207,6 +256,7 @@ int main(int argc, char **argv) {
                   "second_add",
           "independent native two-add graph expectation failed");
   roundtrip(function.module());
+  auto nativeBundle = nativeRoundtrip(function.module());
   negativePatterns();
 
   auto common = compile(participantSource, zkc::ProtocolAction::Expand);
@@ -237,8 +287,11 @@ int main(int argc, char **argv) {
     // Supply both independent readers with the admitted common source paired
     // with the restored physical participant carrier.
     write(std::string(argv[1]) + ".source.json", restoredCommon);
+    auto bundle = take(json::parse(nativeBundle));
+    write(std::string(argv[1]) + ".bundle", bundle);
   }
   outs() << "two-add specialization: independent source/native expectations, "
-            "exact common/logical/physical carrier restoration, pre-lowering "
+            "exact common/logical/physical and native bundle restoration, "
+            "pre-lowering "
             "export refusal and malformed-pattern controls passed\n";
 }

@@ -100,3 +100,46 @@ fn canonical_scalar_curve_subgroup_and_infinity_refusals() {
     wrong.serialize_compressed(&mut bytes).unwrap();
     assert!(G2::from_bytes(&bytes).is_err());
 }
+
+#[test]
+fn target_group_bilinearity_and_checked_canonical_representation() {
+    use ark_bn254::Fq12;
+    use zkc_arkworks::bn254::{Gt, pairing};
+    let a = Fr::from(7);
+    let b = Fr::from(13);
+    let target = pairing(&G1::generator().scale(a), &G2::generator().scale(b));
+    assert_eq!(target, Gt::generator().scale(a * b));
+    assert_eq!(target.add(&target.neg()), Gt::identity());
+    assert_eq!(pairing(&G1::identity(), &G2::generator()), Gt::identity());
+    let reference = Bn254::pairing(
+        G1Affine::generator()
+            .mul_bigint(a.into_bigint())
+            .into_affine(),
+        G2Affine::generator()
+            .mul_bigint(b.into_bigint())
+            .into_affine(),
+    );
+    let mut reference_bytes = Vec::new();
+    reference
+        .serialize_compressed(&mut reference_bytes)
+        .unwrap();
+    assert_eq!(target.to_bytes().unwrap().as_slice(), reference_bytes);
+    for v in [Gt::identity(), Gt::generator(), target] {
+        let bytes = v.to_bytes().unwrap();
+        assert_eq!(Gt::from_bytes(&bytes).unwrap(), v);
+        for n in [0, 1, 32, 383] {
+            assert!(Gt::from_bytes(&bytes[..n]).is_err());
+        }
+        let mut extra = bytes.to_vec();
+        extra.push(0);
+        assert!(Gt::from_bytes(&extra).is_err());
+    }
+    // Canonical extension-field encodings are insufficient: only the target
+    // subgroup is admitted. Zero and the embedded integer two are outside it.
+    for f in [Fq12::zero(), Fq12::from(2)] {
+        let mut bytes = Vec::new();
+        f.serialize_compressed(&mut bytes).unwrap();
+        assert!(Gt::from_bytes(&bytes).is_err());
+    }
+    assert!(Gt::from_bytes(&[255; 384]).is_err());
+}

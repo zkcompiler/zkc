@@ -98,6 +98,7 @@ def MatrixVector : ZKC_Parameters<"MatrixVector", 3, 3>;
 def GatherIndices : ZKC_Parameters<"GatherIndices", 0, -1>;
 def ScatterIndices : ZKC_Parameters<"ScatterIndices", 1, -1>;
 def TranscriptOrigin : ZKC_Parameters<"TranscriptOrigin", 5, 5>;
+def NativeOrigin : ZKC_Parameters<"NativeOrigin", 1, 1>;
 class ZKC_Facet : ZKC_Declaration;
 def PublicReplay : ZKC_Facet;
 def AcceptanceGuard : ZKC_Facet;
@@ -159,12 +160,12 @@ class ZKC_DomainValue<ZKC_ValueRule r, int out = 0, int operand = 0, int other =
   int otherInput = other;
 }
 class ZKC_Operation<string value, list<ZKC_Term> terms,
-                    list<ZKC_Apply> ins, list<ZKC_Apply> outs,
+                    list<ZKC_Term> ins, list<ZKC_Term> outs,
                     list<ZKC_Holds> needs = []> : ZKC_Declaration {
   string name = value;
   list<ZKC_Term> scope = terms;
-  list<ZKC_Apply> inputs = ins;
-  list<ZKC_Apply> outputs = outs;
+  list<ZKC_Term> inputs = ins;
+  list<ZKC_Term> outputs = outs;
   list<ZKC_Holds> requirements = needs;
   ZKC_Stage stage = Source;
   ZKC_Parameters parameters = NoParameters;

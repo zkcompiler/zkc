@@ -17,6 +17,7 @@ fn format(ty: PhysicalType) -> Option<(u8, usize, usize)> {
         (Bn254Fr, Round) => (43, 32, 32),
         (Bn254G1, Group) => (46, 32, std::mem::size_of::<G1>()),
         (Bn254G1, Groups) => (47, 32, std::mem::size_of::<G1>()),
+        (Bn254Gt, Group) => (50, 384, std::mem::size_of::<crate::Bn254Gt>()),
         (Bn254G2, Group) => (48, 64, std::mem::size_of::<G2>()),
         (Bn254G2, Groups) => (49, 64, std::mem::size_of::<G2>()),
         _ => return Option::None,
@@ -74,6 +75,7 @@ pub(crate) fn encode(v: &Value, p: &Policy) -> Option<Result<Vec<u8>>> {
                 }
             }
             Value::Bn254G1(x) => out.extend(x.to_bytes().map_err(ark)?),
+            Value::Bn254Gt(x) => out.extend(x.to_bytes().map_err(ark)?),
             Value::Bn254G2(x) => out.extend(x.to_bytes().map_err(ark)?),
             Value::Bn254G1Vector(v) => {
                 for x in v.iter() {
@@ -134,6 +136,7 @@ pub(crate) fn decode(ty: PhysicalType, b: &[u8], p: &Policy) -> Option<Result<Va
                 }
             }
             46 => Value::Bn254G1(G1::from_bytes(body).map_err(ark)?),
+            50 => Value::Bn254Gt(crate::Bn254Gt::from_bytes(body).map_err(ark)?),
             48 => Value::Bn254G2(G2::from_bytes(body).map_err(ark)?),
             47 => {
                 let mut v = reserve(n)?;

@@ -184,3 +184,13 @@ storage. A compiler consumer states its [execution relation](../verification/ref
 including whether it compares successful runs under sufficient resources or
 establishes a stronger relation on failures. Fewer temporary allocations do not
 by themselves establish equal exhaustion behavior or lower retained-memory use.
+
+## Whole-vector equality
+
+`vector.equal<F>(left,right)` returns true exactly when lengths agree and each
+pair of corresponding field elements is equal. Unequal lengths return false;
+there are no shape attributes. The domain requires `CommRing`. It is a checked
+local kernel, realized by an installed scalar provider. It allows authored
+constraint checks over complete columns without passing a captured vector
+through a scalar loop for every row. It establishes no timing or constant-time
+property and does not erase preceding failures or resource charges.

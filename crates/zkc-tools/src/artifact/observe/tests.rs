@@ -27,6 +27,10 @@ fn response_bounds_cover_actual_maximum_public_vectors_and_mixed_outputs() {
         Value::Field(Scalar::from(0)),
         Value::Bool(false),
         Value::Curve(GroupPoint::generator()),
+        Value::Bn254G1(zkc_backends::Bn254G1::generator()),
+        Value::Bn254G2(zkc_backends::Bn254G2::generator()),
+        Value::Bn254Gt(zkc_backends::Bn254Gt::generator()),
+        Value::Bn254G2Vector(vec![zkc_backends::Bn254G2::generator(); policy.max_groups].into()),
         Value::Round([Scalar::from(0); 3]),
         Value::point(vec![Scalar::from(0); 16], &policy).unwrap(),
         Value::table(&vec![Scalar::from(0); 65536], &policy).unwrap(),
@@ -702,11 +706,13 @@ fn static_observer_refuses_local_control_but_unobserved_artifact_body_executes()
         selected_rng: "r".into(),
         acceptance: 0,
     };
-    match Observed::new(make_backend(), &bundle, TraceMode::Full) {
+    match ObservationPlan::new(&bundle, TraceMode::Full) {
         Ok(_) => panic!("static observer accepted dynamic local body"),
         Err(e) => assert_eq!(e, "artifact-observer-local-control-unsupported"),
     }
-    let observed = Observed::new(make_backend(), &bundle, TraceMode::None).unwrap();
+    let observed = ObservationPlan::new(&bundle, TraceMode::None)
+        .unwrap()
+        .bind(make_backend());
     let mut runner = Runner::new(
         &admitted,
         "main",

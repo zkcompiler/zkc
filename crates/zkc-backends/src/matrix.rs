@@ -223,7 +223,7 @@ pub(crate) fn bilinear<S: Coefficient>(m: &SparseCoo<S>, y: &[S], x: &[S]) -> Re
     }))
 }
 
-trait Wire: Coefficient {
+pub(crate) trait Wire: Coefficient {
     const WIDTH: usize;
     const TAG: u8;
     fn decode(bytes: &[u8]) -> Result<Self>;

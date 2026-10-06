@@ -41,7 +41,7 @@ int main() {
   }
   require(bool(decodeBoundType(&fresh, {"bool", "", ""})),
           "builtin Boolean decoding needs no zkc dialect");
-  fresh.loadDialect<AlgebraDialect>();
+  fresh.loadDialect<zkc::algebra::AlgebraDialect>();
   auto field = accept(parseBoundType("field:bls12-381.fr", false));
   require(bool(decodeBoundType(&fresh, field)), "loaded field type refused");
   auto physical = accept(defaultRepresentation(field));
@@ -65,8 +65,9 @@ int main() {
           "unknown observation types have no IR mapping");
   require(boundOperationName("table.relayout").empty(),
           "physical adapters do not acquire logical operations");
-  mlir::OperationState state(mlir::UnknownLoc::get(&context),
-                             OperationBindingOp::getOperationName());
+  mlir::OperationState state(
+      mlir::UnknownLoc::get(&context),
+      zkc::local::OperationBindingOp::getOperationName());
   auto *detached = mlir::Operation::create(state);
   refuse(readBinding(detached), "binding-declaration-context");
   detached->destroy();

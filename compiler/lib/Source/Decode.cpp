@@ -15,6 +15,7 @@ class Decoder {
   Path path;
   std::string problem;
   bool projected = false;
+  bool program = false;
   bool generic = false;
 
   void locate(const V &value) {
@@ -181,6 +182,21 @@ class Decoder {
                       names((*r)[3 + offset]), names((*r)[4 + offset]),
                       names((*r)[5 + offset])};
       }
+    } else if (tag == "return_if" && program) {
+      if (fields(5, "interactive-return-type"))
+        out.value = ReturnIf{string((*r)[2]), names((*r)[3]), names((*r)[4])};
+    } else if (tag == "bool_constant" && program) {
+      if (fields(4, "native-boolean-shape")) {
+        auto value = (*r)[3].getAsBoolean();
+        if (!value)
+          fail("native-boolean-value");
+        else
+          out.value = BooleanConstant{string((*r)[2]), *value};
+      }
+    } else if (tag == "query" && program) {
+      if (fields(6, "service-query-shape"))
+        out.value = ServiceQuery{string((*r)[2]), string((*r)[3]),
+                                 names((*r)[4]), names((*r)[5])};
     } else if (tag == "local") {
       if (fields(projected ? 5 : 6, "interactive-local-call")) {
         size_t offset = projected ? 0 : 1;
@@ -242,25 +258,41 @@ class Decoder {
                                 at(4, [&] { return body((*r)[4], depth + 1); }),
                                 at(5, [&] { return body((*r)[5], depth + 1); }),
                                 names((*r)[6])};
-    } else if (tag == "for") {
+    } else if (tag == "for" || (tag == "for_while" && program)) {
       if (fields(9, "local-for-shape"))
         out.value = For{
             string((*r)[2]), string((*r)[3]),
             string((*r)[4]), pairs((*r)[5]),
             names((*r)[6]),  at(7, [&] { return body((*r)[7], depth + 1); }),
-            names((*r)[8])};
+            names((*r)[8]),  tag == "for_while"};
     } else if (tag == "loop") {
       if (fields(7, "interactive-loop")) {
         Loop loop;
         if (projected && (*r)[2].getAsString())
           loop.count.value = string((*r)[2]);
-        else if (const auto *count = array((*r)[2], 2)) {
-          auto kind = string((*count)[0]);
-          if (kind != "constant" && kind != "parameter")
+        else if (const auto *count = array((*r)[2])) {
+          if (count->size() == 4 && program &&
+              (*count)[0].getAsString() == "value") {
+            loop.count.kind = LoopCount::Kind::Value;
+            loop.count.value = string((*count)[1]);
+            auto bound = string((*count)[2]);
+            if (bound.empty() || (bound.size() > 1 && bound.front() == '0') ||
+                !llvm::all_of(bound,
+                              [](char c) { return c >= '0' && c <= '9'; }) ||
+                StringRef(bound).getAsInteger(10, loop.count.maximum) ||
+                loop.count.maximum > 1048576)
+              fail("interactive-loop-count");
+            loop.count.induction = string((*count)[3]);
+          } else if (count->size() == 2) {
+            auto kind = string((*count)[0]);
+            if (kind != "constant" && kind != "parameter")
+              fail("interactive-loop-count");
+            loop.count.kind = kind == "parameter" ? LoopCount::Kind::Parameter
+                                                  : LoopCount::Kind::Constant;
+            loop.count.value = string((*count)[1]);
+          } else {
             fail("interactive-loop-count");
-          loop.count.kind = kind == "parameter" ? LoopCount::Kind::Parameter
-                                                : LoopCount::Kind::Constant;
-          loop.count.value = string((*count)[1]);
+          }
         }
         loop.carried = pairs((*r)[3]);
         loop.captures = names((*r)[4]);
@@ -424,8 +456,12 @@ class Decoder {
         5, [&] { return list((*r)[5], [&](const V &x) { return entry(x); }); });
     return out;
   }
-  Participants participants(const V &v) {
+  Participants
+  participants(const V &v,
+               ParticipantContract contract = ParticipantContract::Legacy) {
+    program = isProgram(contract);
     Participants out;
+    out.contract = contract;
     origin(out);
     const auto *r = array(v, 6);
     if (!r)
@@ -436,6 +472,8 @@ class Decoder {
       fail("interactive-stage");
     out.stage = stage == "physical" ? Participants::Stage::Physical
                                     : Participants::Stage::Logical;
+    if (program && stage != "physical")
+      fail("native-physical-required");
     environment(*r, out);
     out.functions = at(3, [&] {
       return list((*r)[3], [&](const V &x) { return function(x); });
@@ -444,7 +482,7 @@ class Decoder {
       return list((*r)[4], [&](const V &x) {
         Participant p;
         origin(p);
-        if (const auto *r = record(x, "participant", 8)) {
+        if (const auto *r = record(x, "participant", program ? 9 : 8)) {
           p.name = string((*r)[1]);
           p.instance = string((*r)[2]);
           p.role = string((*r)[3]);
@@ -452,6 +490,19 @@ class Decoder {
           p.arguments = parameters((*r)[5]);
           p.results = names((*r)[6]);
           p.body = at(7, [&] { return body((*r)[7]); });
+          if (program)
+            p.services = list((*r)[8], [&](const V &v) {
+              ServicePort port;
+              if (const auto *row = array(v, 3)) {
+                port.name = string((*row)[0]);
+                port.contract = string((*row)[1]);
+                auto index = string((*row)[2]);
+                if (StringRef(index).getAsInteger(10, port.inputIndex) ||
+                    std::to_string(port.inputIndex) != index)
+                  fail("service-port-index");
+              }
+              return port;
+            });
         }
         return p;
       });
@@ -562,6 +613,8 @@ public:
       result = module(v);
     else if (tag == "zkc.participants/1")
       result = participants(v);
+    else if (tag == "zkc.program/1")
+      result = participants(v, ParticipantContract::Program);
     else if (tag == "zkc.construction/1")
       result = construction(v);
     else

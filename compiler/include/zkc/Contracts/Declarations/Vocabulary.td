@@ -10,6 +10,7 @@ def TranscriptDomain : ZKC_Domain<TranscriptSort>;
 def CodecSort : ZKC_Sort<"Codec">;
 def CodecDomain : ZKC_Domain<CodecSort>;
 def FieldPairingG1 : ZKC_Member<"PairingG1", FieldDomain, GroupDomain>;
+def FieldPairingGT : ZKC_Member<"PairingGT", FieldDomain, GroupDomain>;
 def FieldPairingG2 : ZKC_Member<"PairingG2", FieldDomain, GroupDomain>;
 def FieldBaseField : ZKC_Member<"BaseField", FieldDomain, FieldDomain>;
 def GroupScalar : ZKC_Member<"Scalar", GroupDomain, FieldDomain>;

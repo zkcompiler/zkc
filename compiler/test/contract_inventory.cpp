@@ -41,8 +41,9 @@ int main() {
     json::Array arguments;
     for (const auto &argument : entry.arguments) {
       if (argument.kind == TypeArgument::Kind::Nat)
-        arguments.push_back(json::Object{
-            {"kind", "Nat"}, {"minimum", 0}, {"maximum", argument.maximum}});
+        arguments.push_back(json::Object{{"kind", "Nat"},
+                                         {"minimum", argument.minimum},
+                                         {"maximum", argument.maximum}});
       else
         arguments.push_back(json::Object{
             {"kind",

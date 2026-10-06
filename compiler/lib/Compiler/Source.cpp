@@ -1,10 +1,10 @@
 #include "zkc/Compiler/Source.h"
+#include "zkc/Compiler/Algorithms.h"
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Frontend/Protocol.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "zkc/Source/Codec.h"
-#include "zkc/Transforms/Algorithms.h"
 namespace zkc {
 llvm::Expected<source::Document>
 lowerSource(const frontend::Analysis &analysis) {

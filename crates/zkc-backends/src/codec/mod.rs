@@ -1,7 +1,9 @@
 //! Native wire and host-input codecs.
 mod bn254;
 mod domains;
+pub(crate) mod native;
 use crate::{NativeBackend, Policy, Result, Value, ark, exhausted, refused};
+pub use native::{NativeWireError, has_native_wire, native_wire_size};
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_arkworks::{Scalar, Table, VerifierKey, decode_scalar, encode_scalar, parse_decimal};
 use zkc_runtime::interactive::{
@@ -11,10 +13,24 @@ use zkc_runtime::interactive::{
 /// Installed public wire carriers that require a host-authorized KZG setup.
 /// Kind alone is insufficient: Merkle roots and paths have no setup key.
 pub fn requires_setup(ty: LogicalType) -> bool {
-    ty.identity() == Identity::MultilinearKzgBls12381
-        && matches!(ty.kind(), Type::Commitment | Type::Proof)
+    ty.sequence_element()
+        .is_some_and(|t| requires_setup(t.clone()))
+        || ty.variant_descriptor().is_some_and(|d| {
+            d.alternatives()
+                .iter()
+                .any(|a| a.payload().iter().any(|t| requires_setup(t.clone())))
+        })
+        || ty.identity() == Identity::MultilinearKzgBls12381
+            && matches!(ty.kind(), Type::Commitment | Type::Proof)
 }
 const MAGIC: &[u8] = b"ZKCV\x01";
+fn decode_bool(body: &[u8]) -> std::result::Result<bool, zkc_runtime::interactive::DecodeReason> {
+    match body {
+        [0] => Ok(false),
+        [1] => Ok(true),
+        _ => Err(zkc_runtime::interactive::DecodeReason::Boolean),
+    }
+}
 fn tag(ty: Type) -> Result<u8> {
     Ok(match ty {
         Type::Field => 1,
@@ -210,11 +226,7 @@ fn decode(
             }
             Value::Groups(points.into())
         }
-        Type::Bool => Value::Bool(match body {
-            [0] => false,
-            [1] => true,
-            _ => return Err(refused("wire-bool")),
-        }),
+        Type::Bool => Value::Bool(decode_bool(body).map_err(|_| refused("wire-bool"))?),
         Type::Table => {
             let (n, body) = length(body)?;
             let count = policy.table_len(n)?;
@@ -280,6 +292,62 @@ impl InputBindings {
         Ok(())
     }
 }
+/// Decoded ordinary inputs and checked references to not-yet-issued host values.
+/// Preparation has no issuance or frame-entry effects. Binding still validates
+/// the actual issued values; preparation cannot predict an issuance failure.
+pub struct InputPlan {
+    values: Vec<PlannedInput>,
+}
+enum PlannedInput {
+    Ready(Box<Value>),
+    Host { name: String, ty: PhysicalType },
+}
+impl InputPlan {
+    /// Check shape, setup and pinned public inputs before resource issuance.
+    pub fn check_entry(
+        &self,
+        backend: &NativeBackend,
+        role: &EntryRole,
+        host: &InputBindings,
+    ) -> Result<()> {
+        let values = self
+            .values
+            .iter()
+            .map(|v| match v {
+                PlannedInput::Ready(v) => Some(v.as_ref()),
+                PlannedInput::Host { name, .. } => host.values.get(name),
+            })
+            .collect::<Vec<_>>();
+        backend.check_entry_values(role, &values)
+    }
+    /// Resolve checked references after the host has prepared every role.
+    pub fn bind<B: Backend<Value = Value>>(
+        self,
+        backend: &B,
+        host: &InputBindings,
+    ) -> Result<Vec<Value>> {
+        self.values
+            .into_iter()
+            .map(|input| {
+                let value = match input {
+                    PlannedInput::Ready(value) => *value,
+                    PlannedInput::Host { name, ty } => {
+                        let value = host
+                            .values
+                            .get(&name)
+                            .ok_or_else(|| refused("input-host-handle"))?;
+                        if value.physical_type() != ty {
+                            return Err(refused("input-type"));
+                        }
+                        value.clone()
+                    }
+                };
+                backend.validate_value(&value)?;
+                Ok(value)
+            })
+            .collect()
+    }
+}
 impl NativeBackend {
     /// Encode a public value only. The runtime envelope must be transported
     /// and checked separately; value bytes do not authenticate a session.
@@ -303,9 +371,30 @@ impl NativeBackend {
         bytes: &[u8],
         host: &InputBindings,
     ) -> Result<Vec<Value>> {
-        input_json(self, self.policy(), role, bytes, host, |port, ty, bytes| {
-            self.decode_input_value(port, ty, bytes)
-        })
+        let types = host
+            .values
+            .iter()
+            .map(|(name, value)| (name.clone(), value.physical_type()))
+            .collect();
+        self.prepare_inputs(role, bytes, &types)?.bind(self, host)
+    }
+    /// Validate input syntax, nominal types, ordinary values and affine name
+    /// reuse before issuing any declared host resources. Types are host policy,
+    /// never inferred from an untrusted host-reference record.
+    pub fn prepare_inputs(
+        &self,
+        role: &EntryRole,
+        bytes: &[u8],
+        host_types: &BTreeMap<String, PhysicalType>,
+    ) -> Result<InputPlan> {
+        input_json(
+            self,
+            self.policy(),
+            role,
+            bytes,
+            host_types,
+            |port, ty, bytes| self.decode_input_value(port, ty, bytes),
+        )
     }
     fn decode_input_value(&self, port: &str, ty: PhysicalType, bytes: &[u8]) -> Result<Value> {
         if self.has_setup_registry() && requires_setup(ty.logical()) {
@@ -373,9 +462,9 @@ fn input_json<B: Backend<Value = Value>>(
     policy: &Policy,
     role: &EntryRole,
     bytes: &[u8],
-    host: &InputBindings,
+    host: &BTreeMap<String, PhysicalType>,
     wire: impl Fn(&str, PhysicalType, &[u8]) -> Result<Value>,
-) -> Result<Vec<Value>> {
+) -> Result<InputPlan> {
     if bytes.len() > policy.max_wire_bytes.min(1024 * 1024) {
         return Err(exhausted("input-bytes"));
     }
@@ -402,6 +491,7 @@ fn input_json<B: Backend<Value = Value>>(
         }
     }
     let mut result = Vec::with_capacity(role.inputs.len());
+    let mut affine = std::collections::BTreeSet::new();
     for (name, ty) in &role.inputs {
         let record = array(
             provided
@@ -411,12 +501,22 @@ fn input_json<B: Backend<Value = Value>>(
         if record.len() != 2 {
             return Err(refused("input-value"));
         }
+        if string(&record[0])? == "host" {
+            let name = string(&record[1])?;
+            let declared = host.get(name).ok_or_else(|| refused("input-host-handle"))?;
+            if declared != ty {
+                return Err(refused("input-type"));
+            }
+            if ty.is_affine() && !affine.insert(name) {
+                return Err(refused("input-host-alias"));
+            }
+            result.push(PlannedInput::Host {
+                name: name.into(),
+                ty: ty.clone(),
+            });
+            continue;
+        }
         let v = match string(&record[0])? {
-            "host" => host
-                .values
-                .get(string(&record[1])?)
-                .cloned()
-                .ok_or_else(|| refused("input-host-handle"))?,
             "wire" => wire(name, ty.clone(), &hex(string(&record[1])?, policy)?)?,
             "field" if ty.kind() == Type::Field => match ty.logical().identity() {
                 Identity::Bn254Fr => {
@@ -529,7 +629,7 @@ fn input_json<B: Backend<Value = Value>>(
             return Err(refused("input-type"));
         }
         backend.validate_value(&v)?;
-        result.push(v);
+        result.push(PlannedInput::Ready(Box::new(v)));
     }
-    Ok(result)
+    Ok(InputPlan { values: result })
 }

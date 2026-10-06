@@ -9,6 +9,10 @@ This is the `run-protocol` development host. Artifact producers and validators
 use `zkc.artifact-inputs/1`, defined in the
 [artifact format](../compiler/artifact-format.md#canonical-logical-encoding).
 Those inputs belong to a different execution route.
+The mathematical compiler's [`zkc.run/1` joint bundle](../spec/profiles/compiler/run.md)
+contains an executable program and schedule; its invocations use
+`zkc.bundle-inputs/1`. The source-host input tag `zkc.run/2` belongs to a separate
+contract, not a newer version of that bundle.
 
 For the two-opening example, with `COMPILER` naming a fresh `zkc-compile` build:
 
@@ -86,3 +90,45 @@ The separate [original-source reference](../compiler/library-design/validation.m
 supplies bounded differential evidence for mathematical and stateful services,
 including multiple setups. It does not establish general scheduler or allocator
 equivalence.
+
+
+## Preparation, results and limits
+
+All source input names, service declarations, setup/receive selections and decoded
+role inputs, including pure entry shape/setup constraints, are prepared before
+execution resources are issued. Development key
+generation still precedes decoding values that require those keys. Once issuance
+begins, ordinary issuance or runner-construction failure retains backend custody
+and retires earlier roots. Existing ingress semantics are preserved: an ingress
+stop does not skip construction of later roles; a load error does.
+
+`zkc.run-result/2` records the primary outcome, phase, started-role flags,
+usage for unstarted/failed loads, diagnostics, and `retired_resources`. Output
+encoding and observation errors append diagnostics while preserving the original
+result. `resources` is observed before explicit retirement. Retirement does not
+undo draws or other reached effects. The input format is `zkc.run/2`.
+
+Optional `--limits=FILE` selects
+`["zkc.source-run-limits/1", schedule_work, message_bytes, total_wire_bytes]`.
+Values are canonical decimal strings. Defaults and hard ceilings are one million
+source traversal units, 16 MiB per message and 64 MiB cumulative transport bytes.
+Higher requests are refused. The source scheduler's traversal work is distinct
+from executed participant instructions and native bundle dispatches. Exhaustion
+retains a `joint` limit stop. Wire exhaustion is `driver-wire-limit` with peer
+cancellation. Reports include selected limits and sent/encoded/transferred counts.
+Both original encoded bytes and bytes returned by transport count, including the
+local transport's same bytes. Native bundle replacement accounting has a different
+contract; these counters must not be substituted for one another.
+
+The CLI returns nonzero for preparation refusal, partial setup failure or report
+and cleanup diagnostics. An executed source-host stop or driver outcome
+is represented in JSON; applications inspect `outcome`. This differs from
+`run-bundle`, whose exit zero requires clean completed execution. Neither infers
+verifier acceptance from an arbitrary Boolean result. Phases use `issuance`,
+`construction` and `execution`; refused source sessions and early aliases have
+explicit `host-session` and `host-input-alias` diagnostics.
+
+Declaration prechecks use `host-input-type` for a missing or mismatched host label
+and for a source/target type disagreement; affine declaration reuse is
+`host-input-alias`. These source-host codes differ from the backend input API's
+`input-host-handle`, `input-type` and `input-host-alias` refusals.

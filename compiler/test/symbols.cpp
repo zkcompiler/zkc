@@ -15,18 +15,18 @@ int main() {
   auto module = parseSourceString<ModuleOp>(R"mlir(
 module {
   func.func private @alias()
-  "pir.protocol"() <{sym_name = "child", dependencies = [], external = true,
+  "protocol.exec_func"() <{sym_name = "child", dependencies = [], external = true,
     function_type = (i1) -> i1, input_roles = ["P"], output_roles = ["P"],
     roles = ["P"], parameters = []}> ({}) : () -> ()
-  "pir.protocol"() <{sym_name = "parent", dependencies = [["alias", @child, []]],
+  "protocol.exec_func"() <{sym_name = "parent", dependencies = [["alias", @child, []]],
     external = false, function_type = (i1) -> i1, input_roles = ["P"],
     output_roles = ["P"], roles = ["P"], parameters = []}> ({
   ^bb0(%arg: i1):
-    %result = "pir.protocol_call"(%arg) <{dependency = "alias", site = "s"}>
+    %result = "protocol.call"(%arg) <{dependency = "alias", site = "s"}>
       : (i1) -> i1
-    "pir.finish"(%result) : (i1) -> ()
+    "protocol.return"(%result) : (i1) -> ()
   }) : () -> ()
-  "pir.instance"() <{sym_name = "i", protocol = @child, parameters = [],
+  "protocol.instance"() <{sym_name = "i", protocol = @child, parameters = [],
     dependencies = [], roles = [["P", "P"]]}> : () -> ()
 })mlir",
                                             &context);
@@ -41,8 +41,8 @@ module {
   for (auto use : *uses)
     if (!isa<SymbolUserOpInterface>(use.getUser()))
       return 3;
-  zkc::ProtocolCallOp call;
-  module->walk([&](zkc::ProtocolCallOp op) { call = op; });
+  zkc::protocol_ir::ProtocolCallOp call;
+  module->walk([&](zkc::protocol_ir::ProtocolCallOp op) { call = op; });
   if (!call || !isa<SymbolUserOpInterface>(call.getOperation()))
     return 4;
   auto renamed = StringAttr::get(&context, "renamed");

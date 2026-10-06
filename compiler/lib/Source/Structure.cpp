@@ -1,3 +1,4 @@
+#include "Structure.h"
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Relations.h"
 #include "zkc/Support/Json.h"
@@ -13,6 +14,7 @@ class Structure {
   static constexpr size_t byteLimit = 1024 * 1024;
   std::string problem;
   bool projected = false, generic = false;
+  bool nativeIR = false, program = false;
 
   void fail(StringRef code) {
     if (problem.empty())
@@ -105,7 +107,12 @@ class Structure {
                           std::is_same_v<T, Yield> ||
                           std::is_same_v<T, Release>)
               return fields({tag, names(op.values)});
-            else if constexpr (std::is_same_v<T, Operation>) {
+            else if constexpr (std::is_same_v<T, ReturnIf>) {
+              if (!program || !projected)
+                fail("interactive-return-type");
+              return fields({tag, text(i.site), text(op.condition),
+                             names(op.values), names(op.continuations)});
+            } else if constexpr (std::is_same_v<T, Operation>) {
               if (!generic && !op.staticArguments.empty())
                 fail("source-model-shape");
               if (generic)
@@ -115,6 +122,14 @@ class Structure {
               return fields({tag, text(i.site), text(op.callee),
                              names(op.attributes), names(op.inputs),
                              names(op.outputs)});
+            } else if constexpr (std::is_same_v<T, BooleanConstant>) {
+              if (!program)
+                fail("native-boolean-context");
+              return fields(
+                  {tag, text(i.site), text(op.output), op.value ? 4u : 5u});
+            } else if constexpr (std::is_same_v<T, ServiceQuery>) {
+              return fields({tag, text(i.site), text(op.port), text(op.method),
+                             names(op.inputs), names(op.outputs)});
             } else if constexpr (std::is_same_v<T, LocalCall>) {
               if (projected) {
                 if (!op.role.empty())
@@ -169,17 +184,28 @@ class Structure {
               return fields({tag, text(i.site), text(op.condition),
                              names(op.captures), body(op.thenBody, depth + 1),
                              body(op.elseBody, depth + 1), names(op.outputs)});
-            else if constexpr (std::is_same_v<T, For>)
-              return fields({tag, text(i.site), text(op.induction),
-                             text(op.lower), text(op.upper), pairs(op.carried),
+            else if constexpr (std::is_same_v<T, For>) {
+              if (op.conditional && !program)
+                fail("source-model-shape");
+              return fields({text(op.conditional ? "for_while" : "for"),
+                             text(i.site), text(op.induction), text(op.lower),
+                             text(op.upper), pairs(op.carried),
                              names(op.captures), body(op.body, depth + 1),
                              names(op.outputs)});
-            else {
+            } else {
               if (op.count.kind != LoopCount::Kind::Constant &&
-                  op.count.kind != LoopCount::Kind::Parameter)
+                  op.count.kind != LoopCount::Kind::Parameter &&
+                  op.count.kind != LoopCount::Kind::Value)
                 fail("source-model-shape");
+              if (op.count.kind == LoopCount::Kind::Value &&
+                  (!projected || !program || op.count.maximum > 1048576))
+                fail("interactive-loop-count");
               size_t count =
-                  projected && op.count.kind == LoopCount::Kind::Constant
+                  op.count.kind == LoopCount::Kind::Value
+                      ? fields({text("value"), text(op.count.value),
+                                text(std::to_string(op.count.maximum)),
+                                text(op.count.induction)})
+                  : projected && op.count.kind == LoopCount::Kind::Constant
                       ? text(op.count.value)
                       : fields({text(op.count.kind == LoopCount::Kind::Parameter
                                          ? "parameter"
@@ -283,20 +309,35 @@ class Structure {
   }
   size_t measure(const Participants &m) {
     projected = true;
+    program = isProgram(m.contract);
+    if (program && !nativeIR && m.stage == Participants::Stage::Logical)
+      fail("native-physical-required");
+    if (participantFormat(m.contract).empty())
+      fail("source-model-shape");
     if (m.stage != Participants::Stage::Logical &&
         m.stage != Participants::Stage::Physical)
       fail("source-model-shape");
     return fields(
-        {text("zkc.participants/1"), environment(m),
+        {text(participantFormat(m.contract)), environment(m),
          text(m.stage == Participants::Stage::Physical ? "physical"
                                                        : "logical"),
          list(m.functions, [&](const auto &f) { return function(f); }),
          list(m.participants,
               [&](const Participant &p) {
-                return fields({text("participant"), text(p.name),
-                               text(p.instance), text(p.role),
-                               pairs(p.parameters), parameters(p.arguments),
-                               names(p.results), body(p.body)});
+                auto bytes = fields(
+                    {text("participant"), text(p.name), text(p.instance),
+                     text(p.role), pairs(p.parameters), parameters(p.arguments),
+                     names(p.results), body(p.body)});
+                if (isProgram(m.contract))
+                  bytes = add(
+                      bytes,
+                      1 + list(p.services, [&](const ServicePort &port) {
+                        return fields({text(port.name), text(port.contract),
+                                       text(std::to_string(port.inputIndex))});
+                      }));
+                else if (!p.services.empty())
+                  fail("service-profile-required");
+                return bytes;
               }),
          list(m.entries, [&](const ParticipantEntry &e) {
            return fields({text("entry"), text(e.name), pairs(e.participants)});
@@ -320,6 +361,10 @@ class Structure {
   }
 
 public:
+  // Internal modules admit native literals. Only measure(Participants) enables
+  // projected value-count loops and resets program from the declared contract.
+  explicit Structure(bool allowNativeIR = false)
+      : nativeIR(allowNativeIR), program(allowNativeIR) {}
   template <typename T> Error run(const T &value) {
     measure(value);
     return problem.empty() ? Error::success() : error(problem);
@@ -333,4 +378,10 @@ Error checkStructure(const Content &content) {
 Error checkStructure(const Module &m) { return Structure().run(m); }
 Error checkStructure(const Participants &m) { return Structure().run(m); }
 Error checkStructure(const Construction &c) { return Structure().run(c); }
+Error detail::checkNativeIRStructure(const Module &m) {
+  return Structure(true).run(m);
+}
+Error detail::checkNativeIRStructure(const Participants &m) {
+  return Structure(true).run(m);
+}
 } // namespace zkc::source

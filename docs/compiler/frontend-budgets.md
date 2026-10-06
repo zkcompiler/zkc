@@ -13,13 +13,8 @@ limits.libraryFormation = 1000;
 auto analysis = zkc::frontend::analyzeProject(project, limits);
 ```
 
-Every default is 262144. The authored/static and library source work defaults
-retain their existing numeric values; generated source and output use that same
-initial value as separate accounts. Combining work within an invocation and
-adding previously uncharged operations can stop inputs that formerly passed
-independent local counters. This narrowing is an intentional policy change, not
-a promise to preserve the former worst-case accepted inputs. These defaults have
-not been calibrated against a performance corpus. No environment variable
+Every default is 262144, with independent accounts for the four work categories.
+These defaults have not been calibrated against a performance corpus. No environment variable
 changes them. Internal phase calls require the invocation's explicit budget;
 they have no overload that silently starts a new account.
 
@@ -89,15 +84,14 @@ specializations of one protocol with eight field inputs and eight field outputs.
 It requires successful analysis and emission using the public defaults, without
 deriving a limit from measured usage. Together with exact/one-less injected
 ceilings, this protects a concrete accepted workload and the refusal boundary.
-It does not establish compatibility with the old worst-case input envelope or
-calibrate a universal default. Independent structural admission still applies.
+It does not calibrate a universal default. Independent structural admission still applies.
 
 ## Separate bounds and remaining coverage
 
 `Environment::expansionLimit` remains the existing library admission/profile
 limit, including its numeric default and identity encoding. Generic requirement
 replay limits, source/carrier structural bounds, Rust/Lean limits, static depth
-and specialization-count limits, and runtime resources are unchanged. Raising
+and specialization-count limits, and runtime resources remain separate. Raising
 a compiler budget cannot bypass any of them.
 
 Uncharged work includes parsing, resolution, dependency discovery and loading,

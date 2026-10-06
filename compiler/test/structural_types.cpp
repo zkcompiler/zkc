@@ -40,6 +40,22 @@ void representationPatterns() {
             "unexpected representation refusal");
   };
   validate(appliedTypeRepresentations());
+  const TypeArgumentPattern positive[] = {{Kind::Domain, "bls12-381.fr"},
+                                          {Kind::Nat, {}, 4, 1}};
+  const TypeArgumentPattern emptyRange[] = {{Kind::Domain, "bls12-381.fr"},
+                                            {Kind::Nat, {}, 0, 1}};
+  validate({{"field_array", positive, "test.array/1", true}});
+  validate({{"field_array", emptyRange, "test.array/1", true}},
+           "representation-pattern");
+  const TypeArgumentPattern later[] = {{Kind::Domain, "bls12-381.fr"},
+                                       {Kind::Nat, {}, 8, 5}};
+  const TypeArgumentPattern overlap[] = {{Kind::Domain, "bls12-381.fr"},
+                                         {Kind::Nat, {}, 8, 4}};
+  validate({{"field_array", positive, "test.array/1", true},
+            {"field_array", later, "test.array/1", true}});
+  validate({{"field_array", positive, "test.array/1", true},
+            {"field_array", overlap, "test.array/2", true}},
+           "representation-default");
   const TypeArgumentPattern arguments[] = {{Kind::Type, "field:koala-bear"},
                                            {Kind::Nat, {}, 1048576}};
   AppliedTypeRepresentation row{"fixed_vector", arguments, "test.vector/1",
@@ -165,6 +181,29 @@ int main() {
     nested = "fixed_vector<" + nested + ",1>";
   accepts(nested);
   refuses("fixed_vector<" + nested + ",1>", "binding-type-limit");
+  nested = "index";
+  for (unsigned i = 0; i < 8; ++i)
+    nested = "sequence<" + nested + ">";
+  auto sequence = accepts(nested);
+  check(bool(defaultRepresentation(sequence)),
+        "nested sequence representation");
+  refuses("sequence<" + nested + ">", "binding-type-limit");
+  for (unsigned i = 0; i < 40; ++i)
+    nested = "sequence<" + nested + ">";
+  refuses(nested, "binding-type-limit");
+  refuses("sequence<rng:bls12-381.fr>", "sequence-element-permission");
+  for (auto spelling :
+       {"sequence<prover_key:multilinear.kzg.bls12-381/1>",
+        "sequence<opening_state:multilinear.kzg.bls12-381/1>"}) {
+    auto local = accepts(spelling);
+    check(duplicable(local) && discardable(local) &&
+              bool(defaultRepresentation(local)) && !nativeMessageData(local),
+          "local immutable sequence acquired wire permission");
+  }
+  auto unsupported =
+      defaultRepresentation(accepts("fixed_vector<sequence<index>,2>"));
+  check(!unsupported, "fixed vector acquired a nested-value representation");
+  consumeError(unsupported.takeError());
   auto applied = applyBoundType("fixed_vector", {"field:koala-bear", "4"});
   check(bool(applied), "kinded application failed");
   check(*applied == type, "direct application differs from parsed type");

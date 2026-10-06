@@ -11,7 +11,7 @@ policies; they are not cryptographic security checkers.
 source. The [examples](../examples/protocols/README.md) can be compiled directly.
 [Interactive execution](../docs/compiler/interactive-execution.md) explains
 the authored source, independent roles, actual backend and assurance boundaries.
-The earlier [finite table path](../docs/compiler/table-execution.md) remains
+The [finite table path](../docs/compiler/table-execution.md) remains
 separately tested and uses its existing commands.
 Its dialects and APIs are not frozen production interfaces. The
 [compilation architecture](../docs/compiler/protocol-pipeline.md) owns the
@@ -42,9 +42,7 @@ setup. Enter `nix develop` for native CMake/Ninja iteration, or use
 
 Use LLVM/MLIR 23, Clang, CMake and Ninja. Any 23 release configures; the
 release the current evidence was produced with is `ZKC_TESTED_LLVM_VERSION` in
-[`CMakeLists.txt`](CMakeLists.txt), and configuring with another one warns. GCC 13 is not a validated build
-configuration: its `maybe-uninitialized` diagnostic in upstream generated
-property hashing has not been revalidated after the include-path cleanup.
+[`CMakeLists.txt`](CMakeLists.txt), and configuring with another one warns. GCC is not a validated build configuration.
 Compiler-owned code builds with `-Wall -Wextra -Werror`; dependency and generated
 headers use system include paths.
 
@@ -107,7 +105,7 @@ Run `just build` first, then from the repository root:
 ```sh
 build/compiler/zkc-compile protocol-import examples/protocols/two-factor.pir > /tmp/common.mlir
 build/compiler/zkc-opt --zkc-project-participants /tmp/common.mlir > /tmp/participants.mlir
-build/compiler/zkc-opt --zkc-plan-participants /tmp/participants.mlir > /tmp/physical.mlir
+build/compiler/zkc-opt --zkc-select-physical /tmp/participants.mlir > /tmp/physical.mlir
 build/compiler/zkc-compile protocol-export /tmp/physical.mlir > /tmp/participants.json
 build/compiler/zkc-compile protocol-source examples/protocols/two-factor.pir > /tmp/source.json
 target/release/zkc run-protocol /tmp/source.json \
@@ -146,7 +144,7 @@ static arguments are inferred from operands or local result annotations, without
 associated-member inversion, a global solver or backend search. `F: Field` adds a
 capability; `F: domain Field` supplies only a sort. Protocol-local generic work
 keeps explicit configurations, and `fn Name<>` remains distinct from `fn Name`.
-Import retains native `func.call` structure; `--zkc-expand-algorithms` expands
+Import retains native `local.apply` structure; `--zkc-expand-algorithms` expands
 acyclic calls before participant projection. `protocol-expand` emits the
 expanded source and `protocol-algorithm-map` reports the original primitive and
 nested call path. [Local composition](../docs/compiler/local-composition.md)
@@ -210,15 +208,15 @@ target/release/zkc run-physical examples/tables/source.json /tmp/table-physical.
 
 Use `--physical=lazy` for deferred evaluation. The explicit MLIR pipeline is
 `builtin.module(lower-pir-to-plan,lower-plan-to-physical{mode=materialized})`.
-It changes scalar values and region signatures to `!plan.scalar`, with
-`plan.prepare` and `plan.invoke` operations, while retaining the logical input
+It changes scalar values and region signatures to `!table.scalar`, with
+`table.plan.prepare` and `table.plan.invoke` operations, while retaining the logical input
 context and compact control. Export serializes the actual converted body.
 `run-physical` also accepts the same `--phase` and `--endpoint` options, before
 trailing `--storage` options, with exact physical realization and policy
 acknowledgment.
 
 Add `--simplify` to `compile SOURCE --physical=lazy|materialized` to eliminate
-`poly.linear(a, a, r)` when its two endpoint operands are the same SSA value.
+`table.poly_linear(a, a, r)` when its two endpoint operands are the same SSA value.
 The explicit pass is `simplify-table-regions`, before physical conversion, for
 example `builtin.module(simplify-table-regions,lower-pir-to-plan,lower-plan-to-physical{mode=lazy})`.
 It retains partial operations, calls and control, including unused producers.
@@ -241,7 +239,8 @@ compilation workflows and command handling. Arrows mean “depends on”:
 ```text
 Compiler (interface aggregate) → CompilerCore, Driver
 Driver → CompilerCore, FrontendLoading, MLIR parser
-CompilerCore → Transforms, Frontend, ClaimTranslation
+CompilerCore → Transforms, Translation, Frontend, ClaimTranslation, MLIR parser
+Translation → IR
 Transforms → IR, MLIR passes and conversions
 IR → Protocol, MLIR IR and interfaces
 ClaimTranslation → Claims, IR
@@ -257,12 +256,13 @@ FrontendLoading → Frontend
 | `Zkc::Relation` | R1CS/AIR data, identities, sparse matrices and AIR polynomial evaluation in `Relation` |
 | `Zkc::Protocol` | Common `Source` records/codecs/snapshots, generated relation views, admission, generic preparation, source analyses and physical selection requests |
 | `Zkc::Claims` | MLIR-free conditional claim analysis, derivation and checking in `Claims` |
-| `Zkc::IR` | Dialects, operation interfaces, binding adapters, translation and mandatory root verification in `Dialect`, `Interfaces` and `Translation` |
+| `Zkc::IR` | Dialects, operation interfaces, binding adapters and mandatory root verification in `Dialect` and `Interfaces` |
+| `Zkc::Translation` | Typed source/participant carrier import and export in `Translation` |
 | `Zkc::ClaimTranslation` | Optional source-bound claim IR import and candidate checking in `ClaimTranslation` |
 | `Zkc::Frontend` | Captured-input resolution, checked authoring, static selection, retained analysis and common lowering in `Frontend` |
 | `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
 | `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion`, `Target` and `Dialect/Relation/Transforms` |
-| `Zkc::CompilerCore` | Typed compilation, checked construction/claim workflows, inspection and pipeline/pass registration in `Compiler` |
+| `Zkc::CompilerCore` | Typed compilation, in-memory native MLIR compilation, checked construction/claim workflows, inspection and pipeline/pass registration in `Compiler` |
 | `Zkc::Driver` | Command options, file loading and output rendering in `Driver` |
 
 The foundations have no MLIR, frontend or driver dependency. A contract
@@ -396,8 +396,14 @@ also supports import, expansion and projection as stopping points.
 `compileTable` is the separate finite-table route. Its registry must install the
 chosen source-library interface, such as `registerTableLibrary`; an interactive
 protocol's built-in operations do not select a table library implicitly.
+`Zkc::IR` owns dialects and mandatory profile/model validation.
+`Zkc::Translation` owns carrier imports and checked exports and depends on IR.
 `Zkc::Transforms` supports caller-owned MLIR contexts and pass factories without
-frontend or driver linkage. `Zkc::Claims` supports conditional claim checking
+translation, frontend or driver linkage. The source-model convenience overload
+of `expandAlgorithms` belongs to `Compiler/Algorithms.h` and CompilerCore.
+`registerNativeDialects` excludes Table and installs the closed arith models;
+`registerDialects` adds the finite-table dialect. Registration does not grant
+profile admission. `Zkc::Claims` supports conditional claim checking
 without MLIR. `Zkc::ClaimTranslation` supports direct claim IR clients without
 frontend or pipeline linkage. `Zkc::Driver` preserves the command dispatcher for tool embedders.
 `Zkc::Compiler` remains an optional aggregate of the application components.
@@ -408,8 +414,12 @@ The installed-consumer build compiles each public header independently. Its
 package tests reject unknown required components and allow unknown optional ones.
 Private construction and claim-analysis records are deliberately not installed.
 
-Interactive ODS is grouped by responsibility in shared `Types.td`/`Kernels.td`,
-`PIR/IR/{Protocol,Participant}.td` and `Plan/IR/Physical.td`. Native symbol-use interfaces
+ODS and C++ declarations belong to their Protocol, Local, Crypto, Algebra,
+Polynomial, PCS, Oracle, Relation, Claim, Plan and Table owners. Protocol owns
+interaction and checked profiles; Local owns stopping executable programs; Plan
+owns selected representations. The finite-table source/plan control path and its
+physical support belong to Table. Shared `Types.td` and `Kernels.td` supply
+constraints and contract declarations. Native symbol-use interfaces
 resolve actual declarations and verify call signatures; kernel verifiers check
 actual SSA kinds, profiles and representation parameters. Local region verifiers
 check callable returns, message types and loop signatures even for standalone
@@ -504,7 +514,7 @@ Natural operation attributes are canonical unsigned decimal strings within the
 64-bit unsigned range. `vector.gather` accepts zero or more indices;
 `vector.matvec` requires exactly rows, columns and transpose (`0` or `1`).
 Splat/powers/random-vector lengths, vector indices/exact-length checks and polynomial
-degree bounds each require one attribute. Other new contracts take none. Generic
+degree bounds each require one attribute. Other vector contracts take none. Generic
 field constants are natural casts reduced at specialization using the selected
 field modulus; closed constants must already be canonical for that field.
 
@@ -553,7 +563,7 @@ mark operations pure/speculatable or implement the buffer `ViewLike` interface.
 C++ callers use `zkc::protocol::lowerPhysical(module, selections, true, &stats)`;
 `LinearContractionStats` and the read-only analysis are declared in
 [LinearContraction.h](include/zkc/Transforms/LinearContraction.h). In a standard
-MLIR pass pipeline, use `--zkc-plan-participants=linear-contractions=true` after
+MLIR pass pipeline, use `--zkc-select-physical=linear-contractions=true` after
 `--zkc-project-participants`. The pass prints the same stderr count summary;
 `--mlir-pass-statistics` also exposes standard counters when the MLIR distribution
 was built with statistics enabled.
@@ -589,7 +599,7 @@ The prescribed output and generated names change when a call is preserved.
 Recompute the construction manifest and physical candidate from original source;
 exact candidate checking is unchanged. The manifest's eight-column origin-row
 schema is unchanged. Preservation changes local frame counts and intermediate
-value lifetimes, so resource-limit equality with old construction is not claimed.
+value lifetimes, so resource-limit equality with expanded calls is not claimed.
 Always inspect selected operations in reached constructed calls as well as static
 selection counts. Native execution and independent source/candidate checking
 remain separate validation obligations.
@@ -600,7 +610,7 @@ Add `--release-storage` to `protocol-compile` or `protocol-physical-ir` to emit
 physical `plan.release` instructions after the last SSA use of discardable local
 values. Unused discardable inputs release at local entry, unused discardable results
 just after production, and returned values escape. The corresponding pass option
-is `--zkc-plan-participants=release-storage=true`.
+is `--zkc-select-physical=release-storage=true`.
 
 Kernels, original observations, ticks, logical live/cumulative charges and budget
 failures remain unchanged. Rust keeps scalar ghost charges until local exit while
@@ -625,3 +635,30 @@ through ordinary local/subprotocol calls. The Groth16 consumer compiles visible
 PIR algorithms and imports snarkjs prepared keys into arkworks-backed operations;
 it does not call an opaque prover. Its verifier can run independently from cached
 code and public inputs.
+
+## Execution bundles
+
+`zkc-compile protocol-bundle FILE.mlir [--entry=main] [--no-simplify]
+[--release-storage]` compiles the closed mathematical `protocol` profile through
+the existing native pipeline and emits one `zkc.run/1` JSON object. It
+contains the exact physical participant carrier and a source-order dispatch plan.
+The C++ API is `compileRun` in `zkc/Compiler/Run.h`; its
+result owns the final MLIR context/module and bundle. `Compilation::source()` is
+null for this MLIR invocation.
+
+The [profile](../docs/spec/profiles/compiler/run.md) defines
+bounds, action grouping, failure and assurance scope. The bundle is supplied
+execution data; it carries no independent source-correspondence certificate.
+
+## Native proof deployments
+
+`zkc-compile protocol-proof FILE.mlir POLICY [--no-simplify]
+[--release-storage]` constructs and source-checks a native proof program for policy `/1`–`/4`,
+then uses the same participant-to-physical pipeline. The C++ API is
+`compileNativeProof` in `zkc/Compiler/NativeProof.h`. It returns owned MLIR and a
+`zkc.native-proof/N` deployment envelope matching the selected policy version. The
+[native proof guide](../docs/compiler/native-proofs.md#command-line-use)
+describes policy, independent host execution and the required trusted deployment
+digest. `protocol-construct-proof FILE.mlir POLICY` emits participant mathematics;
+`protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir` checks that actual candidate
+against the original source.

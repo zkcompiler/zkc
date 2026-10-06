@@ -231,6 +231,17 @@ pub(crate) fn apply(
     p: &Policy,
     public: bool,
 ) -> Option<Result<Vec<Value>>> {
+    if name == "pairing.apply" {
+        return Some((|| {
+            let [Value::Bn254G1(a), Value::Bn254G2(b)] = args else {
+                return Err(refused("kernel-operands"));
+            };
+            p.output(512, i.max_output_bytes)?;
+            // Bound pairing preparation scratch independently of the GT result.
+            p.output(32768, usize::MAX)?;
+            Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))])
+        })());
+    }
     if name == "pairing.check" {
         return Some((|| {
             let [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] = args else {
@@ -262,6 +273,7 @@ pub(crate) fn apply(
             {
                 Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p, public),
                 Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p, public),
+                Some("bn254.gt") => target(name, args, i, p),
                 _ => Err(refused("kernel-operands")),
             }
         }
@@ -481,15 +493,26 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
         ),
     ]
 };
-pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[crate::bindings::curve::pairing(
-    "pairing.check",
-    &[
-        zkc_runtime::interactive::Type::Groups,
-        zkc_runtime::interactive::Type::Groups,
-    ],
-    &[zkc_runtime::interactive::Type::Bool],
-    zkc_runtime::interactive::AttributeRule::None,
-)];
+pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
+    crate::bindings::curve::pairing(
+        "pairing.apply",
+        &[
+            zkc_runtime::interactive::Type::Group,
+            zkc_runtime::interactive::Type::Group,
+        ],
+        &[zkc_runtime::interactive::Type::Group],
+        zkc_runtime::interactive::AttributeRule::None,
+    ),
+    crate::bindings::curve::pairing(
+        "pairing.check",
+        &[
+            zkc_runtime::interactive::Type::Groups,
+            zkc_runtime::interactive::Type::Groups,
+        ],
+        &[zkc_runtime::interactive::Type::Bool],
+        zkc_runtime::interactive::AttributeRule::None,
+    ),
+];
 
 pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
     &[crate::backend::registry::Alternative {
@@ -500,3 +523,21 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
         handler: Some(crate::backend::registry::public_msm),
         public_operands: true,
     }];
+
+fn target(name: &str, args: &[Value], i: &Invocation<'_>, p: &Policy) -> Result<Vec<Value>> {
+    use crate::Bn254Gt as G;
+    p.output(512, i.max_output_bytes)?;
+    let v = match (name, args) {
+        ("curve.generator", []) => {
+            p.output(32768, usize::MAX)?;
+            Value::Bn254Gt(G::generator())
+        }
+        ("curve.neg", [Value::Bn254Gt(a)]) => Value::Bn254Gt(a.neg()),
+        ("curve.nonidentity", [Value::Bn254Gt(a)]) => Value::Bool(*a != G::identity()),
+        ("curve.add", [Value::Bn254Gt(a), Value::Bn254Gt(b)]) => Value::Bn254Gt(a.add(b)),
+        ("curve.scale", [Value::Bn254Gt(a), Value::Bn254Field(s)]) => Value::Bn254Gt(a.scale(*s)),
+        ("curve.equal", [Value::Bn254Gt(a), Value::Bn254Gt(b)]) => Value::Bool(a == b),
+        _ => return Err(refused("kernel-operands")),
+    };
+    Ok(vec![v])
+}

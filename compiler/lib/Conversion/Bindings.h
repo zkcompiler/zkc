@@ -8,7 +8,12 @@ namespace zkc::target {
 class CheckedPhysicalPlan;
 }
 namespace zkc::protocol {
-// Internal in-place application; refuses stale inputs before any mutation.
+// Compare the actual physical candidate with the fresh checked logical input.
+// Includes all local operands, selected kernels and per-use conversions.
+llvm::Error verifyPhysicalMaterialization(mlir::ModuleOp before,
+                                          mlir::ModuleOp after,
+                                          const target::CheckedPhysicalPlan &);
+// Transactional application; publish only after independent correspondence.
 llvm::Error materializePhysical(mlir::ModuleOp,
                                 const target::CheckedPhysicalPlan &);
 // Called after lowerPhysical admits a logical module with explicit bindings.

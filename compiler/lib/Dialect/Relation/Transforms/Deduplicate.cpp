@@ -1,8 +1,8 @@
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Relation/IR/Assets.h"
 #include "zkc/Transforms/Passes.h"
-#include "zkc/Translation/Relations.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -16,7 +16,7 @@ struct DeduplicateRelationsPass
     return "Remove exact duplicate rank-one constraint rows";
   }
   void runOnOperation() final {
-    for (auto op : getOperation().getOps<R1CSRelationOp>()) {
+    for (auto op : getOperation().getOps<zkc::relation::R1CSRelationOp>()) {
       auto relation = readR1CSOperation(op);
       if (!relation) {
         diagnostics::emit(op.emitOpError(), relation.takeError());

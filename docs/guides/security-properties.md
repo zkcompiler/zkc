@@ -60,9 +60,9 @@ correlated-service observation laws likewise retain their own subjects.
 
 [Protocol maps](protocols.md) distinguish expression, mathematical,
 wire and native coverage. The [security companion](../roadmap.md#4-the-security-companion)
-connects one complete source/property/checked-transformation application to the
-next native delivery. Its formal example exists; an optimized native artifact
-and its correspondence remain implementation work.
+tracks native realization of one complete source/property/checked-transformation
+application. Its formal example is maintained; the optimized native artifact and
+its correspondence remain implementation work.
 
 ## Judgments, premises and use
 

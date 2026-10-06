@@ -188,9 +188,14 @@ Success emits JSON status `produced` or `accepted`, exit 0. A failure emits
 codes such as `rejected:require`. All failure paths keep the reached V observation
 prefix; no response is synthesized for a failed operation.
 
-`timings` separates admission from key/input loading and runtime. Key loading
-includes input parsing, canonical root binding and capability issuance. Runtime
-includes proof read/write and final atomic publication. `proof_bytes` counts
+`timings.scope` is `prepared-execution`. `key_load_seconds` measures canonical
+root binding, input/key admission and capability issuance; `run_seconds` measures
+runner construction, execution, observations, retirement and teardown. Input-file
+read/parsing, proof-file read and durable atomic publication have separate
+`input_read_seconds`, `proof_read_seconds` and `publish_seconds` fields. The
+previous unlabelled CLI timers included input parsing in key loading and proof
+I/O/publication in runtime; compare only records with the same scope, or whole
+process costs. `proof_bytes` counts
 written/consumed framing bytes; `candidate_bytes` records full V candidate length.
 `messages` counts complete framed messages consumed or produced, not source
 messages erased by construction. Runtime instruction/call/iteration counts and

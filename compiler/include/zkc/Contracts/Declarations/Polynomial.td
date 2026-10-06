@@ -216,3 +216,11 @@ def OpPolyAppendPoint : ZKC_Operation<"poly.append_point", [OpPolyAppendPointF],
 }
 def ExportPolyAppendPoint : ZKC_OperationExport<"zkc::poly", "append_point",
     OpPolyAppendPoint, ["point", "field"]>;
+
+// Current ordered arity of a dynamically shaped multilinear table.
+def OpPolyTableArityF : ZKC_Root<"F", FieldDomain>;
+def OpPolyTableArity : ZKC_Operation<"poly.table_arity", [OpPolyTableArityF],
+    [ZKC_Apply<TypeTable, [OpPolyTableArityF]>], [ZKC_Apply<TypeIndex, []>],
+    [ZKC_Holds<CapabilityCommRing, [OpPolyTableArityF]>]>;
+def ExportPolyTableArity : ZKC_OperationExport<"zkc::poly", "table_arity",
+    OpPolyTableArity, ["table"]>;

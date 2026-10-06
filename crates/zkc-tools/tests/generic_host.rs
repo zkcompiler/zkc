@@ -59,16 +59,24 @@ impl Host {
         std::fs::write(path.join("candidate.json"), result.stdout).unwrap();
     }
     fn run(&self, input: &Json) -> Result<Json, String> {
+        self.run_with_limits(input, None)
+    }
+    fn run_with_limits(&self, input: &Json, limits: Option<&Json>) -> Result<Json, String> {
         let path = self.directory.path();
         std::fs::write(path.join("inputs.json"), serde_json::to_vec(input).unwrap()).unwrap();
-        let result = Command::new(env!("CARGO_BIN_EXE_zkc"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_zkc"));
+        command
             .arg("run-protocol")
             .arg(path.join("source.json"))
             .arg(path.join("candidate.json"))
             .arg(path.join("inputs.json"))
-            .arg(&self.checker)
-            .output()
-            .unwrap();
+            .arg(&self.checker);
+        if let Some(limits) = limits {
+            let file = path.join("limits.json");
+            std::fs::write(&file, limits.to_string()).unwrap();
+            command.arg(format!("--limits={}", file.display()));
+        }
+        let result = command.output().unwrap();
         if result.status.success() {
             Ok(serde_json::from_slice(&result.stdout).unwrap())
         } else {
@@ -370,4 +378,44 @@ fn bls_shorthand_uses_explicit_host_contract() {
     let report = host.run(&input).unwrap();
     assert_eq!(report["outcome"][0], "returned");
     assert_eq!(report["assurance"][0], "generic-structural-correspondence");
+}
+
+#[test]
+fn installed_source_limits_preserve_consumed_wire_and_stopped_prefix() {
+    let host = Host::compile("generic-openings.pir");
+    let input: Json = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/generic-openings.inputs.json"
+    ))
+    .unwrap();
+    let original = host.run(&input).unwrap();
+    assert_eq!(original["outcome"][0], "returned");
+    let sent = original["wire"]["encoded_bytes"].as_u64().unwrap();
+    assert!(sent > 0);
+    assert_eq!(original["wire"]["transferred_bytes"], sent);
+    let exact = json!([
+        "zkc.source-run-limits/1",
+        "1000000",
+        "16777216",
+        (2 * sent).to_string()
+    ]);
+    assert_eq!(
+        host.run_with_limits(&input, Some(&exact)).unwrap()["outcome"][0],
+        "returned"
+    );
+    let tight = json!([
+        "zkc.source-run-limits/1",
+        "1000000",
+        "16777216",
+        (2 * sent - 1).to_string()
+    ]);
+    let stopped = host.run_with_limits(&input, Some(&tight)).unwrap();
+    assert_eq!(stopped["outcome"], json!(["failed", "driver-wire-limit"]));
+    assert_eq!(stopped["wire"]["encoded_bytes"], sent);
+    assert!(stopped["wire"]["transferred_bytes"].as_u64().unwrap() < sent);
+    let zero = json!(["zkc.source-run-limits/1", "0", "16777216", "67108864"]);
+    let stopped = host.run_with_limits(&input, Some(&zero)).unwrap();
+    assert_eq!(stopped["outcome"][0], "stopped");
+    assert_eq!(stopped["outcome"][1], "joint");
+    assert_eq!(stopped["wire"]["sends"], 0);
+    assert_eq!(stopped["limits"]["schedule_work"], 0);
 }

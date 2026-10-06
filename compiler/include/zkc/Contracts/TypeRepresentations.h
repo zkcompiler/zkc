@@ -11,6 +11,7 @@ struct TypeArgumentPattern {
   TypeArgument::Kind kind;
   llvm::StringRef exact;
   uint64_t maximum = 0;
+  uint64_t minimum = 0;
 };
 struct AppliedTypeRepresentation {
   llvm::StringRef constructor;

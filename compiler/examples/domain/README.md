@@ -65,8 +65,11 @@ generation and installs only the declared public inventory.
 retain both admitted operations' complete dictionaries and locations. The
 consumer checks exact restoration at function, common-protocol and participant
 levels, refusal before decomposition, malformed-pattern controls and equality
-with directly compiled physical carriers. Unused bindings remain present.
-This example establishes no speedup or general rewrite theorem.
+with directly compiled physical carriers. A mathematical `protocol` module also
+calls the restored local function and compiles through `compileRun`. Its exact
+bundle equals direct compilation; an unlowered composite is refused. Unused
+bindings remain present. This example establishes no speedup or general rewrite
+theorem.
 
 With the Rust and Lean tools built, compare the restored program independently:
 
@@ -79,11 +82,14 @@ python3 compiler/examples/domain/consumer/execution.py \
 
 The check covers source admission, participant correspondence, two numeric
 inputs including modular wraparound, message output and resource observations.
+The same input values, encoded as `zkc.bundle-inputs/1`, execute the restored mathematical bundle through `run-bundle`;
+its field result agrees with independently computed modular addition and the
+Lean source reference. The Lean reader does not interpret the native bundle.
 The `Envelope` primitive itself intentionally remains without Rust/Lean support;
 the restored arithmetic program uses only already admitted field operations.
 
 To include independent Rust/Lean execution in the installed consumer checks,
 append `--runtime /path/to/zkc --checker /path/to/interactive-protocol` to
-`just test-install-domain`. Both tools must already be built. The additional
+`just test-install-domain release`. Both tools must already be built. The additional
 CTest case checks restored source admission, candidate correspondence and two
 field-arithmetic executions. It does not install a kernel for `envelope.keep`.

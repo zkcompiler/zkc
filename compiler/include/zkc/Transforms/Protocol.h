@@ -16,6 +16,12 @@ mlir::LogicalResult lowerPhysical(
     llvm::ArrayRef<std::pair<std::string, std::string>> selections = {},
     bool linearContractions = false, LinearContractionStats *stats = nullptr,
     bool releaseStorage = false);
+/// Check that a physical candidate only inserts admitted storage releases,
+/// preserving the positions and operands of existing releases.
+/// Preserves computation under sufficient capacity, not equal heap high water
+/// marks or outcomes at arbitrary native resource caps.
+mlir::LogicalResult verifyStoragePreserved(mlir::ModuleOp before,
+                                           mlir::ModuleOp after);
 /// Insert releases after last SSA use in admitted one-block physical locals.
 mlir::LogicalResult releaseLocalStorage(mlir::ModuleOp);
 } // namespace zkc::protocol

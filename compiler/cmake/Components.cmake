@@ -25,6 +25,7 @@ add_zkc_component(Support
   lib/Support/Input.cpp
   lib/Support/Refusal.cpp
   lib/Support/Json.cpp
+  lib/Support/LogicalTree.cpp
 )
 add_zkc_component(Contracts
   lib/Contracts/Declarations.cpp
@@ -38,6 +39,7 @@ add_zkc_component(Contracts
   lib/Contracts/Operations.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
+  lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
 )
 add_zkc_component(Relation
@@ -76,21 +78,46 @@ add_zkc_component(Claims
 )
 add_zkc_component(IR
   lib/Dialect/Diagnostics.cpp
+  lib/Dialect/Table/IR/TableDialect.cpp
+  lib/Dialect/Crypto/IR/CryptoDialect.cpp
+  lib/Dialect/Local/IR/LocalDialect.cpp
+  lib/Dialect/Local/IR/Functions.cpp
+  lib/Dialect/Local/IR/Control.cpp
+  lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
+  lib/Dialect/Algebra/IR/Mathematical.cpp
   lib/Dialect/Bindings.cpp
   lib/Dialect/Claim/IR/ClaimDialect.cpp
   lib/Dialect/Kernels.cpp
+  lib/Dialect/MathematicalInterfaces.cpp
   lib/Dialect/LinearContraction.cpp
-  lib/Dialect/Operations.cpp
+  lib/Dialect/Algebra/IR/Types.cpp
+  lib/Dialect/Polynomial/IR/Types.cpp
+  lib/Dialect/Polynomial/IR/Mathematical.cpp
+  lib/Dialect/Polynomial/IR/Recipes.cpp
+  lib/Dialect/Table/IR/Operations.cpp
+  lib/Dialect/SourceInterfaces.cpp
   lib/Dialect/Oracle/IR/OracleDialect.cpp
   lib/Dialect/PCS/IR/PCSDialect.cpp
-  lib/Dialect/PIR/IR/PIRDialect.cpp
-  lib/Dialect/PIR/IR/Protocol.cpp
-  lib/Dialect/Plan/IR/Physical.cpp
+  lib/Dialect/Protocol/IR/ProtocolDialect.cpp
+  lib/Dialect/Protocol/IR/Attributes.cpp
+  lib/Dialect/Protocol/Semantics.cpp
+  lib/Dialect/Protocol/NativePolicy.cpp
+  lib/Dialect/Protocol/IR/Protocol.cpp
+  lib/Dialect/Protocol/IR/Mathematical.cpp
+  lib/Dialect/Protocol/IR/ResourceOrigins.cpp
+  lib/Dialect/Protocol/IR/Applications.cpp
+  lib/Dialect/Protocol/IR/Projection.cpp
+  lib/Dialect/Table/IR/Physical.cpp
+  lib/Dialect/Table/IR/Program.cpp
+  lib/Dialect/Protocol/Execution.cpp
+  lib/Dialect/Relation/IR/AIR.cpp
+  lib/Dialect/Relation/IR/R1CS.cpp
   lib/Dialect/Plan/IR/PlanDialect.cpp
   lib/Dialect/Polynomial/IR/PolynomialDialect.cpp
   lib/Dialect/Registry.cpp
   lib/Dialect/Relation/IR/RelationDialect.cpp
+  lib/Dialect/Relation/IR/Declarations.cpp
   lib/Dialect/TableLibrary.cpp
   lib/Dialect/TypeAdapters/Algebra.cpp
   lib/Dialect/TypeAdapters/Commitment.cpp
@@ -101,10 +128,14 @@ add_zkc_component(IR
   lib/Dialect/TypeAdapters/Installed.cpp
   lib/Dialect/TypeAdapters/Resources.cpp
   lib/Interfaces/SourceLibrary.cpp
+)
+add_zkc_component(Translation
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp
+  lib/Translation/ProgramVerification.cpp
   lib/Translation/ProtocolImport.cpp
   lib/Translation/R1CS.cpp
+  lib/Translation/R1CSSumcheck.cpp
   lib/Translation/Table.cpp
 )
 add_zkc_component(ClaimTranslation
@@ -168,9 +199,23 @@ add_zkc_component(Transforms
   lib/Conversion/PIRToPlan.cpp
   lib/Conversion/PlanToPhysical.cpp
   lib/Conversion/Bindings.cpp
+  lib/Conversion/PhysicalVerification.cpp
   lib/Conversion/Participants.cpp
   lib/Transforms/Algorithms.cpp
+  lib/Transforms/AlgorithmVerification.cpp
   lib/Transforms/Participants.cpp
+  lib/Transforms/Mathematical.cpp
+  lib/Transforms/ProtocolApplications.cpp
+  lib/Transforms/MathLowering.cpp
+  lib/Transforms/PolynomialRecipes.cpp
+  lib/Transforms/PolynomialRecipeVerification.cpp
+  lib/Transforms/PolynomialLowering.cpp
+  lib/Transforms/PolynomialFixing.cpp
+  lib/Transforms/MathematicalValues.cpp
+  lib/Transforms/PolynomialValues.cpp
+  lib/Transforms/MathematicalCorrespondence.cpp
+  lib/Transforms/MathematicalPreservation.cpp
+  lib/Transforms/MathLoweringVerification.cpp
   lib/Transforms/Storage.cpp
   lib/Transforms/LinearContraction.cpp
   lib/Transforms/TableSimplification.cpp
@@ -180,7 +225,16 @@ add_zkc_component(Transforms
   lib/Target/PhysicalPlan.cpp
 )
 add_zkc_component(CompilerCore
+  lib/Compiler/Algorithms.cpp
   lib/Compiler/Compilation.cpp
+  lib/Compiler/ArtifactJson.cpp
+  lib/Compiler/RunVerification.cpp
+  lib/Compiler/Run.cpp
+  lib/Compiler/PolynomialReduction.cpp
+  lib/Compiler/PublicCoin.cpp
+  lib/Compiler/NativeDeployment.cpp
+  lib/Compiler/NativeProof.cpp
+  lib/Compiler/NativeProofVerification.cpp
   lib/Compiler/Claims.cpp
   lib/Compiler/Construction.cpp
   lib/Compiler/Inspection.cpp
@@ -208,26 +262,29 @@ target_include_directories(ZkcContracts PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/incl
 target_link_libraries(ZkcContracts PUBLIC ZkcSupport)
 target_link_libraries(ZkcRelation PUBLIC ZkcContracts)
 target_link_libraries(ZkcProtocol PUBLIC ZkcRelation)
-# IR translation and mandatory verification are a coordinated lower library.
+# IR owns mandatory profile validation; carrier adapters depend on that owner.
 add_dependencies(ZkcIR ZkcIRGen)
 target_include_directories(ZkcIR SYSTEM PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<BUILD_INTERFACE:${MLIR_INCLUDE_DIRS}>)
 target_link_libraries(ZkcClaims PUBLIC ZkcProtocol)
 target_link_libraries(ZkcIR PUBLIC ZkcProtocol)
+target_link_libraries(ZkcTranslation PUBLIC ZkcIR)
 target_link_libraries(ZkcClaimTranslation PUBLIC ZkcClaims ZkcIR)
 # Follow MLIR's package linkage too: embedding static MLIR archives alongside
 # its dylib duplicates MLIR definitions and process-global state.
 mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
-  MLIRInferTypeOpInterface MLIRFuncDialect)
+  MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
+  MLIRFuncDialect MLIRArithDialect MLIRTensorDialect)
 target_link_libraries(ZkcFrontend PUBLIC ZkcProtocol)
 target_link_libraries(ZkcFrontendLoading PUBLIC ZkcFrontend)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils)
-target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcFrontend ZkcClaimTranslation)
+target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcTranslation ZkcFrontend ZkcClaimTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompilerCore ZkcFrontendLoading)
+mlir_target_link_libraries(ZkcCompilerCore PUBLIC MLIRParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
 add_library(ZkcCompiler INTERFACE)
 add_library(Zkc::Compiler ALIAS ZkcCompiler)
@@ -237,7 +294,7 @@ target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore ZkcDriver)
 target_include_directories(ZkcCompiler INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
+set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcTranslation ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

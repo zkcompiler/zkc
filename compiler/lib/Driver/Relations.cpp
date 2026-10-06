@@ -58,6 +58,8 @@ int runCommand(int argc, char **argv, const mlir::DialectRegistry &registry) {
   bool publicMatrices =
       mode == "relation-compile-data" || mode == "relation-lower-data";
   bool compile = mode == "relation-compile" || mode == "relation-compile-data";
+  bool native = mode == "relation-protocol";
+  bool requirements = mode == "relation-requirements";
   bool import = mode == "relation-import";
   bool lower = mode == "relation-lower" || mode == "relation-lower-data";
   bool exportIR = mode == "relation-export";
@@ -66,7 +68,7 @@ int runCommand(int argc, char **argv, const mlir::DialectRegistry &registry) {
   bool normalize = mode == "relation-read";
   bool matrices = mode == "relation-matrices";
   if ((!compile && !import && !lower && !exportIR && !evaluateMode &&
-       !inspect && !normalize && !matrices) ||
+       !inspect && !normalize && !matrices && !native && !requirements) ||
       (evaluateMode          ? argc != 5
        : (compile || import) ? argc != 3 && argc != 4
                              : argc != 3))
@@ -86,15 +88,24 @@ int runCommand(int argc, char **argv, const mlir::DialectRegistry &registry) {
       return zkc::error("relation-ir");
     auto &operations = module->getBody()->getOperations();
     if (!llvm::hasSingleElement(operations) ||
-        !isa<R1CSRelationOp>(operations.front()))
+        !isa<zkc::relation::R1CSRelationOp>(operations.front()))
       return zkc::error("relation-module");
-    auto op = cast<R1CSRelationOp>(operations.front());
+    auto op = cast<zkc::relation::R1CSRelationOp>(operations.front());
     symbol = op.getSymName().str();
     return readR1CSOperation(op);
   }();
   if (!relation)
     return fail(relation.takeError());
-  if (compile || lower) {
+  if (native || requirements) {
+    auto module = authorR1CSSumcheck(*relation, context);
+    if (!module)
+      return fail(module.takeError());
+    if (requirements)
+      outs() << r1csSumcheckRequirements(*relation);
+    else
+      (*module)->print(outs());
+    outs() << '\n';
+  } else if (compile || lower) {
     auto source = lowerMultilinearR1CS(*relation, symbol,
                                        publicMatrices ? Staging::PublicMatrices
                                                       : Staging::Specialized);

@@ -244,3 +244,45 @@ Groth16's deterministic setup and fixed randomizers are public test material.
 The integration's existing scope and security limitations remain in its
 [README](../../tests/groth16/README.md). A packaged reproduction does not expand
 those claims.
+
+## Native mathematical source checks
+
+The [mathematical profile](../spec/profiles/compiler/mathematical-protocols.md)
+and [status map](../status.md#foundation-capability-map) define native support
+and checking boundaries. Run the following checks after rebuilding the compiler
+and locked Rust workspace. Replace the build path if using a different preset.
+
+Run `ctest --test-dir build/compiler/test -R '^mathematical$' -V` for source admission,
+optimization, projection and independent evaluation of generated carriers.
+The test prints its evidence directory and retains the source, logical and
+physical MLIR, and participant JSON. Then run
+`cargo run --locked -p zkc-tools --example mathematical_native -- DIRECTORY`
+with that evidence directory for installed native field/group and codec checks.
+The example takes generated candidates; it contains no replacement participant
+program. These checks require a rebuilt compiler and the locked Rust workspace.
+
+Run `ctest --test-dir build/compiler/test -R '^native-services$' -V` for service formation,
+query retention, projection and carrier refusal checks. Then pass its evidence
+directory to the actual native execution check:
+
+```sh
+cargo run --locked -p zkc-tools --example mathematical_services \
+  --features test-utils -- DIRECTORY
+cargo test --locked -p zkc-backends --lib --features test-utils services::tests
+cargo test --locked -p zkc-backends --doc --features test-utils
+```
+
+The deterministic tape is available only with `test-utils`. The example uses
+compiler-generated participant carriers, the installed native backend and codec,
+and registry observations. It makes no source-correspondence or security claim.
+
+### Verifier-view analysis
+
+Use `zkc-compile protocol-public-coin source.mlir requirement.json` to derive the
+unsimplified view, and `protocol-check-public-coin source.mlir requirement.json
+view.json` to recompute and check a retained report. Checked compilation accepts
+`--public-coin=requirement.json`, alongside optional polynomial `--requirements`.
+See the [profile](../spec/profiles/compiler/public-coin.md) for exact formats and
+limits. `compiler/test/public_coin.py` generates both composed clients and refusal controls;
+the `public_coin` Rust example checks their actual runtime prefixes. The
+`public-coin-api` CTest checks source immutability and owned report lifetimes.

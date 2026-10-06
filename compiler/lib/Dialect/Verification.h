@@ -11,9 +11,11 @@ namespace zkc {
 /// Whole finite-table program check through its installed source library.
 mlir::LogicalResult verifyProgram(mlir::Operation *program);
 namespace protocol {
-/// Whole protocol check through checked export and common-source admission.
+/// Whole protocol check through IR reconstruction and executable admission.
 /// Neither this nor MLIR verification establishes source-relative correctness.
 mlir::LogicalResult verifyModule(mlir::Operation *root);
+/// Admit all closed local definitions through the existing executable grammar.
+mlir::LogicalResult verifyLocalDefinitions(mlir::Operation *root);
 } // namespace protocol
 } // namespace zkc
 #endif

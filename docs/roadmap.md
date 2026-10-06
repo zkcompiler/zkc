@@ -1,86 +1,249 @@
 # Roadmap
 
-This page owns the order of work. [Status](status.md) records what the
-implementation supports today; the [specification](spec/README.md) owns the model
-that work is measured against. Research reopens a specific contract when a
-required law or client fails; broader capabilities enter through the triggers in
-section 3 rather than through the sequence in section 1.
+This page owns the order of work. [Status](status.md) records implementation;
+[the specification](spec/README.md) owns semantics. A counterexample or simpler
+validated design can reopen a specific boundary. There is no fixed calendar.
+Detail each package immediately before implementation.
 
 ## 1. The remaining sequence
 
-The compiler runs authored protocols through common source, participant
-generation, physical lowering and Rust execution, with checked candidates in
-between. The captured-project frontend and checked component/library foundation
-are implemented at the scopes in [status](status.md). The next implementation
-program should use them to complete contrasting protocol clients: BP+ component
-composition and a zkVM proof path, with shared changes justified by both clients.
-Existing archived BP+/OpenVM controls validate specific interfaces; they are not
-complete implementations of either protocol.
+The native IR foundation is complete at its declared scope, with bounded
+implementation and execution evidence in the [validation map](compiler/foundation-validation.md).
+Frontend migration and the native Lean connection come next. The target remains one mathematical compiler path and one
+general interpreter with installed primitives.
 
-Choose exact upstream revisions, accepted inputs, proof-byte compatibility and
-verifier acceptance before expanding either client. First close the supported
-client's blocking library/provenance and kernel gaps; then measure reusable
-optimizations against the matching direct library. Reopen source or semantic
-contracts only for a demonstrated expressiveness or correctness gap. Repository
-packaging and publication do not settle these protocol acceptance criteria.
+Start from `protocol → participant → exec → physical` and one mathematical SSA
+program. Revisit a responsibility boundary when a concrete counterexample or simpler
+validated design warrants it.
+Direct MLIR programs and small generators exercise the foundation before frontend
+migration. Independent noninteractive proof production and validation, including
+selected transcript constructions, belong to the foundation. Rust code generation
+and general network transport remain later work.
 
-The capability work below is ordered by dependency, not by size.
+### Completion milestones
 
-1. **Broader backend coverage and resource guarantees.** Real Arkworks, Dalek
-   and Plonky3 paths already execute. Extend the required kernels, layouts and
-   resource accounting for the next supported clients; keep their actual
-   adapter and memory/progress assumptions explicit.
-2. **Shared demand and preparation reuse.** Discovered across contrasting
-   clients, checked against retained source, and measured against an equally
-   capable library that uses the same algorithms and cache policy.
-3. **Broader endpoint admission and checked transformations.** Bounded phase,
-   physical interpolation and linear-contraction routes exist. Extend their
-   supported subjects and candidate checks without treating those instances
-   as general endpoint or transformation coverage.
-4. **Separately deployable role modules.** Participant lowering produces
-   role-local instructions today and supported native routes execute them.
-   Independent deployment and its coordination interface remain open.
-5. **Verifier lowering, resource accounting and general relation-to-argument
-   elaboration.** The AIR and oracle route is authored per protocol; arbitrary
-   elaboration and host accounting for larger runs are not implemented.
-6. **The artifact ABI and the authoring language.** Both stay deliberately
-   unfixed until their consumers exist.
+| Milestone | Completion condition |
+|---|---|
+| Foundation capabilities implemented | Every required capability and composition in the declared executable profile has ordinary compiler/runtime support, executable controls and explicit limits. Another program within that profile needs authored IR, inputs and declared installations. It requires no dispatch on a protocol name or separate executor. |
+| Foundation stabilized | The whole-foundation validation requirements have been met. Semantic and implementation owners, actual checking boundaries, failure behavior, extension paths and retained consumers are explicit; final integration controls and independent review cover the resulting implementation. This adds no native correspondence or security theorem. |
+| Native migration complete | Required frontend, library, host, checker, optimization and public-tool consumers use the new model with their required behavior and evidence. Defaults have moved, and superseded compiler paths, carriers, internal adapters and dependencies are removed. |
 
-Component security correspondence, production hiding, sparse matrix commitments
-and additional protocol families are separate programs. They enter this sequence
-only when a specific obligation makes part of them necessary.
+The [completion contract](compiler/ir-foundation.md#completion-tests-and-limits)
+and [validation map](compiler/foundation-validation.md) define the completed
+foundation scope. [Assurance](assurance.md#6-implementation-correspondence-policy)
+requires native Lean differential evidence before full migration closes. The
+[migration inventory](compiler/migration.md) records the remaining consumers;
+foundation completion alone does not retire them.
+
+### Target and reuse policy
+
+Use the native mathematical pipeline as the target for migrated capabilities.
+Reuse existing frontend checks, libraries and tests when their contracts fit the
+new model. Retain `.pir` as the initial authoring surface unless a later source
+design explicitly selects a change.
+
+Classify each requirement before deciding where to implement it:
+
+| Requirement | Owner and treatment |
+|---|---|
+| Round order, witness calculations, verification equations and subprotocol composition | Author a library program in the general IR. |
+| A new mathematical or cryptographic primitive | Add a reusable operation contract, realization and backend installation where required. Scheme-specific arithmetic and encoding keep their exact contracts. |
+| Shapes, resource flow, provider/key binding or message handling needed across programs | Complete the general IR/runtime boundary, even if one protocol first exposes the need. |
+| An external file/proof format or application deployment convention | Use an explicit adapter and compatibility contract. Defer it when outside the current foundation scope; retain any existing migration obligation. |
+
+Compiler and interpreter control must follow operations and contracts. A hidden
+whole-prover/verifier callback does not close a foundation requirement. Installing
+a new primitive can require code; authoring another program from already admitted
+primitives must use the existing machinery.
+
+### Capability baseline and design method
+
+Before changing a capability, capture its supported behavior, exact affected
+ranges, consumers and comparison evidence from the [baseline](compiler/migration.md).
+Follow the [migration design procedure](compiler/migration.md#research-and-redesign-for-each-capability):
+derive the required contract, choose its owner in the new architecture, compare
+reuse/redesign/removal, and move consumers with their checks. Preserve required
+meaning and external behavior while allowing internal formats and organization
+to change. Features outside the supported baseline need an explicit adoption
+decision.
+
+Write representative protocol compositions during design and implementation:
+
+```text
+author a required composition → identify the missing general contract
+    → research and compare designs → implement
+    → check a contrasting client and failures → retain regression coverage
+```
+
+Use the [protocol corpus](compiler/ir-foundation.md#using-the-corpus-to-choose-abstractions)
+throughout this cycle. Each component client completes its actual computation and
+terminal checks. Keep complete Schnorr and Sumcheck clients as regressions; full
+BP+, Groth16 and zkVM libraries need not all be authored to close the foundation.
+Research and review precede each implementation package. A counterexample can
+change its design or bring a dependency forward. Later packages remain coarse
+until their own starting point.
+
+### Next package: frontend and native exchange design
+
+Define the frontend-to-mathematical exchange before implementation. Inventory
+existing source/generic/library and checking consumers, then choose the smallest
+boundary preserving their identities, operands, requirements and authority.
+Compare adapting the current elaborator with replacement. Specify contrasting
+vertical clients and refusals, the native Lean reader's required meaning and
+source/artifact binding, and which superseded paths each slice can remove.
+Detail implementation only after that design review; retain direct MLIR execution.
+
+### Foundation completion and later migration
+
+The foundation scope is defined by the [structural requirements](compiler/ir-foundation.md#protocol-corpus-and-structural-requirements)
+and [acceptance criteria](compiler/ir-foundation.md#completion-tests-and-limits).
+The [validation map](compiler/foundation-validation.md) maps these criteria to
+compiler/runtime support, composed execution checks and explicit limits. Writing
+a complete library from supported mechanisms has its own migration milestone.
+
+With stabilization and cleanup complete:
+
+1. Connect frontend elaboration and native Lean/checking as consumers of the
+   stable contracts. Detail their dependency order when each package starts;
+   retain direct MLIR input. Preserve source identity, requirements and actual
+   settings, operands and service/key authority. Inventory `.pir`, R1CS/AIR,
+   generic/static libraries, diagnostics and checking consumers, then compare
+   adapting the elaborator with replacement. Define the exchange boundary before
+   adding an independent reader; avoid another editable mathematical IR. Require
+   source-to-native equivalence at its stated scope and installed API checks for
+   contrasting vertical clients. Remove their superseded paths. Existing proofs
+   must connect to the actual new representations and propositions.
+2. Redesign and migrate remaining libraries, construction and optimization
+   consumers, table execution, host preparation and external integrations.
+   Preserve required behavior and comparisons from the migration inventory,
+   including existing Groth16/snarkjs, machine and AIR clients. New full BP+ and
+   lookup libraries retain separately selected scopes.
+3. Move CLI/SDK/default entry points and validate installed users. Remove each
+   superseded compiler path, carrier, internal adapter and package dependency as
+   its last consumer moves. Remove unused private helpers within their package.
+   Independently useful mathematics and formal models retain their own purpose.
+
+Every temporary adapter needs named consumers and a removal condition. Deferring
+an existing external compatibility consumer can keep its adapter live; foundation
+completion alone cannot satisfy repository-wide retirement. Full transition
+requires all retained consumers and evidence to move, defaults to use the native
+model, and no active path to depend on a superseded internal compiler route.
+Independent external adapters can remain with explicit contracts.
+
+Native Lean semantics follow the frontend exchange design. Shared readers remain
+correct and refuse unsupported formats explicitly. Source/candidate checking,
+structural admission, reference execution and formal correspondence retain their
+separate claims throughout migration.
+
+The [migration inventory](compiler/migration.md#capability-owners) records required
+behavior and checking for authoring, libraries, local computation, interaction,
+mathematics, applications, public interfaces and independent consumers. Its
+[comparison rules](compiler/migration.md#evidence-and-comparison-rules) govern each
+slice; difficult migrations remain explicit obligations.
+
+### Research after migration
+
+Preserve existing analyses and transformations during migration. New research
+then extends the stable foundation:
+
+- Affine observation, algebraic completeness, extraction and richer security
+  analyses, with a named fragment, observer/continuation and independently
+  supplied premises. Their required mathematical inputs are retained now.
+  An independent research lane can implement an analyzer earlier without making
+  it a prerequisite for frontend, placement or foundation completion.
+- Broader automatic Fiat–Shamir and new challenge-derivation profiles, with
+  explicit fixed inputs, encoding, domain/occurrence identity, sampling and
+  security premises. Authored transcripts, selected native constructions and
+  existing construction functionality are earlier foundation/migration work.
+- Useful optimization: shared-factor strategies, fusion, storage, caching,
+  parallelism and bulk-kernel tuning, measured against meaningful baselines.
+- Formal compiler/property correspondence and proof reuse at the actual adapters.
+- Full Monero BP+ compatibility, full production/recursive zkVMs, new relations
+  and protocol families, and general concurrent interactive transport. Independent
+  noninteractive participant execution is an earlier foundation requirement.
+
+Private PCS/oracle terminals needed by the foundation corpus are brought forward;
+new schemes and their security results are later. Factor fixing versus caching,
+larger interpolation, and transformations beyond structural recognition retain
+separate evidence obligations. A required client exposing a semantic gap takes
+priority over this nominal order.
 
 ## 2. What closing a unit requires
 
-These conditions apply to each unit above, and they are checks rather than
-milestones.
+Close a unit at its declared evidence level. A selected design, tested native
+implementation, proved checker and cryptographic theorem are distinct results.
+In particular, deferring native Lean work does not authorize claiming its
+correspondence theorem from tests or a structural recognizer.
 
-- The supported source subset is stated. Unsupported syntax and missing evidence
-  are explicit outcomes; implementation coverage never redefines the model.
-- Each new extension boundary has a real consumer and its own controls. Adding a
-  supported operation or domain does not replace generic source binding and
-  control, and a new claim or execution kind cannot reinterpret prior evidence.
-- A substantive analysis or transformation is exercised across two contrasting
-  clients, at recorded scope. Expression, proof and native coverage are reported
-  separately; more examples do not by themselves establish generality.
-- Checking binds the actual candidate: a proved source-relative checker
-  identifies the original, the final result and the remaining requirements, and
-  rejects meaningful invalid cases.
-- Differential validation covers the declared subset, its states, observations
-  and failure paths, with reproducible artifacts and stated gaps. Remaining
-  parser, FFI, primitive and toolchain trust is stated rather than implied; an
-  optional native proof is reported separately.
-- A maintained example reproduces compilation, checking, execution and theorem
-  instantiation, and distinguishes compile-time evidence from the verifier's
-  check of an individual proof and from runtime input guards.
-- Measurements separate search, proof construction, replay, execution, memory and
-  bytes. A speedup is not required for correctness, and an unfavorable
-  measurement is retained.
+- State the supported source subset and the exact remaining gaps. Unsupported
+  syntax and missing evidence are explicit outcomes; implementation coverage
+  never redefines the model.
+- Give each extension boundary a real consumer and positive/negative controls.
+  Adding a domain does not replace generic binding/control, and a new claim or
+  execution kind cannot reinterpret earlier evidence.
+- Exercise a general architectural change across two contrasting clients, at
+  recorded scope. Distinguish expression, execution, analysis and proof coverage.
+- Bind any check to the actual source/candidate and retained requirements. Name
+  its stage, recognized grammar and permitted pass set. A proved checker claim
+  additionally requires the corresponding soundness theorem; structural checks
+  and existing postconditions retain their narrower claims.
+- Cover states, observations and failure paths in bounded differential
+  validation. State parser, FFI, primitive, connector and toolchain trust. Record
+  optional implementation proofs separately.
+- Check executable boundary coverage separately from IR formation: each mapped
+  external input needs an installed codec or host constructor, and unavailable
+  mappings refuse at deployment admission. Preserve valid internal types for
+  other uses. Structural limits and encoded/input/work budgets remain distinct.
+- Mutation controls must target actual operands, including source coordinates,
+  transcript observations and acceptance guards. Metadata agreement alone is
+  insufficient. Separately validate the authored algorithm's terminal predicate
+  against an independent reference or its declared formal evidence.
+- Maintain examples reproducing the claimed compilation, checking and execution.
+  Add theorem instantiation when a formal connection is claimed. Keep compiler
+  evidence, per-proof verifier acceptance and runtime guards distinct.
+- Separate search, proof construction, replay, execution, memory and byte costs
+  when measuring them. A speedup is not required for correctness; retain an
+  unfavorable measurement.
 
 ## 3. Research triggers
 
-The following are extensions, not definitions silently required by the finite
-core. Each starts from its promised outcome and its exact obstacle.
+At the start of every package, inspect the checkpoints below and record which
+triggers apply. A triggered item receives a concrete decision or a stated
+blocker before the dependent feature is admitted. Untriggered items remain
+deferred. This keeps later choices visible without implementing them in advance.
+
+### Design checkpoints
+
+| Decision | Revisit before / when | Required result |
+|---|---|---|
+| Shared polynomial carrier versus specialized operations | A migrated or new consumer exceeds the implemented formal polynomial vocabulary | Retain formal meaning and sharing; compare projection, execution and known bounds |
+| Tensors, nominal aggregates and nested collections | A required type or codec exceeds the implemented structured-data profile | Checked shape/arity, explicit logical messages, encoding and complete failure behavior |
+| Structural recognizer versus named relation/terminal operations or preservation certificates | Initial native check, then any useful rewrite it cannot recognize reliably | Accept legitimate forms and reject changed subjects, requirements and edges without building a general prover |
+| Explicit region captures and ui64 indices selected; `compute`/located types unneeded by current clients | The first useful map/loop or component rewrite that flat operations cannot serve cleanly | One dependency query covers operands and captures across all consumers; totality, bounds and role availability are preserved |
+| Authored `linalg` and bufferization | A real fusion or memory consumer after foundation execution works | Measured benefit and explicit aliasing, storage and failure contracts; dynamic shapes are already foundation work |
+| Helper summaries, degree refinements and opaque polynomial boundaries | Inlining cost or a real opaque boundary becomes necessary | Body-derived or independently checked summaries; unknown degree/meaning never passes through annotations alone |
+| Shared-factor representations, recomputation, parallelism or e-graphs | A correct baseline exposes actual work/storage or scheduling cost | Fair comparison and preservation of interaction, state, resource and failure observations |
+| Broader external relations, composition and private terminals | A selected R1CS/AIR adapter, composable reduction or PCS/oracle client needs them | External encoding adequacy, role mapping, actual residual connections and the relevant terminal/opening contract |
+| Broader automatic Fiat–Shamir and transcript ownership | A client exceeds the selected native derivation profiles | Exact sent/received challenge and transcript bindings, provider/observer model and the claimed sampling/security law |
+| Dynamic origins and draw selection | A new construction exceeds supported static paths, loop coordinates or attempt scopes | Explicit original paths and dynamic coordinates, checked per-role event order and selection, compact execution, and no reliance on generated helper names |
+| Public witnesses and commitment replacements | A required construction intentionally exposes an assignment or replaces it with a commitment | An explicit policy and actual terminal semantics; preserve the flat profile's refusal of verifier-available witness inputs until that extension is selected |
+| Algebraic completeness or special-soundness analysis | A selected algebraic fragment and interpreted source requirement | A derived solver view, explicit premises, accepted/refused examples and evidence at the exact claimed scope |
+| Frontend migration and removal of legacy paths | Frontend exchange design and each subsequent consumer migration | Complete coverage inventory; generated execution and required outcome/format parity; retire each replaced path with its last consumer |
+| Native Lean semantics and proof reuse | Exchange design, then each checker/formal consumer migration | Precise meanings, independent checks and actual theorem instantiations at their stated scopes; general new proofs remain separately tracked |
+| Lean/Mathlib and ArkLib/VCVio upgrades | A coordinated stable toolchain update | Port adapters from `probOutput`/`probEvent` to the upstream measure API and rerun dependency/axiom audits before changing the pinned graph |
+| New dialects or higher-order abstractions | A real semantic responsibility lacks a coherent existing owner | A concrete client, ownership boundary and simpler alternatives considered; dialect count is not a target |
+
+Direct MLIR input is already an independent authoring API. Its compiler library
+still links shared source/frontend workflows. Split that link closure when a
+native-only embedding or measured dependency cost requires it; preserve installed
+components and shared compilation diagnostics. Before an independent frontend or
+Lean reader consumes mathematical source, choose a versioned exchange contract
+and bind the actual source/toolchain identity. Neither trigger introduces another
+editable mathematical IR.
+
+The broader research triggers below are extensions, not definitions silently
+required by the finite core. Each starts from its promised outcome and exact
+obstacle. They apply when its associated claim is selected.
 
 | Trigger | Theory to examine | Required discriminating result |
 |---|---|---|

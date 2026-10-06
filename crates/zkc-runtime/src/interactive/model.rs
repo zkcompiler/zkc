@@ -5,6 +5,9 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 pub struct Limits;
 impl Limits {
     pub const ARTIFACT_BYTES: usize = 1024 * 1024;
+    /// Conservative installed descriptor charge across distinct physical spellings
+    /// and each resolved binding signature. Parsing scratch has separate bounds.
+    pub const TYPE_BYTES: usize = 64 * 1024 * 1024;
     pub const JSON_DEPTH: usize = 64;
     pub const ARRAY_LENGTH: usize = 32_768;
     pub const PARAMETER: u64 = 1_048_576;
@@ -27,25 +30,10 @@ impl Limits {
     pub const TOTAL_VALUE_BYTES: usize = 256 * 1024 * 1024;
 }
 
-/// History transitions forbidden under private-tag local matching. External
-/// transcript states are ordinary checked data, so their attribute rules do not
-/// identify this scheduling effect. Construction and stateless hashing remain
-/// available. See docs/spec/profiles/compiler/local-variants.md.
-pub(crate) fn observes_or_samples_history(contract: &str) -> bool {
-    contract.starts_with("transcript.")
-        || matches!(
-            contract,
-            "external.monero.update"
-                | "external.openvm.observe"
-                | "external.openvm.sample"
-                | "external.openvm.sample_ext"
-                | "external.openvm.sample_bits"
-                | "external.openvm.check_witness"
-        )
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
+    Sequence,
+    FieldArray,
     FixedVector,
     Variant,
     ResourceUnit,
@@ -75,6 +63,8 @@ pub enum Type {
 impl Type {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Sequence => "sequence",
+            Self::FieldArray => "field_array",
             Self::FixedVector => "fixed_vector",
             Self::Variant => "variant",
             Self::ResourceUnit => "resource_unit",
@@ -108,13 +98,15 @@ impl Type {
     /// `LogicalType::is_duplicable` to check their actual permissions.
     pub fn is_affine(self) -> bool {
         match self {
-            Self::FixedVector
+            Self::Sequence
+            | Self::FixedVector
             | Self::Variant
             | Self::ResourceUnit
             | Self::Rng
             | Self::Nonce
             | Self::Transcript => true,
-            Self::Index
+            Self::FieldArray
+            | Self::Index
             | Self::Indices
             | Self::Matrix
             | Self::Vector
@@ -137,7 +129,9 @@ impl Type {
     }
     pub fn is_serializable(self) -> bool {
         match self {
-            Self::FixedVector
+            Self::Sequence
+            | Self::FieldArray
+            | Self::FixedVector
             | Self::Variant
             | Self::ResourceUnit
             | Self::Rng
@@ -179,8 +173,14 @@ impl Type {
     pub fn is_discardable(self) -> bool {
         match self {
             Self::ResourceUnit => true,
-            Self::FixedVector | Self::Variant | Self::Rng | Self::Nonce | Self::Transcript => false,
-            Self::Index
+            Self::Sequence
+            | Self::FixedVector
+            | Self::Variant
+            | Self::Rng
+            | Self::Nonce
+            | Self::Transcript => false,
+            Self::FieldArray
+            | Self::Index
             | Self::Indices
             | Self::Matrix
             | Self::Vector
@@ -203,6 +203,8 @@ impl Type {
     }
     pub(crate) fn parse_kind(name: &str) -> Result<Self, AdmissionError> {
         let ty = match name {
+            "sequence" => Self::Sequence,
+            "field_array" => Self::FieldArray,
             "fixed_vector" => Self::FixedVector,
             "resource_unit" => Self::ResourceUnit,
             "index" => Self::Index,
@@ -258,6 +260,10 @@ pub enum AttributeRule {
     MatrixIdentity,
     MessageOrigin,
     ChallengeOrigin,
+    NativeMessageOrigin,
+    NativeChallengeOrigin,
+    NativeMessageTemplate,
+    NativeChallengeTemplate,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KernelSignature<T = Type> {
@@ -360,6 +366,11 @@ pub(crate) struct MatchArm {
 }
 #[derive(Debug)]
 pub(crate) enum LocalInstruction {
+    BoolConstant {
+        site: String,
+        output: String,
+        value: bool,
+    },
     Variant {
         site: String,
         ty: PhysicalType,
@@ -387,6 +398,7 @@ pub(crate) enum LocalInstruction {
         outputs: Vec<String>,
     },
     For {
+        conditional: bool,
         site: String,
         induction: String,
         lower: String,
@@ -421,6 +433,11 @@ pub(crate) struct FamilyIngress {
 pub(crate) enum Count {
     Constant(u64),
     Parameter(String),
+    Value {
+        value: String,
+        maximum: u64,
+        induction: String,
+    },
 }
 impl Count {
     pub fn may_run(&self) -> bool {
@@ -429,6 +446,7 @@ impl Count {
 }
 #[derive(Debug)]
 pub(crate) struct Participant {
+    pub services: Vec<super::ServicePort>,
     pub symbol: String,
     pub instance: String,
     pub role: String,
@@ -440,6 +458,13 @@ pub(crate) struct Participant {
 }
 #[derive(Debug)]
 pub(crate) enum Instruction {
+    Query {
+        site: String,
+        port: String,
+        method: String,
+        inputs: Vec<String>,
+        outputs: Vec<String>,
+    },
     Local {
         site: String,
         function: String,
@@ -472,6 +497,12 @@ pub(crate) enum Instruction {
         captures: Vec<String>,
         body: Body,
         outputs: Vec<String>,
+    },
+    ReturnIf {
+        site: String,
+        condition: String,
+        values: Vec<String>,
+        continuations: Vec<String>,
     },
     Yield(Vec<String>),
     Return(Vec<String>),
@@ -522,25 +553,5 @@ impl LocalInstruction {
             }
         }
         out
-    }
-}
-
-#[cfg(test)]
-mod history_inventory {
-    #[test]
-    fn independent_history_classification_matches_installed_inventory() {
-        let fixture = include_str!("../../../../tests/fixtures/variants/history-contracts.txt");
-        let mut seen = std::collections::BTreeSet::new();
-        for line in fixture.lines() {
-            let (contract, expected) = line.split_once(' ').expect("inventory row");
-            assert!(seen.insert(contract), "duplicate inventory contract");
-            assert!(matches!(expected, "0" | "1"));
-            assert_eq!(
-                super::observes_or_samples_history(contract),
-                expected == "1",
-                "{contract}"
-            );
-        }
-        assert!(!seen.is_empty());
     }
 }

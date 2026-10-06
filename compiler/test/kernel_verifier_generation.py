@@ -45,15 +45,9 @@ def main():
     with case("exact coarse predicate and summary"):
         role = records["Zkc_ProtocolData"]
         predicate = records[role["predicate"]["def"]]["predExpr"]
-        # Independent baseline text: tensor rank/shape remains unrestricted here.
-        expected = ("::llvm::isa<::zkc::FieldType, ::zkc::MultilinearType, "
-                    "::zkc::QuadraticType, ::zkc::PointType, ::zkc::GroupType, "
-                    "::zkc::UnivariateType, ::zkc::MatrixType, ::zkc::FixedVectorType, "
-                    "::mlir::RankedTensorType, ::zkc::ObjectType, ::zkc::OracleObjectType, "
-                    "::zkc::CapabilityType>($_self) || $_self.isSignlessInteger(1) || "
-                    "$_self.isUnsignedInteger(64)")
-        # CPred wraps the authored expression in parentheses.
-        assert predicate == "(" + expected + ")", predicate
+        # The named predicate keeps generated verifiers independent of concrete
+        # dialect type headers. Semantic admission is exercised by kernel tests.
+        assert predicate == "(::zkc::detail::isLogicalKernelData($_self))", predicate
         assert role["summary"] == "logical protocol data or capability"
     print(f"{counted()} verifier generation cases exercised ({len(standard)} standard kernels)")
 

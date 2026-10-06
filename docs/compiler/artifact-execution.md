@@ -5,7 +5,14 @@ descriptor into a proof producer and a validator that run in separate processes.
 The validator receives candidate bytes, its public statement and application
 configuration. It does not execute a hidden prover or receive its witness.
 The [format](artifact-format.md) defines the installed construction and byte
-contracts.
+contracts. This page describes the portable source path. The selected
+[native proof design](native-proofs.md) retains these execution obligations while
+constructing participant mathematics and reusing the common interpreter/host.
+Its [one-shot completion contract](entry-completion.md#execution-and-checking)
+also permits an explicitly reported early prefix; independent validation decides
+acceptance. Native attempt selection buffers retries under its own completion
+predicate.
+It is not implemented by the current artifact commands.
 
 ## Compilation boundaries
 
@@ -163,3 +170,20 @@ every working loop.
 A shared optimization is chosen from measured behavior and existing theory.
 Admission and key caching and interpreter overhead are engineering observations;
 this path makes no protocol-optimization speedup claim.
+
+
+## Prepared invocation lifecycle
+
+The older `produce-artifact`/`validate-artifact` CLI delegates to
+`PreparedArtifact` for binding, execution and retirement. All ordinary data and
+key files, and a validator's proof file, are loaded before execution resources are
+issued. Observer preparation and installation checks also precede issuance.
+`InvocationError` represents refusal before issuance. Once issuance starts,
+ordinary failures return `PreparedReport` with a failed `execution.outcome`,
+`phase`, resource observations with retirement results, `cleanup_errors` and
+`active_frames`. A failed runner load therefore retains usage and cleanup rather
+than returning only `InvocationError::Runtime`. Callers check both the primary
+outcome and cleanup errors. The CLI refuses cleanup failure and publishes proof
+bytes only after successful execution and cleanup; disabling trace remains an
+explicit observation policy. Prepared invocation reuse never reuses resource
+state or invocation authority.

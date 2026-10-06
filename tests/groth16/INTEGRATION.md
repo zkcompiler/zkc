@@ -1,16 +1,12 @@
 # Relation-aware zkc integration evidence
 
-After the integration worker delivered the actual R1CS-aware CLI,
-[`run_zkc.py`](run_zkc.py) executed both preserved fixtures through the separately
+[`run_zkc.py`](run_zkc.py) executes both preserved fixtures through the separately
 built compiler, Lean checker and Rust tool. The [compact receipt](evidence/zkc-integration.json)
 records executable/PIR hashes, native relation identities, emitted source and
 endpoint hashes, fixed-proof hashes, timings, and every observed outcome.
 This is evidence for these two fixtures with a public, insecure test setup.
 The original 80 fixture controls remain separately recorded in [REPORT.md](REPORT.md).
-The CLI receipt was refreshed after the code-review repairs; its executable
-hashes, timing observations and identity-basis fields describe that final run.
-Only its own checksum changed in `SHA256SUMS`. The original relation/key/proof
-fixtures, 80 controls and deterministic algebra manifests were preserved.
+Executable hashes and timings in the receipt describe the recorded run.
 
 The four fixed `(r,s)=(1,2)` / `(0,0)` zkc proofs equal the controlled upstream
 proofs at every canonical field and point coordinate. Both fixed bound artifacts
@@ -19,7 +15,7 @@ the untouched snarkjs CLI, and a fresh unmodified upstream proof verifies throug
 the zkc endpoint. Fixed upstream proofs also verify through zkc.
 
 The initial prover invocation takes the complete authored PIR and actual binary
-R1CS through the delivered relation-resolution/materialization, compilation and
+R1CS through relation-resolution/materialization, compilation and
 Lean admission route. Later verifier invocations use the saved common source,
 physical endpoints and expected relation identity, plus only the verification
 key, public statement, application context and candidate proof. They receive no

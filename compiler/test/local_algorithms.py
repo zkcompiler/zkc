@@ -32,7 +32,7 @@ def native(mode, value, refuses=None):
 text = (corpus / "local-algorithms.pir").read_text()
 source = native('protocol-source', text)
 common = native('protocol-import', source)
-assert common.count('call @') == 5
+assert common.count('apply @') == 5
 assert native('protocol-source', native('protocol-format', text)) == source
 assert 'let ' in native('protocol-format', source)
 roundtrip = native('protocol-export', common)
@@ -40,7 +40,7 @@ assert sum(i[0] == 'apply' for f in roundtrip[2] for i in f[4]) == 5
 run(optimizer, '--verify-each', text=common)
 native('protocol-source', text.replace('Twice(x);', 'Twice::<"koala-bear">(x);'), 'generic-static-arity')
 expanded_ir = run(optimizer, '--zkc-expand-algorithms', text=common)
-assert 'call @' not in expanded_ir
+assert 'apply @' not in expanded_ir
 assert run(optimizer, '--zkc-expand-algorithms', text=expanded_ir) == expanded_ir
 expanded = native('protocol-expand', source)
 assert native('protocol-export', expanded_ir) == expanded
@@ -60,7 +60,7 @@ assert any(r[0] == 'Nested' and r[4] == [['inner', 'Linear'], ['left', 'Scale']]
 # Native transformation changes a callable body before expansion, without
 # reparsing authored text. The independent checker rejects the changed candidate.
 identity_source = with_identity(source)
-changed_ir = native('protocol-import', identity_source).replace('call @Twice', 'call @Identity')
+changed_ir = native('protocol-import', identity_source).replace('apply @Twice', 'apply @Identity')
 changed_source = native('protocol-export', changed_ir)
 changed_plan = native('protocol-compile', changed_source)
 assert changed_plan != native('protocol-compile', identity_source)
@@ -95,7 +95,7 @@ native('protocol-compile', large, 'algorithm-expansion-limit')
 # Final participant export rejects residual algorithm calls.
 logical_ir = run(optimizer, '--zkc-project-participants', text=common)
 run(optimizer, '--zkc-expand-algorithms', text=logical_ir, refuses='algorithm-expansion-stage')
-foreign = logical_ir.replace('"algebra.sum"', '"func.call"', 1)
+foreign = logical_ir.replace('"algebra.exec.field_add"', '"func.call"', 1)
 run(optimizer, '--verify-each', text=foreign, refuses='callee')
 
 # A declaration selector denotes every expanded invocation of its primitive.

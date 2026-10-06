@@ -7,6 +7,7 @@ execution at the scopes in [status](../status.md).
 
 | Task or boundary | Reference |
 |---|---|
+| Run mathematical MLIR without a frontend or Lean | [Bundle walkthrough](bundles.md) |
 | Run a compiled protocol with development inputs | [Host inputs and setup selection](inputs.md) |
 | Understand role runners, messages, resource views and cancellation | [Interactive execution](../compiler/interactive-execution.md) |
 | Produce a proof and validate it without a live prover | [Artifact execution](../compiler/artifact-execution.md) |

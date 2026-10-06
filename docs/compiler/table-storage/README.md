@@ -1,6 +1,7 @@
 # Table source and storage design
 
-This package selects the first concrete field-table language, its direct execution plan and native storage/API obligations. It
+This design defines the finite field-table language, its direct execution plan
+and native storage/API obligations. It
 instantiates the common source and execution model without changing their
 definitions. [Source operations](source.md) specify actual values and complete
 behavior; [storage and APIs](storage.md) specify the native representation and
@@ -48,5 +49,6 @@ an exported Formal or native API; reusable definitions move to their maintained
 homes as an actual consumer needs them.
 
 Direct execution connects the same operations and values through decoding, MLIR,
-checking and owned Rust execution. This package supplies design and Lean
-evidence, not that native correspondence or the shared optimization.
+checking and owned Rust execution. These pages supply design and Lean evidence;
+[table execution](../table-execution.md) records native correspondence and its
+remaining limits.

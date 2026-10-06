@@ -1,8 +1,9 @@
 #include "envelope/Specialization.h"
 #include "envelope/Envelope.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Translation/Protocol.h"
+#include "zkc/Dialect/Protocol/Execution.h"
 #include "llvm/Support/Error.h"
 
 using namespace mlir;
@@ -22,18 +23,19 @@ bool logicalAttributes(DictionaryAttr attributes) {
 }
 
 bool fieldSum(Operation *op) {
-  if (!op || !isa<zkc::FieldSumOp>(op) || op->getNumOperands() != 2 ||
+  if (!op || !isa<zkc::algebra::FieldSumOp>(op) || op->getNumOperands() != 2 ||
       op->getNumResults() != 1 || !logicalAttributes(op->getAttrDictionary()))
     return false;
   Type type = op->getResult(0).getType();
-  return isa<zkc::FieldType>(type) && op->getOperand(0).getType() == type &&
+  return isa<zkc::algebra::FieldType>(type) &&
+         op->getOperand(0).getType() == type &&
          op->getOperand(1).getType() == type;
 }
 
-class Specialize final : public OpRewritePattern<zkc::FieldSumOp> {
+class Specialize final : public OpRewritePattern<zkc::algebra::FieldSumOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
-  LogicalResult matchAndRewrite(zkc::FieldSumOp second,
+  LogicalResult matchAndRewrite(zkc::algebra::FieldSumOp second,
                                 PatternRewriter &rewriter) const override {
     if (!fieldSum(second))
       return failure();
@@ -78,14 +80,16 @@ public:
         composite->getAttrOfType<LocationAttr>("second_location");
     Type type = composite->getResult(0).getType();
     if (!logicalAttributes(first) || !logicalAttributes(second) ||
-        !firstLocation || !secondLocation || !isa<zkc::FieldType>(type) ||
+        !firstLocation || !secondLocation ||
+        !isa<zkc::algebra::FieldType>(type) ||
         llvm::any_of(composite->getOperandTypes(),
                      [type](Type input) { return input != type; }))
       return failure();
     rewriter.setInsertionPoint(composite);
     auto restore = [&](Location location, DictionaryAttr attributes, Value lhs,
                        Value rhs) {
-      OperationState state(location, zkc::FieldSumOp::getOperationName());
+      OperationState state(location,
+                           zkc::algebra::FieldSumOp::getOperationName());
       state.addOperands({lhs, rhs});
       state.addTypes(type);
       state.addAttributes(attributes.getValue());
@@ -100,14 +104,7 @@ public:
   }
 };
 
-LogicalResult admitted(ModuleOp module) {
-  auto source = zkc::protocol::exportSource(module);
-  if (!source) {
-    module.emitError() << llvm::toString(source.takeError());
-    return failure();
-  }
-  return success();
-}
+LogicalResult admitted(ModuleOp module) { return mlir::verify(module); }
 } // namespace
 
 void populateFieldSumSpecializationPatterns(RewritePatternSet &patterns) {
@@ -127,8 +124,9 @@ LogicalResult specializeFieldSums(ModuleOp module) {
   // Post-order walking permits erasing the current operation. A match erases
   // only it and its already-visited immediate predecessor. Unlike a greedy
   // canonicalizer this does not fold or delete unrelated admitted operations.
-  module.walk(
-      [&](zkc::FieldSumOp op) { (void)pattern.matchAndRewrite(op, rewriter); });
+  module.walk([&](zkc::algebra::FieldSumOp op) {
+    (void)pattern.matchAndRewrite(op, rewriter);
+  });
   return success();
 }
 
@@ -136,7 +134,7 @@ LogicalResult decomposeFieldSums(ModuleOp module) {
   ConversionTarget target(*module.getContext());
   target.addIllegalOp<FieldSumChainOp>();
   // This conversion discharges only the contribution's temporary abstraction.
-  // All other operations still pass the existing checked-export boundary below;
+  // All other operations still pass whole-module verification below;
   // conversion legality is not an executable-support or semantic proof.
   target.markUnknownOpDynamicallyLegal([](Operation *) { return true; });
   RewritePatternSet patterns(module.getContext());

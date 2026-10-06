@@ -1,8 +1,10 @@
 #include "zkc/Protocol/Admission.h"
+#include "../Source/Structure.h"
 #include "EncodingLimits.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Operations.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Source/Codec.h"
@@ -29,6 +31,7 @@ struct Definition {
   source::Names arguments;
   std::set<std::string> familyParameters;
   std::string instance, role;
+  std::map<std::string, std::string> services;
 };
 bool identifier(StringRef s, size_t limit = 128) {
   return !s.empty() && s.size() <= limit &&
@@ -47,6 +50,9 @@ class Admission {
   const source::Node *current = nullptr;
   const source::Node **failureLocation;
   std::map<std::string, source::OperationBinding> bindings;
+  bool program = false;
+  // Executable local literals are also admitted in internal local definitions.
+  bool nativeExecution = false;
   bool target = false, physical = false, executable;
   size_t instructions = 0;
   std::map<std::string, Definition> functions, protocols;
@@ -73,7 +79,8 @@ class Admission {
     return false;
   }
   bool name(StringRef value) {
-    return identifier(value, target ? 512 : 128) || fail("interactive-name");
+    return identifier(value, target && !nativeExecution ? 512 : 128) ||
+           fail("interactive-name");
   }
   bool natural(StringRef value, uint64_t limit, StringRef limitReason) {
     if (value.empty() ||
@@ -82,6 +89,19 @@ class Admission {
     if (value.size() > 1 && value.front() == '0')
       return fail("noncanonical-natural");
     return naturalString(value, limit) || fail(limitReason);
+  }
+  bool wireType(StringRef spelling) {
+    if (serializable(spelling))
+      return true;
+    if (!nativeExecution)
+      return false;
+    auto parsed = parseBoundType(spelling, physical);
+    if (!parsed) {
+      consumeError(parsed.takeError());
+      return false;
+    }
+    return nativeFieldArrayWire(*parsed, physical) ||
+           (program && nativeDataFrame(*parsed));
   }
   bool type(StringRef s) {
     auto parsed = parseBoundType(s, physical);
@@ -261,11 +281,26 @@ class Admission {
     return true;
   }
   bool declare(const source::Participant &p) {
+    // Internal local-definition admission never reaches participant
+    // declarations.
+    auto invalidBoundary = [&](StringRef spelling) {
+      if (typeKind(spelling) == "variant" && !program)
+        return true;
+      if (!nativeExecution)
+        return false;
+      auto type = parseBoundType(spelling, physical);
+      if (!type) {
+        consumeError(type.takeError());
+        // Ordinary port admission below owns type-formation diagnostics.
+        return false;
+      }
+      return !programPort(*type);
+    };
     for (const auto &a : p.arguments)
-      if (typeKind(a.type) == "variant")
+      if (invalidBoundary(a.type))
         return fail("variant-boundary");
     for (const auto &t : p.results)
-      if (typeKind(t) == "variant")
+      if (invalidBoundary(t))
         return fail("variant-boundary");
     if (!symbol(p.name, p) || !name(p.instance) || !name(p.role))
       return false;
@@ -274,6 +309,22 @@ class Admission {
     d.body = &p.body;
     d.instance = p.instance;
     d.role = p.role;
+    if ((!program && !p.services.empty()) || (program && !p.parameters.empty()))
+      return fail("service-profile-required");
+    if (p.services.size() + p.arguments.size() > 1024)
+      return fail("interactive-port-limit");
+    std::set<uint64_t> serviceIndices;
+    std::set<std::string> portNames;
+    for (const auto &arg : p.arguments)
+      portNames.insert(arg.name);
+    for (const auto &port : p.services) {
+      if (!name(port.name) || randomServiceField(port.contract).empty() ||
+          !portNames.insert(port.name).second ||
+          !serviceIndices.insert(port.inputIndex).second ||
+          port.inputIndex >= p.arguments.size() + p.services.size())
+        return fail("service-port-interface");
+      d.services.emplace(port.name, port.contract);
+    }
     std::map<std::string, source::ParameterBinding> params;
     if (!parameterPairs(p.parameters, params))
       return false;
@@ -360,6 +411,13 @@ class Admission {
     std::set<std::string> diagonalUses;
     for (const auto &instruction : instructionsBody) {
       current = &instruction;
+      if (target && !local) {
+        if (nativeExecution && (instruction.get<source::Stop>() ||
+                                instruction.get<source::Incomplete>()))
+          return fail("native-participant-terminal");
+        if (program && instruction.get<source::ProtocolCall>())
+          return fail("service-participant-composition-unsupported");
+      }
       if (++instructions > 32768)
         return fail("interactive-instruction-limit");
       if (instruction.isTerminator() !=
@@ -397,9 +455,43 @@ class Admission {
           *inferredReturns = values;
         continue;
       }
+      // Service names share the participant value namespace, while remaining
+      // unavailable as data operands.
+      for (const auto &[service, contract] : def.services)
+        if (env.count(service))
+          return fail("service-port-interface");
       if (!name(instruction.site) || !sites.insert(instruction.site).second)
         return fail("interactive-site");
-      if (instruction.get<source::Incomplete>()) {
+      if (const auto *query = instruction.get<source::ServiceQuery>()) {
+        if (!program || local || !target || !def.services.count(query->port))
+          return fail("service-query-context");
+        if (query->method != "draw" || !query->inputs.empty())
+          return fail("service-query-signature");
+        auto field = parseBoundType(
+            "field:" + randomServiceField(def.services.at(query->port)).str(),
+            false);
+        if (!field) {
+          consumeError(field.takeError());
+          return fail("service-query-signature");
+        }
+        if (physical) {
+          auto selected = defaultRepresentation(*field);
+          if (!selected) {
+            consumeError(selected.takeError());
+            return fail("service-query-signature");
+          }
+          field = std::move(selected);
+        }
+        if (!bind(query->outputs, {{"", field->spelling()}}, env))
+          return false;
+      } else if (const auto *literal =
+                     instruction.get<source::BooleanConstant>()) {
+        if (!nativeExecution || !local)
+          return fail("native-boolean-context");
+        if (!bind({literal->output},
+                  {{"", physical ? "bool@native.bool/1" : "bool"}}, env))
+          return false;
+      } else if (instruction.get<source::Incomplete>()) {
         if (!target || local)
           return fail("interactive-incomplete");
       } else if (const auto *stop = instruction.get<source::Stop>()) {
@@ -465,6 +557,21 @@ class Admission {
             !bind(call->outputs, f->second.outputs, env))
           return fail("algorithm-call-signature");
         edges[owner.str()].insert(call->callee);
+      } else if (const auto *returned = instruction.get<source::ReturnIf>()) {
+        if (!program || !target || local)
+          return fail("interactive-return-type");
+        std::vector<Port> condition, values;
+        if (!operands({returned->condition}, env, condition, consumed) ||
+            StringRef(condition[0].type).split('@').first != "bool" ||
+            !operands(returned->values, env, values, consumed) ||
+            values != def.outputs)
+          return fail("interactive-return-type");
+        std::vector<Port> affine;
+        for (const auto &value : values)
+          if (!duplicable(value.type))
+            affine.push_back(value);
+        if (!bind(returned->continuations, affine, env))
+          return false;
       } else if (const auto *call = instruction.get<source::LocalCall>()) {
         if (local)
           return fail("interactive-instruction");
@@ -508,7 +615,7 @@ class Admission {
         if (!name(send->schema) || !name(send->peer) || send->peer == def.role)
           return fail("interactive-peer");
         auto p = env.find(send->input);
-        if (p == env.end() || !serializable(p->second.type))
+        if (p == env.end() || !wireType(p->second.type))
           return fail("interactive-send");
         if (!schema(def.instance, send->schema, p->second.type))
           return false;
@@ -519,7 +626,7 @@ class Admission {
             receive->peer == def.role)
           return fail("interactive-peer");
         if (!name(receive->output) || !type(receive->type) ||
-            !serializable(receive->type) ||
+            !wireType(receive->type) ||
             !env.emplace(receive->output, Port{"", receive->type}).second)
           return fail("interactive-receive");
         if (!schema(def.instance, receive->schema, receive->type))
@@ -693,7 +800,16 @@ class Admission {
               !inner.emplace(capture, p->second).second)
             return fail("local-control-capture");
         }
-        if (!body(nested->body, std::move(inner), carried, def, owner, true,
+        auto yielded = carried;
+        if (nested->conditional) {
+          if (!nativeExecution)
+            return fail("local-control-context");
+          if (nested->body.empty() || !nested->body.back().get<source::Yield>())
+            return fail("local-control-yield");
+          yielded.insert(yielded.begin(),
+                         Port{"", physical ? "bool@native.bool/1" : "bool"});
+        }
+        if (!body(nested->body, std::move(inner), yielded, def, owner, true,
                   sites, depth + 1, true, nullptr, inMatch))
           return false;
         current = &instruction;
@@ -702,7 +818,12 @@ class Admission {
       } else if (const auto *nested = instruction.get<source::Loop>()) {
         if (local)
           return fail("interactive-instruction");
-        if (nested->count.kind == source::LoopCount::Kind::Parameter) {
+        if (program && nested->count.kind != source::LoopCount::Kind::Value)
+          return fail("interactive-loop-count");
+        if (nested->count.kind == source::LoopCount::Kind::Value) {
+          if (!program || nested->count.maximum > 1048576)
+            return fail("interactive-loop-count");
+        } else if (nested->count.kind == source::LoopCount::Kind::Parameter) {
           if (!is_contained(def.parameters, nested->count.value) ||
               (target && !def.familyParameters.count(nested->count.value)))
             return fail("interactive-loop-parameter");
@@ -710,6 +831,14 @@ class Admission {
                             "interactive-loop-count"))
           return false;
         Env inner;
+        if (nested->count.kind == source::LoopCount::Kind::Value) {
+          std::vector<Port> count;
+          if (!operands({nested->count.value}, env, count, consumed) ||
+              StringRef(count[0].type).split('@').first != "index" ||
+              !name(nested->count.induction) ||
+              !inner.emplace(nested->count.induction, count[0]).second)
+            return fail("interactive-loop-count");
+        }
         std::vector<Port> carried;
         for (const auto &[binding, initial] : nested->carried) {
           if (!name(binding))
@@ -735,6 +864,9 @@ class Admission {
       } else
         return fail("interactive-instruction");
     }
+    for (const auto &[service, contract] : def.services)
+      if (env.count(service))
+        return fail("service-port-interface");
     for (const auto &[value, port] : env)
       if (isDiagonalRepresentation(StringRef(port.type).split('@').second) &&
           !diagonalUses.count(value))
@@ -962,6 +1094,8 @@ class Admission {
   bool check(const source::Participants &m) {
     current = &m;
     target = true;
+    nativeExecution = source::isProgram(m.contract);
+    program = source::isProgram(m.contract);
     physical = m.stage == source::Participants::Stage::Physical;
     if (!environment(m.bindings))
       return false;
@@ -1036,8 +1170,23 @@ public:
     if (failureLocation)
       *failureLocation = nullptr;
   }
+  Error nativeLocals(const source::Module &module) {
+    if (!module.protocols.empty() || !module.instances.empty() ||
+        !module.entries.empty() || module.isLibrary() ||
+        !module.relations.empty() || !module.relationViews.empty())
+      return error("native-local-definitions-only");
+    nativeExecution = true;
+    return run(module);
+  }
   template <typename Root> Error run(const Root &root) {
-    if (auto e = source::checkStructure(root)) {
+    bool internalNative = nativeExecution;
+    if constexpr (std::is_same_v<Root, source::Participants>)
+      internalNative = source::isProgram(root.contract) &&
+                       root.stage == source::Participants::Stage::Logical;
+    auto structure = internalNative
+                         ? source::detail::checkNativeIRStructure(root)
+                         : source::checkStructure(root);
+    if (auto e = std::move(structure)) {
       if (failureLocation)
         *failureLocation = &root;
       return e;
@@ -1054,6 +1203,9 @@ public:
 };
 } // namespace
 
+Error admitNativeLocalDefinitions(const source::Module &value) {
+  return Admission(false, nullptr).nativeLocals(value);
+}
 Error admit(const source::Module &value, bool executable,
             const source::Node **failureLocation) {
   return Admission(executable, failureLocation).run(value);
