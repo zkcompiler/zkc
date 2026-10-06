@@ -17,8 +17,10 @@ The portable records are:
 
 Each carried entry is `[region_argument, initial_outer_value]`. Every continuing
 region has one final yield; an explicitly stopped region has no yield. A
-continuing function has one final return. Early return,
-break/continue and arbitrary jumps are not admitted. Sites are unique throughout
+continuing function has one final return. The program profile additionally admits
+[bounded conditional termination](entry-completion.md#bounded-local-termination)
+through `local.condition` and its `for_while` record. Local function early return,
+unbounded loops and arbitrary jumps are not admitted. Sites are unique throughout
 a function, including both arms and all nested regions. Regions obey the same
 source size, depth and value limits as other local instructions.
 
@@ -61,11 +63,20 @@ The native machine permits at most 100,000 total entered iterations across
 protocol and local loops and 1,000,000 executed instructions. Each executed
 operation, conditional, loop, yield and return costs one instruction. Each entered
 local region creates a backend child frame and charges its explicit inputs;
-a loop also charges its induction index. An untaken arm or zero-trip body creates
+a loop also charges its induction index. The native runner validates every
+backend-created induction value against the installed index representation
+before entering the body. An untaken arm or zero-trip body creates
 no frame. Region cleanup releases its retained charges, and returned values are
 charged at the enclosing result bindings. Physical `release` has no instruction
 cost and retains the existing ghost-accounting rule. These are retained-payload
 charges, not measurements of actual allocator memory or constant-time execution.
+
+Native local calls, ingress selectors and nested regions use the same frame
+lifecycle. A body stop remains primary when frame cleanup also fails; cleanup
+errors are retained in the actual inner-to-outer order of frame exits. If the
+body succeeds but its cleanup fails, the role stops with that backend error;
+polling or retrying the consumed local cut cannot execute the body again. Completed
+backend transitions are not rolled back by cleanup.
 
 Bound rejection happens before the first body effect. Cumulative iteration or
 instruction exhaustion may occur after earlier effects. Deterministic bound
@@ -125,3 +136,9 @@ instead of the empty role. Reasons are `reject`, `abort`, `exhausted`, `incomple
 and `refused`. Local source syntax is `stop reason;`. All are terminal, including
 inside a match arm or a called algorithm. They produce no result or fabricated
 yield. Continuing alternatives retain their normal result/resource obligations.
+
+## Conditional completion extension
+
+The native mathematical path also supports [conditional entry completion and
+bounded local termination](entry-completion.md). Its program-only records do
+not extend the legacy carrier or its formal checker.

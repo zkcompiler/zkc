@@ -206,9 +206,23 @@ impl State {
         }
     }
 }
+enum Custody {
+    Frame(Domain),
+    Service(String),
+}
+impl From<Domain> for Custody {
+    fn from(domain: Domain) -> Self {
+        Self::Frame(domain)
+    }
+}
+impl Custody {
+    fn matches(&self, frame: &Frame) -> bool {
+        matches!(self, Self::Frame(domain) if domain.matches(frame))
+    }
+}
 struct Slot {
     seal: Arc<Seal>,
-    domain: Domain,
+    domain: Custody,
     generation: u64,
     draws: u64,
     budget: u64,
@@ -244,7 +258,12 @@ impl Resources {
         }
         self.allocate(domain, budget, state)
     }
-    fn allocate(&mut self, domain: Domain, budget: u64, state: State) -> Result<Capability> {
+    fn allocate(
+        &mut self,
+        domain: impl Into<Custody>,
+        budget: u64,
+        state: State,
+    ) -> Result<Capability> {
         if self.slots.len() >= self.limit {
             return Err(exhausted("capability-slots"));
         }
@@ -263,7 +282,7 @@ impl Resources {
             id,
             Slot {
                 seal: seal.clone(),
-                domain,
+                domain: domain.into(),
                 generation: 0,
                 draws: 0,
                 budget,
@@ -373,23 +392,20 @@ impl Resources {
             unreachable!("validated kind")
         };
         transcript.append_message(b"origin", origin);
-        let mut bytes = [0; 64];
-        if *suite != Identity::Merlin3KoalaBearExt8 {
+        let mut block = || {
+            let mut bytes = [0; 64];
             transcript.challenge_bytes(b"challenge", &mut bytes);
-        }
+            bytes
+        };
         let value = match suite {
             Identity::Merlin3KoalaBearExt8 => {
-                Value::KoalaBearExt8Field(crate::sampling::extension(|| {
-                    let mut bytes = [0; 64];
-                    transcript.challenge_bytes(b"challenge", &mut bytes);
-                    bytes
-                })?)
+                Value::KoalaBearExt8Field(crate::sampling::extension(block)?)
             }
             Identity::Merlin3Fr64Be | Identity::Spongefish074KeccakFr64Be => {
-                Value::Field(zkc_arkworks::scalar_from_wide_be(&bytes))
+                Value::Field(zkc_arkworks::scalar_from_wide_be(&block()))
             }
             Identity::Merlin3Ristretto64Le => {
-                Value::RistrettoField(crate::RistrettoScalar::from_bytes_mod_order_wide(&bytes))
+                Value::RistrettoField(crate::RistrettoScalar::from_bytes_mod_order_wide(&block()))
             }
             _ => unreachable!("issued suite"),
         };
@@ -441,36 +457,34 @@ impl Resources {
         next.generation = slot.generation;
         Ok((Value::Index(crate::sampling::index(&bytes, bound)?), next))
     }
-    pub fn issue_rng_for(&mut self, field: Identity, domain: Domain, budget: u64) -> Result<Value> {
+    fn random_state(field: Identity) -> Result<State> {
         use rand::SeedableRng;
-        match field {
-            Identity::Bn254Fr => Ok(Value::Rng(self.issue(
-                domain,
-                budget,
-                State::Bn254Rng(Box::new(RandomSource::from_os().map_err(crate::ark)?)),
-            )?)),
-            Identity::Bls12381Fr => self.issue_rng(domain, budget),
-            Identity::KoalaBearExt8 => {
-                let rng = rand::rngs::StdRng::from_rng(rand::rngs::OsRng)
-                    .map_err(|_| exhausted("entropy-unavailable"))?;
-                Ok(Value::Rng(self.issue(
-                    domain,
-                    budget,
-                    State::ExtensionRng(Box::new(rng)),
-                )?))
+        Ok(match field {
+            Identity::Bn254Fr => {
+                State::Bn254Rng(Box::new(RandomSource::from_os().map_err(crate::ark)?))
             }
-            Identity::Ristretto255Scalar => {
-                let rng = rand::rngs::StdRng::from_rng(rand::rngs::OsRng)
-                    .map_err(|_| exhausted("entropy-unavailable"))?;
-                Ok(Value::Rng(self.issue(
-                    domain,
-                    budget,
-                    State::RistrettoRng(Box::new(rng)),
-                )?))
+            Identity::Bls12381Fr => State::Rng(Source::Os(Box::new(
+                RandomSource::from_os().map_err(crate::ark)?,
+            ))),
+            Identity::KoalaBearExt8 | Identity::Ristretto255Scalar => {
+                let rng = Box::new(
+                    rand::rngs::StdRng::from_rng(rand::rngs::OsRng)
+                        .map_err(|_| exhausted("entropy-unavailable"))?,
+                );
+                if field == Identity::KoalaBearExt8 {
+                    State::ExtensionRng(rng)
+                } else {
+                    State::RistrettoRng(rng)
+                }
             }
-            _ => Err(refused("rng-field")),
-        }
+            _ => return Err(refused("rng-field")),
+        })
     }
+    pub fn issue_rng_for(&mut self, field: Identity, domain: Domain, budget: u64) -> Result<Value> {
+        let state = Self::random_state(field)?;
+        Ok(Value::Rng(self.issue(domain, budget, state)?))
+    }
+
     pub fn issue_nonce_for(
         &mut self,
         field: Identity,
@@ -618,11 +632,11 @@ impl Resources {
         Ok((value, next))
     }
     pub fn draw_value(&mut self, f: &Frame, t: &Capability) -> Result<(Value, Capability)> {
-        if t.identity == Identity::Bls12381Fr {
-            return self.draw(f, t).map(|(v, t)| (Value::Field(v), t));
-        }
-        let slot = self.consume(f, t, Type::Rng)?;
+        Self::draw_value_slot(self.consume(f, t, Type::Rng)?, t)
+    }
+    fn draw_value_slot(slot: &mut Slot, t: &Capability) -> Result<(Value, Capability)> {
         let value = match &mut slot.state {
+            State::Rng(source) => Value::Field(source.scalar()?),
             State::Bn254Rng(rng) => Value::Bn254Field(rng.bn254_scalar()),
             #[cfg(feature = "test-utils")]
             State::Bn254Tape(tape) => {
@@ -685,6 +699,31 @@ impl Resources {
             return Err(refused("nonce-stage"));
         };
         Ok(k + c * x)
+    }
+    pub(crate) fn issue_managed_random(
+        &mut self,
+        owner: &str,
+        field: Identity,
+        budget: u64,
+    ) -> Result<Capability> {
+        self.allocate(
+            Custody::Service(owner.into()),
+            budget,
+            Self::random_state(field)?,
+        )
+    }
+    #[cfg(feature = "test-utils")]
+    pub(crate) fn issue_managed_tape(
+        &mut self,
+        owner: &str,
+        budget: u64,
+        tape: Vec<Scalar>,
+    ) -> Result<Capability> {
+        self.allocate(
+            Custody::Service(owner.into()),
+            budget,
+            State::Rng(Source::Tape(tape.into())),
+        )
     }
     pub fn issue_rng(&mut self, domain: Domain, budget: u64) -> Result<Value> {
         let source = Source::Os(Box::new(RandomSource::from_os().map_err(ark)?));
@@ -749,6 +788,16 @@ impl Resources {
         }
         if slot.state.ty() != ty {
             return Err(refused("capability-kind"));
+        }
+        Ok(())
+    }
+    /// Authenticate both handles and require the current generation of the same root.
+    /// An old root handle identifies custody but never authorizes a new consume.
+    pub fn verify_successor(&self, root: &Capability, successor: &Capability) -> Result<()> {
+        self.slot(root)?;
+        self.validate(successor, root.kind)?;
+        if root.id != successor.id || root.identity != successor.identity {
+            return Err(refused("capability-successor-root"));
         }
         Ok(())
     }
@@ -933,7 +982,9 @@ impl Resources {
         Ok(s)
     }
     fn consume(&mut self, f: &Frame, t: &Capability, ty: Type) -> Result<&mut Slot> {
-        let s = self.active_slot(f, t, ty)?;
+        Self::consume_slot(self.active_slot(f, t, ty)?)
+    }
+    fn consume_slot(s: &mut Slot) -> Result<&mut Slot> {
         // No wrapping or reset. Never return a successor at max generation.
         s.generation = s
             .generation
@@ -952,19 +1003,22 @@ impl Resources {
         s.budget -= 1;
         Ok(s)
     }
-    pub fn draw(&mut self, f: &Frame, t: &Capability) -> Result<(Scalar, Capability)> {
-        if t.identity != Identity::Bls12381Fr {
-            return Err(refused("capability-identity"));
+    // Called only by the native registry after authenticating its exclusive
+    // root lease. Legacy frame-based access and alias checks remain unchanged.
+    pub(crate) fn draw_managed(
+        &mut self,
+        owner: &str,
+        t: &Capability,
+    ) -> Result<(Value, Capability)> {
+        if !self.frames.is_empty() {
+            return Err(refused("service-resource-context"));
         }
-        let slot = self.consume(f, t, Type::Rng)?;
-        let generation = slot.generation;
-        let State::Rng(source) = &mut slot.state else {
-            unreachable!("validated kind")
-        };
-        let value = source.scalar()?;
-        let mut next = t.clone();
-        next.generation = generation;
-        Ok((value, next))
+        self.validate(t, Type::Rng)?;
+        let slot = self.slots.get_mut(&t.id).expect("validated root");
+        if !matches!(&slot.domain, Custody::Service(actual) if actual == owner) {
+            return Err(refused("service-owner"));
+        }
+        Self::draw_value_slot(Self::consume_slot(slot)?, t)
     }
     pub fn commit_nonce(&mut self, f: &Frame, t: &Capability) -> Result<(Scalar, Capability)> {
         if t.identity != Identity::Bls12381Fr {
@@ -1005,6 +1059,43 @@ fn same_frame(a: &Frame, b: &Frame) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn successor_check_authenticates_both_roots_and_current_generation() {
+        let mut store = Resources::new(Policy::default());
+        let domain = Domain::new("P", "session", "main", None);
+        let a = store.issue_rng(domain.clone(), 2).unwrap();
+        let b = store.issue_rng(domain.clone(), 2).unwrap();
+        let root = a.capability().unwrap();
+        store.verify_successor(root, root).unwrap();
+        assert!(
+            store
+                .verify_successor(root, b.capability().unwrap())
+                .is_err()
+        );
+        let mut other = Resources::new(Policy::default());
+        let foreign = other.issue_rng(domain, 2).unwrap();
+        assert_eq!(foreign.capability().unwrap().id, root.id);
+        assert!(
+            store
+                .verify_successor(foreign.capability().unwrap(), root)
+                .is_err()
+        );
+        assert!(
+            store
+                .verify_successor(root, foreign.capability().unwrap())
+                .is_err()
+        );
+        store.slots.get_mut(&root.id).unwrap().generation = 1;
+        let mut next = root.clone();
+        next.generation = 1;
+        store.verify_successor(root, &next).unwrap();
+        assert!(store.verify_successor(root, root).is_err());
+        let mut forged = next.clone();
+        forged.seal = Arc::new(Seal);
+        assert!(store.verify_successor(root, &forged).is_err());
+        store.retire(&next).unwrap();
+        assert!(store.verify_successor(root, &next).is_err());
+    }
     #[test]
     fn retirement_releases_capacity_without_rewinding_issuance() {
         let mut store = Resources::new(Policy {

@@ -95,7 +95,7 @@ int main() {
   raw_string_ostream stream(text);
   ir->print(stream);
   mlir::MLIRContext minimal;
-  minimal.loadDialect<ClaimDialect>();
+  minimal.loadDialect<zkc::claim::ClaimDialect>();
   auto candidate = mlir::parseSourceString<mlir::ModuleOp>(text, &minimal);
   require(bool(candidate), "minimal-context candidate did not parse");
   const auto loaded = minimal.getLoadedDialects().size();
@@ -117,7 +117,8 @@ int main() {
   mlir::MLIRContext oracleContext;
   auto oracleIR = take(claims::import(oracleSource, oracleContract,
                                       oracleCertificate, oracleContext));
-  require(oracleContext.getLoadedDialect<OracleDialect>() != nullptr,
+  require(oracleContext.getLoadedDialect<zkc::oracle::OracleDialect>() !=
+              nullptr,
           "fresh claim import did not initialize oracle subject types");
   success(claims::checkIR(oracleSource, oracleContract, *oracleIR));
 

@@ -2,8 +2,9 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Table/IR/Program.h"
 #include "zkc/Transforms/Passes.h"
-#include "zkc/Translation/Table.h"
 using namespace mlir;
 namespace zkc {
 namespace {
@@ -51,21 +52,35 @@ LogicalResult lowerToPlan(ModuleOp module) {
   if (failed(verify(module)))
     return failure();
   for (auto &op : module.getBody()->getOperations())
-    if (!isa<PIRProgramOp, PlanProgramOp>(op))
+    if (!isa<zkc::table::PIRProgramOp, zkc::table::PlanProgramOp>(op))
       return diagnostics::emit(op.emitOpError(), "expected-finite-program");
   ConversionTarget target(*module.getContext());
-  target.addLegalDialect<PIRDialect, PlanDialect, AlgebraDialect,
-                         PolynomialDialect>();
+  target.addLegalDialect<zkc::table::TableDialect, zkc::plan::PlanDialect,
+                         zkc::algebra::AlgebraDialect,
+                         zkc::poly::PolynomialDialect>();
   target.addLegalOp<ModuleOp>();
   target.markUnknownOpDynamicallyLegal(
       [](Operation *op) { return isa<SourceOpInterface>(op); });
-  target.addIllegalOp<PIRProgramOp, PIRReturnOp, PIRStopOp, PIRChooseOp,
-                      PIRRepeatOp, PIRBindOp>();
+  target.addIllegalOp<zkc::table::PIRProgramOp, zkc::table::PIRReturnOp,
+                      zkc::table::PIRStopOp, zkc::table::PIRChooseOp,
+                      zkc::table::PIRRepeatOp, zkc::table::PIRBindOp>();
   RewritePatternSet patterns(module.getContext());
-  for (StringRef name :
-       {"program", "return", "stop", "choose", "repeat", "bind"})
-    patterns.add<LowerControl>(module.getContext(), ("pir." + name).str(),
-                               ("plan." + name).str());
+  const std::pair<StringRef, StringRef> controls[] = {
+      {table::PIRProgramOp::getOperationName(),
+       table::PlanProgramOp::getOperationName()},
+      {table::PIRReturnOp::getOperationName(),
+       table::PlanReturnOp::getOperationName()},
+      {table::PIRStopOp::getOperationName(),
+       table::PlanStopOp::getOperationName()},
+      {table::PIRChooseOp::getOperationName(),
+       table::PlanChooseOp::getOperationName()},
+      {table::PIRRepeatOp::getOperationName(),
+       table::PlanRepeatOp::getOperationName()},
+      {table::PIRBindOp::getOperationName(),
+       table::PlanBindOp::getOperationName()},
+  };
+  for (const auto &[source, destination] : controls)
+    patterns.add<LowerControl>(module.getContext(), source, destination);
   return applyFullConversion(module, target, std::move(patterns));
 }
 std::unique_ptr<Pass> createLowerPIRToPlanPass() {

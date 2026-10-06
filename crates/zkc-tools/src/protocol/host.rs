@@ -1,7 +1,8 @@
 use super::{
-    JointOutcome, LocalTransport, MessageDecoder, ParticipantChecker, Schedule, WireBackend,
-    drive_with_decoder,
+    DriverLimits, JointOutcome, JointReport, LocalTransport, MessageDecoder, ParticipantChecker,
+    Schedule, WireBackend, drive_with_decoder,
 };
+use crate::host::admission::ResourceInput;
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, sync::Arc, time::Instant};
 use zkc_backends::{
@@ -12,6 +13,7 @@ use zkc_runtime::interactive::{
     Action, Admitted, BackendError, EntryRole, Runner, Stop, StopKind, admit_physical,
 };
 
+mod inputs;
 mod setups;
 
 type Result<T> = std::result::Result<T, String>;
@@ -46,13 +48,23 @@ fn read(path: &str) -> Result<Vec<u8>> {
 trait HostBackend: WireBackend<Value = Value> {
     fn external_work_spent(&self) -> u64;
     fn live_resource_units(&self) -> usize;
-    fn issue(&mut self, kind: &str, domain: Domain, budget: u64) -> Result<Value>;
-    fn inputs(
+    fn issue(&mut self, input: ResourceInput, domain: Domain) -> Result<Value>;
+    fn prepare(
         &self,
         role: &EntryRole,
         bytes: &[u8],
+        types: &BTreeMap<String, zkc_runtime::interactive::PhysicalType>,
+    ) -> Result<zkc_backends::InputPlan>;
+    fn check_entry(
+        &self,
+        plan: &zkc_backends::InputPlan,
+        role: &EntryRole,
         bindings: &InputBindings,
-    ) -> Result<Vec<Value>>;
+    ) -> Result<()>;
+    fn retire(
+        &mut self,
+        token: &Capability,
+    ) -> std::result::Result<CapabilityObservation, BackendError>;
     fn observe(
         &self,
         token: &Capability,
@@ -65,32 +77,41 @@ impl HostBackend for NativeBackend {
     fn live_resource_units(&self) -> usize {
         self.live_resource_units()
     }
-    fn issue(&mut self, kind: &str, domain: Domain, budget: u64) -> Result<Value> {
-        match kind {
-            "rng" => self.issue_rng(domain, budget),
-            "rng:ristretto255.scalar" => self.issue_rng_for(
-                zkc_runtime::interactive::Identity::Ristretto255Scalar,
-                domain,
-                budget,
-            ),
-            "nonce:ristretto255.scalar" => self.issue_nonce_for(
-                zkc_runtime::interactive::Identity::Ristretto255Scalar,
-                domain,
-                budget,
-            ),
-            "nonce" => self.issue_nonce(domain, budget),
+    fn issue(&mut self, input: ResourceInput, domain: Domain) -> Result<Value> {
+        match input.kind {
+            zkc_runtime::interactive::Type::Rng => {
+                self.issue_rng_for(input.field, domain, input.budget)
+            }
+            zkc_runtime::interactive::Type::Nonce => {
+                self.issue_nonce_for(input.field, domain, input.budget)
+            }
             _ => return Err("host-service-profile".into()),
         }
         .map_err(|e| e.to_string())
     }
-    fn inputs(
+    fn prepare(
         &self,
         role: &EntryRole,
         bytes: &[u8],
-        bindings: &InputBindings,
-    ) -> Result<Vec<Value>> {
-        self.inputs_from_json(role, bytes, bindings)
+        types: &BTreeMap<String, zkc_runtime::interactive::PhysicalType>,
+    ) -> Result<zkc_backends::InputPlan> {
+        self.prepare_inputs(role, bytes, types)
             .map_err(|e| e.to_string())
+    }
+    fn check_entry(
+        &self,
+        plan: &zkc_backends::InputPlan,
+        role: &EntryRole,
+        bindings: &InputBindings,
+    ) -> Result<()> {
+        plan.check_entry(self, role, bindings)
+            .map_err(|e| e.to_string())
+    }
+    fn retire(
+        &mut self,
+        token: &Capability,
+    ) -> std::result::Result<CapabilityObservation, BackendError> {
+        self.retire(token)
     }
     fn observe(
         &self,
@@ -105,6 +126,8 @@ struct Config<'a> {
     setup: &'a [Json],
     roles: BTreeMap<String, &'a [Json]>,
     receives: &'a [Json],
+    schedule_work: u64,
+    driver_limits: DriverLimits,
 }
 fn config(value: &Json) -> Result<Config<'_>> {
     let root = list(value)?;
@@ -125,6 +148,8 @@ fn config(value: &Json) -> Result<Config<'_>> {
         setup: list(&root[3])?,
         roles,
         receives: list(&root[5])?,
+        schedule_work: 1_000_000,
+        driver_limits: DriverLimits::default(),
     })
 }
 
@@ -132,13 +157,43 @@ fn config(value: &Json) -> Result<Config<'_>> {
 /// the independently checked compiler artifact. This command issues OS-random
 /// services and explicitly selected development setup; it has no fixture tape.
 pub fn run(args: &[String]) -> Result<Json> {
-    let [source_path, candidate_path, inputs_path, checker_path] = args else {
-        return Err("usage: zkc run-protocol SOURCE PARTICIPANTS INPUTS CHECKER".into());
+    let [
+        source_path,
+        candidate_path,
+        inputs_path,
+        checker_path,
+        options @ ..,
+    ] = args
+    else {
+        return Err(
+            "usage: zkc run-protocol SOURCE PARTICIPANTS INPUTS CHECKER [--limits=LIMITS]".into(),
+        );
     };
     let source = read(source_path)?;
     let candidate = read(candidate_path)?;
     let input: Json = serde_json::from_slice(&read(inputs_path)?).map_err(|_| "host-json")?;
-    let cfg = config(&input)?;
+    let mut cfg = config(&input)?;
+    if !options.is_empty() {
+        let [option] = options else {
+            return Err("host-option".into());
+        };
+        let path = option.strip_prefix("--limits=").ok_or("host-option")?;
+        let bytes = crate::host::io::read_bounded(path, 4096).map_err(|_| "host-limits-read")?;
+        let value: Json = serde_json::from_slice(&bytes).map_err(|_| "host-json")?;
+        let row = array(&value, 4)?;
+        if text(&row[0])? != "zkc.source-run-limits/1" {
+            return Err("host-limits-format".into());
+        }
+        let size = |v| usize::try_from(natural(v)?).map_err(|_| "host-limits".to_owned());
+        cfg.schedule_work = natural(&row[1])?;
+        cfg.driver_limits = DriverLimits {
+            message_bytes: size(&row[2])?,
+            total_wire_bytes: size(&row[3])?,
+        };
+        if cfg.schedule_work > 1_000_000 || cfg.driver_limits != cfg.driver_limits.effective() {
+            return Err("host-limits".into());
+        }
+    }
     let checker = ParticipantChecker::new(checker_path).map_err(|_| "checker-io")?;
     setups::run(&source, &candidate, &cfg, &checker)
 }
@@ -147,125 +202,89 @@ fn execute<B: HostBackend, D: MessageDecoder<B>>(
     cfg: &Config<'_>,
     keys: &BTreeMap<String, Keys>,
     seconds: (f64, f64),
+    declarations: inputs::Declarations,
     factory: impl Fn(&EntryRole) -> Result<B>,
     decoder: &D,
 ) -> Result<Json> {
-    let mut schedule = Schedule::new(admitted, cfg.entry, cfg.session)?;
-    let source_inputs = schedule.inputs()?;
-    if !source_inputs.keys().eq(cfg.roles.keys()) {
-        return Err("host-role-set".into());
-    }
-    let roles = admitted.entry(cfg.entry).ok_or("host-entry")?;
+    let inputs::Declarations {
+        mut schedule,
+        roles,
+    } = declarations;
+    let preparation = Instant::now();
+    let mut prepared = inputs::prepare(roles, keys, factory)?;
     let mut runners = BTreeMap::new();
     let mut ingress_stops = BTreeMap::new();
-    let mut observed_resources = BTreeMap::new();
-    let preparation = Instant::now();
-    for role in roles {
-        let record = cfg.roles.get(&role.role).ok_or("host-role")?;
-        let mut backend = factory(&role)?;
-        let mut bindings = InputBindings::new();
-        let mut resource_handles = Vec::new();
-        for service in list(&record[1])? {
-            let s = list(service)?;
-            let (kind, label) = if s.len() >= 2 {
-                (text(&s[0])?, text(&s[1])?)
-            } else {
-                return Err("host-service".into());
-            };
-            let value = match kind {
-                "prover_key" | "verifier_key" if s.len() == 3 => {
-                    let setup = text(&s[2])?;
-                    let keys = keys.get(setup).ok_or("host-service-setup")?;
-                    if kind == "prover_key" {
-                        Value::ProverKey(Arc::new(keys.prover_key().clone()))
+    let mut phase = "issuance";
+    let mut failure = inputs::issue(&mut prepared).err();
+    if failure.is_none() {
+        phase = "construction";
+        for role in &mut prepared {
+            let backend = role.backend.take().expect("prepared backend");
+            match Runner::new(
+                admitted,
+                cfg.entry,
+                &role.role.role,
+                cfg.session,
+                backend,
+                std::mem::take(&mut role.values),
+            ) {
+                Ok(mut runner) => {
+                    // Preserve the source host's existing ingress contract: an
+                    // ingress stop does not skip construction of later roles.
+                    let stop = if runner.is_terminal() {
+                        match runner.poll() {
+                            Action::Stopped(stop) => Some(stop_details(&stop)),
+                            _ => None,
+                        }
                     } else {
-                        Value::VerifierKey(Arc::new(keys.verifier_key().clone()))
-                    }
-                }
-                "rng" | "nonce" | "rng:ristretto255.scalar" | "nonce:ristretto255.scalar"
-                    if s.len() == 4 =>
-                {
-                    let scope = match text(&s[3])? {
-                        "entry" => Some(role.instance.as_str()),
-                        "session" => None,
-                        _ => return Err("host-resource-scope".into()),
+                        None
                     };
-                    backend.issue(
-                        kind,
-                        Domain::new(&role.role, cfg.session, cfg.entry, scope),
-                        natural(&s[2])?,
-                    )?
+                    ingress_stops.insert(role.role.role.clone(), stop);
+                    runners.insert(role.role.role.clone(), runner);
                 }
-                _ => return Err("host-service".into()),
-            };
-            if matches!(value, Value::Rng(_) | Value::Nonce(_)) {
-                resource_handles.push((label.to_owned(), value.clone()));
-            }
-            bindings.insert(label, value).map_err(|e| e.to_string())?;
-        }
-        let mut supplied = BTreeMap::new();
-        for pair in list(&record[2])? {
-            let p = array(pair, 2)?;
-            if supplied.insert(text(&p[0])?, &p[1]).is_some() {
-                return Err("host-duplicate-input".into());
+                Err(error) => {
+                    role.load_usage = Some(error.usage);
+                    role.backend = Some(error.backend);
+                    failure = Some(error.error.to_string());
+                    break;
+                }
             }
         }
-        let ports = source_inputs.get(&role.role).ok_or("host-inputs")?;
-        if ports.len() != supplied.len() || ports.len() != role.inputs.len() {
-            return Err("host-input-count".into());
-        }
-        let mut inputs = Vec::new();
-        for ((source_name, ty), (target_name, target_type)) in ports.iter().zip(&role.inputs) {
-            if admitted
-                .source_map()
-                .and_then(|m| m.port(&role.instance, &role.role, source_name))
-                != Some(target_name.as_str())
-            {
-                return Err("host-source-port-map".into());
-            }
-            if *ty != target_type.logical().spelling() {
-                return Err("host-input-type".into());
-            }
-            inputs.push(json!([
-                target_name,
-                supplied
-                    .get(source_name.as_str())
-                    .ok_or("host-input-name")?
-            ]));
-        }
-        let bytes =
-            serde_json::to_vec(&json!(["zkc.inputs/1", inputs])).map_err(|_| "host-input-json")?;
-        let inputs = backend.inputs(&role, &bytes, &bindings)?;
-        let mut runner = Runner::new(
-            admitted,
-            cfg.entry,
-            &role.role,
-            cfg.session,
-            backend,
-            inputs,
-        )
-        .map_err(|e| e.error.to_string())?;
-        // Capture construction's actual terminal observation before the driver
-        // can execute a member or cancel a peer. No site-name inference needed.
-        let ingress_stop = if runner.is_terminal()
-            && let Action::Stopped(stop) = runner.poll()
-        {
-            Some(stop_details(&stop))
-        } else {
-            None
-        };
-        ingress_stops.insert(role.role.clone(), ingress_stop);
-        observed_resources.insert(role.role.clone(), resource_handles);
-        runners.insert(role.role, runner);
     }
     let preparation_seconds = preparation.elapsed().as_secs_f64();
     let start = Instant::now();
-    let report = drive_with_decoder(&mut schedule, &mut runners, &mut LocalTransport, decoder);
+    let report = if let Some(error) = failure {
+        let mut cancelled = Vec::new();
+        for runner in runners.values_mut() {
+            if !runner.is_terminal() {
+                runner.cancel();
+                if let Action::Stopped(stop) = runner.poll() {
+                    cancelled.push(stop);
+                }
+            }
+        }
+        JointReport {
+            outcome: JointOutcome::Failed(error),
+            wire: Default::default(),
+            limits: cfg.driver_limits,
+            cancelled,
+        }
+    } else {
+        phase = "execution";
+        drive_with_decoder(
+            &mut schedule,
+            &mut runners,
+            &mut LocalTransport,
+            decoder,
+            cfg.driver_limits,
+        )
+    };
     let execution_seconds = start.elapsed().as_secs_f64();
     let stopped = match &report.outcome {
         JointOutcome::Stopped(stop) => Some(stop_details(stop)),
         _ => None,
     };
+    let mut diagnostics = Vec::new();
     let outcome = match report.outcome {
         JointOutcome::Returned(values) => {
             let mut outputs = BTreeMap::new();
@@ -274,8 +293,13 @@ fn execute<B: HostBackend, D: MessageDecoder<B>>(
                     role.clone(),
                     values
                         .iter()
-                        .map(|v| public_output(runners[&role].backend(), v))
-                        .collect::<Result<Vec<_>>>()?,
+                        .enumerate().map(|(index, v)| match public_output(runners[&role].backend(), v) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                diagnostics.push(json!({"role":role,"output":index,"kind":"output","code":error}));
+                                json!(["unavailable",error])
+                            }
+                        }).collect::<Vec<_>>(),
                 );
             }
             json!(["returned", outputs])
@@ -290,7 +314,7 @@ fn execute<B: HostBackend, D: MessageDecoder<B>>(
     let mut ingress = BTreeMap::new();
     for (role, runner) in &runners {
         ingress.insert(
-            role,
+            role.clone(),
             json!({
                 "selected_parameters": runner.selected_parameters(),
                 "stop": ingress_stops[role],
@@ -300,33 +324,70 @@ fn execute<B: HostBackend, D: MessageDecoder<B>>(
                 })).collect::<Vec<_>>()
             }),
         );
-        for (name, value) in &observed_resources[role] {
-            if let Value::Rng(token) | Value::Nonce(token) = value {
-                let state = runner.backend().observe(token).map_err(|e| e.to_string())?;
-                resources.push(json!([
-                    role,
-                    name,
-                    state.generation,
-                    state.draw_count,
-                    state.budget,
-                    state.stage
-                ]));
-            }
-        }
         let u = runner.usage();
         usage.insert(
-            role,
+            role.clone(),
             json!({"instructions":u.instructions,"calls":u.calls,"iterations":u.iterations,
             "live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,
             "external_work_spent":runner.backend().external_work_spent(),
             "live_resource_units":runner.backend().live_resource_units()}),
         );
     }
+    let mut backends: BTreeMap<_, _> = runners
+        .into_iter()
+        .map(|(name, runner)| (name, runner.into_backend()))
+        .collect();
+    let mut retired = Vec::new();
+    let mut roles = BTreeMap::new();
+    for role in &mut prepared {
+        let name = &role.role.role;
+        roles.insert(name.clone(), json!({"started":backends.contains_key(name)}));
+        let backend = match backends.get_mut(name) {
+            Some(backend) => backend,
+            None => role.backend.as_mut().expect("unstarted custody"),
+        };
+        if !usage.contains_key(name) {
+            let u = role.load_usage.unwrap_or_default();
+            usage.insert(name.clone(), json!({"instructions":u.instructions,"calls":u.calls,"iterations":u.iterations,
+                "live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,
+                "external_work_spent":backend.external_work_spent(),"live_resource_units":backend.live_resource_units()}));
+        }
+        for (label, token) in &role.handles {
+            match backend.observe(token) {
+                Ok(state) => resources.push(json!([
+                    name,
+                    label,
+                    state.generation,
+                    state.draw_count,
+                    state.budget,
+                    state.stage
+                ])),
+                Err(error) => {
+                    resources.push(json!([name, label, "observation-unavailable", error.code]));
+                    diagnostics.push(json!({"role":name,"resource":label,"kind":"observation","code":error.code}));
+                }
+            }
+            match backend.retire(token) {
+                Ok(state) => retired.push(json!([
+                    name,
+                    label,
+                    state.generation,
+                    state.draw_count,
+                    state.budget,
+                    state.stage
+                ])),
+                Err(error) => diagnostics.push(
+                    json!({"role":name,"resource":label,"kind":"retirement","code":error.code}),
+                ),
+            }
+        }
+    }
     Ok(
-        json!({"format":"zkc.run-result/1", "profile":Json::Null,"entry":cfg.entry,"session":cfg.session,
+        json!({"format":"zkc.run-result/2", "status":if phase!="execution" {"setup-failed"} else if !diagnostics.is_empty() {"diagnostic-failed"} else {"executed"}, "phase":phase,"roles":roles,"diagnostics":diagnostics,"retired_resources":retired, "profile":Json::Null,"entry":cfg.entry,"session":cfg.session,
         "outcome":outcome,"resources":resources,"usage":usage,"ingress":ingress,"cancelled_roles":report.cancelled.iter().map(|s| &s.role).collect::<Vec<_>>(),
         "stop":stopped,"cancellations":report.cancelled.iter().map(stop_details).collect::<Vec<_>>(),
-        "wire":{"messages":report.wire.messages,"payload_bytes":report.wire.payload_bytes,"envelope_bytes":report.wire.envelope_bytes},
+        "limits":{"schedule_work":cfg.schedule_work,"message_bytes":report.limits.message_bytes,"total_wire_bytes":report.limits.total_wire_bytes},
+        "wire":{"sends":report.wire.sends,"encoded_bytes":report.wire.encoded_bytes,"transferred_bytes":report.wire.transferred_bytes,"messages":report.wire.messages,"payload_bytes":report.wire.payload_bytes,"envelope_bytes":report.wire.envelope_bytes},
         "seconds":{"admission":seconds.0,"development_setup":seconds.1,"input_preparation":preparation_seconds,"execution":execution_seconds},
         "assurance":["generic-structural-correspondence","local-host-driver","external-backend-contracts","not-production-setup"]}),
     )
@@ -334,12 +395,13 @@ fn execute<B: HostBackend, D: MessageDecoder<B>>(
 fn stop_details(stop: &Stop) -> Json {
     let (kind, detail) = match &stop.kind {
         StopKind::Incomplete => ("incomplete", None),
+        StopKind::Decode(reason) => ("decode", Some(reason.as_str())),
         StopKind::Explicit(reason) => ("explicit", Some(reason.as_str())),
         StopKind::Backend(error) => ("backend", Some(error.code.as_str())),
         StopKind::Limit => ("limit", None),
         StopKind::Cancelled => ("cancelled", None),
     };
-    json!({"origin":stop.origin.json(), "role":stop.role, "site":stop.site,
+    json!({"origin":stop.origin.json(), "role":stop.role, "site":stop.site, "local":stop.local.as_ref().map(|l| json!({"site":l.site,"function":l.function,"instruction":l.instruction})),
         "kind":kind,"detail":detail,
         "cleanup_errors":stop.cleanup_errors.iter().map(|e| &e.code).collect::<Vec<_>>()})
 }
@@ -401,6 +463,11 @@ mod tests {
             role: "V".into(),
             site: Some("guard".into()),
             kind: StopKind::Backend(BackendError::new("rejected:require")),
+            local: Some(Box::new(zkc_runtime::interactive::LocalContext {
+                site: "check".into(),
+                function: "verify".into(),
+                instruction: Some("guard".into()),
+            })),
             cleanup_errors: vec![
                 BackendError::new("leave-local"),
                 BackendError::new("leave-parent"),
@@ -411,8 +478,11 @@ mod tests {
             json!({
                 "origin":["zkc.origin/2","session","main","child",[["loop","round","3"],["call","check","child"]]],
                 "role":"V","site":"guard","kind":"backend","detail":"rejected:require",
-                "cleanup_errors":["leave-local","leave-parent"]
+                "cleanup_errors":["leave-local","leave-parent"],"local":{"site":"check","function":"verify","instruction":"guard"}
             })
         );
     }
 }
+
+#[cfg(test)]
+mod lifecycle;

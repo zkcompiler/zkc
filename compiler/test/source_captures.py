@@ -102,16 +102,16 @@ for captures, yes, no, expected in [
 ]:
     with case(f"captures {captures} on a choice"):
         arguments = ", ".join(f"%c{i}: {FIELD_IR}" for i in range(len(captures)))
-        types = ", ".join(["!pir.flow", "i1"] + [FIELD_IR] * len(captures))
+        types = ", ".join(["!table.flow", "i1"] + [FIELD_IR] * len(captures))
         text = f"""
-  "pir.program"() <{{context = {ctx_attr}, resultType = {FIELD_IR}}}> ({{
-  ^bb0(%flow: !pir.flow, %x: {FIELD_IR}, %y: {FIELD_IR}, %flag: i1):
-    "pir.choose"(%flow, %flag, {", ".join(captures)}) ({{
-    ^bb0(%f: !pir.flow, {arguments}):
-      "pir.return"(%f, %c{yes}) : (!pir.flow, {FIELD_IR}) -> ()
+  "table.source.program"() <{{context = {ctx_attr}, resultType = {FIELD_IR}}}> ({{
+  ^bb0(%flow: !table.flow, %x: {FIELD_IR}, %y: {FIELD_IR}, %flag: i1):
+    "table.source.choose"(%flow, %flag, {", ".join(captures)}) ({{
+    ^bb0(%f: !table.flow, {arguments}):
+      "table.source.return"(%f, %c{yes}) : (!table.flow, {FIELD_IR}) -> ()
     }}, {{
-    ^bb0(%f: !pir.flow, {arguments}):
-      "pir.return"(%f, %c{no}) : (!pir.flow, {FIELD_IR}) -> ()
+    ^bb0(%f: !table.flow, {arguments}):
+      "table.source.return"(%f, %c{no}) : (!table.flow, {FIELD_IR}) -> ()
     }}) : ({types}) -> ()
   }}) : () -> ()
 """

@@ -20,6 +20,10 @@ pub(super) const CONTRACTS: &[Contract] = &[
         (&[Matrix], &[Bool], AttributeRule::MatrixIdentity),
     ),
     Contract::selectable(
+        "matrix.dimension",
+        (&[Matrix], &[Index], AttributeRule::Unsigned64),
+    ),
+    Contract::selectable(
         "matrix.shape_check",
         (&[Matrix], &[Bool], AttributeRule::MatrixDimensions),
     ),

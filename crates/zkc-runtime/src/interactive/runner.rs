@@ -1,4 +1,5 @@
 use super::{Admitted, ArtifactFormat, PhysicalType, admit, backend::*, model::*, transport::*};
+use super::{ProgramCut, ProgramState};
 use std::{collections::BTreeMap, sync::Arc};
 
 // Taking custody out of a runner leaves this empty only while the runner is
@@ -23,9 +24,9 @@ struct Execution<V> {
     body: Body,
     pc: usize,
     env: BTreeMap<String, V>,
-    destination: Destination<V>,
+    destination: Destination,
 }
-enum Destination<V> {
+enum Destination {
     Root,
     Call {
         outputs: Vec<String>,
@@ -33,11 +34,12 @@ enum Destination<V> {
     Loop {
         outputs: Vec<String>,
         carried: Ports,
-        captures: Vec<(String, V)>,
+        captures: Vec<String>,
         remaining: u64,
         iteration: u64,
+        induction: Option<String>,
         site: String,
-        base: Origin,
+        base: Box<Origin>,
     },
 }
 
@@ -53,11 +55,13 @@ pub struct Runner<B: Backend> {
     pending: Option<Action<B::Value>>,
     usage: Usage,
     value_budget: ValueBudget,
+    work_budget: WorkBudget,
     next_frame: u64,
     selected_parameters: BTreeMap<String, u64>,
     ingress_actions: Vec<LocalAction>,
     local_failure: Option<(String, Origin)>,
     local_cleanup_errors: Vec<BackendError>,
+    early_return: Option<(Origin, String)>,
 }
 impl<B: Backend> Runner<B> {
     /// Positional values must exactly match `admitted.entry(entry)` for `role`.
@@ -95,6 +99,36 @@ impl<B: Backend> Runner<B> {
         inputs: Vec<B::Value>,
         value_budget: ValueBudget,
     ) -> std::result::Result<Self, LoadError<B>> {
+        Self::new_with_budgets(
+            admitted,
+            entry,
+            role,
+            session,
+            backend,
+            inputs,
+            value_budget,
+            WorkBudget::default(),
+        )
+    }
+
+    /// Enforce host work and value budgets inside local and administrative steps,
+    /// including steps executed during entry initialization.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_budgets(
+        admitted: &Admitted,
+        entry: &str,
+        role: &str,
+        session: &str,
+        backend: B,
+        inputs: Vec<B::Value>,
+        value_budget: ValueBudget,
+        work_budget: WorkBudget,
+    ) -> std::result::Result<Self, LoadError<B>> {
+        let work_budget = WorkBudget {
+            instructions: work_budget.instructions.min(Limits::INSTRUCTIONS),
+            calls: work_budget.calls.min(Limits::CALLS),
+            iterations: work_budget.iterations.min(Limits::ITERATIONS),
+        };
         let root = Origin {
             format: admitted.format(),
             session: session.to_owned(),
@@ -111,11 +145,13 @@ impl<B: Backend> Runner<B> {
             pending: None,
             usage: Usage::default(),
             value_budget,
+            work_budget,
             next_frame: 0,
             selected_parameters: BTreeMap::new(),
             ingress_actions: Vec::new(),
             local_failure: None,
             local_cleanup_errors: Vec::new(),
+            early_return: None,
         };
         if let Err(error) = runner.initialize(entry, role, session, inputs) {
             if !runner.stack.is_empty() {
@@ -123,6 +159,7 @@ impl<B: Backend> Runner<B> {
             }
             return Err(LoadError {
                 error,
+                usage: runner.usage,
                 backend: runner
                     .backend
                     .0
@@ -158,12 +195,13 @@ impl<B: Backend> Runner<B> {
         let symbol = roles.get(role).ok_or(RuntimeError::Role)?;
         let p = self.admitted.program.participants[symbol].clone();
         self.root.instance = p.instance.clone();
-        let frame = self.frame(
+        let mut frame = self.frame(
             self.root.clone(),
             Arc::new(p.parameters.clone()),
             FrameKind::Entry,
             p.inputs.clone(),
         );
+        frame.services = p.services.clone();
         self.push(frame, p.body.clone(), inputs.clone(), Destination::Root)?;
         self.selected_parameters = p.parameters.clone();
         for (name, ingress) in &p.families {
@@ -191,26 +229,7 @@ impl<B: Backend> Runner<B> {
                 f.inputs.clone(),
             );
             let result = (|| {
-                self.can_retain(&arguments)?;
-                self.backend.enter_frame(&frame, &arguments)?;
-                let result = self.run_local_body(&frame, &f.origin, &f.body, arguments, 1);
-                let (exit, returned) = match &result {
-                    Ok(values) => (FrameExit::Returned, values.as_slice()),
-                    Err(_) => (FrameExit::Stopped, &[][..]),
-                };
-                let leave = self.backend.leave_frame(&frame, exit, returned);
-                let values = match result {
-                    Ok(values) => {
-                        leave?;
-                        values
-                    }
-                    Err(error) => {
-                        if let Err(cleanup) = leave {
-                            self.local_cleanup_errors.push(cleanup);
-                        }
-                        return Err(error);
-                    }
-                };
+                let values = self.run_local_frame(&frame, &f.origin, &f.body, arguments, 1)?;
                 let [value] = values.as_slice() else {
                     return Err(RuntimeError::Inputs);
                 };
@@ -225,10 +244,18 @@ impl<B: Backend> Runner<B> {
                     self.selected_parameters.insert(name.clone(), count);
                 }
                 Err(error) => {
-                    let origin = self.local_failure.take().map(|(_, origin)| origin);
+                    let (instruction, origin) = self
+                        .local_failure
+                        .take()
+                        .map_or((None, None), |(site, origin)| (Some(site), Some(origin)));
                     let cleanup = std::mem::take(&mut self.local_cleanup_errors);
-                    self.failed(error, Some(site), origin);
+                    self.failed(error, Some(site.clone()), origin);
                     if let Some(Action::Stopped(stop)) = &mut self.pending {
+                        stop.local = Some(Box::new(LocalContext {
+                            site,
+                            function: function.clone(),
+                            instruction,
+                        }));
                         stop.cleanup_errors.splice(0..0, cleanup);
                     }
                     return Ok(());
@@ -266,6 +293,95 @@ impl<B: Backend> Runner<B> {
     pub fn is_terminal(&self) -> bool {
         matches!(self.pending, Some(Action::Returned(_) | Action::Stopped(_)))
     }
+    /// Borrow terminal data without preparing another action.
+    pub fn stop(&self) -> Option<&Stop> {
+        match &self.pending {
+            Some(Action::Stopped(stop)) => Some(stop),
+            _ => None,
+        }
+    }
+    /// Exact reached coordinate of a successful conditional entry return.
+    pub fn early_return(&self) -> Option<(&Origin, &str)> {
+        self.early_return
+            .as_ref()
+            .map(|(origin, site)| (origin, site.as_str()))
+    }
+    pub fn returned_values(&self) -> Option<&[B::Value]> {
+        match &self.pending {
+            Some(Action::Returned(values)) => Some(values),
+            _ => None,
+        }
+    }
+    /// Read-only program status, including an unexposed return. Never accesses
+    /// the value environment, invokes backend hooks, or clones payloads.
+    pub fn inspect_program(&self) -> Result<ProgramState<'_>> {
+        if !self.format().is_program() {
+            return Err(RuntimeError::WrongAction);
+        }
+        // Local calls and queries run synchronously; their interiors cannot be
+        // observed through this immutable borrow between dispatches.
+        Ok(match &self.pending {
+            Some(Action::Returned(_)) => ProgramState::Returned,
+            Some(Action::Stopped(stop)) => ProgramState::Stopped(stop),
+            Some(Action::Local(action)) => ProgramState::Pending(ProgramCut {
+                origin: &action.cut.origin,
+                role: &action.cut.role,
+                site: &action.cut.site,
+                kind: CutKind::Local,
+            }),
+            Some(Action::Query(action)) => ProgramState::Pending(ProgramCut {
+                origin: &action.cut.origin,
+                role: &action.cut.role,
+                site: &action.cut.site,
+                kind: CutKind::Query,
+            }),
+            Some(Action::Send(packet)) => ProgramState::Pending(ProgramCut {
+                origin: &packet.envelope.origin,
+                role: &packet.envelope.sender,
+                site: &packet.envelope.site,
+                kind: CutKind::Send,
+            }),
+            Some(Action::Receive(receive)) => ProgramState::Pending(ProgramCut {
+                origin: &receive.envelope.origin,
+                role: &receive.envelope.receiver,
+                site: &receive.envelope.site,
+                kind: CutKind::Receive,
+            }),
+            None => {
+                let frame = self.stack.last().ok_or(RuntimeError::WrongAction)?;
+                let (kind, site) = match &frame.body[frame.pc] {
+                    Instruction::Local { site, .. } => (Some(CutKind::Local), Some(site.as_str())),
+                    Instruction::Query { site, .. } => (Some(CutKind::Query), Some(site.as_str())),
+                    Instruction::Send { site, .. } => (Some(CutKind::Send), Some(site.as_str())),
+                    Instruction::Receive { site, .. } => {
+                        (Some(CutKind::Receive), Some(site.as_str()))
+                    }
+                    Instruction::Loop { site, .. } => (None, Some(site.as_str())),
+                    Instruction::ReturnIf { site, .. } => {
+                        return Ok(ProgramState::ReturnIf { site });
+                    }
+                    Instruction::Yield(_) => return Ok(ProgramState::Yield),
+                    Instruction::Return(_) => (None, None),
+                    _ => return Err(RuntimeError::WrongAction),
+                };
+                ProgramState::Unpolled { kind, site }
+            }
+        })
+    }
+    /// No participant instruction has executed since successful initialization.
+    /// Non-advancing inspection is allowed; ingress work is part of loading.
+    /// Proof hosts use this to reject reused or partially consumed executions.
+    pub fn is_at_entry(&self) -> bool {
+        !self.is_terminal()
+            && matches!(
+                self.stack.as_slice(),
+                [Execution {
+                    pc: 0,
+                    destination: Destination::Root,
+                    ..
+                }]
+            )
+    }
     /// Cancel an unfinished role, unwind all backend frames, and recover its state.
     /// No resource transition is rolled back and no peer is signalled.
     pub fn into_backend(mut self) -> B {
@@ -297,6 +413,14 @@ impl<B: Backend> Runner<B> {
                 parameters
             };
         self.next_frame += 1; // bounded by instruction/iteration/call ceilings
+        let services = if matches!(kind, FrameKind::Loop { .. }) {
+            self.stack
+                .last()
+                .map(|frame| frame.frame.services.clone())
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
         Frame {
             id: FrameId(self.next_frame),
             parent: self.stack.last().map(|s| s.frame.id),
@@ -305,6 +429,7 @@ impl<B: Backend> Runner<B> {
             parameters,
             kind,
             inputs,
+            services,
         }
     }
     fn validate(&self, value: &B::Value, ty: PhysicalType, wire: bool) -> Result<()> {
@@ -316,10 +441,14 @@ impl<B: Backend> Runner<B> {
         }
         self.backend.validate_value(value)?;
         if wire {
-            if !ty.is_serializable() {
+            if !ty.is_message_type(self.format()) {
                 return Err(RuntimeError::Payload);
             }
-            value.validate_serializable()?;
+            // Keep the value-level check for types with an existing codec.
+            // Complete native-only frames were admitted by is_message_type.
+            if ty.is_serializable() {
+                value.validate_serializable()?;
+            }
         }
         Ok(())
     }
@@ -328,10 +457,14 @@ impl<B: Backend> Runner<B> {
             sum.checked_add(v.retained_bytes())
                 .ok_or(RuntimeError::Limit)
         })?;
+        self.can_retain_size(values.len(), bytes)?;
+        Ok(bytes)
+    }
+    fn can_retain_size(&self, count: usize, bytes: usize) -> Result<()> {
         if self
             .usage
             .live_values
-            .checked_add(values.len())
+            .checked_add(count)
             .is_none_or(|n| n > Limits::LIVE_VALUES)
             || self
                 .usage
@@ -346,7 +479,7 @@ impl<B: Backend> Runner<B> {
         {
             return Err(RuntimeError::Limit);
         }
-        Ok(bytes)
+        Ok(())
     }
     fn retain(&mut self, values: &[B::Value]) -> Result<()> {
         self.retain_bytes(values).map(|_| ())
@@ -372,7 +505,7 @@ impl<B: Backend> Runner<B> {
         frame: Frame,
         body: Body,
         values: Vec<B::Value>,
-        destination: Destination<B::Value>,
+        destination: Destination,
     ) -> Result<()> {
         if self.stack.len() >= Limits::STACK_DEPTH {
             return Err(RuntimeError::Limit);
@@ -383,16 +516,12 @@ impl<B: Backend> Runner<B> {
         for (v, (_, ty)) in values.iter().zip(&frame.inputs) {
             self.validate(v, ty.clone(), false)?;
         }
-        // Loop metadata retains captures independently of the active iteration env.
-        let mut retained = values.clone();
-        if let Destination::Loop { captures, .. } = &destination {
-            retained.extend(captures.iter().map(|(_, v)| v.clone()));
-        }
-        // Admit both stores together, before opening a backend frame. Failed
-        // allocation admission cannot strand a successfully opened child view.
-        self.retain(&retained)?;
+        // Captures remain in the suspended parent. The destination stores only
+        // names; each iteration owns one checked body view, never a second
+        // hidden payload store. The parent cannot advance while this frame lives.
+        self.retain(&values)?;
         if let Err(e) = self.backend.enter_frame(&frame, &values) {
-            self.release(retained.iter());
+            self.release(values.iter());
             return Err(e.into());
         }
         let env = frame
@@ -415,7 +544,7 @@ impl<B: Backend> Runner<B> {
         frame: Frame,
         body: Body,
         values: Vec<B::Value>,
-        destination: Destination<B::Value>,
+        destination: Destination,
         site: &str,
     ) {
         let origin = frame.origin.clone();
@@ -426,14 +555,14 @@ impl<B: Backend> Runner<B> {
         }
     }
     fn tick(&mut self) -> Result<()> {
-        if self.usage.instructions >= Limits::INSTRUCTIONS {
+        if self.usage.instructions >= self.work_budget.instructions {
             return Err(RuntimeError::Limit);
         }
         self.usage.instructions += 1;
         Ok(())
     }
     fn iteration(&mut self) -> Result<()> {
-        if self.usage.iterations >= Limits::ITERATIONS {
+        if self.usage.iterations >= self.work_budget.iterations {
             return Err(RuntimeError::Limit);
         }
         self.usage.iterations += 1;
@@ -469,9 +598,6 @@ impl<B: Backend> Runner<B> {
                 cleanup_errors.push(e);
             }
             self.release(frame.env.values());
-            if let Destination::Loop { captures, .. } = frame.destination {
-                self.release(captures.iter().map(|(_, v)| v));
-            }
         }
         self.pending = Some(Action::Stopped(Stop {
             origin,
@@ -479,6 +605,7 @@ impl<B: Backend> Runner<B> {
             site,
             kind,
             cleanup_errors,
+            local: None,
         }));
     }
     fn failed(&mut self, error: RuntimeError, site: Option<String>, origin: Option<Origin>) {
@@ -493,6 +620,13 @@ impl<B: Backend> Runner<B> {
     /// Inspect the next observable action. Once pending, polling is idempotent:
     /// no instructions, frames, backend calls or randomness are advanced.
     pub fn poll(&mut self) -> Action<B::Value> {
+        self.poll_ref().clone()
+    }
+    /// Expose the same action while borrowing its payload and diagnostics.
+    /// This avoids cloning an arbitrarily large backend cleanup error list.
+    /// Like poll, this may prepare an action; use inspect_program to observe
+    /// without execution.
+    pub fn poll_ref(&mut self) -> &Action<B::Value> {
         if self.pending.is_none()
             && let Err(e) = self.prepare()
         {
@@ -501,18 +635,55 @@ impl<B: Backend> Runner<B> {
         self.pending
             .as_ref()
             .expect("prepare always produces action")
-            .clone()
     }
     fn prepare(&mut self) -> Result<()> {
         while self.pending.is_none() {
-            if self.usage.instructions >= Limits::INSTRUCTIONS {
+            if self.usage.instructions >= self.work_budget.instructions {
                 return Err(RuntimeError::Limit);
             }
             let execution = self.stack.last().expect("nonterminal runner has frame");
             let body = execution.body.clone();
             let instruction = &body[execution.pc];
             let origin = execution.frame.origin.clone();
+            // Structured control is crossed only by the explicit program
+            // control API, after the host has established count agreement.
+            if self.format().is_program()
+                && matches!(
+                    instruction,
+                    Instruction::Loop { .. } | Instruction::Yield(_) | Instruction::ReturnIf { .. }
+                )
+            {
+                return Err(BackendError::new("program-control-cut").into());
+            }
             match instruction {
+                Instruction::Query {
+                    site,
+                    port,
+                    method,
+                    inputs,
+                    outputs,
+                } => {
+                    let port = execution
+                        .frame
+                        .services
+                        .iter()
+                        .find(|p| &p.name == port)
+                        .expect("admitted service port")
+                        .clone();
+                    let signature = port.contract.signature(method).expect("admitted method");
+                    self.pending = Some(Action::Query(QueryAction {
+                        cut: Cut {
+                            origin,
+                            role: self.role.clone(),
+                            site: site.clone(),
+                            kind: CutKind::Query,
+                        },
+                        port,
+                        method: method.clone(),
+                        arguments: self.values(inputs),
+                        results: outputs.iter().cloned().zip(signature.outputs).collect(),
+                    }));
+                }
                 Instruction::Local { site, function, .. } => {
                     self.pending = Some(Action::Local(LocalAction {
                         cut: Cut {
@@ -570,7 +741,7 @@ impl<B: Backend> Runner<B> {
                     outputs,
                 } => {
                     self.tick()?;
-                    if self.usage.calls >= Limits::CALLS {
+                    if self.usage.calls >= self.work_budget.calls {
                         return Err(RuntimeError::Limit);
                     }
                     self.usage.calls += 1;
@@ -599,83 +770,7 @@ impl<B: Backend> Runner<B> {
                         site,
                     );
                 }
-                Instruction::Loop {
-                    site,
-                    count,
-                    carried,
-                    captures,
-                    body,
-                    outputs,
-                } => {
-                    self.tick()?;
-                    let values =
-                        self.values(&carried.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>());
-                    self.stack.last_mut().expect("loop parent").pc += 1;
-                    let count = match count {
-                        Count::Constant(n) => *n,
-                        Count::Parameter(key) => *self
-                            .stack
-                            .last()
-                            .expect("loop parent")
-                            .frame
-                            .parameters
-                            .get(key)
-                            .or_else(|| self.selected_parameters.get(key))
-                            .ok_or(RuntimeError::Inputs)?,
-                    };
-                    if count == 0 {
-                        self.bind(outputs, values)?;
-                        continue;
-                    }
-                    self.iteration()?;
-                    let capture_values = self.values(captures);
-                    let ports: Ports = carried
-                        .iter()
-                        .zip(&values)
-                        .map(|((n, _), v)| Ok((n.clone(), v.physical_type())))
-                        .collect::<Result<_>>()?;
-                    let destination = Destination::Loop {
-                        outputs: outputs.clone(),
-                        carried: ports.clone(),
-                        captures: captures
-                            .iter()
-                            .cloned()
-                            .zip(capture_values.clone())
-                            .collect(),
-                        remaining: count,
-                        iteration: 0,
-                        site: site.clone(),
-                        base: origin.clone(),
-                    };
-                    let mut all_ports = ports;
-                    for (n, v) in captures.iter().zip(&capture_values) {
-                        all_ports.push((n.clone(), v.physical_type()));
-                    }
-                    let mut all_values = values;
-                    all_values.extend(capture_values);
-                    let mut child_origin = origin;
-                    child_origin.path.push(PathElement::Loop {
-                        site: site.clone(),
-                        iteration: 0,
-                    });
-                    let params = self
-                        .stack
-                        .last()
-                        .expect("loop parent")
-                        .frame
-                        .parameters
-                        .clone();
-                    let frame = self.frame(
-                        child_origin,
-                        params,
-                        FrameKind::Loop {
-                            site: site.clone(),
-                            iteration: 0,
-                        },
-                        all_ports,
-                    );
-                    self.push_child(frame, body.clone(), all_values, destination, site);
-                }
+                Instruction::Loop { .. } => self.start_loop(instruction)?,
                 Instruction::Yield(names) | Instruction::Return(names) => {
                     self.tick()?;
                     let values = self.values(names);
@@ -685,6 +780,7 @@ impl<B: Backend> Runner<B> {
                     self.tick()?;
                     self.halt(StopKind::Explicit(reason.clone()), Some(site.clone()), None);
                 }
+                Instruction::ReturnIf { .. } => return Err(RuntimeError::WrongAction),
                 Instruction::Incomplete { .. } => {
                     self.tick()?;
                     self.halt(StopKind::Incomplete, None, None);
@@ -693,13 +789,279 @@ impl<B: Backend> Runner<B> {
         }
         Ok(())
     }
+    fn start_loop(&mut self, instruction: &Instruction) -> Result<()> {
+        let Instruction::Loop {
+            site,
+            count,
+            carried,
+            captures,
+            body,
+            outputs,
+        } = instruction
+        else {
+            return Err(RuntimeError::WrongAction);
+        };
+        let origin = self.active_origin();
+        self.tick()?;
+        let values = self.values(&carried.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>());
+        self.stack.last_mut().expect("loop parent").pc += 1;
+        let induction = match count {
+            Count::Value { induction, .. } => Some(induction.clone()),
+            _ => None,
+        };
+        let count = match count {
+            Count::Value { value, maximum, .. } => {
+                let n = self.stack.last().expect("loop parent").env[value].control_index()?;
+                if n > *maximum {
+                    return Err(RuntimeError::Backend(BackendError::new("loop-count-bound")));
+                }
+                n
+            }
+            Count::Constant(n) => *n,
+            Count::Parameter(key) => *self
+                .stack
+                .last()
+                .expect("loop parent")
+                .frame
+                .parameters
+                .get(key)
+                .or_else(|| self.selected_parameters.get(key))
+                .ok_or(RuntimeError::Inputs)?,
+        };
+        if count == 0 {
+            self.bind(outputs, values)?;
+            return Ok(());
+        }
+        let mut child_origin = origin.clone();
+        child_origin.path.push(PathElement::Loop {
+            site: site.clone(),
+            iteration: 0,
+        });
+        if let Err(error) = self.iteration() {
+            self.failed(error, Some(site.clone()), Some(child_origin));
+            return Ok(());
+        }
+        let capture_values = self.values(captures);
+        let ports: Ports = carried
+            .iter()
+            .zip(&values)
+            .map(|((n, _), v)| Ok((n.clone(), v.physical_type())))
+            .collect::<Result<_>>()?;
+        let destination = Destination::Loop {
+            outputs: outputs.clone(),
+            carried: ports.clone(),
+            captures: captures.clone(),
+            remaining: count,
+            iteration: 0,
+            induction: induction.clone(),
+            site: site.clone(),
+            base: Box::new(origin.clone()),
+        };
+        let mut all_ports = ports;
+        for (n, v) in captures.iter().zip(&capture_values) {
+            all_ports.push((n.clone(), v.physical_type()));
+        }
+        let mut all_values = values;
+        all_values.extend(capture_values);
+        if let Some(name) = induction {
+            let value = self.index_value(0)?;
+            all_ports.insert(0, (name, value.physical_type()));
+            all_values.insert(0, value);
+        }
+        let params = self
+            .stack
+            .last()
+            .expect("loop parent")
+            .frame
+            .parameters
+            .clone();
+        let frame = self.frame(
+            child_origin,
+            params,
+            FrameKind::Loop {
+                site: site.clone(),
+                iteration: 0,
+            },
+            all_ports,
+        );
+        self.push_child(frame, body.clone(), all_values, destination, site);
+        Ok(())
+    }
+    /// Advance one reached loop boundary using this role's own count. This is
+    /// for independent participant execution; it establishes no peer agreement.
+    /// Returns false without work at an observable action or terminal state.
+    pub fn advance_local_control(&mut self) -> Result<bool> {
+        if !self.format().is_program() {
+            return Ok(false);
+        }
+        let origin = self.active_origin();
+        match self.inspect_program()? {
+            ProgramState::Unpolled {
+                kind: None,
+                site: Some(site),
+            } => {
+                let site = site.to_owned();
+                if self.loop_count(&origin, &site)?.is_some() {
+                    let (body, pc) = self.program_control(&origin)?;
+                    if let Err(error) = self.start_loop(&body[pc]) {
+                        self.failed(error, Some(site), Some(origin));
+                    }
+                }
+                Ok(true)
+            }
+            ProgramState::ReturnIf { site } => {
+                let site = site.to_owned();
+                self.return_if(&origin, &site)?;
+                Ok(true)
+            }
+            ProgramState::Yield => {
+                self.yield_loop(&origin)?;
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
+    fn program_control(&self, origin: &Origin) -> Result<(Body, usize)> {
+        if !self.format().is_program() || self.pending.is_some() {
+            return Err(RuntimeError::WrongAction);
+        }
+        let frame = self.stack.last().ok_or(RuntimeError::WrongAction)?;
+        if &frame.frame.origin != origin {
+            return Err(RuntimeError::WrongCut);
+        }
+        Ok((frame.body.clone(), frame.pc))
+    }
+    /// Validate the reached local count before joint agreement. This performs
+    /// no body work. A failed bound remains a stopped participant outcome.
+    pub fn loop_count(&mut self, origin: &Origin, site: &str) -> Result<Option<u64>> {
+        let (body, pc) = self.program_control(origin)?;
+        let Instruction::Loop {
+            site: actual,
+            count,
+            ..
+        } = &body[pc]
+        else {
+            return Err(RuntimeError::WrongAction);
+        };
+        if actual != site {
+            return Err(RuntimeError::WrongCut);
+        }
+        let checked = match count {
+            Count::Value { value, maximum, .. } => self.stack.last().expect("active loop").env
+                [value]
+                .control_index()
+                .and_then(|n| {
+                    if n <= *maximum {
+                        Ok(n)
+                    } else {
+                        Err(BackendError::new("loop-count-bound"))
+                    }
+                }),
+            Count::Constant(n) => Ok(*n),
+            Count::Parameter(_) => return Err(RuntimeError::WrongAction),
+        };
+        match checked {
+            Ok(n) => Ok(Some(n)),
+            Err(e) => {
+                self.failed(
+                    RuntimeError::Backend(e),
+                    Some(site.into()),
+                    Some(origin.clone()),
+                );
+                Ok(None)
+            }
+        }
+    }
+    /// Enter an agreed segment without exposing or executing its first action.
+    /// A local count failure is a stopped outcome, as in `loop_count`.
+    pub fn enter_loop(&mut self, origin: &Origin, site: &str, count: u64) -> Result<()> {
+        match self.loop_count(origin, site)? {
+            None => return Ok(()),
+            Some(local) if local != count => return Err(RuntimeError::WrongCut),
+            Some(_) => {}
+        }
+        let (body, pc) = self.program_control(origin)?;
+        if let Err(error) = self.start_loop(&body[pc]) {
+            self.failed(error, Some(site.into()), Some(origin.clone()));
+        }
+        Ok(())
+    }
+    /// Complete exactly one reached iteration. A subsequent iteration has a
+    /// fresh occurrence path; its first body action remains unpolled.
+    pub fn yield_loop(&mut self, origin: &Origin) -> Result<()> {
+        let (body, pc) = self.program_control(origin)?;
+        let Instruction::Yield(names) = &body[pc] else {
+            return Err(RuntimeError::WrongAction);
+        };
+        let result = self.tick().and_then(|()| self.finish(self.values(names)));
+        if let Err(error) = result {
+            self.failed(error, None, Some(origin.clone()));
+        }
+        Ok(())
+    }
+    /// Evaluate one conditional entry return. False binds its affine successors;
+    /// true transfers the entry tuple through all enclosing loop frames. A
+    /// backend or budget failure is a stopped outcome, never a retry result.
+    pub fn return_if(&mut self, origin: &Origin, site: &str) -> Result<()> {
+        let (body, pc) = self.program_control(origin)?;
+        let Instruction::ReturnIf {
+            site: actual,
+            condition,
+            values,
+            continuations,
+        } = &body[pc]
+        else {
+            return Err(RuntimeError::WrongAction);
+        };
+        if actual != site {
+            return Err(RuntimeError::WrongCut);
+        }
+        let result = (|| {
+            self.tick()?;
+            let taken = self.stack.last().expect("return frame").env[condition].control_bool()?;
+            let values = self.values(values);
+            if !taken {
+                let successors = values
+                    .into_iter()
+                    .filter(|v| v.physical_type().is_affine())
+                    .collect();
+                self.bind(continuations, successors)?;
+                self.stack.last_mut().expect("return frame").pc += 1;
+                return Ok(());
+            }
+            // Ordinary finish would restart a loop. Transfer the actual entry
+            // tuple directly instead, using the backend's normal returned-frame
+            // custody checks at each boundary.
+            while self.stack.len() > 1 {
+                if !matches!(
+                    self.stack.last().expect("enclosing frame").frame.kind(),
+                    FrameKind::Loop { .. }
+                ) {
+                    return Err(BackendError::new("program-return-frame").into());
+                }
+                let execution = self.stack.pop().expect("enclosing loop");
+                self.release(execution.env.values());
+                self.backend
+                    .leave_frame(&execution.frame, FrameExit::Returned, &values)?;
+            }
+            self.finish(values)?;
+            if self.returned_values().is_some() {
+                self.early_return = Some((origin.clone(), site.into()));
+            } else if let Some(Action::Stopped(stop)) = &mut self.pending {
+                stop.origin = origin.clone();
+                stop.site = Some(site.into());
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            self.failed(error, Some(site.into()), Some(origin.clone()));
+        }
+        Ok(())
+    }
     fn finish(&mut self, values: Vec<B::Value>) -> Result<()> {
         let execution = self.stack.pop().expect("return frame");
         let origin = execution.frame.origin.clone();
         self.release(execution.env.values());
-        if let Destination::Loop { captures, .. } = &execution.destination {
-            self.release(captures.iter().map(|(_, v)| v));
-        }
         let root = matches!(execution.destination, Destination::Root);
         if root && self.retain(&values).is_err() {
             // The root has no parent to receive a failed result transfer. Reserve
@@ -734,24 +1096,33 @@ impl<B: Backend> Runner<B> {
                 captures,
                 remaining,
                 iteration,
+                induction,
                 site,
                 base,
             } => {
                 if remaining == 1 {
                     self.bind(&outputs, values)?;
                 } else {
-                    self.iteration()?;
-                    let mut ports = carried.clone();
-                    let mut all_values = values;
-                    for (n, v) in &captures {
-                        ports.push((n.clone(), v.physical_type()));
-                        all_values.push(v.clone());
-                    }
-                    let mut origin = base.clone();
+                    let mut origin = (*base).clone();
                     origin.path.push(PathElement::Loop {
                         site: site.clone(),
                         iteration: iteration + 1,
                     });
+                    if let Err(error) = self.iteration() {
+                        self.failed(error, Some(site.clone()), Some(origin));
+                        return Ok(());
+                    }
+                    let mut ports = carried.clone();
+                    let mut all_values = values;
+                    for (name, value) in captures.iter().zip(self.values(&captures)) {
+                        ports.push((name.clone(), value.physical_type()));
+                        all_values.push(value);
+                    }
+                    if let Some(name) = &induction {
+                        let value = self.index_value(iteration + 1)?;
+                        ports.insert(0, (name.clone(), value.physical_type()));
+                        all_values.insert(0, value);
+                    }
                     let frame = self.frame(
                         origin,
                         execution.frame.parameters,
@@ -771,6 +1142,7 @@ impl<B: Backend> Runner<B> {
                             captures,
                             remaining: remaining - 1,
                             iteration: iteration + 1,
+                            induction,
                             site: site.clone(),
                             base,
                         },
@@ -782,6 +1154,16 @@ impl<B: Backend> Runner<B> {
         Ok(())
     }
     fn require_cut(&mut self, expected: &Cut, kind: CutKind) -> Result<()> {
+        if self.format().is_program()
+            && matches!(
+                self.inspect_program()?,
+                ProgramState::Unpolled { kind: None, .. }
+                    | ProgramState::Yield
+                    | ProgramState::ReturnIf { .. }
+            )
+        {
+            return Err(RuntimeError::WrongAction);
+        }
         let current = self.poll().cut().ok_or(RuntimeError::WrongAction)?;
         if current.kind != kind {
             return Err(RuntimeError::WrongAction);
@@ -798,6 +1180,77 @@ impl<B: Backend> Runner<B> {
         if let Err(e) = self.local() {
             self.failed(e, Some(expected.site.clone()), None);
         }
+        Ok(())
+    }
+    /// Execute one exposed query. The backend installs its successor or poison
+    /// before returning. Host cancellation can run only at completed cuts.
+    pub fn execute_query(&mut self, expected: &Cut) -> Result<()> {
+        self.require_cut(expected, CutKind::Query)?;
+        if let Err(error) = self.query() {
+            self.failed(error, Some(expected.site.clone()), None);
+        }
+        Ok(())
+    }
+    fn query(&mut self) -> Result<()> {
+        self.tick()?;
+        let Some(Action::Query(query)) = self.pending.clone() else {
+            unreachable!("checked query cut")
+        };
+        let (signature, bound) = self
+            .backend
+            .service_signature(query.port.contract, &query.method)
+            .ok_or_else(|| BackendError::new("service-unsupported"))?;
+        let expected = query
+            .port
+            .contract
+            .signature(&query.method)
+            .ok_or_else(|| BackendError::new("service-unsupported"))?;
+        if signature != expected
+            || signature.outputs
+                != query
+                    .results
+                    .iter()
+                    .map(|(_, ty)| ty.clone())
+                    .collect::<Vec<_>>()
+        {
+            return Err(BackendError::new("service-signature").into());
+        }
+        self.can_retain_size(signature.outputs.len(), bound)?;
+        let frame = self.stack.last().expect("query entry").frame.clone();
+        let invocation = ServiceInvocation {
+            frame: &frame,
+            site: &query.cut.site,
+            port: &query.port,
+            method: &query.method,
+            max_output_bytes: bound,
+        };
+        let values = self.backend.query(&invocation, &query.arguments)?;
+        let result = (|| {
+            if values.len() != signature.outputs.len() {
+                return Err(RuntimeError::Payload);
+            }
+            for (value, (_, ty)) in values.iter().zip(&query.results) {
+                self.validate(value, ty.clone(), false)?;
+            }
+            let actual = self.can_retain(&values)?;
+            if actual > bound {
+                return Err(RuntimeError::Limit);
+            }
+            self.bind(
+                &query
+                    .results
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect::<Vec<_>>(),
+                values,
+            )
+        })();
+        if result.is_err() {
+            self.backend.reject_service_reply(&invocation);
+        }
+        result?;
+        self.stack.last_mut().expect("query entry").pc += 1;
+        self.pending = None;
         Ok(())
     }
     fn local(&mut self) -> Result<()> {
@@ -824,38 +1277,74 @@ impl<B: Backend> Runner<B> {
             },
             f.inputs.clone(),
         );
-        if self.stack.len() >= Limits::STACK_DEPTH {
-            return Err(RuntimeError::Limit);
-        }
-        self.can_retain(&args)?;
-        self.backend.enter_frame(&frame, &args)?;
-        // Enter succeeded: cleanup is mandatory on every subsequent path.
-        let result = self.run_local_body(&frame, &f.origin, &f.body, args, 1);
-        let (exit, returned) = match &result {
-            Ok(values) => (FrameExit::Returned, values.as_slice()),
-            Err(_) => (FrameExit::Stopped, &[][..]),
-        };
-        let leave = self.backend.leave_frame(&frame, exit, returned);
+        let result = self.run_local_frame(&frame, &f.origin, &f.body, args, 1);
         if let Err(e) = result {
+            let context = LocalContext {
+                site: site.clone(),
+                function: function.clone(),
+                instruction: self.local_failure.as_ref().map(|(site, _)| site.clone()),
+            };
             let (site, origin) = self
                 .local_failure
                 .take()
                 .map_or((site.clone(), None), |(s, o)| (s, Some(o)));
             self.failed(e, Some(site), origin);
             if let Some(Action::Stopped(stop)) = &mut self.pending {
-                stop.cleanup_errors.append(&mut self.local_cleanup_errors);
-            }
-            if let (Err(cleanup), Some(Action::Stopped(stop))) = (leave, &mut self.pending) {
-                stop.cleanup_errors.push(cleanup);
+                stop.local = Some(Box::new(context));
+                // Inner frames already left before failed() unwound the parents.
+                stop.cleanup_errors
+                    .splice(0..0, self.local_cleanup_errors.drain(..));
             }
             return Ok(());
         }
         let values = result.expect("successful local result");
-        leave?;
         self.bind(outputs, values)?;
         self.stack.last_mut().expect("local parent").pc += 1;
         self.pending = None;
         Ok(())
+    }
+    /// Execute one accepted local frame, preserving the original failure and
+    /// recording cleanup failures in actual inner-to-outer leave order.
+    fn run_local_frame(
+        &mut self,
+        frame: &Frame,
+        logical_origin: &LogicalOrigin,
+        body: &[LocalInstruction],
+        args: Vec<B::Value>,
+        depth: usize,
+    ) -> Result<Vec<B::Value>> {
+        if self.stack.len() + depth > Limits::STACK_DEPTH {
+            return Err(RuntimeError::Limit);
+        }
+        self.can_retain(&args)?;
+        self.backend.enter_frame(frame, &args)?;
+        let result = self.run_local_body(frame, logical_origin, body, args, depth);
+        let (exit, returned) = match &result {
+            Ok(values) => (FrameExit::Returned, values.as_slice()),
+            Err(_) => (FrameExit::Stopped, &[][..]),
+        };
+        let leave = self.backend.leave_frame(frame, exit, returned);
+        match result {
+            Ok(values) => {
+                leave?;
+                Ok(values)
+            }
+            Err(error) => {
+                if let Err(cleanup) = leave {
+                    self.local_cleanup_errors.push(cleanup);
+                }
+                Err(error)
+            }
+        }
+    }
+    fn index_value(&self, index: u64) -> Result<B::Value> {
+        let value = B::Value::from_control_index(index)?;
+        self.validate(
+            &value,
+            PhysicalType::parse("index@native.index/1").expect("installed index representation"),
+            false,
+        )?;
+        Ok(value)
     }
     fn run_local_body(
         &mut self,
@@ -874,18 +1363,20 @@ impl<B: Backend> Runner<B> {
             .zip(args)
             .collect();
         let mut current_site = None;
-        let mut current_control = false;
+        let mut current_has_own_site = false;
         let result = (|| {
             for instruction in body.iter() {
-                current_control = matches!(
+                current_has_own_site = matches!(
                     instruction,
-                    LocalInstruction::Conditional { .. }
+                    LocalInstruction::BoolConstant { .. }
+                        | LocalInstruction::Conditional { .. }
                         | LocalInstruction::For { .. }
                         | LocalInstruction::Match { .. }
                         | LocalInstruction::Stop { .. }
                 );
                 current_site = match instruction {
-                    LocalInstruction::Variant { site, .. }
+                    LocalInstruction::BoolConstant { site, .. }
+                    | LocalInstruction::Variant { site, .. }
                     | LocalInstruction::Match { site, .. }
                     | LocalInstruction::Stop { site, .. }
                     | LocalInstruction::Op { site, .. }
@@ -903,6 +1394,18 @@ impl<B: Backend> Runner<B> {
                 }
                 self.tick()?;
                 match instruction {
+                    LocalInstruction::BoolConstant { output, value, .. } => {
+                        let value = B::Value::from_control_bool(*value)?;
+                        self.validate(
+                            &value,
+                            PhysicalType::parse("bool@native.bool/1")
+                                .expect("installed Boolean representation"),
+                            false,
+                        )?;
+                        local_bytes += self.retain_bytes(std::slice::from_ref(&value))?;
+                        local_count += 1;
+                        env.insert(output.clone(), value);
+                    }
                     LocalInstruction::Stop { reason, .. } => {
                         return Err(RuntimeError::ExplicitStop(reason.clone()));
                     }
@@ -1060,6 +1563,7 @@ impl<B: Backend> Runner<B> {
                         env.extend(outputs.iter().cloned().zip(values));
                     }
                     LocalInstruction::For {
+                        conditional,
                         site,
                         induction,
                         lower,
@@ -1091,7 +1595,7 @@ impl<B: Backend> Runner<B> {
                                 self.local_failure = Some((site.clone(), origin));
                                 return Err(error);
                             }
-                            let mut args = vec![B::Value::from_control_index(index)?];
+                            let mut args = vec![self.index_value(index)?];
                             args.extend(values);
                             args.extend(captures.iter().map(|n| env[n].clone()));
                             let names = std::iter::once(induction.clone())
@@ -1113,6 +1617,9 @@ impl<B: Backend> Runner<B> {
                                 },
                                 depth,
                             )?;
+                            if *conditional && !values.remove(0).control_bool()? {
+                                break;
+                            }
                         }
                         local_bytes += self.retain_bytes(&values)?;
                         local_count += values.len();
@@ -1126,7 +1633,7 @@ impl<B: Backend> Runner<B> {
             }
             unreachable!("admitted local terminator")
         })();
-        if result.is_err() && self.local_failure.is_none() && (depth > 1 || current_control) {
+        if result.is_err() && self.local_failure.is_none() && (depth > 1 || current_has_own_site) {
             let site = current_site.unwrap_or_else(|| match frame.origin.path.last() {
                 Some(
                     PathElement::Conditional { site, .. }
@@ -1170,27 +1677,7 @@ impl<B: Backend> Runner<B> {
             for (v, (_, ty)) in args.iter().zip(&frame.inputs) {
                 self.validate(v, ty.clone(), false)?;
             }
-            self.can_retain(&args)?;
-            self.backend.enter_frame(&frame, &args)?;
-            let result = self.run_local_body(&frame, logical_origin, body, args, depth + 1);
-            let (exit, values) = match &result {
-                Ok(v) => (FrameExit::Returned, v.as_slice()),
-                Err(_) => (FrameExit::Stopped, &[][..]),
-            };
-            let leave = self.backend.leave_frame(&frame, exit, values);
-            // Preserve the original failure; cleanup never reverts completed effects.
-            match result {
-                Ok(v) => {
-                    leave?;
-                    Ok(v)
-                }
-                Err(e) => {
-                    if let Err(cleanup) = leave {
-                        self.local_cleanup_errors.push(cleanup);
-                    }
-                    Err(e)
-                }
-            }
+            self.run_local_frame(&frame, logical_origin, body, args, depth + 1)
         })();
         if result.is_err() && self.local_failure.is_none() {
             let site = match frame.origin.path.last() {
@@ -1218,8 +1705,20 @@ impl<B: Backend> Runner<B> {
         self.stack.last_mut().expect("sender").pc += 1;
         Ok(packet)
     }
-    /// Validate without advancing. The driver uses this before committing a send.
+    /// Validate without consuming the receive. Older formats may execute local
+    /// control while polling to find that receive; Program exposes control cuts.
+    /// The driver uses this before committing a send.
     pub fn check_delivery(&mut self, packet: &Packet<B::Value>) -> Result<()> {
+        if self.format().is_program()
+            && matches!(
+                self.inspect_program()?,
+                ProgramState::Unpolled { kind: None, .. }
+                    | ProgramState::Yield
+                    | ProgramState::ReturnIf { .. }
+            )
+        {
+            return Err(RuntimeError::WrongAction);
+        }
         let Action::Receive(request) = self.poll() else {
             return Err(RuntimeError::WrongAction);
         };
@@ -1231,10 +1730,68 @@ impl<B: Backend> Runner<B> {
         }
         self.validate(&packet.payload, request.ty, true)?;
         self.can_retain(std::slice::from_ref(&packet.payload))?;
-        if self.usage.instructions >= Limits::INSTRUCTIONS {
+        if self.usage.instructions >= self.work_budget.instructions {
             return Err(RuntimeError::Limit);
         }
         Ok(())
+    }
+    /// Complete one already exposed native receive. API errors do not poll or
+    /// advance. Once accepted, even a decode/limit/backend stop consumes the
+    /// attempt; the host must remove its payload exactly once.
+    pub fn complete_receive(
+        &mut self,
+        expected: &Cut,
+        decoded: std::result::Result<B::Value, DecodeReason>,
+    ) -> Result<ReceiveCompletion> {
+        if !self.format().is_program() {
+            return Err(RuntimeError::WrongAction);
+        }
+        let Some(Action::Receive(request)) = &self.pending else {
+            return Err(RuntimeError::WrongAction);
+        };
+        if request.cut() != *expected {
+            return Err(RuntimeError::WrongCut);
+        }
+        let ty = request.ty.clone();
+        if let Ok(value) = &decoded
+            && (value.physical_type() != ty
+                || !ty.is_message_type(self.format())
+                || (ty.is_serializable() && value.validate_serializable().is_err()))
+        {
+            return Err(RuntimeError::Payload);
+        }
+        if let Err(error) = self.tick() {
+            self.failed(error, Some(expected.site.clone()), None);
+            return Ok(ReceiveCompletion::Stopped);
+        }
+        let value = match decoded {
+            Ok(value) => value,
+            Err(reason) => {
+                self.halt(StopKind::Decode(reason), Some(expected.site.clone()), None);
+                return Ok(ReceiveCompletion::Stopped);
+            }
+        };
+        let result = (|| {
+            // Serializability was checked before acceptance. Backend validation
+            // retains the existing runtime's typed error contract (no text parsing).
+            self.validate(&value, ty, false)?;
+            let frame = self.stack.last().expect("pending receiver frame");
+            let Instruction::Receive { output, .. } = &frame.body[frame.pc] else {
+                unreachable!("pending native receive")
+            };
+            let output = output.clone();
+            self.bind(std::slice::from_ref(&output), vec![value])?;
+            self.stack.last_mut().expect("receiver").pc += 1;
+            self.pending = None;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => Ok(ReceiveCompletion::Delivered),
+            Err(error) => {
+                self.failed(error, Some(expected.site.clone()), None);
+                Ok(ReceiveCompletion::Stopped)
+            }
+        }
     }
     /// Reject a malformed/misrouted packet without advancing or changing the request.
     /// Wire decoding and its byte limits belong to the installed Value adapter.
@@ -1262,3 +1819,7 @@ impl<B: Backend> Drop for Runner<B> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "native_tests.rs"]
+mod native_tests;

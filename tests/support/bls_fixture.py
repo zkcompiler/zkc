@@ -63,7 +63,7 @@ def module(functions, protocols, instances, entries):
 def declaration(key, name="binding", physical=False):
     implementation = "arkworks/" + key if physical else ""
     import json
-    return (f'"pir.operation_binding"() <{{sym_name = "{name}", contract = "{key}", '
+    return (f'"local.binding"() <{{sym_name = "{name}", contract = "{key}", '
             f'arguments = {json.dumps(arguments(key))}, implementation = "{implementation}"}}> : () -> ()')
 
 

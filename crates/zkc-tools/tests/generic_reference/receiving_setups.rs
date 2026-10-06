@@ -124,7 +124,13 @@ fn compare(rank: usize, mode: u8) {
         );
     }
     let mut schedule = Schedule::new(&admitted, "main", "test").unwrap();
-    let report = drive_with_decoder(&mut schedule, &mut runners, &mut trace.clone(), &decoder);
+    let report = drive_with_decoder(
+        &mut schedule,
+        &mut runners,
+        &mut trace.clone(),
+        &decoder,
+        Default::default(),
+    );
     let native = trace.snapshot();
     let mut answers = Vec::new();
     let mut receiving = Vec::new();

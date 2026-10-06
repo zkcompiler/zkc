@@ -23,6 +23,7 @@ inline bool naturalAttribute(llvm::StringRef operation, size_t index) {
   case V::FieldLiteral:
   case V::FieldLiterals:
   case V::MatrixIdentity:
+  case V::NativeOrigin:
   case V::TranscriptOrigin:
     return false;
   }

@@ -157,7 +157,12 @@ fn original_generic_source_controls_actual_native_execution() {
     )
     .unwrap_or_else(|e| panic!("{:?}", e.error));
     let mut runners = BTreeMap::from([("P".to_owned(), p), ("V".to_owned(), v)]);
-    let report = drive(&mut schedule, &mut runners, &mut LocalTransport);
+    let report = drive(
+        &mut schedule,
+        &mut runners,
+        &mut LocalTransport,
+        Default::default(),
+    );
     assert_eq!(report.wire.messages, 1);
     let JointOutcome::Returned(values) = report.outcome else {
         panic!("{:?}", report.outcome)

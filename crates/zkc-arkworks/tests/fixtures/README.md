@@ -8,5 +8,6 @@ Rust implementation under test.
 
 Source SHA-256: `21ddd0c6b286c18430efe4bac36662127d4851bd9d40d77238fd71a7c194d9b4`.
 Fixture SHA-256: `c02c08a179a4662bfec0dfd4f51a6c1674fb86f958c828223b1f2af746c65996`.
-The fixture is the recorded stdout of that source; rerunning the unchanged
-source with Lean 4.33.1 and the compiled imports reproduces it byte for byte.
+The generator source is not distributed, so this fixture cannot be regenerated
+from a clean checkout. The hashes identify the recorded generator and output;
+they do not establish current-checkout Lean/native correspondence.

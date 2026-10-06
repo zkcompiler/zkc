@@ -173,6 +173,15 @@ def OpMatrixBilinear : ZKC_Operation<"matrix.bilinear", [OpMatrixBilinearF],
 def ExportMatrixBilinear : ZKC_OperationExport<"zkc::algebra", "matrix_bilinear",
     OpMatrixBilinear, ["matrix", "vector1", "vector2"]>;
 
+def OpMatrixDimensionF : ZKC_Root<"F", FieldDomain>;
+def OpMatrixDimension : ZKC_Operation<"matrix.dimension", [OpMatrixDimensionF],
+    [ZKC_Apply<TypeMatrix, [OpMatrixDimensionF]>], [ZKC_Apply<TypeIndex, []>],
+    [ZKC_Holds<CapabilityField, [OpMatrixDimensionF]>]> {
+  let parameters = NaturalParameter;
+}
+def ExportMatrixDimension : ZKC_OperationExport<"zkc::algebra", "matrix_dimension",
+    OpMatrixDimension, ["matrix"]>;
+
 def OpMatrixShapeCheckF : ZKC_Root<"F", FieldDomain>;
 def OpMatrixShapeCheck : ZKC_Operation<"matrix.shape_check", [OpMatrixShapeCheckF],
     [ZKC_Apply<TypeMatrix, [OpMatrixShapeCheckF]>],
@@ -461,3 +470,13 @@ def OperatorVectorAdd8 : ZKC_Operator<"+", [TypeVector, TypeVector], OpVectorAdd
 def OperatorVectorSub9 : ZKC_Operator<"-", [TypeVector, TypeVector], OpVectorSub, [0, 1]>;
 def OperatorVectorScale10 : ZKC_Operator<"*", [TypeVector, TypeField], OpVectorScale, [0, 1]>;
 def OperatorVectorScale11 : ZKC_Operator<"*", [TypeField, TypeVector], OpVectorScale, [1, 0]>;
+
+// Exact finite vector equality, including length. No padding or reduction.
+def OpVectorEqualF : ZKC_Root<"F", FieldDomain>;
+def OpVectorEqual : ZKC_Operation<"vector.equal", [OpVectorEqualF],
+    [ZKC_Apply<TypeVector, [OpVectorEqualF]>, ZKC_Apply<TypeVector, [OpVectorEqualF]>],
+    [ZKC_Apply<TypeBool, []>], [ZKC_Holds<CapabilityCommRing, [OpVectorEqualF]>]> {
+  int ordinal = 159;
+}
+def ExportVectorEqual : ZKC_OperationExport<"zkc::algebra", "vector_equal",
+    OpVectorEqual, ["left", "right"]>;

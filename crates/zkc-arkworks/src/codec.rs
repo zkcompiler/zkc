@@ -94,11 +94,13 @@ pub(crate) fn write<T: CanonicalSerialize>(value: &T, bytes: &mut Vec<u8>) -> Re
 
 /// Only fixed-size field/group objects reach the upstream deserializer. No
 /// attacker-controlled Vec length is ever handed to canonical deserialization.
+// Largest installed fixed object: the BN254 pairing target (twelve Fq coefficients).
+const MAX_FIXED_BYTES: usize = 384;
 pub(crate) fn read<T: CanonicalDeserialize + CanonicalSerialize>(
     input: &mut &[u8],
     width: usize,
 ) -> Result<T, Error> {
-    if input.len() < width || width > G2_BYTES {
+    if input.len() < width || width > MAX_FIXED_BYTES {
         return Err(Error::InvalidEncoding);
     }
     let (bytes, rest) = input.split_at(width);
@@ -110,7 +112,7 @@ pub(crate) fn read<T: CanonicalDeserialize + CanonicalSerialize>(
     }
     // Some upstream point decoders normalize exceptional encodings. Require
     // byte-for-byte canonicality too, including the representation of infinity.
-    let mut canonical = [0u8; G2_BYTES];
+    let mut canonical = [0u8; MAX_FIXED_BYTES];
     value
         .serialize_compressed(&mut canonical[..width])
         .map_err(|_| Error::InvalidEncoding)?;

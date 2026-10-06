@@ -48,7 +48,7 @@ conflated in a backend profile.
 
 The native [closed-binding profile](../spec/profiles/source/operation-bindings.md)
 supplies the concrete carrier: explicit operation applications in common and
-participant artifacts, `pir.operation_binding` symbols, and fully qualified
+participant artifacts, `local.binding` symbols, and fully qualified
 logical/physical ports. Rust admits this carrier into the same fully typed runner
 as other explicitly bound artifacts and executes it against independently installed contracts.
 The independent Lean consumer checks original generic formation, nominal

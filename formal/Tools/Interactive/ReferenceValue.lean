@@ -219,6 +219,8 @@ def decodeValue (json : Json) : Result Value := do
   if ["field", "matrix", "vector", "polynomial", "round"].contains ty.kind then
     let domain ← ScalarReference.Domain.parse ty.identity
     return Value.fromArithmetic domain (← ScalarReference.decode domain ty.kind payload)
+  if ty.identity == Bindings.bn254GT then
+    throw "reference-pairing-target-unsupported"
   if ty.identity == Bindings.bn254G1 || ty.identity == Bindings.bn254G2 then
     let bytes ← Tools.Artifact.unhex (← Decode.string payload)
     Tools.Artifact.checkBn254Wire ty.identity ty.kind bytes

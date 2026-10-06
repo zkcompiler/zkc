@@ -30,18 +30,17 @@ The guard example assumes `use zkc::core;` in the enclosing module.
 | `return x;` / `return (x, y);` / `return;` | One, two, or zero returned values. |
 | `local P: let y = Helper(x);` | Same role-owned `LocalCall`, with explicit owner. |
 | `local P: Check(x);` | Zero-result role-owned call. |
-| `invoke child(a) -> (b);` | Existing explicit subprotocol call; unchanged. |
+| `invoke child(a) -> (b);` | Explicit subprotocol call. |
 
 Resolve names against a complete declaration index, including forward references.
 Do not select targets by trying a function and then silently falling back to an
 operation after a type error. Reject duplicate declarations with both
 locations; resolved declaration categories distinguish installed intrinsics from
 ordinary helpers. Keep their effects and call boundaries intact.
-No frontend inlining is introduced.
+The frontend retains calls without inlining.
 
 Bare call statements are allowed only when the declared result arity is zero.
-They do not discard nonzero results. No wildcard binding or automatic resource
-cleanup is added. Affine resources remain subject to their existing contracts;
+They do not discard nonzero results. Wildcard binding and automatic resource cleanup are unsupported. Affine resources remain subject to their existing contracts;
 this design does not pretend that affine means every result must be used.
 
 Source products are first-class values, including unit, singleton and nested
@@ -290,7 +289,7 @@ conveniences do not confer new logical-operation support.
 Formatting and common printing remain distinct: formatting preserves authored
 tokens/comments; common printing renders an admitted representation and may
 choose explicit rather than inferred forms. Both must have stated round-trip
-properties. Supporting inference does not require an IDE/LSP project now.
+properties. Inference is independent of IDE/LSP support.
 
 ## 6. Preservation and implementation acceptance
 
@@ -321,9 +320,8 @@ Required checks for the implementation:
    artifact-identity comparisons where claimed. Existing consumer proofs are not
    a proof of the native elaborator.
 6. Source consumers: maintained examples, tests, documentation and generators
-   use imports, explicit domains and the installed source APIs. Historical BLS
-   profile headings and global primitive/type fallback are removed; the common
-   carrier still contains explicit logical bindings.
+   use imports, explicit domains and the installed source APIs. The common
+   carrier contains explicit logical bindings.
 
 These controls cover the implemented elaboration boundaries. They do not prove
 the compiler or establish unrestricted inference, dynamic dispatch or a general

@@ -116,7 +116,10 @@ def test_helper_specialization_retains_exact_identity(toolchain, directory, jour
     assert journal.json([checker, "--check", original, candidate])[0] == "checked"
     execute(toolchain, directory, journal, original, candidate, [1, 2, 3], [5, 7, 11], 2)
     # Removing the one fixed choice makes the two configurations share code.
-    app.write_text(app.read_text().replace(f'\n    using (product = "{PAIRWISE}")', ""))
+    configured = app.read_text()
+    choice = f'using (product = "{PAIRWISE}")'
+    assert configured.count(choice) == 1
+    app.write_text(configured.replace(choice, ""))
     shared = journal.json([compiler, "protocol-compile", app])
     assert len(shared[3]) == 1
     assert {binding[3] for binding in shared[1]} == {DEFAULT}

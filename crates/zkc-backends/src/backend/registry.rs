@@ -199,6 +199,18 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 oracle,
             )?;
             r.family(
+                &["arkworks"],
+                crate::field_array::OPERATIONS,
+                Signature::Custom(crate::field_array::signature),
+                field_array,
+            )?;
+            r.family(
+                &["native"],
+                crate::sequence::OPERATIONS,
+                Signature::Custom(crate::sequence::signature),
+                sequence,
+            )?;
+            r.family(
                 &["plonky3"],
                 crate::fixed_vector::OPERATIONS,
                 Signature::Custom(crate::fixed_vector::signature),
@@ -260,6 +272,9 @@ pub(crate) fn basic(
 fn fixed_vector(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::fixed_vector::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
+fn sequence(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::sequence::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
+}
 fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     required(crate::kernels::arithmetic::apply(
         &i.binding.declaration().contract,
@@ -312,6 +327,7 @@ fn resources(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
         i,
         &b.core.policy,
         &mut b.core.resources,
+        &b.core.setups,
     ))
 }
 fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
@@ -376,3 +392,7 @@ pub(crate) fn pairwise(
 #[cfg(test)]
 #[path = "registry_tests.rs"]
 mod tests;
+
+fn field_array(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::field_array::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
+}

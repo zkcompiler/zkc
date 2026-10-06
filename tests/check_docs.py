@@ -94,7 +94,7 @@ def component_pages():
 
 
 def check(include_components=False):
-    # docs/private is a separate repository checked out inside docs/.
+    # docs/private holds non-public material checked out inside docs/.
     private = ROOT / "docs" / "private"
     active = sorted(p for p in (ROOT / "docs").rglob("*.md") if private not in p.parents)
     extra = ["README.md"]

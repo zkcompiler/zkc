@@ -24,8 +24,8 @@ assert common[0] == "zkc.protocol/1" and isinstance(common[1], list)
 printed = run("protocol-format", json.dumps(common))
 assert json.loads(run("protocol-source", printed)) == common
 mlir = run("protocol-import", source)
-assert "pir.operation_binding" in mlir and "binding = @empty" in mlir
-assert "profile =" not in mlir
+assert "local.binding" in mlir and "binding = @empty" in mlir
+assert "profile = #protocol.profile<protocol_exec>" in mlir
 restored = json.loads(run("protocol-export", mlir))
 assert restored[0:2] == common[0:2]  # Local SSA spellings may canonicalize.
 projected = json.loads(run("protocol-project", source))
@@ -96,7 +96,7 @@ pairing_source = (corpus / "bn254-pairing.pir").read_text()
 pairing_common = json.loads(run("protocol-source", pairing_source))
 assert json.loads(run("protocol-source", run("protocol-format", json.dumps(pairing_common)))) == pairing_common
 pairing_ir = run("protocol-import", pairing_source)
-assert '"algebra.pairing_check"' in pairing_ir
+assert '"algebra.exec.pairing_check"' in pairing_ir
 pairing_plan = json.loads(run("protocol-compile", pairing_source))
 selected = next(b for b in pairing_plan[1] if b[1] == "pairing.check")
 assert selected[2:] == [["bn254.fr"], "arkworks/pairing.check"]
@@ -114,7 +114,7 @@ for before, after in [("bn254.g1", "bn254.g2"), ("bn254.g2", "bn254.g1")]:
     verify_pairing(pairing_ir.replace('tensor<?x!algebra.group<"'+before+'">>',
                                       'tensor<?x!algebra.group<"'+after+'">>'),
                    "binding-operation-signature")
-verify_pairing(pairing_ir.replace('"algebra.pairing_check"', '"algebra.curve_equal"'),
+verify_pairing(pairing_ir.replace('"algebra.exec.pairing_check"', '"algebra.exec.group_equal"'),
                "binding-operation")
 verify_pairing(pairing_physical.replace('"arkworks.bn254-g1-vector/1"',
                                         '"arkworks.bn254-g2-vector/1"'),
@@ -152,7 +152,7 @@ duplicate = pairing_source.replace(
     "[unused] let unused = zkc::curve::pairing_check::<F>(left, right);\n"
     "    [pair] let accepted = zkc::curve::pairing_check::<F>(left, right);")
 optimized = verify_pairing(run("protocol-import", duplicate), None, "--canonicalize", "--cse")
-assert optimized.count('"algebra.pairing_check"(') == 2
+assert optimized.count('"algebra.exec.pairing_check"(') == 2
 
 # Reuse the independent authored coset pipeline with the BN254 convention.
 coset_source = (corpus / "coset-kernels.pir").read_text().replace(

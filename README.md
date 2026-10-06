@@ -92,8 +92,11 @@ compiler retains protocol and algebraic structure for analysis and transformatio
 projects participant programs, and lowers them to physical execution plans.
 Rust binds those plans to inputs and backend implementations and executes them.
 
-For supported routes, independent Lean tools check candidate plans against the
-retained source before execution. The [Lean library](formal/README.md) also
+The `.pir` source route used by `just demo` has independent Lean tools that check
+candidate plans against retained source. The native mathematical route takes
+MLIR directly and uses compiler preservation checks and runtime admission; its
+frontend and Lean connections remain planned. See the [native walkthrough](docs/runtime/bundles.md)
+for direct compilation and separate proof execution. The [Lean library](formal/README.md) also
 provides semantic definitions and proofs and can be used independently of the
 native compiler. [Architecture](docs/architecture.md) explains the boundaries;
 [assurance](docs/assurance.md) distinguishes formal proofs, executable checks,

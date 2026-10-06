@@ -77,7 +77,7 @@ and relevant observations. If an intervening write invalidates a logical
 fact, the analysis must account for it even when a separate immutable cache
 entry remains valid.
 
-The existing research establishes scoped instances of this composition. It
+The [Lean library](assurance.md#1-claim-to-definition-map) proves scoped instances of this composition. It
 also separates saved work from lookup and storage overhead. Correct reuse is
 not a claim of universal speedup, and the same contract infrastructure can be
 used by an equally capable library implementation.
@@ -133,7 +133,7 @@ contrasting protocol interpretations and a worked compiler transformation.
 [Theory](theory.md) explains the methods behind those laws.
 
 [Architecture](architecture.md) explains implementation roles and alternatives;
-[status](status.md) separates current evidence from production support;
+[status](status.md) states implemented support and its limits;
 [roadmap](roadmap.md) orders the next work. The
 [documentation decision](rationale/documentation-structure.md) explains these
 homes.

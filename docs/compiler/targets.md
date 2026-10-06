@@ -36,23 +36,20 @@ an entire module to one dialect at a time. Arithmetic can expand while tables,
 calls or construction operations remain logical. Each packaged target must be
 closed under its own supported semantics and requirements.
 
-The earlier OIR label in this target study described executable endpoint behavior.
-The joined pipeline now distinguishes operational participant algorithms from
-their physical storage/kernel plans; the label does not collapse those two
-abstractions. `Zkc.Compiler.Plan` is a direct proof
+`Zkc.Compiler.Plan` is a direct proof
 reference with constructor correspondence to tree programs; it remains useful
 to existing clients but is not the new physical-plan definition. Do not add a
 Region-shaped second copy merely to label it a plan.
 
 ## Native physical plan
 
-The first plan is synchronous, with static callable definitions, explicit
+The native plan is synchronous, with static callable definitions, explicit
 operands, structured bounded control and returned/stopped call exits. Preserve
 shared continuations and loops in exported plan data. No mandatory inlining,
 path expansion or loop unrolling. General recursion and reentrant/asynchronous
 calls require later profiles.
 
-| Plan responsibility | Retained data and interpretation | Initial lowering obligation |
+| Plan responsibility | Retained data and interpretation | Lowering obligation |
 |---|---|---|
 | Scalars and domains | Selected field/group/digest representation; public dimensions and canonical codecs | Typed logical value correspondence; range/shape checks for machine representations |
 | Immutable storage | Owner-relative handles, actual buffers, layouts and immutable views | Handles denote the same ordered original or derived object in the actual store |
@@ -161,9 +158,8 @@ bit is insufficient when an opening or connected component consumes a residual.
 The maintained `Realization.Acceptance` already supplies input binding,
 adequacy, following consumers and heterogeneous relation connections. Its
 concrete execution projection belongs to each target adapter. No universal
-acceptance-execution calculus is required. The bounded Sumcheck/Clean/LLZK
-experiment and the new execution projection probe validate these obligations
-at their recorded scopes; a production relation compiler remains undelivered.
+acceptance-execution calculus is required. A complete relation compiler remains
+future work; the existing acceptance adapters have their own stated scopes.
 
 Native allocation schedules are not mandatory inputs to relation lowering.
 Reuse a total arithmetic/verifier subset when it helps both targets, but retain
@@ -250,10 +246,6 @@ assurance methods, recorded separately.
 | Proof/signature connector | Different boundary types and the actual shared key/message | Ordinary calls and explicit connector; no machine-specific tuple | Connect their actual exposed values using the selected predicate |
 | Binary/linear or folding operation | Field/basis/embedding or residual algebra | Family-specific typed kernels behind common interfaces | Its own algebraic/encoding law; no prime-field or degree-two assumption in the common layer |
 
-Before the first native path is accepted, trace one table computation and one
-ordered service through source admission, physical values, both call exits,
-serialization, checking and Rust execution. Include wrong-role/phase, two
-different operation slots, dynamic shape, failed-write, alias, capacity and
-stale-evidence controls. The existing bounded relation client constrains this
-design; implementing a complete relation backend is a following capability.
-The [roadmap](../roadmap.md) is the sole delivery sequence.
+The [foundation validation map](foundation-validation.md) records native execution
+coverage and its limits. A complete relation backend has separate input-coverage
+and correspondence obligations. The [roadmap](../roadmap.md) owns sequencing.

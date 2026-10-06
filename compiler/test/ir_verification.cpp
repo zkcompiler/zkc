@@ -57,11 +57,16 @@ void importRefuses(const Root &source, MLIRContext &incomplete,
 
 void incompleteRegistration(MLIRContext &complete) {
   DialectRegistry registry;
-  registry.insert<EmptyAlgebraDialect, PIRDialect, PolynomialDialect,
-                  PlanDialect, PCSDialect, OracleDialect, RelationDialect,
-                  ClaimDialect, func::FuncDialect>();
+  registry.insert<zkc::data::DataDialect, EmptyAlgebraDialect,
+                  zkc::protocol_ir::ProtocolDialect, zkc::local::LocalDialect,
+                  zkc::crypto::CryptoDialect, zkc::table::TableDialect,
+                  zkc::poly::PolynomialDialect, zkc::plan::PlanDialect,
+                  zkc::pcs::PCSDialect, zkc::oracle::OracleDialect,
+                  zkc::relation::RelationDialect, zkc::claim::ClaimDialect,
+                  func::FuncDialect>();
   MLIRContext incomplete(registry);
   incomplete.loadAllAvailableDialects();
+  const auto initiallyLoadedDialects = incomplete.getLoadedDialects();
   require(hasProtocolDialects(incomplete),
           "fixture must pass the existing dialect precondition");
   source::Module module;
@@ -160,7 +165,8 @@ void incompleteRegistration(MLIRContext &complete) {
   importRefuses(participants, incomplete, complete, "binding-type",
                 &participants.participants[0]);
   participants.participants[0] = participant;
-  // A physical adapter has no logical ODS mapping and uses ExecuteKernelOp.
+  // A physical adapter has no logical ODS mapping and uses
+  // zkc::plan::ExecuteKernelOp.
   participants.bindings.push_back(
       {{},
        "relayout",
@@ -183,8 +189,7 @@ void incompleteRegistration(MLIRContext &complete) {
       *participants.participants[0].body.front().get<source::Loop>();
   importRefuses(participants, incomplete, complete, "binding-type",
                 &nested.body.front());
-  require(incomplete.getLoadedDialects().size() ==
-              complete.getLoadedDialects().size(),
+  require(incomplete.getLoadedDialects() == initiallyLoadedDialects,
           "import changed the caller's loaded dialects");
 }
 void generatedView(source::Module source, MLIRContext &context) {
@@ -198,7 +203,8 @@ void generatedView(source::Module source, MLIRContext &context) {
           "relation view roundtrip changed");
   Operation *kernel = nullptr;
   module->walk([&](Operation *op) {
-    if (!kernel && op->hasAttr("site") && op->getParentOfType<func::FuncOp>())
+    if (!kernel && op->hasAttr("site") &&
+        op->getParentOfType<zkc::local::FuncOp>())
       kernel = op;
   });
   require(kernel, "generated relation must contain local computation");

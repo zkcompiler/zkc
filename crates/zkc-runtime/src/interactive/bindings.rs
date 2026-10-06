@@ -13,7 +13,13 @@ fn representation_error(detail: &str) -> AdmissionError {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ArtifactFormat {
-    ExplicitBindings,
+    ExplicitBindings = 0,
+    Program = 2,
+}
+impl ArtifactFormat {
+    pub fn is_program(self) -> bool {
+        self == Self::Program
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Identity {
@@ -21,6 +27,7 @@ pub enum Identity {
     Bn254Fr,
     Bn254G1,
     Bn254G2,
+    Bn254Gt,
     Bls12381Fr,
     Bls12381G1,
     MultilinearKzgBls12381,
@@ -51,7 +58,7 @@ impl Identity {
     /// Installed associations, independent of the value kind.
     pub fn scalar_field(self) -> Option<Self> {
         match self {
-            Self::Bn254Fr | Self::Bn254G1 | Self::Bn254G2 => Some(Self::Bn254Fr),
+            Self::Bn254Fr | Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt => Some(Self::Bn254Fr),
             Self::Bls12381Fr
             | Self::Bls12381G1
             | Self::Spongefish074KeccakFr64Be
@@ -79,7 +86,7 @@ impl Identity {
         }
     }
     pub fn group(self) -> Option<Self> {
-        if matches!(self, Self::Bn254G1 | Self::Bn254G2) {
+        if matches!(self, Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt) {
             return Some(self);
         }
         match self.scalar_field()? {
@@ -115,6 +122,7 @@ impl Identity {
             Self::Bn254Fr => "bn254.fr",
             Self::Bn254G1 => "bn254.g1",
             Self::Bn254G2 => "bn254.g2",
+            Self::Bn254Gt => "bn254.gt",
 
             Self::KoalaBear => "koala-bear",
             Self::KoalaBearExt8 => "koala-bear.ext8-binomial3",
@@ -137,6 +145,7 @@ impl Identity {
             Self::Bn254Fr,
             Self::Bn254G1,
             Self::Bn254G2,
+            Self::Bn254Gt,
             Self::Bls12381Fr,
             Self::Bls12381G1,
             Self::MultilinearKzgBls12381,
@@ -215,7 +224,11 @@ impl LogicalType {
     pub fn new(kind: Type, identity: Identity) -> Result<Self> {
         use Identity::*;
         let valid = match kind {
-            Type::FixedVector | Type::ResourceUnit | Type::Variant => false,
+            Type::Sequence
+            | Type::FieldArray
+            | Type::FixedVector
+            | Type::ResourceUnit
+            | Type::Variant => false,
             Type::Bool | Type::Index | Type::Indices => identity == None,
             Type::Field | Type::Matrix | Type::Vector | Type::Polynomial | Type::Round => {
                 matches!(
@@ -229,7 +242,10 @@ impl LogicalType {
             ),
             Type::Nonce => matches!(identity, Bls12381Fr | Ristretto255Scalar),
             Type::Table | Type::Point => identity == Bls12381Fr,
-            Type::Group => matches!(identity, Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group),
+            Type::Group => matches!(
+                identity,
+                Bn254Gt | Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group
+            ),
             Type::Groups => matches!(identity, Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group),
             Type::Transcript => matches!(
                 identity,
@@ -303,6 +319,59 @@ impl LogicalType {
     pub fn variant_descriptor(&self) -> Option<&std::sync::Arc<super::VariantDescriptor>> {
         self.variant.as_ref()
     }
+    /// Closed structured-message data profile. Permission covers every possible
+    /// payload, including inactive alternatives; it never follows from Copy alone.
+    pub fn is_native_message_data(&self) -> bool {
+        if let Some(element) = self.sequence_element() {
+            return element.is_native_message_data();
+        }
+        if let Some(descriptor) = self.variant_descriptor() {
+            return descriptor.is_native_message_data();
+        }
+        (self.kind() == Type::Group && self.identity() == Identity::Bn254Gt)
+            || self
+                .field_array_parts()
+                .is_some_and(|(f, n)| f == Identity::Bls12381Fr && n <= 1_048_576)
+            || matches!(
+                (self.kind(), self.identity()),
+                (Type::Bool | Type::Index | Type::Indices, Identity::None)
+                    | (
+                        Type::Field | Type::Vector | Type::Matrix,
+                        Identity::Bn254Fr
+                            | Identity::Ristretto255Scalar
+                            | Identity::KoalaBear
+                            | Identity::KoalaBearExt8
+                    )
+                    | (
+                        Type::Group | Type::Groups,
+                        Identity::Bn254G1 | Identity::Bn254G2 | Identity::Ristretto255Group
+                    )
+                    | (
+                        Type::Field | Type::Vector | Type::Matrix,
+                        Identity::Bls12381Fr
+                    )
+                    | (Type::Group | Type::Groups, Identity::Bls12381G1)
+                    | (
+                        Type::Commitment | Type::Proof,
+                        Identity::MultilinearKzgBls12381
+                            | Identity::MerkleKoalaBear
+                            | Identity::MerkleKoalaBearExt8
+                    )
+            )
+    }
+    /// Logical program-port permission, independent of codec and target support.
+    /// Copyable aggregates preserve the permission of every possible payload.
+    pub(super) fn is_program_port(&self) -> bool {
+        self.variant
+            .as_ref()
+            .is_none_or(|descriptor| descriptor.is_program_port())
+            && self.structural.as_ref().is_none_or(|structure| {
+                structure.arguments().iter().all(|argument| match argument {
+                    super::TypeArgument::Type(ty) => ty.is_program_port(),
+                    _ => true,
+                })
+            })
+    }
     /// Copy permission for the complete type, including structural arguments and
     /// every variant payload. The constructor head alone cannot grant it.
     pub fn is_duplicable(&self) -> bool {
@@ -329,13 +398,33 @@ impl LogicalType {
     pub fn structural(&self) -> Option<&super::StructuralType> {
         self.structural.as_deref()
     }
-    pub(super) fn descriptor_bytes(&self) -> usize {
+    /// Conservative retained charge for immutable structural type metadata.
+    pub fn descriptor_bytes(&self) -> usize {
         self.variant
             .as_ref()
             .map_or(0, |v| v.retained_bytes())
             .saturating_add(self.structural.as_ref().map_or(0, |s| s.retained_bytes()))
     }
     pub(super) fn parse_nested(
+        spelling: &str,
+        depth: usize,
+        budget: &mut super::structural::ParseBudget,
+    ) -> Result<Self> {
+        if let Some(ty) = budget.cached(spelling, depth, true)? {
+            return Ok(ty);
+        }
+        let before = budget.remaining();
+        let ty = Self::parse_uncached(spelling, depth, budget)?;
+        budget.remember(
+            spelling,
+            depth,
+            ty.clone(),
+            before - budget.remaining(),
+            true,
+        );
+        Ok(ty)
+    }
+    fn parse_uncached(
         spelling: &str,
         depth: usize,
         budget: &mut super::structural::ParseBudget,
@@ -384,6 +473,8 @@ impl LogicalType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Representation {
+    Sequence,
+    FieldArray,
     FixedVector,
     Variant,
     ResourceUnit,
@@ -395,6 +486,7 @@ pub enum Representation {
     Bn254G1,
     Bn254G1Vector,
     Bn254G2,
+    Bn254Gt,
     Bn254G2Vector,
 
     FrSparseCoo,
@@ -441,6 +533,8 @@ pub enum Representation {
 impl Representation {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Sequence => "logical.sequence/1",
+            Self::FieldArray => "arkworks.field-array/1",
             Self::FixedVector => "plonky3.fixed-vector/1",
             Self::Variant => "logical.variant/1",
             Self::Bn254Fr => "arkworks.bn254-fr/1",
@@ -451,6 +545,7 @@ impl Representation {
             Self::Bn254G1 => "arkworks.bn254-g1/1",
             Self::Bn254G1Vector => "arkworks.bn254-g1-vector/1",
             Self::Bn254G2 => "arkworks.bn254-g2/1",
+            Self::Bn254Gt => "arkworks.bn254-gt/1",
             Self::Bn254G2Vector => "arkworks.bn254-g2-vector/1",
             Self::FrSparseCoo => "arkworks.fr-sparse-coo/1",
             Self::DalekSparseCoo => "dalek.scalar-sparse-coo/1",
@@ -500,7 +595,9 @@ impl Representation {
             return Err(error("uninstalled representation"));
         }
         [
+            Self::FieldArray,
             Self::FixedVector,
+            Self::Sequence,
             Self::Variant,
             Self::Bn254Fr,
             Self::Bn254FrVector,
@@ -510,6 +607,7 @@ impl Representation {
             Self::Bn254G1,
             Self::Bn254G1Vector,
             Self::Bn254G2,
+            Self::Bn254Gt,
             Self::Bn254G2Vector,
             Self::FrSparseCoo,
             Self::DalekSparseCoo,
@@ -597,6 +695,24 @@ impl PhysicalType {
         use Type as T;
         // LogicalType construction has already checked the finite sort/identity pairs.
         let representation = match (logical.kind, logical.identity) {
+            (T::Sequence, I::None) => {
+                Self::default_for(
+                    logical
+                        .sequence_element()
+                        .ok_or_else(|| representation_error("sequence-element"))?
+                        .clone(),
+                )?;
+                R::Sequence
+            }
+            (T::FieldArray, I::None) => {
+                let (field, _) = logical
+                    .field_array_parts()
+                    .ok_or_else(|| representation_error("unrepresented logical type"))?;
+                if field != I::Bls12381Fr {
+                    return Err(representation_error("unrepresented logical type"));
+                }
+                R::FieldArray
+            }
             (T::FixedVector, I::None) => {
                 let (element, _) = logical
                     .fixed_vector_parts()
@@ -607,15 +723,10 @@ impl PhysicalType {
                 R::FixedVector
             }
             (T::Variant, I::None) => {
-                for ty in logical
+                logical
                     .variant_descriptor()
                     .ok_or_else(|| error("variant-descriptor"))?
-                    .alternatives()
-                    .iter()
-                    .flat_map(|a| a.payload())
-                {
-                    Self::default_for(ty.clone())?;
-                }
+                    .default_representation()?;
                 R::Variant
             }
             (T::ResourceUnit, I::None) => R::ResourceUnit,
@@ -627,6 +738,7 @@ impl PhysicalType {
             (T::Group, I::Bn254G1) => R::Bn254G1,
             (T::Groups, I::Bn254G1) => R::Bn254G1Vector,
             (T::Group, I::Bn254G2) => R::Bn254G2,
+            (T::Group, I::Bn254Gt) => R::Bn254Gt,
             (T::Groups, I::Bn254G2) => R::Bn254G2Vector,
             (T::Matrix, I::Bls12381Fr) => R::FrSparseCoo,
             (T::Matrix, I::Ristretto255Scalar) => R::DalekSparseCoo,
@@ -692,6 +804,32 @@ impl PhysicalType {
     pub fn is_discardable(&self) -> bool {
         self.logical.is_discardable()
     }
+    /// Exact native-only array frame. This grants no common codec.
+    pub fn has_native_array_frame(&self) -> bool {
+        self.representation == Representation::FieldArray
+            && matches!(
+                self.logical.field_array_parts(),
+                Some((Identity::Bls12381Fr, 0..=1_048_576))
+            )
+    }
+    /// New expected-type native frames, independent of host profile authority.
+    pub fn has_native_data_frame(&self) -> bool {
+        matches!(
+            self.kind(),
+            Type::Sequence
+                | Type::Variant
+                | Type::Vector
+                | Type::Groups
+                | Type::Indices
+                | Type::Matrix
+        ) && self.logical.is_native_message_data()
+            && Self::default_for(self.logical.clone()).ok().as_ref() == Some(self)
+    }
+    pub(super) fn is_message_type(&self, format: ArtifactFormat) -> bool {
+        self.is_serializable()
+            || (format.is_program()
+                && (self.has_native_array_frame() || self.has_native_data_frame()))
+    }
     pub fn is_serializable(&self) -> bool {
         self.kind().is_serializable()
             && !matches!(
@@ -744,6 +882,7 @@ pub struct ResolvedBinding {
     pub(crate) declaration: OperationBinding,
     pub(crate) signature: BoundSignature,
     pub(crate) implementation: String,
+    history: bool,
 }
 impl ResolvedBinding {
     pub fn declaration(&self) -> &OperationBinding {
@@ -755,9 +894,14 @@ impl ResolvedBinding {
     pub fn implementation(&self) -> &str {
         &self.implementation
     }
+    /// True when the installed contract advances observation or sampling history.
+    pub fn observes_history(&self) -> bool {
+        self.history
+    }
     pub(crate) fn explicit(binding: OperationBinding) -> Result<Self> {
         Ok(Self {
             signature: binding.signature()?,
+            history: binding.observes_history()?,
             implementation: binding.implementation.clone(),
             declaration: binding,
         })
@@ -765,6 +909,13 @@ impl ResolvedBinding {
 }
 
 impl OperationBinding {
+    /// Query the installed contract's history facet. Unknown contracts refuse.
+    /// Like registry discovery, this does not admit the static arguments or
+    /// implementation; use signature admission before interpreting a binding.
+    pub fn observes_history(&self) -> Result<bool> {
+        super::operations::observes_history(&self.contract)
+    }
+
     /// Discover exact implementation and contract identities from the installed
     /// registry. Rows may still refuse particular static arguments; discovery
     /// does not replace logical or physical signature admission.

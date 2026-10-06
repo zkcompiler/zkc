@@ -14,8 +14,7 @@ use zkc_runtime::{
     logical::encode_tree,
 };
 
-pub(super) mod admission;
-use admission::{Admission, Input, LoadLimits};
+use crate::host::admission::{Admission, Input, LoadLimits, Operand, ResourceInput, entry_values};
 
 pub(super) struct BoundInputs {
     pub backend: NativeBackend,
@@ -23,12 +22,10 @@ pub(super) struct BoundInputs {
     pub binding: [u8; 32],
     pub resources: Vec<(String, Capability)>,
     pub decoder: Decoder,
+    pub failure: Option<String>,
 }
 impl CheckedBundle {
-    pub(super) fn bind(&self, input: &Json, role: &EntryRole, budget: u64) -> Result<BoundInputs> {
-        self.bind_with_limits(input, role, budget, LoadLimits::default())
-    }
-
+    #[cfg(test)]
     fn bind_with_limits(
         &self,
         input: &Json,
@@ -182,6 +179,7 @@ impl CheckedBundle {
         let binding = Sha256::digest(&root).into();
         let mut seen = std::collections::BTreeSet::new();
         let mut resources = Vec::new();
+        let mut pending_resources = BTreeMap::new();
         for record in list(&envelope[3])? {
             let r = list(record)?;
             let name = text(r.first().ok_or("artifact-input-record")?)?;
@@ -220,24 +218,17 @@ impl CheckedBundle {
                     if port.ty.kind().name() != tag {
                         return Err("artifact-private-input".into());
                     }
-                    let budget = natural(&r[2])?;
-                    Input::Ready(
-                        if tag == "nonce" {
-                            backend.issue_nonce_for(
-                                port.ty.identity(),
-                                resource_domain.clone(),
-                                budget,
-                            )
-                        } else {
-                            backend.issue_rng_for(
-                                port.ty.identity(),
-                                resource_domain.clone(),
-                                budget,
-                            )
-                        }
-                        .map_err(|e| e.to_string())?,
-                    )
+                    pending_resources.insert(
+                        name.to_owned(),
+                        ResourceInput {
+                            kind: port.ty.kind(),
+                            field: port.ty.identity(),
+                            budget: natural(&r[2])?,
+                        },
+                    );
+                    continue;
                 }
+
                 tag if tag == type_spelling(port.ty.clone(), format)
                     && port.ty.kind() == Type::VerifierKey =>
                 {
@@ -289,7 +280,7 @@ impl CheckedBundle {
         if common_ports.len() != role.inputs.len() {
             return Err("artifact-input-map".into());
         }
-        for (port, (physical, ty)) in common_ports.into_iter().zip(&role.inputs) {
+        for (port, (_, ty)) in common_ports.into_iter().zip(&role.inputs) {
             let generated = &port.name;
             if port.ty != ty.logical() {
                 return Err("artifact-input-map-type".into());
@@ -307,53 +298,46 @@ impl CheckedBundle {
             let value = match map {
                 [tag] if tag == "transcript" => {
                     transcript_count += 1;
-                    admission.add(
-                        Input::Ready(
-                            backend
-                                .issue_transcript_for(
-                                    ty.logical().identity(),
-                                    resource_domain.clone(),
-                                    budget,
-                                    &root,
-                                )
-                                .map_err(|e| e.to_string())?,
-                        ),
-                        &policy,
-                    )?
+                    admission.resource(ResourceInput {
+                        kind: Type::Transcript,
+                        field: ty.logical().identity(),
+                        budget,
+                    })?
                 }
-                [tag, label] if tag == "public" => {
-                    *public.get(text(label)?).ok_or("artifact-public-map")?
-                }
+                [tag, label] if tag == "public" => admission.data(
+                    *public.get(text(label)?).ok_or("artifact-public-map")?,
+                    ty.kind(),
+                )?,
                 [tag, port] if tag == "source" => {
                     let name = text(port)?;
                     if !used.insert(name.to_owned()) {
                         return Err("artifact-input-map-reuse".into());
                     }
                     if name == self.selected_rng && role.role == self.validator {
-                        admission.add(
-                            Input::Ready(
-                                backend
-                                    .issue_rng_for(
-                                        ty.logical().identity(),
-                                        resource_domain.clone(),
-                                        0,
-                                    )
-                                    .map_err(|e| e.to_string())?,
-                            ),
-                            &policy,
-                        )?
+                        admission.resource(ResourceInput {
+                            kind: Type::Rng,
+                            field: ty.logical().identity(),
+                            budget: 0,
+                        })?
+                    } else if let Some(resource) = pending_resources.remove(name) {
+                        admission.resource(resource)?
                     } else {
-                        owned.remove(name).ok_or("artifact-missing-input")?
+                        admission.data(
+                            owned.remove(name).ok_or("artifact-missing-input")?,
+                            ty.kind(),
+                        )?
                     }
                 }
                 _ => return Err("artifact-input-map".into()),
             };
-            admission.operand(value, ty.kind())?;
-            operands.push((value, physical, ty));
+            operands.push(value);
         }
 
         // Any explicitly provided source input must actually enter the artifact.
-        if seen.iter().any(|s| !used.contains(s)) || !owned.is_empty() {
+        if seen.iter().any(|s| !used.contains(s))
+            || !owned.is_empty()
+            || !pending_resources.is_empty()
+        {
             return Err("artifact-unused-input".into());
         }
         if transcript_count != 1 {
@@ -362,23 +346,87 @@ impl CheckedBundle {
         // All source/public values and every physical operand are admitted
         // before any PK read or ordinary wire deserialization.
         let loaded = admission.load_cached(&backend, &policy, cache)?;
-        let mut values = Vec::new();
-        for (index, physical, ty) in operands {
-            let value = loaded[index].clone();
-            backend.validate_value(&value).map_err(|e| e.to_string())?;
-            if let Value::Rng(t) | Value::Nonce(t) | Value::Transcript(t) = &value {
-                resources.push((format!("{}:{}", ty.kind().name(), physical), t.clone()));
-            }
-            values.push(value);
+        backend
+            .check_entry_values(role, &entry_values(&operands, &loaded))
+            .map_err(|e| e.to_string())?;
+        if root.len() > policy.max_wire_bytes || root.len() > isize::MAX as usize {
+            return Err("exhausted:wire-bytes".into());
         }
+        let mut values = Vec::new();
+        // From this point onward retain custody and actual issuance on failure.
+        let failure = (|| -> Result<()> {
+            for (operand, (physical, ty)) in operands.into_iter().zip(&role.inputs) {
+                let value = match operand {
+                    Operand::Data(index) => loaded[index].clone(),
+                    Operand::Resource(ResourceInput {
+                        kind,
+                        field,
+                        budget,
+                    }) => match kind {
+                        Type::Nonce => {
+                            backend.issue_nonce_for(field, resource_domain.clone(), budget)
+                        }
+                        Type::Rng => backend.issue_rng_for(field, resource_domain.clone(), budget),
+                        Type::Transcript => backend.issue_transcript_for(
+                            field,
+                            resource_domain.clone(),
+                            budget,
+                            &root,
+                        ),
+                        _ => unreachable!("planned capability"),
+                    }
+                    .map_err(|e| e.to_string())?,
+                };
+                if let Value::Rng(t) | Value::Nonce(t) | Value::Transcript(t) = &value {
+                    resources.push((format!("{}:{}", ty.kind().name(), physical), t.clone()));
+                }
+                backend.validate_value(&value).map_err(|e| e.to_string())?;
+                values.push(value);
+            }
+            Ok(())
+        })()
+        .err();
         Ok(BoundInputs {
             backend,
             values,
             binding,
             resources,
             decoder: config.decoder,
+            failure,
         })
     }
+}
+
+/// Preserve pre-retirement observations and cleanup failures independently of
+/// the proof outcome, including partially issued and unentered invocations.
+pub(super) fn retire(
+    backend: &mut NativeBackend,
+    resources: &[(String, Capability)],
+) -> (Vec<Json>, Vec<String>) {
+    let mut observations = Vec::new();
+    let mut errors = Vec::new();
+    for (name, token) in resources {
+        let mut row = match backend.observe(token) {
+            Ok(o) => {
+                json!({"port":name,"generation":o.generation,"transitions":o.draw_count,"budget":o.budget,"stage":o.stage})
+            }
+            Err(error) => {
+                errors.push(error.to_string());
+                json!({"port":name,"status":"observation-unavailable"})
+            }
+        };
+        match backend.retire(token) {
+            Ok(o) => {
+                row["retirement"] = json!({"generation":o.generation,"transitions":o.draw_count,"budget":o.budget,"stage":o.stage})
+            }
+            Err(error) => errors.push(error.to_string()),
+        }
+        observations.push(row);
+    }
+    if backend.active_frames() != 0 || backend.live_resource_units() != 0 {
+        errors.push("artifact-incomplete-cleanup".into());
+    }
+    (observations, errors)
 }
 
 #[cfg(test)]

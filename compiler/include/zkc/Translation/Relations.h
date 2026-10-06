@@ -2,23 +2,27 @@
 #define ZKC_TRANSLATION_RELATIONS_H
 
 #include "mlir/IR/BuiltinOps.h"
-#include "zkc/Relation/AIR.h"
-#include "zkc/Relation/R1CS.h"
+#include "zkc/Dialect/Relation/IR/Assets.h"
 
 namespace mlir {
 class Builder;
 }
 namespace zkc::relation {
-/// Encode canonical common-model constraint rows for relation.r1cs.
-mlir::ArrayAttr encodeR1CSConstraints(mlir::Builder &, const R1CS &);
-/// Relation imports load their owning RelationDialect into the supplied
-/// context.
+/// Relation imports load their owning zkc::relation::RelationDialect into the
+/// supplied context.
 llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>>
 importR1CS(const R1CS &, llvm::StringRef symbol, mlir::MLIRContext &);
-llvm::Expected<R1CS> readR1CSOperation(mlir::Operation *);
 llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>>
 importAIR(const AIR &, llvm::StringRef symbol, mlir::MLIRContext &);
-llvm::Expected<AIR> readAIROperation(mlir::Operation *);
+/// Bounded public-assignment reference client: at most 8 rows, 128 columns,
+/// 1024 nonzero terms, bls12-381.fr. Creates recipe, reduction, terminal,
+/// composed main and independent exact-evaluation entries. Requires the
+/// registered mathematical interfaces, as for native protocol compilation.
+llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>>
+authorR1CSSumcheck(const R1CS &, mlir::MLIRContext &);
+/// Requirements retain the external canonical relation, never candidate IR.
+/// The same authoring envelope is enforced by the correspondence checker.
+llvm::json::Value r1csSumcheckRequirements(const R1CS &);
 } // namespace zkc::relation
 
 #endif

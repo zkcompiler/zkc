@@ -78,8 +78,9 @@ helpers as part of the public signature.
 
 ## Dialect boundaries
 
-`pir` carries common interaction and participant execution, including explicit
-resource transitions. `algebra` carries field and group operations and finite
+`protocol` carries common protocols, participants, messages and projection
+metadata. `local` carries executable functions and bounded control; `data` carries
+indices, shapes, products and sums; `crypto` carries randomness and transcripts. `algebra` carries field and group operations and finite
 linear algebra. `poly` carries polynomial tables, evaluation points, bounded
 rounds and general univariate polynomials. `pcs` carries a resolved polynomial
 commitment scheme's local contracts. `oracle` carries authenticated table access;

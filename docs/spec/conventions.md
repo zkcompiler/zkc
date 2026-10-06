@@ -51,7 +51,7 @@ MUST and MUST NOT state requirements on their named subjects. MAY permits a
 choice within the surrounding requirements. Ordinary declarative sentences also
 define the model; they do not need a requirement keyword.
 
-Legacy clause identifiers such as `CORE-03` are documentation references. They
+Clause identifiers such as `CORE-03` are documentation references. They
 are not operation tags, diagnostic codes, artifact revisions or content hashes.
 The [correspondence maps](correspondence/core.md) give their
 definition destinations. A semantic amendment records its rationale and the

@@ -29,16 +29,18 @@ llvm::Error validateAppliedTypeRepresentations(
       switch (parameter.kind) {
       case StaticKind::Type:
         if (pattern.kind != TypeArgument::Kind::Type || pattern.maximum ||
-            !staticIdentityMatches("Type", pattern.exact))
+            pattern.minimum || !staticIdentityMatches("Type", pattern.exact))
           return error("representation-pattern");
         break;
       case StaticKind::Domain:
         if (pattern.kind != TypeArgument::Kind::Domain || pattern.maximum ||
+            pattern.minimum ||
             !staticIdentityMatches(parameter.sort, pattern.exact))
           return error("representation-pattern");
         break;
       case StaticKind::Nat:
         if (pattern.kind != TypeArgument::Kind::Nat || !pattern.exact.empty() ||
+            pattern.minimum > pattern.maximum ||
             !staticIdentityMatches("Nat", std::to_string(pattern.maximum)))
           return error("representation-pattern");
         break;
@@ -49,13 +51,14 @@ llvm::Error validateAppliedTypeRepresentations(
     for (const auto &other : representations.take_front(index)) {
       if (entry.constructor != other.constructor)
         continue;
-      // Natural ranges start at zero, so two of them always intersect. Exact
-      // Type/Domain identities decide overlap; there are no wildcard patterns.
+      // Intersect closed natural ranges and exact nominal arguments.
       bool overlaps = llvm::all_of(
           llvm::zip(entry.arguments, other.arguments), [](const auto &pair) {
             const auto &[left, right] = pair;
-            return left.kind == TypeArgument::Kind::Nat ||
-                   left.exact == right.exact;
+            return left.kind == TypeArgument::Kind::Nat
+                       ? left.minimum <= right.maximum &&
+                             right.minimum <= left.maximum
+                       : left.exact == right.exact;
           });
       if (overlaps && entry.representation == other.representation)
         return error("representation-duplicate");
@@ -70,7 +73,11 @@ llvm::ArrayRef<AppliedTypeRepresentation> appliedTypeRepresentations() {
   static const TypeArgumentPattern koalaBearVector[] = {
       {TypeArgument::Kind::Type, "field:koala-bear", 0},
       {TypeArgument::Kind::Nat, {}, 1048576}};
+  static const TypeArgumentPattern fieldArray[] = {
+      {TypeArgument::Kind::Domain, "bls12-381.fr", 0},
+      {TypeArgument::Kind::Nat, {}, 1048576, 0}};
   static const AppliedTypeRepresentation values[] = {
+      {"field_array", fieldArray, "arkworks.field-array/1", true},
       {"fixed_vector", koalaBearVector, "plonky3.fixed-vector/1", true}};
   static const bool validated = [] {
     if (auto e = validateAppliedTypeRepresentations(values))
@@ -99,7 +106,8 @@ appliedTypeRepresentation(const BoundType &type, llvm::StringRef name) {
         break;
       }
       if (argument.kind == TypeArgument::Kind::Nat)
-        matches &= argument.natural <= pattern.maximum;
+        matches &= pattern.minimum <= argument.natural &&
+                   argument.natural <= pattern.maximum;
       else
         matches &= argument.spelling() == pattern.exact;
     }

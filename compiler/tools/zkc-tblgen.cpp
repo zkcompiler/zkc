@@ -96,6 +96,13 @@ bool sameSignature(const Record *left, const Record *right) {
       return false;
     StringRef head = field == "requirements" ? "capability" : "constructor";
     for (auto [l, r] : zip(la, ra)) {
+      if (field != "requirements" &&
+          (!l->isSubClassOf("ZKC_Apply") || !r->isSubClassOf("ZKC_Apply"))) {
+        if (l->isSubClassOf("ZKC_Apply") != r->isSubClassOf("ZKC_Apply") ||
+            index(ls, l) != index(rs, r))
+          return false;
+        continue;
+      }
       if (l->getValueAsDef(head) != r->getValueAsDef(head))
         return false;
       auto larg = l->getValueAsListOfDefs("arguments");
@@ -148,7 +155,8 @@ const Record *observationState(const Record *contract) {
       history->getValueAsInt("stateInput") != 0 ||
       history->getValueAsInt("stateOutput") != 0 ||
       name(contract->getValueAsDef("stage")) != "Construction" ||
-      name(contract->getValueAsDef("parameters")) != "TranscriptOrigin")
+      (name(contract->getValueAsDef("parameters")) != "TranscriptOrigin" &&
+       name(contract->getValueAsDef("parameters")) != "NativeOrigin"))
     PrintFatalError(contract, "incompatible observation contract mapping");
   auto arguments = inputs[0]->getValueAsListOfDefs("arguments");
   if (arguments.size() != 1 || parent(arguments[0]))

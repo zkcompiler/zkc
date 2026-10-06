@@ -1,7 +1,9 @@
 # Independent participant runtime
 
-This directory is a self-contained Rust module for the selected
-`zkc.participants/1` tagged-array schema. It implements strict physical artifact
+This directory is the common Rust participant interpreter for
+`zkc.participants/1` and `zkc.program/1`. The program format covers flat and structured execution;
+the obsolete service-only and native participant tags are refused. Each retained tag has its own
+admitted grammar. The interpreter implements strict physical artifact
 admission, immutable custody, typed SSA checking, stored calls, closed loops,
 independent role execution, packets, resource frames and source-cut controller
 support. It contains no cryptographic implementation. `tests.rs` uses an explicitly
@@ -42,13 +44,21 @@ calling its owner's physical resolver, so alternate layouts retain family rules.
 Transcript observation rows opt in; challenge/random operations and the custom
 fixed owners do not. Registration order cannot bypass this policy.
 
+History transitions are explicit facets on installed contract rows.
+`ResolvedBinding` retains the checked facet for private-tag match admission.
+`OperationBinding::observes_history` queries installed metadata; it does not
+admit arguments or implementations. Unknown contracts refuse. The shared fixture
+covers every installed contract, including physical-only rows. C++ and Lean keep
+independently authored classifications for conformance checks.
+
 ## Loading and custody
 
 1. Install a trusted `Backend` implementation. Its `binding_signature` must
    match the independently resolved contract, nominal arguments and physical
    implementation. Unknown types, contracts, representations and undeclared
-   operation symbols fail closed, including unused definitions. `/1` artifacts
-   are refused; this module has no profile-migration decoder.
+   operation symbols fail closed, including unused definitions. Logical source
+   documents and unknown format versions are refused; loading does not migrate
+   between carrier profiles.
 2. For generated artifacts use
    `admit_physical(source_bytes, candidate_bytes, &backend, &checker)`.
    `Correspondence::check_with_mapping` is the installed actual-source checker. It must
@@ -223,6 +233,14 @@ public parameter and individual loop count 1048576. Additional fail-closed parse
 limits are 200000 JSON nodes, raw string length 4096, identifier length 128, stop
 reason length 1024, and block nesting 64. `ErrorCode` identifies the failure class.
 
+Type loading shares immutable descriptors across repeated physical spellings and
+nested structural arguments. Native admission applies a separate 64 MiB installed
+metadata charge, including resolved binding signatures, and precharges new
+descriptors per logical parse. Cache hits retain full logical node accounting.
+Complete-payload permissions and representation checks are cached. See
+[variant loading policy](../../../../docs/spec/profiles/compiler/local-variants.md)
+for the exact charge and its separation from portable value accounting.
+
 Runtime ceilings are 64 active frames (including local frames), 100000 calls,
 100000 total iterations, 1000000 instruction units, 16384 retained values and
 64 MiB per individual value. Default host policy permits 64 MiB live retained
@@ -245,6 +263,11 @@ Rust/OS allocation aborts and external library panics are separate limitations;
 backend-specific per-operation/total memory limits remain required. Typed values
 must be immutable with stable size reports. Large table handles should share
 backing to avoid repeated deep copies.
+
+`Runner::inspect_program` distinguishes an unpolled loop `ProgramState::Yield`
+from a root return. Hosts with exhaustive matches must handle that variant;
+only the explicit loop-control API advances it. Joint reports retain their
+coarser unpolled-state representation.
 
 ## Validation scope
 
@@ -298,9 +321,15 @@ inverted bounds. Each bound is at most `Limits::PARAMETER`, the trip count is at
 `Limits::LOOP_COUNT`, and global instruction/iteration limits still apply. Deterministic bound failures
 report `exhausted:local-bound-limit`; cumulative machine budget failures retain
 `StopKind::Limit`. An iteration-budget failure retains the attempted iteration
-path without entering its body. Bodies
-remain compact; no trip-count expansion occurs. Local controls are refused in the
-participant body, whose protocol-level control grammar is unchanged. Native helper
+path without entering its body. Participant iteration exhaustion likewise names
+the attempted iteration and loop site; a yield instruction exhaustion remains at
+the completed iteration. `Stop.local` names the enclosing call/ingress site,
+function and optional inner instruction, so a local site cannot be confused with
+a same-named participant site. Ingress retains its outer `ingress.<parameter>`
+site. This context changes no protocol origins or transcript bytes. Bodies
+remain compact; no trip-count expansion occurs. Local `if`/`for`/`match` controls are refused in the participant body.
+Participant control uses its own calls and protocol loops; the program contract admits
+received-value counts, induction variables and compact nested schedules. Native helper
 expansion must expand helper calls inside regions while retaining the regions.
 
 Every selected region is a real backend child frame, with its actual enclosing
@@ -330,3 +359,20 @@ Installed-operation checks, implementation-role inventories, and public-validato
 resource screening traverse both branches and nested loops. Ordinary source
 correspondence remains the independently installed checker's responsibility; these
 runtime checks alone do not establish source/candidate equivalence.
+
+## Native observation and receive completion
+
+`Admitted::program_entry` returns each role's static preorder action layout,
+including resolved send operand types, loop/yield boundaries and Finish. The
+joint bundle retains a compact segment tree over those coordinates; iteration
+occurrences are not expanded in this layout. `Runner::inspect_program` reads state
+without polling or exposing values. `poll_ref` exposes the ordinary next action
+while borrowing payloads and diagnostics.
+
+`complete_receive` requires an already pending native Receive and an exact cut.
+Stale cuts and wrongly typed/nonserializable decoded values are nonadvancing API
+refusals. An accepted attempt accounts its instruction, then either stops with
+a closed `DecodeReason` or validates/retains/binds the value. Both Delivered and
+Stopped consume the attempt. Existing `deliver` retry behavior is unchanged.
+The [joint profile](../../../../docs/spec/profiles/compiler/run.md)
+owns the Tools dispatch policy and ordinary-outcome report contract.

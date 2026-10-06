@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   auto expected = envelope::EnvelopeType::get(
-      &context, zkc::FieldType::get(&context, "koala-bear"), 4);
+      &context, zkc::algebra::FieldType::get(&context, "koala-bear"), 4);
   require(decodeBoundType(&context, *logical) == expected,
           "wrong contributed native type");
   auto encoded = encodeBoundType(expected, false);
@@ -143,7 +143,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   auto nestedNative = decodeBoundType(&context, *nested);
-  auto nestedExpected = zkc::FixedVectorType::get(
+  auto nestedExpected = zkc::algebra::FixedVectorType::get(
       &context,
       envelope::EnvelopeType::get(&context, IntegerType::get(&context, 1), 2),
       3);

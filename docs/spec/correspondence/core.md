@@ -73,10 +73,9 @@ The [core controls](../../../formal/Tests/SpecCore.lean) establish:
 
 The last two quantify over every `Stop` reason. The count application consumes
 the generic theorem rather than proving the example by arithmetic alone.
-The first three are counterexamples to weaker hypotheses, not examples of
-a flawed existing `Related` theorem.
+The first three distinguish the required hypotheses from weaker ones.
 
-[Existing execution controls](../../../formal/Tests/Execution.lean) cover returned
+[Execution controls](../../../formal/Tests/Execution.lean) cover returned
 errors versus terminal stops, state/prefix retention, weak postconditions,
 acceptance followed by abort and the nonuniform well-founded tree.
 [OuterEffects](../../../formal/Tests/OuterEffects.lean) distinguishes lost outer

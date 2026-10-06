@@ -24,9 +24,8 @@ impl std::fmt::Display for CodecError {
 impl std::error::Error for CodecError {}
 type Result<T> = std::result::Result<T, CodecError>;
 
-/// Encode arrays/strings with tags 1/0, u64 LE counts/UTF-8 byte lengths.
-/// Preflight the whole tree before allocating; construction-tree ceilings apply.
-pub fn encode_tree(tree: &Value) -> Result<Vec<u8>> {
+/// Check the complete tree's grammar and bounds without allocating its encoding.
+pub fn tree_size(tree: &Value) -> Result<usize> {
     fn measure(v: &Value, depth: usize, nodes: &mut usize) -> Result<usize> {
         *nodes += 1;
         if depth > TreeLimits::DEPTH || *nodes > TreeLimits::NODES {
@@ -51,6 +50,12 @@ pub fn encode_tree(tree: &Value) -> Result<Vec<u8>> {
         }
         Ok(n)
     }
+    measure(tree, 0, &mut 0)
+}
+
+/// Encode arrays/strings with tags 1/0, u64 LE counts/UTF-8 byte lengths.
+/// Preflight the whole tree before allocating; construction-tree ceilings apply.
+pub fn encode_tree(tree: &Value) -> Result<Vec<u8>> {
     fn write(v: &Value, out: &mut Vec<u8>) {
         match v {
             Value::String(s) => {
@@ -68,7 +73,7 @@ pub fn encode_tree(tree: &Value) -> Result<Vec<u8>> {
             _ => unreachable!("preflight"),
         }
     }
-    let n = measure(tree, 0, &mut 0)?;
+    let n = tree_size(tree)?;
     let mut out = Vec::new();
     out.try_reserve_exact(n)
         .map_err(|_| CodecError("tree-allocation"))?;
@@ -210,4 +215,108 @@ pub fn message_origin(runtime_origin: &Origin, attrs: &[String]) -> Result<Vec<u
 /// `[protocol, local call site, function, operation site, source role]`.
 pub fn challenge_origin(runtime_origin: &Origin, attrs: &[String]) -> Result<Vec<u8>> {
     origin(runtime_origin, attrs, "challenge")
+}
+
+/// Explicit original-source occurrence bytes for flat native construction.
+/// Runtime frame names are deliberately absent. This checks syntax only.
+pub fn native_origin(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
+    read_native_origin(attrs, kind, false)
+}
+/// A source template contains ordered static apply/repeat steps and no dynamic
+/// coordinates. Coordinates are explicit operands of its indexed transition.
+pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
+    read_native_origin(attrs, kind, true)
+}
+pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> Result<Vec<u8>> {
+    let encoded = native_origin_template(attrs, kind)?;
+    let mut tree = decode_tree(&encoded)?;
+    let depth = tree[2]
+        .as_array()
+        .ok_or(CodecError("native-origin"))?
+        .iter()
+        .filter(|step| step[0] == "repeat")
+        .count();
+    if indices.len() != depth || indices.len() > 64 {
+        return Err(CodecError("native-origin-coordinates"));
+    }
+    tree[0] = json!("zkc.native-origin/2");
+    tree[3] = json!(indices.iter().map(u64::to_string).collect::<Vec<_>>());
+    if tree_size(&tree)? > 4096 {
+        return Err(CodecError("native-origin-limit"));
+    }
+    encode_tree(&tree)
+}
+fn read_native_origin(attrs: &[String], kind: &str, indexed: bool) -> Result<Vec<u8>> {
+    if attrs.len() != 1 {
+        return Err(CodecError("native-origin"));
+    }
+    let hex = attrs[0].as_bytes();
+    if hex.is_empty()
+        || hex.len() > 4096
+        || !hex.len().is_multiple_of(2)
+        || !hex
+            .iter()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(b))
+    {
+        return Err(CodecError("native-origin"));
+    }
+    let digit = |b: u8| if b <= b'9' { b - b'0' } else { b - b'a' + 10 };
+    let bytes: Vec<u8> = hex
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|p| digit(p[0]) * 16 + digit(p[1]))
+        .collect();
+    let tree = decode_tree(&bytes)?;
+    let parts = tree.as_array().ok_or(CodecError("native-origin"))?;
+    let name = |v: &Value| {
+        v.as_str().is_some_and(|s| {
+            !s.is_empty() && s.len() <= 128 && s.bytes().all(|b| (33..=126).contains(&b))
+        })
+    };
+    let fields = match kind {
+        "query" => 7,
+        "message" => 6,
+        _ => 0,
+    };
+    if parts.len() != 5
+        || parts[0]
+            != if indexed {
+                "zkc.native-origin-template/1"
+            } else {
+                "zkc.native-origin/1"
+            }
+        || !name(&parts[1])
+        || !parts[2].as_array().is_some_and(|p| {
+            p.len() <= 64
+                && p.iter().all(|step| {
+                    if indexed {
+                        step.as_array().is_some_and(|a| {
+                            a.len() == 3
+                                && (a[0] == "apply" || a[0] == "repeat")
+                                && name(&a[1])
+                                && name(&a[2])
+                        })
+                    } else {
+                        name(step)
+                    }
+                })
+        })
+        || !parts[3].as_array().is_some_and(Vec::is_empty)
+        || fields == 0
+        || !parts[4]
+            .as_array()
+            .is_some_and(|e| e.len() == fields && e[0] == kind && e[1..].iter().all(name))
+    {
+        return Err(CodecError("native-origin"));
+    }
+    if kind == "query"
+        && !parts[4][3]
+            .as_str()
+            .and_then(|s| s.strip_prefix("input_"))
+            .is_some_and(|n| natural_index(n).is_ok())
+    {
+        return Err(CodecError("native-origin"));
+    }
+    Ok(bytes)
 }

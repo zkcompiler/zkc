@@ -63,6 +63,10 @@ pub(super) const CONTRACTS: &[Contract] = &[
         (&[Field], &[Vector], AttributeRule::NaturalIndex),
     ),
     Contract::selectable(
+        "vector.equal",
+        (&[Vector, Vector], &[Bool], AttributeRule::None),
+    ),
+    Contract::selectable(
         "vector.add",
         (&[Vector, Vector], &[Vector], AttributeRule::None),
     ),

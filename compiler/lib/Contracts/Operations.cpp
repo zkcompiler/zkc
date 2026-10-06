@@ -121,7 +121,7 @@ bool hasUnclassifiedProviderEffect(llvm::StringRef key) {
   if (key.starts_with("resource_unit."))
     return true;
   const generic::Operation *declaration = nullptr;
-  for (const auto &candidate : boundOperationContracts())
+  for (const auto &candidate : executableOperationContracts())
     if (candidate.name == key) {
       declaration = &candidate;
       break;

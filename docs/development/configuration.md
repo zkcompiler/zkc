@@ -118,20 +118,7 @@ must be below `build/`. Use a dedicated external directory for reports outside
 the checkout. `ZKC_GROTH16_FIXTURE` remains a separate, scoped input for
 reproduced interoperability fixtures.
 
-## Replacing removed settings
+## Removed settings
 
-Removed settings fail with migration guidance instead of being ignored:
-
-| Removed setting | Replacement |
-|---|---|
-| `ZKC_JOBS` | The native concurrency settings above |
-| `ZKC_BUILD_PRESET` | A command argument, e.g. `just test-compiler dev` |
-| `ZKC_COMPILER_BUILD` | CMake presets for builds; `ZKC_COMPILER_BIN` for tests |
-| `ZKC_COMPILER`, `ZKC_OPTIMIZER` and old compiler example/test file overrides | `ZKC_COMPILER_BIN` |
-| `ZKC_LEAN`, `ZKC_PHYSICAL_CHECKER` | `ZKC_LEAN_BIN` |
-| `ZKC_TEST_RECORDS=/path/tests` | `ZKC_REPORTS_DIR=/path` |
-
-Keep credentials and machine-wide Nix daemon settings outside the source
-flake. GitHub runner labels remain repository variables, documented in the
-[maintenance guide](maintenance.md).
-Neither just nor shell entry modifies host configuration.
+Obsolete `ZKC_*` names are rejected with a replacement hint. Use the settings
+listed above; silently ignored aliases are not supported.

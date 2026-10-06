@@ -27,9 +27,9 @@ static Expected<StringRef> domain(const json::Value &json) {
 }
 Expected<Type> TableLibrary::decodeType(const json::Value &json,
                                         Builder &b) const {
-  b.getContext()->getOrLoadDialect<PIRDialect>();
-  b.getContext()->getOrLoadDialect<AlgebraDialect>();
-  b.getContext()->getOrLoadDialect<PolynomialDialect>();
+  b.getContext()->getOrLoadDialect<zkc::table::TableDialect>();
+  b.getContext()->getOrLoadDialect<zkc::algebra::AlgebraDialect>();
+  b.getContext()->getOrLoadDialect<zkc::poly::PolynomialDialect>();
   auto *a = json.getAsArray();
   if (!a || a->empty() || !(*a)[0].getAsString())
     return error("unknown-type");
@@ -38,17 +38,17 @@ Expected<Type> TableLibrary::decodeType(const json::Value &json,
     if (tag == "bool")
       return Type(b.getI1Type());
     if (tag == "digest")
-      return Type(DigestType::get(b.getContext()));
+      return Type(zkc::table::DigestType::get(b.getContext()));
     if (tag == "summary")
-      return Type(SummaryType::get(b.getContext()));
+      return Type(zkc::table::SummaryType::get(b.getContext()));
   }
   if ((tag == "scalar" || tag == "point") && a->size() == 2) {
     auto d = domain((*a)[1]);
     if (!d)
       return d.takeError();
     if (tag == "scalar")
-      return Type(FieldType::get(b.getContext(), *d));
-    return Type(PointType::get(b.getContext(), *d));
+      return Type(zkc::algebra::FieldType::get(b.getContext(), *d));
+    return Type(zkc::poly::PointType::get(b.getContext(), *d));
   }
   if ((tag == "table" || tag == "residual") && a->size() == 3) {
     auto d = domain((*a)[1]);
@@ -58,15 +58,16 @@ Expected<Type> TableLibrary::decodeType(const json::Value &json,
     if (!n)
       return n.takeError();
     if (tag == "table")
-      return Type(TableType::get(b.getContext(), *d, *n));
-    return Type(ResidualType::get(b.getContext(), *d, *n));
+      return Type(zkc::poly::TableType::get(b.getContext(), *d, *n));
+    return Type(zkc::poly::ResidualType::get(b.getContext(), *d, *n));
   }
   return error("unknown-type");
 }
 Expected<json::Value> TableLibrary::encodeType(Type type) const {
   auto selectedDomain =
       llvm::TypeSwitch<Type, StringRef>(type)
-          .Case<FieldType, PointType, TableType, ResidualType>(
+          .Case<zkc::algebra::FieldType, zkc::poly::PointType,
+                zkc::poly::TableType, zkc::poly::ResidualType>(
               [](auto t) { return t.getDomain(); })
           .Default(StringRef());
   if (!selectedDomain.empty() && selectedDomain != "f2" &&
@@ -74,34 +75,34 @@ Expected<json::Value> TableLibrary::encodeType(Type type) const {
     return error("unknown-domain");
   if (type.isSignlessInteger(1))
     return json::Value(json::Array{"bool"});
-  if (isa<DigestType>(type))
+  if (isa<zkc::table::DigestType>(type))
     return json::Value(json::Array{"digest"});
-  if (isa<SummaryType>(type))
+  if (isa<zkc::table::SummaryType>(type))
     return json::Value(json::Array{"summary"});
-  if (auto t = dyn_cast<FieldType>(type))
+  if (auto t = dyn_cast<zkc::algebra::FieldType>(type))
     return json::Value(json::Array{"scalar", t.getDomain()});
-  if (auto t = dyn_cast<PointType>(type))
+  if (auto t = dyn_cast<zkc::poly::PointType>(type))
     return json::Value(json::Array{"point", t.getDomain()});
-  if (auto t = dyn_cast<TableType>(type))
+  if (auto t = dyn_cast<zkc::poly::TableType>(type))
     return json::Value(
         json::Array{"table", t.getDomain(), naturalValue(t.getRank())});
-  if (auto t = dyn_cast<ResidualType>(type))
+  if (auto t = dyn_cast<zkc::poly::ResidualType>(type))
     return json::Value(
         json::Array{"residual", t.getDomain(), naturalValue(t.getRank())});
   return error("unknown-type");
 }
 Expected<ResolvedOperation>
 TableLibrary::resolveOperation(const json::Value &json, Builder &b) const {
-  b.getContext()->getOrLoadDialect<PIRDialect>();
-  b.getContext()->getOrLoadDialect<AlgebraDialect>();
-  b.getContext()->getOrLoadDialect<PolynomialDialect>();
+  b.getContext()->getOrLoadDialect<zkc::table::TableDialect>();
+  b.getContext()->getOrLoadDialect<zkc::algebra::AlgebraDialect>();
+  b.getContext()->getOrLoadDialect<zkc::poly::PolynomialDialect>();
   auto *a = json.getAsArray();
   if (!a || a->empty() || !(*a)[0].getAsString())
     return error("unknown-operation");
   StringRef tag = *(*a)[0].getAsString();
   auto *c = b.getContext();
-  Type flag = b.getI1Type(), f7 = FieldType::get(c, "f7"),
-       digest = DigestType::get(c);
+  Type flag = b.getI1Type(), f7 = zkc::algebra::FieldType::get(c, "f7"),
+       digest = zkc::table::DigestType::get(c);
   if ((tag == "view" || tag == "restrict" || tag == "evaluate") &&
       a->size() == 3) {
     auto d = domain((*a)[1]);
@@ -110,15 +111,19 @@ TableLibrary::resolveOperation(const json::Value &json, Builder &b) const {
     auto n = natural((*a)[2]);
     if (!n)
       return n.takeError();
-    Type t = TableType::get(c, *d, *n), v = ResidualType::get(c, *d, *n);
+    Type t = zkc::poly::TableType::get(c, *d, *n),
+         v = zkc::poly::ResidualType::get(c, *d, *n);
     if (tag == "view")
-      return ResolvedOperation{"poly.view", {t}, v, {}, false};
+      return ResolvedOperation{"table.poly_view", {t}, v, {}, false};
     if (tag == "restrict")
-      return ResolvedOperation{
-          "poly.restrict", {v, FieldType::get(c, *d)}, v, {}, true};
-    return ResolvedOperation{"poly.evaluate",
-                             {v, PointType::get(c, *d)},
-                             FieldType::get(c, *d),
+      return ResolvedOperation{"table.poly_restrict",
+                               {v, zkc::algebra::FieldType::get(c, *d)},
+                               v,
+                               {},
+                               true};
+    return ResolvedOperation{"table.poly_evaluate",
+                             {v, zkc::poly::PointType::get(c, *d)},
+                             zkc::algebra::FieldType::get(c, *d),
                              {},
                              true};
   }
@@ -127,10 +132,11 @@ TableLibrary::resolveOperation(const json::Value &json, Builder &b) const {
     auto d = domain((*a)[1]);
     if (!d)
       return d.takeError();
-    Type f = FieldType::get(c, *d);
+    Type f = zkc::algebra::FieldType::get(c, *d);
     if (tag == "add")
-      return ResolvedOperation{"algebra.add", {f, f}, f, {}, false};
-    return ResolvedOperation{tag == "record" ? "pir.record" : "pir.abort_write",
+      return ResolvedOperation{"table.field_add", {f, f}, f, {}, false};
+    return ResolvedOperation{tag == "record" ? "table.record"
+                                             : "table.abort_write",
                              {f},
                              flag,
                              {},
@@ -141,14 +147,14 @@ TableLibrary::resolveOperation(const json::Value &json, Builder &b) const {
     if (!value)
       return error("invalid-shape");
     if (tag == "parent")
-      return ResolvedOperation{"pir.parent",
+      return ResolvedOperation{"table.parent",
                                {digest, digest},
                                digest,
                                {b.getNamedAttr("left", b.getBoolAttr(*value))},
                                false};
-    return ResolvedOperation{"poly.endpoint_point",
+    return ResolvedOperation{"table.poly_endpoint_point",
                              {},
-                             PointType::get(c, "f7"),
+                             zkc::poly::PointType::get(c, "f7"),
                              {b.getNamedAttr("atOne", b.getBoolAttr(*value))},
                              false};
   }
@@ -156,32 +162,36 @@ TableLibrary::resolveOperation(const json::Value &json, Builder &b) const {
     return error("unknown-operation");
   if (tag == "ordered_pair")
     return ResolvedOperation{
-        "pir.ordered_pair", {digest, digest}, digest, {}, false};
+        "table.ordered_pair", {digest, digest}, digest, {}, false};
   if (tag == "pack")
-    return ResolvedOperation{"pir.pack",
-                             {FieldType::get(c, "f2"), f7, digest},
-                             SummaryType::get(c),
+    return ResolvedOperation{
+        "table.pack",
+        {zkc::algebra::FieldType::get(c, "f2"), f7, digest},
+        zkc::table::SummaryType::get(c),
+        {},
+        false};
+  if (tag == "send")
+    return ResolvedOperation{"table.send", {f7, f7}, flag, {}, true};
+  if (tag == "draw")
+    return ResolvedOperation{"table.draw", {}, f7, {}, true};
+  if (tag == "linear")
+    return ResolvedOperation{"table.poly_linear", {f7, f7, f7}, f7, {}, false};
+  if (tag == "point")
+    return ResolvedOperation{"table.poly_point",
+                             {f7},
+                             zkc::poly::PointType::get(c, "f7"),
                              {},
                              false};
-  if (tag == "send")
-    return ResolvedOperation{"pir.send", {f7, f7}, flag, {}, true};
-  if (tag == "draw")
-    return ResolvedOperation{"pir.draw", {}, f7, {}, true};
-  if (tag == "linear")
-    return ResolvedOperation{"poly.linear", {f7, f7, f7}, f7, {}, false};
-  if (tag == "point")
-    return ResolvedOperation{
-        "poly.point", {f7}, PointType::get(c, "f7"), {}, false};
   if (tag == "equal")
-    return ResolvedOperation{"algebra.equal", {f7, f7}, flag, {}, false};
+    return ResolvedOperation{"table.field_equal", {f7, f7}, flag, {}, false};
   if (tag == "digest_equal")
     return ResolvedOperation{
-        "pir.digest_equal", {digest, digest}, flag, {}, false};
+        "table.digest_equal", {digest, digest}, flag, {}, false};
   return error("unknown-operation");
 }
 } // namespace
 void registerTableLibrary(DialectRegistry &registry) {
-  registry.addExtension(+[](MLIRContext *, PIRDialect *dialect) {
+  registry.addExtension(+[](MLIRContext *, zkc::table::TableDialect *dialect) {
     dialect->addInterfaces<TableLibrary>();
   });
 }

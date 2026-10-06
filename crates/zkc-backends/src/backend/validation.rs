@@ -30,12 +30,24 @@ impl Core {
             self.resources.validate(t, v.ty())?;
         }
         let metadata = match v {
+            Value::Sequence(sequence) => {
+                sequence.validate(&self.policy)?;
+                for element in sequence.elements() {
+                    self.validate(element)?;
+                }
+                return Ok(());
+            }
             Value::Variant(variant) => {
                 variant.validate()?;
                 for payload in variant.payload() {
                     self.validate(payload)?;
                 }
                 return Ok(());
+            }
+            Value::FieldArray(value) => {
+                value.validate()?;
+                self.policy.vector(value.elements().len())?;
+                None
             }
             Value::FixedVector(value) => {
                 value.validate()?;
@@ -180,6 +192,7 @@ impl Core {
             | Value::Bn254Field(..)
             | Value::Bn254Round(..)
             | Value::Bn254G1(..)
+            | Value::Bn254Gt(..)
             | Value::Bn254G2(..)
             | Value::OracleRoot(..)
             | Value::OracleState(..)
@@ -205,13 +218,97 @@ impl Core {
         }
         Ok(())
     }
+    /// Pure entry constraints; missing values are only pending resource roots.
+    pub(super) fn check_entry_values(
+        &self,
+        inputs: &[(String, zkc_runtime::interactive::PhysicalType)],
+        values: &[Option<&Value>],
+    ) -> Result<()> {
+        if inputs.len() != values.len() {
+            return Err(refused("frame-arguments"));
+        }
+        if let Some(n) = self.entry.arity {
+            self.policy.arity(n)?;
+        }
+        for name in self.entry.ports.keys() {
+            if !inputs.iter().any(|(n, _)| n == name) {
+                return Err(refused("entry-constraint-port"));
+            }
+        }
+        let mut identity = self.setups.only().map(VerifierKey::metadata);
+        for ((port, ty), v) in inputs.iter().zip(values) {
+            if v.is_none() && !matches!(ty.kind(), Type::Rng | Type::Nonce | Type::Transcript) {
+                return Err(refused("entry-preparation-value"));
+            }
+            let (arity, meta) = match v {
+                Some(Value::Table(t)) => (Some(t.arity()), None),
+                Some(Value::TableMsb(t)) => (Some(t.arity()), None),
+                Some(Value::Point(point)) if self.setups.is_registered() => {
+                    (Some(point.len()), None)
+                }
+                Some(Value::ProverKey(k)) => (Some(k.metadata().arity()), Some(k.metadata())),
+                Some(Value::VerifierKey(k)) => (Some(k.metadata().arity()), Some(k.metadata())),
+                Some(Value::Commitment(c)) => (Some(c.metadata().arity()), Some(c.metadata())),
+                Some(Value::OpeningState(s)) => {
+                    let meta = s.commitment().metadata();
+                    (Some(meta.arity()), Some(meta))
+                }
+                Some(Value::Proof(p)) => (Some(p.metadata().arity()), Some(p.metadata())),
+                _ => (None, None),
+            };
+            if let (Some(expected), Some(actual)) = (self.entry.arity, arity)
+                && expected != actual
+            {
+                return Err(refused("entry-shape"));
+            }
+            if let Some(constraint) = self.entry.ports.get(port) {
+                if constraint.arity.is_some() && constraint.arity != arity {
+                    return Err(refused("entry-port-shape"));
+                }
+                if constraint.setup.is_some() && constraint.setup != meta {
+                    return Err(refused("entry-port-setup"));
+                }
+            }
+            if let Some(meta) = meta.filter(|_| !self.setups.is_registered()) {
+                if identity.is_some_and(|old| old != meta) {
+                    return Err(refused("entry-key-mismatch"));
+                }
+                identity = Some(meta);
+            }
+        }
+        if let Some(key) = self.setups.only()
+            && self
+                .entry
+                .arity
+                .is_some_and(|n| n != key.metadata().arity())
+        {
+            return Err(refused("entry-verifier-shape"));
+        }
+        if let PublicInputs::Exact(pins) = &self.entry.public_inputs {
+            for (name, expected) in pins {
+                let index = inputs
+                    .iter()
+                    .position(|(n, _)| n == name)
+                    .ok_or_else(|| refused("public-input-port"))?;
+                let actual = values
+                    .get(index)
+                    .and_then(|v| *v)
+                    .ok_or_else(|| refused("frame-arguments"))?;
+                self.validate(expected)?;
+                if crate::codec::encode(expected, &self.policy)?
+                    != crate::codec::encode(actual, &self.policy)?
+                {
+                    return Err(refused("public-input-mismatch"));
+                }
+            }
+        }
+        Ok(())
+    }
     pub(super) fn enter(&mut self, frame: &Frame, args: &[Value]) -> Result<()> {
         for v in args {
             self.validate(v)?;
         }
         if matches!(frame.kind(), FrameKind::Entry) {
-            // Admission refuses a variant at a participant boundary
-            // (variant-participant-boundary), so no entry receives one.
             if !self.entry.domain.matches(frame) {
                 return Err(refused("entry-domain"));
             }
@@ -223,74 +320,7 @@ impl Core {
             {
                 return Err(refused("entry-parameters"));
             }
-            if let Some(n) = self.entry.arity {
-                self.policy.arity(n)?;
-            }
-            for name in self.entry.ports.keys() {
-                if !frame.inputs().iter().any(|(n, _)| n == name) {
-                    return Err(refused("entry-constraint-port"));
-                }
-            }
-            let mut identity = self.setups.only().map(VerifierKey::metadata);
-            for ((port, _), v) in frame.inputs().iter().zip(args) {
-                let (arity, meta) = match v {
-                    Value::Table(t) => (Some(t.arity()), None),
-                    Value::TableMsb(t) => (Some(t.arity()), None),
-                    Value::Point(point) if self.setups.is_registered() => (Some(point.len()), None),
-                    Value::ProverKey(k) => (Some(k.metadata().arity()), Some(k.metadata())),
-                    Value::VerifierKey(k) => (Some(k.metadata().arity()), Some(k.metadata())),
-                    Value::Commitment(c) => (Some(c.metadata().arity()), Some(c.metadata())),
-                    Value::OpeningState(s) => {
-                        let meta = s.commitment().metadata();
-                        (Some(meta.arity()), Some(meta))
-                    }
-                    Value::Proof(p) => (Some(p.metadata().arity()), Some(p.metadata())),
-                    _ => (None, None),
-                };
-                if let (Some(expected), Some(actual)) = (self.entry.arity, arity)
-                    && expected != actual
-                {
-                    return Err(refused("entry-shape"));
-                }
-                if let Some(constraint) = self.entry.ports.get(port) {
-                    if constraint.arity.is_some() && constraint.arity != arity {
-                        return Err(refused("entry-port-shape"));
-                    }
-                    if constraint.setup.is_some() && constraint.setup != meta {
-                        return Err(refused("entry-port-setup"));
-                    }
-                }
-                if let Some(meta) = meta.filter(|_| !self.setups.is_registered()) {
-                    if identity.is_some_and(|old| old != meta) {
-                        return Err(refused("entry-key-mismatch"));
-                    }
-                    identity = Some(meta);
-                }
-            }
-            if let Some(key) = self.setups.only()
-                && self
-                    .entry
-                    .arity
-                    .is_some_and(|n| n != key.metadata().arity())
-            {
-                return Err(refused("entry-verifier-shape"));
-            }
-            if let PublicInputs::Exact(pins) = &self.entry.public_inputs {
-                for (name, expected) in pins {
-                    let index = frame
-                        .inputs()
-                        .iter()
-                        .position(|(n, _)| n == name)
-                        .ok_or_else(|| refused("public-input-port"))?;
-                    let actual = args.get(index).ok_or_else(|| refused("frame-arguments"))?;
-                    self.validate(expected)?;
-                    if crate::codec::encode(expected, &self.policy)?
-                        != crate::codec::encode(actual, &self.policy)?
-                    {
-                        return Err(refused("public-input-mismatch"));
-                    }
-                }
-            }
+            self.check_entry_values(frame.inputs(), &args.iter().map(Some).collect::<Vec<_>>())?;
         }
         self.resources.enter(frame, args)
     }
@@ -375,6 +405,24 @@ impl Core {
             }
             AttributeRule::RistrettoDecimal if i.attributes.len() == 1 => {
                 crate::parse_ristretto_decimal(&i.attributes[0])?;
+            }
+            AttributeRule::NativeMessageTemplate | AttributeRule::NativeChallengeTemplate => {
+                let kind = if signature.attributes == AttributeRule::NativeMessageTemplate {
+                    "message"
+                } else {
+                    "query"
+                };
+                zkc_runtime::logical::native_origin_template(i.attributes, kind)
+                    .map_err(|_| refused("kernel-attributes"))?;
+            }
+            AttributeRule::NativeMessageOrigin | AttributeRule::NativeChallengeOrigin => {
+                let kind = if signature.attributes == AttributeRule::NativeMessageOrigin {
+                    "message"
+                } else {
+                    "query"
+                };
+                zkc_runtime::logical::native_origin(i.attributes, kind)
+                    .map_err(|_| refused("kernel-attributes"))?;
             }
             AttributeRule::MessageOrigin | AttributeRule::ChallengeOrigin => {
                 zkc_runtime::logical::validate_source_attributes(i.attributes)

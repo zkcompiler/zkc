@@ -279,6 +279,9 @@ Source inputs for public values use `[port, fullNominalType, canonicalWireHex]`.
 can fill an owned source port from a declared public binding or a configuration
 key; an explicitly supplied duplicate must agree exactly. P proving material uses
 `[port, "prover_key_file", path, expectedMaterialFingerprintHex, verifierSourcePort]`.
+Key imports read one bounded regular file. Symlinks may resolve to regular files;
+devices, directories and FIFOs refuse. On Unix, nonblocking open prevents waiting
+for a FIFO writer before checking the opened descriptor.
 P nonce issuance uses `[port, "nonce", transitionBudgetDecimal]` and the OS source.
 The selected transcript input is constructed by the host, not supplied as a token.
 The Lean V reference accepts only its actual source inputs and configuration;

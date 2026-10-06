@@ -78,6 +78,16 @@ pub struct Schedule {
 }
 impl Schedule {
     pub fn new(admitted: &Admitted, entry: &str, session: &str) -> Result<Self> {
+        Self::new_with_work_limit(admitted, entry, session, 1_000_000)
+    }
+    /// Bound source-tree traversal work, including non-action structure.
+    /// This is distinct from participant instructions and dispatched cuts.
+    pub fn new_with_work_limit(
+        admitted: &Admitted,
+        entry: &str,
+        session: &str,
+        work: u64,
+    ) -> Result<Self> {
         let bytes = admitted
             .checked_source()
             .ok_or("schedule-requires-checked-source")?;
@@ -122,7 +132,7 @@ impl Schedule {
             instances,
             root: root.clone(),
             cursors: Vec::new(),
-            remaining_work: 1_000_000,
+            remaining_work: work.min(1_000_000),
             call_mappings: admitted.source_map().map(|mapping| {
                 mapping
                     .calls

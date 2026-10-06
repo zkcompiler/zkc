@@ -10,6 +10,7 @@ what the implementation supports, and the model used to judge it.
 |---|---|
 | Understand the problem and approach | [Overview](overview.md), then [architecture](architecture.md) |
 | Compile and run a first protocol | [Walkthrough](getting-started.md), then [source notation](language/reference.md) |
+| Execute mathematical MLIR directly | [Native bundle walkthrough](runtime/bundles.md); native Lean checking remains open |
 | Author a reusable protocol library | [Source projects](language/projects.md), [checked interfaces](language/components.md#checked-interfaces-and-static-components) and [example clients](../examples/projects/README.md) |
 | Build or develop the repository | [Development guide](development/README.md), [configuration](development/configuration.md) and [repository layout](development/layout.md) |
 | Select and interpret checks | [Test guide](../tests/README.md) and [assurance](assurance.md) |

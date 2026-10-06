@@ -70,6 +70,9 @@ Error signature(const Signature &sig, ArrayRef<TypeConstructor> constructors) {
     if (term.arguments && !valid(term.name, *term.arguments))
       return invalid("generic-application");
   auto validType = [&](const Type &type) {
+    if (type.term)
+      return false; // Complete-type construction ports are outside this
+                    // profile.
     return valid(type.constructor, type.arguments);
   };
   if (!all_of(sig.inputs, validType) || !all_of(sig.outputs, validType))

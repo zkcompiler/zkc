@@ -89,6 +89,32 @@ group and pairing operations use arkworks; Lean's executable arithmetic is
 independent, while group equations and subgroup validation use an explicitly
 trusted primitive service.
 
+### Pairing results
+
+A catalog may additionally declare `F.PairingGT`, a group distinct from its two
+source groups with `ScalarAction` and associated scalar field `F`.
+`pairing.apply<F> : group:F.PairingG1 × group:F.PairingG2 → group:F.PairingGT`
+returns the bilinear pairing value. Catalogs supporting only `pairing.check`
+need not supply this target association; they cannot form `pairing.apply`.
+
+The total mathematical operation `algebra.pairing` has the same ordered source
+and target identities. Zero source points are valid. Its target is the
+prime-order subgroup, after final exponentiation, not a Miller-loop value or an
+arbitrary element of an extension field. Abstract additive group notation is
+retained: target `group_add` multiplies target-field elements, `group_scale`
+exponentiates, zero denotes the multiplicative identity, and negation inverts.
+
+The installed target is `bn254.gt`, with scalar field `bn254.fr`, canonical
+representation `arkworks.bn254-gt/1`, and generator equal to the pairing of the
+installed G1/G2 generators. Its codec is `zkcv.group.bn254.gt/1`: ZKCV tag 50
+followed by exactly 384 canonical arkworks bytes. Decoding checks canonical
+encoding and target subgroup membership; extension-field zero is invalid.
+Only individual target-group values are installed, including recursive data
+containers; a dense `groups:bn254.gt` representation is not installed.
+The independent Lean binding consumer admits the operation and type. Its
+current executable value reference explicitly refuses target decoding with
+`reference-pairing-target-unsupported`; it provides no native GT adequacy proof.
+
 ## Checked indices
 
 The installed `index` value is a natural number strictly below `2^64`.
@@ -160,7 +186,7 @@ Slot selection must preserve exact nominal equality and inequality; truncation
 or an unchecked hash collision assumption does not establish that relation.
 The physical spelling is `resource_unit:D@logical.resource_unit/1`. Its empty
 payload is distinct from runtime bookkeeping for ownership and identity. MLIR
-uses `!pir.capability<"resource_unit:D">` and the existing physical data wrapper.
+uses `!local.capability<"resource_unit:D">` and the existing physical data wrapper.
 No byte wire encoding is installed, including for the empty payload.
 
 The closed logical operations have one static slot argument `D`, no attributes,

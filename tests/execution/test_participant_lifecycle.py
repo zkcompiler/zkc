@@ -131,7 +131,9 @@ def test_administrative_resumes_do_not_preempt_work_limits(toolchain, directory,
         assert reference[3][0:2] == opened[3][0:2] == ["exhausted", "local-iteration-limit"]
         assert reference[3][2][5:7] == opened[3][2][5:7] == ["spin", worker]
         assert reference[3][2][4][-1] == opened[3][2][4][-1] == ["iteration", "spin", "100000"]
-        assert native["outcome"] == ["stopped", worker, None, "Limit"]
+        assert native["outcome"] == ["stopped", worker, "spin", "Limit"]
+        assert native["stop"]["site"] == "spin"
+        assert native["stop"]["origin"][4][-1] == ["loop", "spin", "100000"]
         assert native["usage"][worker]["iterations"] == 100000
         assert native["usage"][worker]["calls"] < 100000
         assert [r for r in opened[5] if r[-1] == "resource_unit"] == []
@@ -156,7 +158,8 @@ def test_the_schedule_budget_stops_the_execution(toolchain, directory, count):
     reference, native = execute(toolchain, directory, program, ["P", "V"])
     if count == 499996:
         assert reference[3][0:2] == ["exhausted", "local-iteration-limit"]
-        assert native["outcome"] == ["stopped", "V", None, "Limit"]
+        assert native["outcome"] == ["stopped", "V", "spin", "Limit"]
+        assert native["stop"]["origin"][4][-1] == ["loop", "spin", "100000"]
         expected = ["P"]
     else:
         assert reference[3][0:2] == ["exhausted", "source-schedule-work-limit"]

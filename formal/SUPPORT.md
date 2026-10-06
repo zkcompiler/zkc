@@ -6,13 +6,13 @@ limits.
 The library supplies finite module contraction and ordered folding laws, cubic
 Sumcheck coefficients, range residual/parent identities and conditional integer
 bounds. The [import table](README.md#use) identifies their reusable modules.
-Logical reference execution now includes nominal vectors, polynomials and
+Logical reference execution includes nominal vectors, polynomials and
 Ristretto; group/PCS/transcript replies remain an explicit trusted boundary.
 This expands neither the bounded physical-accounting proof nor whole-protocol
 security claims.
 
-The semantic adoption adds the component, acceptance, input-binding,
-observation-summary and contextual preparation APIs below.
+The component, acceptance, input-binding, observation-summary and contextual
+preparation APIs are listed below.
 
 ## Protocol families and controllers
 
@@ -152,8 +152,7 @@ adapter's execution theorem.
 
 The root execution model, heterogeneous realization relation, typed source,
 binding, direct-plan and phase-checking APIs retain their existing contracts.
-All retained library capabilities now use maintained modules without `Compat`
-or numbered namespaces. The [boundary check](checks/check_library.py) covers the full
+The [boundary check](checks/check_library.py) covers the full
 owned import closure; the build also audits declaration types and bodies.
 
 The instruction adapter returns the instruction language's `Exit` as data. A
@@ -186,11 +185,11 @@ The generalized preparation API also has [word-valued controls](Tests/Preparatio
 and [correlated-service parameter reuse](Tests/CorrelatedPreparation.lean).
 Distinct-width word results retain XOR, shift and wide-product meanings.
 Reused immutable request parameters still make separate stateful service calls,
-retaining both masked responses, exhausted tapes and complete history. The new
-interface tests do not extend to a complete Binius protocol.
+retaining both masked responses, exhausted tapes and complete history. These
+interface tests do not constitute a complete binary-field proof system.
 
 `Horner.rule` is a real mathematical checker rule with a `Unit` certificate.
-The native artifact codec and CLI still admit their existing direct rule.
+The native artifact codec and CLI admit only the direct rule.
 Selecting a serialized rule, its certificate codec and its interpretation remains
 an explicit engineering join. The fixed-object/materialization rule below has its own proved premises.
 
@@ -434,14 +433,14 @@ and do not measure maturity.
 
 ## Remaining realization and research
 
-The [handoff](design/implementation-handoff.md) specifies the required MLIR/Rust
+The [implementation obligations](design/native-obligations.md) specifies the required MLIR/Rust
 joins; [implementation status](../docs/status.md) records which are built.
 The laws in this library do not themselves prove the native optimizer, storage
 runtime or protocol executor. The controller comparison and resource tests
 likewise retain their bounded evidence scope rather than supplying an
 actual-source Rust refinement proof.
 
-The [research agenda](design/research-agenda.md) retains automatic phase-sensitive
+The [research agenda](design/formal-questions.md) retains automatic phase-sensitive
 analysis/projection, stronger probability/security transport, FS/duplex/QROM,
 ZK/extraction, asynchronous execution and verified native toolchains as separate
 work. Their absence does not invalidate the stated finite ordinary theorems.

@@ -406,6 +406,17 @@ fn dense<S: Family>(
             )])
         }
         "matrix.bilinear" => scalar(crate::matrix::bilinear(S::matrix(arg(0)?)?, v(1)?, v(2)?)?),
+        "matrix.dimension" => {
+            let matrix = S::matrix(arg(0)?)?;
+            let dimension = match natural(i.attributes, 0)? {
+                0 => matrix.rows(),
+                1 => matrix.columns(),
+                _ => return Err(refused("matrix-axis")),
+            };
+            Ok(vec![Value::Index(
+                u64::try_from(dimension).map_err(|_| exhausted("size-overflow"))?,
+            )])
+        }
         "matrix.shape_check" => {
             let m = S::matrix(arg(0)?)?;
             boolean(
@@ -579,6 +590,7 @@ fn dense<S: Family>(
                 .get(natural(i.attributes, 0)?)
                 .ok_or_else(|| refused("vector-index"))?,
         ),
+        "vector.equal" => boolean(v(0)? == v(1)?),
         "vector.length_check" => boolean(v(0)?.len() == natural(i.attributes, 0)?),
         "vector.split" => {
             let a = v(0)?;
@@ -875,6 +887,12 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             AttributeRule::None,
         ),
         field::operation(
+            "matrix.dimension",
+            &[Matrix],
+            &[Index],
+            AttributeRule::Unsigned64,
+        ),
+        field::operation(
             "matrix.shape_check",
             &[Matrix],
             &[Bool],
@@ -916,6 +934,12 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Field],
             &[Vector],
             AttributeRule::NaturalIndex,
+        ),
+        field::operation(
+            "vector.equal",
+            &[Vector, Vector],
+            &[Bool],
+            AttributeRule::None,
         ),
         field::operation(
             "vector.add",

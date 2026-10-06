@@ -141,8 +141,9 @@ failure record so an earlier success cannot be mistaken for the current outcome.
 
 After a successful fixture generation, pass the separately built tools and
 the maintained explicit PIR source. The zkc tool must have the `test-utils`
-feature for the two explicit fixed-randomness comparisons. See the repository's
-native build instructions for compiler and Lean prerequisites; this runner does
+feature for the two explicit fixed-randomness comparisons. See the
+[native build instructions](../../docs/development/README.md) for compiler and
+Lean prerequisites; this runner does
 not modify or build their sources.
 
 ```sh

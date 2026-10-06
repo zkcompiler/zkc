@@ -230,10 +230,10 @@ for label, body, expected in cases:
     for logical_ir, suffix in ((imported, ",lower-pir-to-plan"), (direct_ir, "")):
         simplified = optimize(logical_ir, "simplify-table-regions")
         before, after = operations(logical_ir), operations(simplified)
-        assert after["poly.linear"] <= before["poly.linear"], label
+        assert after["table.poly_linear"] <= before["table.poly_linear"], label
         if expected != body:
-            assert after["poly.linear"] < before["poly.linear"], label
-        del before["poly.linear"], after["poly.linear"]
+            assert after["table.poly_linear"] < before["table.poly_linear"], label
+        del before["table.poly_linear"], after["table.poly_linear"]
         assert before == after, (label, before, after)
         # Region argument lists, captures, and all block/control shapes stay
         # in place. Only SSA operand names and linear definitions may change.

@@ -19,11 +19,15 @@ source, construction, participant algorithms and physical execution. The
 |---|---|
 | Source analysis and elaboration | [Frontend](frontend.md), [compiler work budgets](frontend-budgets.md), [elaboration rules](elaboration.md), [common source model](source-model.md) |
 | Static and semantic selection | [Specialization](specialization.md), [independent generic validation](library-design/validation.md), [components](components.md) |
+| Mathematical representation | [IR foundation](ir-foundation.md), [foundation validation](foundation-validation.md), [resource origin analysis](resource-origins.md), [structured mathematics](structured-mathematics.md), [composed numeric state](composed-state.md), [mathematical composition](mathematical-composition.md), [nested data](nested-data.md): polynomial meaning, finite data and actual relation boundaries |
 | Shared compiler contracts | [Operation contracts](operation-contracts.md), [protocol library extension](protocol-libraries.md), [closed reference libraries](libraries.md) |
-| Interaction and local computation | [Logical calls](calls.md), [local composition](local-composition.md), [local control](local-control.md), [compact regions](regions.md) |
-| Construction and generation | [Interactive carrier](carrier-consolidation.md), [participant execution boundary](interactive-execution.md), [artifact construction](artifact-execution.md) and [format](artifact-format.md) |
-| Relation and claim consumers | [Relation ingress](relation-ingress.md), [claim composition](claim-composition.md), [targets](targets.md) |
-| Transformation and admission | [IR verification](ir-verification.md), [Selective lowering](lowering.md), [phase admission](phase-admission.md), [implementation design](design.md), [representation decisions](representation.md) |
+| Interaction and local computation | [Logical calls](calls.md), [local composition](local-composition.md), [local control](local-control.md), [entry completion](entry-completion.md), [compact regions](regions.md) |
+| Construction and generation | [Source-route carriers](carrier-consolidation.md), [participant execution boundary](interactive-execution.md), [artifact construction](artifact-execution.md) and [format](artifact-format.md); [native proof compilation](native-proofs.md), [native attempts](native-attempts.md) |
+| Relation and claim consumers | [Relation ingress](relation-ingress.md), [native relation composition](relation-composition.md), [structured relation bindings](relation-bindings.md), [claim composition](claim-composition.md), [targets](targets.md) |
+| Transformation and admission | [Verifier views](public-coin.md), [IR verification](ir-verification.md), [Selective lowering](lowering.md), [phase admission](phase-admission.md), [implementation design](design.md), [representation decisions](representation.md) |
+
+The [migration inventory](migration.md) records supported capabilities, their
+checking consumers and conditions for retiring the older routes.
 
 ## Finite reference implementations
 
@@ -119,3 +123,9 @@ not a completed native protocol compiler.
 [Compiled relations](../language/relations.md) connect imported relation data to
 ordinary authored algorithms; [relation ingress](relation-ingress.md) owns the
 compiler-side admission and lowering contracts.
+
+[Structured proof boundaries](structured-proofs.md) cover native records,
+alternatives, dynamic numeric messages and complete-Type transcript observation.
+
+[Authored transcript boundaries](authored-transcripts.md) cover explicit external
+state, trial/live checks, native proof inputs and retained attempt work.

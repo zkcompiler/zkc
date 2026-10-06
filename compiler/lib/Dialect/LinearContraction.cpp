@@ -55,19 +55,20 @@ std::optional<DiagonalContractionRoles> consumerRoles(Operation *op) {
                                   contraction.valuesOperand};
 }
 } // namespace
-std::optional<DiagonalProducerRoles> VectorMulOp::getDiagonalProducerRoles() {
+std::optional<DiagonalProducerRoles>
+zkc::algebra::VectorMulOp::getDiagonalProducerRoles() {
   return producerRoles(*this);
 }
 std::optional<DiagonalProducerRoles>
-CurveScaleEachOp::getDiagonalProducerRoles() {
+zkc::algebra::CurveScaleEachOp::getDiagonalProducerRoles() {
   return producerRoles(*this);
 }
 std::optional<DiagonalContractionRoles>
-VectorDotOp::getDiagonalContractionRoles() {
+zkc::algebra::VectorDotOp::getDiagonalContractionRoles() {
   return consumerRoles(*this);
 }
 std::optional<DiagonalContractionRoles>
-CurveMSMOp::getDiagonalContractionRoles() {
+zkc::algebra::CurveMSMOp::getDiagonalContractionRoles() {
   return consumerRoles(*this);
 }
 } // namespace zkc

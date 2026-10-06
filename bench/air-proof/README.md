@@ -14,7 +14,7 @@ release's own Fibonacci test, as [the file](src/bin/upstream_stark.rs) says.
 
 ```sh
 just bench                                        # both, into build/bench
-cargo run --release --bin air_baseline -- 16 128  # explicit trace heights
+cargo run --locked --release --manifest-path bench/air-proof/Cargo.toml --bin air_baseline -- 16 128  # explicit trace heights
 ```
 
 The crate reuses two modules from `crates/zkc-backends` by path so that the

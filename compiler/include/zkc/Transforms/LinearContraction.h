@@ -1,6 +1,6 @@
 #ifndef ZKC_TRANSFORMS_LINEAR_CONTRACTION_H
 #define ZKC_TRANSFORMS_LINEAR_CONTRACTION_H
-#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Interfaces/FunctionInterfaces.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #include "llvm/ADT/SmallVector.h"
 
@@ -33,6 +33,6 @@ struct LinearContractionGroup {
 /// region pairs remain outside this planner even when carrier admission allows
 /// them.
 llvm::SmallVector<LinearContractionGroup>
-findLinearContractions(mlir::func::FuncOp, LinearContractionStats &);
+findLinearContractions(mlir::FunctionOpInterface, LinearContractionStats &);
 } // namespace zkc
 #endif

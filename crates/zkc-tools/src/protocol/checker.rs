@@ -34,8 +34,11 @@ impl ParticipantChecker {
         &self,
         source: &[u8],
         candidate: &[u8],
-        _format: ArtifactFormat,
+        format: ArtifactFormat,
     ) -> Result<Option<SourceMap>, AdmissionError> {
+        if format == ArtifactFormat::Program {
+            return Err(error("native-participant-correspondence-unsupported"));
+        }
         let response_limit = 4_194_304;
         let io = |_: std::io::Error| error("checker-io");
         let dir = tempfile::tempdir().map_err(io)?;
@@ -99,9 +102,9 @@ impl Correspondence for ParticipantChecker {
         &self,
         source: &[u8],
         candidate: &[u8],
-        _format: ArtifactFormat,
+        format: ArtifactFormat,
     ) -> Result<Option<SourceMap>, AdmissionError> {
-        self.invoke(source, candidate, _format)
+        self.invoke(source, candidate, format)
     }
 }
 

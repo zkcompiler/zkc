@@ -56,7 +56,7 @@ planned = commands.run(
     [
         optimizer,
         "--zkc-project-participants",
-        "--zkc-plan-participants=release-storage=true",
+        "--zkc-select-physical=release-storage=true",
         "--verify-each",
     ],
     stdin=run("protocol-import", source),
@@ -97,6 +97,27 @@ for ty in ["rng", "transcript", "nonce", "opening_state", "prover_key", "verifie
         run("protocol-import", json.dumps(resource_plan), refuses="interactive-release-resource")
     else:
         run("protocol-import", json.dumps(resource_plan))
+
+# A discardable affine resource unit may be released unused. Its consume
+# primitive uses that occurrence; a later release must not consume it twice.
+with case("affine release after primitive consumption"):
+    unit = "resource_unit:Slot.A@logical.resource_unit/1"
+    affine_plan = [
+        "zkc.participants/1",
+        [["consume", "resource_unit.consume", ["Slot.A"], "logical/resource_unit.consume"]],
+        "physical",
+        [["function", "caller", [["state", unit]], [],
+          [["release", ["state"]], ["return", []]], ["caller", []]]],
+        [["participant", "p", "root", "P", [], [], [], [["return", []]]]],
+        [["entry", "main", [["P", "p"]]]],
+    ]
+    run("protocol-import", json.dumps(affine_plan))
+    affine_plan[3][0][4].insert(0, ["op", "consume_state", "consume", [],
+                                  ["state"], []])
+    consumed = copy.deepcopy(affine_plan)
+    del consumed[3][0][4][1]
+    run("protocol-import", json.dumps(consumed))
+    run("protocol-import", json.dumps(affine_plan), refuses="interactive-release-unavailable")
 
 # Installed source imports reach the identical storage-only pass.
 imported_text = source.replace('bind both = "bool.and"();',

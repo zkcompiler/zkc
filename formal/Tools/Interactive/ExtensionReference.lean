@@ -133,6 +133,7 @@ def compute (contract : String) (attrs : List String) (inputs : List Data) : Res
       let n ← natural length
       ensure (n ≤ FiniteVectors.limit) "vector-limit"
       return [.vector ((List.range n).map (power x))]
+  | "vector.equal", [.vector xs, .vector ys], [] => return [.boolean (xs == ys)]
   | "vector.add", [.vector xs, .vector ys], [] => return [.vector (← FiniteVectors.zipExact (· + ·) xs ys)]
   | "vector.sub", [.vector xs, .vector ys], [] => return [.vector (← FiniteVectors.zipExact (· - ·) xs ys)]
   | "vector.mul", [.vector xs, .vector ys], [] => return [.vector (← FiniteVectors.zipExact (· * ·) xs ys)]

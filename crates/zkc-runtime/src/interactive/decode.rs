@@ -1,5 +1,7 @@
 use super::model::*;
-use super::{ArtifactFormat, OperationBinding, PhysicalType, ResolvedBinding};
+use super::{
+    ArtifactFormat, OperationBinding, PhysicalType, ResolvedBinding, ServiceContract, ServicePort,
+};
 use serde_json::Value as Json;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -8,15 +10,20 @@ fn err(code: ErrorCode, detail: &str) -> AdmissionError {
     AdmissionError::new(code, detail)
 }
 
-/// Preflight before serde allocation/recursion. No non-string scalar is part of
-/// this schema. JSON syntax (including escapes and trailing data) remains serde's job.
+/// Preflight before serde allocation/recursion. Arrays, strings and bounded
+/// Boolean tokens only; exact schema validation limits Booleans to native
+/// literals. JSON syntax and trailing data remain serde's responsibility.
 fn preflight(bytes: &[u8]) -> Result<()> {
     if bytes.len() > Limits::ARTIFACT_BYTES {
         return Err(err(ErrorCode::Limit, "artifact byte ceiling"));
     }
     let (mut depth, mut nodes, mut string, mut escape, mut start) =
         (0usize, 0usize, false, false, 0usize);
+    let mut scalar_end = 0;
     for (i, b) in bytes.iter().copied().enumerate() {
+        if i < scalar_end {
+            continue;
+        }
         if string {
             if i - start > 256 * 1024 + 19 {
                 return Err(err(ErrorCode::Limit, "string byte ceiling"));
@@ -45,11 +52,19 @@ fn preflight(bytes: &[u8]) -> Result<()> {
                     .checked_sub(1)
                     .ok_or_else(|| err(ErrorCode::Json, "unbalanced array"))?;
             }
+            b't' | b'f' => {
+                let token: &[u8] = if b == b't' { b"true" } else { b"false" };
+                if !bytes[i..].starts_with(token) {
+                    return Err(err(ErrorCode::Json, "invalid Boolean token"));
+                }
+                scalar_end = i + token.len();
+                nodes += 1;
+            }
             b',' | b' ' | b'\t' | b'\r' | b'\n' => (),
             _ => {
                 return Err(err(
                     ErrorCode::Json,
-                    "only arrays and strings are permitted",
+                    "only arrays, strings and Boolean literals are permitted",
                 ));
             }
         }
@@ -174,38 +189,6 @@ fn list(v: &Json, limit: usize) -> Result<&[Json]> {
 fn names(v: &Json) -> Result<Vec<String>> {
     list(v, Limits::PORTS)?.iter().map(name).collect()
 }
-fn physical_type(value: &Json, _format: ArtifactFormat) -> Result<PhysicalType> {
-    let spelling = value
-        .as_str()
-        .ok_or_else(|| err(ErrorCode::Record, "expected type string"))?;
-    PhysicalType::parse(spelling).map_err(|error| {
-        // The carrier-level reason agrees with source readers; keep the
-        // descriptor parser's more specific reason for callers diagnosing it.
-        if spelling.starts_with("variant:") {
-            AdmissionError::new(error.code, format!("binding-type: {}", error.detail))
-        } else {
-            error
-        }
-    })
-}
-fn types(v: &Json, p: ArtifactFormat) -> Result<Vec<PhysicalType>> {
-    list(v, Limits::PORTS)?
-        .iter()
-        .map(|v| physical_type(v, p))
-        .collect()
-}
-fn ports(v: &Json, p: ArtifactFormat) -> Result<Ports> {
-    list(v, Limits::PORTS)?
-        .iter()
-        .map(|v| {
-            let a = array(v)?;
-            if a.len() != 2 {
-                return Err(err(ErrorCode::Record, "port pair arity"));
-            }
-            Ok((name(&a[0])?, physical_type(&a[1], p)?))
-        })
-        .collect()
-}
 fn pairs(v: &Json) -> Result<Vec<(String, String)>> {
     list(v, Limits::PORTS)?
         .iter()
@@ -228,8 +211,57 @@ struct Decoder {
     format: ArtifactFormat,
     bindings: BTreeMap<String, Arc<ResolvedBinding>>,
     instructions: usize,
+    types: BTreeMap<String, PhysicalType>,
+    type_bytes: usize,
 }
 impl Decoder {
+    fn charge_type(&mut self, ty: &PhysicalType) -> Result<()> {
+        self.type_bytes = self
+            .type_bytes
+            .checked_add(ty.logical().descriptor_bytes())
+            .filter(|n| *n <= Limits::TYPE_BYTES)
+            .ok_or_else(|| err(ErrorCode::Limit, "type descriptor byte ceiling"))?;
+        Ok(())
+    }
+    fn physical_type(&mut self, value: &Json) -> Result<PhysicalType> {
+        let spelling = value
+            .as_str()
+            .ok_or_else(|| err(ErrorCode::Record, "expected type string"))?;
+        if let Some(ty) = self.types.get(spelling) {
+            return Ok(ty.clone());
+        }
+        let ty = PhysicalType::parse(spelling).map_err(|error| {
+            // The carrier-level reason agrees with source readers; keep the
+            // descriptor parser's more specific reason for callers diagnosing it.
+            if spelling.starts_with("variant:") && error.code != ErrorCode::Limit {
+                AdmissionError::new(error.code, format!("binding-type: {}", error.detail))
+            } else {
+                error
+            }
+        })?;
+        self.charge_type(&ty)?;
+        self.types.insert(spelling.into(), ty.clone());
+        Ok(ty)
+    }
+    fn types(&mut self, v: &Json) -> Result<Vec<PhysicalType>> {
+        list(v, Limits::PORTS)?
+            .iter()
+            .map(|v| self.physical_type(v))
+            .collect()
+    }
+    fn ports(&mut self, v: &Json) -> Result<Ports> {
+        list(v, Limits::PORTS)?
+            .iter()
+            .map(|v| {
+                let a = array(v)?;
+                if a.len() != 2 {
+                    return Err(err(ErrorCode::Record, "port pair arity"));
+                }
+                Ok((name(&a[0])?, self.physical_type(&a[1])?))
+            })
+            .collect()
+    }
+
     fn charge(&mut self) -> Result<()> {
         self.instructions += 1;
         if self.instructions > Limits::STATIC_INSTRUCTIONS {
@@ -246,11 +278,21 @@ impl Decoder {
             self.charge()?;
             let a = array(v)?;
             body.push(match a.first().and_then(Json::as_str) {
+                Some("bool_constant") if self.format.is_program() => {
+                    let a = record(v, "bool_constant", 4)?;
+                    LocalInstruction::BoolConstant {
+                        site: name(&a[1])?,
+                        output: name(&a[2])?,
+                        value: a[3]
+                            .as_bool()
+                            .ok_or_else(|| err(ErrorCode::Record, "native Boolean literal"))?,
+                    }
+                }
                 Some("variant") => {
                     let a = record(v, "variant", 6)?;
                     LocalInstruction::Variant {
                         site: name(&a[1])?,
-                        ty: physical_type(&a[2], self.format)?,
+                        ty: self.physical_type(&a[2])?,
                         alternative: name(&a[3])?,
                         payload: names(&a[4])?,
                         output: name(&a[5])?,
@@ -318,9 +360,12 @@ impl Decoder {
                         outputs: names(&a[6])?,
                     }
                 }
-                Some("for") => {
-                    let a = record(v, "for", 9)?;
+                Some(tag @ "for") | Some(tag @ "for_while")
+                    if tag == "for" || self.format.is_program() =>
+                {
+                    let a = record(v, tag, 9)?;
                     LocalInstruction::For {
+                        conditional: tag == "for_while",
                         site: name(&a[1])?,
                         induction: name(&a[2])?,
                         lower: name(&a[3])?,
@@ -369,8 +414,8 @@ impl Decoder {
                     arguments,
                 }
             },
-            inputs: ports(&a[2], self.format)?,
-            outputs: types(&a[3], self.format)?,
+            inputs: self.ports(&a[2])?,
+            outputs: self.types(&a[3])?,
             body,
         })
     }
@@ -408,7 +453,7 @@ impl Decoder {
                         schema: name(&a[2])?,
                         peer: name(&a[3])?,
                         output: name(&a[4])?,
-                        ty: physical_type(&a[5], self.format)?,
+                        ty: self.physical_type(&a[5])?,
                     }
                 }
                 Some("call") => {
@@ -423,8 +468,24 @@ impl Decoder {
                 Some("loop") => {
                     let a = record(v, "loop", 7)?;
                     let count = if a[2].is_array() {
-                        let parts = record(&a[2], "parameter", 2)?;
-                        Count::Parameter(name(&parts[1])?)
+                        let parts = array(&a[2])?;
+                        if parts.first().and_then(Json::as_str) == Some("value")
+                            && self.format.is_program()
+                        {
+                            let parts = record(&a[2], "value", 4)?;
+                            let maximum = natural(&parts[2])?;
+                            if maximum > Limits::LOOP_COUNT {
+                                return Err(err(ErrorCode::Limit, "loop count ceiling"));
+                            }
+                            Count::Value {
+                                value: name(&parts[1])?,
+                                maximum,
+                                induction: name(&parts[3])?,
+                            }
+                        } else {
+                            let parts = record(&a[2], "parameter", 2)?;
+                            Count::Parameter(name(&parts[1])?)
+                        }
                     } else {
                         let n = natural(&a[2])?;
                         if n > Limits::LOOP_COUNT {
@@ -439,6 +500,15 @@ impl Decoder {
                         captures: names(&a[4])?,
                         body: self.body(&a[5], depth + 1)?,
                         outputs: names(&a[6])?,
+                    }
+                }
+                Some("return_if") if self.format.is_program() => {
+                    let a = record(v, "return_if", 5)?;
+                    Instruction::ReturnIf {
+                        site: name(&a[1])?,
+                        condition: name(&a[2])?,
+                        values: names(&a[3])?,
+                        continuations: names(&a[4])?,
                     }
                 }
                 Some("yield") => Instruction::Yield(names(&record(v, "yield", 2)?[1])?),
@@ -457,6 +527,16 @@ impl Decoder {
                         reason: reason.to_owned(),
                     }
                 }
+                Some("query") if self.format.is_program() => {
+                    let a = record(v, "query", 6)?;
+                    Instruction::Query {
+                        site: name(&a[1])?,
+                        port: name(&a[2])?,
+                        method: name(&a[3])?,
+                        inputs: names(&a[4])?,
+                        outputs: names(&a[5])?,
+                    }
+                }
                 Some("incomplete") => Instruction::Incomplete {
                     site: name(&record(v, "incomplete", 2)?[1])?,
                 },
@@ -467,7 +547,27 @@ impl Decoder {
         Ok(body.into())
     }
     fn participant(&mut self, v: &Json) -> Result<Participant> {
-        let a = record(v, "participant", 8)?;
+        let native = self.format.is_program();
+        let a = record(v, "participant", if native { 9 } else { 8 })?;
+        let services = if native {
+            list(&a[8], Limits::PORTS)?
+                .iter()
+                .map(|v| {
+                    let port = array(v)?;
+                    if port.len() != 3 {
+                        return Err(err(ErrorCode::Record, "service port arity"));
+                    }
+                    Ok(ServicePort {
+                        name: name(&port[0])?,
+                        contract: ServiceContract::parse(string(&port[1])?)?,
+                        input_index: usize::try_from(natural(&port[2])?)
+                            .map_err(|_| err(ErrorCode::Limit, "service port index"))?,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            vec![]
+        };
         let mut parameters = BTreeMap::new();
         let mut families = BTreeMap::new();
         for v in list(&a[4], Limits::PORTS)? {
@@ -490,13 +590,14 @@ impl Decoder {
             insert(&mut parameters, name(&p[0])?, value, ErrorCode::Parameters)?;
         }
         Ok(Participant {
+            services,
             symbol: name(&a[1])?,
             instance: name(&a[2])?,
             role: name(&a[3])?,
             parameters,
             families,
-            inputs: ports(&a[5], self.format)?,
-            outputs: types(&a[6], self.format)?,
+            inputs: self.ports(&a[5])?,
+            outputs: self.types(&a[6])?,
             body: self.body(&a[7], 0)?,
         })
     }
@@ -510,8 +611,9 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
         return Err(err(ErrorCode::Record, "participant module arity"));
     }
     let mut bindings = BTreeMap::new();
+    let mut binding_type_bytes = 0usize;
     let format = match string(&a[0])? {
-        "zkc.participants/1" => {
+        tag @ ("zkc.participants/1" | "zkc.program/1") => {
             for value in list(&a[1], Limits::DEFINITIONS)? {
                 let r = array(value)?;
                 if r.len() != 4 {
@@ -525,14 +627,30 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
                         .collect::<Result<_>>()?,
                     implementation: string(&r[3])?.into(),
                 };
+                let binding = ResolvedBinding::explicit(declaration)?;
+                for ty in binding
+                    .signature()
+                    .inputs
+                    .iter()
+                    .chain(&binding.signature().outputs)
+                {
+                    binding_type_bytes = binding_type_bytes
+                        .checked_add(ty.logical().descriptor_bytes())
+                        .filter(|n| *n <= Limits::TYPE_BYTES)
+                        .ok_or_else(|| err(ErrorCode::Limit, "type descriptor byte ceiling"))?;
+                }
                 insert(
                     &mut bindings,
                     name(&r[0])?,
-                    Arc::new(ResolvedBinding::explicit(declaration)?),
+                    Arc::new(binding),
                     ErrorCode::Symbol,
                 )?;
             }
-            ArtifactFormat::ExplicitBindings
+            if tag == "zkc.participants/1" {
+                ArtifactFormat::ExplicitBindings
+            } else {
+                ArtifactFormat::Program
+            }
         }
         _ => return Err(err(ErrorCode::Record, "unknown participant module format")),
     };
@@ -546,6 +664,8 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
         format,
         bindings,
         instructions: 0,
+        types: BTreeMap::new(),
+        type_bytes: binding_type_bytes,
     };
     let (mut functions, mut participants, mut entries) =
         (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
@@ -598,4 +718,111 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
         participants,
         entries,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    fn nested(nominal: &str) -> String {
+        let leaf = json!(["Leaf", [["item", ["bool"]]]]);
+        let inner = json!(["Inner", [["many", vec![leaf; 32]]]]);
+        let tree = json!([nominal, [["many", vec![inner; 32]]]]);
+        format!(
+            "{}@logical.variant/1",
+            zkc_test_support::variants::encode_tree(tree)
+        )
+    }
+    fn carrier(types: Vec<String>) -> Vec<u8> {
+        let ports: Vec<_> = types
+            .iter()
+            .enumerate()
+            .map(|(i, t)| json!([format!("x{i}"), t]))
+            .collect();
+        serde_json::to_vec(&json!([
+            "zkc.program/1",
+            [],
+            "physical",
+            [[
+                "function",
+                "unused",
+                ports,
+                [],
+                [["return", []]],
+                ["unused", []]
+            ]],
+            [[
+                "participant",
+                "p",
+                "root",
+                "P",
+                [],
+                [],
+                [],
+                [["return", []]],
+                []
+            ]],
+            [["entry", "main", [["P", "p"]]]]
+        ]))
+        .unwrap()
+    }
+    #[test]
+    fn repeated_physical_and_nested_variant_descriptors_are_shared() {
+        let bytes = carrier(vec![nested("Outer"); 1000]);
+        assert!(bytes.len() < Limits::ARTIFACT_BYTES);
+        let program = physical(&bytes).unwrap();
+        let inputs = &program.functions["unused"].inputs;
+        let first = inputs[0].1.logical().variant_descriptor().unwrap().clone();
+        for (_, ty) in inputs {
+            assert!(Arc::ptr_eq(
+                &first,
+                ty.logical().variant_descriptor().unwrap()
+            ));
+        }
+        let payload = first.alternatives()[0].payload();
+        for ty in payload {
+            assert!(Arc::ptr_eq(
+                payload[0].variant_descriptor().unwrap(),
+                ty.variant_descriptor().unwrap()
+            ));
+        }
+    }
+    #[test]
+    fn aggregate_distinct_descriptors_refuse_before_retaining_an_unbounded_program() {
+        let bytes = carrier((0..128).map(|i| nested(&format!("Outer{i}"))).collect());
+        assert!(bytes.len() < Limits::ARTIFACT_BYTES);
+        let error = physical(&bytes).err().unwrap();
+        assert_eq!(error.code, ErrorCode::Limit);
+        assert_eq!(error.detail, "type descriptor byte ceiling");
+    }
+    #[test]
+    fn unused_binding_signatures_share_the_installed_metadata_ceiling_with_ports() {
+        let spelling = nested("Payload");
+        let ty = PhysicalType::parse(&spelling).unwrap();
+        let charge = ty.logical().descriptor_bytes();
+        let count = Limits::TYPE_BYTES / charge;
+        assert!(count > 0 && count < Limits::DEFINITIONS);
+        let mut value: Json = serde_json::from_slice(&carrier(vec![])).unwrap();
+        value[1] = Json::Array(
+            (0..count)
+                .map(|i| {
+                    json!([
+                        format!("observe{i}"),
+                        "transcript.native.indexed.observe.data",
+                        ["merlin3.bls12-381.fr64be/1", ty.logical().spelling()],
+                        "arkworks/transcript.native.indexed.observe.data"
+                    ])
+                })
+                .collect(),
+        );
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert!(bytes.len() < Limits::ARTIFACT_BYTES);
+        physical(&bytes).unwrap();
+        value[3][0][2] = json!([["x", spelling]]);
+        let error = physical(&serde_json::to_vec(&value).unwrap())
+            .err()
+            .unwrap();
+        assert_eq!(error.code, ErrorCode::Limit);
+        assert_eq!(error.detail, "type descriptor byte ceiling");
+    }
 }

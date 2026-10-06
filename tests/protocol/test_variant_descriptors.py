@@ -3,6 +3,7 @@
 The native reader also consumes this exact corpus in its backend unit tests.
 """
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,8 @@ def test_variant_descriptor(toolchain, directory, name, accepted, graph):
     assert (native.returncode == 0) == accepted, (name, native.stderr)
     assert (reference[0] == 'checked') == accepted, (name, reference)
     if not accepted:
-        assert 'binding-type:' in native.stderr, (name, native.stderr)
+        assert re.search(
+            r'^(?:[^\n]+:\d+:\d+:\s*(?:error:\s*)?|error:\s*)binding-type:',
+            native.stderr, re.MULTILINE), (name, native.stderr)
         assert reference == ['refused', 'binding-type'], (name, reference)
     journal.save()

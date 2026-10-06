@@ -11,8 +11,8 @@
 //! check their applicability to each request, and retire both together. Nothing
 //! here authenticates a caller contract or proves its trusted laws implicitly.
 use super::{
-    ArtifactReport, CacheLimits, CacheUsage, CheckedBundle, InputLimits, Observed, TraceMode,
-    inputs::BoundInputs, io, material::MaterialCache,
+    ArtifactFailure, ArtifactReport, CacheLimits, CacheUsage, CheckedBundle, InputLimits, Observed,
+    TraceMode, inputs::BoundInputs, io, material::MaterialCache,
 };
 use serde_json::Value as Json;
 use std::{
@@ -148,6 +148,10 @@ pub struct PreparedReport<T> {
     pub binding: [u8; 32],
     pub usage: Usage,
     pub events: Option<Vec<Json>>,
+    pub phase: &'static str,
+    pub resources: Vec<Json>,
+    pub cleanup_errors: Vec<String>,
+    pub active_frames: usize,
     pub bind_time: Duration,
     pub run_time: Duration,
 }
@@ -283,84 +287,136 @@ impl PreparedArtifact {
             binding: report.binding,
             usage: report.usage,
             events: report.events,
+            phase: report.phase,
+            resources: report.resources,
+            cleanup_errors: report.cleanup_errors,
+            active_frames: report.active_frames,
             bind_time: report.bind_time,
             run_time: report.run_time,
         })
     }
 
-    fn execute(
+    pub(super) fn execute(
         &mut self,
         installation: &CheckerInstallation,
         input: &InvocationInputs,
         options: InvocationOptions,
         proof: Option<&[u8]>,
     ) -> Result<PreparedReport<Vec<u8>>, InvocationError> {
+        if !Arc::ptr_eq(&self.installation.0, &installation.0) {
+            return Err(InvocationError::InstallationMismatch);
+        }
+        let observation = super::observe::ObservationPlan::new(&self.checked, options.trace)
+            .map_err(InvocationError::Runtime)?;
         let start = Instant::now();
         let bound = self.bind(installation, input, options, proof.is_none())?;
         let bind_time = start.elapsed();
         let start = Instant::now();
-        let backend = Observed::new(bound.backend, &self.checked, options.trace)
-            .map_err(InvocationError::Runtime)?;
+        let backend = observation.bind(bound.backend);
         let role = if proof.is_none() {
             &self.checked.producer
         } else {
             &self.checked.validator
         };
-        let mut runner: Runner<Observed<NativeBackend>> = Runner::new_with_value_budget(
-            &self.checked.admitted,
-            &self.checked.entry,
-            role,
-            "artifact",
-            backend,
-            bound.values,
-            options.value_budget,
-        )
-        .map_err(|e| InvocationError::Runtime(e.error.to_string()))?;
-        let execution = match proof {
-            None => {
-                let report = super::produce(&mut runner, &bound.binding);
+        let (execution, usage, events, mut backend, phase) = if let Some(error) = bound.failure {
+            (
                 ArtifactReport {
-                    outcome: report.outcome.map(|p| p.proof),
-                    messages: report.messages,
-                    bytes: report.bytes,
-                    cancelled: report.cancelled,
-                }
-            }
-            Some(proof) => {
-                let report = super::validate_with_decoder(
-                    &mut runner,
-                    proof,
-                    &bound.binding,
-                    self.checked.acceptance,
-                    |v| {
-                        if let Value::Bool(b) = v {
-                            Some(*b)
-                        } else {
-                            None
-                        }
-                    },
-                    &bound.decoder,
+                    outcome: Err(ArtifactFailure::Backend(
+                        zkc_runtime::interactive::BackendError::new(error),
+                    )),
+                    bytes: 0,
+                    messages: 0,
+                    cancelled: None,
+                },
+                Usage::default(),
+                (options.trace == TraceMode::Full).then(Vec::new),
+                backend.into_inner(),
+                "issuance",
+            )
+        } else {
+            let loaded: std::result::Result<Runner<Observed<NativeBackend>>, _> =
+                Runner::new_with_value_budget(
+                    &self.checked.admitted,
+                    &self.checked.entry,
+                    role,
+                    "artifact",
+                    backend,
+                    bound.values,
+                    options.value_budget,
                 );
-                ArtifactReport {
-                    outcome: report.outcome.map(|_| Vec::new()),
-                    messages: report.messages,
-                    bytes: report.bytes,
-                    cancelled: report.cancelled,
+            match loaded {
+                Err(error) => (
+                    ArtifactReport {
+                        outcome: Err(ArtifactFailure::Runtime(error.error)),
+                        bytes: 0,
+                        messages: 0,
+                        cancelled: None,
+                    },
+                    error.usage,
+                    (options.trace == TraceMode::Full).then(|| error.backend.events().to_vec()),
+                    error.backend.into_inner(),
+                    "construction",
+                ),
+                Ok(mut runner) => {
+                    let execution = match proof {
+                        None => {
+                            let report = super::produce(&mut runner, &bound.binding);
+                            ArtifactReport {
+                                outcome: report.outcome.map(|p| p.proof),
+                                messages: report.messages,
+                                bytes: report.bytes,
+                                cancelled: report.cancelled,
+                            }
+                        }
+                        Some(proof) => {
+                            let report = super::validate_with_decoder(
+                                &mut runner,
+                                proof,
+                                &bound.binding,
+                                self.checked.acceptance,
+                                |v| {
+                                    if let Value::Bool(b) = v {
+                                        Some(*b)
+                                    } else {
+                                        None
+                                    }
+                                },
+                                &bound.decoder,
+                            );
+                            ArtifactReport {
+                                outcome: report.outcome.map(|_| Vec::new()),
+                                messages: report.messages,
+                                bytes: report.bytes,
+                                cancelled: report.cancelled,
+                            }
+                        }
+                    };
+                    let usage = runner.usage();
+                    let events = (options.trace == TraceMode::Full)
+                        .then(|| runner.backend().events().to_vec());
+                    (
+                        execution,
+                        usage,
+                        events,
+                        runner.into_backend().into_inner(),
+                        "execution",
+                    )
                 }
             }
         };
-        let usage = runner.usage();
-        let events = (options.trace == TraceMode::Full).then(|| runner.backend().events().to_vec());
-        // Include per-invocation teardown in lifecycle measurements. Only the
-        // public report and the explicitly bounded key cache survive this call.
-        drop(runner);
+        let (resources, cleanup_errors) = super::inputs::retire(&mut backend, &bound.resources);
+        let active_frames = backend.active_frames();
+        drop(backend);
         drop(bound.decoder);
-        drop(bound.resources);
         Ok(PreparedReport {
             execution,
             binding: bound.binding,
             usage,
             events,
+            phase,
+            resources,
+            cleanup_errors,
+            active_frames,
             bind_time,
             run_time: start.elapsed(),
         })

@@ -65,12 +65,12 @@ def main():
         authored = json.loads(journal.run([compiler, 'protocol-source', '-'], text))
         plan = json.loads(journal.run([compiler, 'protocol-compile', '-'], text))
         logical = journal.run([compiler, 'protocol-import', '-'], text)
-        assert '!algebra.matrix<' in logical and 'sparse-coo' not in logical
+        assert 'tensor<?x?x!algebra.field<' in logical and 'sparse-coo' not in logical
         for op in ['mul_vector', 'transpose_mul_vector', 'bilinear', 'shape_check']:
-            assert 'algebra.matrix_' + op in logical
+            assert 'algebra.exec.matrix_' + op in logical
         optimized = journal.run([optimizer, '--verify-each', '--canonicalize', '--cse'], logical)
         for op in ['mul_vector', 'transpose_mul_vector', 'bilinear', 'shape_check']:
-            assert 'algebra.matrix_' + op in optimized
+            assert 'algebra.exec.matrix_' + op in optimized
         ir = journal.run([compiler, 'protocol-physical-ir', '-'], text)
         journal.run([optimizer, '--verify-each'], ir)
         assert 'sparse-coo/1' in ir
@@ -164,7 +164,9 @@ def main():
         changed[3][0][2][0][1] = changed[3][0][2][0][1].replace(field, other)
         path = journal.write(directory / 'bad-field-plan.json', changed)
         journal.run([lean, '--check-generic', str(directory / 'source.json'), path], refuses='refused')
-        wrong = ir.replace('matrix<' + json.dumps(field) + '>', 'matrix<' + json.dumps(other) + '>', 1)
+        matrix_type = 'tensor<?x?x!algebra.field<' + json.dumps(field) + '>>'
+        other_matrix = 'tensor<?x?x!algebra.field<' + json.dumps(other) + '>>'
+        wrong = ir.replace(matrix_type, other_matrix)
         assert wrong != ir
         journal.run([optimizer, '--verify-each'], wrong, 'binding')
         # Unknown storage and a missing public field requirement are refused.

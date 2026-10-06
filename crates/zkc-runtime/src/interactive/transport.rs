@@ -34,6 +34,8 @@ impl From<BackendError> for RuntimeError {
 pub struct LoadError<B> {
     pub error: RuntimeError,
     pub backend: B,
+    /// Charges reached before entry loading failed.
+    pub usage: Usage,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -87,6 +89,7 @@ impl Origin {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CutKind {
     Local,
+    Query,
     Send,
     Receive,
 }
@@ -153,12 +156,57 @@ pub struct LocalAction {
     pub function: String,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueryAction<V> {
+    pub cut: Cut,
+    pub port: super::ServicePort,
+    pub method: String,
+    pub arguments: Vec<V>,
+    pub results: Vec<(String, PhysicalType)>,
+}
+/// Closed malformed-wire categories; no peer-controlled diagnostic strings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecodeReason {
+    Length,
+    Header,
+    Boolean,
+    Scalar,
+    Group,
+}
+impl DecodeReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Length => "length",
+            Self::Header => "header",
+            Self::Boolean => "boolean",
+            Self::Scalar => "scalar",
+            Self::Group => "group",
+        }
+    }
+}
+/// An accepted receive consumes its payload even when the role stops.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReceiveCompletion {
+    Delivered,
+    Stopped,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StopKind {
+    Decode(DecodeReason),
     Incomplete,
     Explicit(String),
     Backend(BackendError),
     Limit,
     Cancelled,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalContext {
+    /// Participant local-call (or ingress) site containing the failure.
+    pub site: String,
+    pub function: String,
+    /// Inner instruction recorded by local control, when available. Ingress keeps its outer
+    /// `ingress.<parameter>` site in Stop and retains the inner site here.
+    pub instruction: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stop {
@@ -168,9 +216,13 @@ pub struct Stop {
     pub kind: StopKind,
     /// Cleanup errors are local; completed resource transitions remain installed.
     pub cleanup_errors: Vec<BackendError>,
+    /// Names the local call or ingress namespace containing the failure.
+    /// This diagnostic does not change protocol origins or transcript histories.
+    pub local: Option<Box<LocalContext>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action<V> {
+    Query(QueryAction<V>),
     Local(LocalAction),
     Send(Packet<V>),
     Receive(Receive),
@@ -180,6 +232,7 @@ pub enum Action<V> {
 impl<V> Action<V> {
     pub fn cut(&self) -> Option<Cut> {
         match self {
+            Self::Query(query) => Some(query.cut.clone()),
             Self::Local(local) => Some(local.cut.clone()),
             Self::Send(packet) => Some(packet.envelope.cut(CutKind::Send)),
             Self::Receive(request) => Some(request.cut()),
@@ -211,6 +264,24 @@ impl Default for ValueBudget {
         Self {
             live_bytes: Limits::VALUE_BYTES,
             total_bytes: Limits::TOTAL_VALUE_BYTES,
+        }
+    }
+}
+
+/// Host work ceilings for one runner. Values above the hard limits are clamped.
+/// A session that reenters a participant can pass its remaining cumulative budget.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WorkBudget {
+    pub instructions: u64,
+    pub calls: u64,
+    pub iterations: u64,
+}
+impl Default for WorkBudget {
+    fn default() -> Self {
+        Self {
+            instructions: Limits::INSTRUCTIONS,
+            calls: Limits::CALLS,
+            iterations: Limits::ITERATIONS,
         }
     }
 }

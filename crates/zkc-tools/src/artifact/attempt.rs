@@ -36,6 +36,9 @@ pub fn execute<B: WireBackend, R, A>(
     classify: impl FnOnce(Vec<B::Value>) -> Result<Decision<R, A>, ArtifactFailure>,
     encode: impl FnOnce(&[BufferedMessage<B::Value>]) -> Result<Vec<u8>, ArtifactFailure>,
 ) -> ArtifactReport<Decision<R, Ready<A>>> {
+    if let Some(report) = super::driver::refuse_native_profile(runner) {
+        return report;
+    }
     let mut messages = Vec::new();
     let mut bytes = 0usize;
     let mut retained = 0usize;
@@ -43,6 +46,7 @@ pub fn execute<B: WireBackend, R, A>(
         let outputs = loop {
             let action = runner.poll();
             match action {
+                Action::Query(_) => return Err(ArtifactFailure::UnsupportedNativeProfile),
                 Action::Local(local) => runner.execute_local(&local.cut)?,
                 Action::Send(_) => {
                     let cut = action

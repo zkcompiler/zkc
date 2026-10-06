@@ -1913,7 +1913,7 @@ fn failed_root_result_reservation_never_reports_returned_frame() {
     for cleanup_failure in [false, true] {
         let mut backend = Mock::new();
         backend.fail_leave = cleanup_failure;
-        let mut r = runner(&j, "P", backend, vec![V::Sized(30 * 1024 * 1024)]);
+        let mut r = runner(&j, "P", backend, vec![V::Sized(34 * 1024 * 1024)]);
         let Action::Stopped(stop) = r.poll() else {
             panic!("oversized result must stop");
         };
@@ -2089,12 +2089,12 @@ fn child_entry_reservation_failure_preserves_origin_without_entering_backend() {
     // Call and initial-loop live-byte limits, then cumulative bytes on a later push.
     for (count, size_mib, iteration, draws) in [
         (None, 34, None, 1),
-        (Some(1), 22, Some(0), 1),
-        (Some(6), 20, Some(5), 6),
+        (Some(1), 34, Some(0), 1),
+        (Some(12), 20, Some(11), 12),
     ] {
         for failure in [true, false] {
-            let count = if !failure && count == Some(6) {
-                Some(5)
+            let count = if !failure && count == Some(12) {
+                Some(11)
             } else {
                 count
             };
@@ -2198,7 +2198,7 @@ fn combined_loop_capture_allocation_fails_before_child_entry() {
             ["return", []]
         ]),
     );
-    let mut r = runner(&j, "P", Mock::new(), vec![V::Sized(30 * 1024 * 1024)]);
+    let mut r = runner(&j, "P", Mock::new(), vec![V::Sized(34 * 1024 * 1024)]);
     assert!(matches!(
         r.poll(),
         Action::Stopped(Stop {
@@ -3103,4 +3103,206 @@ fn leaf_payload_types_have_a_single_canonical_spelling() {
             .code,
         ErrorCode::Type
     );
+}
+
+#[test]
+fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
+    let logical = zkc_test_support::variants::logical("Local", json!([["empty", []]]));
+    let ty = format!("{logical}@logical.variant/1");
+    let mut program = json!([
+        "zkc.program/1",
+        [],
+        "physical",
+        [],
+        [[
+            "participant",
+            "p",
+            "root",
+            "P",
+            [],
+            [["x", ty]],
+            [ty],
+            [["return", ["x"]]],
+            []
+        ]],
+        [["entry", "main", [["P", "p"]]]]
+    ]);
+    admit_supplied(&bytes(&program), &Mock::new()).unwrap();
+    let affine = zkc_test_support::variants::logical(
+        "Local",
+        json!([["empty", []], ["owned", ["rng:bls12-381.fr"]]]),
+    );
+    let affine = format!("{affine}@logical.variant/1");
+    program[4][0][5][0][1] = json!(affine);
+    program[4][0][6][0] = json!(affine);
+    let error = admit_supplied(&bytes(&program), &Mock::new()).unwrap_err();
+    assert_eq!(error.code, ErrorCode::Type);
+    assert_eq!(error.detail, "variant-participant-boundary");
+}
+
+#[test]
+fn host_work_limits_stop_administrative_execution_at_the_selected_boundary() {
+    let j = one(
+        json!([]),
+        json!([]),
+        json!([]),
+        json!([
+            ["loop", "rounds", "3", [], [], [["yield", []]], []],
+            ["return", []]
+        ]),
+    );
+    for budget in [
+        WorkBudget {
+            instructions: 1,
+            ..WorkBudget::default()
+        },
+        WorkBudget {
+            iterations: 1,
+            ..WorkBudget::default()
+        },
+    ] {
+        let mut r = Runner::new_with_budgets(
+            &admitted(&j),
+            "main",
+            "P",
+            "s",
+            Mock::new(),
+            vec![],
+            ValueBudget::default(),
+            budget,
+        )
+        .unwrap();
+        assert!(matches!(
+            r.poll(),
+            Action::Stopped(Stop {
+                kind: StopKind::Limit,
+                ..
+            })
+        ));
+        assert!(r.usage().instructions <= budget.instructions);
+        assert!(r.usage().iterations <= budget.iterations);
+        assert!(r.backend().frames.is_empty());
+    }
+    let j = module(
+        json!([]),
+        json!([
+            participant(
+                "mainP",
+                "root",
+                "P",
+                json!([]),
+                json!([]),
+                json!([["call", "nested", "childP", [], []], ["return", []]])
+            ),
+            participant(
+                "childP",
+                "child",
+                "P",
+                json!([]),
+                json!([]),
+                json!([["return", []]])
+            )
+        ]),
+        json!([["entry", "main", [["P", "mainP"]]]]),
+    );
+    let mut r = Runner::new_with_budgets(
+        &admitted(&j),
+        "main",
+        "P",
+        "s",
+        Mock::new(),
+        vec![],
+        ValueBudget::default(),
+        WorkBudget {
+            calls: 0,
+            ..WorkBudget::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        r.poll(),
+        Action::Stopped(Stop {
+            kind: StopKind::Limit,
+            ..
+        })
+    ));
+    assert_eq!(r.usage().calls, 0);
+    assert!(r.backend().frames.is_empty());
+}
+
+#[test]
+fn participant_iteration_limit_identifies_the_attempted_occurrence() {
+    let j = one(
+        json!([]),
+        json!([]),
+        json!([]),
+        json!([
+            ["loop", "rounds", "3", [], [], [["yield", []]], []],
+            ["return", []]
+        ]),
+    );
+    for (iterations, instructions, expected, site) in [
+        (0, 100, 0, Some("rounds")),
+        (1, 100, 1, Some("rounds")),
+        (100, 1, 0, None),
+    ] {
+        let mut runner = Runner::new_with_budgets(
+            &admitted(&j),
+            "main",
+            "P",
+            "s",
+            Mock::new(),
+            vec![],
+            ValueBudget::default(),
+            WorkBudget {
+                instructions,
+                iterations,
+                ..WorkBudget::default()
+            },
+        )
+        .unwrap();
+        let Action::Stopped(stop) = runner.poll() else {
+            panic!("expected budget stop")
+        };
+        assert_eq!(stop.kind, StopKind::Limit);
+        assert_eq!(stop.site.as_deref(), site);
+        assert_eq!(
+            stop.origin.path,
+            vec![PathElement::Loop {
+                site: "rounds".into(),
+                iteration: expected
+            }]
+        );
+        assert!(runner.backend().frames.is_empty());
+    }
+}
+
+#[test]
+fn local_stop_identifies_its_namespace_when_a_participant_site_collides() {
+    let j = one(
+        json!([["function", "check", [], [], [["stop", "message", "reject"]]]]),
+        json!([["x", "field"]]),
+        json!([]),
+        json!([
+            ["local", "guard", "check", [], []],
+            ["send", "message", "schema", "V", "x"],
+            ["return", []]
+        ]),
+    );
+    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(3)]);
+    let cut = r.poll().cut().unwrap();
+    r.execute_local(&cut).unwrap();
+    let Action::Stopped(stop) = r.poll() else {
+        panic!("stop")
+    };
+    assert_eq!(stop.site.as_deref(), Some("message"));
+    assert_eq!(
+        stop.local,
+        Some(Box::new(LocalContext {
+            site: "guard".into(),
+            function: "check".into(),
+            instruction: Some("message".into())
+        }))
+    );
+    assert!(r.backend().frames.is_empty());
 }

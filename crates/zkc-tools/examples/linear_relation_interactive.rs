@@ -118,7 +118,7 @@ fn main() {
         runners.insert(role.role.clone(), runner);
     }
     let mut wire = RecordingTransport::default();
-    let report = drive(&mut schedule, &mut runners, &mut wire);
+    let report = drive(&mut schedule, &mut runners, &mut wire, Default::default());
     let mut resources = Vec::new();
     for (role, runner) in &runners {
         assert_eq!(runner.backend().active_frames(), 0);

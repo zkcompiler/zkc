@@ -6,12 +6,13 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
-#include "zkc/Translation/Protocol.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -36,8 +37,10 @@ namespace {
 // alias one SSA value. Retain its first occurrence and rewrite the region's
 // arguments together. Recurse after rewriting: aliases can reach inner regions.
 LogicalResult canonicalizeCaptures(Operation *op) {
-  if (isa<LocalIfOp, LocalMatchOp, LocalForOp>(op)) {
-    unsigned prefix = isa<LocalForOp>(op) ? 2 + op->getNumResults() : 1;
+  if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
+          zkc::local::LocalForOp>(op)) {
+    unsigned prefix =
+        isa<zkc::local::LocalForOp>(op) ? 2 + op->getNumResults() : 1;
     unsigned captures = op->getNumOperands() - prefix;
     for (unsigned i = captures; i-- > 0;) {
       Value value = op->getOperand(prefix + i);
@@ -57,8 +60,12 @@ LogicalResult canonicalizeCaptures(Operation *op) {
         unsigned start = block.getNumArguments() - captures;
         block.getArgument(start + i).replaceAllUsesWith(
             block.getArgument(start + first));
-        if (isa<LocalForOp>(op) && isa<LocalYieldOp>(block.back()))
-          block.back().eraseOperand(op->getNumResults() + i);
+        if (isa<zkc::local::LocalForOp>(op) &&
+            isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
+                block.back()))
+          block.back().eraseOperand(
+              op->getNumResults() + i +
+              (isa<zkc::local::LocalConditionOp>(block.back()) ? 1 : 0));
         block.eraseArgument(start + i);
       }
       op->eraseOperand(prefix + i);
@@ -75,29 +82,37 @@ LogicalResult canonicalizeCaptures(Operation *op) {
 
 class Expander {
   OpBuilder builder;
-  std::map<std::string, func::FuncOp> functions;
+  std::map<std::string, zkc::local::FuncOp> functions;
   size_t work = 0;
   std::vector<AlgorithmOrigin> origins;
 
-  std::string definition(func::FuncOp function) {
+  std::string definition(zkc::local::FuncOp function) {
     if (auto origin = function->getAttrOfType<ArrayAttr>("logical_origin"))
       return cast<StringAttr>(origin[0]).getValue().str();
     return function.getSymName().str();
   }
 
-  LogicalResult body(func::FuncOp function, Block &block, IRMapping &mapping,
-                     StringRef root, source::Assignments path, bool encode,
+  LogicalResult body(zkc::local::FuncOp function, Block &block,
+                     IRMapping &mapping, StringRef root,
+                     source::Assignments path, bool encode,
                      SmallVector<Value> &returned) {
+    if (path.size() > 64)
+      return diagnostics::emit(function.emitOpError(),
+                               "interactive-call-depth");
     for (auto &op : block) {
       // Bound traversal as well as output: empty helpers can also form an
       // exponentially large DAG. Admission separately bounds depth/cycles.
       if (++work > 32768)
         return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
-      if (auto ret = dyn_cast<func::ReturnOp>(op)) {
+      if (auto ret = dyn_cast<zkc::local::ReturnOp>(op)) {
         for (auto value : ret.getOperands())
           returned.push_back(mapping.lookup(value));
-      } else if (auto call = dyn_cast<func::CallOp>(op)) {
-        auto callee = functions.at(call.getCallee().str());
+      } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op)) {
+        auto found = functions.find(call.getCallee().str());
+        if (found == functions.end() || found->second.isExternal() ||
+            !llvm::hasSingleElement(found->second.getBody()))
+          return diagnostics::emit(call.emitOpError(), "algorithm-call-symbol");
+        auto callee = found->second;
         IRMapping inner;
         for (auto [arg, value] : zip(callee.getArguments(), call.getOperands()))
           inner.map(arg, mapping.lookup(value));
@@ -108,11 +123,12 @@ class Expander {
                         std::move(nested), true, results)))
           return failure();
         if (!builder.getInsertionBlock()->empty() &&
-            isa<HaltOp>(builder.getInsertionBlock()->back()))
+            isa<zkc::local::StopOp>(builder.getInsertionBlock()->back()))
           return success();
         for (auto [old, value] : zip(call.getResults(), results))
           mapping.map(old, value);
-      } else if (isa<LocalYieldOp>(op)) {
+      } else if (isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
+                     op)) {
         builder.clone(op, mapping);
       } else {
         std::string site = attr(&op, "site").str();
@@ -138,14 +154,16 @@ class Expander {
                           ignored)))
             return failure();
         }
-        copy->setAttr("site", builder.getStringAttr(site));
+        if (op.hasAttr("site"))
+          copy->setAttr("site", builder.getStringAttr(site));
         // Specialization can make every continuing arm stop. Until expansion
         // can rebuild the surrounding result-less region and continuation,
         // refuse at the actual control operation rather than emit undefined
         // results that fail later during source export.
-        if (isa<LocalIfOp, LocalMatchOp>(copy) && copy->getNumResults() &&
+        if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp>(copy) &&
+            copy->getNumResults() &&
             llvm::all_of(copy->getRegions(), [](Region &region) {
-              return isa<HaltOp>(region.front().back());
+              return isa<zkc::local::StopOp>(region.front().back());
             }))
           return diagnostics::emit(copy->emitOpError(),
                                    "algorithm-terminal-results");
@@ -156,7 +174,7 @@ class Expander {
         if (definition(function) != function.getSymName())
           origins.push_back(
               {root.str(), site, function.getSymName().str(), original, path});
-        if (isa<HaltOp>(copy))
+        if (isa<zkc::local::StopOp>(copy))
           return success();
       }
     }
@@ -165,18 +183,20 @@ class Expander {
 
 public:
   explicit Expander(ModuleOp original) : builder(original.getContext()) {
-    auto root = cast<ProtocolModuleOp>(&original.getBody()->front());
-    for (auto fn : root.getBody().front().getOps<func::FuncOp>())
+    auto root =
+        cast<zkc::protocol_ir::ProtocolModuleOp>(&original.getBody()->front());
+    for (auto fn : root.getBody().front().getOps<zkc::local::FuncOp>())
       functions.emplace(fn.getSymName().str(), fn);
   }
   LogicalResult run(ModuleOp candidate) {
-    auto root = cast<ProtocolModuleOp>(&candidate.getBody()->front());
-    for (auto fn : root.getBody().front().getOps<func::FuncOp>()) {
+    auto root =
+        cast<zkc::protocol_ir::ProtocolModuleOp>(&candidate.getBody()->front());
+    for (auto fn : root.getBody().front().getOps<zkc::local::FuncOp>()) {
       if (fn.isExternal())
         continue;
       auto original = functions.at(fn.getSymName().str());
       bool calls = false;
-      original.walk([&](func::CallOp) { calls = true; });
+      original.walk([&](zkc::local::ApplyOp) { calls = true; });
       auto &block = fn.getBody().front();
       block.dropAllReferences();
       block.getOperations().clear();
@@ -188,8 +208,8 @@ public:
       if (failed(body(original, original.getBody().front(), mapping,
                       fn.getSymName(), {}, calls, returned)))
         return failure();
-      if (block.empty() || !isa<HaltOp>(block.back()))
-        func::ReturnOp::create(
+      if (block.empty() || !isa<zkc::local::StopOp>(block.back()))
+        zkc::local::ReturnOp::create(
             builder, original.getBody().front().back().getLoc(), returned);
       if (failed(canonicalizeCaptures(fn)))
         return failure();
@@ -213,7 +233,28 @@ struct AlgorithmExpansionPass
 } // namespace
 LogicalResult expandAlgorithms(ModuleOp module,
                                std::vector<AlgorithmOrigin> *origins) {
-  auto source = exportSource(module);
+  if (llvm::hasSingleElement(*module.getBody())) {
+    auto unit =
+        dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+    if (unit && unit.getProfile() == protocol_ir::Profile::Protocol) {
+      if (failed(verify(module)))
+        return failure();
+      bool calls = false;
+      unit.walk([&](local::ApplyOp) { calls = true; });
+      if (!calls && !origins)
+        return success();
+      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
+      Expander expansion(module);
+      if (failed(expansion.run(*candidate)) || failed(verify(*candidate)) ||
+          failed(verifyAlgorithmExpansionPreserved(module, *candidate)))
+        return failure();
+      module.getBodyRegion().takeBody(candidate->getBodyRegion());
+      if (origins)
+        *origins = expansion.takeOrigins();
+      return success();
+    }
+  }
+  auto source = readExecutionModel(module);
   if (!source)
     return diagnostics::emit(module.emitError(), source.takeError());
   auto *common = std::get_if<source::Module>(&*source);
@@ -231,28 +272,14 @@ LogicalResult expandAlgorithms(ModuleOp module,
     return success();
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
   Expander expansion(module);
-  if (failed(expansion.run(*candidate)) || failed(verify(*candidate)))
+  if (failed(expansion.run(*candidate)) || failed(verify(*candidate)) ||
+      failed(verifyAlgorithmExpansionPreserved(module, *candidate)))
     return failure();
   // Do not expose partial rewrites on failure.
   module.getBodyRegion().takeBody(candidate->getBodyRegion());
   if (origins)
     *origins = expansion.takeOrigins();
   return success();
-}
-Expected<ExpandedAlgorithms> expandAlgorithms(const source::Module &source,
-                                              MLIRContext &context) {
-  auto module = importModule(source, context);
-  if (!module)
-    return module.takeError();
-  std::vector<AlgorithmOrigin> origins;
-  if (failed(expandAlgorithms(**module, &origins)))
-    return error("algorithm-expansion-failed");
-  auto result = exportSource(**module);
-  if (!result)
-    return result.takeError();
-  auto expanded = source;
-  expanded.functions = std::get<source::Module>(std::move(*result)).functions;
-  return ExpandedAlgorithms{std::move(expanded), std::move(origins)};
 }
 std::unique_ptr<Pass> createExpandAlgorithmsPass() {
   return std::make_unique<AlgorithmExpansionPass>();

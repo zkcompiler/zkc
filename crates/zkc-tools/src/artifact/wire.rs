@@ -29,17 +29,31 @@ impl std::error::Error for FormatError {}
 pub struct ProofWriter {
     bytes: Vec<u8>,
     messages: usize,
+    limit: usize,
 }
 impl ProofWriter {
     pub fn new(expected_binding: &[u8; 32]) -> Self {
         let mut bytes = Vec::with_capacity(HEADER_BYTES);
         bytes.extend_from_slice(MAGIC);
         bytes.extend_from_slice(expected_binding);
-        Self { bytes, messages: 0 }
+        Self {
+            bytes,
+            messages: 0,
+            limit: MAX_PROOF_BYTES,
+        }
+    }
+    /// A host can lower the buffer ceiling, including the framing header.
+    pub fn with_limit(expected_binding: &[u8; 32], limit: usize) -> Result<Self, FormatError> {
+        if limit < HEADER_BYTES {
+            return Err(FormatError::Limit);
+        }
+        let mut writer = Self::new(expected_binding);
+        writer.limit = limit.min(MAX_PROOF_BYTES);
+        Ok(writer)
     }
     pub fn message(&mut self, payload: &[u8]) -> Result<(), FormatError> {
         let additional = payload.len().checked_add(8).ok_or(FormatError::Limit)?;
-        if self.bytes.len().saturating_add(additional) > MAX_PROOF_BYTES {
+        if self.bytes.len().saturating_add(additional) > self.limit {
             return Err(FormatError::Limit);
         }
         self.bytes
@@ -127,6 +141,18 @@ impl<'a> ProofReader<'a> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn lowered_writer_limit_includes_header_and_refuses_before_buffer_extension() {
+        assert!(matches!(
+            ProofWriter::with_limit(&[0; 32], 39),
+            Err(FormatError::Limit)
+        ));
+        let mut writer = ProofWriter::with_limit(&[0; 32], 49).unwrap();
+        writer.message(&[1]).unwrap();
+        assert_eq!(writer.message(&[]), Err(FormatError::Limit));
+        assert_eq!(writer.bytes_written(), 49);
+        assert_eq!(writer.messages(), 1);
+    }
     #[test]
     fn exact_context_and_bounded_payload_consumption() {
         // Independently spelled fixture: one 3-byte payload and one empty

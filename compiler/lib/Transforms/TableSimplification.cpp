@@ -2,9 +2,10 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Plan/IR/Physical.h"
+#include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Table/IR/Physical.h"
+#include "zkc/Dialect/Table/IR/Program.h"
 #include "zkc/Transforms/Passes.h"
-#include "zkc/Translation/Table.h"
 #include "llvm/ADT/DenseMap.h"
 
 using namespace mlir;
@@ -15,9 +16,10 @@ namespace {
 // visiting the region, so an outer linear alias also reaches nested chains.
 // Keep every capture operand and block argument, including unused ones.
 void propagateCaptureAliases(Operation *op, IRRewriter &rewriter) {
-  bool repeat = isa<PIRRepeatOp, PlanRepeatOp>(op);
-  bool binding = isa<PIRBindOp, PlanBindOp>(op);
-  if (!repeat && !binding && !isa<PIRChooseOp, PlanChooseOp>(op))
+  bool repeat = isa<zkc::table::PIRRepeatOp, zkc::table::PlanRepeatOp>(op);
+  bool binding = isa<zkc::table::PIRBindOp, zkc::table::PlanBindOp>(op);
+  if (!repeat && !binding &&
+      !isa<zkc::table::PIRChooseOp, zkc::table::PlanChooseOp>(op))
     return;
   auto captures = op->getOperands().drop_front(binding ? 1 : 2);
   for (Region &region : op->getRegions()) {
@@ -52,7 +54,8 @@ struct SimplifyPass : PassWrapper<SimplifyPass, OperationPass<ModuleOp>> {
 
 LogicalResult simplifyTableRegions(ModuleOp module) {
   if (!llvm::hasSingleElement(*module.getBody()) ||
-      !isa<PIRProgramOp, PlanProgramOp>(module.getBody()->front()))
+      !isa<zkc::table::PIRProgramOp, zkc::table::PlanProgramOp>(
+          module.getBody()->front()))
     return diagnostics::emit(module.emitError(), "expected-logical-program");
   if (failed(verify(module)))
     return failure();
@@ -75,7 +78,7 @@ LogicalResult simplifyTableRegions(ModuleOp module) {
   // hook, canonicalizer, or implicit DCE participates in this pass.
   IRRewriter rewriter(module.getContext());
   program->walk<WalkOrder::PreOrder>([&](Operation *op) {
-    if (auto linear = dyn_cast<LinearOp>(op)) {
+    if (auto linear = dyn_cast<zkc::table::LinearOp>(op)) {
       if (linear.getAtZero() == linear.getAtOne()) {
         rewriter.replaceOp(linear, linear.getAtZero());
         // MLIR's pre-order walker requires skipping an erased operation.

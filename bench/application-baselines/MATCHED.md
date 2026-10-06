@@ -140,28 +140,27 @@ claimed. Cross-route proofs fail the version check.
   comparison its default is `dense.compile.stdout`; `--physical` selects an
   explicit candidate, and explicit `--linear-contractions` selects the existing
   contraction ablation. Native claim admission remains optional as in the
-  original harness: use `--include-claims` for the optimization work integrated measurements.
+  original harness: use `--include-claims` to include that check in measurements.
   Do not combine selected contraction/implementation changes with this baseline
   and attribute the difference solely to the runtime.
 
-Native CLI `run_seconds` includes proof-file reads or durable publication
-(`sync_all` and persist), report construction and runner teardown. Direct API
-proof timers exclude file I/O; its process path uses `fs::write` without the same
-publication policy. The prepared-host experiment supplies the separate in-memory
-comparison. No subtraction of those CLI/direct timer fields isolates VM cost.
+Native CLI reports with `timings.scope: prepared-execution` separate runner
+execution/cleanup from input reading, proof reading and durable publication.
+`measure.py` records this scope and all six phase timings. Earlier unlabelled
+CLI records included proof I/O/publication in `run_seconds` and input parsing in
+key loading; do not pool those phase measurements with the new scope. Direct
+proof timers exclude file I/O and have their own setup/teardown boundary. Use the
+prepared-host comparison or whole process costs; subtraction of these fields
+alone does not isolate VM overhead.
 
 ## Functional reproduction
 
-The commands below replay retained campaign inputs. Their `/tmp` paths and
-frozen native tools are not supplied by a clean checkout; see the
-[input requirements](README.md#reproduce). Select your actual run directory and
-binary explicitly. The recorded measurements are not rerun by building the crate.
-
-Build with the existing lock, including all unchanged prior dependency versions:
+These commands require retained campaign inputs and recorded native tools,
+which are not distributed; see the [input requirements](README.md#reproduce).
+Building the crate does not rerun the recorded measurements.
 
 ```sh
-CARGO_TARGET_DIR=/tmp/zkc-baseline/matched-baseline-target cargo build --offline --locked --release -j 2 \
-  --manifest-path bench/application-baselines/Cargo.toml
+cargo build --locked --release --manifest-path bench/application-baselines/Cargo.toml
 ```
 
 Standalone commands have the original positional CLI shape:
@@ -181,14 +180,14 @@ verifier always derives its own challenges and never consumes this export.
 
 ```sh
 python3 -B bench/application-baselines/matched_compare.py \
-  --run /tmp/zkc-baseline/baseline/tx-small --output /tmp/matched-small-new \
-  --binary /tmp/zkc-baseline/matched-baseline-target/release/zkc-application-baselines --native
+  --run RUN_DIR --output NEW_DIR \
+  --binary bench/application-baselines/target/release/zkc-application-baselines --native
 python3 -B bench/application-baselines/matched_compare.py \
-  --run /tmp/zkc-4b-transaction/n32-m8-k4 --output /tmp/matched-large-new \
-  --binary /tmp/zkc-baseline/matched-baseline-target/release/zkc-application-baselines --native
+  --run RUN_DIR --output NEW_DIR \
+  --binary bench/application-baselines/target/release/zkc-application-baselines --native
 python3 -B bench/application-baselines/controls.py \
-  --application tx-matched --run /tmp/zkc-baseline/baseline/tx-small --output /tmp/matched-controls-new \
-  --binary /tmp/zkc-baseline/matched-baseline-target/release/zkc-application-baselines
+  --application tx-matched --run RUN_DIR --output NEW_DIR \
+  --binary bench/application-baselines/target/release/zkc-application-baselines
 ```
 
 The comparison pins actual fixture/tool/artifact files, produces two distinct
@@ -206,7 +205,7 @@ execution tests remain in the suite.
 
 ## Execution comparison adequacy
 
-The unchanged execution route is already a complete algorithm-level comparison:
+The execution route is already a complete algorithm-level comparison:
 one original commitment; ONE and all public coordinate openings; CPU, memory and
 link cubic outer sumchecks; three quadratic inner sumchecks; three final
 original openings and three separately required coefficient-times-value
@@ -217,5 +216,4 @@ tests attack each terminal connection after valid PCS checks.
 It still uses its own transcript/framing, direct sparse matrix loops,
 allocation/folding layout and preparation rather than the source runtime's
 materialization and dispatch. Its matching schedule is adequate for a complete
-algorithm comparison, not for a pure interpreter-overhead subtraction. No
-execution implementation changes are part of this addition.
+algorithm comparison, not for a pure interpreter-overhead subtraction.

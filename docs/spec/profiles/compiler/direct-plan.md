@@ -393,7 +393,7 @@ with every child replaced by `RegionControl`, plus:
 RegionControl ::= ... | ["bind", Type, RegionControl, RegionControl].
 ```
 
-The new fields are result sort, body and suffix. Both children consume one
+The `bind` fields are result sort, body and suffix. Both children consume one
 control-depth level and are formed under the respective contexts above.
 Malformed dormant bodies or suffixes fail formation even when execution would
 stop before reaching them.

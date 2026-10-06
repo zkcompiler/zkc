@@ -201,3 +201,13 @@ uv run --no-sync --locked pytest tests/protocol/test_contract_conformance.py
 Per-test reports preserve request/reply lines, complete disagreements and
 per-operation accepted counts. There are no expected-failure exemptions for
 consumer disagreement.
+
+
+The coverage policy records deferred consumers explicitly. Native sequences and their four operations, field arrays and `field_array.from_vector` / `field_array.at`, plus `matrix.dimension` and
+`poly.table_arity`, plus the explicitly listed native-origin transcript
+contracts, have independent C++, Rust and backend support; the existing Lean
+reader must refuse them. Native indexed field-array observations use a closed
+Transcript/Field/Nat witness and retain the same explicit absence policy. Tests enumerate all
+declarations and installations, require positive native witnesses and check the
+declared Lean absence. Remove that absence only with an independent Lean
+implementation and its tests.

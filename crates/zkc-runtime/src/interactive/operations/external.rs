@@ -18,7 +18,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Indices, Indices],
             AttributeRule::None,
         ),
-    ),
+    )
+    .history(),
     Contract::new(
         "external.openvm.init",
         (&[], &[Indices], AttributeRule::None),
@@ -26,19 +27,23 @@ pub(super) const CONTRACTS: &[Contract] = &[
     Contract::new(
         "external.openvm.observe",
         (&[Indices, Indices], &[Indices], AttributeRule::None),
-    ),
+    )
+    .history(),
     Contract::new(
         "external.openvm.sample",
         (&[Indices], &[Indices, Index], AttributeRule::None),
-    ),
+    )
+    .history(),
     Contract::new(
         "external.openvm.sample_ext",
         (&[Indices], &[Indices, Indices], AttributeRule::None),
-    ),
+    )
+    .history(),
     Contract::new(
         "external.openvm.sample_bits",
         (&[Indices, Index], &[Indices, Index], AttributeRule::None),
-    ),
+    )
+    .history(),
     Contract::new(
         "external.openvm.check_witness",
         (
@@ -46,7 +51,8 @@ pub(super) const CONTRACTS: &[Contract] = &[
             &[Indices, Bool],
             AttributeRule::None,
         ),
-    ),
+    )
+    .history(),
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],

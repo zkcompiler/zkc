@@ -124,7 +124,9 @@ macro_rules! value_inventory {
     };
 }
 value_inventory! {
+    Sequence(crate::Sequence),
 
+    FieldArray(crate::FieldArray),
     FixedVector(crate::FixedVector),
     Variant(crate::variant::Variant),
     /// Zero payload; nominal identity and live ownership stay in authenticated metadata.
@@ -137,6 +139,7 @@ value_inventory! {
     Bn254G1(crate::Bn254G1),
     Bn254G1Vector(Arc<[crate::Bn254G1]>),
     Bn254G2(crate::Bn254G2),
+    Bn254Gt(crate::Bn254Gt),
     Bn254G2Vector(Arc<[crate::Bn254G2]>),
 
     OracleRoot(crate::oracle::Domain, crate::plonky3::oracle::Digest),
@@ -191,10 +194,20 @@ value_inventory! {
 }
 
 impl Value {
+    /// Conservative retained charge for an RNG, nonce or transcript handle.
+    /// Host planners use this before issuing a capability.
+    pub const fn capability_retained_bytes() -> usize {
+        512
+    }
+
     /// Visit only active leaves, preserving their exact capability handles.
     pub(crate) fn active_leaves(&self) -> Vec<&Self> {
         fn visit<'a>(v: &'a Value, out: &mut Vec<&'a Value>) {
-            if let Value::Variant(v) = v {
+            if let Value::Sequence(v) = v {
+                for p in v.elements() {
+                    visit(p, out);
+                }
+            } else if let Value::Variant(v) = v {
                 for p in v.payload() {
                     visit(p, out);
                 }
@@ -214,6 +227,8 @@ impl Value {
     // New variants must explicitly classify all three properties.
     fn type_identity(&self) -> (Type, Identity, Representation) {
         match self {
+            Self::Sequence(_) => (Type::Sequence, Identity::None, Representation::Sequence),
+            Self::FieldArray(_) => (Type::FieldArray, Identity::None, Representation::FieldArray),
             Self::FixedVector(_) => (
                 Type::FixedVector,
                 Identity::None,
@@ -248,6 +263,7 @@ impl Value {
                 Identity::Bn254G1,
                 Representation::Bn254G1Vector,
             ),
+            Self::Bn254Gt(_) => (Type::Group, Identity::Bn254Gt, Representation::Bn254Gt),
             Self::Bn254G2(_) => (Type::Group, Identity::Bn254G2, Representation::Bn254G2),
             Self::Bn254G2Vector(_) => (
                 Type::Groups,
@@ -447,7 +463,9 @@ impl Value {
             Type::Indices => wire_len / 8,
             Type::Groups => wire_len / 48,
             Type::Proof => wire_len / 96,
-            Type::FixedVector
+            Type::Sequence
+            | Type::FieldArray
+            | Type::FixedVector
             | Type::Variant
             | Type::ResourceUnit
             | Type::Field
@@ -519,7 +537,9 @@ impl Value {
             policy.wire(wire_len)?;
             let bytes = match ty.kind() {
                 Type::Vector | Type::Polynomial => size(wire_len / 4, 4)?,
-                Type::FixedVector
+                Type::Sequence
+                | Type::FieldArray
+                | Type::FixedVector
                 | Type::Variant
                 | Type::ResourceUnit
                 | Type::Field
@@ -561,8 +581,9 @@ impl Value {
             Self::ResourceUnit(t) => Some(t.capability()),
             Self::Rng(t) | Self::Nonce(t) | Self::Transcript(t) => Some(t),
             // Variants carry resources through active leaves, not a wrapper token.
-            Self::Variant(_) => None,
-            Self::FixedVector(..)
+            Self::Variant(_) | Self::Sequence(_) => None,
+            Self::FieldArray(..)
+            | Self::FixedVector(..)
             | Self::Bn254Field(..)
             | Self::Bn254Vector(..)
             | Self::Bn254Polynomial(..)
@@ -570,6 +591,7 @@ impl Value {
             | Self::Bn254Matrix(..)
             | Self::Bn254G1(..)
             | Self::Bn254G1Vector(..)
+            | Self::Bn254Gt(..)
             | Self::Bn254G2(..)
             | Self::Bn254G2Vector(..)
             | Self::OracleRoot(..)
@@ -685,6 +707,9 @@ impl RuntimeValue for Value {
             _ => Err(refused("local-control-index")),
         }
     }
+    fn from_control_bool(value: bool) -> Result<Self> {
+        Ok(Self::Bool(value))
+    }
     fn from_control_index(index: u64) -> Result<Self> {
         Ok(Self::Index(index))
     }
@@ -693,8 +718,14 @@ impl RuntimeValue for Value {
         self.ty().name()
     }
     fn physical_type(&self) -> PhysicalType {
+        if let Self::Sequence(value) = self {
+            return value.physical_type().clone();
+        }
         // Structural families already retain their checked physical descriptor;
         // do not traverse every inactive variant payload on each invocation.
+        if let Self::FieldArray(value) = self {
+            return value.physical_type().clone();
+        }
         if let Self::FixedVector(value) = self {
             return value.physical_type().clone();
         }
@@ -726,6 +757,11 @@ impl RuntimeValue for Value {
     fn retained_bytes(&self) -> usize {
         // Conservative retained Rust payload, counting shared backing in full.
         match self {
+            Self::Rng(_) | Self::Nonce(_) | Self::Transcript(_) => {
+                Ok(Self::capability_retained_bytes())
+            }
+            Self::Sequence(v) => Ok(v.retained_bytes()),
+            Self::FieldArray(v) => v.retained_bytes(),
             Self::FixedVector(v) => v.retained_bytes(),
             Self::Variant(v) => Ok(v.retained_bytes()),
             Self::ResourceUnit(_) => Ok(512),
@@ -762,6 +798,7 @@ impl RuntimeValue for Value {
             Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
+            | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
@@ -774,10 +811,7 @@ impl RuntimeValue for Value {
             | Self::Round(_)
             | Self::Bool(_)
             | Self::Index(_)
-            | Self::Rng(_)
             | Self::Commitment(_)
-            | Self::Nonce(_)
-            | Self::Transcript(_)
             | Self::Curve(_) => Ok(512),
         }
         .unwrap_or(usize::MAX)
@@ -791,7 +825,9 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         Type::Indices => size(elements, 8),
         Type::Groups | Type::VerifierKey => size(elements, 128),
         Type::Proof => size(elements, 192),
-        Type::FixedVector
+        Type::Sequence
+        | Type::FieldArray
+        | Type::FixedVector
         | Type::Variant
         | Type::ResourceUnit
         | Type::Field

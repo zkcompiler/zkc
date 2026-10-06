@@ -53,11 +53,11 @@ canonical = native('protocol-format', source)
 assert 'capture (' in canonical and 'carry (' in canonical
 assert native('protocol-source', canonical) == source
 logical = native('protocol-import', text)
-assert '"pir.local_if"' in logical and '"pir.local_for"' in logical
+assert '"local.if"' in logical and '"local.for"' in logical
 run([optimizer, '--verify-each'], logical)
 assert native('protocol-export', native('protocol-import', native('protocol-export', logical))) == native('protocol-export', logical)
 expanded = run([optimizer, '--zkc-expand-algorithms', '--verify-each'], logical)
-assert 'call @' not in expanded and '"pir.local_for"' in expanded
+assert 'call @' not in expanded and '"local.for"' in expanded
 assert run([optimizer, '--zkc-expand-algorithms'], expanded) == expanded
 plans = []
 for flags in [[], ['--release-storage']]:
@@ -184,8 +184,9 @@ for spelling in ('a..b', 'a.'):
     assert native('protocol-source', native('protocol-format', renamed)) == renamed
 
 # A region interface must diagnose malformed input before accessing short ranges.
-loop_line = next(line for line in logical.splitlines() if '"pir.local_for"(' in line)
-broken = logical.replace(loop_line, re.sub(r'local_for"\([^)]*\)', 'local_for"()', loop_line), 1)
+loop_line = next(line for line in logical.splitlines() if '"local.for"(' in line)
+broken = logical.replace(loop_line, re.sub(r'local[.]for"\([^)]*\)', 'local.for"()', loop_line), 1)
+assert broken != logical
 run([optimizer, '--verify-each'], broken, refuses='')
 # Affine loop state must be carried, not implicitly borrowed on every trip.
 affine = """

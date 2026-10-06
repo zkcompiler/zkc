@@ -72,6 +72,9 @@ llvm::Error checkBindingDeclaration(llvm::StringRef name,
 /// checked before any nominal domain or implementation is selected.
 llvm::ArrayRef<generic::TypeConstructor> boundTypeConstructors();
 llvm::ArrayRef<generic::Operation> boundOperationContracts();
+/// Construction-only complete-type bindings are not common generic operations.
+llvm::ArrayRef<generic::Operation> nonGenericOperationContracts();
+llvm::ArrayRef<generic::Operation> executableOperationContracts();
 llvm::ArrayRef<requirements::Implication> boundCapabilityRules();
 llvm::StringRef installedIdentitySort(llvm::StringRef identity);
 /// Formation of a ground static, using the reserved Type/Nat kind tokens.

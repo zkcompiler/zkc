@@ -39,7 +39,8 @@ merging evaluations. An unused invalid evaluation still refuses before a
 following provider call. [Changed-candidate controls](../../Tests/TableOptimization.lean)
 cover alias chains, shared suffixes, original certificates and invalid deletions.
 
-Run from the repository root after building the tool in `formal`:
+Build with `lake build table-physical-reference` from `formal/`, then run from
+the repository root:
 
 ```sh
 formal/.lake/build/bin/table-physical-reference lower lazy examples/tables/source.json > /tmp/table-lazy.json

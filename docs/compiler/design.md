@@ -6,10 +6,12 @@ the lower-level responsibilities inside that architecture. The
 [transformation specification](../spec/verification/refinement.md) owns meaning; the
 [compiler guide](README.md) explains it. The compiler is
 a set of [C++ components](../../compiler/README.md#components): MLIR-free common
-services, coordinated IR/translation/verification, optional claim translation,
+services, IR with mandatory verification, separate Translation, optional claim translation,
 and upper compiler workflows. `Zkc::ClaimTranslation` depends on Claims and IR;
 ordinary IR retains structural claim definitions and mandatory protocol checks
 without linking the claim checker.
+[Compiler preservation](preservation.md) selects the adjacent checking contracts,
+role-indexed operand relation, emitted-artifact boundary and reopening conditions.
 Graph algorithms, cost models, search, rewrites, planning and emission remain
 in the native compiler rather than crossing a per-operation language boundary. Rust
 submits complete jobs and consumes completed artifacts.
@@ -29,22 +31,41 @@ production integration of these contracts remain work.
 
 ## 1. Representation and dialects
 
-PIR meaning is not a sequence of dialect names. An interaction constrains an
-endpoint; a structured source denotes that endpoint; an execution plan realizes
-it. Several dialects can coexist while individual regions are lowered.
+Interaction constrains participant execution; a physical plan realizes that
+execution. Several domain dialects can coexist while a profile constrains their
+allowed operations. The native implementation has these responsibility owners:
 
-| Library / namespace | Owns | Initial operations |
-|---|---|---|
-| PIR / `pir` | Participants, explicit bindings, bounded control, ordered calls and complete outcomes | `endpoint`, `invoke`, `repeat`, `continue`, `return`, `stop`, atomic session boundary |
-| Algebra / `algebra` | Mathematical field/group identities and total algebra | Constants, add/multiply, explicit natural embedding, contracted group kernels |
-| Polynomial / `poly` | Domains, variable order, factors, views, reductions and materialization requests | Restriction, evaluation, fold, FFT and reduction descriptors |
-| Plan / `plan` | Selected storage, kernels, codecs, providers and executable control | Typed slots, allocation, kernel invocation, preparation lookup, decode, branch, repeat, release |
+| Dialect | Responsibility |
+|---|---|
+| `protocol` | Checked units/profiles, common protocols, participants, messages, queries, statements and retained projection metadata |
+| `local` | Executable functions, ordered local calls, bindings, bounded control, stops and local capabilities |
+| `data` | Common index, shape and nominal product/sum operations; homogeneous collections use builtin tensors |
+| `algebra` | Field/group types, total algebra and explicitly bound numerical kernels |
+| `poly` | Polynomial, table and point types and contracted polynomial operations |
+| `pcs` | Commitment-scheme objects and operations |
+| `oracle` | Oracle and authenticated-query operations |
+| `crypto` | Ordered randomness, nonce and transcript operations, hashes and sponge transitions |
+| `relation` | External relation declarations and existing R1CS/AIR assets |
+| `claim` | Structural claim IR consumed by explicit checking workflows |
+| `plan` | Selected representations, kernels, storage and physical literals |
+| `table` | The separate finite source/plan program and its control/evidence vocabulary |
 
-This table groups intended responsibilities. It does not freeze four production
-dialects or require one dialect per abstraction level. In particular, the finite
-table prototype's `plan` operations and Formal's direct `Compiler.Plan` do not
-complete the physical-plan/OIR design. The component/call and selective-lowering
-decisions take precedence over illustrative operation names in this chapter.
+A domain operation's dialect does not establish totality. Total mathematical
+operations have their own closed admission interface; bound executable kernels
+carry explicit bindings and retain stopping/resource behavior. In particular,
+`arith` is admitted only for the selected Boolean forms. The
+[native profile](../spec/profiles/compiler/mathematical-protocols.md) defines exact
+forms and type-use permissions. Pure helpers use `func`; executable functions use
+`local.func`. The same SSA infrastructure serves both mathematical profiles;
+projection and math lowering are distinct transformations.
+
+The [structured mathematics design](structured-mathematics.md) keeps these
+profiles and owners. The implemented subset includes formal polynomial SSA,
+recipe specialization, ranked tensors, nominal products/sums and compact
+`protocol.repeat` regions. The [structured-value contract](../spec/profiles/compiler/structured-iteration.md)
+owns exact mappings. [Runtime-count nested collections](nested-data.md) and
+their typed wire codecs are implemented; [status](../status.md) distinguishes formation,
+execution and checking coverage.
 
 Create libraries when their first operation is implemented, not empty dialects
 for every anticipated protocol. Merkle compression can begin as a contracted
@@ -85,14 +106,19 @@ carry an obligation that disappears on export. This follows MLIR's
 [operation](https://mlir.llvm.org/docs/DefiningDialects/Operations/) and
 [dialect conventions](https://mlir.llvm.org/docs/Tutorials/CreatingADialect/).
 
-The first portable boundary is finite source data with a typed interpretation,
-not arbitrary MLIR assembly. Its required constructor families are explicit
-bindings, pure expressions, branch, public bounded repetition, contracted invoke,
-return and stop. Source and direct Plan interpretations are developed together
-before optimization. The first implementation uses the small owned typed
-carrier and [finite source/plan format](source-plan.md). The
-[interactive route](protocol-pipeline.md) separately retains common protocols,
-projects participant programs and selects physical implementations.
+The source and finite-table routes use zkc-owned finite typed carriers,
+including the [finite source/plan format](source-plan.md). The mathematical
+route accepts closed-profile MLIR directly and emits versioned participant
+carriers. It does not admit arbitrary operations merely because MLIR parses them.
+Direct MLIR is an independent input API; the current `CompilerCore` link closure
+still includes source/frontend workflows. A separate link component should be
+introduced when an embedding needs that smaller dependency closure, with an
+installed-consumer check. Splitting targets alone would not remove the shared
+compilation storage, diagnostics and construction dependencies.
+
+Before a frontend or Lean consumer needs mathematical source without linking
+MLIR, select its source exchange contract and format/toolchain identity. Retain
+one editable SSA program; a transport record is not another optimizer.
 
 For each compilation, fix the referenced semantic environment: operation
 signatures and interpretations, field/domain parameters, module contracts and
@@ -113,6 +139,11 @@ well-typed uses must work and accidental domain mixing must fail. The
 native baseline still needs only one backend. Unsupported meanings remain
 unsupported; extensibility does not authorize an uninterpreted call.
 
+The closed-profile passes run at module scope. MLIR's verifier on an isolated
+function is not a substitute for module admission: role availability, symbol
+contracts and projection metadata cross operation boundaries. Re-run module
+verification before exporting or treating a transformed body as admitted.
+
 ## 2. Calls, stopping and ordering
 
 Calls must preserve returned/stopped outcomes, state ordering and selected-instance
@@ -122,14 +153,14 @@ alternative CFG sketch, not a registered operation or supported parser form:
 
 ```text
 pir.invoke @write(%flow, %cell, %value)
-  returned ^reply(!pir.flow, !pir.reply<WriteError,Value>)
-  stopped  ^exit(!pir.flow, !pir.stop)
+  returned ^reply(!table.flow, !pir.reply<WriteError,Value>)
+  stopped  ^exit(!table.flow, !table.source.stop)
 
 ^reply(%after, %reply):
   // A returned error can recover from the actual post-write state.
   ...
 ^exit(%after, %why):
-  pir.stop %after, %why
+  table.source.stop %after, %why
 ```
 
 The operation produces successor arguments on both edges. Its post-flow orders
@@ -140,7 +171,7 @@ the participant can inspect. Branch interfaces describe successor dataflow;
 they do not prove the handler contract.
 [MLIR interfaces](https://mlir.llvm.org/docs/Interfaces/).
 
-`pir.repeat` carries the natural iteration count, accumulators and flow. A body
+`table.source.repeat` carries the natural iteration count, accumulators and flow. A body
 returns updated accumulators or a local stopped outcome. A stopped body exits the
 loop with its last state and event prefix and skips later iterations. Lower to an
 explicit counter/exit CFG; use `scf.for` directly only for total, non-stopping
@@ -155,7 +186,7 @@ than unroll all public iterations.
 
 Use a zkc type for this ordering value. MLIR's builtin `token` has a different
 contract: it cannot be forwarded through branch successors or loop-carried
-arguments/results. It is not a replacement for `!pir.flow`. The distinction was
+arguments/results. It is not a replacement for `!table.flow`. The distinction was
 checked against the official [token documentation](https://mlir.llvm.org/docs/Tokens/)
 and the installed LLVM 23 type constraints. Neither type supplies zkc's
 path-sensitive usage law automatically.
@@ -253,10 +284,9 @@ meaning: a closed physical execution plan and a verifier acceptance relation.
 This section owns their common MLIR conversion and checking mechanisms.
 
 The [admission boundary](../rationale/external-candidate-checking.md)
-requires a separately checked external optimized artifact for the first useful
-optimizing delivery. Version-1 direct lowering remains the baseline. Specify a
-new exact format together with its consumer, beginning with one fixed Horner
-rule before connecting the shared factor pass. Bind the actual source, final
+requires independent checking of an external optimized artifact. Direct
+lowering remains the baseline; each optimizing format needs a matching
+consumer. Bind the actual source, final
 candidate, meanings, relation, initial premises and any required phase evidence.
 Phase evidence is required whenever the requested endpoint policy requires it;
 omitting the field does not waive the policy. A child with no interaction can

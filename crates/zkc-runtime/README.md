@@ -26,8 +26,8 @@ Binding or reservation failure does not clear the preceding trace.
 and the native `zkc-table-physical-plan` region using their installed operation
 interpretations. It retains both byte streams and requires the checker's exact
 `table-physical-plan` claim. Both source grammars retain their logical input ABI;
-the target always uses the existing region grammar. The older physical-reference
-wire is refused. Optional phase/endpoint evidence uses the same selected policy
+the target always uses the existing region grammar. The Lean-only
+`zkc-table-physical-reference` profile is refused. Optional phase/endpoint evidence uses the same selected policy
 and exact acknowledgment requirements as direct admission, with the physical
 realization retained.
 
@@ -122,6 +122,22 @@ admission errors still return `LoadError` with backend custody. `ingress_actions
 records attempted selectors; `selected_parameters` retains each successful
 selection, including when a later selector fails. The joint host checks stopped
 runners before family agreement and preserves each role's observation.
+
+## Program format
+
+`zkc.program/1` is a physical-only supplied participant format. It
+includes service port rows and the local `bool_constant` instruction.
+`Backend::supports_boolean_literals` advertises stable installation support;
+admission checks every retained body and initialization rechecks before opening
+frames. `Value::from_control_bool` constructs a value, which the runner validates
+against `bool@native.bool/1` and ordinary storage limits. A literal consumes one
+local instruction step and reports its own site on failure. The default adapter
+refuses support. `zkc.participants/1` does not admit this instruction.
+
+`Admitted::requires_boolean_literals` reports this structural capability
+separately from installed kernel roles. The current proof and joint hosts use
+the same program. Source-relative correspondence and source artifact adapters
+refuse it. See the [program contract](../../docs/spec/profiles/compiler/program.md).
 
 ## Code ownership
 

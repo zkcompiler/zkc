@@ -346,6 +346,44 @@ void ownershipAndBounds() {
 }
 
 void structuralBoundaries() {
+  Participants native;
+  native.contract = ParticipantContract::Program;
+  rejects(checkStructure(native), "native-physical-required");
+  native.stage = Participants::Stage::Physical;
+  Function literal;
+  literal.name = "literal";
+  literal.origin = LogicalOrigin{"literal", {}};
+  literal.results = {"bool@native.bool/1"};
+  literal.body = Body{instruction("make", BooleanConstant{"value", true}),
+                      instruction("", source::Return{{"value"}})};
+  native.functions.push_back(literal);
+  success(checkStructure(native));
+  require(encode(take(decode(encode(native)))) == encode(native),
+          "native physical literals survive checked interchange");
+  Module commonLiteral;
+  commonLiteral.functions.push_back(literal);
+  rejects(checkStructure(commonLiteral), "native-boolean-context");
+  native.contract = ParticipantContract::Legacy;
+  rejects(checkStructure(native), "native-boolean-context");
+
+  Participants services;
+  Participant serviceOwner;
+  serviceOwner.name = "owner";
+  serviceOwner.instance = "main";
+  serviceOwner.role = "Alice";
+  serviceOwner.services = {{"rng", "random.bls12-381.fr/1", 0}};
+  serviceOwner.body = {instruction("", source::Return{})};
+  services.participants.push_back(serviceOwner);
+  rejects(checkStructure(services), "service-profile-required");
+  // The infallible encoder must retain an invalid interface so ingress refuses
+  // the old tag, rather than silently serializing a different program.
+  rejects(decode(encode(services)), "interactive-record");
+  services.contract = source::ParticipantContract::Program;
+  services.stage = Participants::Stage::Physical;
+  success(checkStructure(services));
+  require(encode(take(decode(encode(services)))) == encode(services),
+          "native service ports survive direct model encoding");
+
   // Measure the exact escaped encoding, including UTF-8 and control bytes.
   source::Construction descriptor;
   descriptor.suite = "\n\\\"\001\xc3\xa9";

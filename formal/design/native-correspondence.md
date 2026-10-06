@@ -14,7 +14,7 @@ on its actual limb representation produces a related result and permitted state
 and error behavior. A protocol theorem then uses the field/operation contract.
 
 ```text
-native operation on NativeState and NativeValue
+native operation on ProgramState and NativeValue
        │ representation and operation correspondence
 logical handler on LogicalState and FieldValue
        │ common module and compiler laws
@@ -36,7 +36,7 @@ do not discharge a Rust implementation boundary by being imported.
 
 ## 2. A compositional contract with actual representations
 
-The maintained [simulation module](../Zkc/Realization/Simulation.lean) now supplies
+The maintained [simulation module](../Zkc/Realization/Simulation.lean) supplies
 `PIR.Execution.Relates`, with separate reply types and a value relation indexed
 by both actual final states. Its `follow`, `trans` and `of_related` laws compose
 continuations, representation boundaries and the existing equal-reply relation.
@@ -77,9 +77,15 @@ are related; they are not an automatic license to resample correlated state.
 ### 2.1. Default validation route
 
 The [assurance policy](../../docs/assurance.md#6-implementation-correspondence-policy)
-adopts differential testing for the native connection. Drive actual MLIR
-import, transformation and export, then execute the resulting admitted plan in
-Lean and Rust. Compare against source execution or an independent evaluator
+adopts differential testing for the native connection. Its explicit milestones
+permit mathematical MLIR/program foundation stabilization before that connection,
+with source-to-emitted validation and independent references at their declared
+scope. Native Lean differential evidence stays open for each such slice and is
+required before native migration completes. Existing Lean-checked routes retain
+their current requirement; unsupported native formats still refuse.
+
+For the native connection, drive actual MLIR import, transformation and export,
+then execute the resulting admitted plan in Lean and Rust. Compare against source execution or an independent evaluator
 where feasible: running both interpreters on the same wrongly exported plan
 alone would miss a shared source-to-plan defect. An eventual generated-code
 route needs its own execution comparison.
@@ -106,7 +112,7 @@ Native proofs below are selective extensions of this method; their absence does
 not prevent delivering a tested native slice under its stated implementation
 assumptions.
 
-## 3. The first native slice
+## 3. Connecting a native implementation
 
 Choose a real zkc-owned wrapper that binds immutable inputs, prepares or looks
 up a factor, invokes a module, updates state and returns through a recoverable
@@ -114,7 +120,7 @@ failure branch. The arithmetic primitive inside the call may initially remain
 contracted/trusted. Test the wrapper that zkc actually adds, where a mistake
 would invalidate otherwise correct backend mathematics.
 
-Make the first runtime a coarse-grained plan interpreter when feasible. A plan
+The native runtime is a coarse-grained plan interpreter. A plan
 instruction should invoke a useful kernel, batch or module action; a mandatory
 dispatch for every field multiplication would unnecessarily constrain performance.
 The interpreter is an execution engine, not an independent Rust authority for

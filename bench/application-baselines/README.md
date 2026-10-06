@@ -154,43 +154,26 @@ pure algebra timings.
 
 ## Reproduce
 
-Run from the repository root with the fixture runs available. The paths below
-identify the original local campaign directories, which are not distributed
-with a clean checkout. These commands replay an existing campaign; they do not
-generate all its inputs. Supply an equivalent retained run directory, the
-baseline binary as `--binary` and, for execution measurements, the frozen tools
-as `--tools`; neither has a default location. A lockfile permits offline
-building only after its source dependencies have been fetched.
-
-The [measurement policy](../README.md#reading-and-recording-a-measurement) states
-what to retain for a new run. The summaries and their original identities remain
-historical evidence until a new campaign is actually executed.
+Run from the repository root. The recorded campaign inputs and tools are not
+distributed. A clean checkout can build and test the crates with `just test-bench`,
+but replaying these measurements requires an equivalent retained `RUN_DIR` and
+the tools recorded with that run. The [measurement policy](../README.md#reading-and-recording-a-measurement)
+specifies the inputs and evidence to retain for a new campaign.
 
 ```sh
-CARGO_TARGET_DIR=/tmp/zkc-4b-baselines/target cargo build --offline --locked --release \
-  --manifest-path bench/application-baselines/Cargo.toml
-
-binary=/tmp/zkc-4b-baselines/target/release/zkc-application-baselines
+cargo build --locked --release --manifest-path bench/application-baselines/Cargo.toml
+binary=bench/application-baselines/target/release/zkc-application-baselines
 python3 -B bench/application-baselines/measure.py --binary "$binary" \
-  --application tx --run /tmp/zkc-4b-transaction/final-n8-m2 \
-  --output /tmp/zkc-4b-baselines/reproduce-tx-n8-m2 --compare-native
+  --application tx --run RUN_DIR --output NEW_DIR --compare-native
 python3 -B bench/application-baselines/measure.py --binary "$binary" \
-  --application tx --run /tmp/zkc-4b-transaction/n32-m8-k4 \
-  --output /tmp/zkc-4b-baselines/reproduce-tx-n32-m8-k4 --compare-native
-python3 -B bench/application-baselines/measure.py --binary "$binary" \
-  --application execution --run /tmp/zkc-4b-execution/tiny \
-  --tools /tmp/zkc-4b-execution/tools \
-  --output /tmp/zkc-4b-baselines/reproduce-execution-tiny --compare-native
-python3 -B bench/application-baselines/measure.py --binary "$binary" \
-  --application execution --run /tmp/zkc-4b-execution/memory64 \
-  --tools /tmp/zkc-4b-execution/tools \
-  --output /tmp/zkc-4b-baselines/reproduce-execution-memory64 --compare-native
+  --application execution --run RUN_DIR --tools TOOLS_DIR \
+  --output NEW_DIR --compare-native
 ```
 
 Each output directory must be new. `--samples` defaults to three and requires
 at least three. Other measured fixtures are transaction `n16-m4`, `n64-m2` and
-execution `memory8`, `loop16`. Native execution uses the frozen tools named by
-`--tools`; transaction uses each run's frozen tools unless `--tools` names
+execution `memory8`, `loop16`. Native execution uses the tools recorded with the run named by
+`--tools`; transaction uses each run's tools recorded with the run unless `--tools` names
 others. Receipts retain commands, raw samples, RSS, stdout, stderr,
 and binary/lock hashes. Each native sample pins its actual source, descriptor,
 construction, physical artifact and input envelope before execution and checks
@@ -200,7 +183,7 @@ Tool pins include the transaction admission helper; Python harness hashes and
 the execution admission helper's loaded repository sources are also retained.
 `report.py RESULTS_JSON...` regenerates compact comparison tables.
 
-Native timing includes the frozen artifact admission. The pipeline column adds
+Native timing includes the recorded artifact admission. The pipeline column adds
 application admission but excludes the later retained claim check; receipts mark
 `native_claim_admission_included: false`. Historical measurements are preserved
 with their original manifests, rather than retrospectively assigned new pins.
@@ -228,20 +211,16 @@ original fixture key used by proof comparisons.
 
 ```sh
 cargo fmt --check --manifest-path bench/application-baselines/Cargo.toml
-CARGO_TARGET_DIR=/tmp/zkc-4b-baselines/target cargo clippy --offline --locked \
-  --all-targets --manifest-path bench/application-baselines/Cargo.toml -- -D warnings
-CARGO_TARGET_DIR=/tmp/zkc-4b-baselines/target cargo test --offline --locked --release \
-  --manifest-path bench/application-baselines/Cargo.toml
+cargo clippy --locked --all-targets \
+  --manifest-path bench/application-baselines/Cargo.toml -- -D warnings
+cargo test --locked --release --manifest-path bench/application-baselines/Cargo.toml
 ruff check --no-cache bench/application-baselines
 
-binary=/tmp/zkc-4b-baselines/target/release/zkc-application-baselines
+binary=bench/application-baselines/target/release/zkc-application-baselines
 python3 -B bench/application-baselines/controls.py --binary "$binary" \
-  --application tx --run /tmp/zkc-4b-transaction/final-n8-m2 \
-  --output /tmp/zkc-4b-baselines/reproduce-controls-tx
+  --application tx --run RUN_DIR --output NEW_DIR
 python3 -B bench/application-baselines/controls.py --binary "$binary" \
-  --application execution --run /tmp/zkc-4b-execution/tiny \
-  --export /tmp/zkc-4b-baselines/reproduce-execution-tiny/export \
-  --output /tmp/zkc-4b-baselines/reproduce-controls-execution
+  --application execution --run RUN_DIR --export EXPORT_DIR --output NEW_DIR
 ```
 
 The Rust tests include honest zero excess, fresh transaction proof randomness,
@@ -254,7 +233,11 @@ message and selected lengths, test EOF, and produce invalid full proofs without
 a whole-relation producer gate. Tests are evaluation evidence, not security
 proofs or a new production cryptographic library.
 
-The native CLI `run_seconds` includes proof reads or durable proof publication
-(`sync_all`) and runner teardown. Direct warm timers exclude file I/O. Compare
-whole process/pipeline costs or the prepared-host evaluation for aligned API
-boundaries; subtracting these two run fields is not a VM-overhead estimate.
+Native CLI reports with `timings.scope: prepared-execution` separate runner
+execution/cleanup from input reading, proof reading and durable publication.
+`measure.py` records this scope and all six phase timings. Earlier unlabelled
+CLI records included proof I/O/publication in `run_seconds` and input parsing in
+key loading; do not pool those phase measurements with the new scope. Direct
+proof timers exclude file I/O and have their own setup/teardown boundary. Use the
+prepared-host comparison or whole process costs; subtraction of these fields
+alone does not isolate VM overhead.

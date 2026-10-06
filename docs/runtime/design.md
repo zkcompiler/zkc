@@ -21,6 +21,54 @@ The [representation design](../compiler/representation.md) treats existing
 native APIs as behavioral evidence. Final production APIs follow the physical-plan
 and target decisions in the [roadmap](../roadmap.md).
 
+## Current execution architecture
+
+The official execution target is the common Rust interpreter. Compilation emits
+an admitted program and schedule; it does not currently emit per-protocol Rust.
+The role runner executes control and calls installed kernels through `Backend`.
+Arkworks, dalek and plonky3 adapters provide selected cryptographic operations.
+Protocol names do not select runner implementations.
+
+| Owner | Responsibility | Extension boundary |
+|---|---|---|
+| Compiler | Mathematical rewriting, role projection, local recipes and physical selection | MLIR operations/interfaces and explicit pass legality |
+| Runtime admission | Independent types, operations, bindings, resources and immutable program custody | Statically installed contract owners |
+| Role runner | Calls, branches, loops, action cuts, frames, budgets and stops | New primitive kernels do not change control dispatch |
+| Joint driver | Selected schedule, count agreement, transport, observation and cleanup | Explicit driver policy; no access to another role's local environment |
+| Backend | Values, primitive kernels, codecs and resource/service adapters | Exact implementation identity and typed arguments |
+
+Keep concrete instruction/value enums and static installation. A new control
+meaning requires admission and runner work; a new protocol composed from existing
+instructions does not. Bulk operations avoid per-element dispatch where needed by
+a required client. Native performance has not been established by this design.
+Revisit Rust code generation only after measured interpreter overhead remains
+material with suitable bulk kernels, or a deployment requires emitted code.
+Code generation then has its own correspondence and failure/resource obligations.
+
+The compiler's small Python carrier evaluator is maintained independent test
+support for its stated arithmetic fragment. It is not a second production runtime
+or a whole-foundation reference semantics. New native clients use the actual Rust
+runner plus independent primitive/equation controls; unsupported evaluator forms
+remain explicit rather than acquiring invented semantics.
+
+### Outcome boundaries
+
+| Layer | Result | Meaning |
+|---|---|---|
+| Loading | Admission/Bundle error or `LoadError` | No admitted invocation; failed start returns backend custody |
+| Participant | Return, or `StopKind` (explicit, backend, decode, incomplete, limit, cancelled) | A reached role-local outcome with prior effects retained |
+| Codec | Invalid bytes, limit or backend error | Invalid bytes complete a receive with `DecodeReason`; codec limit/backend faults remain driver failures |
+| Joint driver | Completed, participant stopped, driver failed or host cancelled | Count disagreement and schedule faults are driver observations, not protocol rejection |
+
+Completion requires every role to have returned and no pending message.
+Cleanup errors preserve actual inner-to-outer frame exit order. A cleanup failure
+after a successful body is a backend stop; it cannot replay the completed call.
+Per-loop admission
+bounds and cumulative execution budgets are separate: an admitted program can
+stop at the instruction, iteration, stack or storage limit. Raising an admission
+bound does not raise those budgets. No failure restores consumed randomness,
+service advances or completed messages.
+
 ## 1. Ownership and deployment
 
 The compiler chooses the plan. The runtime loads an admitted immutable plan and
@@ -29,7 +77,7 @@ search, scheduling, fusion or protocol selection. Useful kernels process arrays,
 folds, FFTs, MSMs or pairing products; avoid interpreter dispatch for every scalar
 multiplication.
 
-The public API will distinguish an immutable admitted program from an owned
+The public API separates an immutable admitted program from an owned
 session. A session owns the live world, cursor, provider/tape state, buffers,
 immutable preparation cache and any continuation ledger. The admitted-program
 constructor is private to checked admission. Shared program bytes may use `Arc`;
@@ -57,8 +105,10 @@ restartable snapshot or reconstruct provider state from a public report.
 This is the target lifecycle. The current Rust `Session` in
 [`execution.rs`](../../crates/zkc-runtime/src/execution.rs) represents one owned
 invocation and returns `Completed` with residual bindings. It is not already the
-whole enclosing controller. The production API must distinguish these lifetimes
-and preserve the binding state when implementing repeated permitted attempts.
+whole enclosing controller. Bounded retries use `attempt::Controller` and the
+[native attempt host](../compiler/native-attempts.md), which preserve advanced
+provider state. The whole-experiment `Session` above remains an illustrative
+interface, distinct from the implemented table invocation.
 
 `start` validates without draws, cursor consumption, ledger changes or installation.
 If validation fails, `StartFailure` returns ownership of the unmodified inputs
@@ -96,8 +146,7 @@ alone establishes no field identity, codec correctness or probabilistic law.
 Changing conforming backends reuses compiler laws; it changes the representation
 and implementation-contract instance that must be supplied.
 
-Implement these separate kernel/codec/provider contracts in the first runtime,
-not after a concrete backend has spread through the dispatcher. Logical value
+Keep kernel, codec and provider contracts separate from the dispatcher. Logical value
 and domain identities stay independent of pointers and the selected field
 library. Slot descriptors and backend-owned buffers state shape, layout,
 ownership, alias permissions and capacity behavior. The dispatcher uses their
@@ -110,7 +159,7 @@ test adapter without editing the dispatcher. This exercises the actual boundary
 alongside the production adapter; it is not a second production backend or a
 proof that arbitrary providers satisfy their contracts.
 
-The finite table runtime now implements this storage boundary with
+The finite table runtime implements this storage boundary with
 `BufferStore<T>` and two layouts: packed buffers and retained reservation
 segments. A successful reservation permits immutable publication without new
 payload/descriptor allocation. Reads borrow from the owner; later reservation
@@ -169,7 +218,7 @@ owned core forbids unsafe code.
 [Rust API guidelines](https://rust-lang.github.io/api-guidelines/checklist.html).
 
 The representation theorem must interpret returned handles in their **actual
-post-state**. The new Lean `Execution.Relates` supports different source/native
+post-state**. Lean's `Execution.Relates` supports different source/native
 reply types, related residual states and equal projected ordered events. Its
 sequencing law requires each continuation to preserve that relation; its
 composition law shares the intermediate value and state witness. This is a
@@ -195,17 +244,19 @@ DeploymentArtifact + installed backend policy -> AdmittedProgram
 ```
 
 Define finite source, plan and certificate schemas beside their semantic
-interpretations. Choose a strict versioned encoding for the first joined slice:
+interpretations. Use a strict versioned encoding:
 fixed constructor tags, explicit lengths, canonical naturals/field encodings,
 ordered bindings, bounded nesting and mandatory full-input consumption. Reject
 duplicate declarations, unknown mandatory constructors and unresolved references.
-JSON can serve diagnostic fixtures; it does not determine canonical identity.
-The exact binary tag table is an implementation deliverable, not an invented
-layout to freeze before there is a decoder.
+Current source, participant and bundle contracts use strict versioned JSON.
+Where a report binds exact input bytes, those JSON bytes are part of its identity;
+where a contract specifies normalization, use that normalization. Protocol wire
+codecs are a separate boundary. Changing either encoding requires updating its
+actual readers and identity checks. No universal binary artifact format is selected.
 
-The first schema nevertheless separates format version, required capabilities,
-semantic/rule dependencies, selected claim and realization kind. The first
-implemented kind is Plan execution. A future generated-code kind must bind its
+The schema separates format version, required capabilities, semantic/rule
+dependencies, selected claim and realization kind. The implemented kind is Plan
+execution. A future generated-code kind must bind its
 own correspondence and entry interface, rather than being relabeled as a checked
 Plan. Unknown required capabilities or semantic versions are rejected; reserved
 extension space is never implicitly executable. Evidence dependencies and cost
@@ -230,7 +281,7 @@ the permitted observer/relation. Evidence quantifies over allowed runtime values
 `start` binds actual private values and providers to those declarations without
 putting them in compilation artifacts. An immutable runtime capture is frozen
 for its declared lifetime; it is not automatically a compile-time constant.
-The first implementation specializes only on public data. Secret-dependent
+Specialization uses only public data. Secret-dependent
 specialization and cross-session preparation caches require their own disclosure
 and lifetime argument before introduction.
 
@@ -327,12 +378,13 @@ dynamic allocator needs a related failure contract before replacing this policy.
 
 ## 5. Packages, native proof and acceptance
 
-Start with `zkc-runtime`; add `zkc-tools` for the SDK and CLI when whole-job
-admission is implemented. Keep internal format, session, value and backend
-interfaces as modules. Split a backend adapter when it introduces independently
-selectable dependencies; split a shared format crate when two real Rust consumers
-need it without runtime dependencies. This avoids empty crates while preserving
-the independence the interfaces need.
+`zkc-runtime` owns admission and execution; `zkc-tools` provides the SDK and CLI.
+`zkc-backends` and `zkc-arkworks` provide adapters with separately selectable
+dependencies, and `zkc-test-support` supplies shared test utilities. Internal
+format, session, value and backend interfaces remain modules. Split another
+backend adapter when it introduces independently selectable dependencies; split
+a shared format crate when two real Rust consumers need it without runtime
+dependencies.
 
 CMake builds the compiler separately. A runtime `build.rs` must not build MLIR,
 download Lean or run an optimizer. Cargo workspaces share lock/feature resolution;
@@ -341,9 +393,13 @@ incompatible toolchains live in separate workspaces.
 [Cargo workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html).
 
 The [default assurance policy](../assurance.md#6-implementation-correspondence-policy)
-requires differential validation of each delivered native slice against executable
-Lean meaning, including residual state and failure behavior under an explicit
-relation. It does not require a native proof before delivery.
+requires differential validation against executable Lean meaning for native
+correspondence and completed migration, including residual state and failure
+behavior under an explicit relation. Its foundation milestone permits earlier
+mathematical MLIR/program stabilization with source-to-emitted validation and
+independent references at their recorded scope; each slice retains its open Lean
+obligation. Existing Lean-checked routes keep their requirement. A native
+implementation proof remains an optional strengthening.
 
 If a native proof is pursued, its first target is the **actual** owned dispatcher,
 buffer/key validation and complete-outcome plumbing used by execution. Assess Aeneas first

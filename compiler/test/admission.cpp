@@ -1,4 +1,5 @@
 #include "zkc/Protocol/Admission.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Protocol/Instantiation.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -79,6 +80,54 @@ void configurations(unsigned length, bool reverseNames, bool cycle = false) {
 } // namespace
 
 int main() {
+  // A dormant affine alternative still makes the complete type noncopyable.
+  // Copyable variants now belong to the single program contract.
+  auto variant = protocol::encodeVariant(
+      {"Local", {{"Empty", {}}, {"Owned", {"rng:bls12-381.fr"}}}});
+  if (!variant)
+    return 1;
+  for (const auto &type : {*variant, "fixed_vector<" + *variant + ",2>"})
+    for (bool input : {false, true}) {
+      source::Participants module;
+      module.contract = source::ParticipantContract::Program;
+      source::Participant participant;
+      participant.name = "p";
+      participant.instance = "root";
+      participant.role = "P";
+      if (input)
+        participant.arguments.push_back({"x", type});
+      else
+        participant.results.push_back(type);
+      source::Instruction result;
+      result.value = source::Return{};
+      participant.body.push_back(result);
+      module.participants.push_back(participant);
+      // Boundary admission precedes body typing. The output-only control
+      // deliberately has no inputs, so an input check cannot mask its failure.
+      auto error = protocol::admit(module, false);
+      if (!error || toString(std::move(error)) != "variant-boundary")
+        return 1;
+    }
+  for (bool input : {false, true}) {
+    source::Participants module;
+    module.contract = source::ParticipantContract::Program;
+    source::Participant participant;
+    participant.name = "p";
+    participant.instance = "root";
+    participant.role = "P";
+    const std::string malformed = "fixed_vector<bool,broken>";
+    if (input)
+      participant.arguments.push_back({"x", malformed});
+    else
+      participant.results.push_back(malformed);
+    source::Instruction result;
+    result.value = source::Return{};
+    participant.body.push_back(result);
+    module.participants.push_back(participant);
+    auto error = protocol::admit(module, false);
+    if (!error || toString(std::move(error)) != "binding-type")
+      return 1;
+  }
   // A memoized suffix must contribute its height regardless of spelling or
   // declaration order. The existing depth budget admits at most 65 nodes.
   for (bool reverse : {false, true}) {

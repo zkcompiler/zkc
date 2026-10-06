@@ -166,7 +166,7 @@ The [core specification](../spec/core/observations.md) owns execution/event rela
 [disclosure](../spec/properties/disclosure.md) owns joint artifact/runtime disclosure; and
 [evidence judgments](../spec/verification/judgments.md) own cost/evidence use.
 This guide explains those contracts and their distinct observers. The
-[S6 correspondence](../spec/correspondence/properties.md) includes the
+[property correspondence](../spec/correspondence/properties.md) includes the
 normalized randomized joint-release laws.
 
 Correctness concerns a specified observation of a complete execution. A
@@ -193,12 +193,12 @@ boundaries without weakening this equal-reply relation.
 per-operation premise and its adaptive-body consequence;
 [sequential](../spec/core/observations.md#sequential-composition) and
 [transitive composition](../spec/core/observations.md#transitive-composition)
-complete the laws formerly grouped as CORE-10. The common continuation sees replies. A scheduler reacting to
+complete the observation-composition laws. The common continuation sees replies. A scheduler reacting to
 addresses or cache hits needs those observations modeled in its interface/state.
 These laws compose passes; they do not make passes commute.
 [CORE-11](../spec/core/observations.md#final-state-observations) gives the
 extra compatibility premise for a final-state observer. The
-[S1 controls](../../formal/Tests/SpecCore.lean) show why dropping that premise
+[core specification controls](../../formal/Tests/SpecCore.lean) show why dropping that premise
 or changing the selected event observer changes the conclusion.
 
 Each premise of `Related` is used by the induction behind handler replacement:

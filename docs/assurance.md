@@ -107,7 +107,7 @@ elaboration, kernel refinement or cryptographic security for arbitrary extension
 | Lean/Std toolchain | Pinned by `formal/lean-toolchain`; a build record must identify the actual source/cache scope and completed audits; no toolchain bootstrap claim |
 | Mathematical external libraries | Exact source pins; reached proof assumptions audited |
 | Native checker/parser and artifact bytes | Correspondence obligation for implementation; no universal decoder correctness theorem yet |
-| Structured MLIR source and lowering | Bounded compiler routes exist; their exact supported scope is in [status](status.md), with source/lowering correspondence still required |
+| Structured MLIR source and lowering | Source route: Lean source/candidate checks at supported profiles. Native route: bounded [adjacent and emitted-artifact checks](compiler/preservation.md), with native Lean correspondence still open |
 | Rust runtime and backend | Explicit common contracts; native realization can be proved or declared trusted at its actual scope |
 | Concrete cryptography/providers | Scheme/model-specific assumptions and experiments; product-tape math does not prove native entropy/PRG/hash security |
 | Full protocol security | Only the exact existing scoped propositions; no blanket completeness, soundness, knowledge or zero-knowledge theorem |
@@ -151,12 +151,48 @@ obligation; an open topic gets a concrete research target before expanding scope
 
 ## 6. Implementation correspondence policy
 
-Differential testing is the default practical validation
-of correspondence between executable Lean meanings and actual MLIR/Rust
-implementation paths. It is required evidence for each delivered native slice;
-a proof of the Rust implementation is an optional strengthening, not a gate for
-the first useful compiler component. Mathematical compiler/checker and promised
-protocol-security theorems retain their own completion conditions.
+Differential testing against executable Lean meanings is the default practical
+validation of native correspondence. A proof of the Rust implementation is an
+optional strengthening. Mathematical compiler/checker and protocol-security
+theorems retain their own completion conditions.
+
+The mathematical MLIR/program route uses two explicit evidence milestones:
+
+| Milestone | Required evidence |
+|---|---|
+| Foundation stabilization | Source/candidate validation through the actual emitted artifact for the declared compiler route; independent execution references for its required capability compositions, inputs, failures, state and selected observations; mutation controls and recorded coverage/trust limits |
+| Native Lean connection and completed native migration | Executable Lean meaning for the actual supported carrier, source/artifact binding and Lean/native differential campaigns for each delivered slice, with its declared comparison relation |
+
+These milestones permit tested foundation implementation before the native Lean
+connection; they do not count current C++/Rust tests as Lean evidence.
+The selected foundation milestone is met at the bounded scope recorded in the
+[validation map](compiler/foundation-validation.md#source-to-artifact-checks).
+[Compiler preservation](compiler/preservation.md) checks adjacent source/candidate
+subjects through physical SSA and the actual emitted program, schedule and
+source-port maps. Independent execution references and mutation controls cover
+the required compositions. Same-constructor reconstruction and encoder/decoder
+round trips alone are insufficient. This completion adds no native Lean meaning,
+universal refinement, cryptographic security or whole-process resource theorem.
+
+An independent reference derives the expected result from the original inputs
+and selected operation/protocol contract without using the producer's rewrite
+or recipe-emission algorithm as its oracle. It may decode actual artifacts for
+comparison. Running two interpreters on the same exported plan alone cannot detect
+a shared source-to-plan mistake. A reference that checks only arithmetic at a
+proof-supplied challenge supplies only that narrower evidence, not independent
+challenge or transcript validation.
+
+Each slice records its source subset, carrier/policy, comparison scope, remaining
+implementation trust and open Lean differential obligation in status and campaign
+records. None may be described as Lean-corresponding until that obligation closes.
+Existing Lean-checked routes retain their evidence requirement and refuse
+unsupported native formats; they cannot be retired while a migrated consumer still
+requires their checking capability. No artifact flag can promote supplied code to
+a higher evidence class. Frontend migration alone cannot close native migration.
+
+Bring native Lean evidence forward if a consumer needs it before its migration
+slice, or if an independent reference cannot test a required contract. An
+unsupported comparison cannot count as agreement.
 
 Each campaign identifies the supported source subset, actual compiler route,
 executables, inputs, initial states/providers and comparison relation. Compare

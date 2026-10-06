@@ -77,12 +77,22 @@ fn response_bound(
             Type::Indices => 10 + 8 * policy.max_table_elements,
             Type::Field => 38,
             Type::Bool => 7,
-            Type::Group => 54,
+            Type::Group => match ty.logical().identity() {
+                Identity::Bn254Gt => 390,
+                Identity::Bn254G2 => 70,
+                _ => 54,
+            },
             Type::Round => 102,
             Type::Point => 10 + 32 * policy.max_arity,
             Type::Table | Type::Vector | Type::Polynomial => 10 + 32 * policy.max_table_elements,
             Type::Matrix => policy.max_wire_bytes,
-            Type::Groups => 10 + 48 * policy.max_groups,
+            Type::Groups => {
+                10 + (if ty.logical().identity() == Identity::Bn254G2 {
+                    64
+                } else {
+                    48
+                }) * policy.max_groups
+            }
             Type::Commitment if ty.logical().identity().is_row_commitment() => 38,
             Type::Proof if ty.logical().identity().is_row_commitment() => 10 + 32 * 24,
             Type::Commitments => 10 + 32 * policy.max_table_elements,
@@ -159,8 +169,15 @@ pub struct Observed<B> {
     event_bytes: usize,
     trace: TraceMode,
 }
-impl<B: WireBackend<Value = Value>> Observed<B> {
-    pub(super) fn new(inner: B, bundle: &CheckedBundle, trace: TraceMode) -> Result<Self> {
+pub(super) struct ObservationPlan {
+    validator: String,
+    format: ArtifactFormat,
+    origins: BTreeMap<(String, String), SourceOp>,
+    source_map: Option<zkc_runtime::interactive::SourceMap>,
+    trace: TraceMode,
+}
+impl ObservationPlan {
+    pub(super) fn new(bundle: &CheckedBundle, trace: TraceMode) -> Result<Self> {
         let mut origins = BTreeMap::new();
         if trace == TraceMode::Full {
             for function in list(&bundle.common[2])? {
@@ -200,6 +217,9 @@ impl<B: WireBackend<Value = Value>> Observed<B> {
                     .ok_or("artifact-observer-op")?;
                 let op = array(op, 6)?;
                 let (contract, arguments) = match bundle.admitted.format() {
+                    ArtifactFormat::Program => {
+                        return Err("native-participant-artifact-unsupported".into());
+                    }
                     ArtifactFormat::ExplicitBindings => {
                         let binding = list(&bundle.common[1])?
                             .iter()
@@ -242,7 +262,6 @@ impl<B: WireBackend<Value = Value>> Observed<B> {
             }
         }
         Ok(Self {
-            inner,
             validator: bundle.validator.clone(),
             format: bundle.admitted.format(),
             origins,
@@ -251,10 +270,25 @@ impl<B: WireBackend<Value = Value>> Observed<B> {
             } else {
                 None
             },
-            events: Vec::new(),
-            event_bytes: 0,
             trace,
         })
+    }
+    pub(super) fn bind<B>(self, inner: B) -> Observed<B> {
+        Observed {
+            inner,
+            validator: self.validator,
+            format: self.format,
+            origins: self.origins,
+            source_map: self.source_map,
+            trace: self.trace,
+            events: Vec::new(),
+            event_bytes: 0,
+        }
+    }
+}
+impl<B: WireBackend<Value = Value>> Observed<B> {
+    pub(super) fn into_inner(self) -> B {
+        self.inner
     }
     pub fn inner(&self) -> &B {
         &self.inner

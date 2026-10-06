@@ -93,11 +93,13 @@ The checked controls are substantive countermodels:
 The [finite phase algorithm](../profiles/compiler/finite-phases.md) and
 [typed factor rule](../profiles/compiler/factor-preparation.md#typed-factor-rule)
 own their selected algorithms. The common [merge condition](../verification/analysis.md#merging-descriptions)
-is the propositional consequence of weakening from each alternative; it is not
-a new implemented factor merge or a newly claimed Lean declaration. The existing
-phase cover uses union; conjunctions of known facts have different meaning.
+is the propositional consequence of weakening from each alternative.
+[`FactorOptimization.Conservative`](../../../formal/Zkc/Compiler/FactorOptimization/Conservative.lean)
+instantiates it for fact and availability lists by intersection (`rule`,
+`execution`). The phase cover uses union; conjunctions of known facts have
+different meaning.
 
-The [admission clarification](../verification/refinement.md#effects-and-admission-timing)
+The [admission timing rule](../verification/refinement.md#effects-and-admission-timing)
 retains a separate all-reply transport premise.
 [PhaseAdmission.Realizes.translate](../../../formal/Zkc/Source/PhaseAdmissionInterpretation.lean)
 requires `InterpretationAdmission`; [Artifact.checkCandidate](../../../formal/Zkc/Compiler/Artifact.lean)

@@ -31,9 +31,12 @@ struct Scope {
 
 /// A shallow logical head with scope indices. Nested Type arguments are
 /// requirements::Term applications in that scope, not erased domain names.
+/// A term port refers to a complete Type in the scope. It is reserved for
+/// construction bindings and refused by the common generic profile.
 struct Type {
   std::string constructor;
   std::vector<unsigned> arguments;
+  std::optional<unsigned> term = {};
 };
 
 struct TypeConstructor {

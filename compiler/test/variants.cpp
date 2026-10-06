@@ -1,6 +1,7 @@
 #include "Names.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Compiler/Algorithms.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
@@ -9,7 +10,6 @@
 #include "zkc/Source/Codec.h"
 #include "zkc/Source/Execution.h"
 #include "zkc/Support/Json.h"
-#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/StringExtras.h"
@@ -258,7 +258,7 @@ int main() {
   context.loadAllAvailableDialects();
   auto native = take(protocol::importModule(module, context));
   check(succeeded(mlir::verify(*native)), "native MLIR verify");
-  native->walk([&](LocalMatchOp match) {
+  native->walk([&](zkc::local::LocalMatchOp match) {
     auto edge = mlir::RegionSuccessor(&match.getRegion(0));
     check(match.getEntrySuccessorOperands(edge).size() == 1 &&
               match.getSuccessorInputs(edge).size() == 1 &&
@@ -283,19 +283,20 @@ int main() {
                                           });
     mlir::OwningOpRef<mlir::ModuleOp> malformed(
         mlir::cast<mlir::ModuleOp>(native->clone()));
-    malformed->walk(
-        [&](VariantInjectOp pack) { pack.setAlternative("Unknown"); });
+    malformed->walk([&](zkc::local::VariantInjectOp pack) {
+      pack.setAlternative("Unknown");
+    });
     check(failed(mlir::verify(*malformed)) &&
               namesIdentifier(said, "variant-alternative"),
           "native unknown alternative admitted");
     auto exported = protocol::exportSource(*malformed);
     check(!exported, "native malformed export admitted");
-    reject(exported.takeError(), "interactive-malformed-ir");
+    reject(exported.takeError(), "variant-alternative");
     // The payload-free arm given a payload its alternative does not carry.
     // Its yield still forwards the capture, so only the arm's payload rule
     // can refuse it.
     malformed = mlir::cast<mlir::ModuleOp>(native->clone());
-    malformed->walk([&](LocalMatchOp match) {
+    malformed->walk([&](zkc::local::LocalMatchOp match) {
       match.getRegion(1).front().insertArgument(
           0u, mlir::IntegerType::get(&context, 64, mlir::IntegerType::Unsigned),
           match.getLoc());

@@ -1,26 +1,18 @@
 #ifndef ZKC_DIALECT_OPERATIONS_H
 #define ZKC_DIALECT_OPERATIONS_H
-#include "mlir/Bytecode/BytecodeOpInterface.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/Dialect.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/OpImplementation.h"
-#include "mlir/IR/SymbolTable.h"
-#include "mlir/Interfaces/ControlFlowInterfaces.h"
-#include "mlir/Interfaces/InferTypeOpInterface.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "zkc/Dialect/Types.h"
-#include "llvm/Support/JSON.h"
+// Convenience aggregate; each owner header is independently usable.
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Claim/IR/ClaimOps.h"
+#include "zkc/Dialect/Crypto/IR/CryptoOps.h"
+#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Oracle/IR/OracleOps.h"
+#include "zkc/Dialect/PCS/IR/PCSOps.h"
+#include "zkc/Dialect/Plan/IR/PlanOps.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Dialect/Table/IR/TableOps.h"
 
-#include "zkc/Interfaces/LinearContraction.h"
-#include "zkc/Interfaces/SourceOpInterface.h.inc"
-namespace zkc::detail {
-// Shared logical kernel policy used by ODS-generated standard verifiers.
-::llvm::LogicalResult verifyLogicalKernel(::mlir::Operation *operation);
-} // namespace zkc::detail
+#include "zkc/Dialect/Data/IR/DataOps.h"
 
-// Cross-dialect parent traits require the shared forward declarations.
-#define GET_OP_CLASSES
-#include "zkc/Dialect/Operations.h.inc"
 #endif

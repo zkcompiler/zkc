@@ -1,6 +1,6 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
-#include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "llvm/ADT/TypeSwitch.h"
 using namespace mlir;
 #include "zkc/Dialect/Polynomial/IR/polyDialect.cpp.inc"
@@ -9,7 +9,7 @@ using namespace mlir;
 #define GET_TYPEDEF_CLASSES
 #include "zkc/Dialect/Polynomial/IR/polyTypes.cpp.inc"
 
-void zkc::PolynomialDialect::initialize() {
+void zkc::poly::PolynomialDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "zkc/Dialect/Polynomial/IR/polyTypes.cpp.inc"

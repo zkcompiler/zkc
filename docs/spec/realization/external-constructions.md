@@ -5,6 +5,11 @@ functions. Their source operations, logical MLIR kernels, physical bindings and
 native implementations preserve explicit call boundaries. The operations do not
 contain a proof algorithm or determine which proof fields are observed.
 
+These are ordered, fallible local operations, even though their state values
+are copyable. Equal operands do not permit common-subexpression elimination,
+dead-call removal or speculation: calls consume work and can stop. Their kernel
+operations make no MLIR purity or speculatability claim.
+
 ## Interpretation and admission
 
 An external construction state in this contract is an ordinary, copyable
@@ -114,3 +119,76 @@ provider assumption alone establishes neither primitive correctness nor a
 complete native correspondence. Current APIs and evidence are recorded in the
 [implementation guide](../../compiler/interactive-execution.md#external-construction-execution)
 and [backend adapter](../../../crates/zkc-backends/src/external/README.md).
+
+## Authored native deployment
+
+The `/4` [native proof profile](../profiles/compiler/native-proofs.md) admits
+these transitions through ordinary local functions and its `indices` input and
+message codec. An empty selected suite declares no derived transcript. It does
+not forbid an authored data-state computation. Existing affine transcript inputs
+remain outside this host's input-constructor contract.
+
+The application independently supplies the expected deployment digest and
+validator public inputs. Canonical snapshot bytes are public configuration when
+declared as such. The host checks framing, declared input consistency and the
+proof header; the first reached external operation checks state representation.
+No host constructor attests that an imported state is reachable. State received
+from the producer has only the meaning given by the authored verification code.
+
+Authored code selects the exact inputs to each update, observation and sample.
+The native container header and ambient invocation context are not automatically
+absorbed by these primitives. `binding_scope = "header"` describes the host's
+binding guarantee, including when authored external calls are present. An ignored
+input, or a duplex word overwritten before sampling, need not affect a response.
+A declaration of public inputs alone is no cryptographic binding theorem.
+
+Source/candidate checking preserves the chosen calls and operands. It does not
+prove transcript completeness: an authored program can omit a received word
+from its chain, import an inappropriate root or return an inadequate acceptance
+predicate. There is no automatic external construction correspondence claim.
+The `History` facet identifies the declared state input/successor relation; it
+neither makes copyable data affine nor proves a unique live chain. Affine-origin
+analysis tracks affine outputs only. These operations are admitted in ordinary
+`local.if` and `local.for`; the existing lexical prohibition on history calls in
+private `local.match` arms still applies. History metadata does not permit
+deleting or reordering a call.
+
+## Work, attempts and control
+
+External primitive work is cumulative within one native proof invocation,
+including all producer attempts. Each independent producer or validator
+invocation starts its own allowance. Trial copies, failed witness predicates,
+discarded proofs and cleanup never refund completed work. A call refused before
+its debit consumes no primitive work; earlier calls remain charged. The default
+allowance is 16,777,216 units under the metric above.
+
+The native proof host permits an application to lower this allowance through
+`NativeDeployment::with_external_work_limit`. Values above the default refuse
+with `native-proof-external-work-limit`; zero admits only zero-work transitions.
+This is local execution configuration, outside deployment and attempt-policy
+identities and transcript bytes. Reports record the actual allowance, cumulative
+consumption and each attempt's consumption. The CLI retains the default.
+An exhausted primitive budget is a fatal execution stop, never a retry decision.
+
+A returned completion Boolean uses the existing attempt contract. A conditional
+can skip a local suffix while returning actual RNG successors. It cannot skip a
+later participant send. A bounded loop with a carried found bit can skip later
+trial calls, but still enters its remaining iterations and charges control
+instructions and frame bindings. Such an encoding is not early return or break
+and can exhaust interpreter budgets after its last trial. True participant
+abandonment requires a separate control/custody contract.
+
+Canonical wire decoding and primitive validation remain different boundaries.
+Malformed frame bytes fail decoding. An admitted `indices` value with an invalid
+state envelope, byte, field word or bit width stops at the reached primitive
+with its `refused:external-*` diagnostic. A canonical false witness check returns
+its successor and Boolean; an authored guard can stop there with
+`artifact-stopped:Explicit("reject")`. The reached primitive validates its
+complete input before charging any work, including all words in one observation.
+A normal false terminal Boolean produces `artifact-rejected`. Full proof
+consumption and atomic publication retain the native proof contract in every case.
+
+Invalid primitive data received in a canonical frame is also non-acceptance.
+The first reached failure retains its diagnostic and consumed work; unread
+later frames do not replace it with `proof-trailing`. Full-consumption checking
+occurs on normal participant return, before testing the terminal Boolean.

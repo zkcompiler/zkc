@@ -6,7 +6,7 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Inspection.h"
 #include "zkc/Compiler/Source.h"
-#include "zkc/Dialect/PIR/IR/PIRDialect.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolDialect.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/TableLibrary.h"
 #include "zkc/Frontend/Protocol.h"
@@ -187,8 +187,8 @@ void tableOwnership() {
   handleAllErrors(
       importedBeforeLoad.takeError(), [&](const DialectRegistrationError &e) {
         tablePrecondition =
-            e.precondition == InvocationPrecondition::LoadedPIRDialect &&
-            e.detail == "table import requires the loaded pir dialect";
+            e.precondition == InvocationPrecondition::LoadedTableDialect &&
+            e.detail == "table import requires the loaded table dialect";
       });
   require(tablePrecondition && unloaded.getLoadedDialects().size() == 1,
           "table import must refuse without changing the caller's context");
@@ -222,9 +222,10 @@ void tableOwnership() {
                  e.refusals.front().code == "unresolved-dependency";
   });
   require(structured, "missing library failure lost its type or code");
-  registry.addExtension(+[](mlir::MLIRContext *, PIRDialect *dialect) {
-    dialect->addInterfaces<NoisyLibrary>();
-  });
+  registry.addExtension(
+      +[](mlir::MLIRContext *, zkc::protocol_ir::ProtocolDialect *dialect) {
+        dialect->addInterfaces<NoisyLibrary>();
+      });
   auto noisy = compileTable(request, {TableAction::Import, false}, registry);
   require(!noisy, "successful extension hid its error diagnostic");
   structured = false;
@@ -242,9 +243,10 @@ void tableOwnership() {
   require(structured,
           "upstream error was not retained without inventing a code");
   mlir::DialectRegistry setupRegistry;
-  setupRegistry.addExtension(+[](mlir::MLIRContext *, PIRDialect *dialect) {
-    dialect->addInterfaces<SetupFailureLibrary>();
-  });
+  setupRegistry.addExtension(
+      +[](mlir::MLIRContext *, zkc::protocol_ir::ProtocolDialect *dialect) {
+        dialect->addInterfaces<SetupFailureLibrary>();
+      });
   auto setup =
       compileTable(request, {TableAction::Import, false}, setupRegistry);
   require(!setup, "extension setup failure published a compilation");
@@ -422,7 +424,7 @@ void registryPreconditions() {
       registerDialects(registry);
       mlir::MLIRContext context(registry);
       if (partial)
-        context.getOrLoadDialect<PIRDialect>();
+        context.getOrLoadDialect<zkc::protocol_ir::ProtocolDialect>();
       auto count = context.getLoadedDialects().size();
       auto result = protocol::importModule(*document.module(), context);
       require(!result, "incompletely initialized registry imported source");

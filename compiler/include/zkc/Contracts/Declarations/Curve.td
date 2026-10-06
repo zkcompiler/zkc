@@ -215,3 +215,21 @@ def OperatorCurveAdd4 : ZKC_Operator<"+", [TypeGroup, TypeGroup], OpCurveAdd, [0
 def OperatorCurveNeg5 : ZKC_Operator<"-", [TypeGroup], OpCurveNeg, [0]>;
 def OperatorCurveScale6 : ZKC_Operator<"*", [TypeGroup, TypeField], OpCurveScale, [0, 1]>;
 def OperatorCurveScale7 : ZKC_Operator<"*", [TypeField, TypeGroup], OpCurveScale, [1, 0]>;
+
+// A reusable pairing result is a prime-order target group element, not a
+// Miller-loop accumulator or an arbitrary extension-field element.
+def OpPairingApplyF : ZKC_Root<"F", FieldDomain>;
+def OpPairingApplyG1 : ZKC_Project<OpPairingApplyF, FieldPairingG1>;
+def OpPairingApplyG2 : ZKC_Project<OpPairingApplyF, FieldPairingG2>;
+def OpPairingApplyGT : ZKC_Project<OpPairingApplyF, FieldPairingGT>;
+def OpPairingApply : ZKC_Operation<"pairing.apply",
+    [OpPairingApplyF, OpPairingApplyG1, OpPairingApplyG2, OpPairingApplyGT],
+    [ZKC_Apply<TypeGroup, [OpPairingApplyG1]>, ZKC_Apply<TypeGroup, [OpPairingApplyG2]>],
+    [ZKC_Apply<TypeGroup, [OpPairingApplyGT]>],
+    [ZKC_Holds<CapabilityPairingField, [OpPairingApplyF]>,
+     ZKC_Holds<CapabilityScalarAction, [OpPairingApplyGT]>]> {
+  int ordinal = 158;
+  let facets = [PublicReplay];
+}
+def ExportPairingApply : ZKC_OperationExport<"zkc::curve", "pairing",
+    OpPairingApply, ["g1", "g2"]>;

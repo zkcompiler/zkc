@@ -17,7 +17,7 @@ pub struct Arena<T> {
 impl<T> Arena<T> {
     pub fn new() -> Result<Self, Error> {
         let session = NEXT_SESSION
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map_err(|_| Error("session-identity-exhausted"))?;
         Ok(Self {
             session,

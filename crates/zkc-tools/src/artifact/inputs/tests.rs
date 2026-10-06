@@ -2,7 +2,7 @@
 //! The compiler and the Lean checker are resolved by name; no synthetic or
 //! mutated CheckedBundle and no mock backend is used.
 use super::*;
-use admission::{DECODE_COUNT, IMPORT_COUNT};
+use crate::host::admission::{DECODE_COUNT, IMPORT_COUNT};
 use std::{path::Path, process::Command, sync::Arc};
 use zkc_arkworks::{Keys, Scalar};
 use zkc_runtime::interactive::{Runner, Value as RuntimeValue};

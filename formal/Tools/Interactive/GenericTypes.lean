@@ -213,6 +213,12 @@ def signature (parameters : Parameters) (contract : String) (arguments : List Te
       | "fixed_vector.from_vector" => ⟨[vector], [fixed], needs⟩
       | "fixed_vector.to_vector" => ⟨[fixed], [vector], needs⟩
       | _ => ⟨[fixed, fixed], [scalar], needs⟩
+  if contract == "pairing.apply" then
+    let [f] := arguments | throw "generic-static-arity"
+    ensure ((← termSort parameters f) == .field) "generic-static-sort"
+    return ⟨[⟨"group", some (.project f "PairingG1")⟩,
+      ⟨"group", some (.project f "PairingG2")⟩], [⟨"group", some (.project f "PairingGT")⟩],
+      [.relation "PairingField" [f], .relation "ScalarAction" [.project f "PairingGT"]]⟩
   if contract == "pairing.check" then
     let [f] := arguments | throw "generic-static-arity"
     ensure ((← termSort parameters f) == .field) "generic-static-sort"

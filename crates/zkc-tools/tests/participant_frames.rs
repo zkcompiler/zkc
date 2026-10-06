@@ -99,7 +99,12 @@ fn a_returned_participant_keeps_its_units_when_another_stops_later() {
             .unwrap_or_else(|e| panic!("{:?}", e.error));
         runners.insert(role.to_owned(), runner);
     }
-    let report = drive(&mut schedule, &mut runners, &mut LocalTransport);
+    let report = drive(
+        &mut schedule,
+        &mut runners,
+        &mut LocalTransport,
+        Default::default(),
+    );
     assert!(
         matches!(&report.outcome, JointOutcome::Stopped(stop)
             if stop.role == "V" && stop.kind == StopKind::Limit),

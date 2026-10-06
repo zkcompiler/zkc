@@ -14,7 +14,7 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  auto field = zkc::FieldType::get(&context, "f7");
+  auto field = zkc::algebra::FieldType::get(&context, "f7");
   if (field.getDomain() != "f7")
     return 1;
   const zkc::frontend::Input input(

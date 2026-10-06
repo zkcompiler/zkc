@@ -83,7 +83,8 @@ Type decodeBoundType(MLIRContext *ctx, const BoundType &t) {
     return {};
   if (t.representation.empty())
     return result;
-  return type_adapters::loadedType<DataType>(ctx, result, t.representation);
+  return type_adapters::loadedType<zkc::plan::DataType>(ctx, result,
+                                                        t.representation);
 }
 
 Expected<BoundType> encodeBoundType(Type type, bool physical) {
@@ -91,7 +92,7 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
     return error("binding-type");
   Type original = type;
   std::string rep;
-  if (auto data = dyn_cast<DataType>(type)) {
+  if (auto data = dyn_cast<zkc::plan::DataType>(type)) {
     if (!physical)
       return error("binding-physical-type-at-logical-stage");
     rep = data.getRepresentation().str();
@@ -112,8 +113,9 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
 }
 
 Expected<source::OperationBinding> readBinding(Operation *op) {
-  auto declaration = dyn_cast_or_null<OperationBindingOp>(op);
-  if (!declaration || !isa_and_nonnull<ProtocolModuleOp>(op->getParentOp()))
+  auto declaration = dyn_cast_or_null<zkc::local::OperationBindingOp>(op);
+  if (!declaration ||
+      !isa_and_nonnull<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp()))
     return error("binding-declaration-context");
   auto name = declaration.getSymNameAttr();
   auto contract = declaration.getContractAttr();
@@ -128,8 +130,9 @@ Expected<source::OperationBinding> readBinding(Operation *op) {
       return error("binding-static-identity");
     values.push_back(value.getValue().str());
   }
-  auto root = cast<ProtocolModuleOp>(op->getParentOp());
-  bool physical = root.getStageAttr() && root.getStage() == "physical";
+  auto root = cast<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp());
+  bool physical = root.getProfileAttr() &&
+                  root.getProfile() == zkc::protocol_ir::Profile::Physical;
   source::OperationBinding binding{{},
                                    name.getValue().str(),
                                    {contract.getValue().str(),
@@ -142,7 +145,7 @@ Expected<source::OperationBinding> readBinding(Operation *op) {
 }
 
 Expected<source::OperationBinding> operationBinding(Operation *user) {
-  auto root = user->getParentOfType<ProtocolModuleOp>();
+  auto root = user->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
   auto reference = user->getAttrOfType<FlatSymbolRefAttr>("binding");
   if (!root || !reference)
     return error("binding-reference");
@@ -158,7 +161,7 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
     return diagnostics::emit(op->emitOpError(), signature.takeError());
   if (physical) {
     auto key = op->getAttrOfType<StringAttr>("kernel");
-    if (!isa<ExecuteKernelOp>(op) || !key ||
+    if (!isa<zkc::plan::ExecuteKernelOp>(op) || !key ||
         key.getValue() != selected->application.implementation)
       return diagnostics::emit(op->emitOpError(), "binding-implementation");
   } else if (!operationSupportsContract(op->getName().getStringRef(),
@@ -198,7 +201,7 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
 } // namespace zkc::protocol
 
 namespace zkc {
-LogicalResult OperationBindingOp::verify() {
+LogicalResult zkc::local::OperationBindingOp::verify() {
   auto binding = protocol::readBinding(*this);
   if (!binding)
     return diagnostics::emit(emitOpError(), binding.takeError());

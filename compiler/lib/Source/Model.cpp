@@ -3,11 +3,22 @@
 
 using namespace llvm;
 namespace zkc::source {
+StringRef participantFormat(ParticipantContract contract) {
+  switch (contract) {
+  case ParticipantContract::Legacy:
+    return "zkc.participants/1";
+  case ParticipantContract::Program:
+    return "zkc.program/1";
+  }
+  return {};
+}
 StringRef Instruction::kind() const {
   static constexpr const char *names[] = {
-      "op",     "local", "call", "message",    "send", "receive",
-      "return", "yield", "stop", "incomplete", "loop", "release",
-      "apply",  "if",    "for",  "variant",    "match"};
+      "op",    "local",      "call",          "message",
+      "send",  "receive",    "return",        "yield",
+      "stop",  "incomplete", "loop",          "release",
+      "apply", "if",         "for",           "variant",
+      "match", "query",      "bool_constant", "return_if"};
   return names[value.index()];
 }
 bool Instruction::isTerminator() const {

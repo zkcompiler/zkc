@@ -113,6 +113,10 @@ transport. It rejects unknown/custom-gate binary sections and unsupported exact
 field moduli. It does not reinterpret a BN254 circuit as BLS12-381 merely because
 both have roughly 256-bit field elements.
 
+Run from the repository root after the
+[native build](../development/README.md). These commands assume
+`build/compiler` is on `PATH` and the named input files are supplied by the caller.
+
 ```sh
 zkc-compile relation-read circuit.r1cs > circuit.relation.json
 zkc-compile relation-inspect circuit.r1cs

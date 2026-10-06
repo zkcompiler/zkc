@@ -26,8 +26,7 @@ Static instantiation can remove generic dispatch, at real cost: requirement
 checking, specialization and code growth, representation conversions, incomplete
 search, and explicit proof or trust obligations. Replacing a field or PCS can
 select a different protocol instance; replacing an arithmetic kernel can preserve
-an existing instance. These are different operations even when both were
-previously chosen by the same profile string.
+an existing instance. These are different operations even when one profile string selects both.
 
 | Question | Rule |
 |---|---|
@@ -42,8 +41,7 @@ previously chosen by the same profile string.
 
 Ordinary file-level authoring supports generic definitions and explicit
 semantic and implementation bindings. Source APIs resolve through explicit
-imports from the installed modules. Historical BLS module headings and their
-defaults are removed. [Interactive carrier admission](../compiler/carrier-consolidation.md#authoring-and-admission)
+imports from the installed modules. [Source-route carrier admission](../compiler/carrier-consolidation.md#authoring-and-admission)
 still checks explicit selected contracts and fully qualified logical and physical
 ports independently of authoring imports.
 

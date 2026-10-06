@@ -28,12 +28,12 @@ assert planned(commands, text, directory)[9] == body
 # by the verifier rather than carried into a plan.
 for label, invalid in {
     "bad-child-type": text.replace('"f7"', '"unknown"', 1),
-    "unknown-child": text.replace('"algebra.add"', '"algebra.unknown"'),
+    "unknown-child": text.replace('"table.field_add"', '"algebra.unknown"'),
     "extra-control-attribute": text.replace(
-        '"pir.return"(%arg0, %0)', '"pir.return"(%arg0, %0) {extra = true}'
+        '"table.source.return"(%arg0, %0)', '"table.source.return"(%arg0, %0) {extra = true}'
     ),
     "child-wrong-arity": text.replace(
-        '"algebra.add"(%arg1, %arg1)', '"algebra.add"(%arg1)'
+        '"table.field_add"(%arg1, %arg1)', '"table.field_add"(%arg1)'
     ).replace(
         '(!algebra.field<"f7">, !algebra.field<"f7">)', '(!algebra.field<"f7">)'
     ),

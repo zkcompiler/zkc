@@ -46,6 +46,28 @@ int main() {
             "duplicate history inventory entry");
   }
   require(fixture.eof(), "invalid history inventory row");
+  // The shared portable inventory remains the Lean reader's supported set.
+  // Native source origins are admitted only by the native execution profile.
+  for (llvm::StringRef key :
+       {"transcript.native.challenge", "transcript.native.observe.bool",
+        "transcript.native.observe.field", "transcript.native.observe.group",
+        "transcript.native.indexed.challenge",
+        "transcript.native.indexed.observe.bool",
+        "transcript.native.indexed.observe.field",
+        "transcript.native.indexed.observe.group",
+        "transcript.native.indexed.observe.index",
+        "transcript.native.indexed.observe.field_array",
+        "transcript.native.indexed.observe.data",
+        "transcript.native.indexed.observe.commitment",
+        "transcript.native.indexed.observe.proof"})
+    require(expectedHistory.emplace(key.str(), true).second,
+            "duplicate native history inventory entry");
+  // Closed native sequence operations carry no transcript history. The older
+  // portable reader does not admit their complete-Type ports.
+  for (llvm::StringRef key :
+       {"sequence.empty", "sequence.append", "sequence.at", "sequence.length"})
+    require(expectedHistory.emplace(key.str(), false).second,
+            "duplicate sequence history inventory entry");
   for (const auto &kernel : kernels()) {
     require(keys.insert(kernel.key.str()).second, "duplicate contract key");
     auto expected = expectedHistory.find(kernel.key.str());
@@ -55,8 +77,10 @@ int main() {
             "history classification differs from shared inventory");
     require(operationContracts(kernel.key) == &kernel.contracts,
             "catalog does not own the contract facts");
-    const bool opaqueResource = llvm::is_contained(kernel.inputs, "nonce") ||
-                                kernel.key.starts_with("resource_unit.");
+    const bool opaqueResource =
+        llvm::is_contained(kernel.inputs, "nonce") ||
+        kernel.key.starts_with("resource_unit.") ||
+        (kernel.key.starts_with("sequence.") && !kernel.inputs.empty());
     require(hasUnclassifiedProviderEffect(kernel.key) == opaqueResource,
             "entropy/transcript coverage or opaque resource classification");
     if (auto sample = samplingContract(kernel.key)) {
@@ -113,9 +137,11 @@ int main() {
                   kernel.inputs[observation->stateInput] == "transcript" &&
                   kernel.outputs[observation->stateOutput] == "transcript",
               "observation port outside transcript signature");
-      require(kernel.key.starts_with("transcript.observe.") &&
-                  kernel.key.drop_front(19) ==
-                      kernel.inputs[observation->payloadInput],
+      auto suffix = kernel.key;
+      require((suffix.consume_front("transcript.observe.") ||
+               suffix.consume_front("transcript.native.observe.") ||
+               suffix.consume_front("transcript.native.indexed.observe.")) &&
+                  suffix == kernel.inputs[observation->payloadInput],
               "observation payload differs from its logical contract");
     }
     if (auto map = kernel.contracts.diagonalMap)
@@ -158,6 +184,24 @@ int main() {
               !pairing->sampling && !pairing->linearContraction &&
               !hasUnclassifiedProviderEffect("pairing.check"),
           "pairing predicate grants neither acceptance nor replay authority");
+  // The shared inventory also covers the installed physical-only adapter.
+  // It has no logical kernel row and must not acquire one through discovery.
+  BindingApplication relayout{
+      "table.relayout",
+      {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
+      "arkworks/table.relayout"};
+  auto physicalRelayout = resolveBinding(relayout, true);
+  require(bool(physicalRelayout), "physical relayout must be installed");
+  auto logicalRelayout = resolveBinding(relayout, false);
+  require(!logicalRelayout, "relayout must remain physical-only");
+  llvm::consumeError(logicalRelayout.takeError());
+  require(keys.insert(relayout.contract).second,
+          "physical adapter unexpectedly has a logical kernel row");
+  auto expectedRelayout = expectedHistory.find(relayout.contract);
+  require(expectedRelayout != expectedHistory.end() &&
+              !expectedRelayout->second &&
+              !isHistoryTransition(relayout.contract),
+          "physical relayout history classification");
   require(keys.size() == expectedHistory.size(),
           "uninstalled history inventory contract");
 }

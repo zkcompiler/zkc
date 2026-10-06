@@ -193,7 +193,7 @@ an explicit boundary. The broader [selective lowering design](lowering.md) is no
 claimed for every current container.
 
 Closed local [algorithm composition](local-composition.md) now adds
-`AlgorithmCall`/`apply`, retained `func.call` common IR and a bounded native
+`AlgorithmCall`/`apply`, retained `local.apply` common IR and a bounded native
 expansion pass. Its [accounting and occurrence contract](../spec/profiles/compiler/local-algorithms.md)
 defines the executable boundary. Participant export still rejects residual
 applications; independent Lean consumers derive their own expansion.

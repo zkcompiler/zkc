@@ -75,8 +75,7 @@ a coordinate cache hit cannot substitute for the root/path predicate.
 
 The maintained [AIR/oracle examples](../../examples/protocols/air-oracle/README.md)
 use explicit extension-field traces, FRI and authenticated queries. Their native
-and reference evidence has the bounds stated there. A full emitted-FRI-to-`Proc`
-or SSA-to-Rust theorem is not supplied by a local cache law.
+and reference evidence has the bounds stated there.
 
 The local cache relation stores only results for exact ordered primitive
 inputs. It preserves logical requests and the selected result/event observation;
@@ -170,8 +169,7 @@ original witness claim.
 
 For a field order that does not divide `2^256`, reducing a uniform 256-bit
 digest modulo that order gives a biased pushforward. The selected property must use that actual distribution or a justified
-bound. An informal "uniform" comment is not a probability proof. No new KZG attack is
-claimed.
+bound. An informal "uniform" comment is not a probability proof.
 
 ## 6. Accepted continuation and finite recurrence
 

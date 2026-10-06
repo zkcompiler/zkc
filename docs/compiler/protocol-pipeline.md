@@ -34,8 +34,9 @@ Rust role runner + selected driver/transport + external cryptographic libraries
 supplied participant / independent artifact entry ──► participant admission
 ```
 
-The construction checkpoint is explicit but need not introduce a fourth
-universal IR. It can transform a protocol module and its dependency bindings.
+The construction checkpoint remains explicit within the protocol IR. A
+construction can transform a protocol module and its dependency bindings
+without introducing another IR stage.
 Polynomial, group, oracle and relation abstractions form an independent domain
 dimension. Each can remain inspectable in several representations. An efficient
 upstream kernel can implement an operation directly; a smaller operation does
@@ -47,13 +48,93 @@ availability, independent verifier reasoning and target selection. Physical
 plans support storage, locality, kernel choice and executable cost. These
 consumers, rather than the number of dialect namespaces, justify the boundaries.
 
-Use `pir` for the common and participant protocol carriers initially, with
-different operation forms and module stage declarations; use `plan` for physical
-choices. A phase verifier enforces which forms may occur together. Keep common
-source and generated role modules as separate artifacts even when they share a
-dialect. Introducing `oir` later is a namespace/ownership decision if separate
-registration becomes useful, not a change to participant meaning. Keep dialect
-definitions and implementation files separated by responsibility from the start.
+The implemented native path uses `protocol.module` with a checked profile:
+
+```text
+protocol ── projection ──▶ participant ── lowering ──▶ exec ── selection ──▶ physical
+protocol_exec ───────────────────── projection ──────▶ exec
+```
+
+| Profile | Meaning |
+|---|---|
+| `protocol` | Whole-protocol interaction with mathematical expressions and ordered actions |
+| `participant` | Projected participant programs with mathematical expressions retained |
+| `exec` | Participant programs expressed through executable local functions |
+| `physical` | Participant programs with selected representations, kernels and storage handling |
+| `protocol_exec` | Whole protocols already expressed through executable local functions |
+
+These are profile names within `protocol.module`, not separate dialects. Each
+name highlights the stage's abstraction; `exec` and `physical` still contain
+participant programs. `exec` does not imply selected implementations or machine
+code. The `protocol_exec` route remains supported and uses its own source
+admission; changing a profile attribute does not convert between routes.
+
+Profile and execution-contract selection jointly determine the admitted grammar
+and exchange boundary:
+
+| Profile | Execution contract | Current producer and export boundary |
+|---|---|---|
+| `protocol`, `participant` | None | Authored MLIR or [R1CS translation](../../compiler/lib/Translation/R1CSSumcheck.cpp), then role projection; mathematical bodies must lower before physical program export. |
+| `protocol_exec` | None | Frontend/common-source import; common source can be exported and projected through the older pipeline. |
+| `exec` | `legacy_participants_v1` | Older projection or explicit import/authored MLIR; exports `zkc.participants/1` with logical stage. |
+| `exec` | `program` | Math lowering or explicit MLIR; native export refuses until physical selection. |
+| `physical` | `legacy_participants_v1` | Older physical selection or import; exports `zkc.participants/1`. |
+| `physical` | `program` | Mathematical physical selection or native import; exports `zkc.program/1`. |
+
+Rust production admission requires physical stage. The existing Lean explicit
+participant checker reads `zkc.participants/1`; the other formats do not inherit
+its source correspondence. The [evidence map](../status.md#checking-and-evidence)
+records the narrower current checks. A valid profile/contract pair does not
+establish that a particular producer or public host supports it.
+
+The first two profiles retain total mathematical operations in ordinary SSA.
+Projection is required to preserve each role's actual received values and
+ordered actions. Its [preservation checks](preservation.md#checking-boundaries) compare actual
+prepared and projected operands, interfaces, statement bindings and action
+metadata. Lowering subsequently outlines calculations into executable locals.
+This keeps mathematics inspectable in both common and participant IR without a second graph
+representation. Profiles constrain legal combinations of operations; dialects
+separate responsibilities. `protocol` owns interaction, `local` owns executable
+functions and local control, and `plan` owns selected execution. Domain dialects
+remain usable at several profiles. `table` owns the separate finite-table path.
+The [mathematical profile](../spec/profiles/compiler/mathematical-protocols.md)
+and [native carrier](../spec/profiles/compiler/program.md) define the
+closed implemented subset, including the limits on composition and control.
+
+### Transformation names
+
+| Transformation | Pass |
+|---|---|
+| Protocol preparation | `zkc-prepare-protocol` |
+| Algorithm expansion, also performed by preparation | `zkc-expand-algorithms` |
+| Projection from `protocol` | `zkc-project-protocol` |
+| Participant simplification | `zkc-simplify-participant` |
+| Optional polynomial factor fixing | `zkc-fix-polynomial-factors` |
+| Formal polynomial elimination | `zkc-eliminate-polynomials` |
+| Math lowering to `exec` | `zkc-lower-math` |
+| Physical selection | `zkc-select-physical` |
+| Projection from `protocol_exec` | `zkc-project-participants` |
+
+Preparation also expands admitted static algorithms/applications and helpers.
+The public mathematical compilation sequence performs polynomial elimination
+before math lowering; optional factor fixing is a separate choice. The registered
+`zkc-participant-pipeline` is the older executable-source pipeline, not the whole
+mathematical compilation sequence.
+
+Use **projection**, **lowering** and **selection** in pipeline discussions;
+qualify them when several transformations are in scope. A **binding** connects
+a declared operation contract to its domain arguments and optional implementation.
+It is a declaration used by execution, rather than the name of math lowering.
+
+`protocol.participant` defines a participant program, and
+`protocol.participant_call` calls one. `protocol.func` defines the mathematical
+whole-protocol body; `protocol.exec_func` defines the executable whole-protocol
+body. `protocol.statement` binds an advertised statement to its relation and
+entry values. `protocol.projection` retains source interfaces and calculation
+origins. Neither operation requires an additional suffix.
+
+Profile and pass names belong to the compiler API. Execution contracts and
+versioned JSON carrier tags are independent and retain their existing spellings.
 
 ## 2. Module, instance and local algorithm
 
@@ -81,13 +162,14 @@ the actual referenced signatures, not just symbol spelling. A public statement
 is available separately at each relevant role. Its agreement and connection to
 the advertised subject are entry obligations, not implied by a `public` label.
 
-Each `local` region has an owner and explicit captures, block arguments and
-results. Its body contains actual domain algorithms or calls with visible
-contracts. Use isolated regions to forbid ambient SSA capture and separately
-check role availability. Neither MLIR isolation nor ordinary type equality
-proves privacy. Pure helpers can use `func`; effectful protocol calls retain
-returned/stopped control, instance context and invocation origin. Do not treat
-an effectful verifier with receives as a local pure helper.
+Pure helpers use `func.func`; executable algorithms use isolated `local.func`
+with explicit arguments and `local.return`. An executable call is ordered even
+when its results are unused. Common mathematical calls name their owner through
+`protocol.local_call`; projected calls use role-free `local.call`. The caller
+checks role availability and affine custody. Neither MLIR isolation nor ordinary
+type equality proves privacy. Authored executable bodies stay outside total
+mathematical simplification, and local functions cannot contain communication
+or service queries. These occur in the enclosing protocol or participant.
 
 Public dimensions parameterize a resolved family. A fixed `Nat` in the current
 Lean `repeat` does not require native per-dimension compilation or unrolling:
@@ -96,7 +178,7 @@ representation needs correspondence to that selection, checked integer/shape
 bounds and agreement wherever multiple roles use the count. The initial source
 profile admits fixed public control, local branches and stops. Global choice
 requires a later explicit agreement/delivery/merge rule; it is not inferred from
-matching syntax in two endpoints.
+matching syntax in two participant programs.
 
 ## 3. Resources and child authority
 
@@ -298,13 +380,17 @@ their respective consumers. The optional `ClaimTranslation` component bridges
 Claims and IR for claim import and independent candidate checking. IR retains
 the claim dialect's structure and mandatory protocol verification without a
 Claims dependency. CompilerCore links ClaimTranslation for its claim workflows.
-Conversion implementations live in `lib/Conversion/`.
+`Translation` separately owns interchange adapters and depends on IR. Transforms
+depends on IR; CompilerCore owns workflows that combine transformations with
+source import/export. Conversion implementations live in `lib/Conversion/`.
 The [component map](../../compiler/README.md#components) records enforced build
 ownership, which need not be one library per directory. Tools and tests sit
 alongside these libraries.
-Common interaction, participant control and domain definitions live in separate
-`Protocol.td`, `Participant.td` and `Kernels.td` files. `IR.td` retains the distinct
-finite evidence carrier; it is not the definition of the current common route.
+Each dialect owns ODS, generated declarations and implementation under
+`Dialect/<Owner>/IR/`. `IR.td` and `IR.h` are convenience aggregates. Protocol
+operations use the C++ namespace `zkc::protocol_ir`; MLIR-free source and execution
+services retain `zkc::protocol`. Current protocol pass factories also use
+`zkc::protocol`; the namespace alone does not identify a library dependency.
 Rust remains in `crates/`: runtime admission/execution/custody, concrete backend
 adapters and tools. Introduce backend crates only with real dependency/feature
 boundaries; no crate per trait is required. Production names describe concepts,

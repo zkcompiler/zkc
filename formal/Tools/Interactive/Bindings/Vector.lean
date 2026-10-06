@@ -48,6 +48,7 @@ def contribution : Contribution :=
     Operation.ofShape "vector.append" ["vector", "field"] ["vector"] resolve,
     Operation.ofShape "vector.splat" ["field"] ["vector"] resolve,
     Operation.ofShape "vector.powers" ["field"] ["vector"] resolve,
+    Operation.ofShape "vector.equal" ["vector", "vector"] ["bool"] resolve,
     Operation.ofShape "vector.add" ["vector", "vector"] ["vector"] resolve,
     Operation.ofShape "vector.sub" ["vector", "vector"] ["vector"] resolve,
     Operation.ofShape "vector.mul" ["vector", "vector"] ["vector"] resolve,

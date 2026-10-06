@@ -102,6 +102,7 @@ def defaultRepresentation (kind identity : String) : String :=
     | "polynomial" => "arkworks.bn254-fr-polynomial/1"
     | "round" => "arkworks.bn254-fr-round/1"
     | _ => ""
+  else if identity == bn254GT then "arkworks.bn254-gt/1"
   else if identity == bn254G1 || identity == bn254G2 then
     "arkworks.bn254-" ++ (if identity == bn254G1 then "g1" else "g2") ++
       (if kind == "groups" then "-vector/1" else "/1")
@@ -184,7 +185,7 @@ def serializableKinds : List String :=
   ["index", "indices", "field", "matrix", "vector", "polynomial", "table", "point", "round", "bool", "group", "groups", "commitment", "commitments", "proof"]
 
 def staticIdentity (identity : String) : Bool :=
-  let domains := [bn254Fr, bn254G1, bn254G2, fr, ristrettoScalar, koalaBear, koalaBearExt8, g1, ristrettoGroup, pcs, rowBase, rowExtension, transcriptIdentity, ristrettoTranscript, spongefishTranscript, extensionTranscript]
+  let domains := [bn254Fr, bn254G1, bn254G2, bn254GT, fr, ristrettoScalar, koalaBear, koalaBearExt8, g1, ristrettoGroup, pcs, rowBase, rowExtension, transcriptIdentity, ristrettoTranscript, spongefishTranscript, extensionTranscript]
   domains.contains identity ||
     (("" :: domains).flatMap fun domain => serializableKinds.filterMap fun kind =>
       if logicalIdentity kind domain then some (codec kind domain) else none).contains identity
@@ -218,7 +219,7 @@ def associatedSort (sort : StaticSort) (member : String) : Result StaticSort :=
       (sort == .group && member == "Scalar") ||
       (sort == .commitment && ["ValueField", "PointField", "EvaluationField"].contains member) ||
       (sort == .transcript && member == "ChallengeField") then .ok .field
-  else if sort == .field && ["PairingG1", "PairingG2"].contains member then .ok .group
+  else if sort == .field && ["PairingG1", "PairingG2", "PairingGT"].contains member then .ok .group
   else .error "generic-associated-sort"
 
 def associatedIdentity (identity member : String) : Result String :=
@@ -230,9 +231,10 @@ def associatedIdentity (identity member : String) : Result String :=
   else if rowDomain identity && member == "ValueField" then .ok (if identity == rowBase then koalaBear else koalaBearExt8)
   else if identity == extensionTranscript && member == "ChallengeField" then .ok koalaBearExt8
   else if identity == koalaBearExt8 && member == "BaseField" then .ok koalaBear
-  else if (identity == bn254G1 || identity == bn254G2) && member == "Scalar" then .ok bn254Fr
+  else if (identity == bn254G1 || identity == bn254G2 || identity == bn254GT) && member == "Scalar" then .ok bn254Fr
   else if identity == bn254Fr && member == "PairingG1" then .ok bn254G1
   else if identity == bn254Fr && member == "PairingG2" then .ok bn254G2
+  else if identity == bn254Fr && member == "PairingGT" then .ok bn254GT
   else .error "binding-associated-identity"
 
 abbrev Declaration := OperationBinding

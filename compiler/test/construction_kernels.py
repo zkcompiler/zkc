@@ -12,23 +12,23 @@ from journal import names
 T={'bool':'i1','field':'!algebra.field<"bls12-381.fr">',
    'group':'!algebra.group<"bls12-381.g1">','groups':'tensor<?x!algebra.group<"bls12-381.g1">>',
    'table':'!poly.multilinear<"bls12-381.fr">','round':'!poly.quadratic<"bls12-381.fr">',
-   'point':'!poly.point<"bls12-381.fr">','nonce':'!pir.capability<"nonce:bls12-381.fr">',
-   'transcript':'!pir.capability<"transcript:merlin3.bls12-381.fr64be/1">',
+   'point':'!poly.point<"bls12-381.fr">','nonce':'!local.capability<"nonce:bls12-381.fr">',
+   'transcript':'!local.capability<"transcript:merlin3.bls12-381.fr64be/1">',
    **{k:f'!pcs.object<"{PCS}", "{k}">' for k in ['commitment','proof']}}
 contracts=[
- ('pcs.equal','pcs.equal',['commitment','commitment'],['bool'],[]),
- ('curve.generator','algebra.curve_generator',[],['group'],[]),
- ('curve.add','algebra.curve_add',['group','group'],['group'],[]),
- ('curve.scale','algebra.curve_scale',['group','field'],['group'],[]),
- ('curve.equal','algebra.curve_equal',['group','group'],['bool'],[]),
- ('curve.empty','algebra.curve_empty',[],['groups'],[]),
- ('curve.append','algebra.curve_append',['groups','group'],['groups'],[]),
- ('curve.at','algebra.curve_at',['groups'],['group'],['0']),
- ('curve.commit','algebra.curve_commit',['groups','nonce'],['groups','nonce'],[]),
- ('curve.response','algebra.curve_response',['field','field','nonce'],['field'],[]),
- ('transcript.challenge','pir.transcript_challenge',['transcript'],['field','transcript'],['Protocol','call','Function','draw','V'])]
+ ('pcs.equal','pcs.exec.equal',['commitment','commitment'],['bool'],[]),
+ ('curve.generator','algebra.exec.group_generator',[],['group'],[]),
+ ('curve.add','algebra.exec.group_add',['group','group'],['group'],[]),
+ ('curve.scale','algebra.exec.group_scale',['group','field'],['group'],[]),
+ ('curve.equal','algebra.exec.group_equal',['group','group'],['bool'],[]),
+ ('curve.empty','algebra.exec.group_empty',[],['groups'],[]),
+ ('curve.append','algebra.exec.group_append',['groups','group'],['groups'],[]),
+ ('curve.at','algebra.exec.group_at',['groups'],['group'],['0']),
+ ('curve.commit','crypto.exec.curve_commit',['groups','nonce'],['groups','nonce'],[]),
+ ('curve.response','crypto.exec.curve_response',['field','field','nonce'],['field'],[]),
+ ('transcript.challenge','crypto.exec.transcript_challenge',['transcript'],['field','transcript'],['Protocol','call','Function','draw','V'])]
 for t in ['bool','field','table','point','round','commitment','proof','group','groups']:
- contracts.append(('transcript.observe.'+t,'pir.transcript_observe',['transcript',t],['transcript'],['Protocol','message','schema','P','V']))
+ contracts.append(('transcript.observe.'+t,'crypto.exec.transcript_observe',['transcript',t],['transcript'],['Protocol','message','schema','P','V']))
 checks=[]
 commands=Commands(records())
 
@@ -40,14 +40,14 @@ def run(tool,*args,text=None,ok=True,code=None):
 
 def ir(spelling,inputs,outputs,params,extra=''):
  key = next((k for k, op, ins, outs, _ in contracts
-             if op == spelling and (op != 'pir.transcript_observe' or [T[t] for t in ins] == inputs)), 'curve.commit')
+             if op == spelling and (op != 'crypto.exec.transcript_observe' or [T[t] for t in ins] == inputs)), 'curve.commit')
  binding = declaration(key, key)
  args=', '.join(f'%a{i}: {t}' for i,t in enumerate(inputs))
  vals=', '.join(f'%a{i}' for i in range(len(inputs)))
  results=f'%r:{len(outputs)} = ' if outputs else ''
- return f'''module {{ "pir.module"() <{{stage = "common"}}> ({{
+ return f'''module {{ "protocol.module"() <{{profile = #protocol.profile<protocol_exec>}}> ({{
  {binding}
- func.func @f({args}) attributes {{logical_origin = ["f", []]}} {{
+ local.func @f({args}) attributes {{logical_origin = ["f", []]}} {{
  {results}"{spelling}"({vals}) <{{site = "site", binding = @"{key}", parameters = {json.dumps(params)}}}> : ({', '.join(inputs)}) -> ({', '.join(outputs)})
  {extra}
  return
@@ -79,15 +79,15 @@ for key,spelling,ins,outs,params in contracts:
 for bad,code in [('00','noncanonical-natural'),('-1','expected-natural'),
                  ('1048577','interactive-index'),('18446744073709551616','interactive-index'),
                  ('1.0','expected-natural'),('','expected-natural')]:
- run(optimizer,text=ir('algebra.curve_at',[T['groups']],[T['group']],[bad]),ok=False,code=code)
+ run(optimizer,text=ir('algebra.exec.group_at',[T['groups']],[T['group']],[bad]),ok=False,code=code)
  checks.append('curve-at-refuses-'+bad)
-run(optimizer,text=ir('algebra.curve_add',['!algebra.group<"reference.group">']*2,[T['group']],[]),ok=False,code='binding-operation-signature')
+run(optimizer,text=ir('algebra.exec.group_add',['!algebra.group<"reference.group">']*2,[T['group']],[]),ok=False,code='binding-operation-signature')
 checks.append('reference-group-is-not-g1')
-run(optimizer,text=ir('algebra.curve_commit',[T['groups'],'!pir.capability<"nonce">'],[T['groups'],'!pir.capability<"nonce">'],[]),ok=False,code='binding-operation-signature')
+run(optimizer,text=ir('crypto.exec.curve_commit',[T['groups'],'!local.capability<"nonce">'],[T['groups'],'!local.capability<"nonce">'],[]),ok=False,code='binding-operation-signature')
 checks.append('reference-nonce-is-not-fr-nonce')
 # The same affine transcript cannot be consumed twice. This subject is directly
 # authored MLIR, so it exercises admission of actual mutated SSA.
-second='''%second = "pir.transcript_observe"(%a0, %a1) <{site = "other", binding = @"transcript.observe.bool", parameters = ["Protocol","m2","schema","P","V"]}> : (!pir.capability<"transcript:merlin3.bls12-381.fr64be/1">, i1) -> !pir.capability<"transcript:merlin3.bls12-381.fr64be/1">'''
-run(optimizer,text=ir('pir.transcript_observe',[T['transcript'],'i1'],[T['transcript']],['Protocol','message','schema','P','V'],extra=second),ok=False,code='interactive-resource-reuse')
+second='''%second = "crypto.exec.transcript_observe"(%a0, %a1) <{site = "other", binding = @"transcript.observe.bool", parameters = ["Protocol","m2","schema","P","V"]}> : (!local.capability<"transcript:merlin3.bls12-381.fr64be/1">, i1) -> !local.capability<"transcript:merlin3.bls12-381.fr64be/1">'''
+run(optimizer,text=ir('crypto.exec.transcript_observe',[T['transcript'],'i1'],[T['transcript']],['Protocol','message','schema','P','V'],extra=second),ok=False,code='interactive-resource-reuse')
 checks.append('transcript-affine-reuse')
 print(f'construction kernels: {commands.save()} checks over {len(checks)} named assertions')

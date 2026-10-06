@@ -9,6 +9,7 @@ pub(crate) fn apply(
     i: &Invocation<'_>,
     p: &Policy,
     r: &mut Resources,
+    key: &crate::setups::Setups,
 ) -> Option<Result<Vec<Value>>> {
     if !matches!(
         name,
@@ -19,7 +20,10 @@ pub(crate) fn apply(
             | "curve.commit"
             | "curve.response"
             | "transcript.challenge"
+            | "transcript.native.challenge"
     ) && !name.starts_with("transcript.observe.")
+        && !name.starts_with("transcript.native.observe.")
+        && !name.starts_with("transcript.native.indexed.")
     {
         return None;
     }
@@ -54,17 +58,52 @@ pub(crate) fn apply(
                 let (value, next) = r.draw_vector(i.frame, t, n)?;
                 Ok(vec![value, Rng(next)])
             }
-            ("transcript.challenge", [Transcript(t)]) => {
+            ("transcript.native.indexed.challenge", [Transcript(t), Indices(indices)]) => {
                 p.output(1024, i.max_output_bytes)?;
-                let origin = zkc_runtime::logical::challenge_origin(i.frame.origin(), i.attributes)
-                    .map_err(|_| refused("transcript-origin"))?;
+                let origin =
+                    zkc_runtime::logical::indexed_native_origin(i.attributes, "query", indices)
+                        .map_err(|_| refused("transcript-origin"))?;
                 let (v, t) = r.transcript_challenge_value(i.frame, t, &origin)?;
                 Ok(vec![v, Transcript(t)])
             }
-            (name, [Transcript(t), v]) if name.starts_with("transcript.observe.") => {
+            (name, [Transcript(t), v, Indices(indices)])
+                if name.starts_with("transcript.native.indexed.observe.") =>
+            {
                 p.output(512, i.max_output_bytes)?;
-                let origin = zkc_runtime::logical::message_origin(i.frame.origin(), i.attributes)
-                    .map_err(|_| refused("transcript-origin"))?;
+                let origin =
+                    zkc_runtime::logical::indexed_native_origin(i.attributes, "message", indices)
+                        .map_err(|_| refused("transcript-origin"))?;
+                let bytes = crate::codec::native::encode(v, p, key).map_err(|e| match e {
+                    crate::NativeWireError::Limit => exhausted("native-wire-limit"),
+                    crate::NativeWireError::Backend(e) => e,
+                    crate::NativeWireError::Invalid(_) => refused("native-wire-value"),
+                })?;
+                Ok(vec![Transcript(
+                    r.transcript_observe(i.frame, t, &origin, &bytes)?,
+                )])
+            }
+            (name @ ("transcript.challenge" | "transcript.native.challenge"), [Transcript(t)]) => {
+                p.output(1024, i.max_output_bytes)?;
+                let origin = if name == "transcript.native.challenge" {
+                    zkc_runtime::logical::native_origin(i.attributes, "query")
+                } else {
+                    zkc_runtime::logical::challenge_origin(i.frame.origin(), i.attributes)
+                }
+                .map_err(|_| refused("transcript-origin"))?;
+                let (v, t) = r.transcript_challenge_value(i.frame, t, &origin)?;
+                Ok(vec![v, Transcript(t)])
+            }
+            (name, [Transcript(t), v])
+                if name.starts_with("transcript.observe.")
+                    || name.starts_with("transcript.native.observe.") =>
+            {
+                p.output(512, i.max_output_bytes)?;
+                let origin = if name.starts_with("transcript.native.") {
+                    zkc_runtime::logical::native_origin(i.attributes, "message")
+                } else {
+                    zkc_runtime::logical::message_origin(i.frame.origin(), i.attributes)
+                }
+                .map_err(|_| refused("transcript-origin"))?;
                 let bytes = crate::codec::encode(v, p)?;
                 Ok(vec![Transcript(
                     r.transcript_observe(i.frame, t, &origin, &bytes)?,
@@ -116,6 +155,60 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{curve, random, transcript};
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
+        transcript::observation(
+            "transcript.native.indexed.observe.data",
+            &[],
+            &[],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::challenge(
+            "transcript.native.indexed.challenge",
+            &[Transcript, Indices],
+            &[Field, Transcript],
+            AttributeRule::NativeChallengeTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.bool",
+            &[Transcript, Bool, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.field",
+            &[Transcript, Field, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.group",
+            &[Transcript, Group, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.commitment",
+            &[Transcript, Commitment, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.proof",
+            &[Transcript, Proof, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.index",
+            &[Transcript, Index, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
+        transcript::observation(
+            "transcript.native.indexed.observe.field_array",
+            &[Transcript, FieldArray, Indices],
+            &[Transcript],
+            AttributeRule::NativeMessageTemplate,
+        ),
         curve::operation(
             "curve.commit",
             &[Groups, Nonce],
@@ -127,6 +220,12 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Field, Field, Nonce],
             &[Field],
             AttributeRule::None,
+        ),
+        transcript::challenge(
+            "transcript.native.challenge",
+            &[Transcript],
+            &[Field, Transcript],
+            AttributeRule::NativeChallengeOrigin,
         ),
         transcript::challenge(
             "transcript.challenge",
@@ -178,10 +277,22 @@ pub(crate) const OBSERVATIONS: &[crate::bindings::Contract] = {
             AttributeRule::MessageOrigin,
         ),
         transcript::observation(
+            "transcript.native.observe.bool",
+            &[Transcript, Bool],
+            &[Transcript],
+            AttributeRule::NativeMessageOrigin,
+        ),
+        transcript::observation(
             "transcript.observe.bool",
             &[Transcript, Bool],
             &[Transcript],
             AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.native.observe.field",
+            &[Transcript, Field],
+            &[Transcript],
+            AttributeRule::NativeMessageOrigin,
         ),
         transcript::observation(
             "transcript.observe.field",
@@ -224,6 +335,12 @@ pub(crate) const OBSERVATIONS: &[crate::bindings::Contract] = {
             &[Transcript, Point],
             &[Transcript],
             AttributeRule::MessageOrigin,
+        ),
+        transcript::observation(
+            "transcript.native.observe.group",
+            &[Transcript, Group],
+            &[Transcript],
+            AttributeRule::NativeMessageOrigin,
         ),
         transcript::observation(
             "transcript.observe.group",

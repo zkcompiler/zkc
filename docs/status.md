@@ -9,6 +9,131 @@ Every capability below is bounded. Passing controls establish behavior within an
 implemented subset; they do not establish that the complete target architecture
 is realized, and no entry is a cryptographic security theorem.
 
+## Routes at a glance
+
+| Route | Entry and execution | Checking and state |
+|---|---|---|
+| Source | `.pir` → `protocol_exec` → `zkc.participants/1`; source/artifact hosts | Supported Lean source/candidate checks; retained while consumers migrate |
+| Native mathematical | Direct MLIR → `zkc.program/1`; `zkc.run/1` bundles or proof deployments | Bounded compiler preservation and runtime admission; foundation complete, native Lean connection open |
+| Finite tables | Table source → direct/physical plans → table session | Independent Lean references and scoped transformation proofs; executable consumers remain |
+
+## Foundation capability map
+
+The selected foundation is implemented and stabilized. This map separates
+formation, execution and proof-host support. The [validation map](compiler/foundation-validation.md)
+connects it to maintained evidence; the [migration inventory](compiler/migration.md)
+records consumers still using earlier paths. Full migration and native Lean
+correspondence remain open.
+
+| Capability | Implemented path and evidence owner | Limits and later extensions |
+|---|---|---|
+| Total scalar mathematics and dependencies | [Mathematical formation](../compiler/lib/Dialect/Protocol/IR/Mathematical.cpp), [math lowering](../compiler/lib/Transforms/MathLowering.cpp); generated arithmetic and received-value controls | Wider mathematical vocabulary is admitted per operation; an installed kernel alone is not a total-operation recipe. |
+| Static calls and applications | Canonical application expansion, projection and authored local preservation; [nested Schnorr](../compiler/test/fixtures/mathematical/nested-schnorr.mlir) | Affine application results use exact-input summaries; unknown roots remain refused at repeat obligations. |
+| Structured local control | [Local control](compiler/local-control.md), C++/Rust admission and managed frames; bounded `local.condition` termination in the [entry completion](compiler/entry-completion.md) profile | Exact-root `if`/`match` captures/`for` results compose with mathematical repeats. Aggregate payload provenance and private-match history are not added. |
+| Protocol iteration and roles | [Structured iteration](spec/profiles/compiler/structured-iteration.md), [compiler checks](../compiler/test/native_iteration.py), [runtime client](../crates/zkc-tools/examples/native_iteration.rs) | Composed RNG/transcript local control now executes through nested repeats. Count agreement in a joint run is not a proof of equal count expressions. |
+| Products, sums, extents and indexing | Structured data operations, optional matrices and residual state execute | Common data operations retain total payloads; checked local variant operations package copyable non-total PCS objects. [Runtime-count sequences](compiler/nested-data.md) now support immutable records and independently shaped matrices; affine elements remain excluded. |
+| Affine resources and effects | [Native local policy](../compiler/lib/Dialect/Protocol/NativePolicy.cpp), state-successor contracts, runtime custody and generation checks | [Exact origins](compiler/resource-origins.md) prove input identity through structured control; this does not establish state equality or independent randomness. |
+| Services and aliases | Entry-origin scalar services, nested capture/query and lease cleanup execute | Mathematical query formation admits the installed BLS, BN254, Ristretto and ext8 random-service contracts with exact result types. Native attempts retain provider state while reinstalling entry service bindings. Broader service contracts remain separate. |
+| Vector/group bulk algebra | Explicit [algebra](../compiler/include/zkc/Contracts/Declarations/Algebra.td) and [curve](../compiler/include/zkc/Contracts/Declarations/Curve.td) contracts; [composed numeric state](compiler/composed-state.md) executes shrinking inner products and growing commitment batches through proof and interactive hosts | BLS numeric state, partial inverses and persistent returned attempts have maintained coverage. [Composed clients](compiler/mathematical-composition.md) extend this evidence to BN254 QAP/pairing and KoalaBear/ext8 oracle data; [entry completion](compiler/entry-completion.md) covers early-abandoned attempts. |
+| Polynomial residuals | [Recipe lowering](spec/profiles/compiler/polynomial-recipes.md), product/cubic Sumcheck and actual original-point checks | The [composition client](compiler/mathematical-composition.md) exercises ext8 interpolation, coset transforms and quotient/fold kernels in transparent local bodies. Formal polynomial expansion retains its separate declared limits. |
+| Relation and setup identity | [Structured relation declarations and actual entry bindings](compiler/relation-bindings.md), selected BLS PCS and [multiple authorized setups](spec/profiles/compiler/structured-proof-messages.md#application-authorized-setups) | Exact key/input authority includes unused ports and inactive PCS alternatives. Non-BLS leaf codecs and typed services have contrasting executed clients; installed bulk-domain compositions have [executed coverage](compiler/mathematical-composition.md); declarations alone do not check relation satisfaction. |
+| QAP, pairing and AIR/oracle composition | [Composed clients and capacity](compiler/mathematical-composition.md): bound matrix/assignment, coset numerator/MSM/GT and full-trace extension/oracle checks through separate participants; native component sizes up to 8,192 rows in three lowering modes | Individual GT values, all installed scalar vectors/matrices and source-group vectors; dense GT vectors and full protocol libraries remain later work. No native Lean execution correspondence is claimed. |
+| Native transcript construction | [Native proof packages](compiler/native-proofs.md) derive selected BLS, Ristretto and ext8 suites; [authored external state](compiler/authored-transcripts.md) uses explicit initialization, snapshots, trials/live checks and exact native messages | Authored admission preserves calls but does not prove transcript completeness or snapshot reachability. Existing suite selection is not arbitrary derivation. |
+| Native proof input and wire | [Host constructors](../crates/zkc-tools/src/artifact/native.rs) and [closed codec](../crates/zkc-backends/src/codec/native.rs) | Native inputs require a supported wire type or explicit resource/key constructor. [Structured proof messages](compiler/structured-proofs.md) supply `/4` records/sums with installed typed numeric leaves. [Nested data](compiler/nested-data.md) adds record sequences and ragged matrix frames. Each complete type retains explicit wire admission. |
+| Attempts and retained work | [Native attempts](compiler/native-attempts.md) retain RNG/services, unpublished buffers and consumed work, including authored external calls; reports expose per-attempt primitive work and a host-configurable lower cap | Application-owned Boolean policy; one-shot inputs and unsupported affine outputs refuse. [Conditional entry completion](compiler/entry-completion.md) skips unreached suffixes and preserves affine successors, prefix work and exact return coordinates. |
+| Independent proof execution | Existing native producer/validator programs use the common `Runner`; source and supplied-participant admission have separate scopes | No protocol-specific interpreter is required. New boundary forms still need admission, host construction and composed proof tests. |
+| Observation inputs and checking | Actual receives, draws, roots, ordered guards/stops and source operands remain explicit under their contracts | Rich observation analyses and broad native Lean correspondence are later work; current passes/fixtures are not security proofs. |
+
+## Checking and evidence
+
+The [owner map](architecture.md#implementation-owners) locates code. The table
+below distinguishes compiler checks, runtime admission, independent references
+and formal evidence. Current test results apply to the tested revision and scope;
+a documentation link is not evidence of a fresh run.
+
+The [foundation validation map](compiler/foundation-validation.md) records the
+checks, references and trust boundaries. Native compiler checks recognize bounded
+relations; equal but unrecognized rewrites may refuse. Native Lean differential
+execution and source/artifact correspondence remain open. Existing source and
+table consumers retain their independent checking contracts.
+
+## Native mathematical protocol path
+
+Mathematical MLIR enters as `protocol.module` with the `protocol` profile.
+Preparation expands static applications and helpers, then performs scoped
+canonicalization. Projection emits participant programs with total expressions
+retained. Demand lowering outlines calculations at their first consumers and
+applies admitted execution recipes. Physical selection binds installed kernels.
+[Compiler profiles](spec/profiles/compiler/mathematical-protocols.md) and
+[preservation checks](compiler/preservation.md) define each boundary.
+
+The current execution formats are [`zkc.program/1`](spec/profiles/compiler/program.md)
+and [`zkc.run/1`](spec/profiles/compiler/run.md). They cover flat and structured
+values, loops, messages and services. Superseded native participant/run tags and
+the service-only carrier are refused. The earlier source route uses
+`protocol_exec` and `zkc.participants/1`; its frontend and independent checker
+consumers have not migrated. The source host's `zkc.run/2` input array is a
+separate interface, not a version of the native Run bundle.
+
+| Mechanism | Current behavior and guide |
+|---|---|
+| Mathematical values | Total scalar expressions, formal polynomials, dynamic tensors, nominal products/sums and runtime-count record/ragged containers; [structured mathematics](compiler/structured-mathematics.md), [nested data](compiler/nested-data.md). Formation alone does not install a realization or codec. |
+| Ordered computation | Authored local calls, partial operations, guards, affine successors, bounded loops and conditional entry completion; [local control](compiler/local-control.md), [entry completion](compiler/entry-completion.md). |
+| Interaction | Arbitrary declared roles within the roster bound, actual receives, compact counted regions and source-bound schedules; [structured iteration](spec/profiles/compiler/structured-iteration.md). General network transport and dynamic protocol composition remain open. |
+| Resources | Exact-root summaries through local control/static applications, distinct randomness draws, nonce/transcript custody, poisoned service roots and cancellation; [resource origins](compiler/resource-origins.md), [native services](spec/profiles/compiler/native-services.md). |
+| Relations | Immutable R1CS/AIR signatures, configuration/public/witness purposes and actual decision binding; [relation bindings](compiler/relation-bindings.md). A declaration alone does not check satisfaction. |
+| Proof execution | Selected derived or authored transcripts, separate producer/validator processes, exact deployment pins, structured frames, authorized setups and persistent attempts; [native proofs](compiler/native-proofs.md), [attempts](compiler/native-attempts.md). Producer completion alone does not certify a proof prefix. |
+| Numerical composition | QAP/coset/MSM/GT, full-trace AIR/extension/oracle checks and shrinking/growing state; [mathematical composition](compiler/mathematical-composition.md), [composed state](compiler/composed-state.md). These are general mechanisms and composed clients, not full BP+/Groth16/zkVM libraries. |
+| Observation inputs | Actual operands, receives, draw occurrences, resource roots, ordered guards/stops and later disclosures remain explicit; [analysis inputs](compiler/ir-foundation.md#information-retained-for-observation-analyses). No affine observation analyzer or sampling/security theorem is claimed. |
+
+### Compiler limits
+
+The following limits are separate from runtime value, wire and work capacities.
+They bound analysis and expansion; increasing one does not raise the others.
+
+| Boundary | Limit |
+|---|---|
+| Declared role roster | 1,024 roles |
+| Active helper depth and expanded helper analysis | 64 levels; 100,000 operations |
+| Helper dependency analysis | 1,000,000 bit-vector words and dependency indices |
+| Availability replay | 1,000,000 words, including repeated calls |
+| Role expansion | 100,000 operation/port visits before allocation |
+| Exact resource-origin analysis | 100,000 shared work units and 64 call/structured-region levels |
+| Formal scalar interpolation | Subject to expansion budgets; formation of 64 points does not imply scalar lowering succeeds |
+| Composed R1CS adapter | BLS Fr, at most 8 rows, 128 columns and 1,024 nonzero terms; ordinary lowering limits also apply |
+
+Every original helper, including unreferenced private definitions, is checked
+before optimization. Analysis summaries belong to the current IR revision.
+Unknown/conflicting resource roots refuse independently of analysis-limit stops.
+The R1CS adapter's envelope is distinct from the larger bulk-math clients.
+
+The optional checked polynomial compiler binds original and participant inputs,
+receives, guards, queries, residual outputs and the terminal decision. It supports
+`boolean-sum-to-point/1` and relation-pinned `r1cs-sum-to-point/1`; its reports bind
+companion bundle bytes and post-check passes. See [structured mathematics](compiler/structured-mathematics.md)
+for the exact comparison and trusted boundaries.
+
+### Native verifier views
+
+[Public-coin analysis](spec/profiles/compiler/public-coin.md) now checks the
+selected verifier's guard/decision dependencies on bound entry components,
+actual received values and designated draws. It derives ordered challenge
+prefixes and authored application paths from an unsimplified prepared copy;
+unchanged challenge delivery and statement coverage are checked independently
+of candidate reports. The `ZkcCompilerCore` API, standalone report checker and
+checked native bundle option are implemented. Reports identify exact original
+and prepared IR, requirements and, for compilation, source text and bundle.
+
+Controls distinguish public-table Sumcheck from composed R1CS with verifier
+witness inputs. Statement-only binding refuses the latter; full-assignment
+binding reports its non-statement coordinates. Generated runtime controls cover
+honest prefixes, altered prover messages, an explicit unsatisfiable-R1CS
+weighted bad event, early guard stops, service failures, decode stops and driver
+limits. This is conservative structural analysis. Broader automatic Fiat–Shamir, new encoding/domain policies, algebraic
+extraction and native Lean correspondence remain open. Selected native transcript
+constructions have separate admission rules; this analysis supplies no security
+premises for them.
+
 ## 1. By implementation area
 
 | Area | What runs | What is not claimed |
@@ -232,7 +357,7 @@ validators consume that verifier-owned contract; authenticating it is the
 caller's responsibility and is not inferred from the proof. Transaction overhead
 is substantial and native and reference resources are limited.
 
-**AIR and oracles.** An authored two-AIR permutation argument runs with
+**Source-route AIR and oracles.** An authored two-AIR permutation argument runs with
 extension-field auxiliary traces, scope quotients, opening batching, binary FRI
 and authenticated queries; a non-FRI affine-table client uses the same oracle and
 construction interfaces. Small cases agree with an independent Lean source
@@ -259,9 +384,11 @@ separately. Tool wrappers are compiled and linked separately, and their
 serialization behavior is not covered by the library audit. Declaration counts
 report coverage, not maturity.
 
-Differential testing is the default native correspondence evidence, as the
-[assurance policy](assurance.md#6-implementation-correspondence-policy) states.
-Comparisons cover complete outcomes, selected observations, live values and
+For the older source/table routes with executable Lean references, differential
+testing supplies the scoped native correspondence evidence described by the
+[assurance policy](assurance.md#6-implementation-correspondence-policy). The
+mathematical program route has not discharged that Lean differential obligation.
+Existing reference comparisons cover complete outcomes, selected observations, live values and
 residual states, with independent input generation, failure controls and replay,
 including export after canonicalization and common-subexpression elimination.
 Intentionally corrupted observations are detected. This is finite execution

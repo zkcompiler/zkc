@@ -270,6 +270,7 @@ def compute (d : Domain) (contract : String) (attrs : List String)
       ensure (n ≤ FiniteVectors.limit) "vector-limit"
       return [.vector (List.replicate n x)]
   | "vector.powers", [.field x], [length] => return [.vector (← FiniteVectors.powers x (← natural length))]
+  | "vector.equal", [.vector xs, .vector ys], [] => return [.boolean (xs == ys)]
   | "vector.add", [.vector xs, .vector ys], [] => return [.vector (← FiniteVectors.zipExact (· + ·) xs ys)]
   | "vector.sub", [.vector xs, .vector ys], [] => return [.vector (← FiniteVectors.zipExact (· - ·) xs ys)]
   | "vector.mul", [.vector xs, .vector ys], [] => return [.vector (← FiniteVectors.zipExact (· * ·) xs ys)]
@@ -304,7 +305,7 @@ def supported (contract : String) : Bool :=
   dynamicSupported contract ||
   ["field.constant", "field.add", "field.sub", "field.mul", "field.neg", "field.inverse", "field.equal",
    "matrix.mul_vector", "matrix.transpose_mul_vector", "matrix.bilinear", "matrix.shape_check",
-   "vector.constant", "vector.scatter_sum", "vector.empty", "vector.append", "vector.splat", "vector.powers", "vector.add", "vector.sub", "vector.mul",
+   "vector.constant", "vector.scatter_sum", "vector.empty", "vector.append", "vector.splat", "vector.powers", "vector.equal", "vector.add", "vector.sub", "vector.mul",
    "vector.scale", "vector.sum", "vector.dot", "vector.split", "vector.concat", "vector.at", "vector.length_check",
    "vector.gather", "vector.kronecker", "vector.matvec", "poly.from_coefficients", "poly.coefficients",
    "poly.degree_check", "poly.univariate_evaluate", "poly.univariate_boundary", "poly.boundary", "poly.round_evaluate"].contains contract

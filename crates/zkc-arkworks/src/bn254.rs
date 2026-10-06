@@ -119,3 +119,53 @@ pub fn pairing_check(a: &[G1], b: &[G2]) -> Result<bool, Error> {
     }
     Ok(ark_bn254::Bn254::multi_pairing(a.iter().map(|p| p.0), b.iter().map(|p| p.0)).is_zero())
 }
+
+/// Prime-order BN254 pairing target. Abstract additive notation denotes target
+/// field multiplication; scalar multiplication denotes exponentiation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gt(ark_ec::pairing::PairingOutput<ark_bn254::Bn254>);
+impl Gt {
+    /// Canonical target-field byte width.
+    pub const BYTES: usize = 384;
+    /// Pairing of the installed source generators.
+    pub fn generator() -> Self {
+        pairing(&G1::generator(), &G2::generator())
+    }
+    /// Multiplicative one, the abstract group identity.
+    pub fn identity() -> Self {
+        Self(ark_ec::pairing::PairingOutput::zero())
+    }
+    /// Target group product.
+    pub fn add(&self, other: &Self) -> Self {
+        Self(self.0 + other.0)
+    }
+    /// Target group inverse.
+    pub fn neg(&self) -> Self {
+        Self(-self.0)
+    }
+    /// Target group exponentiation by a canonical scalar.
+    pub fn scale(&self, scalar: Scalar) -> Self {
+        Self(self.0 * scalar)
+    }
+    /// Canonical compressed representation (twelve base-field coefficients).
+    pub fn to_bytes(&self) -> Result<[u8; Self::BYTES], Error> {
+        let mut bytes = [0; Self::BYTES];
+        self.0
+            .serialize_compressed(&mut bytes[..])
+            .map_err(|_| Error::InvalidEncoding)?;
+        Ok(bytes)
+    }
+    /// Exact canonical decoding with arkworks' prime-order subgroup check.
+    /// In particular, extension-field zero and non-subgroup values are refused.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        if bytes.len() != Self::BYTES {
+            return Err(Error::InvalidEncoding);
+        }
+        let mut input = bytes;
+        Ok(Self(crate::codec::read(&mut input, Self::BYTES)?))
+    }
+}
+/// Total bilinear map into the prime-order target, including final exponentiation.
+pub fn pairing(a: &G1, b: &G2) -> Gt {
+    Gt(ark_bn254::Bn254::pairing(a.0, b.0))
+}

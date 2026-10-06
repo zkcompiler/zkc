@@ -1,9 +1,11 @@
 # Logical calls and connected outputs
 
 Calls preserve complete returned/stopped behavior and distinguish reusable bodies
-from their selected instances. The native interactive route uses `func.func`
-local algorithms, `pir.local_call`, `pir.protocol_call` and, after projection,
-`pir.participant_call`. Their structured execution propagates stops without an
+from their selected instances. The native interactive route uses `local.func`
+local algorithms, `local.apply` for source application, and
+`protocol.local_call` for an owner-local invocation. Projection produces
+role-free `local.call`. Protocol composition uses `protocol.call` and projected
+`protocol.participant_call`. Their structured execution propagates stops without an
 explicit pair of MLIR successor blocks at each call. See the
 [protocol pipeline](protocol-pipeline.md) for the implemented path.
 
@@ -45,7 +47,7 @@ at the call boundary.
 Use isolated local function bodies, explicit arguments and symbol references.
 A local function interface does not by itself supply the role and communication
 rules of a common protocol or independent participant. Keep those containers'
-additional invariants explicit rather than deriving locality from `func.func`.
+additional invariants explicit rather than deriving locality from `local.func`.
 
 | Call form | Environment used | Refused ambiguity |
 |---|---|---|
@@ -186,7 +188,7 @@ Lowered arithmetic children do not replace high-level polynomial, commitment, tr
 domain operations. Those operations remain inspectable until a transformation
 needs their expansion. Binding construction and lowering arithmetic are separate
 axes. The [selective-lowering discussion](lowering.md) describes local expansion and
-source-relative evidence without choosing the physical-plan/OIR carrier.
+source-relative evidence without choosing the physical-plan carrier.
 
 ## 5. Semantic basis and assurance
 
@@ -253,8 +255,7 @@ operation's complete-result contract. Reply legality alone is not a frame law.
 
 The [closed library/reply implementation](libraries.md) exercises vector and
 Boolean operations with different signatures and request-dependent constraints,
-alongside the table client. Integration probes supplied the semantic boundary;
-the independent service consumer tests its native join.
+alongside the table client. The independent service consumer tests its native join.
 Arbitrary open slot-environment resolution is still not implemented.
 
 The C++ resolver separates family signature/type decoding, descriptor resolution
@@ -263,6 +264,6 @@ models under the closed entry's exact dependencies; unknown or ambiguous models
 refuse. Colliding local operation spellings do not identify their meaning.
 Static slot resolution belongs to the compiler environment. Runtime bindings
 supply the resolved provider implementation and actual state through that
-family's library adapter; no universal runtime dictionary is required initially.
+family's library adapter; no universal runtime dictionary is required.
 Malformed backend replies are classified by the selected operation/codec
 contract. They are not automatically turned into a new logical protocol stop.

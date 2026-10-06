@@ -52,6 +52,14 @@ def arithmetic (checks : Checks) : IO Unit := do
   checks.holds (!(run "poly.opening_quotient" [] [.vector [1,2], .field 1, .field 1, .field 1]).isOk) "opening on domain"
 
 def formation (checks : Checks) : IO Unit := do
+  checks.holds (same (compute .bn254 "vector.equal" [] [.vector [1,2], .vector [1,2]]) (.ok [.boolean true])) "vector equality"
+  checks.holds (same (compute .bn254 "vector.equal" [] [.vector [1,2], .vector [1]]) (.ok [.boolean false])) "vector equality length"
+  let target ← get (Bindings.resolve true ⟨"target", "pairing.apply", [Bindings.bn254Fr], "arkworks/pairing.apply"⟩)
+  checks.holds (target.outputs.map (·.spelling) == ["group:bn254.gt@arkworks.bn254-gt/1"]) "pairing target binding"
+  checks.holds (!(Bindings.valueType false "groups:bn254.gt").isOk) "no target vectors"
+  checks.holds ((match Reference.decodeValue (.arr #[.str "group:bn254.gt", .str ""]) with
+    | .error e => e == "reference-pairing-target-unsupported"
+    | .ok _ => false)) "explicit native target refusal"
   let pair ← get (Bindings.resolve true ⟨"pair", "pairing.check", [Bindings.bn254Fr], "arkworks/pairing.check"⟩)
   checks.holds (pair.inputs.map (·.spelling) == ["groups:bn254.g1@arkworks.bn254-g1-vector/1",
     "groups:bn254.g2@arkworks.bn254-g2-vector/1"] && pair.outputs.map (·.spelling) == ["bool@native.bool/1"]) "separate pairing operands"

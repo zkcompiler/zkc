@@ -73,6 +73,21 @@ impl Setups {
             _ => Ok(()),
         }
     }
+    pub(crate) fn is_empty(&self) -> bool {
+        match self {
+            Self::InputKeys(key) => key.is_none(),
+            Self::Registered(keys) => keys.keys.is_empty(),
+        }
+    }
+    pub(crate) fn by_key_id(&self, id: &[u8]) -> Option<&VerifierKey> {
+        match self {
+            Self::InputKeys(key) => key.as_ref().filter(|key| key.metadata().key_id() == id),
+            Self::Registered(registry) => registry
+                .keys
+                .iter()
+                .find(|key| key.metadata().key_id() == id),
+        }
+    }
     pub(crate) fn is_registered(&self) -> bool {
         matches!(self, Self::Registered(_))
     }

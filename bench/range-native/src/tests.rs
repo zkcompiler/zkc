@@ -438,7 +438,7 @@ fn transcript_literal_replay_and_terminal_continuation_obligation() {
     let report = agree(&g, &s, &bytes);
     let p = Proof::parse(&bytes, g.dimensions()).unwrap();
     // Literal independent Merlin schedule: bypass Flight and compare every draw.
-    let mut raw = merlin::Transcript::new(b"zkc-goal3-range-native-v1");
+    let mut raw = merlin::Transcript::new(b"zkc-range-native-v1");
     raw.append_message(b"application-context", &s.context);
     raw.append_message(b"dom-sep", b"rangeproof v1");
     raw.append_u64(b"n", 8);

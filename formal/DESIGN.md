@@ -10,7 +10,7 @@ The library has a small common execution foundation, typed source and lawful
 interpretation APIs, source-relative transformation checking, concrete module
 and protocol applications, and a separately resolved ArkLib integration. These
 are semantic dependencies, not a prescribed stack of compiler IR dialects.
-The [implementation handoff](design/implementation-handoff.md) records which
+The [implementation obligations](design/native-obligations.md) record which
 information each native abstraction must retain before it can be lowered.
 
 The [verification map](design/verification-map.md) separates actual source
@@ -168,38 +168,34 @@ corresponding embedding and preservation law; it is a semantic extension.
 ### 3.1 Source carrier and upstream reuse
 
 The maintained source carrier is the small owned finite typed calculus in
-`Zkc.Source`. The actual Lean-MLIR compatibility trial required proof-script
-porting of its first context modules on the selected toolchain, before the full
-stateful client could run. That is a bounded maintenance decision, not evidence
-that Lean-MLIR cannot express effects or regions. No upstream implementation
-was copied into this library. Its monadic SSA/region calculus remains a candidate
-for a compatible, useful adapter. [4]
+`Zkc.Source`. Lean-MLIR's monadic SSA/region calculus remains a candidate for a
+compatible adapter that reduces proof and maintenance costs. No upstream
+implementation was copied into this library. [4]
 
 Reconsider that choice using typed captures, a branch, a stateful failed call
 and an actual rewrite, with a proved interpretation into the complete execution
 model. Compare the proof machinery saved and the maintenance cost. A different
 carrier does not change PIR meaning without a corresponding interpretation law.
 
-CSLib's transition-system composition and trace-lifting theorems were inspected
-as potential reuse. [5] The core uses its own complete outcome/state/observation
+CSLib provides transition-system composition and trace-lifting theorems. [5] The core uses its own complete outcome/state/observation
 relations; it does not currently claim an LTS bridge. The optional PolyFun path
 uses CSLib free-monad foundations through its actual dependencies. These are
 different uses. A future LTS adapter must account for terminal outcomes and
 observations, not only returned values or transition traces.
 
 The existing `Source.Program`, `Compiler.Plan` and admission clients establish
-binding, branches, bounded repetition and stopped execution. The concrete MLIR
-review must decide which information to preserve in each native level; the
-owned Lean source calculus does not require a one-dialect transcription.
+binding, branches, bounded repetition and stopped execution. The
+[native preservation contracts](../docs/compiler/preservation.md) specify what
+each native level retains. The owned Lean source calculus does not require a
+one-dialect transcription.
 
 ## 4. Contracts, analyses and checking
 
-Phase admission now uses one compact-region checker, including explicit
-binding, with a direct conformance/return-cover proof. Tree programs embed with
-`toRegion` and keep their existing admission API. This consolidates two source
-consumers without flattening or adding a new execution meaning. The certificate
-codec and [phase tests](Tests/PhaseAdmission.lean) move with that rule; native
-evidence consumption remains a separate compiler boundary.
+Phase admission uses one compact-region checker, including explicit binding,
+with a direct conformance/return-cover proof. Tree programs embed with `toRegion`
+and use the same checker through their admission API. The certificate codec and
+[phase tests](Tests/PhaseAdmission.lean) implement that rule; native evidence
+consumption remains a separate compiler boundary.
 
 Use ordinary explicit records for chosen protocol/module interpretations,
 observers, providers and backend premises. Use type classes for coherent
@@ -448,16 +444,16 @@ provenance system to describe ordinary development.
 
 A new capability enters the library with an actual client, a stated law and an
 acceptance condition. Reopen an accepted result for a changed supported behavior,
-an affected premise or a counterexample. The [research agenda](design/research-agenda.md)
+an affected premise or a counterexample. The [formal questions](design/formal-questions.md)
 records broader questions without making all of them prerequisites of this baseline.
 
 Toolchain upgrades are separate from semantic changes. Rebuild supported main and
 optional targets, recheck declarations and exact pins, and state evidence for any
-changed external assumption. Retired scratch packages need not be ported.
+changed external assumption.
 
 ## 9. What the compiler consumes
 
-The [handoff](design/implementation-handoff.md) records each abstraction's source
+The [implementation obligations](design/native-obligations.md) record each abstraction's source
 form, denotation, retained information, legal transformations, lowering relation,
 runtime requirements and discriminating checks. Construction choice, roles,
 logical algorithms and physical representation are separate design decisions.
@@ -503,8 +499,8 @@ or claiming to have verified external native cryptography.
 
 | Alternative | Decision and reason |
 |---|---|
-| Rename every research module one-for-one | Reject: preserves accidental dependencies and specialized assumptions under generic names |
-| Permanent Compat/Legacy layer | Reject: no identified public compatibility requirement justifies it; it prevents the requested deletion |
+| Rename modules without changing dependencies | Reject: preserves accidental dependencies and specialized assumptions under generic names |
+| Permanent Compat/Legacy layer | Reject: no identified public compatibility requirement justifies it |
 | Rewrite every proof from scratch | Reject: reuse correct mathematics while changing its ownership/API; reprove the statements that actually change |
 | Make every subject a separate Lake package | Reject initially: one main mathematical library plus a real external-integration boundary gives useful isolation without a version matrix for every area |
 | Put ArkLib behind an optional root import only | Reject: imports do not remove a declared package dependency or prevent public type leakage |
@@ -524,7 +520,7 @@ semantic interpretations.
 
 [3] [Mathlib library style](https://leanprover-community.github.io/contribute/style.html).
 Guidance for readable declaration APIs, imports, transparency and proof
-engineering; these are design inputs, not a new agent workflow.
+engineering; these are design inputs.
 
 [4] Siddharth Bhat, Alex Keizer, Chris Hughes, Andrés Goens and Tobias Grosser.
 [Verifying Peephole Rewriting In SSA Compiler IRs](https://arxiv.org/abs/2407.03685),

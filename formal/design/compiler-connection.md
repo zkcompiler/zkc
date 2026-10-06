@@ -12,7 +12,7 @@ substitution and analysis. MLIR provides mutable SSA/region infrastructure for
 search and transformation. The executable plan exposes scheduling and contracted
 operations in a form with a small interpreter.
 
-This plan is a first supported realization/OIR carrier, not a new independent
+This plan is a first supported realization carrier, not a new independent
 protocol semantics or a requirement for every future backend to use one graph.
 
 Use the [source architecture](../DESIGN.md#3-mathematical-objects-and-source-representation):
@@ -240,9 +240,8 @@ Executable command-line decoding and reporting belong in a tool target, not
 imports required by every theorem. No stable public API should expose generated
 names from an extraction tool.
 
-The first implementation uses the small owned finite typed carrier in
-`Zkc.Source`. The bounded Lean-MLIR trials exposed a dependency-porting cost at the selected
-Lean pin; they did not establish semantic unsuitability. Reconsider that adapter
+The implementation uses the small owned finite typed carrier in `Zkc.Source`.
+Reconsider a Lean-MLIR adapter
 when a compatible core supports the same effectful client and a useful rewrite
 with less maintenance than the owned API. CSLib remains a candidate for
 simulation infrastructure. Verification dialects/xDSL-SMT offer a separate

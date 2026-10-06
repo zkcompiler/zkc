@@ -209,6 +209,7 @@ fn family_value_budget_distinguishes_admission_from_ingress_execution() {
                 total_bytes: 32,
             },
         )
+        .map_err(Box::new)
     };
     let failure = make(7).err().expect("entry value cannot be admitted");
     assert_eq!(failure.error, RuntimeError::Limit);
@@ -320,6 +321,10 @@ fn family_selector_failure_keeps_primary_error_and_all_cleanup_errors() {
         panic!("expected selector stop")
     };
     assert_eq!(stop.site.as_deref(), Some("ingress.rounds"));
+    let local = stop.local.as_ref().unwrap();
+    assert_eq!(local.site, "ingress.rounds");
+    assert_eq!(local.instruction.as_deref(), Some("scan"));
+    assert!(!local.function.is_empty());
     assert_eq!(
         stop.kind,
         StopKind::Backend(BackendError::new("exhausted:local-bound-limit"))

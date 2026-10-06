@@ -177,11 +177,11 @@ def construct(source, desc, name, ok=True, code=None, stages=True):
         exported = json.loads(run(compiler, 'protocol-export', ir_path))
         projected_ir = run(optimizer, '--zkc-project-participants', ir_path)
         pi = tmp / 'projected.mlir'; pi.write_text(projected_ir)
-        physical_ir = run(optimizer, '--zkc-plan-participants', pi)
+        physical_ir = run(optimizer, '--zkc-select-physical', pi)
         phy = tmp / 'physical.mlir'; phy.write_text(physical_ir)
         physical = json.loads(run(compiler, 'protocol-export', phy))
         check(name+'-separate-stages', physical == json.loads(run(compiler, 'protocol-compile', common)))
-        check(name+'-inspectable', 'pir.transcript_' in ir or not result[4])
+        check(name+'-inspectable', 'crypto.exec.transcript_' in ir or not result[4])
         run(compiler, 'protocol-project', save('reexported.json', exported))
     return result
 

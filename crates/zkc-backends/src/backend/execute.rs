@@ -53,6 +53,8 @@ impl NativeBackend {
             ("poly.evaluate", [TableMsb(t), Point(point)]) => {
                 vec![Field(t.evaluate(point).map_err(ark)?)]
             }
+            ("poly.table_arity", [Table(t)]) => vec![Index(t.arity() as u64)],
+            ("poly.table_arity", [TableMsb(t)]) => vec![Index(t.arity() as u64)],
             ("poly.product_sum", [Table(a), Table(b)]) => {
                 vec![Field(a.product_boolean_sum(b).map_err(ark)?)]
             }
@@ -134,6 +136,7 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
         control::operation("bool.not", &[Bool], &[Bool], AttributeRule::None),
         control::operation("bool.or", &[Bool, Bool], &[Bool], AttributeRule::None),
         control::operation("control.require", &[Bool], &[], AttributeRule::None),
+        poly::operation("poly.table_arity", &[Table], &[Index], AttributeRule::None),
         poly::operation(
             "poly.product_sum",
             &[Table, Table],

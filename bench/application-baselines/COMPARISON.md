@@ -9,7 +9,7 @@ the application composition or establish interoperability or production security
 Environment: AMD Ryzen 9 5950X 16-Core Processor, 32 logical CPUs,
 Linux 6.8.0-139-generic x86_64/glibc 2.39, Rust/Cargo 1.98.0, Cargo default release
 profile. Three samples per workload and role, serial measurement commands,
-`--trace=none` for native artifacts, warm filesystem. Other agents/processes
+`--trace=none` for native artifacts, warm filesystem. Other processes
 could use the machine; no CPU isolation or statistical speedup claim is made.
 All eight final records use binary SHA-256
 `c632fa5fd9d2d1fe4072980900ccd8225fa5ace2c7bb944bbc17e39f681f6abc`
@@ -157,34 +157,20 @@ Executed checks:
   verifier key/pin, with no assignment or proving-key path. Transaction public
   bundles contain only parameters, ledger and statement.
 
-The original campaign stored raw results and exact commands at
-`/tmp/zkc-4b-baselines/final-{tx-final-n8-m2,tx-n16-m4,tx-n32-m8-k4,tx-n64-m2,execution-tiny,execution-memory8,execution-loop16,execution-memory64}/results.json`.
-They include all input/tool hashes and raw per-sample process reports. Controls
-are under `/tmp/zkc-4b-baselines/final-controls-{tx,execution-tiny,execution-memory8}/results.json`.
-Build/check logs are `/tmp/zkc-4b-baselines/{build,test,clippy,ruff}.log`.
-These are provenance locations on the measurement machine, not files shipped
-with this repository or a guarantee that the temporary directories still exist.
-The [reproduction instructions](README.md#reproduce) require retained campaign
-inputs; this table remains a historical summary until new results are recorded.
-Earlier `measure-*` records are superseded by the `final-*` records after the
-capacity-admission hardening and final rebuild. The table uses one final binary identity.
+Raw per-sample records, commands, inputs and logs were retained on the measurement
+machine and are not distributed. The binary and lock hashes above identify the
+measured baseline build. These tables are historical summaries, not current
+checkout measurements. The [reproduction instructions](README.md#reproduce)
+state the required campaign inputs.
 
 The local adapter source digest is
 `5b6e245637be4eda347bdc05785a61109b15b57b7a44d5a6ff4f47eb3bd21b6b`:
 SHA-256 of sorted repository-relative paths, each followed by NUL, file bytes,
 NUL, for `crates/zkc-arkworks/Cargo.toml` and all 12 `src/**/*.rs` files.
-Maintained algorithm source SHA-256 values read for this implementation:
+The maintained algorithm sources are the [transaction](../../examples/protocols/confidential-transaction.pir)
+and [execution-proof](../../examples/protocols/execution-proof.pir) clients. Their
+current contents are not asserted to reproduce the historical build above.
 
-| Source | SHA-256 |
-|---|---|
-| composable-libraries/source/build.py | `b11ebd1409a036a05785d211191be73151a086165ca41fe500c1e18c6e9fc987` |
-| relation-integration/proof/build.py | `1116dc35ce4b7adebad93534237997fc0e179aa55dd4cef59a2bff4ba2654efe` |
-| application-composition/execution/build.py | `e9a260facce2da833fa4e921d3cedd5b8ca56c3ca18be2098f932151a1fa57a4` |
-
-The native runtime pin is
-`78269cf9ae05f6a7978ce5594a4f85279faa3e70c5b97030c43b79b72ce31923`;
-the compiler pin is
-`b1aef05fc2f88522ebcb6f1f128192ccb48a7b859d00e21de0dc536c1761da5e`.
 This record is fixture-scoped execution evidence with shared trusted crypto
 libraries, not proof of the libraries, production setup validity, application
 soundness, zero knowledge or the rest of the application composition.

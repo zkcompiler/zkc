@@ -34,6 +34,30 @@ impl<B: WireBackend> MessageDecoder<B> for BackendDecoder {
         backend.decode(receive.ty.clone(), bytes)
     }
 }
+/// Host-selected wire ceilings. Encoded and transport-returned bytes both count,
+/// including identical local delivery and bytes refused by receiver decoding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DriverLimits {
+    pub message_bytes: usize,
+    pub total_wire_bytes: usize,
+}
+impl Default for DriverLimits {
+    fn default() -> Self {
+        Self {
+            message_bytes: 16 << 20,
+            total_wire_bytes: 64 << 20,
+        }
+    }
+}
+impl DriverLimits {
+    pub fn effective(self) -> Self {
+        let hard = Self::default();
+        Self {
+            message_bytes: self.message_bytes.min(hard.message_bytes),
+            total_wire_bytes: self.total_wire_bytes.min(hard.total_wire_bytes),
+        }
+    }
+}
 #[derive(Debug)]
 pub enum JointOutcome<V> {
     Returned(BTreeMap<String, Vec<V>>),
@@ -44,12 +68,17 @@ pub enum JointOutcome<V> {
 pub struct WireUsage {
     pub cuts: u64,
     pub messages: u64,
+    pub sends: u64,
     pub payload_bytes: usize,
     pub envelope_bytes: usize,
+    /// Bytes encoded at send and returned by transport, charged separately.
+    pub encoded_bytes: usize,
+    pub transferred_bytes: usize,
 }
 pub struct JointReport<V> {
     pub outcome: JointOutcome<V>,
     pub wire: WireUsage,
+    pub limits: DriverLimits,
     /// Host cancellation is explicit and distinct from the role that stopped.
     pub cancelled: Vec<Stop>,
 }
@@ -74,8 +103,9 @@ pub fn drive<B: WireBackend, T: Transport<B::Value>>(
     schedule: &mut Schedule,
     runners: &mut BTreeMap<String, Runner<B>>,
     transport: &mut T,
+    limits: DriverLimits,
 ) -> JointReport<B::Value> {
-    drive_with_decoder(schedule, runners, transport, &BackendDecoder)
+    drive_with_decoder(schedule, runners, transport, &BackendDecoder, limits)
 }
 
 /// Run with an explicitly installed receiving policy, for example per-message
@@ -85,9 +115,11 @@ pub fn drive_with_decoder<B: WireBackend, T: Transport<B::Value>, D: MessageDeco
     runners: &mut BTreeMap<String, Runner<B>>,
     transport: &mut T,
     decoder: &D,
+    limits: DriverLimits,
 ) -> JointReport<B::Value> {
+    let limits = limits.effective();
     let mut wire = WireUsage::default();
-    let result = execute(schedule, runners, transport, decoder, &mut wire);
+    let result = execute(schedule, runners, transport, decoder, limits, &mut wire);
     let outcome = result.unwrap_or_else(JointOutcome::Failed);
     let mut cancelled = Vec::new();
     if !matches!(outcome, JointOutcome::Returned(_)) {
@@ -103,6 +135,7 @@ pub fn drive_with_decoder<B: WireBackend, T: Transport<B::Value>, D: MessageDeco
     JointReport {
         outcome,
         wire,
+        limits,
         cancelled,
     }
 }
@@ -111,6 +144,7 @@ fn execute<B: WireBackend, T: Transport<B::Value>, D: MessageDecoder<B>>(
     runners: &mut BTreeMap<String, Runner<B>>,
     transport: &mut T,
     decoder: &D,
+    limits: DriverLimits,
     wire: &mut WireUsage,
 ) -> Result<JointOutcome<B::Value>, String> {
     let roles = schedule.inputs()?;
@@ -147,6 +181,7 @@ fn execute<B: WireBackend, T: Transport<B::Value>, D: MessageDecoder<B>>(
                 site: None,
                 kind: StopKind::Limit,
                 cleanup_errors: Vec::new(),
+                local: None,
             }));
         }
         next => next?,
@@ -193,22 +228,35 @@ fn execute<B: WireBackend, T: Transport<B::Value>, D: MessageDecoder<B>>(
                     kind: CutKind::Send,
                 };
                 let source = runners.get_mut(&sender).ok_or("driver-sender")?;
-                match source.poll() {
+                let pending = match source.poll() {
                     Action::Send(packet)
                         if packet.envelope.origin == origin
                             && packet.envelope.site == site
                             && packet.envelope.schema == schema
                             && packet.envelope.sender == sender
-                            && packet.envelope.receiver == receiver => {}
+                            && packet.envelope.receiver == receiver =>
+                    {
+                        packet
+                    }
                     Action::Stopped(stop) => return Ok(JointOutcome::Stopped(stop)),
                     _ => return Err("driver-send-cut".into()),
-                }
-                let packet = source.take_send(&send_cut).map_err(|e| e.to_string())?;
+                };
                 let bytes = source
                     .backend()
-                    .encode(&packet.payload)
+                    .encode(&pending.payload)
                     .map_err(|e| e.to_string())?;
+                let mut encoded = wire.encoded_bytes;
+                charge_wire(bytes.len(), &mut encoded, wire.transferred_bytes, limits)?;
+                let packet = source.take_send(&send_cut).map_err(|e| e.to_string())?;
+                wire.encoded_bytes = encoded;
+                wire.sends += 1;
                 let bytes = transport.transfer(&packet, bytes)?;
+                charge_wire(
+                    bytes.len(),
+                    &mut wire.transferred_bytes,
+                    wire.encoded_bytes,
+                    limits,
+                )?;
                 wire.messages += 1;
                 wire.payload_bytes = wire
                     .payload_bytes
@@ -273,4 +321,22 @@ fn execute<B: WireBackend, T: Transport<B::Value>, D: MessageDecoder<B>>(
         }
     }
     Ok(JointOutcome::Returned(values))
+}
+
+fn charge_wire(
+    bytes: usize,
+    charged: &mut usize,
+    other: usize,
+    limits: DriverLimits,
+) -> Result<(), String> {
+    let total = charged.checked_add(bytes).ok_or("driver-wire-limit")?;
+    if bytes > limits.message_bytes
+        || total
+            .checked_add(other)
+            .is_none_or(|n| n > limits.total_wire_bytes)
+    {
+        return Err("driver-wire-limit".into());
+    }
+    *charged = total;
+    Ok(())
 }

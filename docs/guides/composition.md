@@ -65,7 +65,7 @@ value-dependent guard may require stronger analysis than the current finite
 phase-set checker; [its design guide](../compiler/phase-admission.md) explains
 that incompleteness.
 
-## 6. Theory review and formal coverage
+## 6. Theory and formal coverage
 
 Returned-phase predicates apply compositional partial-correctness reasoning.
 Unlike a total-correctness weakest precondition, a stopped body need not

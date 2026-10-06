@@ -132,7 +132,7 @@ fn compiled_attempts_reuse_actual_rng_and_release_only_selected_wire_bytes() {
 }
 
 #[test]
-fn compiled_failure_is_not_a_retry_and_keeps_consumed_native_state() {
+fn compiled_failure_is_not_a_retry_and_keeps_consumed_program_state() {
     let input = zkc_test_support::root().join("examples/protocols/attempt-control.pir");
     let source = zkc_test_support::compile("protocol-source", &input);
     let candidate = zkc_test_support::compile("protocol-compile", &input);

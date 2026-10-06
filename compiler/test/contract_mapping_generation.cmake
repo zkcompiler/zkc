@@ -366,6 +366,8 @@ string(REGEX MATCH "constexpr ExpectedMapping expected\\[\\] = \\{([^;]*)\\};"
 if(NOT oracle)
   message(FATAL_ERROR "Independent mapping oracle not found")
 endif()
+# clang-format can wrap a literal pair across lines; spelling remains exact.
+string(REGEX REPLACE ",[ \t\r\n]+" ", " oracle "${oracle}")
 string(REGEX MATCHALL "\\{\"[^\"]+\", \"[^\"]+\"\\}" expected_pairs "${oracle}")
 expect_rows(maintained "${expected_pairs}")
 mapping_case(maintained-repeat [=[include "zkc/Dialect/IR.td"]=] "" "")

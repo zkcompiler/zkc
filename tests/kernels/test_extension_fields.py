@@ -107,7 +107,7 @@ def main():
     authored = json.loads(journal.run([compiler, 'protocol-source', '-'], text))
     plan = json.loads(journal.run([compiler, 'protocol-compile', '-'], text))
     logical = journal.run([compiler, 'protocol-import', '-'], text)
-    assert 'algebra.embed' in logical
+    assert 'algebra.exec.field_embed' in logical
     journal.run([optimizer, '--verify-each'], logical)
     physical = journal.run([compiler, 'protocol-physical-ir', '-'], text)
     journal.run([optimizer, '--verify-each'], physical)

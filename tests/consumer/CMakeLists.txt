@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(ZkcConsumer LANGUAGES C CXX)
-find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Compiler Support Contracts Relation Protocol Claims IR ClaimTranslation Frontend FrontendLoading Transforms CompilerCore Driver)
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS Compiler Support Contracts Relation Protocol Claims IR Translation ClaimTranslation Frontend FrontendLoading Transforms CompilerCore Driver)
 add_executable(consumer main.cpp)
 target_link_libraries(consumer PRIVATE Zkc::Compiler)
 
@@ -27,9 +27,11 @@ function(check_component_closure component forbidden)
     endforeach()
   endwhile()
 endfunction()
-check_component_closure(Zkc::IR "Zkc::Claims;Zkc::ClaimTranslation;Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
+check_component_closure(Zkc::IR "Zkc::Translation;Zkc::Claims;Zkc::ClaimTranslation;Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
 check_component_closure(Zkc::Claims "Zkc::IR;Zkc::ClaimTranslation;Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
 check_component_closure(Zkc::ClaimTranslation "Zkc::Transforms;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
+check_component_closure(Zkc::Transforms "Zkc::Translation;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
+check_component_closure(Zkc::Translation "Zkc::Transforms;Zkc::Claims;Zkc::Frontend;Zkc::CompilerCore;Zkc::Driver")
 get_target_property(claim_links Zkc::ClaimTranslation INTERFACE_LINK_LIBRARIES)
 foreach(required Zkc::Claims Zkc::IR)
   if(NOT required IN_LIST claim_links)
@@ -41,7 +43,7 @@ if(NOT "Zkc::ClaimTranslation" IN_LIST core_links)
   message(FATAL_ERROR "CompilerCore is missing claim translation")
 endif()
 add_test(NAME compiler-consumer COMMAND consumer)
-foreach(component Support Contracts Relation Protocol Claims IR ClaimTranslation Frontend FrontendLoading Transforms CompilerCore Driver)
+foreach(component Support Contracts Relation Protocol Claims IR Translation ClaimTranslation Frontend FrontendLoading Transforms CompilerCore Driver)
   string(TOLOWER ${component} name)
   add_executable(${name}-consumer ${name}.cpp)
   target_link_libraries(${name}-consumer PRIVATE Zkc::${component})
@@ -88,3 +90,12 @@ add_test(NAME package-component-validation COMMAND ${CMAKE_COMMAND}
   "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/component-validation"
   "-DC_COMPILER=${CMAKE_C_COMPILER}" "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/package-components.cmake")
+
+# Optional cross-language boundary: execute the exact installed API output.
+set(ZKC_CONSUMER_RUNTIME "" CACHE FILEPATH "Same-version zkc runtime for artifact execution")
+if(ZKC_CONSUMER_RUNTIME)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME installed-native-execution COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/execution.py"
+    --consumer $<TARGET_FILE:compilercore-consumer> --runtime "${ZKC_CONSUMER_RUNTIME}")
+endif()

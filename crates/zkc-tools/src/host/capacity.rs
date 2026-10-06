@@ -1,0 +1,120 @@
+//! Application-selected operational ceilings, separate from proof semantics.
+use super::{admission::LoadLimits, inputs::*};
+use serde_json::{Value as Json, json};
+use zkc_backends::Policy;
+use zkc_runtime::interactive::{Limits, ValueBudget, WorkBudget};
+
+/// A host may raise the default collection count within installed hard limits,
+/// or lower byte/work ceilings. Neither proof nor deployment data grants this
+/// authority. Setup and provider-specific ceilings keep their existing owners.
+#[derive(Clone, Copy, Debug)]
+pub struct NativeCapacity {
+    pub elements: usize,
+    pub groups: usize,
+    pub wire_bytes: usize,
+    pub value_bytes: usize,
+    pub work: WorkBudget,
+    pub values: ValueBudget,
+}
+impl Default for NativeCapacity {
+    fn default() -> Self {
+        let p = Policy::default();
+        Self {
+            elements: p.max_table_elements,
+            groups: p.max_groups,
+            wire_bytes: p.max_wire_bytes,
+            value_bytes: p.max_value_bytes,
+            work: WorkBudget::default(),
+            values: ValueBudget::default(),
+        }
+    }
+}
+impl NativeCapacity {
+    pub(crate) fn check(&self) -> Result<()> {
+        if self.elements > 1 << 20
+            || self.groups > 32768
+            || self.wire_bytes > INPUT_LIMIT
+            || self.value_bytes > Limits::VALUE_BYTES
+            || self.work.instructions > Limits::INSTRUCTIONS
+            || self.work.calls > Limits::CALLS
+            || self.work.iterations > Limits::ITERATIONS
+            || self.values.live_bytes > Limits::VALUE_BYTES
+            || self.values.total_bytes > Limits::TOTAL_VALUE_BYTES
+        {
+            return Err("native-capacity-limit".into());
+        }
+        Ok(())
+    }
+    pub(crate) fn backend(&self) -> Policy {
+        Policy {
+            max_table_elements: self.elements,
+            max_groups: self.groups,
+            max_wire_bytes: self.wire_bytes,
+            max_value_bytes: self.value_bytes,
+            ..Policy::default()
+        }
+    }
+    pub(crate) fn loading(&self) -> LoadLimits {
+        LoadLimits {
+            bytes: self.values.live_bytes.min(self.values.total_bytes),
+            work: self.values.total_bytes,
+            ..LoadLimits::default()
+        }
+    }
+    /// Stable report record. This quota record is deliberately absent from the
+    /// semantic binding root; changing a quota cannot change successful values.
+    pub fn record(&self) -> Json {
+        json!([
+            "zkc.native-capacity/1",
+            self.elements.to_string(),
+            self.groups.to_string(),
+            self.wire_bytes.to_string(),
+            self.value_bytes.to_string(),
+            [
+                self.work.instructions.to_string(),
+                self.work.calls.to_string(),
+                self.work.iterations.to_string()
+            ],
+            [
+                self.values.live_bytes.to_string(),
+                self.values.total_bytes.to_string()
+            ]
+        ])
+    }
+    /// Parse the application's bounded quota file. Unknown fields are refused.
+    pub fn parse(bytes: &[u8]) -> Result<Self> {
+        let value = parse(bytes, 4096)?;
+        let row = array(&value, 7)?;
+        if text(&row[0])? != "zkc.native-capacity/1" {
+            return Err("native-capacity-format".into());
+        }
+        let size =
+            |v| usize::try_from(natural(v)?).map_err(|_| String::from("native-capacity-limit"));
+        let work = array(&row[5], 3)?;
+        let values = array(&row[6], 2)?;
+        let result = Self {
+            elements: size(&row[1])?,
+            groups: size(&row[2])?,
+            wire_bytes: size(&row[3])?,
+            value_bytes: size(&row[4])?,
+            work: WorkBudget {
+                instructions: natural(&work[0])?,
+                calls: natural(&work[1])?,
+                iterations: natural(&work[2])?,
+            },
+            values: ValueBudget {
+                live_bytes: size(&values[0])?,
+                total_bytes: size(&values[1])?,
+            },
+        };
+        result.check()?;
+        Ok(result)
+    }
+    pub(crate) fn wire(&self, value: &Json) -> Result<Vec<u8>> {
+        // Check the knowable binary length before allocating its hex decoding.
+        if text(value)?.len() / 2 > self.wire_bytes {
+            return Err("native-capacity-wire".into());
+        }
+        unhex(value)
+    }
+}

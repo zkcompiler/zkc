@@ -18,6 +18,21 @@ from toolchain import ROOT
 import contract_inventory as INVENTORY
 
 FIXTURES = ROOT / "tests/fixtures/contracts"
+DEFERRED = json.loads((FIXTURES / "coverage.json").read_text())["deferred_consumers"]
+
+
+def supported(consumer, request):
+    """Explicit absence, checked as refusal; never silently drop a reader."""
+    deferred = DEFERRED.get(consumer, {})
+    if request.get("contract", request.get("facets")) in deferred.get("operations", []):
+        return False
+    spelling = request.get("type", request.get("physical_type", ""))
+    return not any(spelling.startswith(name + "<") for name in deferred.get("types", []))
+
+
+def covered(name, counts):
+    return all(count > 0 if supported(consumer, {"contract": name}) else count == 0
+               for consumer, count in counts.items())
 
 
 
@@ -32,11 +47,30 @@ def inventory(toolchain):
     declarations = json.loads(run([
         toolchain.tool("compiler", "zkc-tblgen"), "--dump-contract-declarations",
         "-I", ROOT / "compiler/include", ROOT / "compiler/include/zkc/Contracts/Declarations.td"]))
-    assert declarations["format"] == "zkc.contract-declarations/1"
+    assert declarations["format"] == "zkc.contract-declarations/2"
     catalog = json.loads(run([toolchain.native_test("zkc-contract_inventory-test")]))
     assert catalog["profile"] == "zkc.contract-catalog/1"
     profile = json.loads((FIXTURES / "coverage.json").read_text())
     INVENTORY.dispositions(profile, declarations)
+    # Removing this implementation gap requires an explicit policy change.
+    assert DEFERRED == {"lean": {"operations": ["field_array.from_vector", "field_array.at",
+                                              "matrix.dimension", "poly.table_arity",
+                                              'transcript.native.challenge',
+                                              'transcript.native.indexed.challenge',
+                                              'transcript.native.observe.bool',
+                                              'transcript.native.observe.field',
+                                              'transcript.native.observe.group',
+                                              'transcript.native.indexed.observe.bool',
+                                              'transcript.native.indexed.observe.field',
+                                              'transcript.native.indexed.observe.group',
+                                              'transcript.native.indexed.observe.index',
+                                              'transcript.native.indexed.observe.commitment',
+                                              'transcript.native.indexed.observe.proof',
+                                              'transcript.native.indexed.observe.field_array',
+                                              'transcript.native.indexed.observe.data',
+                                              'sequence.empty', 'sequence.append',
+                                              'sequence.length', 'sequence.at'],
+                                  "types": ["field_array", "sequence"]}}
     return declarations, catalog, profile
 
 
@@ -75,11 +109,15 @@ def query(drivers, requests, directory, *, arguments=None):
 
 
 def agreements(results, requests):
-    baseline = next(iter(results.values()))
-    return [{"request": request,
-             "replies": {name: rows[i] for name, rows in results.items()}}
-            for i, request in enumerate(requests)
-            if any(rows[i] != baseline[i] for rows in results.values())]
+    failures = []
+    for i, request in enumerate(requests):
+        active = [rows[i] for name, rows in results.items() if supported(name, request)]
+        bad = any(rows[i] != {"accepted": False} for name, rows in results.items()
+                  if not supported(name, request))
+        if bad or any(row != active[0] for row in active):
+            failures.append({"request": request,
+                             "replies": {name: rows[i] for name, rows in results.items()}})
+    return failures
 
 
 def finish(directory, failures):
@@ -245,14 +283,38 @@ def candidates(inventory):
         elif group == "nullary":
             choices = [([], "native" if name.startswith(("index.", "indices.", "external.")) else "arkworks")]
         elif group == "observation":
-            kind = name.removeprefix("transcript.observe.")
+            kind = name.rsplit(".observe.", 1)[1]
             choices = [( [t["identity"]] + ([c["domain"]] if c["domain"] else []) + [c["identity"]],
                          t["provider"])
                        for t in by_sort["Transcript"] for c in catalog["codecs"] if c["kind"] == kind]
+        elif group == "sequence":
+            choices = [([payload], "native") for payload in
+                       ["index", "field:bn254.fr", "group:bn254.g2", "field:koala-bear",
+                        "sequence<field:ristretto255.scalar>", "rng:bls12-381.fr"]]
+        elif group == "native_data_observation":
+            choices = [([t["identity"], payload], t["provider"])
+                       for t in by_sort["Transcript"] for payload in
+                       ["bool", "vector:bls12-381.fr", "groups:bls12-381.g1", "indices",
+                        "vector:bn254.fr", "rng:bls12-381.fr", "matrix:bls12-381.fr",
+                        "field:bn254.fr", "group:bn254.g1", "group:bn254.g2",
+                        "field:koala-bear", "field:koala-bear.ext8-binomial3",
+                        "field:ristretto255.scalar", "group:ristretto255.group",
+                        "sequence<group:bn254.g2>", "group:bn254.gt", "sequence<group:bn254.gt>",
+                        "vector:koala-bear", "vector:koala-bear.ext8-binomial3",
+                        "matrix:bn254.fr", "matrix:koala-bear.ext8-binomial3",
+                        "groups:bn254.g2", "groups:ristretto255.group",
+                        "commitment:rows.merkle-keccak256.koala-bear/1",
+                        "proof:rows.merkle-keccak256.koala-bear/1",
+                        "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/1",
+                        "opening_state:rows.merkle-keccak256.koala-bear/1",
+                        "commitments:rows.merkle-keccak256.koala-bear/1"]]
+        elif group == "native_array_observation":
+            choices = [([t["identity"], f["identity"], "4"], t["provider"])
+                       for t in by_sort["Transcript"] for f in by_sort["Field"]]
         else:
-            sort = {"field": "Field", "fixed": "Field", "group": "Group",
+            sort = {"field": "Field", "fixed": "Field", "array": "Field", "group": "Group",
                     "commitment": "Commitment", "transcript": "Transcript"}[group]
-            choices = [([d["identity"]] + (["4"] if group == "fixed" else []),
+            choices = [([d["identity"]] + (["4"] if group in ("fixed", "array") else []),
                         "plonky3" if group == "fixed" else d["provider"]) for d in by_sort[sort]]
         assert choices, f"no closed candidates for {name}"
         for arguments, provider in choices:
@@ -468,7 +530,7 @@ def test_declared_signatures(inventory, drivers, directory, physical):
                 failures.append({"consumer": consumer, "request": requests[i],
                                  "expected_ports": expected, "actual": response})
     for name, counts in coverage.items():
-        if not all(counts.values()):
+        if not covered(name, counts):
             failures.append({"unexercised_declaration": name, "accepted_counts": counts})
     (directory / "coverage.json").write_text(json.dumps(coverage, indent=2) + "\n")
     finish(directory, failures)
@@ -487,10 +549,11 @@ def test_logical_signatures_without_implementation(inventory, drivers, directory
             coverage[op["name"]][consumer] += response["accepted"]
         expected = ({"accepted": True, "physical": False, **expected_ports(op, args, inventory)}
                     if actual["cpp"]["accepted"] else {"accepted": False})
-        if any(response != expected for response in actual.values()):
+        if any(response != (expected if supported(consumer, requests[i]) else {"accepted": False})
+               for consumer, response in actual.items()):
             failures.append({"request": requests[i], "replies": actual, "expected": expected})
     for name, counts in coverage.items():
-        if not all(counts.values()):
+        if not covered(name, counts):
             failures.append({"unexercised_declaration": name, "accepted_counts": counts})
     (directory / "coverage.json").write_text(json.dumps(coverage, indent=2) + "\n")
     finish(directory, failures)
@@ -506,6 +569,8 @@ def test_explicit_semantic_witnesses(drivers, directory):
          ["table:bls12-381.fr", "point:bls12-381.fr"], ["field:bls12-381.fr"]),
         ("curve.scale", ["bn254.g2"], ["group:bn254.g2", "field:bn254.fr"], ["group:bn254.g2"]),
         ("pairing.check", ["bn254.fr"], ["groups:bn254.g1", "groups:bn254.g2"], ["bool"]),
+        ("pairing.apply", ["bn254.fr"], ["group:bn254.g1", "group:bn254.g2"], ["group:bn254.gt"]),
+        ("vector.equal", ["bn254.fr"], ["vector:bn254.fr", "vector:bn254.fr"], ["bool"]),
         ("pcs.check", ["multilinear.kzg.bls12-381/1"],
          ["verifier_key:multilinear.kzg.bls12-381/1", "commitment:multilinear.kzg.bls12-381/1",
           "point:bls12-381.fr", "field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/1"], ["bool"]),
@@ -590,7 +655,8 @@ def test_independently_authored_signature_drift(inventory, drivers, directory, u
     baseline = query(selected, requests, baseline_directory)
     assert {request["contract"] for request, response in zip(requests, baseline[divergent])
             if "contract" in request and response["accepted"]} == {
-                op["name"] for op in inventory[0]["operations"]}
+                op["name"] for op in inventory[0]["operations"]
+                if supported(divergent, {"contract": op["name"]})}
     # Facet support is deliberately consumer-specific, unlike signatures.
     comparable = [i for i, request in enumerate(requests) if "facets" not in request]
     finish(baseline_directory, agreements(
@@ -695,6 +761,17 @@ def expected_facets(operation, group, declarations, policy):
             operation["name"], "facet has no conformance disposition", facet)
         if kind in policy["declared_fields"]:
             result[policy["declared_fields"][kind]] = True
+    if group == "native_data_observation":
+        # The construction observer has a complete Type input and an explicit
+        # Observation facet. Its closed grammar is independently bound below.
+        assert result["observation"]
+        result["unclassifiedProviderEffect"] = False
+        return result
+    if group == "sequence":
+        # The declaration's open Type root has no copy bound. This is a
+        # conservative declaration facet, independent of closed admission.
+        result["unclassifiedProviderEffect"] = bool(operation["inputs"])
+        return result
     # Current covered declarations have no open or affine nested Type terms.
     # Verify that restriction before using input-head custody as the expected
     # effect flag. The actual C++ API propagates Type-argument uncertainty too.
@@ -733,7 +810,9 @@ def test_declared_semantic_facets(inventory, drivers, directory):
     coverage = {name: {consumer: 0 for consumer in drivers} for name in expected}
     for i, request in enumerate(requests):
         admission = {consumer: results[i]["accepted"] for consumer, results in replies.items()}
-        if len(set(admission.values())) != 1:
+        active = [accepted for consumer, accepted in admission.items() if supported(consumer, request)]
+        if len(set(active)) != 1 or any(accepted for consumer, accepted in admission.items()
+                                       if not supported(consumer, request)):
             failures.append({"request": request, "admission_disagreement": admission})
         for consumer, results in replies.items():
             actual = results[i]
@@ -752,7 +831,7 @@ def test_declared_semantic_facets(inventory, drivers, directory):
                                          for value in actual.get("facets", {}).values()):
                 failures.append({"consumer": consumer, "request": request, "actual": actual, "expected": want})
     for name, counts in coverage.items():
-        if not all(counts.values()):
+        if not covered(name, counts):
             failures.append({"unexercised_facet_declaration": name, "accepted_counts": counts})
     (directory / "coverage.json").write_text(json.dumps(coverage, indent=2) + "\n")
     finish(directory, failures)
@@ -859,6 +938,10 @@ def test_generated_applied_representations(inventory, drivers, directory):
     failures = agreements(replies, requests)
     for consumer, results in replies.items():
         for request, response, want in zip(requests, results, wanted):
+            if not supported(consumer, request):
+                if response != {"accepted": False}:
+                    failures.append({"consumer": consumer, "unexpected_deferred_support": request})
+                continue
             if want["kind"] == "physical":
                 if response != want["response"]:
                     failures.append({"consumer": consumer, "request": request,
@@ -871,3 +954,29 @@ def test_generated_applied_representations(inventory, drivers, directory):
                                  "actual": response, "expected_default": want["default"]})
     (directory / "coverage.json").write_text(json.dumps(coverage, indent=2) + "\n")
     finish(directory, failures)
+
+
+def test_native_array_signature_witnesses(drivers, directory):
+    field = "field:bls12-381.fr"
+    array = "field_array<bls12-381.fr,4>"
+    requests = [binding("field_array.from_vector", ["bls12-381.fr", "4"]),
+                binding("field_array.at", ["bls12-381.fr", "4"]),
+                {"type": "field_array<bls12-381.g1,4>"},
+                binding("transcript.native.indexed.observe.field_array",
+                        ["merlin3.bls12-381.fr64be/1", "bls12-381.g1", "4"])]
+    expected = [{"accepted": True, "physical": False, "inputs": ["vector:bls12-381.fr"], "outputs": [array]},
+                {"accepted": True, "physical": False, "inputs": [array], "outputs": [field]},
+                {"accepted": False}, {"accepted": False}]
+    replies = query(drivers, requests, directory)
+    for consumer, rows in replies.items():
+        assert rows == (expected if consumer != "lean" else [{"accepted": False}] * 4), (consumer, rows)
+
+
+def test_native_shape_signature_witnesses(drivers, directory):
+    requests = [binding("matrix.dimension", ["bls12-381.fr"]),
+                binding("poly.table_arity", ["bls12-381.fr"])]
+    expected = [{"accepted": True, "physical": False, "inputs": ["matrix:bls12-381.fr"], "outputs": ["index"]},
+                {"accepted": True, "physical": False, "inputs": ["table:bls12-381.fr"], "outputs": ["index"]}]
+    replies = query(drivers, requests, directory)
+    for consumer, rows in replies.items():
+        assert rows == (expected if consumer != "lean" else [{"accepted": False}] * 2), (consumer, rows)

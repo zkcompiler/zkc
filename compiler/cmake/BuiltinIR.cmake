@@ -1,7 +1,11 @@
 # Core build facts only: dialect namespace | C++ owner | type generation.
 # Both contribution admission and TableGen generation consume these records.
 set(zkc_builtin_dialects
-  "pir|PIR|types"
+  "protocol|Protocol|types"
+  "local|Local|types"
+  "data|Data|types"
+  "crypto|Crypto|none"
+  "table|Table|types"
   "algebra|Algebra|types"
   "poly|Polynomial|types"
   "plan|Plan|types"

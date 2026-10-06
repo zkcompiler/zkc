@@ -9,10 +9,8 @@ separate future work.
 The mathematical source already has branches and fixed finite state-carrying
 iteration (`Zkc.Source.Program` and `Region`). Runtime bounds select a member of
 that finite family after checked admission; this is not an unbounded loop
-constructor or a proof of raw-adapter adequacy. Native local definitions have previously
-been straight-line primitive/helper calls. This work connects structured local
-control to that executable path rather than introducing a protocol-specific
-algorithm interpreter.
+constructor or a proof of raw-adapter adequacy. Structured native local control executes on the same path as
+primitive and helper calls.
 
 Authoring conveniences elaborate into typed operations and isolated regions.
 Vector literals reuse existing empty/append operations; indexing selects the
@@ -55,7 +53,7 @@ control, rather than unrolling loops or executing both branches.
 
 ## Native representation
 
-`pir.local_if`, `pir.local_for` and `pir.local_yield` retain single-block,
+`local.if`, `local.for` and `local.yield` retain single-block,
 isolated typed regions. MLIR's `RegionBranchOpInterface` exposes entry, branch,
 backedge and result mappings; there are no purity or speculation traits. Explicit
 capture block arguments keep lifetime and affine admission local to each region.

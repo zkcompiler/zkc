@@ -2,9 +2,10 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Plan/IR/Physical.h"
+#include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Table/IR/Physical.h"
+#include "zkc/Dialect/Table/IR/Program.h"
 #include "zkc/Transforms/Passes.h"
-#include "zkc/Translation/Table.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc {
@@ -20,32 +21,34 @@ public:
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> operands,
                   ConversionPatternRewriter &rewriter) const override {
-    bool control = isa<PlanProgramOp, PlanReturnOp, PlanStopOp, PlanChooseOp,
-                       PlanRepeatOp, PlanBindOp>(op);
+    bool control = isa<zkc::table::PlanProgramOp, zkc::table::PlanReturnOp,
+                       zkc::table::PlanStopOp, zkc::table::PlanChooseOp,
+                       zkc::table::PlanRepeatOp, zkc::table::PlanBindOp>(op);
     auto descriptor = descriptors.find(op);
     if (!control && descriptor == descriptors.end())
       return failure();
     SmallVector<Type> results;
     if (failed(getTypeConverter()->convertTypes(op->getResultTypes(), results)))
       return failure();
-    StringRef name = control               ? op->getName().getStringRef()
-                     : isa<EvaluateOp>(op) ? "plan.prepare"
-                                           : "plan.invoke";
+    StringRef name = control ? op->getName().getStringRef()
+                     : isa<zkc::table::EvaluateOp>(op) ? "table.plan.prepare"
+                                                       : "table.plan.invoke";
     OperationState state(op->getLoc(), name);
     state.addOperands(operands);
     state.addTypes(results);
     if (control) {
       NamedAttrList attrs(op->getAttrs());
-      if (isa<PlanProgramOp>(op)) {
+      if (isa<zkc::table::PlanProgramOp>(op)) {
         auto result = op->getAttrOfType<TypeAttr>("resultType");
         attrs.set("resultType", TypeAttr::get(physicalType(result.getValue())));
         attrs.set("realization", rewriter.getStringAttr("table-physical-plan"));
       }
       state.addAttributes(attrs);
     } else {
-      state.addAttribute(isa<EvaluateOp>(op) ? "mode" : "descriptor",
-                         rewriter.getStringAttr(
-                             isa<EvaluateOp>(op) ? mode : descriptor->second));
+      state.addAttribute(
+          isa<zkc::table::EvaluateOp>(op) ? "mode" : "descriptor",
+          rewriter.getStringAttr(
+              isa<zkc::table::EvaluateOp>(op) ? mode : descriptor->second));
     }
     for (unsigned i = 0; i < op->getNumRegions(); ++i)
       state.addRegion();
@@ -88,9 +91,11 @@ LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
     return diagnostics::emit(module.emitError(),
                              "unsupported-preparation-mode");
   // A closed direct plan is the admitted input of this representation pass.
-  auto direct = exportPlan(module);
-  if (!direct)
-    return diagnostics::emit(module.emitError(), direct.takeError());
+  if (failed(verify(module)))
+    return failure();
+  if (!llvm::hasSingleElement(*module.getBody()) ||
+      !isa<zkc::table::PlanProgramOp>(module.getBody()->front()))
+    return diagnostics::emit(module.emitError(), "expected-plan-program");
   Operation &program = module.getBody()->front();
   if (isPhysicalProgram(&program))
     return diagnostics::emit(program.emitError(), "expected-direct-plan");
@@ -108,17 +113,22 @@ LogicalResult lowerToPhysical(ModuleOp module, StringRef mode) {
   TypeConverter types;
   types.addConversion([](Type type) { return physicalType(type); });
   ConversionTarget target(*module.getContext());
-  target.addLegalOp<ModuleOp, PrepareOp, InvokeOp>();
-  target.addDynamicallyLegalOp<PlanProgramOp>([&](PlanProgramOp op) {
-    return isPhysicalProgram(op) && types.isLegal(op) &&
-           types.isLegal(&op.getBody()) && types.isLegal(op.getResultType());
-  });
-  target.addDynamicallyLegalOp<PlanReturnOp, PlanStopOp, PlanChooseOp,
-                               PlanRepeatOp, PlanBindOp>([&](Operation *op) {
-    return types.isLegal(op) &&
-           llvm::all_of(op->getRegions(),
-                        [&](Region &region) { return types.isLegal(&region); });
-  });
+  target.addLegalOp<ModuleOp, zkc::table::PrepareOp, zkc::table::InvokeOp>();
+  target.addDynamicallyLegalOp<zkc::table::PlanProgramOp>(
+      [&](zkc::table::PlanProgramOp op) {
+        return isPhysicalProgram(op) && types.isLegal(op) &&
+               types.isLegal(&op.getBody()) &&
+               types.isLegal(op.getResultType());
+      });
+  target
+      .addDynamicallyLegalOp<zkc::table::PlanReturnOp, zkc::table::PlanStopOp,
+                             zkc::table::PlanChooseOp, zkc::table::PlanRepeatOp,
+                             zkc::table::PlanBindOp>([&](Operation *op) {
+        return types.isLegal(op) &&
+               llvm::all_of(op->getRegions(), [&](Region &region) {
+                 return types.isLegal(&region);
+               });
+      });
   target.addIllegalOp<UnrealizedConversionCastOp>();
   RewritePatternSet patterns(module.getContext());
   patterns.add<LowerPhysical>(types, module.getContext(), mode, descriptors);

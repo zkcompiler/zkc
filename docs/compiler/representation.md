@@ -6,7 +6,7 @@ end-to-end architecture. The direct table and logical query examples below
 exercise individual obligations; they are not the full native protocol route.
 
 The [table and storage contract](table-storage/README.md) and the
-[formal handoff](../../formal/design/implementation-handoff.md) are the starting
+[native implementation obligations](../../formal/design/native-obligations.md) are the starting
 requirements. [Component instantiation](components.md) selects static dependency
 specialization and shared definitions, [logical calls](calls.md) complete
 returned and stopped behavior and a possible successor representation, [selective lowering](lowering.md) local expansion,
@@ -53,9 +53,8 @@ visible code are separate extension mechanisms.
 | Execution plan | Kernel selection, materialization, storage, provider calls, guards and exits | Capacity planning and execution or later code generation | Complete native value/state/observation correspondence |
 
 Several rows can coexist in a module. There is no fixed requirement for one
-dialect per row. The implemented families include PIR, Algebra, Polynomial,
-PCS, Oracle, Relation, Claim and Plan; define libraries around operation contracts
-and their consumers. A protocol
+dialect per row. The [dialect map](design.md#1-representation-and-dialects) lists the implemented
+families. Define libraries around operation contracts and their consumers. A protocol
 library composes those operations and contracts rather than changing generic
 binding, control or analysis for each protocol.
 
@@ -75,12 +74,11 @@ or attributes hold resolved immutable descriptors, not mutable execution state.
 | Protocol/construction requirement | Retained resolved contract and source-relative evidence | A freely editable attribute or operation name does not prove admission |
 | Physical buffer/session/generation | Plan value and runtime ownership | Native handles do not replace the logical object's meaning |
 
-The initial native profile uses public specialization and the adopted F2/F7
-table contract. The type/domain resolver must admit independent additional
-profiles without a global modulus or a Sumcheck-specific switch in generic
-control. The F4 query experiment tests a third descriptor; it does not implement
-a binary-tower runtime. Canonical F4 representation codes are basis coordinates,
-not natural-number casts into characteristic two.
+The [finite-table profile](table-execution.md) uses public specialization and
+the F2/F7 table contract. Domain resolution admits additional profiles without
+a global modulus or a Sumcheck-specific switch in generic control. Extension-field
+representation codes denote basis coordinates, not natural-number casts into
+the characteristic field.
 
 Protocol containers and algorithm regions retain useful structure. A region
 captures values explicitly and yields ordered results. It may group a round or
@@ -92,9 +90,9 @@ execution rules; a grouping label is not a new semantic constructor.
 Keep logical stopping distinct from formation. For example, a well-typed table
 evaluation with the wrong residual/point arity is a computation that refuses.
 Its source cannot silently become an unconditionally pure operation or a
-compile-time input error. The initial native implementation needs explicit
-returned/stopped control and a path-sensitive flow verifier. Straight-line
-single-use checking in the experiment does not establish that CFG invariant.
+compile-time input error. Native execution requires explicit returned/stopped control and path-sensitive
+flow validation; straight-line single-use checking alone cannot establish the
+control-flow invariant.
 
 ## Checked physical decisions
 
@@ -191,10 +189,9 @@ keeps the actual state/event prefix, and the final comparison returns a Boolean
 without silently introducing another rejection. The provider's residual tape
 belongs to the same session. The view's storage remains alive until its last use.
 
-The first direct artifact retains the original operation descriptors and uses
-their contracted kernels. The experiment's expanded affine child changes those
-operations: it cannot be serialized as a direct-v1 candidate and accepted merely
-because its algebra is correct. That actual changed candidate needs an admitted
+A direct artifact retains the original operation descriptors and uses their
+contracted kernels. Expanding the affine child changes those operations, so a
+direct checker cannot accept it merely because its algebra is correct. That actual changed candidate needs an admitted
 expansion/rewrite rule and consumer, or a separately bound generated-kernel
 realization with its own correspondence. Until that join exists, the direct path
 uses the unexpanded operation. This keeps selective-lowering feasibility separate
@@ -220,8 +217,7 @@ descriptor. The verifier region has no witness table. A zero-filled right shift
 induces a query pullback on the original root: for a two-cell table, `(w0,w1)`
 becomes `(w1,0)`.
 
-The identity is a specialization of `dot(w,Mv) = dot(M^T w,v)` from the checked
-expressiveness experiment. Root and query remain explicit opening operands.
+The identity is a specialization of `dot(w,Mv) = dot(M^T w,v)`. Root and query remain explicit opening operands.
 The example pressures the carrier for a general linear form; it is not a full
 Binius verifier, PCS implementation or claim-batching security proof. Dense
 weights are a finite reference. Production queries may retain sparse, tensor,
@@ -238,10 +234,10 @@ factored or composed structure if their original-object interpretation is fixed.
 | Custom storage everywhere versus upstream tensor/buffer lowering | Keep logical handles initially; compare appropriate physical kernels at materialization | Original-value/alias relation, failure behavior and measured copy/allocation costs |
 | Whole compiler in Rust versus split analyses | Keep one C++/MLIR engine and whole-job Rust execution boundary | Runtime consumes a finished plan without reproducing compiler decisions |
 
-The first production interfaces are semantic export, resolved domains and
+The shared interfaces cover semantic export, resolved domains and
 signatures, complete operation outcomes/effects, and exact source binding.
 Demand/preparation interfaces enter with their first two real consumers.
-Kernel, codec and provider APIs are separate from the beginning; a substituted
+Kernel, codec and provider APIs are separate; a substituted
 test adapter must work through the same runtime dispatcher.
 
 Admit the original source and its complete declaration/dependency environment
@@ -263,7 +259,7 @@ Compare complete outcomes, selected observations, live values and residual
 states, with independent input generation, failure controls and replay. Optional
 native proofs strengthen individual adapters later.
 
-The [delivered direct table slice](table-execution.md) implements canonical
+The [direct table implementation](table-execution.md) implements canonical
 numeric parsing (`-0` versus negative nonzero values), all declared captures
 including dormant bodies, two domains, prefix-growing loops, failed writes,
 stopped suffixes, stale and foreign handles, substituted field kernels and

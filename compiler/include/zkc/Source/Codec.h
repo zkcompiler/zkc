@@ -26,10 +26,12 @@ llvm::Expected<Content> decode(const llvm::json::Value &,
 /// and exact-source identity. Metadata is omitted from the serialized value.
 /// Precondition: checkStructure succeeded for the unchanged enclosing content
 /// (including when encoding one of its GenericFunction records). Encoding is
-/// not an admission API. Broken relation invariants terminate with an internal
-/// diagnostic in release builds too; fallible callers use checkStructure first.
-/// On that domain, decode(encode(x)) preserves authored
-/// fields except diagnostic locations. Checked relation-generated functions and
+/// not an admission API. Broken relation or native interchange invariants
+/// terminate with an internal diagnostic in release builds too; fallible
+/// callers use checkStructure first. Native participant interchange is
+/// physical-only; internal logical IR reconstruction does not satisfy this
+/// precondition. On that domain, decode(encode(x)) preserves authored fields
+/// except diagnostic locations. Checked relation-generated functions and
 /// bindings are derived from the retained immutable asset/view declarations;
 /// decoding reconstructs them in canonical generated order. The resource budget
 /// is compact encoded bytes, not sizeof the owning C++ model.
@@ -39,7 +41,9 @@ llvm::json::Value encode(const Participants &, RecordMap *records = nullptr);
 llvm::json::Value encode(const Construction &, RecordMap *records = nullptr);
 llvm::json::Value encode(const GenericFunction &, RecordMap *records = nullptr);
 
-/// Structural/resource checks for non-text authors. Semantic checks remain in
+/// Interchange structural/resource checks for non-text authors. Native logical
+/// participants and common-source Boolean literal instructions are refused.
+/// Semantic checks remain in
 /// the protocol/generic owners; callers cannot bypass limits with a builder.
 llvm::Error checkStructure(const Content &);
 llvm::Error checkStructure(const Module &);

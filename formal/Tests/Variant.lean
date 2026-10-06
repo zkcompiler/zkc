@@ -290,6 +290,18 @@ def run : IO Unit := do
           == "external-attributes"
       | .error _ => false) "external operation attributes"
   checks.holds (refusal (Variant.parse "variant:zz") == "variant-descriptor") "descriptor decoding"
+  checks.holds (refusal (Logical.parse "variant:zz") == "binding-type") "logical type descriptor refusal"
+  let badPayload : Variant.Descriptor := ⟨.str "Malformed", [("Some", ["fixed_vector<bool>"])]⟩
+  checks.holds (refusal (Logical.parse badPayload.spelling) == "binding-type-arity")
+    "variant payload type error remains distinct"
+  checks.holds (refusal (Logical.parseBudgeted 8 1 choice.spelling) == "binding-type-nodes")
+    "variant payload node budget remains distinct"
+  checks.holds (refusal (Logical.parseWithDepth 0 choice.spelling) == "binding-type-depth")
+    "variant type depth budget remains distinct"
+  checks.holds (refusal (Bindings.valueType false "variant:zz") == "binding-type")
+    "logical binding descriptor refusal"
+  checks.holds (refusal (Bindings.valueType true "variant:zz@logical.variant/1") == "binding-type")
+    "physical binding descriptor refusal"
   checks.holds (refusal (Value.validateAt 0 (Value.variant choice "None" [])) == "variant-depth")
     "value nesting fuel"
   checks.holds (refusal (admitFunctionWith variantKernel usesVariantKernel) == "variant-operation-boundary")

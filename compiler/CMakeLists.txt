@@ -76,7 +76,7 @@ set_target_properties(zkc-compile zkc-opt zkc-tblgen PROPERTIES
 install(TARGETS ${zkc_components} ZkcCompiler zkc-compile zkc-opt zkc-tblgen
   EXPORT ZkcCompilerTargets
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
-install(DIRECTORY include/zkc DESTINATION include FILES_MATCHING PATTERN "*.h" PATTERN "*.td")
+install(DIRECTORY include/zkc DESTINATION include FILES_MATCHING PATTERN "*.h" PATTERN "*.td" PATTERN "*.def")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Contracts/Installation.td"
   DESTINATION include/zkc/Contracts)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Installation.td"

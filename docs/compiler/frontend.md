@@ -231,8 +231,7 @@ checking. `Contracts/Declarations/*.td` owns neutral logical contracts, curated
 exports, finite type-family cases and operator bindings. `Zkc::Contracts` exposes
 immutable descriptors; Frontend consumes them without an MLIR runtime dependency.
 Associated `Element` projections use sort metadata; `Vector` and `Matrix` resolve
-finite declared element cases before common emission. Module profile headings and
-global operation/type fallbacks are removed. Core forms and globally accepted
+finite declared element cases before common emission. Core forms and globally accepted
 domain identities, sorts and predicates keep their existing scope.
 
 Both ordinary and component bodies use the same operator binding matcher before

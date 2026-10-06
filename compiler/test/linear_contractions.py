@@ -75,7 +75,7 @@ for fn in nested[2][:2]:
         ['apply', 'contract', contract_name, [], ['w', 'mapped'], ['result']],
     ]
 nested_text = json.dumps(nested)
-assert run('protocol-import', nested_text).count('call @') == 4
+assert run('protocol-import', nested_text).count('apply @') == 4
 nested_dense = json.loads(run('protocol-compile', nested_text))
 nested_optimized = plan(nested_text)
 assert logical_bodies(nested_dense) == logical_bodies(nested_optimized)
@@ -93,7 +93,7 @@ assert json.loads(run('protocol-export', ir)) == optimized
 # inspected artifact. Statistics are available through standard MLIR reporting.
 logical_ir = run('protocol-import', source)
 planned = commands.run([optimizer, '--zkc-project-participants',
-                        '--zkc-plan-participants=linear-contractions=true',
+                        '--zkc-select-physical=linear-contractions=true',
                         '--verify-each', '--mlir-pass-statistics'], stdin=logical_ir)
 assert 'linear-contractions: producers=3 eligible=2 selected=2' in commands.last.stderr, \
     commands.last.stderr

@@ -4,12 +4,13 @@ mod checker;
 mod codecs;
 mod driver;
 mod host;
+pub mod run;
 mod schedule;
 
 pub use checker::ParticipantChecker;
 pub use driver::{
-    BackendDecoder, JointOutcome, JointReport, LocalTransport, MessageDecoder, Transport,
-    WireBackend, WireUsage, drive, drive_with_decoder,
+    BackendDecoder, DriverLimits, JointOutcome, JointReport, LocalTransport, MessageDecoder,
+    Transport, WireBackend, WireUsage, drive, drive_with_decoder,
 };
 pub use host::run;
 pub use schedule::{Schedule, ScheduledAction};

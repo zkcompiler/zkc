@@ -37,8 +37,8 @@ Binding or reservation failure does not clear the preceding trace.
 and the native `zkc-table-physical-plan` region using their installed operation
 interpretations. It retains both byte streams and requires the checker's exact
 `table-physical-plan` claim. Both source grammars retain their logical input ABI;
-the target always uses the existing region grammar. The older physical-reference
-wire is refused. Optional phase/endpoint evidence uses the same selected policy
+the target always uses the existing region grammar. The Lean-only
+`zkc-table-physical-reference` profile is refused. Optional phase/endpoint evidence uses the same selected policy
 and exact acknowledgment requirements as direct admission, with the physical
 realization retained.
 

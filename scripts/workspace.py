@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REMOVED = {
-    "ZKC_JOBS": "use the build tool's parallelism variable (see docs/development/README.md)",
+    "ZKC_JOBS": "use the build tool's parallelism variable (see docs/development/configuration.md#toolchain-and-concurrency)",
     "ZKC_BUILD_PRESET": "pass a profile argument, e.g. just build-compiler dev",
     "ZKC_COMPILER_BUILD": "use a CMake preset; select its output with ZKC_COMPILER_BIN",
     "ZKC_COMPILER": "set ZKC_COMPILER_BIN to the directory containing zkc-compile",

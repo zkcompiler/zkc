@@ -350,14 +350,14 @@ set_property(TARGET Vendor::Leaf PROPERTY INTERFACE_LINK_LIBRARIES "Vendor::IR")
         with case(f"base adapter output and owner collision: {owner}"):
             configure(registration("first", f'ADAPTER_OWNERS {owner}'), "Invalid or duplicate contribution adapter owner")
     with case("base dialect class collision in standalone assembly"):
-        configure(registration("first", 'DIALECT_CLASSES ::zkc::PIRDialect'), "Invalid or duplicate contribution dialect")
+        configure(registration("first", 'DIALECT_CLASSES ::zkc::ProtocolDialect'), "Invalid or duplicate contribution dialect")
     base_descriptor = descriptor.read_text()
     controls = (
         ("empty dialect inventory", 'set(zkc_builtin_dialects)\n', "Missing built-in IR records"),
         ("empty adapter inventory", 'set(zkc_builtin_type_adapters)\n', "Missing built-in IR records"),
         ("malformed dialect", 'list(APPEND zkc_builtin_dialects "oops")\n', "Malformed built-in dialect record"),
-        ("duplicate namespace", 'list(APPEND zkc_builtin_dialects "pir|Other|none")\n', "Duplicate built-in dialect record"),
-        ("duplicate class", 'list(APPEND zkc_builtin_dialects "other|PIR|types")\n', "Duplicate built-in dialect record"),
+        ("duplicate namespace", 'list(APPEND zkc_builtin_dialects "protocol|Other|none")\n', "Duplicate built-in dialect record"),
+        ("duplicate class", 'list(APPEND zkc_builtin_dialects "other|Protocol|types")\n', "Duplicate built-in dialect record"),
         ("malformed adapter", 'list(APPEND zkc_builtin_type_adapters "oops")\n', "Malformed built-in adapter record"),
         ("duplicate adapter owner", 'list(APPEND zkc_builtin_type_adapters "CoreTypeAdapters|Other")\n', "Duplicate built-in adapter record"),
         ("duplicate adapter output", 'list(APPEND zkc_builtin_type_adapters "Other|Resources")\n', "Duplicate built-in adapter record"),

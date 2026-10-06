@@ -18,7 +18,7 @@ void buildParticipantPipeline(mlir::OpPassManager &pm,
                               LinearContractionStats *statistics) {
   pm.addPass(protocol::createProjectParticipantsPass());
   if (!projectOnly)
-    pm.addPass(protocol::createPlanParticipantsPass(
+    pm.addPass(protocol::createSelectPhysicalPass(
         options.implementations.choices, options.linearContractions,
         options.releaseStorage, statistics));
 }

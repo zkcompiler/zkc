@@ -37,6 +37,16 @@ def main():
         result = journal.attempt(argv, text=False)
         assert result.returncode >= 0 and (result.returncode == 0) == success, (argv, result.stdout, result.stderr)
         value = json.loads(result.stdout)
+        if argv[0] == args.zkc and status in ('produced', 'accepted'):
+            timings = value['timings']
+            assert timings['scope'] == 'prepared-execution'
+            assert all(timings[name] >= 0 for name in (
+                'admission_seconds', 'key_load_seconds', 'run_seconds',
+                'input_read_seconds', 'proof_read_seconds', 'publish_seconds'))
+            if status == 'produced':
+                assert timings['proof_read_seconds'] == 0 and timings['publish_seconds'] > 0
+            else:
+                assert timings['publish_seconds'] == 0 and timings['proof_read_seconds'] > 0
         if status:
             assert value['status'] == status, value
         return value

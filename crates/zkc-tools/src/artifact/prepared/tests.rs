@@ -1,13 +1,9 @@
 //! Real source-relative admission; no forged CheckedBundle or cloned backend.
 use super::*;
 use crate::artifact::{
-    ArtifactFailure, FormatError, hex,
-    inputs::{
-        admission::{DECODE_COUNT, IMPORT_COUNT},
-        tests::Case,
-    },
-    material::VERIFIER_IMPORTS,
+    ArtifactFailure, FormatError, hex, inputs::tests::Case, material::VERIFIER_IMPORTS,
 };
+use crate::host::admission::{DECODE_COUNT, IMPORT_COUNT};
 use serde_json::json;
 use zkc_arkworks::Keys;
 use zkc_backends::Policy;
@@ -311,10 +307,14 @@ fn cache_hits_preserve_exact_input_budgets_and_runtime_charges() {
         },
         ..options
     };
-    // Zero budget is exhausted while installing the initial frame, before
-    // an executable run/report exists.
-    assert!(matches!(prepared.produce(&installation, &input, tiny),
-        Err(InvocationError::Runtime(code)) if code == "Limit"));
+    // A failed load still owns issued roots and returns their cleanup evidence.
+    let refused = prepared.produce(&installation, &input, tiny).unwrap();
+    assert!(refused.execution.outcome.is_err());
+    assert_eq!(refused.phase, "construction");
+    assert_eq!(refused.usage.instructions, 0);
+    assert_eq!(refused.active_frames, 0);
+    assert!(refused.cleanup_errors.is_empty());
+    assert!(!refused.resources.is_empty());
     let recovered = prepared.produce(&installation, &input, options).unwrap();
     assert!(recovered.execution.outcome.is_ok());
     assert_eq!(recovered.usage, first.usage);

@@ -17,9 +17,9 @@ The BP+ proofs and statements are the transcript corpus's own, under
 and the keys, and checks the BP+ V/L/R bytes and the key-derived dimensions
 independently.
 
-The corpus is frozen: the typed adapters that extracted it, and the research
-inputs they read, are not part of this repository. What follows records how
-it was extracted, against the upstream commits in `provenance.json`.
+The extraction adapters and their upstream inputs are not distributed, so the
+corpus cannot be regenerated from this repository. The derivation below records
+the decoding boundary and upstream commits in `provenance.json`.
 
 ## Adapter boundary and source derivation
 
@@ -30,7 +30,7 @@ statement data, restored exactly from the archived transcript's `V` array.
 `L` and `R` come from decoding the actual proof container, never from an expected
 round count. Codec re-encoding must recover exactly the input bytes. The adapter
 also checks upstream acceptance, including the consistent-torsion archive.
-The unchanged `tests/fixtures/input-families/bp-shape.pir` receives raw original bytes,
+The `tests/fixtures/input-families/bp-shape.pir` receives raw original bytes,
 checks byte ranges, exact widths and L/R lengths, and computes
 `6 + ceil(log2(|V|))`. It does not decode or normalize group elements.
 The torsion archive is an accepted upstream proof whose altered A is outside

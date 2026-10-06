@@ -1,6 +1,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Interfaces/Mathematical.h"
 #include <cstdlib>
 
 namespace {
@@ -19,21 +20,37 @@ void check(mlir::MLIRContext &context, llvm::StringRef name) {
 } // namespace
 
 int main() {
+  mlir::DialectRegistry nativeRegistry;
+  zkc::registerNativeDialects(nativeRegistry);
+  require(!nativeRegistry.getDialectAllocator("table"));
+  mlir::MLIRContext native(nativeRegistry);
+  native.loadAllAvailableDialects();
+  require(zkc::hasProtocolDialects(native));
+  require(mlir::OperationName("arith.andi", &native)
+              .hasInterface<zkc::MathematicalOpInterface>());
+  require(!native.getLoadedDialect<zkc::table::TableDialect>());
+  check<zkc::protocol_ir::ProtocolDialect>(native, "protocol");
+  check<zkc::local::LocalDialect>(native, "local");
+  check<zkc::plan::PlanDialect>(native, "plan");
+
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   require(!zkc::hasProtocolDialects(context));
-  context.getOrLoadDialect<zkc::PIRDialect>();
+  context.getOrLoadDialect<zkc::protocol_ir::ProtocolDialect>();
   require(!zkc::hasProtocolDialects(context));
   context.loadAllAvailableDialects();
   require(zkc::hasProtocolDialects(context));
-  check<zkc::PIRDialect>(context, "pir");
-  check<zkc::AlgebraDialect>(context, "algebra");
-  check<zkc::PolynomialDialect>(context, "poly");
-  check<zkc::PlanDialect>(context, "plan");
-  check<zkc::PCSDialect>(context, "pcs");
-  check<zkc::OracleDialect>(context, "oracle");
-  check<zkc::RelationDialect>(context, "relation");
-  check<zkc::ClaimDialect>(context, "claim");
+  check<zkc::protocol_ir::ProtocolDialect>(context, "protocol");
+  check<zkc::local::LocalDialect>(context, "local");
+  check<zkc::crypto::CryptoDialect>(context, "crypto");
+  check<zkc::table::TableDialect>(context, "table");
+  check<zkc::algebra::AlgebraDialect>(context, "algebra");
+  check<zkc::poly::PolynomialDialect>(context, "poly");
+  check<zkc::plan::PlanDialect>(context, "plan");
+  check<zkc::pcs::PCSDialect>(context, "pcs");
+  check<zkc::oracle::OracleDialect>(context, "oracle");
+  check<zkc::relation::RelationDialect>(context, "relation");
+  check<zkc::claim::ClaimDialect>(context, "claim");
   check<mlir::func::FuncDialect>(context, "func");
 }

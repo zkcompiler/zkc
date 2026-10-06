@@ -148,7 +148,12 @@ fn compare(kind: &str, restricted: bool, joint: bool) {
         supplied.push(json!(["V", [["b", value_json(&Value::Bool(true))]]]));
     }
     let mut schedule = Schedule::new(&admitted, "main", "test").unwrap();
-    let report = drive(&mut schedule, &mut runners, &mut trace.clone());
+    let report = drive(
+        &mut schedule,
+        &mut runners,
+        &mut trace.clone(),
+        Default::default(),
+    );
     let reference_inputs = json!([
         "zkc.reference-inputs/1",
         "main",

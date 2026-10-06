@@ -105,7 +105,7 @@ transcript operations. The separate common carrier can contain those operations
 without establishing construction provenance. [Resolved authoring](authoring.md)
 owns this source boundary.
 
-In MLIR, `pir.operation_binding` is a symbol declaration. Mathematical dialect
+In MLIR, `local.binding` is a symbol declaration. Mathematical dialect
 operations reference it with a `binding` symbol attribute. This includes
 operations with no operands: their result domain is explicitly selected.
 The common-protocol interaction and role-projection structure is unchanged.

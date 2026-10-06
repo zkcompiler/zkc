@@ -4,7 +4,7 @@ Lean definitions and proofs for the finite atomic PIR kernel, structured
 sources, outer iteration, checked transformations and protocol applications.
 [docs](../docs/README.md) owns the prose semantics. Its
 [specification](../docs/spec/README.md) owns the selected model's normative
-contracts. Reviewed correspondence maps cover
+contracts. Correspondence maps cover
 [execution](../docs/spec/correspondence/core.md),
 [programs](../docs/spec/correspondence/programs.md),
 [domains](../docs/spec/correspondence/domains.md),
@@ -17,7 +17,7 @@ with exact declarations, premises and validation;
 Start with [capability support](SUPPORT.md) for actual statements, premises and
 clients. [The verification map](design/verification-map.md) distinguishes
 semantic laws, compiler refinement, checker soundness, realization and protocol
-security. [The implementation requirements](design/implementation-handoff.md)
+security. [The implementation requirements](design/native-obligations.md)
 state what these results require of the MLIR/C++ and Rust implementations.
 
 The independent [artifact identity consumer](Tools/Artifact/Identity.lean)
@@ -81,7 +81,7 @@ narrow imports for other capabilities. There is no compatibility aggregate.
 | `Zkc.Realization.Framing` | Exact length-framed payload decoding and suffix preservation; list-byte laws, not a proof of native codecs |
 | `Zkc.Realization.RegionSimulation` | Lift local heterogeneous execution and immutable alias laws through compact regions; [checked physical-table client](Examples/TablePhysical/README.md) |
 | `Zkc.Semantics.RelationComposition` | Heterogeneous component connections, contextual replacement and boundary representation changes |
-| `Zkc.Semantics.Obligations` | Finite ordered derivations with independently supplied requirements, reusable facts and conditional rule/terminal soundness |
+| `Zkc.Semantics.Obligations` | Finite ordered derivations with independently supplied requirements and reusable facts; conditional rule and terminal soundness needs actual terminal truth and admitted rule laws |
 | `Zkc.Relation.Encoding` | Two-direction source/target adequacy with statement maps and arbitrary target witnesses; composition and terminal transport |
 | `Zkc.Relation.Sparse`, `Zkc.Relation.SparsePolynomial` | Sparse matrix products, contractions, normalization laws and ordered multilinear evaluation |
 | `Zkc.Relation.RankOne`, `Zkc.Relation.Padding`, `Zkc.Relation.Reference` | ONE/public/witness layouts, arbitrary-assignment reconstruction, zero padding and executable sparse relation checking |
@@ -100,7 +100,6 @@ narrow imports for other capabilities. There is no compatibility aggregate.
 | `Zkc.Algebra.BatchVerification` | Exact accepting-fiber count for fixed residuals and independent uniform field coefficients; no native RNG or protocol-security theorem |
 | `Zkc.Protocols.LinearRelation` | Completeness and distinct-challenge extraction for a fixed linear map, with actual MSM/matrix product-map bridge; no probabilistic knowledge or native theorem |
 | `Zkc.Algebra.BoundedResidues` | Recover integer conservation and word addition from field equations under bounds on complete expressions |
-| `Zkc.Semantics.Obligations` | Finite multi-premise closure over independent requirements; soundness needs actual terminal truth and admitted rule laws |
 | `Zkc.Protocols.Pedersen`, `Zkc.Protocols.Schnorr` | Actual-opening excess identity and two-response extraction; algebraic laws, not joint knowledge or Fiat–Shamir security |
 | `Zkc.Protocols.InnerProduct.Folding`, `Zkc.Protocols.InnerProduct.Weights` | A round's commitment identity and repeated folding as one ordered contraction; algebraic results, not extraction or Fiat–Shamir security |
 | `Zkc.Protocols.RangeProof.Relations`, `Zkc.Protocols.RangeProof.Bits` | Preserve the non-bit residual, connect parent commitments, and bound canonical integer reconstruction under explicit premises |
@@ -116,7 +115,7 @@ narrow imports for other capabilities. There is no compatibility aggregate.
 
 [Downstream clients](clients/) show ordinary theorem use from a separate Lake
 package. A generic contract states an obligation; a proved law and its supplied
-premises establish an instance. Typed framing does not establish FS security,
+premises establish an instance. Typed framing does not establish Fiat–Shamir security,
 and a logical backend contract does not verify native backend code.
 
 ## Build and validate
@@ -198,7 +197,7 @@ scopes; neither imports an implicit Fiat–Shamir security theorem.
 
 ## Scope and development
 
-The [research agenda](design/research-agenda.md) separates future theory work,
+The [research agenda](design/formal-questions.md) separates future theory work,
 upstream proof gaps and native realization from implemented formal claims.
 The [virtual-product example](Examples/OpeningReduction/README.md) adds actual
 cubic rounds returning opening obligations and a conditional terminal-error bound.
@@ -206,4 +205,4 @@ cubic rounds returning opening obligations and a conditional terminal-error boun
 The common `Proc` denotation does not prescribe a flat compiler IR. Protocol
 structure, construction choice, role availability, logical algorithms and physical
 representation have distinct retained information and transformation obligations.
-Native expansion remains subject to the renewed MLIR design review in the handoff.
+Native consumers retain the [implementation obligations](design/native-obligations.md).

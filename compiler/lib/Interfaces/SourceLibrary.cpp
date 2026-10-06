@@ -36,7 +36,8 @@ LogicalResult verifySourceOperationContext(Operation *op) {
   if (!isa<SourceOpInterface>(op))
     return diagnostics::emit(op->emitOpError(), "missing-source-interface");
   Operation *program = op->getParentOp();
-  while (program && !isa<PIRProgramOp, PlanProgramOp>(program))
+  while (program &&
+         !isa<zkc::table::PIRProgramOp, zkc::table::PlanProgramOp>(program))
     program = program->getParentOp();
   if (!program)
     return diagnostics::emit(op->emitOpError(), "missing-source-context");
@@ -51,8 +52,9 @@ LogicalResult verifySourceOperation(Operation *op,
     return diagnostics::emit(op->emitOpError(), "unsupported-attribute");
   SmallVector<Type> inputs = resolved.inputs, outputs{resolved.output};
   if (resolved.ordered) {
-    inputs.insert(inputs.begin(), FlowType::get(op->getContext()));
-    outputs.insert(outputs.begin(), FlowType::get(op->getContext()));
+    inputs.insert(inputs.begin(), zkc::table::FlowType::get(op->getContext()));
+    outputs.insert(outputs.begin(),
+                   zkc::table::FlowType::get(op->getContext()));
   }
   if (op->getOperandTypes() != TypeRange(inputs) ||
       op->getResultTypes() != TypeRange(outputs))

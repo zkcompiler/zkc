@@ -8,6 +8,8 @@
 
 pub mod attempt;
 mod driver;
+mod entropy;
+pub mod native;
 mod wire;
 
 pub use driver::{
@@ -20,19 +22,17 @@ mod construction;
 mod host;
 mod identity;
 mod inputs;
-mod io;
-mod json;
-mod material;
+use crate::host::{inputs as io, json, material};
 mod requirements;
 pub use requirements::{ClaimRequirements, PhysicalChoices};
 mod static_requirements;
 pub use static_requirements::replay_static_requirements;
 mod observe;
 mod prepared;
+pub use crate::host::admission::LoadLimits as InputLimits;
 pub use construction::CheckedBundle;
 pub use host::run;
 pub use identity::inspect as inspect_identity;
-pub use inputs::admission::LoadLimits as InputLimits;
 pub use io::hex;
 pub use material::{CacheLimits, CacheUsage};
 pub use observe::{Observed, TraceMode};

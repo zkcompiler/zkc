@@ -43,7 +43,7 @@ fn check_pairing(
 ) -> Option<BoundSignature> {
     if !matches!(selection, Selection::Default)
         || binding.arguments != ["bn254.fr"]
-        || binding.implementation != "arkworks/pairing.check"
+        || binding.implementation != format!("arkworks/{}", binding.contract)
     {
         return None;
     }
@@ -60,7 +60,16 @@ fn check_pairing(
         outputs: row
             .outputs
             .iter()
-            .map(|&kind| make(kind, Identity::None))
+            .map(|&kind| {
+                make(
+                    kind,
+                    if kind == Type::Group {
+                        Identity::Bn254Gt
+                    } else {
+                        Identity::None
+                    },
+                )
+            })
             .collect::<Option<_>>()?,
         attributes: row.attributes,
     })
