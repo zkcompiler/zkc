@@ -240,6 +240,23 @@ class Comparator {
       if (!bind(i, std::move(input)))
         return false;
     }
+    Values services;
+    for (const auto &port : source.services) {
+      if (argument >= block.getNumArguments())
+        return fail("missing managed service argument");
+      auto value = block.getArgument(argument++);
+      auto type =
+          mlir::dyn_cast<protocol_ir::ServiceReferenceType>(value.getType());
+      if (!type || type.getContract() != port.contract)
+        return fail("managed service contract differs");
+      if (!availability)
+        return fail("managed service outside protocol body");
+      auto found = availability->values.find(value);
+      if (found == availability->values.end() || found->second.count() != 1 ||
+          port.owner >= found->second.size() || !found->second[port.owner])
+        return fail("managed service owner differs");
+      services.push_back(value);
+    }
     if (argument != block.getNumArguments())
       return fail("block has extra arguments");
     auto flatten = [&](ArrayRef<ValueId> ids) {
@@ -383,11 +400,35 @@ class Comparator {
                        !string(*actual, "role", decl.roles[*call->owner]))))
           return fail("call target, mode, owner or site differs");
         result = Values(actual->getResults());
+      } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
+        const auto &port = source.services[query->service.index];
+        auto *actual = next(block, cursor, op.span, "protocol.query",
+                            services[query->service.index], 1);
+        if (!actual)
+          return false;
+        if (!attributes(*actual, {"method", "owner", "site"}) ||
+            !string(*actual, "method", "draw") ||
+            !string(*actual, "owner", decl.roles[port.owner]) ||
+            !string(*actual, "site", site))
+          return fail("managed query method, owner or occurrence differs");
+        result = Values(actual->getResults());
+      } else if (auto *guard = std::get_if<ProtocolGuard>(&op.action)) {
+        auto *actual = next(block, cursor, op.span, "protocol.guard",
+                            values[guard->condition.index], 0);
+        if (!actual)
+          return false;
+        if (!attributes(*actual, {"owner", "site"}) ||
+            !string(*actual, "owner", decl.roles[guard->owner]) ||
+            !string(*actual, "site", site))
+          return fail("guard owner or occurrence differs");
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
         const auto &target = project.declarations()[application->callee.index];
-        auto *actual = next(block, cursor, op.span, "protocol.apply",
-                            flatten(application->operands), leaves.size());
+        auto operands = flatten(application->operands);
+        for (auto service : application->services)
+          operands.push_back(services[service.index]);
+        auto *actual = next(block, cursor, op.span, "protocol.apply", operands,
+                            leaves.size());
         if (!actual)
           return false;
         auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
@@ -603,9 +644,24 @@ public:
               return error("source.correspondence",
                            "flattened port roles differ");
         }
-        if (!types(input ? signature.getInputs() : signature.getResults(),
-                   leaves))
+        auto nativeTypes =
+            input ? signature.getInputs() : signature.getResults();
+        auto serviceCount = input ? decl.services.size() : 0;
+        if (nativeTypes.size() != leaves.size() + serviceCount)
+          return error("source.correspondence",
+                       "signature argument count differs");
+        if (!types(nativeTypes.take_front(leaves.size()), leaves))
           return std::move(failure);
+        for (unsigned i = 0; i < serviceCount; ++i) {
+          const auto &port = decl.services[i];
+          auto type = mlir::dyn_cast<protocol_ir::ServiceReferenceType>(
+              nativeTypes[leaves.size() + i]);
+          if (!type || type.getContract() != port.contract || !roles ||
+              flat >= roles.size() ||
+              !roleSet(roles[flat++], decl, {port.owner}))
+            return error("source.correspondence",
+                         "managed port signature differs");
+        }
         if (protocol && flat != roles.size())
           return error("source.correspondence", "extra port roles");
       }

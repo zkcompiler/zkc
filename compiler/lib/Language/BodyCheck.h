@@ -7,6 +7,7 @@ public:
   BodyChecker(Checker &, Declaration &, const SyntaxDeclaration &, Body &,
               unsigned);
   bool run(const SyntaxBody &, llvm::ArrayRef<Port>, bool protocol);
+  bool addService(const ServicePort &);
   bool addInput(llvm::StringRef, const Type &, std::vector<unsigned>, Span);
 
 private:
@@ -18,6 +19,8 @@ private:
   uint32_t statement = 0;
   std::optional<unsigned> owner;
   std::map<std::string, ValueId> bindings;
+  std::map<std::string, ServiceId> services;
+  std::optional<ServiceId> service(const Expression &);
   struct Uses {
     std::vector<std::vector<unsigned>> used, moved;
   };

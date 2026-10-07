@@ -577,7 +577,15 @@ private:
         return {};
       if (protocol && (!expect("roles") || !roleList(d.roles, true)))
         return {};
-      if (!ports(d.inputs, protocol) || !expect("->"))
+      if (!ports(d.inputs, protocol))
+        return {};
+      if (take("using")) {
+        if (!protocol || !ports(d.services, true)) {
+          fail("source.service", "managed ports require protocol mode");
+          return {};
+        }
+      }
+      if (!expect("->"))
         return {};
       if (protocol) {
         if (!ports(d.outputs, true))
@@ -652,6 +660,8 @@ private:
           value.children.push_back(*argument);
         } while (take(",") && !at(")"));
       if (!expect(")"))
+        return {};
+      if (take("using") && !names(value.services))
         return {};
     } else if (take("if")) {
       value.kind = Expression::Kind::If;
@@ -821,6 +831,18 @@ private:
         return {};
       if (bracket && !expect("]"))
         return {};
+      if (!bracket && take("(")) {
+        projection.kind = Expression::Kind::MethodCall;
+        if (!at(")"))
+          do {
+            auto arg = expression(decl, depth + 1);
+            if (!arg)
+              return {};
+            projection.children.push_back(*arg);
+          } while (take(",") && !at(")"));
+        if (!expect(")"))
+          return {};
+      }
       projection.span.end = previousEnd;
       left = decl.expressions.size();
       decl.expressions.push_back(std::move(projection));
@@ -875,7 +897,20 @@ private:
         }
         s.owner = std::move(owner);
       }
-      if (take("let")) {
+      if (take("using")) {
+        s.kind = Statement::Kind::Alias;
+        if (!name(s.name) || !expect("="))
+          return {};
+      } else if (take("guard")) {
+        if (s.owner) {
+          fail("source.mode", "guard declares its own owner");
+          return {};
+        }
+        s.kind = Statement::Kind::Guard;
+        s.owner.emplace();
+        if (!expect("@") || !name(*s.owner))
+          return {};
+      } else if (take("let")) {
         if (at("(")) {
           s.resultNames.emplace();
           if (!names(*s.resultNames))

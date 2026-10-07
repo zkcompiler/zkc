@@ -1,5 +1,6 @@
 #include "Checker.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Services.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -23,8 +24,19 @@ bool Checker::specialize(DeclarationId selected) {
     type = std::move(*result);
     return true;
   };
+  auto closeService = [&](ServicePort &port, const Substitution &bindings) {
+    if (!closeType(port.field, bindings, port.span))
+      return false;
+    port.contract = protocol::randomServiceContract(port.field.domain).str();
+    return !port.contract.empty() ||
+           fail("source.service",
+                "no installed random service for selected field", port.span);
+  };
   closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode) {
     body.mode = mode;
+    for (auto &service : body.services)
+      if (!closeService(service, bindings))
+        return false;
     for (auto &value : body.values) {
       if (!closeType(value.type, bindings, value.span))
         return false;
@@ -207,6 +219,9 @@ bool Checker::specialize(DeclarationId selected) {
       for (const auto &port : *ports)
         if (!chargeType(port.type, port.span))
           return {};
+    for (const auto &service : source.services)
+      if (!chargeType(service.field, service.span))
+        return {};
     if (!chargeBody(*source.body))
       return {};
     Declaration result = source;
@@ -247,6 +262,9 @@ bool Checker::specialize(DeclarationId selected) {
       for (auto &port : *ports)
         if (!closeType(port.type, bindings, port.span))
           return {};
+    for (auto &service : result.services)
+      if (!closeService(service, bindings))
+        return {};
     if (!closeBody(*result.body, bindings, mode))
       return {};
     if (mode == Body::Mode::Local)

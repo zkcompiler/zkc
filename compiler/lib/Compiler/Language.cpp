@@ -191,6 +191,21 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     });
     ports("inputs", protocol.inputs, inputs);
     ports("outputs", protocol.outputs, outputs);
+    out.attributeArray("services", [&] {
+      unsigned native = 0;
+      for (const auto &layout : inputs)
+        native += layout->leaves.size();
+      for (const auto &service : protocol.services) {
+        if (!charge(service.name.size() + service.contract.size() + 1))
+          break;
+        out.object([&] {
+          out.attribute("name", service.name);
+          out.attribute("contract", service.contract);
+          out.attribute("owner", protocol.roles[service.owner]);
+          out.attribute("native", native++);
+        });
+      }
+    });
   });
   if (limited || stream.overflow())
     return error("source.limit", "interface traversal or byte limit exceeded");

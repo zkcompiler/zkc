@@ -12,6 +12,11 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     return {};
   }
   using K = Expression::Kind;
+  if (expr.kind == K::MethodCall) {
+    auto root = service(syntax.expressions[expr.children.front()]);
+    return root ? std::optional<Type>(body.services[root->index].field)
+                : std::nullopt;
+  }
   if (expr.kind == K::Boolean || expr.kind == K::Equal)
     return Type{};
   if (expr.kind == K::Decimal)
@@ -130,7 +135,19 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
          "protocol application requires a complete let statement", expr.span);
     return {};
   }
-  if (expr.kind == K::Name) {
+  if (expr.kind == K::MethodCall) {
+    if (!protocol() || owner || expr.text != "draw" ||
+        expr.children.size() != 1) {
+      fail("source.service",
+           "managed query requires service.draw() in protocol mode", expr.span);
+      return {};
+    }
+    auto root = service(syntax.expressions[expr.children.front()]);
+    if (!root)
+      return {};
+    const auto &port = body.services[root->index];
+    result = emit(ServiceQuery{*root}, port.field, {port.owner}, expr.span);
+  } else if (expr.kind == K::Name) {
     auto found = bindings.find(expr.text);
     if (found == bindings.end()) {
       fail("source.name", "unknown local value: " + expr.text, expr.span);

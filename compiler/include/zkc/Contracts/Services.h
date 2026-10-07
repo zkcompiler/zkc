@@ -4,15 +4,24 @@
 namespace zkc::protocol {
 // Installed random-service signatures. Contracts identify distributions;
 // registry references separately authenticate the actual provider root.
+struct RandomService {
+  llvm::StringLiteral contract, field;
+};
+inline constexpr RandomService randomServices[] = {
+    {"random.bls12-381.fr/1", "bls12-381.fr"},
+    {"random.bn254.fr/1", "bn254.fr"},
+    {"random.ristretto255.scalar/1", "ristretto255.scalar"},
+    {"random.koala-bear.ext8-binomial3/1", "koala-bear.ext8-binomial3"}};
 inline llvm::StringRef randomServiceField(llvm::StringRef contract) {
-  if (contract == "random.bls12-381.fr/1")
-    return "bls12-381.fr";
-  if (contract == "random.bn254.fr/1")
-    return "bn254.fr";
-  if (contract == "random.ristretto255.scalar/1")
-    return "ristretto255.scalar";
-  if (contract == "random.koala-bear.ext8-binomial3/1")
-    return "koala-bear.ext8-binomial3";
+  for (const auto &service : randomServices)
+    if (service.contract == contract)
+      return service.field;
+  return {};
+}
+inline llvm::StringRef randomServiceContract(llvm::StringRef field) {
+  for (const auto &service : randomServices)
+    if (service.field == field)
+      return service.contract;
   return {};
 }
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {

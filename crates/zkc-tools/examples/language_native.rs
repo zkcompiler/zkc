@@ -2,18 +2,19 @@
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::Path;
+use zkc_backends::services::ServiceRegistry;
 use zkc_backends::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
 };
 use zkc_runtime::interactive::{Action, Packet, Runner, Value as RuntimeValue, admit_supplied};
-use zkc_tools::protocol::run::{HostLimits, RunHost, SetupAuthority};
+use zkc_tools::protocol::run::{Bundle, BundleLimits, HostLimits, RunHost, SetupAuthority};
 
 fn field(n: u64) -> Value {
     Value::Field(Scalar::from(n))
 }
-fn runner(bundle: &serde_json::Value, role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
+fn backend(bundle: &serde_json::Value, role: &str) -> NativeBackend {
     let entry = bundle["entry"].as_str().unwrap();
-    let backend = NativeBackend::new(
+    NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(
             Domain::new(role, "language_test", entry, None),
@@ -22,7 +23,18 @@ fn runner(bundle: &serde_json::Value, role: &str, inputs: Vec<Value>) -> Runner<
         ),
         None,
     )
-    .unwrap();
+    .unwrap()
+}
+fn runner(bundle: &serde_json::Value, role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
+    start(bundle, role, inputs, backend(bundle, role))
+}
+fn start(
+    bundle: &serde_json::Value,
+    role: &str,
+    inputs: Vec<Value>,
+    backend: NativeBackend,
+) -> Runner<NativeBackend> {
+    let entry = bundle["entry"].as_str().unwrap();
     let admitted =
         admit_supplied(bundle["candidate"].as_str().unwrap().as_bytes(), &backend).unwrap();
     Runner::new(&admitted, entry, role, "language_test", backend, inputs)
@@ -33,6 +45,7 @@ fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
     for _ in 0..100 {
         match runner.poll() {
             Action::Local(local) => runner.execute_local(&local.cut).unwrap(),
+            Action::Query(query) => runner.execute_query(&query.cut).unwrap(),
             action => return action,
         }
     }
@@ -40,7 +53,10 @@ fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
 }
 fn send(runner: &mut Runner<NativeBackend>) -> Value {
     let action = next(runner);
-    assert!(matches!(action, Action::Send(_)));
+    assert!(
+        matches!(action, Action::Send(_)),
+        "expected send, got {action:?}"
+    );
     runner.take_send(&action.cut().unwrap()).unwrap().payload
 }
 fn receive(runner: &mut Runner<NativeBackend>, value: Value) {
@@ -115,6 +131,52 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
     expect_field(&verifier.outputs[2], 7 - verifier_c);
     assert!(matches!(verifier.outputs[3], Value::Bool(true)));
 }
+fn managed_queries(bundle: &serde_json::Value) {
+    for go in [false, true] {
+        let registry = ServiceRegistry::new(Policy::default());
+        let root = registry
+            .issue_test_tape("V", 2, vec![Scalar::from(3), Scalar::from(7)])
+            .unwrap();
+        let admitted = Bundle::admit(
+            bundle.to_string().as_bytes(),
+            &backend(bundle, "V"),
+            BundleLimits::default(),
+        )
+        .unwrap();
+        let role = admitted
+            .roles()
+            .iter()
+            .find(|role| role.entry.role == "V")
+            .unwrap();
+        assert_eq!(role.entry.services.len(), 1);
+        let ports = [(role.entry.services[0].name.clone(), root.clone())]
+            .into_iter()
+            .collect();
+        let provider = backend(bundle, "V")
+            .with_services(registry.clone(), ports)
+            .unwrap();
+        let mut verifier = start(bundle, "V", vec![Value::Bool(go)], provider);
+        if go {
+            let mut prover = runner(bundle, "P", vec![]);
+            let challenge = send(&mut verifier);
+            expect_field(&challenge, 7);
+            receive(&mut prover, challenge);
+            expect_field(&returned(&mut prover)[0], 7);
+            expect_field(&returned(&mut verifier)[0], 7);
+        } else {
+            let Action::Stopped(stop) = next(&mut verifier) else {
+                panic!("guard did not stop")
+            };
+            assert!(stop.cleanup_errors.is_empty());
+        }
+        assert_eq!(verifier.backend().active_frames(), 0);
+        let observation = registry.observe(&root).unwrap();
+        assert!(!observation.leased && !observation.poisoned);
+        let state = observation.state.unwrap();
+        assert_eq!(state.draw_count, if go { 2 } else { 0 });
+        assert_eq!(state.budget, if go { 0 } else { 2 });
+    }
+}
 fn main() {
     let directory = std::env::args()
         .nth(1)
@@ -151,6 +213,7 @@ fn main() {
         }
     }
     for optimized in [0, 1] {
+        managed_queries(&load(&format!("services-{optimized}.bundle")));
         let bundle = load(&format!("application-{optimized}.bundle"));
         let mut prover = runner(&bundle, "P", vec![field(2), field(3)]);
         let mut verifier = runner(&bundle, "V", vec![field(5), field(7)]);

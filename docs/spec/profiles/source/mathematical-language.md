@@ -241,6 +241,45 @@ by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because er
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.
 
+## Managed services and guards
+
+```text
+protocol Draw<F: Field> roles(V)() using(coins: Random<F> @V) -> (r: F @V) {
+  using alias = coins;
+  let r = alias.draw();
+  return (r = r);
+}
+protocol Run roles(V)(go: bool @V) using(coins: Random<Fr> @V) -> (r: Fr @V) {
+  guard @V go;
+  let r = apply Draw<Fr>() using(coins);
+  return (r = r);
+}
+```
+
+Managed service ports are separate from data ports and static type arguments.
+`Random<F>` requires a field and exactly one owner. Closure selects an installed
+random-service contract for that field; analysis can retain a generic declaration
+before that selection. The installed catalog includes service contracts in its
+identity.
+
+`using alias = coins;` borrows the same root. Aliases introduce no query, reset or
+independence assumption. `coins.draw()` is ordered protocol work: its result is
+available only at the service owner, and an unused result does not remove the
+query. Services cannot enter ordinary types, aggregate fields, messages, local
+functions or return values. An application supplies its managed bindings after
+its data arguments, in declared service order. Each field and mapped owner must
+match. Repeating a binding passes the same reference to both ports.
+
+`guard @V condition;` requires a Boolean available at V. False stops V at that
+ordered occurrence; it does not produce a Boolean result or establish knowledge
+at another role. The guard contributes the `stop` effect. Queries and guards
+remain distinct native operations checked by source correspondence.
+
+In the original MLIR, managed ports follow flattened data inputs. Each has a
+`protocol.service_ref` type and a singleton role set. The source interface lists
+managed ports under `services`, with name, installed contract, owner and native
+input index; data schemas contain no service references.
+
 ## Protocol composition
 
 ```text

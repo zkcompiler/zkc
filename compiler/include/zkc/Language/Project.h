@@ -23,6 +23,9 @@ struct DeclarationId {
 struct ValueId {
   uint32_t index;
 };
+struct ServiceId {
+  uint32_t index;
+};
 struct Span {
   ModuleId module;
   uint32_t begin, end;
@@ -86,6 +89,14 @@ struct Port {
   std::vector<unsigned> roles;
   Span span;
 };
+/// A managed port is a borrowed service root, never an ordinary data type.
+struct ServicePort {
+  std::string name;
+  Type field;
+  unsigned owner;
+  Span span;
+  std::string contract; // Filled by selected Entry closure.
+};
 struct Value {
   Type type;
   /// Protocol: roster indices. Math: input dependencies. Both are sorted sets.
@@ -110,6 +121,14 @@ struct ProtocolApplication {
   std::vector<Type> arguments;
   /// Caller roster indices, in the callee's declared role order.
   std::vector<unsigned> roles;
+  std::vector<ServiceId> services;
+};
+struct ServiceQuery {
+  ServiceId service;
+};
+struct ProtocolGuard {
+  ValueId condition;
+  unsigned owner;
 };
 struct Exchange {
   unsigned sender, receiver;
@@ -155,7 +174,7 @@ struct LocalControl {
 struct Operation {
   std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
                Projection, LocalPrimitive, Consume, LocalControl,
-               ProtocolApplication>
+               ProtocolApplication, ServiceQuery, ProtocolGuard>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;
@@ -164,6 +183,7 @@ struct Operation {
 };
 struct Body {
   enum class Mode { Math, Local, Protocol } mode;
+  std::vector<ServicePort> services;
   std::vector<Value> values;
   std::vector<Operation> operations;
   std::vector<ValueId> results;
@@ -246,6 +266,7 @@ struct Declaration {
   std::vector<Type> staticArguments;
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
+  std::vector<ServicePort> services;
   std::optional<Body> body;
   std::optional<DeclarationId> target;
 };

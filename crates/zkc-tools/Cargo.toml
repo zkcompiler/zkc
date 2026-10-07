@@ -158,3 +158,8 @@ path = "examples/native_setups.rs"
 [[example]]
 name = "native_composition"
 path = "examples/native_composition/main.rs"
+
+[[example]]
+name = "language_native"
+path = "examples/language_native.rs"
+required-features = ["test-utils"]

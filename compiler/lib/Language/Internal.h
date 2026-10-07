@@ -86,6 +86,7 @@ struct Expression {
     Boolean,
     Call,
     Apply,
+    MethodCall,
     Add,
     Subtract,
     Multiply,
@@ -104,12 +105,20 @@ struct Expression {
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;
   std::vector<std::string> captures;
+  std::vector<std::string> services;
   std::optional<std::vector<std::string>> roles;
   std::vector<uint32_t> regions;
   std::vector<std::vector<std::string>> payloads;
 };
 struct Statement {
-  enum class Kind { Let, Drop, Consume, Require } kind = Kind::Let;
+  enum class Kind {
+    Let,
+    Drop,
+    Consume,
+    Require,
+    Alias,
+    Guard
+  } kind = Kind::Let;
   std::string name;
   std::optional<std::vector<std::string>> resultNames;
   std::optional<SyntaxType> type;
@@ -137,7 +146,7 @@ struct SyntaxDeclaration {
   bool isPublic = false;
   Span span;
   std::vector<std::string> roles;
-  std::vector<SyntaxPort> inputs, outputs;
+  std::vector<SyntaxPort> inputs, outputs, services;
   std::vector<Expression> expressions;
   // Root body is kept in the first slot; nested bodies use stable indices.
   std::vector<SyntaxBody> bodies;

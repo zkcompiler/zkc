@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Services.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/SHA256.h"
@@ -65,13 +66,14 @@ bool isUnsupported(StringRef name) {
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module",    "use",       "pub",   "domain",  "field", "group",  "math",
-      "fn",        "protocol",  "roles", "entry",   "let",   "return", "send",
-      "bool",      "true",      "false", "index",   "type",  "struct", "enum",
-      "interface", "component", "where", "nat",     "local", "if",     "else",
-      "match",     "for",       "in",    "capture", "carry", "yield",  "drop",
-      "consume",   "require",   "stop",  "opaque",  "Type",  "Field",  "Group",
-      "Copy",      "Drop",      "Share", "Wire"};
+      "module", "use",     "pub",      "domain",    "field",     "group",
+      "math",   "fn",      "protocol", "roles",     "entry",     "let",
+      "return", "send",    "bool",     "true",      "false",     "index",
+      "type",   "struct",  "enum",     "interface", "component", "where",
+      "nat",    "local",   "if",       "else",      "using",     "guard",
+      "match",  "for",     "in",       "capture",   "carry",     "yield",
+      "drop",   "consume", "require",  "stop",      "opaque",    "Type",
+      "Field",  "Group",   "Copy",     "Drop",      "Share",     "Wire"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {
@@ -366,6 +368,8 @@ std::string installedCatalogIdentity() {
     detail::frame(value, protocol::operationEffect(kernel.key));
     rows.push_back(std::move(value));
   }
+  for (const auto &service : protocol::randomServices)
+    row({"service", service.contract, "draw", service.field});
   std::sort(rows.begin(), rows.end());
   std::string bytes;
   detail::frame(bytes, "zkc.language-catalog/1");

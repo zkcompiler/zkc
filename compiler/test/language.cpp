@@ -447,6 +447,66 @@ void protocolApplications() {
     });
   });
 }
+void managedServices() {
+  auto source = replace(read("services.zkc"), "module sample;", "module m;");
+  auto checked = original(source);
+  const auto &protocol = checked.entry().protocol();
+  require(protocol.services.size() == 1 && protocol.inputs.size() == 1,
+          "managed signature was mixed into data ports");
+  for (const auto &operation : protocol.body->operations)
+    if (auto *application = std::get_if<ProtocolApplication>(&operation.action))
+      require(application->services.size() == 2 &&
+                  application->services[0].index ==
+                      application->services[1].index,
+              "alias manufactured a new service root");
+  for (bool simplify : {false, true})
+    must(compileEntry(checked, {simplify, false}));
+  for (const auto &[from, to, code] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {"using(alias, coins)", "using(alias)", "source.service"},
+           {"using(alias, coins)", "using(unknown, coins)", "source.service"},
+           {"using(alias, coins)", "using(go, coins)", "source.service"},
+           {"Random<Fr> @V", "Random<Fr> @(P,V)", "source.service"},
+           {"Random<Fr> @V", "Random<Fr> @P", "source.service"},
+           {"Random<Fr>", "Random<bool>", "source.service"},
+           {"using alias = coins", "using go = coins", "source.shadow"},
+           {"using alias = coins", "using alias = go", "source.service"},
+           {"let unused = first.draw()", "let unused = first.draw(true)",
+            "source.service"},
+           {"let unused = first.draw()", "let unused = first.other()",
+            "source.service"},
+           {"let unused = first.draw()", "let first = first.draw()",
+            "source.shadow"},
+           {"let unused = first.draw()", "let unused = (first,)",
+            "source.name"},
+           {"guard @V go", "guard @P go", "source.roles"},
+           {"let unused = first.draw()", "let unused = send V -> P(first)",
+            "source.name"},
+           {"entry Demo = Run;",
+            "entry Demo = Run;fn bad(x:Random<Fr>)->(){return ();}",
+            "source.name"},
+       })
+    sourceRefuses(replace(source, from, to), code);
+  auto alternate = source + R"(
+    domain Small=field("koala-bear");
+    entry Other=Draw<Small>;
+  )";
+  auto project = check(alternate);
+  must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
+  refuses(closeEntry(project, "m::Other"), "source.service");
+  mutation(checked, "unused random occurrence omitted",
+           [](auto m) { first(m, "protocol.query")->erase(); });
+  mutation(checked, "guard omitted",
+           [](auto m) { first(m, "protocol.guard")->erase(); });
+  mutation(checked, "same-contract query root changed", [](auto m) {
+    auto *query = first(m, "protocol.query");
+    query->setOperand(0, query->getBlock()->getArgument(1));
+  });
+  mutation(checked, "query occurrence changed", [](auto m) {
+    first(m, "protocol.query")
+        ->setAttr("site", mlir::StringAttr::get(m.getContext(), "changed"));
+  });
+}
 void selectedClosure() {
   auto source = replace(read("application.zkc"), "module sample;", "module m;");
   auto project = check(source);
@@ -574,6 +634,8 @@ void bounds() {
 }
 } // namespace
 int main() {
+  stage = "managedServices";
+  managedServices();
   stage = "selectedClosure";
   selectedClosure();
   stage = "protocolApplications";

@@ -179,6 +179,15 @@ class Emitter {
         ++cursor;
       }
     }
+    Values services;
+    for (const auto &port : source.services) {
+      auto type =
+          protocol_ir::ServiceReferenceType::get(&context, port.contract);
+      services.push_back(cursor < block.getNumArguments()
+                             ? block.getArgument(cursor)
+                             : block.addArgument(type, location));
+      ++cursor;
+    }
     auto flatten = [&](ArrayRef<ValueId> ids) {
       Values result;
       for (auto id : ids)
@@ -336,11 +345,28 @@ class Emitter {
         if (!actual)
           return false;
         result = Values(actual->getResults());
+      } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
+        const auto &port = source.services[query->service.index];
+        auto *actual =
+            make("protocol.query", resultTypes, services[query->service.index],
+                 {text("method", "draw"), text("owner", decl.roles[port.owner]),
+                  text("site", site)});
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *guard = std::get_if<ProtocolGuard>(&op.action)) {
+        if (!make(
+                "protocol.guard", {}, values[guard->condition.index],
+                {text("owner", decl.roles[guard->owner]), text("site", site)}))
+          return false;
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
         const auto &target = project.declarations()[application->callee.index];
+        auto operands = flatten(application->operands);
+        for (auto service : application->services)
+          operands.push_back(services[service.index]);
         auto *actual =
-            make("protocol.apply", resultTypes, flatten(application->operands),
+            make("protocol.apply", resultTypes, operands,
                  {attr("callee",
                        mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
                   text("site", site),
@@ -472,6 +498,11 @@ public:
           for (unsigned i = 0; i < ts->size(); ++i)
             (input ? inRoles : outRoles).push_back(roles(decl, port.roles));
         }
+      for (const auto &port : decl.services) {
+        ins.push_back(
+            protocol_ir::ServiceReferenceType::get(&context, port.contract));
+        inRoles.push_back(roles(decl, {port.owner}));
+      }
       SmallVector<mlir::NamedAttribute> attrs{
           text("sym_name", decl.symbol),
           attr("function_type",

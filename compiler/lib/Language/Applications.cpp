@@ -28,7 +28,8 @@ bool BodyChecker::application(const Statement &statement) {
   std::set<std::string> seen;
   for (const auto &name : names)
     if (!checker.bindingName(decl, name, statement.span) ||
-        bindings.count(name) || !seen.insert(name).second)
+        bindings.count(name) || services.count(name) ||
+        !seen.insert(name).second)
       return checker.diagnostic ? false
                                 : fail("source.shadow",
                                        "duplicate or shadowing result binding",
@@ -65,6 +66,26 @@ bool BodyChecker::application(const Statement &statement) {
   if (!arguments)
     return false;
   auto substitution = checker.substitution(callee, *arguments);
+  if (expr.services.size() != callee.services.size())
+    return fail("source.service",
+                "protocol application managed port count differs", expr.span);
+  std::vector<ServiceId> managed;
+  for (unsigned i = 0; i < expr.services.size(); ++i) {
+    auto found = services.find(expr.services[i]);
+    if (found == services.end())
+      return fail("source.service",
+                  "application requires an existing managed binding",
+                  expr.span);
+    const auto &actual = body.services[found->second.index];
+    const auto &expected = callee.services[i];
+    auto field = checker.substitute(expected.field, substitution, expr.span);
+    if (!field)
+      return false;
+    if (*field != actual.field || mapping[expected.owner] != actual.owner)
+      return fail("source.service",
+                  "managed service field or mapped owner differs", expr.span);
+    managed.push_back(found->second);
+  }
   std::vector<ValueId> operands;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     const auto &port = callee.inputs[i];
@@ -106,9 +127,9 @@ bool BodyChecker::application(const Statement &statement) {
       return false;
     results.push_back({*type, mappedRoles(port), expr.span});
   }
-  auto emitted =
-      emitResults(ProtocolApplication{callee.id, operands, *arguments, mapping},
-                  std::move(results), expr.span);
+  auto emitted = emitResults(
+      ProtocolApplication{callee.id, operands, *arguments, mapping, managed},
+      std::move(results), expr.span);
   if (!emitted)
     return false;
   for (unsigned i = 0; i < names.size(); ++i)

@@ -282,6 +282,30 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         (input ? decl.inputs : decl.outputs).push_back(std::move(p));
       }
     }
+    for (const auto &src : source.services) {
+      if (decl.kind != Declaration::Kind::Protocol ||
+          src.type.kind != SyntaxType::Kind::Name ||
+          src.type.name != "Random" || src.type.arguments.size() != 1)
+        return fail("source.service", "expected a Random<Field> managed port",
+                    src.span);
+      if (!bindingName(decl, src.name, src.span) ||
+          llvm::any_of(decl.inputs,
+                       [&](const auto &p) { return p.name == src.name; }) ||
+          llvm::any_of(decl.services,
+                       [&](const auto &p) { return p.name == src.name; }))
+        return diagnostic ? false
+                          : fail("source.shadow",
+                                 "duplicate service or data binding", src.span);
+      auto field = type(decl, src.type.arguments.front(), depth + 1);
+      auto owner = roles(decl, src.roles, src.span);
+      if (!field || !owner)
+        return false;
+      if (field->kind != Type::Kind::Field || owner->size() != 1)
+        return fail("source.service",
+                    "managed random service requires a field and one owner",
+                    src.span);
+      decl.services.push_back({src.name, *field, owner->front(), src.span, {}});
+    }
     if (decl.kind == Declaration::Kind::Math && decl.effectAllowance &&
         (decl.effectAllowance->mayStop || decl.effectAllowance->opaque))
       return fail("source.effect", "math callable cannot allow ordered effects",

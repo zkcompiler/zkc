@@ -116,4 +116,18 @@ with case('protocol composition preserves distributed results'):
         bundle = commands.run([compiler, 'language-bundle', *args, *flags])
         (OUT / f'application-{optimized}.bundle').write_text(bundle)
 
+with case('managed aliases retain ordered queries and owner guards'):
+    args = ['--source-format=zkc', '--entry=sample::Demo',
+            f'--module=sample={FIXTURES / "services.zkc"}']
+    original = commands.run([compiler, 'language-emit', *args])
+    assert original.count('"protocol.query"') == 2
+    assert original.count('"protocol.guard"') == 1
+    schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+    assert schema['services'] == [{'name': 'coins', 'owner': 'V',
+                                   'contract': 'random.bls12-381.fr/1', 'native': 1}]
+    for optimized in (0, 1):
+        flags = [] if optimized else ['--no-simplify']
+        bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+        (OUT / f'services-{optimized}.bundle').write_text(bundle)
+
 counted()

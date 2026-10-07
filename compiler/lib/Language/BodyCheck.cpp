@@ -28,10 +28,37 @@ bool BodyChecker::data(const Type &type, Span span) {
                fail("source.mode", "mathematical values require Copy and Drop",
                     span));
 }
+bool BodyChecker::addService(const ServicePort &port) {
+  if (!protocol() || !checker.bindingName(decl, port.name, port.span) ||
+      !checker.chargeType(port.field, port.span))
+    return false;
+  if (bindings.count(port.name) ||
+      !services.emplace(port.name, ServiceId{uint32_t(body.services.size())})
+           .second)
+    return fail("source.shadow", "duplicate service or data binding",
+                port.span);
+  body.services.push_back(port);
+  return true;
+}
+std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
+  if (expr.kind != Expression::Kind::Name) {
+    fail("source.service", "service reference must name a managed binding",
+         expr.span);
+    return {};
+  }
+  auto found = services.find(expr.text);
+  if (found == services.end()) {
+    fail("source.service", "unknown managed service: " + expr.text, expr.span);
+    return {};
+  }
+  return found->second;
+}
 bool BodyChecker::addInput(StringRef name, const Type &type,
                            std::vector<unsigned> components, Span span) {
   if (!checker.bindingName(decl, name, span) || !checker.chargeType(type, span))
     return false;
+  if (services.count(name.str()))
+    return fail("source.shadow", "data binding shadows a service", span);
   if (!bindings.emplace(name.str(), ValueId{uint32_t(body.values.size())})
            .second)
     return fail("source.duplicate", "duplicate local input or capture", span);
@@ -269,6 +296,21 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
                       bool isProtocol) {
   for (auto &s : source.statements) {
     owner.reset();
+    if (s.kind == Statement::Kind::Alias) {
+      if (!protocol() || s.owner || !checker.bindingName(decl, s.name, s.span))
+        return checker.diagnostic
+                   ? false
+                   : fail("source.mode",
+                          "service aliases require protocol mode", s.span);
+      auto root = service(syntax.expressions[s.expression]);
+      if (!root)
+        return false;
+      if (bindings.count(s.name) || !services.emplace(s.name, *root).second)
+        return fail("source.shadow",
+                    "service alias shadows an existing binding", s.span);
+      ++statement;
+      continue;
+    }
     if (syntax.expressions[s.expression].kind == Expression::Kind::Apply) {
       if (!application(s))
         return false;
@@ -287,7 +329,8 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     if (s.kind == Statement::Kind::Let &&
         !checker.bindingName(decl, s.name, s.span))
       return false;
-    if (s.kind == Statement::Kind::Let && bindings.count(s.name))
+    if (s.kind == Statement::Kind::Let &&
+        (bindings.count(s.name) || services.count(s.name)))
       return fail("source.shadow", "binding shadows an existing local", s.span);
     std::optional<Type> expected;
     if (s.type) {
@@ -295,11 +338,23 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       if (!expected)
         return false;
     }
-    if (s.kind == Statement::Kind::Require)
+    if (s.kind == Statement::Kind::Require || s.kind == Statement::Kind::Guard)
       expected = Type{};
     auto value = expression(s.expression, expected);
     if (!value)
       return false;
+    if (s.kind == Statement::Kind::Guard) {
+      if (!protocol() || !owner ||
+          !llvm::is_contained(body.values[value->index].components, *owner))
+        return fail("source.roles",
+                    "guard condition must be available at its owner", s.span);
+      if (!use(*value, s.span) ||
+          !emitResults(ProtocolGuard{*value, *owner}, {}, s.span))
+        return false;
+      body.mayStop = true;
+      ++statement;
+      continue;
+    }
     if (s.owner) {
       const auto *call =
           body.operations.empty()
@@ -519,6 +574,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                         p.span))
       return false;
   }
+  for (const auto &service : decl.services)
+    if (!check.addService(service))
+      return false;
   for (auto &p : decl.outputs) {
     auto caps = permissions(p.type, p.span, &decl);
     if (!caps)
