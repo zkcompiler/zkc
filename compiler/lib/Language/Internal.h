@@ -52,6 +52,7 @@ struct SyntaxType {
   enum class Kind {
     Name,
     Builtin,
+    Formal,
     Natural,
     Add,
     Multiply,
@@ -88,6 +89,7 @@ struct Expression {
     Boolean,
     Call,
     Kernel,
+    Intrinsic,
     Apply,
     MethodCall,
     Repeat,

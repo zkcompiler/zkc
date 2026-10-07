@@ -22,7 +22,7 @@ Type parameterType(const Parameter &p) {
     value.arguments = p.arguments;
   return value;
 }
-bool runtimeType(const Type &type) {
+bool valueType(const Type &type) {
   return type.kind != Type::Kind::Natural && type.kind != Type::Kind::Component;
 }
 bool Checker::chargeType(const Type &type, Span span) {
@@ -240,7 +240,9 @@ bool Checker::checkArguments(const Declaration &target, ArrayRef<Type> args,
       kind = a.kind == Type::Kind::Natural;
       break;
     case Parameter::Sort::Type:
-      kind = runtimeType(a);
+      kind = valueType(a);
+      if (kind && !executableType(a, span))
+        return false;
       break;
     case Parameter::Sort::Component: {
       kind = a.kind == Type::Kind::Component;
@@ -285,7 +287,7 @@ bool Checker::checkArguments(const Declaration &target, ArrayRef<Type> args,
     }
     if (!kind)
       return fail("source.generic", "static argument has wrong sort", span);
-    if (runtimeType(a)) {
+    if (valueType(a)) {
       auto caps = permissions(a, span, context);
       if (!caps)
         return false;
@@ -331,7 +333,7 @@ std::optional<Type> Checker::type(const Declaration &context,
   }
   using S = SyntaxType::Kind;
   using K = Type::Kind;
-  if (s.kind == S::Builtin) {
+  if (s.kind == S::Builtin || s.kind == S::Formal) {
     std::vector<Type> arguments;
     for (const auto &syntax : s.arguments) {
       auto argument = type(context, syntax, depth + 1);
@@ -339,9 +341,11 @@ std::optional<Type> Checker::type(const Declaration &context,
         return {};
       arguments.push_back(std::move(*argument));
     }
-    auto result = builtinType(s.name, arguments);
+    auto result = s.kind == S::Formal ? formalType(s.name, arguments)
+                                      : builtinType(s.name, arguments);
     if (!result) {
-      fail("source.builtin", toString(result.takeError()), s.span);
+      fail(s.kind == S::Formal ? "source.formal" : "source.builtin",
+           toString(result.takeError()), s.span);
       return {};
     }
     return std::move(*result);
@@ -405,7 +409,7 @@ std::optional<Type> Checker::type(const Declaration &context,
          count = type(context, s.arguments[1], depth + 1);
     if (!element || !count)
       return {};
-    if (!runtimeType(*element) || count->kind != K::Natural) {
+    if (!valueType(*element) || count->kind != K::Natural) {
       fail("source.type", "array requires an element type and natural length",
            s.span);
       return {};
@@ -427,7 +431,7 @@ std::optional<Type> Checker::type(const Declaration &context,
       auto t = type(context, child, depth + 1);
       if (!t)
         return {};
-      if (!runtimeType(*t)) {
+      if (!valueType(*t)) {
         fail("source.type", "static term in tuple type", s.span);
         return {};
       }

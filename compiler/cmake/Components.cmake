@@ -37,6 +37,7 @@ add_zkc_component(Contracts
   lib/Contracts/TypeRepresentations.cpp
   lib/Contracts/Implementations.cpp
   lib/Contracts/Operations.cpp
+  lib/Contracts/Mathematical.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
   lib/Contracts/NativePolicy.cpp
@@ -59,6 +60,7 @@ add_zkc_component(Language
   lib/Language/Calls.cpp
   lib/Language/Builtins.cpp
   lib/Language/Kernels.cpp
+  lib/Language/Intrinsics.cpp
   lib/Language/Applications.cpp
   lib/Language/Repetition.cpp
   lib/Language/Completion.cpp

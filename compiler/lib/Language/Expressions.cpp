@@ -12,9 +12,11 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     return {};
   }
   using K = Expression::Kind;
-  if (expr.kind == K::Kernel) {
+  if (expr.kind == K::Kernel || expr.kind == K::Intrinsic) {
     std::vector<Type> arguments;
-    auto signature = kernelSignature(expr, arguments);
+    auto signature = expr.kind == K::Kernel
+                         ? kernelSignature(expr, arguments)
+                         : intrinsicSignature(expr, arguments);
     if (!signature)
       return {};
     return signature->resultType();
@@ -146,6 +148,8 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   }
   if (expr.kind == K::Kernel) {
     result = kernel(expr, depth);
+  } else if (expr.kind == K::Intrinsic) {
+    result = intrinsic(expr, depth);
   } else if (expr.kind == K::MethodCall) {
     if (!protocol() || owner || expr.text != "draw" ||
         expr.children.size() != 1) {

@@ -305,7 +305,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   std::vector<ValueId> args;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     auto type = checker.substitute(callee.inputs[i].type, subst, expr.span);
-    if (!type)
+    if (!type || (!math() && !checker.executableType(*type, expr.span)))
       return {};
     auto selectedOwner = owner;
     owner.reset();

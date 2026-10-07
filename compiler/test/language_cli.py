@@ -106,6 +106,16 @@ for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
         if name == 'resource':
             assert schema['inputs'] == schema['outputs'] == []
 
+for entry in ('Demo', 'LocalDemo'):
+    with case(f'formal source mathematics: {entry}'):
+        args = ['--source-format=zkc', f'--entry=sample::{entry}',
+                f'--module=sample={FIXTURES / "polynomial.zkc"}']
+        for optimized in (0, 1):
+            for released in (0, 1):
+                flags = ([] if optimized else ['--no-simplify']) + (['--release-storage'] if released else [])
+                bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+                (OUT / f'polynomial-{entry}-{optimized}-{released}.bundle').write_text(bundle)
+
 with case('protocol composition preserves distributed results'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / "application.zkc"}']

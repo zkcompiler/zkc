@@ -2,6 +2,7 @@
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Registry.h"
@@ -23,6 +24,7 @@ class Emitter {
   mlir::MLIRContext &context;
   mlir::OpBuilder builder;
   mlir::Location location;
+  StringRef declaration;
   Layouts layouts;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   mlir::Block *definitions = nullptr;
@@ -70,13 +72,32 @@ class Emitter {
   std::optional<SmallVector<mlir::Type>> types(const Layout &layout) {
     SmallVector<mlir::Type> result;
     for (auto &leaf : layout.leaves) {
-      if (leaf.size() + 1 > remaining) {
+      if (leaf.cost() > remaining) {
         failure =
             error("source.limit", "native type emission work limit exceeded");
         return {};
       }
-      remaining -= leaf.size() + 1;
-      auto bound = take(protocol::parseBoundType(leaf, false));
+      remaining -= leaf.cost();
+      if (const auto *polynomial = leaf.polynomial()) {
+        std::string diagnostics;
+        mlir::ScopedDiagnosticHandler handler(
+            &context, [&](mlir::Diagnostic &diagnostic) {
+              raw_string_ostream stream(diagnostics);
+              diagnostic.print(stream);
+              return mlir::success();
+            });
+        auto type = poly::PolynomialType::getChecked(
+            [&] { return mlir::emitError(location); }, &context,
+            StringRef(polynomial->field), polynomial->arity);
+        if (!type) {
+          failure = error("target.admission",
+                          "in " + declaration + ": " + diagnostics);
+          return {};
+        }
+        result.push_back(type);
+        continue;
+      }
+      auto bound = take(protocol::parseBoundType(*leaf.data(), false));
       if (!bound)
         return {};
       auto type = protocol::decodeBoundType(&context, *bound);
@@ -308,7 +329,9 @@ class Emitter {
         if (!input)
           return false;
         for (unsigned i = 0; i < (**input).leaves.size(); ++i)
-          if (StringRef((**input).leaves[i]).starts_with("resource_unit:") &&
+          if ((**input).leaves[i].data() &&
+              StringRef(*(**input).leaves[i].data())
+                  .starts_with("resource_unit:") &&
               !retire(values[consume->input.index][i],
                       site + "_" + std::to_string(i)))
             return false;
@@ -355,6 +378,48 @@ class Emitter {
           case MathematicalIdentity::GroupEqual:
             name = "algebra.group_equal";
             break;
+          case MathematicalIdentity::ArrayFromElements:
+            name = "tensor.from_elements";
+            break;
+          case MathematicalIdentity::ArrayAt:
+            name = "algebra.array_at";
+            break;
+          case MathematicalIdentity::PolynomialConstant:
+            name = "poly.constant";
+            break;
+          case MathematicalIdentity::PolynomialFromCoefficients:
+            name = "poly.from_coefficients";
+            break;
+          case MathematicalIdentity::PolynomialMLE:
+            name = "poly.mle";
+            break;
+          case MathematicalIdentity::PolynomialAdd:
+            name = "poly.add";
+            break;
+          case MathematicalIdentity::PolynomialMultiply:
+            name = "poly.multiply";
+            break;
+          case MathematicalIdentity::PolynomialFix:
+            name = "poly.fix";
+            break;
+          case MathematicalIdentity::PolynomialSum:
+            name = "poly.sum_suffix";
+            break;
+          case MathematicalIdentity::PolynomialEvaluate:
+            name = "poly.evaluate";
+            break;
+          case MathematicalIdentity::PolynomialCoefficients:
+            name = "poly.coefficients";
+            break;
+          case MathematicalIdentity::PolynomialEvaluateDomain:
+            name = "poly.evaluate_domain";
+            break;
+          case MathematicalIdentity::PolynomialInterpolate:
+            name = "poly.interpolate";
+            break;
+          case MathematicalIdentity::PolynomialFixTable:
+            name = "poly.fix_table";
+            break;
           default:
             failure =
                 error("source.emission", "unsupported mathematical identity");
@@ -363,6 +428,18 @@ class Emitter {
           SmallVector<mlir::NamedAttribute> attrs;
           if (!math->literal.empty())
             attrs.push_back(text("value", math->literal));
+          if (math->identity == MathematicalIdentity::ArrayAt ||
+              math->identity == MathematicalIdentity::PolynomialSum) {
+            auto value = math->staticArguments[2].dimension.closedValue();
+            attrs.push_back(attr(math->identity == MathematicalIdentity::ArrayAt
+                                     ? "index"
+                                     : "count",
+                                 builder.getI64IntegerAttr(value)));
+          }
+          if (math->identity ==
+                  MathematicalIdentity::PolynomialEvaluateDomain ||
+              math->identity == MathematicalIdentity::PolynomialInterpolate)
+            attrs.push_back(attr("points", strings(math->parameters)));
           actual = make(name, resultTypes, operands, attrs);
           break;
         }
@@ -612,6 +689,7 @@ public:
     for (auto &decl : project.declarations()) {
       if (!decl.body || !decl.parameters.empty())
         continue;
+      declaration = decl.qualifiedName;
       SmallVector<mlir::Type> ins, outs;
       SmallVector<mlir::Attribute> inRoles, outRoles;
       for (bool input : {true, false})

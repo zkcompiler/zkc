@@ -59,6 +59,8 @@ std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
 }
 bool BodyChecker::addInput(StringRef name, const Type &type,
                            std::vector<unsigned> components, Span span) {
+  if (!math() && !checker.executableType(type, span))
+    return false;
   if (!checker.bindingName(decl, name, span) || !checker.chargeType(type, span))
     return false;
   if (services.count(name.str()))
@@ -87,6 +89,8 @@ BodyChecker::emitResults(decltype(Operation::action) action,
                                          "operation count", span)))
     return {};
   for (const auto &value : results) {
+    if (!math() && !checker.executableType(value.type, span))
+      return {};
     if (!checker.chargeType(value.type, span) ||
         !checker.charge(value.components.size() + 1, span))
       return {};
@@ -397,6 +401,8 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
           !active(*receiver, s.span))
         return false;
       auto before = body.values[value->index];
+      if (!checker.executableType(before.type, s.span))
+        return false;
       auto caps = checker.permissions(before.type, s.span, &decl);
       if (!caps)
         return false;
@@ -425,6 +431,8 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
         return fail("source.roles",
                     "binding cannot gain participant availability", s.span);
       if (*selected != before.components) {
+        if (!checker.executableType(before.type, s.span))
+          return false;
         auto caps = checker.permissions(before.type, s.span, &decl);
         if (!caps)
           return false;

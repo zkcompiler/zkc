@@ -75,7 +75,8 @@ bool isReserved(StringRef name) {
       "repeat", "match",     "for",       "in",        "capture",   "carry",
       "yield",  "drop",      "consume",   "require",   "stop",      "opaque",
       "Type",   "Field",     "Group",     "Copy",      "Drop",      "Share",
-      "Wire",   "completes", "finish_if", "builtin",   "kernel",    "pow2"};
+      "Wire",   "completes", "finish_if", "builtin",   "kernel",    "pow2",
+      "formal", "intrinsic"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {
@@ -313,6 +314,10 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
                 layouts.get(body.values[exchange->payload.index].type);
             if (!layout)
               return layout.takeError();
+            if ((*layout)->formal)
+              return detail::failure("source.formal",
+                                     "message cannot contain formal values",
+                                     op.span);
             if ((*layout)->leaves.empty())
               return detail::failure(
                   "source.wire", "message requires a nonempty native payload",
@@ -369,6 +374,11 @@ std::string installedCatalogIdentity() {
   for (const auto &rep : catalog.allRepresentations())
     row({"representation", rep.identity, rep.kind, rep.domain, rep.layout,
          rep.isDefault ? "default" : "explicit"});
+  for (const auto &intrinsic : mathematicalIntrinsics())
+    row({"mathematical-intrinsic", intrinsic.name,
+         std::to_string(static_cast<unsigned>(intrinsic.identity)),
+         std::to_string(intrinsic.naturals),
+         intrinsic.domainPoints ? "domain" : "none"});
   for (const auto &kernel : protocol::kernels()) {
     std::string value;
     detail::frame(value, "kernel");

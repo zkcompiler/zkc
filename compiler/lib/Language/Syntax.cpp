@@ -256,10 +256,13 @@ private:
       if (!expect("(") || !type(exponent, depth + 1) || !expect(")"))
         return false;
       out.arguments.push_back(std::move(exponent));
-    } else if (take("builtin")) {
-      out.kind = SyntaxType::Kind::Builtin;
+    } else if (at("builtin") || at("formal")) {
+      out.kind =
+          take("formal") ? SyntaxType::Kind::Formal : SyntaxType::Kind::Builtin;
+      if (out.kind == SyntaxType::Kind::Builtin)
+        advance();
       if (!expect("(") || current().kind != TokenKind::String)
-        return fail("source.syntax", "builtin requires a constructor string");
+        return fail("source.syntax", "type constructor requires a name string");
       out.name = text().drop_front().drop_back().str();
       advance();
       while (take(",")) {
@@ -690,8 +693,11 @@ private:
         return {};
       if (take("using") && !names(value.services))
         return {};
-    } else if (take("kernel")) {
-      value.kind = Expression::Kind::Kernel;
+    } else if (at("kernel") || at("intrinsic")) {
+      value.kind = take("intrinsic") ? Expression::Kind::Intrinsic
+                                     : Expression::Kind::Kernel;
+      if (value.kind == Expression::Kind::Kernel)
+        advance();
       if (take("<")) {
         do {
           SyntaxType argument;
@@ -703,7 +709,8 @@ private:
           return {};
       }
       if (!expect("(") || current().kind != TokenKind::String) {
-        fail("source.syntax", "kernel requires an installed contract string");
+        fail("source.syntax",
+             "operation hook requires an installed identity string");
         return {};
       }
       value.text = text().drop_front().drop_back().str();
@@ -717,7 +724,8 @@ private:
       if (take(";")) {
         do {
           if (current().kind != TokenKind::String) {
-            fail("source.syntax", "kernel parameters must be literal strings");
+            fail("source.syntax",
+                 "operation parameters must be literal strings");
             return {};
           }
           value.labels.push_back(text().drop_front().drop_back().str());

@@ -608,6 +608,32 @@ fn main() {
     let values = returned(&mut helpers);
     expect_field(&values[0], 4);
     assert!(matches!(values[1], Value::Bool(true)));
+    for entry in ["Demo", "LocalDemo"] {
+        for optimized in [0, 1] {
+            for released in [0, 1] {
+                let bundle = load(&format!("polynomial-{entry}-{optimized}-{released}.bundle"));
+                for (a, b, x) in [(2, 3, 5), (0, 1, 0), (4, 9, 2)] {
+                    let result = returned(&mut runner(
+                        &bundle,
+                        "P",
+                        vec![field(a), field(b), field(x)],
+                    ));
+                    let expected = [
+                        a + (b - a) * x,
+                        a + b,
+                        a + (b - a) * x,
+                        b * b,
+                        a + b * x,
+                        a + b,
+                    ];
+                    assert_eq!(result.len(), expected.len());
+                    for (value, expected) in result.iter().zip(expected) {
+                        expect_field(value, expected);
+                    }
+                }
+            }
+        }
+    }
     for optimized in [0, 1] {
         let bundle = |name: &str| load(&format!("typed-{name}-{optimized}.bundle"));
         for (name, inputs, expected) in [

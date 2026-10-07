@@ -59,7 +59,8 @@ is a singleton tuple; `(T)` is grouping. A record's identity includes its declar
 and every static argument, including phantom arguments. Variant identity includes
 its declaration and static arguments, not only its payload layout. Aliases expand
 without creating a nominal identity. Variant payloads are positional; a variant
-has one to 32 distinct alternatives.
+has one to 32 distinct alternatives. Formal mathematical types have a separate
+[authoring contract](#formal-mathematics).
 
 Domain declarations require an installed identity of the declared sort. A group's
 `Scalar` association gives its scalar field. Static parameters use `Type`, `Field`,
@@ -156,6 +157,72 @@ The catalog's construction stage includes runtime sequence operations; it does
 not move those calls into Entry setup. Kernels cannot occur in `math fn` or directly
 in protocol expressions. Protocols call library wrappers with an explicit local
 owner. These bindings install no new backend, mathematical identity or provider.
+
+## Formal mathematics
+
+```text
+type Array<F: Field, N: nat> = builtin("field_array", F, N);
+type Poly<F: Field, N: nat> = formal("polynomial", F, N);
+math fn multilinear<F: Field, N: nat>(table: Array<F, pow2(N)>) -> Poly<F, N> {
+  return intrinsic<F, N>("poly.mle", table);
+}
+math fn evaluate<F: Field, N: nat>(p: Poly<F, N>, point: [F; N]) -> F {
+  return intrinsic<F, N>("poly.evaluate", p, point);
+}
+```
+
+A formal polynomial denotes an expression over a field and an ordered list of
+variables. It is an SSA value in mathematical MLIR and has no executable value
+encoding. Its type carries the field and natural arity. It has Copy and Drop,
+but no Share or Wire. Mathematical helper ports, products, fixed arrays and
+ordinary record fields can contain formal values. A zero-length array retains
+its formal element meaning even though it has no SSA leaves.
+
+Formal values are confined to mathematical helpers. Protocol and local-function
+ports and body values require executable types, including messages, explicit role
+restriction operations and distributed loop carriers/captures. The same restriction applies to `Type` static arguments, variants,
+associated representations and native container arguments. These checks inspect
+representation recursively, including private fields; permission annotations
+cannot make a formal type executable. Arrays of length zero still require a
+closed element layout and retain the element permissions. This also applies to
+executable elements and is reflected in the source interface schema. A mathematical helper with executable ports may use formal values
+internally and be realized inside local code through the common compiler path.
+
+`intrinsic<...>("name", operands...; "point", ...)` is a library hook admitted
+inside `math fn`. It emits a typed mathematical operation directly. Libraries
+can wrap it with ordinary named functions. Static roots are explicit: one field
+followed by the naturals listed below. Here `A(L)` means `Array<F,L>` and `P(N)`
+means `Poly<F,N>`; `[F;K]` is a structural source array, flattened in order.
+
+| Intrinsic | Natural roots | Input → output |
+|---|---|---|
+| `array.pack` | `L` | `[F;L] → A(L)` |
+| `array.at` | `L,I` | `A(L) → F`, requiring `I + 1 <= L` |
+| `poly.constant` | `N` | `F → P(N)` |
+| `poly.from_coefficients` | `L` | `A(L) → P(1)`, requiring `1 <= L` |
+| `poly.mle` | `N` | `A(pow2(N)) → P(N)` |
+| `poly.add`, `poly.multiply` | `N` | `(P(N),P(N)) → P(N)` |
+| `poly.fix` | `N,K` | `(P(N+K),[F;K]) → P(N)` |
+| `poly.sum_suffix` | `N,C` | `P(N+C) → P(N)` |
+| `poly.evaluate` | `N` | `(P(N),[F;N]) → F` |
+| `poly.coefficients` | `L` | `P(1) → A(L)`, requiring `1 <= L` |
+| `poly.evaluate_domain` | none | `P(1) → A(L)` for `L` supplied points |
+| `poly.interpolate` | none | `A(L) → P(1)` for `L` supplied points |
+| `poly.fix_table` | `N,K` | `(A(pow2(N+K)),[F;K]) → A(pow2(N))` |
+
+Only the two domain intrinsics accept string parameters: one to 64 distinct,
+canonical field literals in declared order. A symbolic field supports only
+`0` and `1`; other literals need a concrete installed field. Explicit generic
+natural bounds use the same entailment rules as ordinary calls. Definition
+checking establishes logical shapes; closing rechecks the selected statics.
+
+Native mathematical admission and preparation enforce the selected representation
+and expansion limits, including arity at most 32. Coefficient extraction also
+requires a derived degree bound that fits the result array. The polynomial
+compiler checks every observation before eliminating unused expressions, including
+observations exposed by helper expansion. Source typing does not supply a degree
+certificate. The mathematical IR retains these expressions for analysis before
+polynomial elimination produces ordinary executable calculations.
 
 ## Permissions and abstraction
 

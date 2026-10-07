@@ -17,8 +17,10 @@ std::string spelling(const Type &type) {
   default:
     break;
   }
-  if (type.kind == K::Builtin) {
-    std::string result = "builtin(\"" + type.domain + "\"";
+  if (type.kind == K::Builtin || type.kind == K::Formal) {
+    std::string result =
+        std::string(type.kind == K::Formal ? "formal(\"" : "builtin(\"") +
+        type.domain + "\"";
     for (const auto &argument : type.arguments)
       result += ", " + spelling(argument);
     return result + ")";

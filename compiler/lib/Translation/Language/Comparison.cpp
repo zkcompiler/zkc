@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
@@ -84,16 +85,23 @@ class Comparator {
     }
     return true;
   }
-  bool types(mlir::TypeRange actual, ArrayRef<std::string> expected) {
+  bool types(mlir::TypeRange actual, ArrayRef<LayoutLeaf> expected) {
     if (actual.size() != expected.size())
       return fail("native layout arity differs");
     for (unsigned i = 0; i < actual.size(); ++i) {
-      if (!charge(expected[i].size() + 1))
+      if (!charge(expected[i].cost()))
         return false;
+      if (const auto *polynomial = expected[i].polynomial()) {
+        auto type = mlir::dyn_cast<poly::PolynomialType>(actual[i]);
+        if (!type || type.getDomain() != polynomial->field ||
+            type.getArity() != polynomial->arity)
+          return fail("formal polynomial layout differs");
+        continue;
+      }
       auto type = take(protocol::encodeBoundType(actual[i], false));
       if (!type)
         return false;
-      if (type->spelling() != expected[i])
+      if (type->spelling() != *expected[i].data())
         return fail("native layout type differs");
     }
     return true;
@@ -123,7 +131,7 @@ class Comparator {
   std::optional<Values>
   primitive(mlir::Block &block, mlir::Block::iterator &cursor,
             const LocalPrimitive &expected, mlir::ValueRange operands,
-            ArrayRef<std::string> outputs, Span span, StringRef site) {
+            ArrayRef<LayoutLeaf> outputs, Span span, StringRef site) {
     if (!expected.bindingArguments && expected.contract == "bool.constant") {
       auto *actual = next(block, cursor, span, "local.bool_constant", {}, 1);
       if (!actual)
@@ -302,7 +310,7 @@ class Comparator {
     };
     for (auto &op : source.operations) {
       std::vector<std::shared_ptr<const Layout>> resultLayouts;
-      std::vector<std::string> leaves;
+      std::vector<LayoutLeaf> leaves;
       for (auto id : op.results) {
         auto layout = take(layouts.get(source.values[id.index].type));
         if (!layout)
@@ -343,7 +351,7 @@ class Comparator {
           if (resultLayouts.front()->custody) {
             auto created = primitive(
                 block, cursor, LocalPrimitive{"resource_unit.create", {}, {}},
-                {}, ArrayRef<std::string>(leaves).take_front(), op.span,
+                {}, ArrayRef<LayoutLeaf>(leaves).take_front(), op.span,
                 site + "_create");
             if (!created)
               return false;
@@ -369,20 +377,23 @@ class Comparator {
         if (!input)
           return false;
         for (unsigned i = 0; i < (**input).leaves.size(); ++i)
-          if (StringRef((**input).leaves[i]).starts_with("resource_unit:") &&
+          if ((**input).leaves[i].data() &&
+              StringRef(*(**input).leaves[i].data())
+                  .starts_with("resource_unit:") &&
               !retire(block, cursor, values[consume->input.index][i], op.span,
                       site + "_" + std::to_string(i)))
             return false;
       } else if (auto *math = std::get_if<MathValue>(&op.action)) {
-        auto *actual = next(block, cursor, op.span, "", flatten(math->operands),
-                            leaves.size());
+        auto operands = flatten(math->operands);
+        auto *actual =
+            next(block, cursor, op.span, "", operands, leaves.size());
         if (!actual)
           return false;
         auto interface = mlir::dyn_cast<MathematicalOpInterface>(actual);
         if (!interface || interface.getMathematicalIdentity() != math->identity)
           return fail("mathematical operation identity differs");
         auto dependencies = interface.getOperandDependencies(0);
-        if (dependencies.size() != math->operands.size())
+        if (dependencies.size() != operands.size())
           return fail("mathematical dependency arity differs");
         for (unsigned i = 0; i < dependencies.size(); ++i)
           if (dependencies[i] != i)
@@ -401,6 +412,24 @@ class Comparator {
           if (!attributes(*actual, {"predicate"}) || !cmp ||
               cmp.getPredicate() != mlir::arith::CmpIPredicate::eq)
             return fail("Boolean comparison differs");
+        } else if (math->identity == MathematicalIdentity::ArrayAt ||
+                   math->identity == MathematicalIdentity::PolynomialSum) {
+          StringRef key = math->identity == MathematicalIdentity::ArrayAt
+                              ? "index"
+                              : "count";
+          auto value = actual->getAttrOfType<mlir::IntegerAttr>(key);
+          if (!attributes(*actual, {key}) || !value ||
+              !value.getType().isSignlessInteger(64) ||
+              value.getValue().getZExtValue() !=
+                  math->staticArguments[2].dimension.closedValue())
+            return fail("mathematical static coordinate differs");
+        } else if (math->identity ==
+                       MathematicalIdentity::PolynomialEvaluateDomain ||
+                   math->identity ==
+                       MathematicalIdentity::PolynomialInterpolate) {
+          if (!attributes(*actual, {"points"}) ||
+              !strings(actual->getAttr("points"), math->parameters))
+            return fail("polynomial domain differs");
         } else if (!attributes(*actual, {}))
           return fail("extra mathematical attributes");
         result = Values(actual->getResults());
@@ -781,7 +810,7 @@ public:
       if (!signature)
         return error("source.correspondence", "missing definition signature");
       for (bool input : {true, false}) {
-        std::vector<std::string> leaves;
+        std::vector<LayoutLeaf> leaves;
         auto roles = function.getAttrOfType<mlir::ArrayAttr>(
             input ? "input_roles" : "output_roles");
         unsigned flat = 0;

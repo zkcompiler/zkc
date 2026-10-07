@@ -44,6 +44,15 @@ Expected<std::string> kernelArgument(const Type &type, StringRef sort) {
   }
   return error("source.builtin", "installed static argument sort differs");
 }
+Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
+  if (name != "polynomial" || arguments.size() != 2 ||
+      arguments[0].kind != K::Field || arguments[1].kind != K::Natural)
+    return error("source.formal",
+                 "formal polynomial requires a field and natural arity");
+  Type result(K::Formal, name.str());
+  result.arguments.assign(arguments.begin(), arguments.end());
+  return result;
+}
 Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
   if (name == "bool" && arguments.empty())
     return Type{};

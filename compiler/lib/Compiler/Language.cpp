@@ -92,10 +92,13 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
       auto layout = layouts.get(port.type);
       if (!layout)
         return layout.takeError();
+      if ((*layout)->formal)
+        return error("source.formal",
+                     "interface ports cannot contain formal values");
       (input ? inputs : outputs).push_back(*layout);
     }
   uint64_t remaining = limits.work;
-  bool limited = false;
+  bool limited = false, formal = false;
   auto charge = [&](uint64_t work) {
     if (limited || stream.overflow() || work > remaining) {
       limited = true;
@@ -149,9 +152,14 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
       });
       out.attributeArray("leaves", [&] {
         for (auto &leaf : layout.leaves) {
-          if (!charge(leaf.size() + 1))
+          if (!charge(leaf.cost()))
             break;
-          out.value(leaf);
+          const auto *data = leaf.data();
+          if (!data) {
+            formal = true;
+            break;
+          }
+          out.value(*data);
         }
       });
     });
@@ -211,6 +219,8 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
       }
     });
   });
+  if (formal)
+    return error("source.formal", "interface schema contains formal leaves");
   if (limited || stream.overflow())
     return error("source.limit", "interface traversal or byte limit exceeded");
   return Error::success();

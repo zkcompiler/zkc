@@ -150,6 +150,8 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
     return Permissions{true, true, true, true};
+  if (type.kind == K::Formal)
+    return Permissions{true, true, false, false};
   if (type.kind == K::Builtin) {
     auto formed = builtinType(type.domain, type.arguments);
     if (!formed) {
@@ -232,6 +234,40 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
   }
   return result;
 }
+bool Checker::executableType(const Type &type, Span span, unsigned depth) {
+  if (depth > work.limits.typeDepth || !charge(1, span))
+    return diagnostic ? false
+                      : fail("source.limit", "executable type depth", span);
+  using K = Type::Kind;
+  if (type.kind == K::Formal)
+    return fail("source.formal",
+                "formal values cannot cross an executable boundary", span);
+  if (type.kind == K::Array || type.kind == K::Tuple ||
+      type.kind == K::Builtin) {
+    for (const auto &child : type.arguments)
+      if (!executableType(child, span, depth + 1))
+        return false;
+  } else if (type.kind == K::Record || type.kind == K::Associated) {
+    auto *decl = typeDeclaration(type);
+    if (type.kind == K::Associated && decl && decl->abstract)
+      return true;
+    auto children = fields(type, span, depth + 1);
+    if (!children)
+      return false;
+    for (const auto &child : *children)
+      if (!executableType(child.type, span, depth + 1))
+        return false;
+  } else if (type.kind == K::Variant) {
+    auto alts = alternatives(type, span, depth + 1);
+    if (!alts)
+      return false;
+    for (const auto &alt : *alts)
+      for (const auto &child : alt.fields)
+        if (!executableType(child.type, span, depth + 1))
+          return false;
+  }
+  return true;
+}
 bool Checker::mathematicalData(const Type &type, Span span,
                                const Declaration *scope, unsigned depth) {
   if (depth > work.limits.typeDepth || !charge(1, span))
@@ -285,6 +321,8 @@ bool Checker::constructorAllowed(const Declaration &context,
          decl->module.index == context.module.index;
 }
 bool Checker::ingress(const Type &type, Span span) {
+  if (!executableType(type, span))
+    return false;
   auto caps = permissions(type, span);
   return caps &&
          (caps->wire ||

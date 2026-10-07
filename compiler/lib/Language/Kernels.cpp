@@ -7,7 +7,7 @@
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<Checker::KernelSignature>
+std::optional<Checker::CallSignature>
 Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
                          ArrayRef<std::string> attributes, Span span) {
   auto stage = protocol::authoringStage(contract);
@@ -193,7 +193,7 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     }
     closedSignature = std::move(*selected);
   }
-  KernelSignature result;
+  CallSignature result;
   auto ports = [&](ArrayRef<generic::Type> source, std::vector<Type> &dest) {
     for (const auto &port : source) {
       auto type = port.term ? std::optional<Type>(terms[*port.term])
@@ -260,14 +260,14 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
   }
   return result;
 }
-Type Checker::KernelSignature::resultType() const {
+Type Checker::CallSignature::resultType() const {
   if (outputs.size() == 1)
     return outputs.front();
   Type result(outputs.empty() ? Type::Kind::Unit : Type::Kind::Tuple);
   result.arguments = outputs;
   return result;
 }
-std::optional<Checker::KernelSignature>
+std::optional<Checker::CallSignature>
 BodyChecker::kernelSignature(const Expression &expr,
                              std::vector<Type> &arguments) {
   for (const auto &syntax : expr.arguments) {

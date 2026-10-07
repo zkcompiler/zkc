@@ -41,9 +41,9 @@ Use the native mathematical pipeline as the target for migrated capabilities.
 The fresh `.zkc` source path covers mathematical helpers, nominal products/variants,
 static components/generics, permissions, bounded naturals, ordered local control,
 messages and selected Entries with independently checked MLIR emission. The next
-package is **Protocols and specifications**: first refine services, composition and
-distributed control against the existing IR, then specify typed predicates and
-attachments with an independent reader. Follow it with **Entries and Host** for
+package, **Protocols and specifications**, has implemented services, composition,
+distributed control and formal polynomial authorship against the existing IR.
+Typed predicates and attachments with an independent reader remain next. Follow it with **Entries and Host** for
 construction selection, trusted inputs and typed CLI jobs. Finish with integrated
 stabilization, consumer migration and removal of superseded paths.
 

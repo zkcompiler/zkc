@@ -2,7 +2,30 @@
 #define ZKC_LANGUAGE_LAYOUT_H
 #include "zkc/Language/Project.h"
 #include <map>
+#include <variant>
 namespace zkc::language {
+struct PolynomialLayout {
+  std::string field;
+  uint64_t arity;
+};
+/// One mathematical SSA leaf: executable native data or a formal polynomial.
+/// The variant makes it impossible to pass a formal type as a BoundType string.
+class LayoutLeaf {
+public:
+  LayoutLeaf(std::string data) : value(std::move(data)) {}
+  LayoutLeaf(const char *data) : value(std::string(data)) {}
+  LayoutLeaf(PolynomialLayout polynomial) : value(std::move(polynomial)) {}
+  const std::string *data() const { return std::get_if<std::string>(&value); }
+  const PolynomialLayout *polynomial() const {
+    return std::get_if<PolynomialLayout>(&value);
+  }
+  uint64_t cost() const {
+    return data() ? data()->size() + 1 : polynomial()->field.size() + 2;
+  }
+
+private:
+  std::variant<std::string, PolynomialLayout> value;
+};
 struct Layout;
 struct LayoutField {
   std::string name;
@@ -19,10 +42,12 @@ struct LayoutAlternative {
 struct Layout {
   Type type;
   Permissions permissions;
-  std::vector<std::string> leaves;
+  std::vector<LayoutLeaf> leaves;
   std::vector<LayoutField> fields;
   std::vector<LayoutAlternative> alternatives;
   bool custody = false;
+  /// Includes formal element meaning even when an array has zero leaves.
+  bool formal = false;
 };
 class Layouts {
 public:

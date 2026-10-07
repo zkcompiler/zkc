@@ -202,10 +202,13 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                     "component must implement an interface", decl.span);
       decl.implementation = *def;
     } else {
-      if (!runtimeType(*def))
+      if (!valueType(*def))
         return fail("source.type",
-                    "alias or representation must denote a runtime type",
+                    "alias or representation must denote a value type",
                     decl.span);
+      if (decl.kind == Declaration::Kind::Associated &&
+          !executableType(*def, decl.span))
+        return false;
       if (decl.kind == Declaration::Kind::Associated &&
           ((decl.associatedSort == "Field" && def->kind != Type::Kind::Field) ||
            (decl.associatedSort == "Group" && def->kind != Type::Kind::Group)))
@@ -229,7 +232,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       auto t = type(decl, src.type, depth + 1);
       if (!t)
         return false;
-      if (!runtimeType(*t))
+      if (!valueType(*t))
         return fail("source.type", "field cannot contain a static term",
                     src.span);
       to.push_back({src.name, *t, src.isPublic, src.span});
@@ -248,6 +251,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     alt.span = src.span;
     if (!fieldList(src.fields, alt.fields))
       return false;
+    for (const auto &field : alt.fields)
+      if (!executableType(field.type, field.span))
+        return false;
     decl.alternatives.push_back(std::move(alt));
   }
   if (decl.kind == Declaration::Kind::Variant &&
@@ -275,9 +281,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         auto t = type(decl, src.type, depth + 1);
         if (!t)
           return false;
-        if (!runtimeType(*t))
+        if (!valueType(*t))
           return fail("source.type", "port cannot contain a static term",
                       src.span);
+        if (decl.kind != Declaration::Kind::Math &&
+            !executableType(*t, src.span))
+          return false;
         Port p{src.name, *t, {}, src.span};
         if (decl.kind == Declaration::Kind::Protocol) {
           auto set = roles(decl, src.roles, src.span);

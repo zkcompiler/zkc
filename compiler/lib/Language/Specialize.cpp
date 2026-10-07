@@ -42,6 +42,8 @@ bool Checker::specialize(DeclarationId selected) {
         return false;
       if (!permissions(value.type, value.span))
         return false;
+      if (mode != Body::Mode::Math && !executableType(value.type, value.span))
+        return false;
       if (mode == Body::Mode::Local)
         value.components.clear();
     }
@@ -76,6 +78,33 @@ bool Checker::specialize(DeclarationId selected) {
         if (!primitive->staticArguments.empty())
           primitive->parameters = {std::to_string(
               primitive->staticArguments.front().dimension.closedValue())};
+      }
+      if (auto *math = std::get_if<MathValue>(&op.action);
+          math && !math->staticArguments.empty()) {
+        for (auto &argument : math->staticArguments)
+          if (!closeType(argument, bindings, op.span))
+            return false;
+        auto intrinsics = mathematicalIntrinsics();
+        auto intrinsic = llvm::find_if(intrinsics, [&](const auto &candidate) {
+          return candidate.identity == math->identity;
+        });
+        if (intrinsic == intrinsics.end())
+          return fail("source.intrinsic", "unknown mathematical hook", op.span);
+        auto signature =
+            intrinsicSignature(nullptr, intrinsic->name, math->staticArguments,
+                               math->parameters, op.span);
+        if (!signature)
+          return false;
+        if (math->operands.size() != signature->inputs.size() ||
+            op.results.size() != 1 ||
+            body.values[op.results.front().index].type !=
+                signature->resultType())
+          return fail("source.intrinsic",
+                      "specialized mathematical ports differ", op.span);
+        for (unsigned i = 0; i < math->operands.size(); ++i)
+          if (body.values[math->operands[i].index].type != signature->inputs[i])
+            return fail("source.intrinsic",
+                        "specialized mathematical input differs", op.span);
       }
       if (auto *exchange = std::get_if<Exchange>(&op.action)) {
         if (!ingress(body.values[exchange->payload.index].type, op.span))
@@ -204,6 +233,18 @@ bool Checker::specialize(DeclarationId selected) {
       for (const auto &value : body.values)
         if (!chargeType(value.type, value.span))
           return false;
+      for (const auto &op : body.operations)
+        if (const auto *math = std::get_if<MathValue>(&op.action)) {
+          if (!charge(math->operands.size() + math->literal.size() + 1,
+                      op.span))
+            return false;
+          for (const auto &arg : math->staticArguments)
+            if (!chargeType(arg, op.span))
+              return false;
+          for (const auto &parameter : math->parameters)
+            if (!charge(parameter.size() + 1, op.span))
+              return false;
+        }
       return true;
     };
     for (auto *ports : {&source.inputs, &source.outputs})

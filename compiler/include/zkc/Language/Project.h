@@ -107,6 +107,14 @@ struct MathValue {
   MathematicalIdentity identity;
   std::vector<ValueId> operands;
   std::string literal;
+  std::vector<Type> staticArguments;
+  std::vector<std::string> parameters;
+  MathValue(MathematicalIdentity identity, std::vector<ValueId> operands,
+            std::string literal, std::vector<Type> statics = {},
+            std::vector<std::string> parameters = {})
+      : identity(identity), operands(std::move(operands)),
+        literal(std::move(literal)), staticArguments(std::move(statics)),
+        parameters(std::move(parameters)) {}
 };
 struct HelperCall {
   DeclarationId callee;

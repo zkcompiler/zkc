@@ -3,7 +3,7 @@
 #include "Internal.h"
 namespace zkc::language::detail {
 Type parameterType(const Parameter &);
-bool runtimeType(const Type &);
+bool valueType(const Type &);
 using Substitution = std::map<std::string, Type>;
 class Checker {
 public:
@@ -48,19 +48,25 @@ public:
   const Declaration *typeDeclaration(const Type &) const;
   bool constructorAllowed(const Declaration &, const Type &) const;
   bool ingress(const Type &, Span);
+  // Checks representation, not permissions: even a zero-length formal array
+  // cannot become a runtime Type argument, port, region carrier or local value.
+  bool executableType(const Type &, Span, unsigned = 1);
   bool mathematicalData(const Type &, Span, const Declaration * = nullptr,
                         unsigned = 1);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   bool body(DeclarationId, unsigned);
   bool specialize(DeclarationId);
-  struct KernelSignature {
+  struct CallSignature {
     std::vector<Type> inputs, outputs;
     Type resultType() const;
   };
-  std::optional<KernelSignature> kernelSignature(llvm::StringRef,
-                                                 llvm::ArrayRef<Type>,
-                                                 llvm::ArrayRef<std::string>,
-                                                 Span);
+  std::optional<CallSignature> kernelSignature(llvm::StringRef,
+                                               llvm::ArrayRef<Type>,
+                                               llvm::ArrayRef<std::string>,
+                                               Span);
+  std::optional<CallSignature>
+  intrinsicSignature(const Declaration *, llvm::StringRef, llvm::ArrayRef<Type>,
+                     llvm::ArrayRef<std::string>, Span);
   bool symbolic(const Type &) const;
   Substitution substitution(const Declaration &, llvm::ArrayRef<Type>) const;
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);

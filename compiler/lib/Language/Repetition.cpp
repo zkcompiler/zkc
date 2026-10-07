@@ -60,6 +60,8 @@ bool BodyChecker::repeat(const Statement &statement) {
     if (!value || !use(*value, expr.span))
       return false;
     const auto &initial = body.values[value->index];
+    if (!checker.executableType(initial.type, expr.span))
+      return false;
     auto caps = checker.permissions(initial.type, expr.span, &decl);
     if (!caps)
       return false;
@@ -98,6 +100,8 @@ bool BodyChecker::repeat(const Statement &statement) {
       return fail("source.name", "unknown data capture: " + name, expr.span);
     auto value = found->second;
     const auto &captured = body.values[value.index];
+    if (!checker.executableType(captured.type, expr.span))
+      return false;
     auto caps = checker.permissions(captured.type, expr.span, &decl);
     if (!caps)
       return false;

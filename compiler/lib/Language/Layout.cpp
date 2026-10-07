@@ -203,7 +203,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   }
   auto addField = [&](StringRef name, const Type &field,
                       std::vector<LayoutField> &fields,
-                      std::vector<std::string> &leaves) -> Error {
+                      std::vector<LayoutLeaf> &leaves) -> Error {
     auto closed = substitute(field, bindings, depth + 1);
     if (!closed)
       return closed.takeError();
@@ -215,8 +215,9 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     if (auto e = charge(name.size() + 1))
       return e;
     for (const auto &leaf : (*layout)->leaves)
-      if (auto e = charge(leaf.size() + 1))
+      if (auto e = charge(leaf.cost()))
         return e;
+    result->formal |= (*layout)->formal;
     fields.push_back({name.str(), *layout, unsigned(leaves.size())});
     leaves.insert(leaves.end(), (*layout)->leaves.begin(),
                   (*layout)->leaves.end());
@@ -237,7 +238,20 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->leaves = {"field:" + type.domain};
   else if (type.kind == K::Group)
     result->leaves = {"group:" + type.domain};
-  else if (type.kind == K::Builtin) {
+  else if (type.kind == K::Formal) {
+    auto formed = formalType(type.domain, type.arguments);
+    if (!formed)
+      return formed.takeError();
+    auto field = builtinLayout(type.arguments[0]);
+    if (!field)
+      return field.takeError();
+    const auto &arity = type.arguments[1].dimension;
+    if (!arity.isClosed())
+      return error("source.generic", "formal layout requires a closed arity");
+    result->formal = true;
+    result->permissions = {true, true, false, false};
+    result->leaves = {PolynomialLayout{field->identity, arity.closedValue()}};
+  } else if (type.kind == K::Builtin) {
     auto native = builtinLayout(type);
     if (!native)
       return native.takeError();
@@ -267,6 +281,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       if (!layout)
         return layout.takeError();
       result->permissions = (*layout)->permissions;
+      result->formal = (*layout)->formal;
     }
     for (uint64_t i = 0; i < size; ++i)
       if (auto e = addField(std::to_string(i), type.arguments.front(),
@@ -289,10 +304,20 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     for (auto &alt : decl->alternatives) {
       LayoutAlternative logical{alt.name, {}};
       protocol::VariantAlternative native{alt.name, {}};
+      std::vector<LayoutLeaf> payload;
       for (auto &field : alt.fields)
-        if (auto e = addField(field.name, field.type, logical.fields,
-                              native.payload))
+        if (auto e = addField(field.name, field.type, logical.fields, payload))
           return e;
+      if (result->formal)
+        return error("source.formal",
+                     "variant payload cannot contain formal values");
+      for (const auto &leaf : payload) {
+        const auto *data = leaf.data();
+        if (!data)
+          return error("source.formal",
+                       "variant payload cannot contain formal leaves");
+        native.payload.push_back(*data);
+      }
       result->alternatives.push_back(std::move(logical));
       descriptor.alternatives.push_back(std::move(native));
     }
@@ -302,11 +327,15 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->leaves.push_back(std::move(*encoded));
   } else
     return error("source.layout", "type has no closed native layout");
-  for (auto &leaf : result->leaves) {
-    auto bound = protocol::parseBoundType(leaf, false);
-    if (!bound)
-      return bound.takeError();
-  }
+  if (result->formal && result->custody)
+    return error("source.formal",
+                 "formal values cannot have executable custody");
+  for (auto &leaf : result->leaves)
+    if (const auto *data = leaf.data()) {
+      auto bound = protocol::parseBoundType(*data, false);
+      if (!bound)
+        return bound.takeError();
+    }
   std::shared_ptr<const Layout> immutable = result;
   cache.emplace(std::move(key), immutable);
   return immutable;
