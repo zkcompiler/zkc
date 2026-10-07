@@ -15,6 +15,10 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(language CompilerCore language-api)
+mlir_target_link_libraries(zkc-language-test PRIVATE MLIRParser)
+target_compile_definitions(zkc-language-test PRIVATE
+  ZKC_LANGUAGE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/language")
 add_zkc_test(compilation CompilerCore compilation-api)
 add_zkc_test(run CompilerCore run-api)
 add_zkc_test(run_preservation CompilerCore run-preservation)

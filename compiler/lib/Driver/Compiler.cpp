@@ -2,6 +2,7 @@
 #include "../Support/Input.h"
 #include "Claims.h"
 #include "InspectionPrinter.h"
+#include "Language.h"
 #include "Relations.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Analysis/OracleAccess.h"
@@ -33,6 +34,8 @@
 using namespace llvm;
 int zkc::runCompiler(int argc, char **argv,
                      const mlir::DialectRegistry &extensions) {
+  if (argc >= 2 && StringRef(argv[1]).starts_with("language-"))
+    return runLanguageCompiler(argc, argv);
   mlir::DialectRegistry registry;
   registerDialects(registry);
   extensions.appendTo(registry);
@@ -40,6 +43,12 @@ int zkc::runCompiler(int argc, char **argv,
       (StringRef(argv[1]) == "--help" || StringRef(argv[1]) == "-h")) {
     outs()
         << "usage: zkc-compile COMMAND FILE\n\n"
+           "Fresh source language (.zkc; explicit captured module map):\n"
+           "  language-check | language-emit | language-interface | "
+           "language-bundle\n"
+           "    --source-format=zkc --entry=MODULE::ENTRY\n"
+           "    --module=MODULE=FILE.zkc [--module=MODULE=FILE.zkc ...]\n"
+           "    [--no-simplify] [--release-storage]\n\n"
            "Protocol developer sources (.pir or JSON; '-' reads stdin):\n"
            "  protocol-resolve       load bounded relation assets into a "
            "frozen project snapshot\n"

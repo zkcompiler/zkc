@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
     ('mathematical', 'mathematical_native'),
     ('mixed_mathematical', 'mixed_native'),
     ('native_boolean', 'native_boolean'),
+    ('language_cli', 'language_native'),
     ('native_services', 'mathematical_services'),
     ('native_joint', 'native_joint'),
     ('native_proofs', 'native_proof'),

@@ -101,6 +101,12 @@ can use a precompiled artifact without installing Lean or the MLIR toolchain,
 subject to the artifact-admission policy in section 6. Library applications can
 also consume checked plans; code generation is not the only product interface.
 
+The initial `.zkc` authoring path uses a pure `Language` component, direct
+mathematical MLIR emission and independent structural comparison in Translation.
+CompilerCore retains immutable originals and Entry interfaces before running the
+existing participant pipeline. The [source guide](language/mathematical.md)
+records this boundary and its current scalar scope.
+
 ### Implementation owners
 
 The current foundation follows these concrete boundaries. This map locates
@@ -315,19 +321,18 @@ execution resources. The [runtime language rationale](rationale/runtime-language
 compares it with C++ and states when to revisit the choice. Language selection
 alone establishes neither a speedup nor native correspondence.
 
-The maintained `.pir` parser and the implemented [common typed source model](compiler/source-model.md)
-stay in C++ beside common checking and elaboration. Distinguish this model from
-a frontend's syntax tree. For a future independent DSL and editing subsystem,
-Rust is the preferred implementation direction, to reassess with its actual
-language requirements. That frontend should submit the common source contract;
-it does not take ownership of the compiler's optimization loop or MLIR objects.
-The maintained frontend now captures multi-file projects before checking, resolves
-exact declarations with owner-local environments, and elaborates checked library
-selections before lowering to common source. Syntax, resolution, typed analysis,
-static selection and PIR lowering remain separate compiler subsystems; tools
-query the retained analysis rather than creating an alternate checking pipeline.
-See [source projects](language/projects.md) for the implemented boundary.
-This does not implement a separate SDK language or move MLIR ownership into Rust.
+The fresh `.zkc` frontend stays in C++ and separates pure Language capture,
+syntax, checking and Entry closure from Translation's MLIR emission and
+comparison. CompilerCore owns parsing, immutable original retention and the
+existing participant pipeline. This gives source tools checked data without
+making them own MLIR contexts. The [source guide](language/mathematical.md)
+describes the first implemented fragment.
+
+The maintained `.pir` parser and [common typed source model](compiler/source-model.md)
+retain their existing library, table and formal consumers. Their capture,
+resolution, static selection and common-source lowering remain a separate
+migration route; see [source projects](language/projects.md). Remove these
+owners as their last required consumers move to the native mathematical path.
 
 ## 6. Code and checking lifecycle
 

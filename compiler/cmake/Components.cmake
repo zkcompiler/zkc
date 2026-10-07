@@ -42,6 +42,12 @@ add_zkc_component(Contracts
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
 )
+add_zkc_component(Language
+  lib/Language/Project.cpp
+  lib/Language/Syntax.cpp
+  lib/Language/Check.cpp
+)
+target_link_libraries(ZkcLanguage PUBLIC ZkcContracts)
 add_zkc_component(Relation
   lib/Relation/R1CS.cpp
   lib/Relation/R1CSBinary.cpp
@@ -130,6 +136,8 @@ add_zkc_component(IR
   lib/Interfaces/SourceLibrary.cpp
 )
 add_zkc_component(Translation
+  lib/Translation/Language/Emission.cpp
+  lib/Translation/Language/Comparison.cpp
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp
   lib/Translation/ProgramVerification.cpp
@@ -225,6 +233,8 @@ add_zkc_component(Transforms
   lib/Target/PhysicalPlan.cpp
 )
 add_zkc_component(CompilerCore
+  lib/Compiler/Language.cpp
+  lib/Compiler/LanguageInterface.cpp
   lib/Compiler/Algorithms.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/ArtifactJson.cpp
@@ -244,6 +254,7 @@ add_zkc_component(CompilerCore
   lib/Compiler/SourceLocations.cpp
 )
 add_zkc_component(Driver
+  lib/Driver/Language.cpp
   lib/Driver/Compiler.cpp
   lib/Driver/Claims.cpp
   lib/Driver/Relations.cpp
@@ -269,7 +280,7 @@ target_include_directories(ZkcIR SYSTEM PUBLIC
   $<BUILD_INTERFACE:${MLIR_INCLUDE_DIRS}>)
 target_link_libraries(ZkcClaims PUBLIC ZkcProtocol)
 target_link_libraries(ZkcIR PUBLIC ZkcProtocol)
-target_link_libraries(ZkcTranslation PUBLIC ZkcIR)
+target_link_libraries(ZkcTranslation PUBLIC ZkcIR ZkcLanguage)
 target_link_libraries(ZkcClaimTranslation PUBLIC ZkcClaims ZkcIR)
 # Follow MLIR's package linkage too: embedding static MLIR archives alongside
 # its dylib duplicates MLIR definitions and process-global state.
@@ -294,7 +305,7 @@ target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore ZkcDriver)
 target_include_directories(ZkcCompiler INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcTranslation ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
+set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcTranslation ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")
@@ -333,3 +344,5 @@ endforeach()
 
 # Forward references and aliases now resolve against every core component.
 zkc_link_contribution_libraries()
+
+include(${CMAKE_CURRENT_LIST_DIR}/BuildIdentity.cmake)

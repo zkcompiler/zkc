@@ -30,6 +30,7 @@ The following links identify the definitions and selected scope of each profile.
 
 | Group | Profile | Selected scope |
 |---|---|---|
+| Source | [Mathematical source language](source/mathematical-language.md) | Explicit `.zkc` capture, scalar mathematics, participant components, messages, Entries and independent source correspondence |
 | Source | [Named inputs and role stores](source/named-inputs.md) | Exact ordered string-named binding, diagnostics, permitted views and local runs |
 | Source | [Public dimensions](source/public-dimensions.md) | Scoped natural expressions, formation, actual public values and substitution |
 | Source | [Invocation-selected families](source/families.md) | Public input selection, dependent protocol shapes, complete outcomes and bounded admission |

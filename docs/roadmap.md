@@ -38,9 +38,17 @@ foundation completion alone does not retire them.
 ### Target and reuse policy
 
 Use the native mathematical pipeline as the target for migrated capabilities.
-Reuse existing frontend checks, libraries and tests when their contracts fit the
-new model. Retain `.pir` as the initial authoring surface unless a later source
-design explicitly selects a change.
+The fresh `.zkc` source path now covers concrete mathematics, messages and Entry
+selection with independently checked MLIR emission. Extend that source design
+through generic/library contracts, local computation and resources, richer
+protocol composition/services, and Entry/Host integration. Detail each package
+before implementation. Relation declarations and future formal consumers retain
+explicit semantic attachment requirements when their syntax is introduced.
+
+Use existing implementations as references when their contracts fit. New source
+code belongs to the Language component and emits native mathematics directly.
+The `.pir` route retains its current consumers until their required behavior and
+checking obligations have migrated.
 
 Classify each requirement before deciding where to implement it:
 
@@ -83,15 +91,17 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Next package: frontend and native exchange design
+### Next package: types and local computation
 
-Define the frontend-to-mathematical exchange before implementation. Inventory
-existing source/generic/library and checking consumers, then choose the smallest
-boundary preserving their identities, operands, requirements and authority.
-Compare adapting the current elaborator with replacement. Specify contrasting
-vertical clients and refusals, the native Lean reader's required meaning and
-source/artifact binding, and which superseded paths each slice can remove.
-Detail implementation only after that design review; retain direct MLIR execution.
+The first `.zkc` compiler path is implemented: concrete mathematics and messages
+reach the existing participant runtime through checked original MLIR. Next,
+refine nominal products/sums, static generics, permissions, checked naturals and
+owned local control/resources. Define each feature's source rules and direct IR
+mapping before enabling syntax. Check generic definitions before selection and
+retain layout, custody, ingress and zero-storage obligations in the acceptance
+controls. Services, protocol composition, specifications, Entry construction and
+the source-facing Host interface follow these foundations. Lean integration and
+consumer retirement retain separate evidence requirements.
 
 ### Foundation completion and later migration
 
@@ -107,8 +117,8 @@ With stabilization and cleanup complete:
    stable contracts. Detail their dependency order when each package starts;
    retain direct MLIR input. Preserve source identity, requirements and actual
    settings, operands and service/key authority. Inventory `.pir`, R1CS/AIR,
-   generic/static libraries, diagnostics and checking consumers, then compare
-   adapting the elaborator with replacement. Define the exchange boundary before
+   generic/static libraries, diagnostics and checking consumers as the fresh
+   Language path expands. Define each exchange boundary before
    adding an independent reader; avoid another editable mathematical IR. Require
    source-to-native equivalence at its stated scope and installed API checks for
    contrasting vertical clients. Remove their superseded paths. Existing proofs

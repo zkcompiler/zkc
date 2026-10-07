@@ -13,9 +13,17 @@ is realized, and no entry is a cryptographic security theorem.
 
 | Route | Entry and execution | Checking and state |
 |---|---|---|
+| Mathematical source | `.zkc` → mathematical MLIR → existing participant compiler/runtime | Concrete fields/Booleans, total helpers, messages, selected Entries, immutable originals and independent structural comparison; [scope](spec/profiles/source/mathematical-language.md) |
 | Source | `.pir` → `protocol_exec` → `zkc.participants/1`; source/artifact hosts | Supported Lean source/candidate checks; retained while consumers migrate |
 | Native mathematical | Direct MLIR → `zkc.program/1`; `zkc.run/1` bundles or proof deployments | Bounded compiler preservation and runtime admission; foundation complete, native Lean connection open |
 | Finite tables | Table source → direct/physical plans → table session | Independent Lean references and scoped transformation proofs; executable consumers remain |
+
+The mathematical source path has source/admitted-IR mutation and limit controls
+in [language.cpp](../compiler/test/language.cpp), command controls in
+[language_cli.py](../compiler/test/language_cli.py), and actual per-role input and
+receive and joint-host controls in [language_native.rs](../crates/zkc-tools/examples/language_native.rs).
+The source fragment does not yet expose the full native IR vocabulary or proof
+construction; existing frontend consumers have not migrated.
 
 ## Foundation capability map
 

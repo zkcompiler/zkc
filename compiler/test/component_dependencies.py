@@ -6,8 +6,9 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("ZkcSupport", "ZkcContracts", "ZkcRelation", "ZkcProtocol", "ZkcIR", "ZkcTranslation", "ZkcFrontend", "ZkcFrontendLoading", "ZkcClaims", "ZkcClaimTranslation", "ZkcTransforms", "ZkcCompilerCore", "ZkcDriver")
+COMPONENTS = ("ZkcLanguage", "ZkcSupport", "ZkcContracts", "ZkcRelation", "ZkcProtocol", "ZkcIR", "ZkcTranslation", "ZkcFrontend", "ZkcFrontendLoading", "ZkcClaims", "ZkcClaimTranslation", "ZkcTransforms", "ZkcCompilerCore", "ZkcDriver")
 ALLOWED = {
+    "ZkcLanguage": {"ZkcContracts"},
     "ZkcFrontend": {"ZkcProtocol"},
     "ZkcFrontendLoading": {"ZkcFrontend"},
     "ZkcSupport": {"LLVMSupport"},
@@ -19,13 +20,14 @@ ALLOWED = {
     "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils"},
     "ZkcCompilerCore": {"ZkcTransforms", "ZkcTranslation", "ZkcFrontend", "ZkcClaimTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompilerCore", "ZkcFrontendLoading", "MLIRParser"},
-    "ZkcTranslation": {"ZkcIR"},
+    "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
     "ZkcIR": {"ZkcProtocol", "MLIRIR", "MLIRControlFlowInterfaces", "MLIRSideEffectInterfaces", "MLIRInferTypeOpInterface", "MLIRFuncDialect", "MLIRFunctionInterfaces", "MLIRCallInterfaces", "MLIRArithDialect", "MLIRTensorDialect"},
 }
 HEADER_ROOTS = {
+    "ZkcLanguage": ["Language"],
     "ZkcFrontend": ["Frontend"],
     "ZkcFrontendLoading": ["Frontend/Loading.h"],
-    "ZkcSupport": ["Support/Refusal.h", "Support/Json.h", "Support/LogicalTree.h", "Support/MLIRInput.h"],
+    "ZkcSupport": ["Support/BoundedStream.h", "Support/Refusal.h", "Support/Json.h", "Support/LogicalTree.h", "Support/MLIRInput.h"],
     "ZkcContracts": ["Contracts"],
     "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Matrices")],
     "ZkcProtocol": ["Source", "Analysis", "Protocol/Admission.h", "Protocol/Instantiation.h", "Protocol/PhysicalOptions.h"],
@@ -182,6 +184,7 @@ def main():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     assert targets["ZkcCompiler"] == (set(), {"ZkcCompilerCore", "ZkcDriver"}, []), "aggregate must not compile sources"
     private_headers = {
+        "ZkcLanguage": {ROOT / "lib/Language/Internal.h"},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h"},
@@ -282,7 +285,7 @@ def main():
         dylib = expected - mlir | {"MLIR"} if mlir else expected
         assert links in (expected, dylib) or (name == "ZkcSupport" and links == {"LLVM"}), (name, links)
         permitted = set().union(*(public_headers[d] | private_headers[d] for d in closure(name)))
-        if name == "ZkcFrontend":
+        if name in ("ZkcFrontend", "ZkcLanguage"):
             permitted.discard(ROOT / "lib/Support/Input.h")
         if "ZkcIR" in closure(name):
             permitted.update(generated)
@@ -299,7 +302,7 @@ def main():
             if path.suffix in (".h", ".hpp", ".def", ".inc"):
                 assert path in permitted, f"{name}: upward header dependency {path}"
             for include in re.findall(r'^\s*#\s*include\s*[<"]([^">]+)[">]', path.read_text(), re.M):
-                if name == "ZkcFrontend":
+                if name in ("ZkcFrontend", "ZkcLanguage"):
                     assert include not in (
                         "filesystem", "fstream", "cstdio", "stdio.h", "llvm/Support/FileSystem.h",
                         "llvm/Support/MemoryBuffer.h", "llvm/Support/Program.h",
@@ -359,6 +362,9 @@ def main():
 
         for path in public_headers[name] | {ROOT / source for source in sources}:
             visit(path)
+    comparison = (ROOT / "lib/Translation/Language/Comparison.cpp").read_text()
+    assert "emitOriginal(" not in comparison, "source comparison must not call emission"
+    assert "zkc/Frontend/" not in comparison, "source comparison must not depend on old frontend"
     # Tools consume public interfaces. The source benchmark is itself a bounded
     # file-reading CLI, so it shares only the driver's private input helper.
     for directory in (ROOT / "tools", ROOT / "examples/service"):

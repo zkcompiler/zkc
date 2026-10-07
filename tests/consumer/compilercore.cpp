@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/Diagnostics.h"
+#include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
@@ -32,6 +33,39 @@ static llvm::Expected<zkc::Compilation> compile() {
   return zkc::compileProtocol(std::move(*source), {}, registry);
 }
 int main(int argc, char **argv) {
+  auto captured = zkc::language::capture({{"m", R"(module m;
+    protocol Run roles(P)(x:bool@P)->(r:bool@P){return(r=x);}
+    entry Demo=Run;)",
+                                           "consumer.zkc"}});
+  if (!captured) {
+    llvm::errs() << llvm::toString(captured.takeError());
+    return 30;
+  }
+  auto languageChecked = zkc::language::analyze(*captured).checkedProject();
+  if (!languageChecked) {
+    llvm::errs() << llvm::toString(languageChecked.takeError());
+    return 31;
+  }
+  auto entry = zkc::language::closeEntry(*languageChecked, "m::Demo");
+  if (!entry) {
+    llvm::errs() << llvm::toString(entry.takeError());
+    return 32;
+  }
+  auto original = zkc::language::prepareOriginal(*entry);
+  if (!original) {
+    llvm::errs() << llvm::toString(original.takeError());
+    return 33;
+  }
+  auto execution = zkc::language::compileEntry(*original);
+  if (!execution) {
+    llvm::errs() << llvm::toString(execution.takeError());
+    return 34;
+  }
+  if (auto error =
+          zkc::language::checkInterface(*original, original->interfaceJson())) {
+    llvm::errs() << llvm::toString(std::move(error));
+    return 35;
+  }
   if (argc > 2)
     return 15;
   auto result = compile();
