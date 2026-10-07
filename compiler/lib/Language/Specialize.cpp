@@ -51,7 +51,22 @@ bool Checker::specialize() {
         if (!ingress(body.values[exchange->payload.index].type, op.span))
           return false;
       }
-      if (auto *call = std::get_if<HelperCall>(&op.action)) {
+      if (auto *application = std::get_if<ProtocolApplication>(&op.action)) {
+        for (auto &argument : application->arguments)
+          if (!closeType(argument, bindings, op.span))
+            return false;
+        DeclarationId target = application->callee;
+        if (auto origin = output.declarations[target.index].origin) {
+          application->arguments =
+              output.declarations[target.index].staticArguments;
+          target = *origin;
+        }
+        auto instance =
+            instantiate(target, application->arguments, Body::Mode::Protocol);
+        if (!instance)
+          return false;
+        application->callee = *instance;
+      } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         for (auto &arg : call->arguments)
           if (!closeType(arg, bindings, op.span))
             return false;

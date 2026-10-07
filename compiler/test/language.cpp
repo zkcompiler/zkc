@@ -379,6 +379,65 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
   mutation(withUnused, "unused operation omitted",
            [](auto m) { first(m, "arith.cmpi")->erase(); });
 }
+void protocolApplications() {
+  auto source = replace(read("application.zkc"), "module sample;", "module m;");
+  auto checked = original(source);
+  const auto &protocol = checked.entry().protocol();
+  bool found = false;
+  for (const auto &op : protocol.body->operations)
+    if (std::holds_alternative<ProtocolApplication>(op.action)) {
+      require(op.results.size() == 2, "application lost its separate results");
+      require(protocol.body->values[op.results[0].index].components ==
+                      std::vector<unsigned>{0} &&
+                  protocol.body->values[op.results[1].index].components ==
+                      std::vector<unsigned>{1},
+              "application combined unrelated participant sets");
+      found = true;
+    }
+  require(found, "missing checked protocol application");
+  for (bool simplify : {false, true})
+    must(compileEntry(checked, {simplify, false}));
+  sourceRefuses(replace(source, "roles(V,P)(x, y)", "roles(P,P)(x, y)"),
+                "source.roles");
+  sourceRefuses(replace(source, "roles(V,P)(x, y)", "roles()(x, y)"),
+                "source.roles");
+  sourceRefuses(replace(source, "roles(V,P)(x, y)", "roles(Unknown,P)(x, y)"),
+                "source.roles");
+  sourceRefuses(replace(source, "let (atV, atP)", "let (atV, atV)"),
+                "source.shadow");
+  sourceRefuses(replace(source, "let (atV, atP)", "let atV"), "source.call");
+  sourceRefuses(replace(source, "p = atP, v = atV", "p = atV, v = atP"),
+                "source.roles");
+  sourceRefuses(replace(source, "x: Fr @(P,V)", "x: Fr @P"), "source.roles");
+  sourceRefuses(replace(source, "apply Segment(x, y)", "apply Run(x, y)"),
+                "source.cycle");
+  sourceRefuses(replace(source, "apply Segment(x, y)", "apply Segment(x)"),
+                "source.call");
+  sourceRefuses(replace(source, "let (a, b) = apply Segment(x, y);",
+                        "let (a, b) = (x, y);"),
+                "source.binding");
+  auto limits = Limits{};
+  limits.callDepth = 2;
+  sourceRefuses(source, "source.limit", limits);
+  mutation(checked, "application argument swap", [](auto module) {
+    auto *op = first(module, "protocol.apply");
+    auto a = op->getOperand(0), b = op->getOperand(1);
+    op->setOperand(0, b);
+    op->setOperand(1, a);
+  });
+  mutation(checked, "application site change", [](auto module) {
+    first(module, "protocol.apply")
+        ->setAttr("site",
+                  mlir::StringAttr::get(module.getContext(), "changed"));
+  });
+  mutation(checked, "omitted resultless application", [](auto module) {
+    module.walk([&](mlir::Operation *op) {
+      if (op->getName().getStringRef() == "protocol.apply" &&
+          op->getNumResults() == 0)
+        op->erase();
+    });
+  });
+}
 void bounds() {
   Limits limits;
   limits.files = 1;
@@ -474,6 +533,8 @@ void bounds() {
 }
 } // namespace
 int main() {
+  stage = "protocolApplications";
+  protocolApplications();
   stage = "sourceControls";
   sourceControls();
   stage = "bounds";

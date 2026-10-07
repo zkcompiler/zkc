@@ -30,6 +30,9 @@ private:
   std::optional<std::vector<unsigned>> combine(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> emit(decltype(Operation::action), const Type &,
                               std::vector<unsigned>, Span);
+  std::optional<std::vector<ValueId>> emitResults(decltype(Operation::action),
+                                                  std::vector<Value>, Span);
+  bool application(const Statement &);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
   bool finish(Span);
   bool data(const Type &, Span);

@@ -44,26 +44,39 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
                                          const Type &type,
                                          std::vector<unsigned> components,
                                          Span span) {
-  if (!checker.chargeType(type, span) ||
-      !checker.accept(checker.work.count(checker.work.operations,
+  auto ids = emitResults(std::move(action),
+                         {{type, std::move(components), span}}, span);
+  return ids ? std::optional<ValueId>(ids->front()) : std::nullopt;
+}
+std::optional<std::vector<ValueId>>
+BodyChecker::emitResults(decltype(Operation::action) action,
+                         std::vector<Value> results, Span span) {
+  if (!checker.accept(checker.work.count(checker.work.operations,
                                          checker.work.limits.operations,
-                                         "operation count", span)) ||
-      !checker.charge(components.size() + 1, span))
+                                         "operation count", span)))
     return {};
-  if (protocol() && components.size() > 1) {
-    auto caps = checker.permissions(type, span, &decl);
-    if (!caps || !caps->share) {
-      if (!checker.diagnostic)
-        fail("source.permission",
-             "multiple participant components require Share", span);
+  for (const auto &value : results) {
+    if (!checker.chargeType(value.type, span) ||
+        !checker.charge(value.components.size() + 1, span))
       return {};
+    if (protocol() && value.components.size() > 1) {
+      auto caps = checker.permissions(value.type, span, &decl);
+      if (!caps || !caps->share) {
+        if (!checker.diagnostic)
+          fail("source.permission",
+               "multiple participant components require Share", span);
+        return {};
+      }
     }
   }
-  ValueId id{uint32_t(body.values.size())};
-  body.values.push_back({type, std::move(components), span});
-  uses.emplace_back();
-  body.operations.push_back({std::move(action), id, span, statement});
-  return id;
+  std::vector<ValueId> ids;
+  for (auto &value : results) {
+    ids.push_back(ValueId{uint32_t(body.values.size())});
+    body.values.push_back(std::move(value));
+    uses.emplace_back();
+  }
+  body.operations.push_back({std::move(action), ids, span, statement});
+  return ids;
 }
 std::optional<std::vector<unsigned>>
 BodyChecker::combine(ArrayRef<ValueId> args, Span span) {
@@ -256,6 +269,15 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
                       bool isProtocol) {
   for (auto &s : source.statements) {
     owner.reset();
+    if (syntax.expressions[s.expression].kind == Expression::Kind::Apply) {
+      if (!application(s))
+        return false;
+      ++statement;
+      continue;
+    }
+    if (s.resultNames)
+      return fail("source.binding",
+                  "multiple bindings require a protocol application", s.span);
     if (s.owner) {
       auto selected = checker.roles(decl, {*s.owner}, s.span);
       if (!selected)
@@ -283,8 +305,8 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
           body.operations.empty()
               ? nullptr
               : std::get_if<HelperCall>(&body.operations.back().action);
-      if (!call || !call->owner ||
-          body.operations.back().result.index != value->index)
+      if (!call || !call->owner || body.operations.back().results.size() != 1 ||
+          body.operations.back().results.front().index != value->index)
         return fail("source.mode",
                     "owned statement requires a local function call", s.span);
     }

@@ -150,6 +150,17 @@ fn main() {
             }
         }
     }
+    for optimized in [0, 1] {
+        let bundle = load(&format!("application-{optimized}.bundle"));
+        let mut prover = runner(&bundle, "P", vec![field(2), field(3)]);
+        let mut verifier = runner(&bundle, "V", vec![field(5), field(7)]);
+        let p = returned(&mut prover);
+        let v = returned(&mut verifier);
+        assert_eq!(p.len(), 1);
+        assert_eq!(v.len(), 1);
+        expect_field(&p[0], 6);
+        expect_field(&v[0], 12);
+    }
     for (name, expected) in [("One", 4), ("Two", 6), ("Alias", 4)] {
         let bundle = load(&format!("{name}.bundle"));
         let mut participant = runner(&bundle, "P", vec![field(3)]);

@@ -625,7 +625,35 @@ private:
     Span span = current().span;
     Expression value;
     value.span = span;
-    if (take("if")) {
+    if (at("apply") && tokens[cursor + 1].kind == TokenKind::Word) {
+      advance();
+      value.kind = Expression::Kind::Apply;
+      SyntaxType target;
+      if (!type(target, depth + 1))
+        return {};
+      if (target.kind != SyntaxType::Kind::Name) {
+        fail("source.syntax", "application requires a named protocol");
+        return {};
+      }
+      value.text = std::move(target.name);
+      value.arguments = std::move(target.arguments);
+      if (take("roles")) {
+        value.roles.emplace();
+        if (!names(*value.roles))
+          return {};
+      }
+      if (!expect("("))
+        return {};
+      if (!at(")"))
+        do {
+          auto argument = expression(decl, depth + 1);
+          if (!argument)
+            return {};
+          value.children.push_back(*argument);
+        } while (take(",") && !at(")"));
+      if (!expect(")"))
+        return {};
+    } else if (take("if")) {
       value.kind = Expression::Kind::If;
       auto condition = expression(decl, depth + 1);
       if (!condition)
@@ -848,7 +876,11 @@ private:
         s.owner = std::move(owner);
       }
       if (take("let")) {
-        if (!name(s.name))
+        if (at("(")) {
+          s.resultNames.emplace();
+          if (!names(*s.resultNames))
+            return {};
+        } else if (!name(s.name))
           return {};
         if (take(":")) {
           SyntaxType t;

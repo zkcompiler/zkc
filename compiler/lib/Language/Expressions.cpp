@@ -102,7 +102,8 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
           *target->second);
     return checker.substitute(callee.outputs.front().type, sub, expr.span);
   }
-  if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For)
+  if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For ||
+      expr.kind == K::Apply)
     return {};
   for (auto child : expr.children) {
     auto result = hint(child, depth + 1);
@@ -124,6 +125,11 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   using K = Expression::Kind;
   using T = Type::Kind;
   std::optional<ValueId> result;
+  if (expr.kind == K::Apply) {
+    fail("source.mode",
+         "protocol application requires a complete let statement", expr.span);
+    return {};
+  }
   if (expr.kind == K::Name) {
     auto found = bindings.find(expr.text);
     if (found == bindings.end()) {

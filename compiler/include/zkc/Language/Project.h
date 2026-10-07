@@ -104,6 +104,13 @@ struct HelperCall {
   std::optional<Type> component;
   std::optional<unsigned> owner;
 };
+struct ProtocolApplication {
+  DeclarationId callee;
+  std::vector<ValueId> operands;
+  std::vector<Type> arguments;
+  /// Caller roster indices, in the callee's declared role order.
+  std::vector<unsigned> roles;
+};
 struct Exchange {
   unsigned sender, receiver;
   ValueId payload;
@@ -147,9 +154,11 @@ struct LocalControl {
 };
 struct Operation {
   std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
-               Projection, LocalPrimitive, Consume, LocalControl>
+               Projection, LocalPrimitive, Consume, LocalControl,
+               ProtocolApplication>
       action;
-  ValueId result;
+  /// Each result has its own type and participant availability.
+  std::vector<ValueId> results;
   Span span;
   uint32_t statement;
 };

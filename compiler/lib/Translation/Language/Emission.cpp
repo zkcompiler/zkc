@@ -186,12 +186,18 @@ class Emitter {
       return result;
     };
     for (auto &op : source.operations) {
-      auto layout = take(layouts.get(source.values[op.result.index].type));
-      if (!layout)
-        return false;
-      auto resultTypes = types(**layout);
-      if (!resultTypes)
-        return false;
+      std::vector<std::shared_ptr<const Layout>> resultLayouts;
+      SmallVector<mlir::Type> resultTypes;
+      for (auto id : op.results) {
+        auto layout = take(layouts.get(source.values[id.index].type));
+        if (!layout)
+          return false;
+        auto native = types(**layout);
+        if (!native)
+          return false;
+        llvm::append_range(resultTypes, *native);
+        resultLayouts.push_back(*layout);
+      }
       auto site = "s" + std::to_string(siteOrdinal++);
       Values result;
       if (auto *projection = std::get_if<Projection>(&op.action)) {
@@ -221,17 +227,17 @@ class Emitter {
           }
           result = std::move(input);
         } else {
-          if ((**layout).custody) {
-            auto created =
-                primitive("resource_unit.create", {}, resultTypes->front(), {},
-                          site + "_create");
+          if (resultLayouts.front()->custody) {
+            auto created = primitive("resource_unit.create", {},
+                                     resultTypes.front(), {}, site + "_create");
             if (!created)
               return false;
             llvm::append_range(result, *created);
           }
-          if (source.values[op.result.index].type.kind == Type::Kind::Variant) {
+          if (source.values[op.results.front().index].type.kind ==
+              Type::Kind::Variant) {
             auto *actual =
-                make("local.variant_inject", resultTypes->back(), input,
+                make("local.variant_inject", resultTypes.back(), input,
                      {text("site", site),
                       text("alternative", construct->alternative)});
             if (!actual)
@@ -256,13 +262,13 @@ class Emitter {
         switch (math->identity) {
         case MathematicalIdentity::BooleanConstant:
           actual = make(
-              "arith.constant", *resultTypes, {},
+              "arith.constant", resultTypes, {},
               {attr("value", builder.getIntegerAttr(builder.getI1Type(),
                                                     math->literal == "true"))});
           break;
         case MathematicalIdentity::BooleanEqual:
           actual =
-              make("arith.cmpi", *resultTypes, operands,
+              make("arith.cmpi", resultTypes, operands,
                    {attr("predicate", builder.getI64IntegerAttr(int64_t(
                                           mlir::arith::CmpIPredicate::eq)))});
           break;
@@ -301,7 +307,7 @@ class Emitter {
           SmallVector<mlir::NamedAttribute> attrs;
           if (!math->literal.empty())
             attrs.push_back(text("value", math->literal));
-          actual = make(name, *resultTypes, operands, attrs);
+          actual = make(name, resultTypes, operands, attrs);
           break;
         }
         }
@@ -310,7 +316,7 @@ class Emitter {
         result = Values(actual->getResults());
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
         auto emitted = primitive(local->contract, flatten(local->operands),
-                                 *resultTypes, local->parameters, site);
+                                 resultTypes, local->parameters, site);
         if (!emitted)
           return false;
         result = std::move(*emitted);
@@ -326,18 +332,30 @@ class Emitter {
           if (call->owner)
             attrs.push_back(text("role", decl.roles[*call->owner]));
         }
-        auto *actual = make(name, *resultTypes, flatten(call->operands), attrs);
+        auto *actual = make(name, resultTypes, flatten(call->operands), attrs);
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *application =
+                     std::get_if<ProtocolApplication>(&op.action)) {
+        const auto &target = project.declarations()[application->callee.index];
+        auto *actual =
+            make("protocol.apply", resultTypes, flatten(application->operands),
+                 {attr("callee",
+                       mlir::FlatSymbolRefAttr::get(&context, target.symbol)),
+                  text("site", site),
+                  attr("roles", roles(decl, application->roles))});
         if (!actual)
           return false;
         result = Values(actual->getResults());
       } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
-        if (resultTypes->empty()) {
+        if (resultTypes.empty()) {
           failure = error("source.wire",
                           "empty layouts have no native message occurrence");
           return false;
         }
-        for (unsigned i = 0; i < resultTypes->size(); ++i) {
-          auto *sent = make("protocol.exchange", (*resultTypes)[i],
+        for (unsigned i = 0; i < resultTypes.size(); ++i) {
+          auto *sent = make("protocol.exchange", resultTypes[i],
                             values[exchange->payload.index][i],
                             {text("sender", decl.roles[exchange->sender]),
                              text("receiver", decl.roles[exchange->receiver]),
@@ -345,15 +363,15 @@ class Emitter {
           if (!sent)
             return false;
           auto *received = make(
-              "protocol.restrict_roles", (*resultTypes)[i], sent->getResult(0),
+              "protocol.restrict_roles", resultTypes[i], sent->getResult(0),
               {attr("roles", roles(decl, {exchange->receiver}))});
           if (!received)
             return false;
           result.push_back(received->getResult(0));
         }
       } else if (auto *restriction = std::get_if<Restriction>(&op.action)) {
-        for (unsigned i = 0; i < resultTypes->size(); ++i) {
-          auto *actual = make("protocol.restrict_roles", (*resultTypes)[i],
+        for (unsigned i = 0; i < resultTypes.size(); ++i) {
+          auto *actual = make("protocol.restrict_roles", resultTypes[i],
                               values[restriction->input.index][i],
                               {attr("roles", roles(decl, restriction->roles))});
           if (!actual)
@@ -381,7 +399,7 @@ class Emitter {
             make(match                                      ? "local.match"
                  : control->kind == LocalControl::Kind::For ? "local.for"
                                                             : "local.if",
-                 *resultTypes, inputs, attrs, control->regions.size());
+                 resultTypes, inputs, attrs, control->regions.size());
         if (!actual)
           return false;
         result = Values(actual->getResults());
@@ -391,12 +409,21 @@ class Emitter {
                     true))
             return false;
         }
+      } else {
+        failure = error("source.emission", "source operation has no emitter");
+        return false;
       }
-      if (result.size() != resultTypes->size()) {
+      if (result.size() != resultTypes.size()) {
         failure = error("source.layout", "operation result layout differs");
         return false;
       }
-      values[op.result.index] = std::move(result);
+      unsigned offset = 0;
+      for (unsigned i = 0; i < op.results.size(); ++i) {
+        const auto count = resultLayouts[i]->leaves.size();
+        values[op.results[i].index] =
+            Values(result.begin() + offset, result.begin() + offset + count);
+        offset += count;
+      }
     }
     if (source.stopped)
       return make("local.stop", {}, {},

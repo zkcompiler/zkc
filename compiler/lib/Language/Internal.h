@@ -81,6 +81,7 @@ struct Expression {
     Decimal,
     Boolean,
     Call,
+    Apply,
     Add,
     Subtract,
     Multiply,
@@ -99,12 +100,14 @@ struct Expression {
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;
   std::vector<std::string> captures;
+  std::optional<std::vector<std::string>> roles;
   std::vector<uint32_t> regions;
   std::vector<std::vector<std::string>> payloads;
 };
 struct Statement {
   enum class Kind { Let, Drop, Consume, Require } kind = Kind::Let;
   std::string name;
+  std::optional<std::vector<std::string>> resultNames;
   std::optional<SyntaxType> type;
   std::optional<std::vector<std::string>> roles;
   std::optional<std::pair<std::string, std::string>> exchange;

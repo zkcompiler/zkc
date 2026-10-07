@@ -106,4 +106,14 @@ for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
         if name == 'resource':
             assert schema['inputs'] == schema['outputs'] == []
 
+with case('protocol composition preserves distributed results'):
+    args = ['--source-format=zkc', '--entry=sample::Demo',
+            f'--module=sample={FIXTURES / "application.zkc"}']
+    original = commands.run([compiler, 'language-emit', *args])
+    assert original.count('"protocol.apply"') == 3
+    for optimized in (0, 1):
+        flags = [] if optimized else ['--no-simplify']
+        bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+        (OUT / f'application-{optimized}.bundle').write_text(bundle)
+
 counted()

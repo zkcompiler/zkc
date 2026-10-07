@@ -56,6 +56,7 @@ add_zkc_component(Language
   lib/Language/BodyCheck.cpp
   lib/Language/Expressions.cpp
   lib/Language/Calls.cpp
+  lib/Language/Applications.cpp
   lib/Language/Control.cpp
   lib/Language/Specialize.cpp
 )

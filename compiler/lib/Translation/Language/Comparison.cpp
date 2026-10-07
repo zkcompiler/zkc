@@ -249,10 +249,15 @@ class Comparator {
       return result;
     };
     for (auto &op : source.operations) {
-      auto layout = take(layouts.get(source.values[op.result.index].type));
-      if (!layout)
-        return false;
-      auto &leaves = (**layout).leaves;
+      std::vector<std::shared_ptr<const Layout>> resultLayouts;
+      std::vector<std::string> leaves;
+      for (auto id : op.results) {
+        auto layout = take(layouts.get(source.values[id.index].type));
+        if (!layout)
+          return false;
+        llvm::append_range(leaves, (**layout).leaves);
+        resultLayouts.push_back(*layout);
+      }
       Values result;
       auto site = "s" + std::to_string(siteOrdinal++);
       if (auto *projection = std::get_if<Projection>(&op.action)) {
@@ -283,7 +288,7 @@ class Comparator {
           }
           result = std::move(input);
         } else {
-          if ((**layout).custody) {
+          if (resultLayouts.front()->custody) {
             auto created = primitive(
                 block, cursor, LocalPrimitive{"resource_unit.create", {}, {}},
                 {}, ArrayRef<std::string>(leaves).take_front(), op.span,
@@ -292,7 +297,8 @@ class Comparator {
               return false;
             llvm::append_range(result, *created);
           }
-          if (source.values[op.result.index].type.kind == Type::Kind::Variant) {
+          if (source.values[op.results.front().index].type.kind ==
+              Type::Kind::Variant) {
             auto *actual =
                 next(block, cursor, op.span, "local.variant_inject", input, 1);
             if (!actual)
@@ -377,6 +383,24 @@ class Comparator {
                        !string(*actual, "role", decl.roles[*call->owner]))))
           return fail("call target, mode, owner or site differs");
         result = Values(actual->getResults());
+      } else if (auto *application =
+                     std::get_if<ProtocolApplication>(&op.action)) {
+        const auto &target = project.declarations()[application->callee.index];
+        auto *actual = next(block, cursor, op.span, "protocol.apply",
+                            flatten(application->operands), leaves.size());
+        if (!actual)
+          return false;
+        auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
+        std::vector<std::string> mapped;
+        for (auto role : application->roles)
+          mapped.push_back(decl.roles[role]);
+        if (!attributes(*actual, {"callee", "site", "roles"}) || !callee ||
+            callee.getValue() != target.symbol ||
+            !string(*actual, "site", site) ||
+            !strings(actual->getAttr("roles"), mapped))
+          return fail(
+              "protocol application target, role substitution or site differs");
+        result = Values(actual->getResults());
       } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
         auto &input = values[exchange->payload.index];
         if (leaves.empty() || input.size() != leaves.size())
@@ -449,9 +473,18 @@ class Comparator {
                     nullptr, true))
             return false;
         result = Values(actual->getResults());
+      } else
+        return fail("source operation has no comparison rule");
+      if (result.size() != leaves.size())
+        return fail("operation result layout differs");
+      unsigned offset = 0;
+      for (unsigned i = 0; i < op.results.size(); ++i) {
+        const auto count = resultLayouts[i]->leaves.size();
+        if (!bind(op.results[i].index, Values(result.begin() + offset,
+                                              result.begin() + offset + count)))
+          return false;
+        offset += count;
       }
-      if (!bind(op.result.index, std::move(result)))
-        return false;
     }
     if (source.stopped) {
       auto *stop = next(block, cursor, decl.span, "local.stop", {}, 0);

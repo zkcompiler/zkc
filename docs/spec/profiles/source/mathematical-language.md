@@ -220,6 +220,39 @@ by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because er
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.
 
+## Protocol composition
+
+```text
+protocol Pair roles(A, B)(x: Fr @(A,B), y: Fr @(A,B))
+    -> (sum: Fr @A, product: Fr @B) {
+  return (sum = x + y, product = x * y);
+}
+protocol Use roles(P, V)(x: Fr @(P,V), y: Fr @(P,V))
+    -> (p: Fr @P, v: Fr @V) {
+  let (atV, atP) = apply Pair roles(V,P)(x, y);
+  return (p = atP, v = atV);
+}
+```
+
+`apply` occupies a whole protocol `let` RHS. Bindings follow the callee's declared
+output order. Each result retains its own type and participant set; the binding
+list does not construct a tuple with shared availability. A sole result can use
+`let value = apply ...`; a resultless application uses `let () = apply ...`.
+Applications remain ordered even when their results are unused.
+
+`roles(...)` maps the callee's ordered roster to distinct caller roles. Omitting
+it selects identically named roles, which must all exist in the caller. An explicit
+empty, incomplete or noninjective map refuses. Inputs must supply every mapped
+component. Results expose exactly the callee's mapped declared output sets.
+Shared availability does not assert equality of participant inputs or results.
+Static arguments follow the same inference and bound checks as helper calls.
+
+Applications lower directly to `protocol.apply`. Its native static expansion
+preserves nested sites and explicit participant boundaries before projection.
+The combined helper/application graph must be acyclic and obey source and native
+expansion limits. No additional runtime call stack is introduced. `apply` is
+contextual here; library members can still be named `apply`.
+
 ## Translation and retained interface
 
 The source model has Math, Local and Protocol body modes, checked types, explicit
