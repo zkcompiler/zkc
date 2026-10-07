@@ -15,6 +15,9 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(language_natural Language language-natural)
+add_zkc_test(language_types CompilerCore language-types)
+mlir_target_link_libraries(zkc-language_types-test PRIVATE MLIRParser)
 add_zkc_test(language CompilerCore language-api)
 mlir_target_link_libraries(zkc-language-test PRIVATE MLIRParser)
 target_compile_definitions(zkc-language-test PRIVATE

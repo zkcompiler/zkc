@@ -16,9 +16,10 @@
 using namespace llvm;
 using namespace zkc::language;
 namespace {
+StringRef stage;
 void require(bool ok, StringRef message) {
   if (!ok) {
-    errs() << message << '\n';
+    errs() << stage << ": " << message << '\n';
     std::exit(1);
   }
 }
@@ -56,9 +57,12 @@ CheckedProject check(StringRef source, const Limits &limits = {}) {
 }
 void sourceRefuses(StringRef source, StringRef code,
                    const Limits &limits = {}) {
-  refuses(analyze(must(capture({{"m", source.str(), "m.zkc"}})), limits)
-              .checkedProject(),
-          code);
+  auto result = analyze(must(capture({{"m", source.str(), "m.zkc"}})), limits)
+                    .checkedProject();
+  if (result)
+    errs() << "unexpectedly accepted source (" << code << "): " << source
+           << '\n';
+  refuses(std::move(result), code);
 }
 CheckedOriginal original(StringRef source) {
   return must(prepareOriginal(must(closeEntry(check(source), "m::Demo"))));
@@ -252,11 +256,10 @@ void depthAndAggregateBounds() {
           "source.limit");
 }
 void reviewControls() {
-  for (StringRef feature :
-       {"local", "service", "predicate", "relation", "construct"})
+  for (StringRef feature : {"service", "predicate", "relation", "construct"})
     sourceRefuses("module m; " + feature.str() + " X;", "source.unsupported");
   sourceRefuses("module m; math fn f<F>() -> bool {return true;}",
-                "source.unsupported");
+                "source.syntax");
   sourceRefuses("module m; domain F=field(\"missing\");", "source.domain");
   sourceRefuses("module m; domain F=field(\"bls12-381.g1\");", "source.domain");
   sourceRefuses(
@@ -433,13 +436,13 @@ void bounds() {
   --limits.tokens;
   sourceRefuses(basic, "source.limit", limits);
   limits = {};
-  limits.operations = 2;
+  limits.operations = 4;
   check(basic, limits);
   --limits.operations;
   sourceRefuses(basic, "source.limit", limits);
-  // The emitter additionally accounts for the receiver restriction.
+  // Native emission counts the module, definition and terminator as well.
   limits = {};
-  limits.operations = 3;
+  limits.operations = 6;
   must(prepareOriginal(selected, limits));
   --limits.operations;
   refuses(prepareOriginal(selected, limits), "source.limit");
@@ -471,9 +474,13 @@ void bounds() {
 }
 } // namespace
 int main() {
+  stage = "sourceControls";
   sourceControls();
+  stage = "bounds";
   bounds();
+  stage = "depthAndAggregateBounds";
   depthAndAggregateBounds();
+  stage = "reviewControls";
   reviewControls();
   auto algebra = read("algebra.zkc"), transfer = read("transfer.zkc");
   auto captured = must(capture({{"transfer", transfer, "transfer.zkc"},

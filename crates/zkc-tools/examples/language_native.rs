@@ -2,7 +2,9 @@
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Value};
+use zkc_backends::{
+    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
+};
 use zkc_runtime::interactive::{Action, Packet, Runner, Value as RuntimeValue, admit_supplied};
 use zkc_tools::protocol::run::{HostLimits, RunHost, SetupAuthority};
 
@@ -45,10 +47,10 @@ fn receive(runner: &mut Runner<NativeBackend>, value: Value) {
     let Action::Receive(expected) = next(runner) else {
         panic!("expected receive")
     };
-    let bytes = runner.backend().encode_value(&value).unwrap();
+    let bytes = runner.backend().encode_native_value(&value).unwrap();
     let decoded = runner
         .backend()
-        .decode_typed_value(expected.ty, &bytes)
+        .decode_native_value(&expected.ty, &bytes)
         .unwrap();
     runner
         .deliver(Packet {
@@ -159,7 +161,118 @@ fn main() {
     let values = returned(&mut helpers);
     expect_field(&values[0], 4);
     assert!(matches!(values[1], Value::Bool(true)));
+    for optimized in [0, 1] {
+        let bundle = |name: &str| load(&format!("typed-{name}-{optimized}.bundle"));
+        for (name, inputs, expected) in [
+            ("array", vec![field(3), field(7)], 3),
+            ("component", vec![field(3)], 4),
+            ("associated", vec![field(3)], 3),
+            ("associated_domain", vec![field(3)], 6),
+        ] {
+            let result = returned(&mut runner(&bundle(name), "P", inputs));
+            assert_eq!(result.len(), 1);
+            expect_field(&result[0], expected);
+        }
+        for n in [0, 1, 5] {
+            let result = returned(&mut runner(
+                &bundle("loop"),
+                "P",
+                vec![field(3), Value::Index(n)],
+            ));
+            expect_field(&result[0], n * 3);
+        }
+        assert!(returned(&mut runner(&bundle("resource"), "P", vec![])).is_empty());
+        for n in [0, 1, 5] {
+            for go in [false, true] {
+                let mut resource = runner(
+                    &bundle("resource_control"),
+                    "P",
+                    vec![Value::Index(n), Value::Bool(go)],
+                );
+                match next(&mut resource) {
+                    Action::Returned(values) => {
+                        assert!(go);
+                        assert!(values.is_empty());
+                    }
+                    Action::Stopped(stop) => {
+                        assert!(!go);
+                        assert!(stop.cleanup_errors.is_empty());
+                    }
+                    action => panic!("unexpected affine control outcome: {action:?}"),
+                }
+                assert_eq!(resource.backend().active_frames(), 0);
+                assert_eq!(resource.usage().live_values, 0);
+            }
+        }
+        for a in [false, true] {
+            for b in [false, true] {
+                let result = returned(&mut runner(
+                    &bundle("bool"),
+                    "P",
+                    vec![Value::Bool(a), Value::Bool(b)],
+                ));
+                assert!(matches!(result[0], Value::Bool(actual) if actual == (a == b)));
+            }
+            let mut prover = runner(&bundle("branch"), "P", vec![field(3), Value::Bool(a)]);
+            let mut verifier = runner(&bundle("branch"), "V", vec![]);
+            let value = send(&mut prover);
+            expect_field(&value, if a { 6 } else { 3 });
+            receive(&mut verifier, value);
+            expect_field(&returned(&mut verifier)[0], if a { 6 } else { 3 });
+            assert!(returned(&mut prover).is_empty());
+        }
+        let mut prover = runner(
+            &bundle("group"),
+            "P",
+            vec![Value::Curve(GroupPoint::generator()), field(3)],
+        );
+        let mut verifier = runner(&bundle("group"), "V", vec![]);
+        receive(&mut verifier, send(&mut prover));
+        assert!(matches!(&returned(&mut verifier)[0], Value::Curve(point)
+            if *point == GroupPoint::generator().scale(Scalar::from(4u64))));
+        assert!(returned(&mut prover).is_empty());
+        for (a, b, expected) in [
+            (true, false, 3),
+            (false, true, 7),
+            (false, false, 11),
+            (true, true, 22),
+        ] {
+            for name in ["variant", "variant_custody"] {
+                let mut local = runner(
+                    &bundle(name),
+                    "P",
+                    vec![
+                        field(3),
+                        field(7),
+                        field(11),
+                        Value::Bool(a),
+                        Value::Bool(b),
+                    ],
+                );
+                expect_field(&returned(&mut local)[0], expected);
+            }
+            let mut prover = runner(
+                &bundle("variant_wire"),
+                "P",
+                vec![field(3), field(7), Value::Bool(a), Value::Bool(b)],
+            );
+            let mut verifier = runner(&bundle("variant_wire"), "V", vec![field(11)]);
+            receive(&mut verifier, send(&mut prover));
+            expect_field(&returned(&mut verifier)[0], expected);
+            assert!(returned(&mut prover).is_empty());
+        }
+        let index = returned(&mut runner(&bundle("index"), "P", vec![]));
+        assert!(matches!(index.as_slice(), [Value::Index(3)]));
+        let mut prover = runner(&bundle("record"), "P", vec![field(3), field(7)]);
+        let mut verifier = runner(&bundle("record"), "V", vec![]);
+        receive(&mut verifier, send(&mut prover));
+        receive(&mut verifier, send(&mut prover));
+        let result = returned(&mut verifier);
+        expect_field(&result[0], 7);
+        expect_field(&result[1], 3);
+        assert!(returned(&mut prover).is_empty());
+    }
     println!(
-        "fresh source: actual receives, per-role inputs, optimization variants and selected Entries passed"
+        "fresh source: receives, static dispatch, aggregates, resources, branches, loops and selected Entries passed"
     );
 }

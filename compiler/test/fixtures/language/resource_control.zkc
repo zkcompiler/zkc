@@ -1,0 +1,31 @@
+module sample;
+
+struct Ticket:Share {}
+enum State { Live(Ticket), Empty() }
+
+fn work(n:index, go:bool)->() {
+  let ticket = Ticket{};
+  let carried = for i in 0..n carry(current=ticket) capture() {
+    yield current;
+  };
+  let state = State::Live(carried);
+  let result = match state capture(go) {
+    Live(value) => {
+      let checked = if go capture(value) {
+        yield value;
+      } else {
+        stop "reject";
+      };
+      consume checked;
+      yield ();
+    },
+    Empty() => { yield (); }
+  };
+  return result;
+}
+
+protocol Run roles(P)(n:index@P, go:bool@P)->() {
+  local P let result = work(n, go);
+  return ();
+}
+entry Demo = Run;

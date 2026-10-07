@@ -17,7 +17,7 @@ Error preflight(StringRef bytes) {
   for (size_t i = 0; i < bytes.size();) {
     char c = bytes[i++];
     if (c == '{' || c == '[') {
-      if (stack.size() == 16)
+      if (stack.size() == 256)
         return error("source.limit", "interface nesting limit exceeded");
       stack.push_back(c == '{'
                           ? std::optional<std::set<std::string>>(std::in_place)
@@ -33,7 +33,7 @@ Error preflight(StringRef bytes) {
           ++i;
         ++i;
       }
-      if (i >= bytes.size() || i - start > 4096)
+      if (i >= bytes.size() || i - start > 262144)
         return error("source.interface",
                      "invalid or oversized interface string");
       StringRef spelling = bytes.slice(start, ++i);

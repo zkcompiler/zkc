@@ -45,13 +45,34 @@ struct Work {
 };
 
 struct SyntaxType {
+  enum class Kind {
+    Name,
+    Natural,
+    Add,
+    Multiply,
+    Array,
+    Tuple
+  } kind = Kind::Name;
   std::string name;
   Span span;
+  std::vector<SyntaxType> arguments;
 };
 struct SyntaxPort {
   std::string name;
   SyntaxType type;
   std::vector<std::string> roles;
+  Span span;
+  bool isPublic = true;
+};
+struct SyntaxParameter {
+  std::string name;
+  SyntaxType constraint;
+  Permissions permissions;
+  Span span;
+};
+struct SyntaxRequirement {
+  std::string permission;
+  SyntaxType lhs, rhs;
   Span span;
 };
 struct Expression {
@@ -63,18 +84,44 @@ struct Expression {
     Add,
     Subtract,
     Multiply,
-    Equal
+    Equal,
+    Tuple,
+    Array,
+    Record,
+    Projection,
+    If,
+    Match,
+    For
   } kind;
   std::string text;
   std::vector<uint32_t> children;
   Span span;
+  std::vector<SyntaxType> arguments;
+  std::vector<std::string> labels;
+  std::vector<std::string> captures;
+  std::vector<uint32_t> regions;
+  std::vector<std::vector<std::string>> payloads;
 };
 struct Statement {
+  enum class Kind { Let, Drop, Consume, Require } kind = Kind::Let;
   std::string name;
   std::optional<SyntaxType> type;
   std::optional<std::vector<std::string>> roles;
   std::optional<std::pair<std::string, std::string>> exchange;
+  std::optional<std::string> owner;
   uint32_t expression;
+  Span span;
+};
+struct SyntaxBody {
+  std::vector<Statement> statements;
+  std::vector<std::pair<std::string, uint32_t>> results;
+  bool stopped = false;
+  std::string stopReason;
+  Span span;
+};
+struct SyntaxAlternative {
+  std::string name;
+  std::vector<SyntaxPort> fields;
   Span span;
 };
 struct SyntaxDeclaration {
@@ -85,8 +132,19 @@ struct SyntaxDeclaration {
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs;
   std::vector<Expression> expressions;
-  std::vector<Statement> statements;
-  std::vector<std::pair<std::string, uint32_t>> results;
+  // Root body is kept in the first slot; nested bodies use stable indices.
+  std::vector<SyntaxBody> bodies;
+  std::vector<SyntaxParameter> parameters;
+  std::vector<SyntaxRequirement> requirements;
+  std::optional<Permissions> permissions;
+  std::optional<std::pair<bool, bool>> effects;
+  std::optional<SyntaxType> definition;
+  std::vector<SyntaxType> targetArguments;
+  std::vector<SyntaxPort> fields;
+  std::vector<SyntaxAlternative> alternatives;
+  std::vector<SyntaxDeclaration> members;
+  bool abstract = false;
+  std::string associatedSort;
 };
 struct Import {
   std::string module;

@@ -16,7 +16,7 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface/1'
+    assert interface['format'] == 'zkc.language-interface/2'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
     assert 'clauses' not in interface
@@ -86,5 +86,24 @@ with case('target admission failure names its phase and related source declarati
     assert 'target.admission' in diagnostic
     assert 'related source declaration: expansion::' in diagnostic
     assert f'at {source}:' in diagnostic
+
+for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
+             'associated', 'associated_domain', 'bool', 'branch', 'resource_control', 'group', 'variant_wire', 'variant_custody', 'index'):
+    args = ['--source-format=zkc', '--entry=sample::Demo',
+            f'--module=sample={FIXTURES / (name + ".zkc")}']
+    with case(f'typed source participant compilation: {name}'):
+        for optimized in (0, 1):
+            flags = [] if optimized else ['--no-simplify']
+            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            (OUT / f'typed-{name}-{optimized}.bundle').write_text(bundle)
+        schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+        for direction in ('inputs', 'outputs'):
+            native = [index for port in schema[direction] for index in port['native']]
+            assert native == list(range(len(native)))
+        if name == 'record':
+            assert schema['inputs'][0]['native'] == [0, 1]
+            assert [f['name'] for f in schema['inputs'][0]['schema']['fields']] == ['left', 'right']
+        if name == 'resource':
+            assert schema['inputs'] == schema['outputs'] == []
 
 counted()

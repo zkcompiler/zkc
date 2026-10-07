@@ -1,0 +1,5 @@
+module sample; domain Fr=field("bls12-381.fr");
+interface Increment<F:Field>{math fn add(x:F)->F;}
+component Plus<F:Field>:Increment<F>{math fn add(x:F)->F{return x+1;}}
+math fn invoke<F:Field,C:Increment<F>>(x:F)->F{return C::add(x);}
+protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return(r=invoke<Fr,Plus<Fr>>(x));}entry Demo=Run;

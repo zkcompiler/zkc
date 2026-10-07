@@ -184,7 +184,7 @@ def main():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     assert targets["ZkcCompiler"] == (set(), {"ZkcCompilerCore", "ZkcDriver"}, []), "aggregate must not compile sources"
     private_headers = {
-        "ZkcLanguage": {ROOT / "lib/Language/Internal.h"},
+        "ZkcLanguage": {ROOT / "lib/Language/Internal.h", ROOT / "lib/Language/Checker.h", ROOT / "lib/Language/BodyCheck.h"},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h"},

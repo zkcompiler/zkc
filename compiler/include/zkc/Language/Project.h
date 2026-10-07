@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_PROJECT_H
 
 #include "zkc/Contracts/Mathematical.h"
+#include "zkc/Language/Types.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
@@ -53,6 +54,8 @@ struct Limits {
   uint64_t declarations = 10000, operations = 100000, work = 1000000;
   uint64_t irBytes = 16777216, symbolBytes = 4096;
   uint64_t interfaceBytes = 4194304, locationBytes = 16777216;
+  uint64_t typeDepth = 32, typeNodes = 100000, instances = 4096;
+  uint64_t aggregateLeaves = 1024, naturalTerms = 1024, naturalFactors = 64;
 };
 llvm::Error checkLimits(const Limits &);
 
@@ -77,14 +80,6 @@ struct Token {
   TokenKind kind;
   Span span;
 };
-struct Type {
-  enum class Kind { Boolean, Field } kind = Kind::Boolean;
-  std::string domain;
-  bool operator==(const Type &other) const {
-    return kind == other.kind && domain == other.domain;
-  }
-  bool operator!=(const Type &other) const { return !(*this == other); }
-};
 struct Port {
   std::string name;
   Type type;
@@ -105,6 +100,9 @@ struct MathValue {
 struct HelperCall {
   DeclarationId callee;
   std::vector<ValueId> operands;
+  std::vector<Type> arguments;
+  std::optional<Type> component;
+  std::optional<unsigned> owner;
 };
 struct Exchange {
   unsigned sender, receiver;
@@ -114,28 +112,124 @@ struct Restriction {
   ValueId input;
   std::vector<unsigned> roles;
 };
+struct Body;
+struct Construct {
+  enum class Kind { Aggregate, Variant, Unpack };
+  std::vector<ValueId> operands;
+  std::string alternative;
+  Kind kind = Kind::Aggregate;
+};
+struct Projection {
+  ValueId input;
+  std::vector<unsigned> path;
+};
+struct LocalPrimitive {
+  std::string contract;
+  std::vector<ValueId> operands;
+  std::vector<std::string> parameters;
+  std::vector<Type> staticArguments;
+  LocalPrimitive(std::string contract, std::vector<ValueId> operands,
+                 std::vector<std::string> parameters,
+                 std::vector<Type> statics = {})
+      : contract(std::move(contract)), operands(std::move(operands)),
+        parameters(std::move(parameters)), staticArguments(std::move(statics)) {
+  }
+};
+struct Consume {
+  ValueId input;
+};
+struct LocalControl {
+  enum class Kind { If, Match, For } kind;
+  std::vector<ValueId> operands;
+  std::vector<std::shared_ptr<const Body>> regions;
+  std::vector<std::string> alternatives;
+  unsigned carried = 0;
+};
 struct Operation {
-  std::variant<MathValue, HelperCall, Exchange, Restriction> action;
+  std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
+               Projection, LocalPrimitive, Consume, LocalControl>
+      action;
   ValueId result;
   Span span;
   uint32_t statement;
 };
 struct Body {
-  enum class Mode { Math, Protocol } mode;
+  enum class Mode { Math, Local, Protocol } mode;
   std::vector<Value> values;
   std::vector<Operation> operations;
   std::vector<ValueId> results;
+  unsigned inputs = 0;
+  bool stopped = false;
+  std::string stopReason;
+  bool mayStop = false, opaque = false;
   /// Includes intermediate dependencies of unused mathematical work.
   std::vector<std::vector<unsigned>> formationRequirements;
 };
+struct Parameter {
+  enum class Sort { Type, Field, Group, Natural, Component } sort;
+  std::string name, atom;
+  Permissions permissions;
+  std::optional<DeclarationId> interface;
+  std::vector<Type> arguments;
+  Span span;
+};
+struct TypeField {
+  std::string name;
+  Type type;
+  bool isPublic = true;
+  Span span;
+};
+struct Alternative {
+  std::string name;
+  std::vector<TypeField> fields;
+  Span span;
+};
+struct NaturalBound {
+  Natural lhs, rhs;
+  Span span;
+};
+struct PermissionBound {
+  Type type;
+  Permissions permissions;
+  Span span;
+};
 struct Declaration {
-  enum class Kind { Domain, Math, Protocol, Entry } kind;
+  enum class Kind {
+    Domain,
+    Math,
+    Local,
+    Protocol,
+    Entry,
+    Alias,
+    Record,
+    Variant,
+    Interface,
+    Component,
+    Associated
+  } kind;
   DeclarationId id;
   ModuleId module;
   std::string name, qualifiedName, symbol;
   bool isPublic = false;
   Span span;
   Type domain;
+  std::vector<Parameter> parameters;
+  std::vector<NaturalBound> bounds;
+  std::vector<PermissionBound> permissionBounds;
+  std::optional<Permissions> permissions;
+  std::vector<TypeField> fields;
+  std::vector<Alternative> alternatives;
+  std::vector<DeclarationId> members;
+  std::optional<DeclarationId> parent;
+  std::optional<Type> implementation;
+  std::optional<std::pair<bool, bool>> effectAllowance;
+  bool abstract = false;
+  /// Empty or Type is a private representation; Field and Group expose a
+  /// domain.
+  std::string associatedSort;
+  /// A closed definition records its template and exact static substitution.
+  std::optional<DeclarationId> origin;
+  std::vector<Type> staticArguments;
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
   std::optional<Body> body;

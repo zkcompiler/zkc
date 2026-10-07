@@ -1,0 +1,5 @@
+module sample; domain Fr=field("bls12-381.fr");
+struct Ticket:Drop {}
+fn make()->Ticket{return Ticket{};}
+fn close(t:Ticket)->(){consume t;return ();}
+protocol Run roles(P)()->(){local P let t=make();local P let done=close(t);return();}entry Demo=Run;

@@ -43,9 +43,18 @@ add_zkc_component(Contracts
   lib/Contracts/Representations.cpp
 )
 add_zkc_component(Language
+  lib/Language/Types.cpp
+  lib/Language/Layout.cpp
+  lib/Language/Natural.cpp
   lib/Language/Project.cpp
   lib/Language/Syntax.cpp
   lib/Language/Check.cpp
+  lib/Language/TypeCheck.cpp
+  lib/Language/BodyCheck.cpp
+  lib/Language/Expressions.cpp
+  lib/Language/Calls.cpp
+  lib/Language/Control.cpp
+  lib/Language/Specialize.cpp
 )
 target_link_libraries(ZkcLanguage PUBLIC ZkcContracts)
 add_zkc_component(Relation

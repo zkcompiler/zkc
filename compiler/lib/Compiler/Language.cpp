@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Layout.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
@@ -76,12 +77,88 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
       locations.push_back(sourceSpan(entry, decl.span));
     }
 }
-void writeInterface(json::OStream &out, const ClosedEntry &entry,
-                    StringRef original, StringRef toolchain) {
+Error writeInterface(json::OStream &out, BoundedStream &stream,
+                     const ClosedEntry &entry, StringRef original,
+                     StringRef toolchain, const Limits &limits) {
   const auto &protocol = entry.protocol();
-  auto ports = [&](StringRef name, ArrayRef<Port> source) {
+  Layouts layouts(entry.project(), limits);
+  std::vector<std::shared_ptr<const Layout>> inputs, outputs;
+  for (bool input : {true, false})
+    for (auto &port : input ? protocol.inputs : protocol.outputs) {
+      auto layout = layouts.get(port.type);
+      if (!layout)
+        return layout.takeError();
+      (input ? inputs : outputs).push_back(*layout);
+    }
+  uint64_t remaining = limits.work;
+  bool limited = false;
+  auto charge = [&](uint64_t work) {
+    if (limited || stream.overflow() || work > remaining) {
+      limited = true;
+      return false;
+    }
+    remaining -= work;
+    return true;
+  };
+  std::function<void(const Layout &)> schema;
+  schema = [&](const Layout &layout) {
+    if (!charge(1)) {
+      out.value(nullptr);
+      return;
+    }
+    out.object([&] {
+      out.attribute("type", spelling(layout.type));
+      out.attribute("custody", layout.custody);
+      out.attributeArray("permissions", [&] {
+        if (layout.permissions.copy)
+          out.value("Copy");
+        if (layout.permissions.drop)
+          out.value("Drop");
+        if (layout.permissions.share)
+          out.value("Share");
+        if (layout.permissions.wire)
+          out.value("Wire");
+      });
+      auto fields = [&](ArrayRef<LayoutField> fields) {
+        for (auto &field : fields) {
+          if (!charge(field.name.size() + 1))
+            break;
+          out.object([&] {
+            out.attribute("name", field.name);
+            out.attribute("offset", field.offset);
+            out.attributeBegin("schema");
+            schema(*field.layout);
+            out.attributeEnd();
+          });
+        }
+      };
+      out.attributeArray("fields", [&] { fields(layout.fields); });
+      out.attributeArray("alternatives", [&] {
+        for (auto &alternative : layout.alternatives) {
+          if (!charge(alternative.name.size() + 1))
+            break;
+          out.object([&] {
+            out.attribute("name", alternative.name);
+            out.attributeArray("fields", [&] { fields(alternative.fields); });
+          });
+        }
+      });
+      out.attributeArray("leaves", [&] {
+        for (auto &leaf : layout.leaves) {
+          if (!charge(leaf.size() + 1))
+            break;
+          out.value(leaf);
+        }
+      });
+    });
+  };
+  auto ports = [&](StringRef name, ArrayRef<Port> source,
+                   ArrayRef<std::shared_ptr<const Layout>> layouts) {
+    unsigned flat = 0;
     out.attributeArray(name, [&] {
-      for (unsigned i = 0; i < source.size(); ++i)
+      for (unsigned i = 0; i < source.size(); ++i) {
+        if (!charge(source[i].name.size() + 1))
+          break;
         out.object([&] {
           out.attribute("name", source[i].name);
           out.attribute("type", spelling(source[i].type));
@@ -90,11 +167,19 @@ void writeInterface(json::OStream &out, const ClosedEntry &entry,
               out.value(protocol.roles[role]);
           });
           out.attribute("index", i);
+          out.attributeArray("native", [&] {
+            for (unsigned j = 0; j < layouts[i]->leaves.size(); ++j)
+              out.value(flat++);
+          });
+          out.attributeBegin("schema");
+          schema(*layouts[i]);
+          out.attributeEnd();
         });
+      }
     });
   };
   out.object([&] {
-    out.attribute("format", "zkc.language-interface/1");
+    out.attribute("format", "zkc.language-interface/2");
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);
@@ -104,9 +189,12 @@ void writeInterface(json::OStream &out, const ClosedEntry &entry,
       for (const auto &role : protocol.roles)
         out.value(role);
     });
-    ports("inputs", protocol.inputs);
-    ports("outputs", protocol.outputs);
+    ports("inputs", protocol.inputs, inputs);
+    ports("outputs", protocol.outputs, outputs);
   });
+  if (limited || stream.overflow())
+    return error("source.limit", "interface traversal or byte limit exceeded");
+  return Error::success();
 }
 } // namespace
 struct CheckedOriginal::Storage {
@@ -190,7 +278,9 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
   storage->toolchain = compilerToolchainIdentity();
   BoundedStream stream(storage->interface, limits.interfaceBytes);
   json::OStream interface(stream);
-  writeInterface(interface, entry, storage->identity, storage->toolchain);
+  if (auto error = writeInterface(interface, stream, entry, storage->identity,
+                                  storage->toolchain, limits))
+    return std::move(error);
   if (stream.overflow())
     return error("source.limit", "source interface byte limit exceeded");
   std::string mapIdentity;
@@ -207,7 +297,10 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
     }
   }
   storage->locationsIdentity = digest(mapIdentity);
-  return CheckedOriginal(std::move(storage));
+  CheckedOriginal original(std::move(storage));
+  if (auto failure = checkInterface(original, original.interfaceJson(), limits))
+    return std::move(failure);
+  return original;
 }
 const ClosedEntry &CheckedOriginal::entry() const { return storage->selected; }
 StringRef CheckedOriginal::bytes() const { return storage->original; }

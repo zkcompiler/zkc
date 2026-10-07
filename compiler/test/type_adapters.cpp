@@ -92,13 +92,8 @@ int main() {
                         4),
                 "structural native type lost its element or length");
         roundTrip(context, take(defaultRepresentation(logical)), true);
-        refuses(encodeBoundType(
-                    zkc::algebra::FixedVectorType::get(
-                        &context,
-                        zkc::algebra::FieldType::get(&context, "koala-bear"),
-                        1048577),
-                    false),
-                "binding-type-limit");
+        // Invalid native construction is tested with getChecked below. Calling
+        // get here asserts before the adapter can inspect an oversized vector.
         logical.arguments[1] = TypeArgument::naturalArgument(1048577);
         require(!decodeBoundType(&context, logical),
                 "malformed aggregate bypassed admission");

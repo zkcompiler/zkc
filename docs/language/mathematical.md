@@ -1,10 +1,11 @@
 # Author mathematical protocols
 
-The `.zkc` language compiles concrete field and Boolean calculations, mathematical
-helpers, explicit messages and selected Entries directly into mathematical MLIR.
-The [source profile](../spec/profiles/source/mathematical-language.md) defines its
-syntax, role semantics, checks and limits. Wider language features remain under
-[frontend migration](../roadmap.md).
+The `.zkc` language combines total mathematical helpers, ordered local functions,
+static libraries and explicit participant messages. It emits mathematical MLIR
+for the existing participant compiler and runtime. The
+[source profile](../spec/profiles/source/mathematical-language.md) defines syntax,
+permissions, role semantics and bounds. Services, protocol composition, relation
+attachments and source-facing Host jobs remain under [frontend migration](../roadmap.md).
 
 For a complete small example, read [algebra.zkc](../../compiler/test/fixtures/language/algebra.zkc)
 and [transfer.zkc](../../compiler/test/fixtures/language/transfer.zkc). The two
@@ -35,6 +36,65 @@ also demonstrates direct independent runners, changed receive values and the
 existing joint host with independently supplied role inputs.
 There is no protocol-specific runtime or source-facing Host generator here.
 
+## Local code and reusable types
+
+```text
+module example;
+domain Fr = field("bls12-381.fr");
+
+struct Pair<T: Type> { pub left: T, pub right: T }
+math fn square<F: Field>(x: F) -> F { return x * x; }
+fn choose(x: Fr, go: bool) -> Pair<Fr> {
+  let squared = square(x);
+  let selected = if go capture(x, squared) {
+    yield squared;
+  } else {
+    yield x;
+  };
+  return Pair<Fr>{left: x, right: selected};
+}
+protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
+  local P let pair = choose(x, go);
+  let received = send P -> V(pair);
+  return (result = received);
+}
+entry Demo = Transfer;
+```
+
+`math fn` describes total algebra. `fn` describes ordered work, including control
+and resources. The protocol explicitly chooses P as the owner of `choose` and
+sends its result. The receiver obtains its actual received components. The record
+becomes two ordered payload leaves, which the interface maps back to named fields.
+
+Generic libraries declare the permissions they use. A mathematical parameter
+needs `Copy + Drop`; a protocol message also needs `Share + Wire`. A plain `Type`
+parameter promises none. These permissions are independent. Components select
+interface implementations statically and can seal an associated representation.
+Library clients need neither its representation nor a runtime dispatch table.
+
+Use explicit captures in local `if` and `match`; use `carry` for changing state or
+affine resources in a `for` loop. Defined functions infer effects. Write `!{}` only
+when an effect-free interface is an intended contract. Local owner inference,
+nonlinear dimension inference and arbitrary inequality solving are not required.
+
+The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/array.zkc),
+[variants](../../compiler/test/fixtures/language/variant.zkc),
+[static components](../../compiler/test/fixtures/language/component.zkc),
+[associated domains](../../compiler/test/fixtures/language/associated_domain.zkc),
+and [affine control and stop cleanup](../../compiler/test/fixtures/language/resource_control.zkc).
+Generic associated types can declare explicit bounds such as
+`where Share(G::Scalar), Wire(G::Scalar)`; selecting a group checks those bounds.
+Fixed arrays currently use static numeric indices. Private ingress requires a
+validator that this source profile does not yet expose. Zero-leaf messages refuse;
+empty values and ports still retain their source obligations and interface rows.
+
+`language-interface` emits `zkc.language-interface/2`. A logical port's `native`
+indices and recursive `schema` describe its flattened fields, variant payloads and
+custody. These indices refer to the original mathematical signature, not a promise
+that downstream physical storage uses the same positions. Host adapters must also
+consult the selected bundle. This package supplies the schema and existing runtime
+path; typed source job construction belongs to the Host package.
+
 ## C++ boundaries
 
 - `Zkc::Language`: capture supplied buffers, analyze them, and close an exact
@@ -48,7 +108,9 @@ There is no protocol-specific runtime or source-facing Host generator here.
   remains caller-accessible and is separate from the immutable original.
 - `Zkc::Driver`: read explicit bounded files and render command results.
 
-The public APIs are [Language/Project.h](../../compiler/include/zkc/Language/Project.h),
+The logical type and layout APIs are [Language/Types.h](../../compiler/include/zkc/Language/Types.h)
+and [Language/Layout.h](../../compiler/include/zkc/Language/Layout.h).
+The compilation APIs are [Language/Project.h](../../compiler/include/zkc/Language/Project.h),
 [Translation/Language.h](../../compiler/include/zkc/Translation/Language.h), and
 [Compiler/Language.h](../../compiler/include/zkc/Compiler/Language.h).
 Diagnostics retain byte spans; recovery tokens cannot be promoted into checked
@@ -57,7 +119,7 @@ state. The compiler never accepts a caller-constructed checked project.
 Target failures retain their phase and generated coordinates. Admission failures
 also identify a related source declaration; later compiler diagnostics use the
 operation map established by source comparison when a position matches.
-Unsupported planned syntax reports `source.unsupported` and is reserved.
+Unsupported future syntax is reserved and refuses explicitly.
 
 The interface's toolchain stamp records the compiler source, installed catalog,
 LLVM/MLIR release and LLVM revision when the installation provides it. An absent

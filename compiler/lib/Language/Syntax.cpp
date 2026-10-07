@@ -55,13 +55,12 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
       kind = TokenKind::Punctuation;
       if (offset < text.size() && ((c == ':' && text[offset] == ':') ||
                                    (c == '-' && text[offset] == '>') ||
-                                   (c == '=' && text[offset] == '=')))
+                                   (c == '=' && text[offset] == '=') ||
+                                   (c == '=' && text[offset] == '>') ||
+                                   (c == '<' && text[offset] == '=') ||
+                                   (c == '.' && text[offset] == '.')))
         ++offset;
-      else if (StringRef("<>[]!").contains(c))
-        return failure("source.unsupported",
-                       "generic, aggregate, or effect syntax is not enabled",
-                       Span{module, uint32_t(begin), uint32_t(offset)});
-      else if (!StringRef(";,:(){}@=+-*").contains(c))
+      else if (!StringRef(";,:(){}@=+-*<>[]!.").contains(c))
         return failure("source.token", "unsupported source character",
                        Span{module, uint32_t(begin), uint32_t(offset)});
     }
@@ -105,10 +104,9 @@ public:
       return takeError();
     }
     while (!atEnd() && !diagnostic) {
-      if (at("use")) {
+      if (take("use")) {
         Import import;
         import.span = current().span;
-        advance();
         if (!name(import.module))
           break;
         bool separator = false;
@@ -124,12 +122,10 @@ public:
         }
         if (diagnostic)
           break;
-        if (!separator) {
-          fail("source.syntax", "expected '::' before import list");
+        if (!separator || !expect("{")) {
+          fail("source.syntax", "expected import list");
           break;
         }
-        if (!expect("{"))
-          break;
         if (at("}")) {
           fail("source.syntax", "import list must be nonempty");
           break;
@@ -148,58 +144,12 @@ public:
           break;
         }
         output.imports.push_back(std::move(import));
-        continue;
-      }
-      SyntaxDeclaration declaration;
-      declaration.span = current().span;
-      declaration.isPublic = take("pub");
-      if (take("domain")) {
-        declaration.kind = Declaration::Kind::Domain;
-        if (!name(declaration.name) || !expect("=") || !expect("field") ||
-            !expect("("))
-          break;
-        if (current().kind != TokenKind::String) {
-          fail("source.syntax", "expected installed field identity string");
-          break;
-        }
-        declaration.domain = text().drop_front().drop_back().str();
-        advance();
-        if (!expect(")") || !expect(";"))
-          break;
-      } else if (take("entry")) {
-        declaration.kind = Declaration::Kind::Entry;
-        if (!name(declaration.name) || !expect("=") ||
-            !path(declaration.target) || !expect(";"))
-          break;
-      } else if (take("math")) {
-        declaration.kind = Declaration::Kind::Math;
-        if (!expect("fn") || !name(declaration.name) ||
-            !ports(declaration.inputs, false) || !expect("->"))
-          break;
-        SyntaxType result;
-        if (!type(result))
-          break;
-        declaration.outputs.push_back(
-            {"result", std::move(result), {}, current().span});
-        if (!body(declaration, false))
-          break;
-      } else if (take("protocol")) {
-        declaration.kind = Declaration::Kind::Protocol;
-        if (!name(declaration.name) || !expect("roles") ||
-            !roleList(declaration.roles, true) ||
-            !ports(declaration.inputs, true) || !expect("->") ||
-            !ports(declaration.outputs, true) || !body(declaration, true))
-          break;
       } else {
-        fail("source.syntax",
-             "expected domain, math fn, protocol, or entry declaration");
-        break;
+        auto decl = declaration(false, false, 1);
+        if (!decl)
+          break;
+        output.declarations.push_back(std::move(*decl));
       }
-      declaration.span.end = previousEnd;
-      if (!accept(work.count(work.declarations, work.limits.declarations,
-                             "declaration count", declaration.span)))
-        break;
-      output.declarations.push_back(std::move(declaration));
     }
     if (diagnostic)
       return takeError();
@@ -216,8 +166,8 @@ private:
   std::optional<Diagnostic> diagnostic;
   const Token &current() const { return tokens[cursor]; }
   StringRef text() const {
-    auto span = current().span;
-    return StringRef(source.text).slice(span.begin, span.end);
+    auto s = current().span;
+    return StringRef(source.text).slice(s.begin, s.end);
   }
   bool at(StringRef value) const { return text() == value; }
   bool atEnd() const { return current().kind == TokenKind::End; }
@@ -248,6 +198,11 @@ private:
     return success;
   }
   Error takeError() { return make_error<DiagnosticError>(*diagnostic); }
+  bool bounded(unsigned depth) {
+    return depth <= work.limits.parseDepth
+               ? accept(work.charge(1, current().span))
+               : fail("source.limit", "parse depth limit exceeded");
+  }
   bool name(std::string &output) {
     if (current().kind != TokenKind::Word || isReserved(text()))
       return fail("source.name", "expected non-reserved identifier");
@@ -268,14 +223,156 @@ private:
                work.limits.moduleBytes + work.limits.identifierBytes + 2 ||
            fail("source.limit", "qualified name byte limit exceeded");
   }
-  bool type(SyntaxType &output) {
-    output.span = current().span;
-    if (take("bool"))
-      output.name = "bool";
-    else if (!path(output.name))
-      return false;
-    output.span.end = previousEnd;
+  bool permission(Permissions &p) {
+    if (take("Copy"))
+      p.copy = true;
+    else if (take("Drop"))
+      p.drop = true;
+    else if (take("Share"))
+      p.share = true;
+    else if (take("Wire"))
+      p.wire = true;
+    else
+      return fail("source.permission", "expected Copy, Drop, Share, or Wire");
     return true;
+  }
+  bool permissionList(std::optional<Permissions> &p) {
+    if (!take(":"))
+      return true;
+    p.emplace();
+    do {
+      if (!permission(*p))
+        return false;
+    } while (take("+"));
+    return true;
+  }
+  bool type(SyntaxType &out, unsigned depth = 1, unsigned minimum = 0) {
+    if (!bounded(depth))
+      return false;
+    out.span = current().span;
+    if (take("[")) {
+      out.kind = SyntaxType::Kind::Array;
+      SyntaxType element, count;
+      if (!type(element, depth + 1) || !expect(";") ||
+          !type(count, depth + 1) || !expect("]"))
+        return false;
+      out.arguments = {std::move(element), std::move(count)};
+    } else if (take("(")) {
+      out.kind = SyntaxType::Kind::Tuple;
+      bool comma = false;
+      if (!at(")"))
+        do {
+          SyntaxType child;
+          if (!type(child, depth + 1))
+            return false;
+          out.arguments.push_back(std::move(child));
+        } while ((comma = take(",")) && !at(")"));
+      if (!expect(")"))
+        return false;
+      if (out.arguments.size() == 1 && !comma) {
+        auto inner = std::move(out.arguments.front());
+        out = std::move(inner);
+      }
+    } else if (current().kind == TokenKind::Decimal) {
+      out.kind = SyntaxType::Kind::Natural;
+      out.name = text().str();
+      advance();
+    } else {
+      if (at("bool") || at("index") || at("nat") || at("Type") || at("Field") ||
+          at("Group")) {
+        out.name = text().str();
+        advance();
+      } else if (!path(out.name))
+        return false;
+      if (take("<")) {
+        if (at(">"))
+          return fail("source.syntax", "empty static argument list");
+        do {
+          SyntaxType arg;
+          if (!type(arg, depth + 1))
+            return false;
+          out.arguments.push_back(std::move(arg));
+        } while (take(",") && !at(">"));
+        if (!expect(">"))
+          return false;
+      }
+    }
+    out.span.end = previousEnd;
+    while (!diagnostic) {
+      unsigned precedence = at("+") ? 1 : at("*") ? 2 : 0;
+      if (!precedence || precedence < minimum)
+        break;
+      auto kind = at("+") ? SyntaxType::Kind::Add : SyntaxType::Kind::Multiply;
+      advance();
+      SyntaxType rhs;
+      if (!type(rhs, depth + 1, precedence + 1))
+        return false;
+      SyntaxType combined;
+      combined.kind = kind;
+      combined.span = out.span;
+      combined.span.end = previousEnd;
+      combined.arguments.push_back(std::move(out));
+      combined.arguments.push_back(std::move(rhs));
+      out = std::move(combined);
+    }
+    return true;
+  }
+  bool parameters(std::vector<SyntaxParameter> &parameters) {
+    if (!take("<"))
+      return true;
+    if (at(">"))
+      return fail("source.syntax", "empty static parameter list");
+    do {
+      SyntaxParameter p;
+      p.span = current().span;
+      if (!name(p.name) || !expect(":") || !type(p.constraint, 1, 2))
+        return false;
+      while (take("+"))
+        if (!permission(p.permissions))
+          return false;
+      p.span.end = previousEnd;
+      parameters.push_back(std::move(p));
+    } while (take(",") && !at(">"));
+    return expect(">");
+  }
+  bool requirements(SyntaxDeclaration &decl) {
+    if (!take("where"))
+      return true;
+    do {
+      SyntaxRequirement req;
+      req.span = current().span;
+      if (at("Copy") || at("Drop") || at("Share") || at("Wire")) {
+        req.permission = text().str();
+        advance();
+        if (!expect("(") || !type(req.lhs) || !expect(")"))
+          return false;
+      } else if (!type(req.lhs) || !expect("<=") || !type(req.rhs))
+        return false;
+      req.span.end = previousEnd;
+      decl.requirements.push_back(std::move(req));
+    } while (take(",") && !at("{") && !at(";") && !at("!"));
+    return true;
+  }
+  bool effects(SyntaxDeclaration &decl) {
+    if (!take("!"))
+      return true;
+    decl.effects = std::make_pair(false, false);
+    if (!expect("{"))
+      return false;
+    if (!at("}"))
+      do {
+        bool *flag = nullptr;
+        if (take("stop"))
+          flag = &decl.effects->first;
+        else if (take("opaque"))
+          flag = &decl.effects->second;
+        else
+          return fail("source.effect", "expected stop or opaque effect");
+        if (*flag)
+          return fail("source.duplicate", "duplicate effect");
+        *flag = true;
+      } while (take(",") && !at("}"));
+    return expect("}");
   }
   bool roleList(std::vector<std::string> &roles, bool parenthesized = false) {
     bool parens = take("(");
@@ -289,68 +386,416 @@ private:
     } while (parens && take(",") && !at(")"));
     return !parens || expect(")");
   }
-  bool ports(std::vector<SyntaxPort> &output, bool roles) {
+  bool ports(std::vector<SyntaxPort> &ports, bool roles) {
     if (!expect("("))
       return false;
-    if (take(")"))
-      return true;
-    do {
-      SyntaxPort port;
-      port.span = current().span;
-      if (!name(port.name) || !expect(":") || !type(port.type))
-        return false;
-      if (roles && (!expect("@") || !roleList(port.roles)))
-        return false;
-      port.span.end = previousEnd;
-      output.push_back(std::move(port));
-    } while (take(",") && !at(")"));
+    if (!at(")"))
+      do {
+        SyntaxPort p;
+        p.span = current().span;
+        if (!name(p.name) || !expect(":") || !type(p.type))
+          return false;
+        if (roles && (!expect("@") || !roleList(p.roles)))
+          return false;
+        p.span.end = previousEnd;
+        ports.push_back(std::move(p));
+      } while (take(",") && !at(")"));
+    return expect(")");
+  }
+  std::optional<SyntaxDeclaration> declaration(bool member, bool abstract,
+                                               unsigned depth) {
+    if (!bounded(depth))
+      return {};
+    SyntaxDeclaration d;
+    d.span = current().span;
+    d.isPublic = take("pub") || member;
+    if (take("domain")) {
+      d.kind = Declaration::Kind::Domain;
+      if (member) {
+        fail("source.syntax", "declaration is not an interface member");
+        return {};
+      }
+      if (!name(d.name) || !expect("="))
+        return {};
+      if (take("field"))
+        d.target = "Field";
+      else if (take("group"))
+        d.target = "Group";
+      else {
+        fail("source.domain", "expected installed field or group");
+        return {};
+      }
+      if (!expect("(") || current().kind != TokenKind::String) {
+        fail("source.syntax", "expected installed domain identity string");
+        return {};
+      }
+      d.domain = text().drop_front().drop_back().str();
+      advance();
+      if (!expect(")") || !expect(";"))
+        return {};
+    } else if (take("entry")) {
+      d.kind = Declaration::Kind::Entry;
+      if (member) {
+        fail("source.syntax", "declaration is not an interface member");
+        return {};
+      }
+      if (!name(d.name) || !expect("="))
+        return {};
+      SyntaxType target;
+      if (!type(target) || !expect(";"))
+        return {};
+      d.target = target.name;
+      d.targetArguments = std::move(target.arguments);
+    } else if (take("type")) {
+      d.kind =
+          member ? Declaration::Kind::Associated : Declaration::Kind::Alias;
+      if (!name(d.name) || !parameters(d.parameters))
+        return {};
+      if (member && take(":")) {
+        d.permissions.emplace();
+        if (at("Type") || at("Field") || at("Group")) {
+          d.associatedSort = text().str();
+          advance();
+          if (d.associatedSort != "Type")
+            d.permissions->copy = d.permissions->drop = true;
+          if (take("+"))
+            do {
+              if (!permission(*d.permissions))
+                return {};
+            } while (take("+"));
+        } else
+          do {
+            if (!permission(*d.permissions))
+              return {};
+          } while (take("+"));
+      }
+      d.abstract = abstract;
+      if (!requirements(d))
+        return {};
+      if (!abstract) {
+        SyntaxType repr;
+        if (!expect("=") || !type(repr))
+          return {};
+        d.definition = std::move(repr);
+      }
+      if (!expect(";"))
+        return {};
+    } else if (at("struct") || at("enum")) {
+      if (member) {
+        fail("source.syntax", "nominal declarations belong at module scope");
+        return {};
+      }
+      bool variant = take("enum");
+      if (!variant)
+        advance();
+      d.kind = variant ? Declaration::Kind::Variant : Declaration::Kind::Record;
+      if (!name(d.name) || !parameters(d.parameters) ||
+          !permissionList(d.permissions) || !requirements(d) || !expect("{"))
+        return {};
+      if (!at("}"))
+        do {
+          if (variant) {
+            SyntaxAlternative alt;
+            alt.span = current().span;
+            if (!name(alt.name) || !expect("("))
+              return {};
+            if (!at(")"))
+              do {
+                SyntaxPort p;
+                p.span = current().span;
+                p.name = std::to_string(alt.fields.size());
+                if (!type(p.type))
+                  return {};
+                p.span.end = previousEnd;
+                alt.fields.push_back(std::move(p));
+              } while (take(",") && !at(")"));
+            if (!expect(")"))
+              return {};
+            alt.span.end = previousEnd;
+            d.alternatives.push_back(std::move(alt));
+          } else {
+            SyntaxPort p;
+            p.span = current().span;
+            p.isPublic = take("pub");
+            if (!name(p.name) || !expect(":") || !type(p.type))
+              return {};
+            p.span.end = previousEnd;
+            d.fields.push_back(std::move(p));
+          }
+        } while (take(",") && !at("}"));
+      if (!expect("}"))
+        return {};
+    } else if (at("interface") || at("component")) {
+      if (member) {
+        fail("source.syntax", "nested component declarations are not admitted");
+        return {};
+      }
+      bool interface = take("interface");
+      if (!interface)
+        advance();
+      d.kind = interface ? Declaration::Kind::Interface
+                         : Declaration::Kind::Component;
+      if (!name(d.name) || !parameters(d.parameters))
+        return {};
+      if (!interface) {
+        SyntaxType target;
+        if (!expect(":") || !type(target))
+          return {};
+        d.definition = std::move(target);
+      }
+      if (!requirements(d) || !expect("{"))
+        return {};
+      while (!at("}") && !atEnd()) {
+        auto child = declaration(true, interface, depth + 1);
+        if (!child)
+          return {};
+        d.members.push_back(std::move(*child));
+      }
+      if (!expect("}"))
+        return {};
+    } else {
+      bool math = take("math");
+      bool fn = take("fn");
+      if (math && !fn) {
+        fail("source.syntax", "expected fn after math");
+        return {};
+      }
+      bool protocol = !fn && take("protocol");
+      if (!fn && !protocol) {
+        fail("source.syntax", "expected a source declaration");
+        return {};
+      }
+      if (protocol && member) {
+        fail("source.unsupported",
+             "protocol component members belong to protocol composition");
+        return {};
+      }
+      d.kind = protocol ? Declaration::Kind::Protocol
+               : math   ? Declaration::Kind::Math
+                        : Declaration::Kind::Local;
+      if (!name(d.name) || !parameters(d.parameters))
+        return {};
+      if (protocol && (!expect("roles") || !roleList(d.roles, true)))
+        return {};
+      if (!ports(d.inputs, protocol) || !expect("->"))
+        return {};
+      if (protocol) {
+        if (!ports(d.outputs, true))
+          return {};
+      } else {
+        SyntaxPort p;
+        p.name = "result";
+        p.span = current().span;
+        if (!type(p.type))
+          return {};
+        p.span.end = previousEnd;
+        d.outputs.push_back(std::move(p));
+      }
+      if (!requirements(d) || !effects(d))
+        return {};
+      d.abstract = abstract;
+      if (abstract) {
+        if (!expect(";"))
+          return {};
+      } else if (!body(d, protocol, false, 1))
+        return {};
+    }
+    d.span.end = previousEnd;
+    if (!accept(work.count(work.declarations, work.limits.declarations,
+                           "declaration count", d.span)))
+      return {};
+    return d;
+  }
+  bool names(std::vector<std::string> &out) {
+    if (!expect("("))
+      return false;
+    if (!at(")"))
+      do {
+        std::string n;
+        if (!name(n))
+          return false;
+        out.push_back(std::move(n));
+      } while (take(",") && !at(")"));
     return expect(")");
   }
   std::optional<uint32_t> expression(SyntaxDeclaration &decl,
                                      unsigned depth = 1, unsigned minimum = 0) {
-    if (depth > work.limits.parseDepth) {
-      fail("source.limit", "parse depth limit exceeded");
-      return {};
-    }
-    if (!accept(work.charge(1, current().span)))
+    if (!bounded(depth))
       return {};
     Span span = current().span;
-    std::optional<uint32_t> left;
-    if (take("(")) {
-      left = expression(decl, depth + 1);
-      if (!left || !expect(")"))
+    Expression value;
+    value.span = span;
+    if (take("if")) {
+      value.kind = Expression::Kind::If;
+      auto condition = expression(decl, depth + 1);
+      if (!condition)
         return {};
-    } else {
-      Expression value;
-      value.span = span;
-      if (current().kind == TokenKind::Decimal) {
-        value.kind = Expression::Kind::Decimal;
-        value.text = text().str();
-        advance();
-      } else if (at("true") || at("false")) {
-        value.kind = Expression::Kind::Boolean;
-        value.text = text().str();
-        advance();
-      } else {
-        value.kind = Expression::Kind::Name;
-        if (!path(value.text))
-          return {};
-        if (take("(")) {
-          value.kind = Expression::Kind::Call;
-          if (!at(")"))
-            do {
-              auto arg = expression(decl, depth + 1);
-              if (!arg)
-                return {};
-              value.children.push_back(*arg);
-            } while (take(",") && !at(")"));
-          if (!expect(")"))
+      value.children.push_back(*condition);
+      if (!expect("capture") || !names(value.captures))
+        return {};
+      auto first = body(decl, false, true, depth + 1);
+      if (!first || !expect("else"))
+        return {};
+      auto second = body(decl, false, true, depth + 1);
+      if (!second)
+        return {};
+      value.regions = {*first, *second};
+    } else if (take("match")) {
+      value.kind = Expression::Kind::Match;
+      auto subject = expression(decl, depth + 1);
+      if (!subject)
+        return {};
+      value.children.push_back(*subject);
+      if (!expect("capture") || !names(value.captures) || !expect("{"))
+        return {};
+      if (!at("}"))
+        do {
+          std::string label;
+          std::vector<std::string> payload;
+          if (!name(label) || !names(payload) || !expect("=>"))
             return {};
-        }
+          auto arm = body(decl, false, true, depth + 1);
+          if (!arm)
+            return {};
+          value.labels.push_back(std::move(label));
+          value.payloads.push_back(std::move(payload));
+          value.regions.push_back(*arm);
+        } while (take(",") && !at("}"));
+      if (!expect("}"))
+        return {};
+    } else if (take("for")) {
+      value.kind = Expression::Kind::For;
+      if (!name(value.text) || !expect("in"))
+        return {};
+      auto lower = expression(decl, depth + 1);
+      if (!lower || !expect(".."))
+        return {};
+      auto upper = expression(decl, depth + 1);
+      if (!upper || !expect("carry") || !expect("("))
+        return {};
+      value.children = {*lower, *upper};
+      if (!at(")"))
+        do {
+          std::string n;
+          if (!name(n) || !expect("="))
+            return {};
+          auto initial = expression(decl, depth + 1);
+          if (!initial)
+            return {};
+          value.labels.push_back(std::move(n));
+          value.children.push_back(*initial);
+        } while (take(",") && !at(")"));
+      if (!expect(")") || !expect("capture") || !names(value.captures))
+        return {};
+      auto region = body(decl, false, true, depth + 1);
+      if (!region)
+        return {};
+      value.regions.push_back(*region);
+    } else if (take("(")) {
+      value.kind = Expression::Kind::Tuple;
+      bool comma = false;
+      if (!at(")"))
+        do {
+          auto x = expression(decl, depth + 1);
+          if (!x)
+            return {};
+          value.children.push_back(*x);
+        } while ((comma = take(",")) && !at(")"));
+      if (!expect(")"))
+        return {};
+      if (value.children.size() == 1 && !comma)
+        return postfix(decl, value.children.front(), span, depth, minimum);
+    } else if (take("[")) {
+      value.kind = Expression::Kind::Array;
+      if (!at("]"))
+        do {
+          auto x = expression(decl, depth + 1);
+          if (!x)
+            return {};
+          value.children.push_back(*x);
+        } while (take(",") && !at("]"));
+      if (!expect("]"))
+        return {};
+    } else if (current().kind == TokenKind::Decimal) {
+      value.kind = Expression::Kind::Decimal;
+      value.text = text().str();
+      advance();
+    } else if (at("true") || at("false")) {
+      value.kind = Expression::Kind::Boolean;
+      value.text = text().str();
+      advance();
+    } else {
+      value.kind = Expression::Kind::Name;
+      if (at("index")) {
+        value.text = "index";
+        advance();
+      } else if (!path(value.text))
+        return {};
+      if (take("<")) {
+        do {
+          SyntaxType arg;
+          if (!type(arg, depth + 1))
+            return {};
+          value.arguments.push_back(std::move(arg));
+        } while (take(",") && !at(">"));
+        if (!expect(">"))
+          return {};
       }
-      value.span.end = previousEnd;
+      if (take("(")) {
+        value.kind = Expression::Kind::Call;
+        if (!at(")"))
+          do {
+            auto x = expression(decl, depth + 1);
+            if (!x)
+              return {};
+            value.children.push_back(*x);
+          } while (take(",") && !at(")"));
+        if (!expect(")"))
+          return {};
+      } else if (take("{")) {
+        value.kind = Expression::Kind::Record;
+        if (!at("}"))
+          do {
+            std::string label;
+            if (!name(label) || !expect(":"))
+              return {};
+            auto x = expression(decl, depth + 1);
+            if (!x)
+              return {};
+            value.labels.push_back(std::move(label));
+            value.children.push_back(*x);
+          } while (take(",") && !at("}"));
+        if (!expect("}"))
+          return {};
+      } else if (!value.arguments.empty()) {
+        fail("source.syntax",
+             "static application requires a call or constructor");
+        return {};
+      }
+    }
+    value.span.end = previousEnd;
+    auto left = uint32_t(decl.expressions.size());
+    decl.expressions.push_back(std::move(value));
+    return postfix(decl, left, span, depth, minimum);
+  }
+  std::optional<uint32_t> postfix(SyntaxDeclaration &decl, uint32_t left,
+                                  Span span, unsigned depth, unsigned minimum) {
+    while (take(".") || take("[")) {
+      bool bracket = source.text[previousEnd - 1] == '[';
+      Expression projection;
+      projection.kind = Expression::Kind::Projection;
+      projection.children = {left};
+      projection.span = span;
+      if (current().kind == TokenKind::Decimal) {
+        projection.text = text().str();
+        advance();
+      } else if (!name(projection.text))
+        return {};
+      if (bracket && !expect("]"))
+        return {};
+      projection.span.end = previousEnd;
       left = decl.expressions.size();
-      decl.expressions.push_back(std::move(value));
+      decl.expressions.push_back(std::move(projection));
     }
     bool equality = false;
     while (!diagnostic) {
@@ -364,90 +809,132 @@ private:
         fail("source.syntax", "chained equality requires parentheses");
         return {};
       }
-      auto kind = at("==")  ? Expression::Kind::Equal
-                  : at("+") ? Expression::Kind::Add
-                  : at("-") ? Expression::Kind::Subtract
-                            : Expression::Kind::Multiply;
+      Expression binary;
+      binary.span = span;
+      binary.kind = at("==")  ? Expression::Kind::Equal
+                    : at("+") ? Expression::Kind::Add
+                    : at("-") ? Expression::Kind::Subtract
+                              : Expression::Kind::Multiply;
       equality |= precedence == 1;
       advance();
       auto right = expression(decl, depth + 1, precedence + 1);
       if (!right)
         return {};
-      uint32_t result = decl.expressions.size();
-      decl.expressions.push_back(
-          {kind, {}, {*left, *right}, {module, span.begin, previousEnd}});
-      left = result;
+      binary.children = {left, *right};
+      binary.span.end = previousEnd;
+      left = decl.expressions.size();
+      decl.expressions.push_back(std::move(binary));
     }
     return left;
   }
-  bool body(SyntaxDeclaration &decl, bool protocol) {
-    if (!expect("{"))
-      return false;
-    while (take("let")) {
-      Statement statement;
-      statement.span = current().span;
-      if (!name(statement.name))
-        return false;
-      if (take(":")) {
-        SyntaxType value;
-        if (!type(value))
-          return false;
-        statement.type = std::move(value);
+  std::optional<uint32_t> body(SyntaxDeclaration &decl, bool protocol,
+                               bool region, unsigned depth) {
+    if (!bounded(depth) || !expect("{"))
+      return {};
+    uint32_t id = decl.bodies.size();
+    decl.bodies.emplace_back();
+    SyntaxBody b;
+    b.span = current().span;
+    while (!at("return") && !at("yield") && !at("stop") && !atEnd() &&
+           !at("}")) {
+      Statement s;
+      s.span = current().span;
+      if (take("local")) {
+        std::string owner;
+        if (!protocol || !name(owner)) {
+          fail("source.mode", "owned local statements require protocol mode");
+          return {};
+        }
+        s.owner = std::move(owner);
       }
-      if (take("@")) {
-        statement.roles.emplace();
-        if (!protocol)
-          return fail("source.roles",
-                      "math bindings do not have participant roles");
-        if (!roleList(*statement.roles))
-          return false;
+      if (take("let")) {
+        if (!name(s.name))
+          return {};
+        if (take(":")) {
+          SyntaxType t;
+          if (!type(t))
+            return {};
+          s.type = std::move(t);
+        }
+        if (take("@")) {
+          s.roles.emplace();
+          if (!protocol || !roleList(*s.roles)) {
+            fail("source.roles", "role annotation requires protocol mode");
+            return {};
+          }
+        }
+        if (!expect("="))
+          return {};
+        if (take("send")) {
+          if (!protocol || s.owner) {
+            fail("source.send", "send requires a protocol binding");
+            return {};
+          }
+          std::string from, to;
+          if (!name(from) || !expect("->") || !name(to) || !expect("("))
+            return {};
+          s.exchange = std::make_pair(std::move(from), std::move(to));
+        }
+      } else if (take("drop"))
+        s.kind = Statement::Kind::Drop;
+      else if (take("consume"))
+        s.kind = Statement::Kind::Consume;
+      else if (take("require"))
+        s.kind = Statement::Kind::Require;
+      else {
+        fail("source.syntax",
+             "expected let, drop, consume, require, or body terminator");
+        return {};
       }
-      if (!expect("="))
-        return false;
-      if (take("send")) {
-        if (!protocol)
-          return fail("source.send",
-                      "send is allowed only in a protocol binding");
-        std::string from, to;
-        if (!name(from) || !expect("->") || !name(to) || !expect("("))
-          return false;
-        statement.exchange = std::make_pair(std::move(from), std::move(to));
-      }
-      auto value = expression(decl);
-      if (!value)
-        return false;
-      statement.expression = *value;
-      if (statement.exchange && !expect(")"))
-        return false;
+      auto expr = expression(decl, depth);
+      if (!expr)
+        return {};
+      s.expression = *expr;
+      if (s.exchange && !expect(")"))
+        return {};
       if (!expect(";"))
-        return false;
-      statement.span.end = previousEnd;
-      decl.statements.push_back(std::move(statement));
+        return {};
+      s.span.end = previousEnd;
+      b.statements.push_back(std::move(s));
     }
-    if (!expect("return"))
-      return false;
-    if (protocol) {
-      if (!expect("("))
-        return false;
-      if (!at(")"))
-        do {
-          std::string nameValue;
-          if (!name(nameValue) || !expect("="))
-            return false;
-          auto value = expression(decl);
-          if (!value)
-            return false;
-          decl.results.emplace_back(std::move(nameValue), *value);
-        } while (take(",") && !at(")"));
-      if (!expect(")"))
-        return false;
+    if (take("stop")) {
+      if (protocol || current().kind != TokenKind::String) {
+        fail("source.mode", "local stop requires a reason string");
+        return {};
+      }
+      b.stopped = true;
+      b.stopReason = text().drop_front().drop_back().str();
+      advance();
     } else {
-      auto value = expression(decl);
-      if (!value)
-        return false;
-      decl.results.emplace_back("result", *value);
+      if (!expect(region ? "yield" : "return"))
+        return {};
+      if (protocol) {
+        if (!expect("("))
+          return {};
+        if (!at(")"))
+          do {
+            std::string n;
+            if (!name(n) || !expect("="))
+              return {};
+            auto value = expression(decl, depth);
+            if (!value)
+              return {};
+            b.results.emplace_back(std::move(n), *value);
+          } while (take(",") && !at(")"));
+        if (!expect(")"))
+          return {};
+      } else {
+        auto value = expression(decl, depth);
+        if (!value)
+          return {};
+        b.results.emplace_back("result", *value);
+      }
     }
-    return expect(";") && expect("}");
+    if (!expect(";") || !expect("}"))
+      return {};
+    b.span.end = previousEnd;
+    decl.bodies[id] = std::move(b);
+    return id;
   }
 };
 } // namespace

@@ -38,12 +38,19 @@ foundation completion alone does not retire them.
 ### Target and reuse policy
 
 Use the native mathematical pipeline as the target for migrated capabilities.
-The fresh `.zkc` source path now covers concrete mathematics, messages and Entry
-selection with independently checked MLIR emission. Extend that source design
-through generic/library contracts, local computation and resources, richer
-protocol composition/services, and Entry/Host integration. Detail each package
-before implementation. Relation declarations and future formal consumers retain
-explicit semantic attachment requirements when their syntax is introduced.
+The fresh `.zkc` source path covers mathematical helpers, nominal products/variants,
+static components/generics, permissions, bounded naturals, ordered local control,
+messages and selected Entries with independently checked MLIR emission. The next
+package is **Protocols and specifications**: first refine services, composition and
+distributed control against the existing IR, then specify typed predicates and
+attachments with an independent reader. Follow it with **Entries and Host** for
+construction selection, trusted inputs and typed CLI jobs. Finish with integrated
+stabilization, consumer migration and removal of superseded paths.
+
+Detail each package before implementation. Relation targets remain distinct from
+input/output conditions. Dynamic data access, additional native primitives and
+broader inference enter through their owning contracts when a concrete library
+requires them; they are not protocol-specific executor exceptions.
 
 Use existing implementations as references when their contracts fit. New source
 code belongs to the Language component and emits native mathematics directly.

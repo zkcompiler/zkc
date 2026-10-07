@@ -1,22 +1,505 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Layout.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
-#include "llvm/Support/raw_ostream.h"
-#include <algorithm>
-
 using namespace llvm;
 namespace zkc::language {
+namespace {
+using Values = SmallVector<mlir::Value>;
+class Emitter {
+  const CheckedProject &project;
+  const Limits &limits;
+  mlir::MLIRContext &context;
+  mlir::OpBuilder builder;
+  mlir::Location location;
+  Layouts layouts;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
+  mlir::Block *definitions = nullptr;
+  std::map<std::pair<std::string, std::vector<std::string>>, std::string>
+      bindings;
+  Error failure = Error::success();
+  uint64_t operations = 0, siteOrdinal = 0, remaining;
+  template <class T> std::optional<T> take(Expected<T> value) {
+    if (!value) {
+      failure = value.takeError();
+      return {};
+    }
+    return std::move(*value);
+  }
+  mlir::ArrayAttr strings(ArrayRef<std::string> values) {
+    SmallVector<mlir::Attribute> out;
+    for (auto &s : values)
+      out.push_back(builder.getStringAttr(s));
+    return builder.getArrayAttr(out);
+  }
+  mlir::NamedAttribute attr(StringRef name, mlir::Attribute value) {
+    return builder.getNamedAttr(name, value);
+  }
+  mlir::NamedAttribute text(StringRef name, StringRef value) {
+    return attr(name, builder.getStringAttr(value));
+  }
+  mlir::Operation *make(StringRef name, mlir::TypeRange outputs,
+                        mlir::ValueRange inputs,
+                        ArrayRef<mlir::NamedAttribute> attrs,
+                        unsigned regions = 0) {
+    if (++operations > limits.operations) {
+      failure = error("source.limit", "emitted operation limit exceeded");
+      return nullptr;
+    }
+    mlir::OperationState state(location, name);
+    state.addTypes(outputs);
+    state.addOperands(inputs);
+    state.addAttributes(attrs);
+    for (unsigned i = 0; i < regions; ++i)
+      state.addRegion()->push_back(new mlir::Block());
+    return builder.create(state);
+  }
+  std::optional<SmallVector<mlir::Type>> types(const Layout &layout) {
+    SmallVector<mlir::Type> result;
+    for (auto &leaf : layout.leaves) {
+      if (leaf.size() + 1 > remaining) {
+        failure =
+            error("source.limit", "native type emission work limit exceeded");
+        return {};
+      }
+      remaining -= leaf.size() + 1;
+      auto bound = take(protocol::parseBoundType(leaf, false));
+      if (!bound)
+        return {};
+      auto type = protocol::decodeBoundType(&context, *bound);
+      if (!type) {
+        failure = error("source.layout", "native type dialect unavailable");
+        return {};
+      }
+      result.push_back(type);
+    }
+    return result;
+  }
+  std::optional<Values> primitive(StringRef contract, mlir::ValueRange inputs,
+                                  mlir::TypeRange outputs,
+                                  ArrayRef<std::string> parameters,
+                                  StringRef site) {
+    if (contract == "bool.constant") {
+      auto *op = make(
+          "local.bool_constant", outputs, {},
+          {attr("value", builder.getBoolAttr(parameters.front() == "true")),
+           text("site", site)});
+      return op ? std::optional<Values>(Values(op->getResults()))
+                : std::nullopt;
+    }
+    if (contract == "bool.equal") {
+      auto a = primitive("bool.and", inputs, outputs, {}, site.str() + "_both");
+      if (!a)
+        return {};
+      auto n0 =
+          primitive("bool.not", inputs[0], outputs, {}, site.str() + "_left");
+      if (!n0)
+        return {};
+      auto n1 =
+          primitive("bool.not", inputs[1], outputs, {}, site.str() + "_right");
+      if (!n1)
+        return {};
+      Values neg{(*n0)[0], (*n1)[0]};
+      auto b = primitive("bool.and", neg, outputs, {}, site.str() + "_neither");
+      if (!b)
+        return {};
+      Values either{(*a)[0], (*b)[0]};
+      return primitive("bool.or", either, outputs, {}, site);
+    }
+    std::vector<std::string> arguments;
+    if (contract.starts_with("field.") || contract.starts_with("curve.") ||
+        contract.starts_with("resource_unit.")) {
+      auto type = take(protocol::encodeBoundType(
+          inputs.empty() ? outputs.front() : inputs.front().getType(), false));
+      if (!type)
+        return {};
+      arguments.push_back(type->identity);
+    }
+    const auto key = std::make_pair(contract.str(), arguments);
+    auto found = bindings.find(key);
+    if (found == bindings.end()) {
+      auto name = "zkl_binding_" + std::to_string(bindings.size());
+      if (name.size() > limits.symbolBytes) {
+        failure = error("source.limit", "binding symbol exceeds byte limit");
+        return {};
+      }
+      mlir::OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToStart(definitions);
+      if (!make("local.binding", {}, {},
+                {text("sym_name", name), text("contract", contract),
+                 attr("arguments", strings(arguments)),
+                 text("implementation", "")}))
+        return {};
+      found = bindings.emplace(key, std::move(name)).first;
+    }
+    auto operationName = protocol::boundOperationName(contract);
+    if (operationName.empty()) {
+      failure = error("source.emission",
+                      "no installed ordered operation for " + contract);
+      return {};
+    }
+    auto *op = make(
+        operationName, outputs, inputs,
+        {attr("binding", mlir::FlatSymbolRefAttr::get(&context, found->second)),
+         attr("parameters", strings(parameters)), text("site", site)});
+    return op ? std::optional<Values>(Values(op->getResults())) : std::nullopt;
+  }
+  bool retire(mlir::Value value, StringRef site) {
+    return bool(primitive("resource_unit.consume", value, {}, {}, site));
+  }
+  mlir::ArrayAttr roles(const Declaration &decl, ArrayRef<unsigned> indices) {
+    SmallVector<mlir::Attribute> result;
+    for (auto index : indices)
+      result.push_back(builder.getStringAttr(decl.roles[index]));
+    return builder.getArrayAttr(result);
+  }
+  bool body(const Declaration &decl, const Body &source, mlir::Block &block,
+            bool region = false) {
+    builder.setInsertionPointToEnd(&block);
+    std::vector<Values> values(source.values.size());
+    unsigned cursor = 0;
+    for (unsigned i = 0; i < source.inputs; ++i) {
+      auto layout = take(layouts.get(source.values[i].type));
+      if (!layout)
+        return false;
+      auto ts = types(**layout);
+      if (!ts)
+        return false;
+      for (auto type : *ts) {
+        if (cursor < block.getNumArguments())
+          values[i].push_back(block.getArgument(cursor));
+        else
+          values[i].push_back(block.addArgument(type, location));
+        ++cursor;
+      }
+    }
+    auto flatten = [&](ArrayRef<ValueId> ids) {
+      Values result;
+      for (auto id : ids)
+        llvm::append_range(result, values[id.index]);
+      return result;
+    };
+    for (auto &op : source.operations) {
+      auto layout = take(layouts.get(source.values[op.result.index].type));
+      if (!layout)
+        return false;
+      auto resultTypes = types(**layout);
+      if (!resultTypes)
+        return false;
+      auto site = "s" + std::to_string(siteOrdinal++);
+      Values result;
+      if (auto *projection = std::get_if<Projection>(&op.action)) {
+        auto selected =
+            take(layouts.get(source.values[projection->input.index].type));
+        if (!selected)
+          return false;
+        unsigned offset = 0;
+        for (auto field : projection->path) {
+          offset += (**selected).fields[field].offset;
+          selected = (**selected).fields[field].layout;
+        }
+        auto &input = values[projection->input.index];
+        result.append(input.begin() + offset,
+                      input.begin() + offset + (**selected).leaves.size());
+      } else if (auto *construct = std::get_if<Construct>(&op.action)) {
+        auto input = flatten(construct->operands);
+        if (construct->kind == Construct::Kind::Unpack) {
+          auto origin = take(layouts.get(
+              source.values[construct->operands.front().index].type));
+          if (!origin)
+            return false;
+          if ((**origin).custody) {
+            if (!retire(input.front(), site + "_unpack"))
+              return false;
+            input.erase(input.begin());
+          }
+          result = std::move(input);
+        } else {
+          if ((**layout).custody) {
+            auto created =
+                primitive("resource_unit.create", {}, resultTypes->front(), {},
+                          site + "_create");
+            if (!created)
+              return false;
+            llvm::append_range(result, *created);
+          }
+          if (source.values[op.result.index].type.kind == Type::Kind::Variant) {
+            auto *actual =
+                make("local.variant_inject", resultTypes->back(), input,
+                     {text("site", site),
+                      text("alternative", construct->alternative)});
+            if (!actual)
+              return false;
+            result.push_back(actual->getResult(0));
+          } else
+            llvm::append_range(result, input);
+        }
+      } else if (auto *consume = std::get_if<Consume>(&op.action)) {
+        auto input =
+            take(layouts.get(source.values[consume->input.index].type));
+        if (!input)
+          return false;
+        for (unsigned i = 0; i < (**input).leaves.size(); ++i)
+          if (StringRef((**input).leaves[i]).starts_with("resource_unit:") &&
+              !retire(values[consume->input.index][i],
+                      site + "_" + std::to_string(i)))
+            return false;
+      } else if (auto *math = std::get_if<MathValue>(&op.action)) {
+        auto operands = flatten(math->operands);
+        mlir::Operation *actual = nullptr;
+        switch (math->identity) {
+        case MathematicalIdentity::BooleanConstant:
+          actual = make(
+              "arith.constant", *resultTypes, {},
+              {attr("value", builder.getIntegerAttr(builder.getI1Type(),
+                                                    math->literal == "true"))});
+          break;
+        case MathematicalIdentity::BooleanEqual:
+          actual =
+              make("arith.cmpi", *resultTypes, operands,
+                   {attr("predicate", builder.getI64IntegerAttr(int64_t(
+                                          mlir::arith::CmpIPredicate::eq)))});
+          break;
+        default: {
+          StringRef name;
+          switch (math->identity) {
+          case MathematicalIdentity::FieldConstant:
+            name = "algebra.constant";
+            break;
+          case MathematicalIdentity::FieldAdd:
+            name = "algebra.field_add";
+            break;
+          case MathematicalIdentity::FieldSubtract:
+            name = "algebra.field_subtract";
+            break;
+          case MathematicalIdentity::FieldMultiply:
+            name = "algebra.field_multiply";
+            break;
+          case MathematicalIdentity::FieldEqual:
+            name = "algebra.field_equal";
+            break;
+          case MathematicalIdentity::GroupAdd:
+            name = "algebra.group_add";
+            break;
+          case MathematicalIdentity::GroupScale:
+            name = "algebra.group_scale";
+            break;
+          case MathematicalIdentity::GroupEqual:
+            name = "algebra.group_equal";
+            break;
+          default:
+            failure =
+                error("source.emission", "unsupported mathematical identity");
+            return false;
+          }
+          SmallVector<mlir::NamedAttribute> attrs;
+          if (!math->literal.empty())
+            attrs.push_back(text("value", math->literal));
+          actual = make(name, *resultTypes, operands, attrs);
+          break;
+        }
+        }
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
+        auto emitted = primitive(local->contract, flatten(local->operands),
+                                 *resultTypes, local->parameters, site);
+        if (!emitted)
+          return false;
+        result = std::move(*emitted);
+      } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
+        const auto &target = project.declarations()[call->callee.index];
+        SmallVector<mlir::NamedAttribute> attrs{attr(
+            "callee", mlir::FlatSymbolRefAttr::get(&context, target.symbol))};
+        StringRef name = "func.call";
+        if (target.kind == Declaration::Kind::Local) {
+          name = source.mode == Body::Mode::Protocol ? "protocol.local_call"
+                                                     : "local.apply";
+          attrs.push_back(text("site", site));
+          if (call->owner)
+            attrs.push_back(text("role", decl.roles[*call->owner]));
+        }
+        auto *actual = make(name, *resultTypes, flatten(call->operands), attrs);
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+      } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
+        if (resultTypes->empty()) {
+          failure = error("source.wire",
+                          "empty layouts have no native message occurrence");
+          return false;
+        }
+        for (unsigned i = 0; i < resultTypes->size(); ++i) {
+          auto *sent = make("protocol.exchange", (*resultTypes)[i],
+                            values[exchange->payload.index][i],
+                            {text("sender", decl.roles[exchange->sender]),
+                             text("receiver", decl.roles[exchange->receiver]),
+                             text("site", site + "_" + std::to_string(i))});
+          if (!sent)
+            return false;
+          auto *received = make(
+              "protocol.restrict_roles", (*resultTypes)[i], sent->getResult(0),
+              {attr("roles", roles(decl, {exchange->receiver}))});
+          if (!received)
+            return false;
+          result.push_back(received->getResult(0));
+        }
+      } else if (auto *restriction = std::get_if<Restriction>(&op.action)) {
+        for (unsigned i = 0; i < resultTypes->size(); ++i) {
+          auto *actual = make("protocol.restrict_roles", (*resultTypes)[i],
+                              values[restriction->input.index][i],
+                              {attr("roles", roles(decl, restriction->roles))});
+          if (!actual)
+            return false;
+          result.push_back(actual->getResult(0));
+        }
+      } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
+        auto inputs = flatten(control->operands);
+        bool match = control->kind == LocalControl::Kind::Match;
+        if (match) {
+          auto subject = take(
+              layouts.get(source.values[control->operands.front().index].type));
+          if (!subject)
+            return false;
+          if ((**subject).custody) {
+            if (!retire(inputs.front(), site + "_match"))
+              return false;
+            inputs.erase(inputs.begin());
+          }
+        }
+        SmallVector<mlir::NamedAttribute> attrs{text("site", site)};
+        if (match)
+          attrs.push_back(attr("alternatives", strings(control->alternatives)));
+        auto *actual =
+            make(match                                      ? "local.match"
+                 : control->kind == LocalControl::Kind::For ? "local.for"
+                                                            : "local.if",
+                 *resultTypes, inputs, attrs, control->regions.size());
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+        for (unsigned i = 0; i < control->regions.size(); ++i) {
+          mlir::OpBuilder::InsertionGuard guard(builder);
+          if (!body(decl, *control->regions[i], actual->getRegion(i).front(),
+                    true))
+            return false;
+        }
+      }
+      if (result.size() != resultTypes->size()) {
+        failure = error("source.layout", "operation result layout differs");
+        return false;
+      }
+      values[op.result.index] = std::move(result);
+    }
+    if (source.stopped)
+      return make("local.stop", {}, {},
+                  {text("site", "stop" + std::to_string(siteOrdinal++)),
+                   text("reason", source.stopReason)});
+    auto results = flatten(source.results);
+    return make(region                                ? "local.yield"
+                : source.mode == Body::Mode::Protocol ? "protocol.return"
+                : source.mode == Body::Mode::Local    ? "local.return"
+                                                      : "func.return",
+                {}, results, {});
+  }
+
+public:
+  Emitter(const CheckedProject &project, mlir::MLIRContext &context,
+          const Limits &limits)
+      : project(project), limits(limits), context(context), builder(&context),
+        location(builder.getUnknownLoc()), layouts(project, limits),
+        module(mlir::ModuleOp::create(location)), remaining(limits.work) {
+    (void)!!failure;
+  }
+  Expected<std::string> run() {
+    builder.setInsertionPointToEnd(module->getBody());
+    auto *unit =
+        make("protocol.module", {}, {},
+             {attr("profile", protocol_ir::ProfileAttr::get(
+                                  &context, protocol_ir::Profile::Protocol))},
+             1);
+    if (!unit)
+      return std::move(failure);
+    definitions = &unit->getRegion(0).front();
+    for (auto &decl : project.declarations()) {
+      if (!decl.body || !decl.parameters.empty())
+        continue;
+      SmallVector<mlir::Type> ins, outs;
+      SmallVector<mlir::Attribute> inRoles, outRoles;
+      for (bool input : {true, false})
+        for (auto &port : input ? decl.inputs : decl.outputs) {
+          auto layout = take(layouts.get(port.type));
+          if (!layout)
+            return std::move(failure);
+          auto ts = types(**layout);
+          if (!ts)
+            return std::move(failure);
+          llvm::append_range(input ? ins : outs, *ts);
+          for (unsigned i = 0; i < ts->size(); ++i)
+            (input ? inRoles : outRoles).push_back(roles(decl, port.roles));
+        }
+      SmallVector<mlir::NamedAttribute> attrs{
+          text("sym_name", decl.symbol),
+          attr("function_type",
+               mlir::TypeAttr::get(builder.getFunctionType(ins, outs)))};
+      bool protocol = decl.kind == Declaration::Kind::Protocol,
+           local = decl.kind == Declaration::Kind::Local;
+      if (protocol)
+        attrs.append({attr("roles", strings(decl.roles)),
+                      attr("input_roles", builder.getArrayAttr(inRoles)),
+                      attr("output_roles", builder.getArrayAttr(outRoles))});
+      else {
+        if (!local)
+          attrs.push_back(text("sym_visibility", "private"));
+        if (local)
+          attrs.push_back(
+              attr("logical_origin",
+                   builder.getArrayAttr({builder.getStringAttr(decl.symbol),
+                                         builder.getArrayAttr({})})));
+      }
+      builder.setInsertionPointToEnd(definitions);
+      auto *function = make(protocol ? "protocol.func"
+                            : local  ? "local.func"
+                                     : "func.func",
+                            {}, {}, attrs, 1);
+      if (!function)
+        return std::move(failure);
+      siteOrdinal = 0;
+      if (!body(decl, *decl.body, function->getRegion(0).front()))
+        return std::move(failure);
+    }
+    std::string result;
+    mlir::OpPrintingFlags flags;
+    flags.printGenericOpForm(true)
+        .enableDebugInfo(false)
+        .skipRegions(false)
+        .assumeVerified(false)
+        .useLocalScope(false)
+        .printValueUsers(false)
+        .printUniqueSSAIDs(false)
+        .printNameLocAsPrefix(false);
+    mlir::AsmState state(*module, flags);
+    BoundedStream stream(result, limits.irBytes);
+    module->print(stream, state);
+    stream << '\n';
+    if (stream.overflow())
+      return error("source.limit", "emitted MLIR byte limit exceeded");
+    return result;
+  }
+};
+} // namespace
 Expected<std::string> emitOriginal(const CheckedProject &project,
                                    mlir::MLIRContext &context,
                                    const Limits &limits) {
-  if (auto error = checkLimits(limits))
-    return std::move(error);
+  if (auto e = checkLimits(limits))
+    return e;
   if (project.checkedWork() > limits.work ||
       project.declarations().size() > limits.declarations)
     return error("source.limit",
@@ -24,173 +507,6 @@ Expected<std::string> emitOriginal(const CheckedProject &project,
   if (!hasProtocolDialects(context))
     return error("source.dialects",
                  "native dialects must be loaded before source emission");
-  mlir::OpBuilder builder(&context);
-  auto location = builder.getUnknownLoc();
-  mlir::OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(location));
-  auto type = [&](const Type &source) -> mlir::Type {
-    return source.kind == Type::Kind::Boolean
-               ? mlir::Type(builder.getI1Type())
-               : algebra::FieldType::get(&context, source.domain);
-  };
-  auto make =
-      [&](StringRef name, mlir::TypeRange results, mlir::ValueRange operands,
-          ArrayRef<mlir::NamedAttribute> attributes, bool region = false) {
-        mlir::OperationState state(location, name);
-        state.addOperands(operands);
-        state.addTypes(results);
-        state.addAttributes(attributes);
-        if (region)
-          state.addRegion()->push_back(new mlir::Block());
-        return builder.create(state);
-      };
-  auto named = [&](StringRef name, mlir::Attribute value) {
-    return builder.getNamedAttr(name, value);
-  };
-  builder.setInsertionPointToEnd(module->getBody());
-  auto *protocolModule =
-      make("protocol.module", {}, {},
-           {named("profile", protocol_ir::ProfileAttr::get(
-                                 &context, protocol_ir::Profile::Protocol))},
-           true);
-  uint64_t count = 0;
-  for (const auto &decl : project.declarations()) {
-    if (!decl.body)
-      continue;
-    builder.setInsertionPointToEnd(&protocolModule->getRegion(0).front());
-    SmallVector<mlir::Type> inputs, outputs;
-    for (const auto &port : decl.inputs)
-      inputs.push_back(type(port.type));
-    for (const auto &port : decl.outputs)
-      outputs.push_back(type(port.type));
-    bool protocol = decl.kind == Declaration::Kind::Protocol;
-    auto roleSet = [&](ArrayRef<unsigned> indices) {
-      SmallVector<mlir::Attribute> attrs;
-      for (unsigned index : indices)
-        attrs.push_back(builder.getStringAttr(decl.roles[index]));
-      return builder.getArrayAttr(attrs);
-    };
-    SmallVector<mlir::NamedAttribute> attrs{
-        named("sym_name", builder.getStringAttr(decl.symbol)),
-        named("function_type",
-              mlir::TypeAttr::get(builder.getFunctionType(inputs, outputs)))};
-    if (protocol) {
-      SmallVector<mlir::Attribute> roster, ins, outs;
-      for (const auto &role : decl.roles)
-        roster.push_back(builder.getStringAttr(role));
-      for (const auto &port : decl.inputs)
-        ins.push_back(roleSet(port.roles));
-      for (const auto &port : decl.outputs)
-        outs.push_back(roleSet(port.roles));
-      attrs.append({named("roles", builder.getArrayAttr(roster)),
-                    named("input_roles", builder.getArrayAttr(ins)),
-                    named("output_roles", builder.getArrayAttr(outs))});
-    } else
-      attrs.push_back(
-          named("sym_visibility", builder.getStringAttr("private")));
-    auto *function =
-        make(protocol ? "protocol.func" : "func.func", {}, {}, attrs, true);
-    auto &block = function->getRegion(0).front();
-    SmallVector<mlir::Value> values;
-    for (auto input : inputs)
-      values.push_back(block.addArgument(input, location));
-    builder.setInsertionPointToEnd(&block);
-    for (const auto &op : decl.body->operations) {
-      if (++count > limits.operations)
-        return error("source.limit", "emitted operation count limit exceeded");
-      mlir::Operation *actual = nullptr;
-      auto resultType = type(decl.body->values[op.result.index].type);
-      if (const auto *math = std::get_if<MathValue>(&op.action)) {
-        SmallVector<mlir::Value> operands;
-        for (auto id : math->operands)
-          operands.push_back(values[id.index]);
-        switch (math->identity) {
-        case MathematicalIdentity::BooleanConstant:
-          actual = mlir::arith::ConstantIntOp::create(
-              builder, location, math->literal == "true", 1);
-          break;
-        case MathematicalIdentity::BooleanEqual:
-          actual = mlir::arith::CmpIOp::create(builder, location,
-                                               mlir::arith::CmpIPredicate::eq,
-                                               operands[0], operands[1]);
-          break;
-        case MathematicalIdentity::FieldConstant:
-          actual = make("algebra.constant", resultType, {},
-                        {named("value", builder.getStringAttr(math->literal))});
-          break;
-        case MathematicalIdentity::FieldAdd:
-          actual = make("algebra.field_add", resultType, operands, {});
-          break;
-        case MathematicalIdentity::FieldSubtract:
-          actual = make("algebra.field_subtract", resultType, operands, {});
-          break;
-        case MathematicalIdentity::FieldMultiply:
-          actual = make("algebra.field_multiply", resultType, operands, {});
-          break;
-        case MathematicalIdentity::FieldEqual:
-          actual = make("algebra.field_equal", resultType, operands, {});
-          break;
-        default:
-          return error("source.emission",
-                       "unsupported checked mathematical identity");
-        }
-      } else if (const auto *call = std::get_if<HelperCall>(&op.action)) {
-        SmallVector<mlir::Value> operands;
-        for (auto id : call->operands)
-          operands.push_back(values[id.index]);
-        actual = make(
-            "func.call", resultType, operands,
-            {named("callee",
-                   mlir::FlatSymbolRefAttr::get(
-                       &context,
-                       project.declarations()[call->callee.index].symbol))});
-      } else if (const auto *exchange = std::get_if<Exchange>(&op.action)) {
-        actual = make(
-            "protocol.exchange", resultType, values[exchange->payload.index],
-            {named("sender",
-                   builder.getStringAttr(decl.roles[exchange->sender])),
-             named("receiver",
-                   builder.getStringAttr(decl.roles[exchange->receiver])),
-             named("site",
-                   builder.getStringAttr("s" + std::to_string(op.statement)))});
-      } else {
-        const auto &restriction = std::get<Restriction>(op.action);
-        actual = make("protocol.restrict_roles", resultType,
-                      values[restriction.input.index],
-                      {named("roles", roleSet(restriction.roles))});
-      }
-      if (const auto *exchange = std::get_if<Exchange>(&op.action)) {
-        if (++count > limits.operations)
-          return error("source.limit",
-                       "emitted operation count limit exceeded");
-        actual =
-            make("protocol.restrict_roles", resultType, actual->getResult(0),
-                 {named("roles", roleSet({exchange->receiver}))});
-      }
-      values.push_back(actual->getResult(0));
-    }
-    SmallVector<mlir::Value> results;
-    for (auto id : decl.body->results)
-      results.push_back(values[id.index]);
-    make(protocol ? "protocol.return" : "func.return", {}, results, {});
-  }
-  std::string result;
-  // Host processes can register MLIR printer flags. Identity bytes use our
-  // fixed scalar printing policy, independently of those global preferences.
-  mlir::OpPrintingFlags flags;
-  flags.printGenericOpForm(true)
-      .enableDebugInfo(false)
-      .skipRegions(false)
-      .assumeVerified(false)
-      .useLocalScope(false)
-      .printValueUsers(false)
-      .printUniqueSSAIDs(false)
-      .printNameLocAsPrefix(false);
-  mlir::AsmState state(*module, flags);
-  BoundedStream stream(result, limits.irBytes);
-  module->print(stream, state);
-  stream << '\n';
-  if (stream.overflow())
-    return error("source.limit", "emitted MLIR byte limit exceeded");
-  return result;
+  return Emitter(project, context, limits).run();
 }
 } // namespace zkc::language

@@ -326,7 +326,12 @@ syntax, checking and Entry closure from Translation's MLIR emission and
 comparison. CompilerCore owns parsing, immutable original retention and the
 existing participant pipeline. This gives source tools checked data without
 making them own MLIR contexts. The [source guide](language/mathematical.md)
-describes the first implemented fragment.
+describes its implemented scope. Language owns typed Math, Local and Protocol
+bodies, static substitution and logical layouts. Translation maps those bodies
+directly to existing dialects and independently compares the admitted result.
+CompilerCore retains the versioned source interface; it does not introduce a new
+runtime carrier. Products flatten, variants retain tags, and source no-Drop checks
+remain separate from native affine custody.
 
 The maintained `.pir` parser and [common typed source model](compiler/source-model.md)
 retain their existing library, table and formal consumers. Their capture,

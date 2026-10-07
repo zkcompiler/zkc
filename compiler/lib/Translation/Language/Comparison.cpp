@@ -1,299 +1,615 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Interfaces/Mathematical.h"
+#include "zkc/Language/Layout.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
 #include <set>
-
 using namespace llvm;
 namespace zkc::language {
 namespace {
-bool sameType(const Type &source, mlir::Type actual) {
-  if (source.kind == Type::Kind::Boolean)
-    return actual.isSignlessInteger(1);
-  auto field = mlir::dyn_cast<algebra::FieldType>(actual);
-  return field && field.getDomain() == source.domain;
-}
+using Values = SmallVector<mlir::Value>;
 bool attributes(mlir::Operation &op, std::initializer_list<StringRef> names) {
-  if (op.getAttrs().size() != names.size())
-    return false;
-  return llvm::all_of(names,
-                      [&](StringRef name) { return bool(op.getAttr(name)); });
+  return op.getAttrs().size() == names.size() &&
+         llvm::all_of(names, [&](auto name) { return bool(op.getAttr(name)); });
 }
-bool string(mlir::Operation &op, StringRef name, StringRef value) {
-  auto attr = op.getAttrOfType<mlir::StringAttr>(name);
-  return attr && attr.getValue() == value;
+bool string(mlir::Operation &op, StringRef name, StringRef expected) {
+  auto value = op.getAttrOfType<mlir::StringAttr>(name);
+  return value && value.getValue() == expected;
 }
-bool roleSet(mlir::Attribute actual, const Declaration &decl,
-             ArrayRef<unsigned> expected) {
-  auto array = mlir::dyn_cast_if_present<mlir::ArrayAttr>(actual);
-  if (!array || array.size() != expected.size())
+bool strings(mlir::Attribute attr, ArrayRef<std::string> expected) {
+  auto values = mlir::dyn_cast_if_present<mlir::ArrayAttr>(attr);
+  if (!values || values.size() != expected.size())
     return false;
   for (unsigned i = 0; i < expected.size(); ++i) {
-    auto role = mlir::dyn_cast<mlir::StringAttr>(array[i]);
-    if (!role || role.getValue() != decl.roles[expected[i]])
+    auto value = mlir::dyn_cast<mlir::StringAttr>(values[i]);
+    if (!value || value.getValue() != expected[i])
       return false;
   }
   return true;
 }
+bool roleSet(mlir::Attribute value, const Declaration &decl,
+             ArrayRef<unsigned> indices) {
+  std::vector<std::string> expected;
+  for (auto i : indices)
+    expected.push_back(decl.roles[i]);
+  return strings(value, expected);
+}
+class Comparator {
+  const CheckedProject &project;
+  mlir::ModuleOp module;
+  const Limits &limits;
+  Layouts layouts;
+  Error failure = Error::success();
+  Correspondence report;
+  uint64_t remaining;
+  uint64_t siteOrdinal = 0;
+  std::map<std::string, mlir::Operation *> bindings;
+  std::set<std::string> usedBindings;
+  template <class T> std::optional<T> take(Expected<T> value) {
+    if (!value) {
+      failure = value.takeError();
+      return {};
+    }
+    return std::move(*value);
+  }
+  bool fail(StringRef message) {
+    failure = error("source.correspondence", message);
+    return false;
+  }
+  bool charge(uint64_t n) {
+    if (n > remaining) {
+      failure = error("source.limit", "comparison work limit exceeded");
+      return false;
+    }
+    remaining -= n;
+    return true;
+  }
+  bool record(mlir::Operation &op, Span source) {
+    if (auto loc = mlir::dyn_cast<mlir::FileLineColLoc>(op.getLoc())) {
+      if (report.locations.size() >=
+          limits.locationBytes / (5 * sizeof(uint64_t))) {
+        failure = error("source.limit", "source location map limit exceeded");
+        return false;
+      }
+      report.locations.push_back({loc.getLine(), loc.getColumn(), source});
+    }
+    return true;
+  }
+  bool types(mlir::TypeRange actual, ArrayRef<std::string> expected) {
+    if (actual.size() != expected.size())
+      return fail("native layout arity differs");
+    for (unsigned i = 0; i < actual.size(); ++i) {
+      if (!charge(expected[i].size() + 1))
+        return false;
+      auto type = take(protocol::encodeBoundType(actual[i], false));
+      if (!type)
+        return false;
+      if (type->spelling() != expected[i])
+        return fail("native layout type differs");
+    }
+    return true;
+  }
+  mlir::Operation *next(mlir::Block &block, mlir::Block::iterator &cursor,
+                        Span span, StringRef name, mlir::ValueRange operands,
+                        unsigned results, unsigned regions = 0) {
+    if (cursor == block.end()) {
+      fail("original omitted an operation");
+      return nullptr;
+    }
+    auto &op = *cursor++;
+    if (++report.operations > limits.operations) {
+      failure = error("source.limit", "comparison operation limit exceeded");
+      return nullptr;
+    }
+    if (!charge(1 + operands.size()) || !record(op, span))
+      return nullptr;
+    if ((!name.empty() && op.getName().getStringRef() != name) ||
+        op.getNumResults() != results || op.getNumRegions() != regions ||
+        op.getNumSuccessors() || op.getOperands() != operands) {
+      fail("operation identity, operands or region structure differs");
+      return nullptr;
+    }
+    return &op;
+  }
+  std::optional<Values>
+  primitive(mlir::Block &block, mlir::Block::iterator &cursor,
+            const LocalPrimitive &expected, mlir::ValueRange operands,
+            ArrayRef<std::string> outputs, Span span, StringRef site) {
+    if (expected.contract == "bool.constant") {
+      auto *actual = next(block, cursor, span, "local.bool_constant", {}, 1);
+      if (!actual)
+        return {};
+      auto value = actual->getAttrOfType<mlir::BoolAttr>("value");
+      if (!attributes(*actual, {"value", "site"}) || !value ||
+          value.getValue() != (expected.parameters.front() == "true") ||
+          !string(*actual, "site", site) ||
+          !types(actual->getResultTypes(), outputs)) {
+        if (!failure)
+          fail("local Boolean literal differs");
+        return {};
+      }
+      return Values(actual->getResults());
+    }
+    if (expected.contract == "bool.equal") {
+      auto invoke = [&](StringRef contract, mlir::ValueRange ins,
+                        StringRef suffix) {
+        return primitive(block, cursor, LocalPrimitive{contract.str(), {}, {}},
+                         ins, outputs, span, site.str() + suffix.str());
+      };
+      auto both = invoke("bool.and", operands, "_both");
+      if (!both)
+        return {};
+      auto left = invoke("bool.not", operands[0], "_left");
+      if (!left)
+        return {};
+      auto right = invoke("bool.not", operands[1], "_right");
+      if (!right)
+        return {};
+      Values neg{left->front(), right->front()};
+      auto neither = invoke("bool.and", neg, "_neither");
+      if (!neither)
+        return {};
+      Values either{both->front(), neither->front()};
+      return invoke("bool.or", either, "");
+    }
+    auto *actual = next(block, cursor, span, "", operands, outputs.size());
+    if (!actual)
+      return {};
+    if (!attributes(*actual, {"binding", "parameters", "site"}) ||
+        !string(*actual, "site", site) ||
+        !strings(actual->getAttr("parameters"), expected.parameters) ||
+        !protocol::operationSupportsContract(actual->getName().getStringRef(),
+                                             expected.contract) ||
+        !types(actual->getResultTypes(), outputs)) {
+      if (!failure)
+        fail("ordered operation contract, parameters or site differ");
+      return {};
+    }
+    auto ref = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("binding");
+    auto found = ref ? bindings.find(ref.getValue().str()) : bindings.end();
+    if (found == bindings.end()) {
+      fail("ordered binding is absent");
+      return {};
+    }
+    auto &binding = *found->second;
+    usedBindings.insert(found->first);
+    std::vector<std::string> args;
+    if (StringRef(expected.contract).starts_with("field.") ||
+        StringRef(expected.contract).starts_with("curve.") ||
+        StringRef(expected.contract).starts_with("resource_unit.")) {
+      auto type = take(protocol::encodeBoundType(
+          operands.empty() ? actual->getResult(0).getType()
+                           : operands[0].getType(),
+          false));
+      if (!type)
+        return {};
+      args.push_back(type->identity);
+    }
+    if (!string(binding, "contract", expected.contract) ||
+        !strings(binding.getAttr("arguments"), args) ||
+        !string(binding, "implementation", "")) {
+      fail("ordered binding selection differs");
+      return {};
+    }
+    return Values(actual->getResults());
+  }
+  bool retire(mlir::Block &block, mlir::Block::iterator &cursor,
+              mlir::Value value, Span span, StringRef site) {
+    return bool(primitive(block, cursor,
+                          LocalPrimitive{"resource_unit.consume", {}, {}},
+                          value, {}, span, site));
+  }
+  bool body(const Declaration &decl, const Body &source, mlir::Block &block,
+            const mathematical::Availability *availability,
+            bool region = false) {
+    auto cursor = block.begin();
+    std::vector<Values> values(source.values.size());
+    unsigned argument = 0;
+    auto bind = [&](unsigned i, Values native) -> bool {
+      auto layout = take(layouts.get(source.values[i].type));
+      if (!layout ||
+          !types(mlir::ValueRange(native).getTypes(), (**layout).leaves))
+        return false;
+      if (availability)
+        for (auto value : native) {
+          auto found = availability->values.find(value);
+          if (found == availability->values.end() ||
+              found->second.count() != source.values[i].components.size())
+            return fail("participant availability differs");
+          for (auto role : source.values[i].components)
+            if (role >= found->second.size() || !found->second[role])
+              return fail("participant availability differs");
+        }
+      values[i] = std::move(native);
+      return true;
+    };
+    for (unsigned i = 0; i < source.inputs; ++i) {
+      auto layout = take(layouts.get(source.values[i].type));
+      if (!layout)
+        return false;
+      Values input;
+      for (unsigned j = 0; j < (**layout).leaves.size(); ++j) {
+        if (argument >= block.getNumArguments())
+          return fail("block input layout is incomplete");
+        input.push_back(block.getArgument(argument++));
+      }
+      if (!bind(i, std::move(input)))
+        return false;
+    }
+    if (argument != block.getNumArguments())
+      return fail("block has extra arguments");
+    auto flatten = [&](ArrayRef<ValueId> ids) {
+      Values result;
+      for (auto id : ids)
+        llvm::append_range(result, values[id.index]);
+      return result;
+    };
+    for (auto &op : source.operations) {
+      auto layout = take(layouts.get(source.values[op.result.index].type));
+      if (!layout)
+        return false;
+      auto &leaves = (**layout).leaves;
+      Values result;
+      auto site = "s" + std::to_string(siteOrdinal++);
+      if (auto *projection = std::get_if<Projection>(&op.action)) {
+        auto selected =
+            take(layouts.get(source.values[projection->input.index].type));
+        if (!selected)
+          return false;
+        unsigned offset = 0;
+        for (auto field : projection->path) {
+          offset += (**selected).fields[field].offset;
+          selected = (**selected).fields[field].layout;
+        }
+        auto &input = values[projection->input.index];
+        result.append(input.begin() + offset,
+                      input.begin() + offset + (**selected).leaves.size());
+      } else if (auto *construct = std::get_if<Construct>(&op.action)) {
+        auto input = flatten(construct->operands);
+        if (construct->kind == Construct::Kind::Unpack) {
+          auto origin = take(layouts.get(
+              source.values[construct->operands.front().index].type));
+          if (!origin)
+            return false;
+          if ((**origin).custody) {
+            if (!retire(block, cursor, input.front(), op.span,
+                        site + "_unpack"))
+              return false;
+            input.erase(input.begin());
+          }
+          result = std::move(input);
+        } else {
+          if ((**layout).custody) {
+            auto created = primitive(
+                block, cursor, LocalPrimitive{"resource_unit.create", {}, {}},
+                {}, ArrayRef<std::string>(leaves).take_front(), op.span,
+                site + "_create");
+            if (!created)
+              return false;
+            llvm::append_range(result, *created);
+          }
+          if (source.values[op.result.index].type.kind == Type::Kind::Variant) {
+            auto *actual =
+                next(block, cursor, op.span, "local.variant_inject", input, 1);
+            if (!actual)
+              return false;
+            if (!attributes(*actual, {"alternative", "site"}) ||
+                !string(*actual, "alternative", construct->alternative) ||
+                !string(*actual, "site", site))
+              return fail("variant alternative differs");
+            result.push_back(actual->getResult(0));
+          } else
+            llvm::append_range(result, input);
+        }
+      } else if (auto *consume = std::get_if<Consume>(&op.action)) {
+        auto input =
+            take(layouts.get(source.values[consume->input.index].type));
+        if (!input)
+          return false;
+        for (unsigned i = 0; i < (**input).leaves.size(); ++i)
+          if (StringRef((**input).leaves[i]).starts_with("resource_unit:") &&
+              !retire(block, cursor, values[consume->input.index][i], op.span,
+                      site + "_" + std::to_string(i)))
+            return false;
+      } else if (auto *math = std::get_if<MathValue>(&op.action)) {
+        auto *actual = next(block, cursor, op.span, "", flatten(math->operands),
+                            leaves.size());
+        if (!actual)
+          return false;
+        auto interface = mlir::dyn_cast<MathematicalOpInterface>(actual);
+        if (!interface || interface.getMathematicalIdentity() != math->identity)
+          return fail("mathematical operation identity differs");
+        auto dependencies = interface.getOperandDependencies(0);
+        if (dependencies.size() != math->operands.size())
+          return fail("mathematical dependency arity differs");
+        for (unsigned i = 0; i < dependencies.size(); ++i)
+          if (dependencies[i] != i)
+            return fail("mathematical dependency order differs");
+        if (math->identity == MathematicalIdentity::FieldConstant) {
+          if (!attributes(*actual, {"value"}) ||
+              !string(*actual, "value", math->literal))
+            return fail("field literal differs");
+        } else if (math->identity == MathematicalIdentity::BooleanConstant) {
+          auto value = actual->getAttrOfType<mlir::IntegerAttr>("value");
+          if (!attributes(*actual, {"value"}) || !value ||
+              value.getValue().getBoolValue() != (math->literal == "true"))
+            return fail("Boolean literal differs");
+        } else if (math->identity == MathematicalIdentity::BooleanEqual) {
+          auto cmp = mlir::dyn_cast<mlir::arith::CmpIOp>(actual);
+          if (!attributes(*actual, {"predicate"}) || !cmp ||
+              cmp.getPredicate() != mlir::arith::CmpIPredicate::eq)
+            return fail("Boolean comparison differs");
+        } else if (!attributes(*actual, {}))
+          return fail("extra mathematical attributes");
+        result = Values(actual->getResults());
+      } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
+        auto checked =
+            primitive(block, cursor, *local, flatten(local->operands), leaves,
+                      op.span, site);
+        if (!checked)
+          return false;
+        result = std::move(*checked);
+      } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
+        auto &target = project.declarations()[call->callee.index];
+        bool local = target.kind == Declaration::Kind::Local,
+             owned = local && source.mode == Body::Mode::Protocol;
+        auto *actual = next(block, cursor, op.span,
+                            owned   ? "protocol.local_call"
+                            : local ? "local.apply"
+                                    : "func.call",
+                            flatten(call->operands), leaves.size());
+        if (!actual)
+          return false;
+        auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
+        if (!callee || callee.getValue() != target.symbol ||
+            !attributes(
+                *actual,
+                owned
+                    ? std::initializer_list<StringRef>{"callee", "site", "role"}
+                : local ? std::initializer_list<StringRef>{"callee", "site"}
+                        : std::initializer_list<StringRef>{"callee"}) ||
+            (local && !string(*actual, "site", site)) ||
+            (owned && (!call->owner ||
+                       !string(*actual, "role", decl.roles[*call->owner]))))
+          return fail("call target, mode, owner or site differs");
+        result = Values(actual->getResults());
+      } else if (auto *exchange = std::get_if<Exchange>(&op.action)) {
+        auto &input = values[exchange->payload.index];
+        if (leaves.empty() || input.size() != leaves.size())
+          return fail(
+              "message has no native occurrence or its payload layout differs");
+        for (unsigned i = 0; i < leaves.size(); ++i) {
+          auto *sent =
+              next(block, cursor, op.span, "protocol.exchange", input[i], 1);
+          if (!sent)
+            return false;
+          if (!attributes(*sent, {"sender", "receiver", "site"}) ||
+              !string(*sent, "sender", decl.roles[exchange->sender]) ||
+              !string(*sent, "receiver", decl.roles[exchange->receiver]) ||
+              !string(*sent, "site", site + "_" + std::to_string(i)))
+            return fail("message occurrence differs");
+          auto *received =
+              next(block, cursor, op.span, "protocol.restrict_roles",
+                   sent->getResult(0), 1);
+          if (!received)
+            return false;
+          if (!attributes(*received, {"roles"}) ||
+              !roleSet(received->getAttr("roles"), decl, {exchange->receiver}))
+            return fail("message receiver restriction differs");
+          result.push_back(received->getResult(0));
+        }
+      } else if (auto *restriction = std::get_if<Restriction>(&op.action)) {
+        for (auto input : values[restriction->input.index]) {
+          auto *actual =
+              next(block, cursor, op.span, "protocol.restrict_roles", input, 1);
+          if (!actual)
+            return false;
+          if (!attributes(*actual, {"roles"}) ||
+              !roleSet(actual->getAttr("roles"), decl, restriction->roles))
+            return fail("role restriction differs");
+          result.push_back(actual->getResult(0));
+        }
+      } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
+        auto input = flatten(control->operands);
+        bool match = control->kind == LocalControl::Kind::Match;
+        if (match) {
+          auto subject = take(
+              layouts.get(source.values[control->operands.front().index].type));
+          if (!subject)
+            return false;
+          if ((**subject).custody) {
+            if (!retire(block, cursor, input.front(), op.span, site + "_match"))
+              return false;
+            input.erase(input.begin());
+          }
+        }
+        auto *actual =
+            next(block, cursor, op.span,
+                 match                                      ? "local.match"
+                 : control->kind == LocalControl::Kind::For ? "local.for"
+                                                            : "local.if",
+                 input, leaves.size(), control->regions.size());
+        if (!actual)
+          return false;
+        if (!attributes(
+                *actual,
+                match ? std::initializer_list<StringRef>{"site", "alternatives"}
+                      : std::initializer_list<StringRef>{"site"}) ||
+            !string(*actual, "site", site) ||
+            (match &&
+             !strings(actual->getAttr("alternatives"), control->alternatives)))
+          return fail("control site or alternative order differs");
+        for (unsigned i = 0; i < control->regions.size(); ++i)
+          if (!llvm::hasSingleElement(actual->getRegion(i)) ||
+              !body(decl, *control->regions[i], actual->getRegion(i).front(),
+                    nullptr, true))
+            return false;
+        result = Values(actual->getResults());
+      }
+      if (!bind(op.result.index, std::move(result)))
+        return false;
+    }
+    if (source.stopped) {
+      auto *stop = next(block, cursor, decl.span, "local.stop", {}, 0);
+      if (!stop)
+        return false;
+      if (!attributes(*stop, {"site", "reason"}) ||
+          !string(*stop, "site", "stop" + std::to_string(siteOrdinal++)) ||
+          !string(*stop, "reason", source.stopReason))
+        return fail("stop reason or site differs");
+    } else {
+      auto *ret = next(block, cursor, decl.span,
+                       region                                ? "local.yield"
+                       : source.mode == Body::Mode::Protocol ? "protocol.return"
+                       : source.mode == Body::Mode::Local    ? "local.return"
+                                                             : "func.return",
+                       flatten(source.results), 0);
+      if (!ret)
+        return false;
+      if (!attributes(*ret, {}))
+        return fail("extra return attributes");
+    }
+    return cursor == block.end() || fail("extra operations after source body");
+  }
+
+public:
+  Comparator(const CheckedProject &project, mlir::ModuleOp module,
+             const Limits &limits)
+      : project(project), module(module), limits(limits),
+        layouts(project, limits), remaining(limits.work) {
+    (void)!!failure;
+  }
+  Expected<Correspondence> run() {
+    if (!module->getAttrs().empty() ||
+        !llvm::hasSingleElement(*module.getBody()))
+      return error("source.correspondence",
+                   "expected one unadorned protocol module");
+    auto native = mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(
+        module.getBody()->front());
+    if (!native || !attributes(*native, {"profile"}) ||
+        native.getProfile() != protocol_ir::Profile::Protocol ||
+        !llvm::hasSingleElement(native.getBody()))
+      return error("source.correspondence", "unexpected original module");
+    SmallVector<mlir::Operation *> functions;
+    for (auto &op : native.getBody().front()) {
+      if (op.getName().getStringRef() == "local.binding") {
+        auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
+        if (!attributes(
+                op, {"sym_name", "contract", "arguments", "implementation"}) ||
+            !name || !bindings.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence", "invalid or duplicate binding");
+      } else
+        functions.push_back(&op);
+    }
+    unsigned index = 0;
+    mlir::SymbolTableCollection symbols;
+    for (auto &decl : project.declarations()) {
+      if (!decl.body || !decl.parameters.empty())
+        continue;
+      if (++report.declarations > limits.declarations)
+        return error("source.limit", "comparison declaration limit");
+      if (index >= functions.size())
+        return error("source.correspondence", "omitted definition");
+      auto &function = *functions[index++];
+      bool protocol = decl.kind == Declaration::Kind::Protocol,
+           local = decl.kind == Declaration::Kind::Local;
+      if (function.getName().getStringRef() != (protocol ? "protocol.func"
+                                                : local  ? "local.func"
+                                                         : "func.func") ||
+          !string(function, "sym_name", decl.symbol) ||
+          function.getNumRegions() != 1 ||
+          !llvm::hasSingleElement(function.getRegion(0)))
+        return error("source.correspondence",
+                     "definition identity or structure differs");
+      auto names =
+          protocol
+              ? std::initializer_list<StringRef>{"sym_name", "function_type",
+                                                 "roles", "input_roles",
+                                                 "output_roles"}
+          : local
+              ? std::initializer_list<StringRef>{"sym_name", "function_type",
+                                                 "logical_origin"}
+              : std::initializer_list<StringRef>{"sym_name", "function_type",
+                                                 "sym_visibility"};
+      if (!attributes(function, names) ||
+          (!protocol && !local &&
+           !string(function, "sym_visibility", "private")))
+        return error("source.correspondence", "definition attributes differ");
+      if (local) {
+        auto origin = function.getAttrOfType<mlir::ArrayAttr>("logical_origin");
+        if (!origin || origin.size() != 2 || !strings(origin[1], {}) ||
+            !mlir::isa<mlir::StringAttr>(origin[0]) ||
+            mlir::cast<mlir::StringAttr>(origin[0]).getValue() != decl.symbol)
+          return error("source.correspondence", "local origin differs");
+      }
+      auto type = function.getAttrOfType<mlir::TypeAttr>("function_type");
+      auto signature = type
+                           ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
+                           : mlir::FunctionType();
+      if (!signature)
+        return error("source.correspondence", "missing definition signature");
+      for (bool input : {true, false}) {
+        std::vector<std::string> leaves;
+        auto roles = function.getAttrOfType<mlir::ArrayAttr>(
+            input ? "input_roles" : "output_roles");
+        unsigned flat = 0;
+        for (auto &port : input ? decl.inputs : decl.outputs) {
+          auto layout = take(layouts.get(port.type));
+          if (!layout)
+            return std::move(failure);
+          llvm::append_range(leaves, (**layout).leaves);
+          for (unsigned i = 0; i < (**layout).leaves.size(); ++i)
+            if (protocol && (!roles || flat >= roles.size() ||
+                             !roleSet(roles[flat++], decl, port.roles)))
+              return error("source.correspondence",
+                           "flattened port roles differ");
+        }
+        if (!types(input ? signature.getInputs() : signature.getResults(),
+                   leaves))
+          return std::move(failure);
+        if (protocol && flat != roles.size())
+          return error("source.correspondence", "extra port roles");
+      }
+      mathematical::Availability availability;
+      if (protocol) {
+        if (!strings(function.getAttr("roles"), decl.roles))
+          return error("source.correspondence", "participant roster differs");
+        if (mlir::failed(mathematical::analyze(
+                mlir::cast<protocol_ir::MathematicalOp>(function), availability,
+                symbols)))
+          return error("source.correspondence", "participant analysis failed");
+      }
+      siteOrdinal = 0;
+      if (!record(function, decl.span) ||
+          !body(decl, *decl.body, function.getRegion(0).front(),
+                protocol ? &availability : nullptr))
+        return std::move(failure);
+    }
+    if (index != functions.size() || usedBindings.size() != bindings.size())
+      return error("source.correspondence",
+                   "extra definition or unused binding");
+    llvm::sort(report.locations, [](auto &a, auto &b) {
+      return std::tie(a.line, a.column) < std::tie(b.line, b.column);
+    });
+    return std::move(report);
+  }
+};
 } // namespace
 Expected<Correspondence> compareOriginal(const CheckedProject &project,
                                          mlir::ModuleOp module,
                                          const Limits &limits) {
-  if (auto error = checkLimits(limits))
-    return std::move(error);
+  if (auto e = checkLimits(limits))
+    return e;
   if (project.installationIdentity() != installedCatalogIdentity())
     return error("source.environment",
                  "source was checked against another installed catalog");
   if (!module || mlir::failed(mlir::verify(module)))
     return error("target.admission",
                  "original failed mathematical IR admission");
-  auto mismatch = [](StringRef detail) {
-    return error("source.correspondence", detail);
-  };
-  if (!module || !module->getAttrs().empty() ||
-      !llvm::hasSingleElement(*module.getBody()))
-    return mismatch("expected one unadorned protocol module");
-  auto native =
-      mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
-  if (!native || !attributes(*native, {"profile"}) ||
-      native.getProfile() != protocol_ir::Profile::Protocol ||
-      !llvm::hasSingleElement(native.getBody()))
-    return mismatch("unexpected original profile or module structure");
-  auto &definitions = native.getBody().front();
-  auto current = definitions.begin();
-  Correspondence report;
-  auto record = [&](mlir::Operation &operation, Span source) -> bool {
-    auto location = mlir::dyn_cast<mlir::FileLineColLoc>(operation.getLoc());
-    if (!location)
-      return true; // In-memory callers can omit serialized source positions.
-    if (report.locations.size() >=
-        limits.locationBytes / (5 * sizeof(uint64_t)))
-      return false;
-    report.locations.push_back(
-        {location.getLine(), location.getColumn(), source});
-    return true;
-  };
-  uint64_t work = 0;
-  mlir::SymbolTableCollection tables;
-  for (const auto &decl : project.declarations()) {
-    if (!decl.body)
-      continue;
-    if (++report.declarations > limits.declarations)
-      return error("source.limit",
-                   "comparison declaration count limit exceeded");
-    if (current == definitions.end())
-      return mismatch("original omitted a definition");
-    auto &function = *current++;
-    bool protocol = decl.kind == Declaration::Kind::Protocol;
-    if (function.getName().getStringRef() !=
-            (protocol ? "protocol.func" : "func.func") ||
-        !string(function, "sym_name", decl.symbol) ||
-        function.getNumRegions() != 1 ||
-        !llvm::hasSingleElement(function.getRegion(0)))
-      return mismatch("definition identity, order, or structure differs");
-    if (protocol ? !attributes(function, {"sym_name", "function_type", "roles",
-                                          "input_roles", "output_roles"})
-                 : !attributes(function, {"sym_name", "function_type",
-                                          "sym_visibility"}) ||
-                       !string(function, "sym_visibility", "private"))
-      return mismatch("unexpected definition attributes");
-    auto typeAttr = function.getAttrOfType<mlir::TypeAttr>("function_type");
-    auto signature =
-        typeAttr ? mlir::dyn_cast<mlir::FunctionType>(typeAttr.getValue())
-                 : mlir::FunctionType();
-    if (!signature || signature.getNumInputs() != decl.inputs.size() ||
-        signature.getNumResults() != decl.outputs.size())
-      return mismatch("definition signature differs");
-    for (unsigned i = 0; i < decl.inputs.size(); ++i)
-      if (!sameType(decl.inputs[i].type, signature.getInput(i)))
-        return mismatch("input type differs");
-    for (unsigned i = 0; i < decl.outputs.size(); ++i)
-      if (!sameType(decl.outputs[i].type, signature.getResult(i)))
-        return mismatch("output type differs");
-    mathematical::Availability availability;
-    if (protocol) {
-      auto roster = function.getAttrOfType<mlir::ArrayAttr>("roles");
-      if (roster.size() != decl.roles.size())
-        return mismatch("participant roster differs");
-      for (unsigned i = 0; i < decl.roles.size(); ++i)
-        if (mlir::cast<mlir::StringAttr>(roster[i]).getValue() != decl.roles[i])
-          return mismatch("participant order differs");
-      for (bool input : {true, false}) {
-        auto ports = function.getAttrOfType<mlir::ArrayAttr>(
-            input ? "input_roles" : "output_roles");
-        const auto &expected = input ? decl.inputs : decl.outputs;
-        if (ports.size() != expected.size())
-          return mismatch("port count differs");
-        for (unsigned i = 0; i < expected.size(); ++i)
-          if (!roleSet(ports[i], decl, expected[i].roles))
-            return mismatch("port role set differs");
-      }
-      if (mlir::failed(mathematical::analyze(
-              mlir::cast<protocol_ir::MathematicalOp>(function), availability,
-              tables)))
-        return mismatch(
-            "actual participant availability could not be analyzed");
-    }
-    if (!record(function, decl.span))
-      return error("source.limit", "source location map limit exceeded");
-    const auto &source = *decl.body;
-    auto &block = function.getRegion(0).front();
-    if (block.getNumArguments() != decl.inputs.size())
-      return mismatch("block signature differs");
-    DenseMap<mlir::Value, unsigned> values;
-    auto bind = [&](mlir::Value actual, unsigned index) {
-      if (index >= source.values.size() ||
-          !sameType(source.values[index].type, actual.getType()) ||
-          !values.try_emplace(actual, index).second)
-        return false;
-      if (protocol) {
-        auto found = availability.values.find(actual);
-        if (found == availability.values.end() ||
-            found->second.count() != source.values[index].components.size())
-          return false;
-        for (unsigned role : source.values[index].components)
-          if (role >= found->second.size() || !found->second[role])
-            return false;
-      }
-      return true;
-    };
-    for (unsigned i = 0; i < block.getNumArguments(); ++i)
-      if (!bind(block.getArgument(i), i))
-        return mismatch("input availability differs");
-    auto operands = [&](mlir::Operation &actual, ArrayRef<ValueId> expected) {
-      if (actual.getNumOperands() != expected.size())
-        return false;
-      for (unsigned i = 0; i < expected.size(); ++i) {
-        auto found = values.find(actual.getOperand(i));
-        if (found == values.end() || found->second != expected[i].index)
-          return false;
-      }
-      return true;
-    };
-    auto operation = block.begin();
-    for (const auto &expected : source.operations) {
-      if (++report.operations > limits.operations)
-        return error("source.limit",
-                     "comparison operation count limit exceeded");
-      if (operation == block.end())
-        return mismatch("original omitted an operation");
-      auto &actual = *operation++;
-      if (!record(actual, expected.span))
-        return error("source.limit", "source location map limit exceeded");
-      if (actual.getNumRegions() || actual.getNumSuccessors() ||
-          actual.getNumResults() != 1 ||
-          (!std::holds_alternative<Exchange>(expected.action) &&
-           !bind(actual.getResult(0), expected.result.index)))
-        return error("source.correspondence",
-                     "operation result type or availability differs: " +
-                         actual.getName().getStringRef() + " in " +
-                         decl.qualifiedName + " value " +
-                         Twine(expected.result.index));
-      uint64_t cost = actual.getNumOperands() +
-                      source.values[expected.result.index].components.size() +
-                      1;
-      if (cost > limits.work - work)
-        return error("source.limit", "comparison work limit exceeded");
-      work += cost;
-      if (const auto *math = std::get_if<MathValue>(&expected.action)) {
-        auto interface = mlir::dyn_cast<MathematicalOpInterface>(actual);
-        if (!interface ||
-            interface.getMathematicalIdentity() != math->identity ||
-            !operands(actual, math->operands))
-          return mismatch("mathematical identity or ordered operands differ");
-        auto dependencies = interface.getOperandDependencies(0);
-        if (dependencies.size() != math->operands.size())
-          return mismatch("mathematical dependency contract differs");
-        for (unsigned i = 0; i < dependencies.size(); ++i)
-          if (dependencies[i] != i)
-            return mismatch("mathematical dependency order differs");
-        if (math->identity == MathematicalIdentity::FieldConstant) {
-          if (!attributes(actual, {"value"}) ||
-              !string(actual, "value", math->literal))
-            return mismatch("field literal differs");
-        } else if (math->identity == MathematicalIdentity::BooleanConstant) {
-          auto value = actual.getAttrOfType<mlir::IntegerAttr>("value");
-          if (!attributes(actual, {"value"}) || !value ||
-              value.getValue().getBoolValue() != (math->literal == "true"))
-            return mismatch("Boolean literal differs");
-        } else if (math->identity == MathematicalIdentity::BooleanEqual) {
-          auto comparison = mlir::dyn_cast<mlir::arith::CmpIOp>(actual);
-          if (!attributes(actual, {"predicate"}) || !comparison ||
-              comparison.getPredicate() != mlir::arith::CmpIPredicate::eq)
-            return mismatch("unexpected Boolean comparison attributes");
-        } else if (!attributes(actual, {}))
-          return mismatch("unexpected mathematical attributes");
-      } else if (const auto *call = std::get_if<HelperCall>(&expected.action)) {
-        auto callee = actual.getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
-        if (actual.getName().getStringRef() != "func.call" ||
-            !attributes(actual, {"callee"}) || !callee ||
-            callee.getValue() !=
-                project.declarations()[call->callee.index].symbol ||
-            !operands(actual, call->operands))
-          return mismatch("helper target or ordered arguments differ");
-      } else if (const auto *exchange =
-                     std::get_if<Exchange>(&expected.action)) {
-        if (actual.getName().getStringRef() != "protocol.exchange" ||
-            !attributes(actual, {"sender", "receiver", "site"}) ||
-            !string(actual, "sender", decl.roles[exchange->sender]) ||
-            !string(actual, "receiver", decl.roles[exchange->receiver]) ||
-            !string(actual, "site", "s" + std::to_string(expected.statement)) ||
-            !operands(actual, {exchange->payload}))
-          return mismatch("message identity, order, or payload differs");
-        if (++report.operations > limits.operations)
-          return error("source.limit",
-                       "comparison operation count limit exceeded");
-        if (!sameType(source.values[expected.result.index].type,
-                      actual.getResult(0).getType()) ||
-            operation == block.end())
-          return mismatch("message is missing its receiver restriction");
-        auto available = availability.values.find(actual.getResult(0));
-        if (available == availability.values.end() ||
-            available->second.count() != 2 ||
-            !available->second[exchange->sender] ||
-            !available->second[exchange->receiver])
-          return mismatch("exchange components differ");
-        auto &received = *operation++;
-        if (!record(received, expected.span))
-          return error("source.limit", "source location map limit exceeded");
-        if (received.getName().getStringRef() != "protocol.restrict_roles" ||
-            !attributes(received, {"roles"}) ||
-            !roleSet(received.getAttr("roles"), decl, {exchange->receiver}) ||
-            received.getNumOperands() != 1 ||
-            received.getOperand(0) != actual.getResult(0) ||
-            received.getNumResults() != 1 || received.getNumRegions() ||
-            !bind(received.getResult(0), expected.result.index))
-          return mismatch("message receiver restriction differs");
-      } else {
-        const auto &restriction = std::get<Restriction>(expected.action);
-        if (actual.getName().getStringRef() != "protocol.restrict_roles" ||
-            !attributes(actual, {"roles"}) ||
-            !roleSet(actual.getAttr("roles"), decl, restriction.roles) ||
-            !operands(actual, {restriction.input}))
-          return mismatch("explicit role restriction differs");
-      }
-    }
-    if (operation == block.end())
-      return mismatch("missing return");
-    auto &result = *operation++;
-    if (!record(result, decl.span))
-      return error("source.limit", "source location map limit exceeded");
-    if (result.getName().getStringRef() !=
-            (protocol ? "protocol.return" : "func.return") ||
-        !attributes(result, {}) || result.getNumResults() ||
-        result.getNumRegions() || !operands(result, source.results) ||
-        operation != block.end())
-      return mismatch("return operands or remaining operations differ");
-  }
-  if (current != definitions.end())
-    return mismatch("original contains an extra definition");
-  llvm::sort(report.locations, [](const auto &a, const auto &b) {
-    return std::tie(a.line, a.column) < std::tie(b.line, b.column);
-  });
-  return report;
+  return Comparator(project, module, limits).run();
 }
 } // namespace zkc::language

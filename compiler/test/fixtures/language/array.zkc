@@ -1,0 +1,3 @@
+module sample; domain Fr=field("bls12-381.fr");
+math fn first<F:Field,N:nat>(a:[F;N])->F where 1<=N {return a[0];}
+protocol Run roles(P)(a:[Fr;2]@P)->(r:Fr@P){return(r=first(a));}entry Demo=Run;
