@@ -158,6 +158,25 @@ not move those calls into Entry setup. Kernels cannot occur in `math fn` or dire
 in protocol expressions. Protocols call library wrappers with an explicit local
 owner. These bindings install no new backend, mathematical identity or provider.
 
+## Boolean formulas
+
+Total Boolean operations use the same mathematical helper path as field and
+group expressions. `intrinsic("bool.and", a, b)`, `"bool.or"` and `"bool.xor"`
+take two Boolean operands and return one Boolean. They have no static arguments
+or literal parameters. Both operands are evaluated; these are mathematical
+operations, not conditional execution. Libraries can expose ordinary functions:
+
+```text
+math fn both(a: bool, b: bool) -> bool {
+  return intrinsic("bool.and", a, b);
+}
+math fn negate(a: bool) -> bool { return a == false; }
+```
+
+These helpers can be called in protocols or realized within local code. Their
+input dependencies retain every actual participant component. Intrinsic syntax
+itself stays inside mathematical functions.
+
 ## Formal mathematics
 
 ```text

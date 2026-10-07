@@ -354,6 +354,15 @@ class Emitter {
         default: {
           StringRef name;
           switch (math->identity) {
+          case MathematicalIdentity::BooleanAnd:
+            name = "arith.andi";
+            break;
+          case MathematicalIdentity::BooleanOr:
+            name = "arith.ori";
+            break;
+          case MathematicalIdentity::BooleanXor:
+            name = "arith.xori";
+            break;
           case MathematicalIdentity::FieldConstant:
             name = "algebra.constant";
             break;

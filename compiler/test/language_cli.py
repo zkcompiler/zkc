@@ -88,7 +88,7 @@ with case('target admission failure names its phase and related source declarati
     assert f'at {source}:' in diagnostic
 
 for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
-             'associated', 'associated_domain', 'bool', 'branch', 'resource_control', 'group', 'variant_wire', 'variant_custody', 'index', 'dynamic', 'matrix', 'trace', 'vector_rounds'):
+             'associated', 'associated_domain', 'bool', 'boolean_formula', 'branch', 'resource_control', 'group', 'variant_wire', 'variant_custody', 'index', 'dynamic', 'matrix', 'trace', 'vector_rounds'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / (name + ".zkc")}']
     with case(f'typed source participant compilation: {name}'):

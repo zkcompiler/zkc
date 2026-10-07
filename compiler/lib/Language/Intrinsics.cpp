@@ -10,6 +10,15 @@ Checker::intrinsicSignature(const Declaration *scope, StringRef name,
                             ArrayRef<std::string> parameters, Span span) {
   const auto *intrinsic = mathematicalIntrinsic(name);
   using K = Type::Kind;
+  if (intrinsic &&
+      intrinsic->domain == MathematicalIntrinsic::Domain::Boolean) {
+    if (!arguments.empty() || !parameters.empty()) {
+      fail("source.intrinsic",
+           "Boolean intrinsic has no static roots or parameters", span);
+      return {};
+    }
+    return CallSignature{{Type{}, Type{}}, {Type{}}};
+  }
   if (!intrinsic || arguments.size() != intrinsic->naturals + 1 ||
       arguments.front().kind != K::Field ||
       !llvm::all_of(arguments.drop_front(),

@@ -636,6 +636,20 @@ fn main() {
     }
     for optimized in [0, 1] {
         let bundle = |name: &str| load(&format!("typed-{name}-{optimized}.bundle"));
+        for a in [false, true] {
+            for b in [false, true] {
+                let bundle = bundle("boolean_formula");
+                let mut p = runner(&bundle, "P", vec![Value::Bool(a), Value::Bool(b)]);
+                let result = returned(&mut p);
+                assert_eq!(result.len(), 8);
+                for (value, expected) in result
+                    .iter()
+                    .zip([a && b, a || b, a ^ b, !a].into_iter().cycle().take(8))
+                {
+                    assert!(matches!(value, Value::Bool(actual) if *actual == expected));
+                }
+            }
+        }
         for (name, inputs, expected) in [
             ("array", vec![field(3), field(7)], 3),
             ("component", vec![field(3)], 4),

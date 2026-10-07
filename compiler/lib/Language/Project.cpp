@@ -378,7 +378,9 @@ std::string installedCatalogIdentity() {
     row({"mathematical-intrinsic", intrinsic.name,
          std::to_string(static_cast<unsigned>(intrinsic.identity)),
          std::to_string(intrinsic.naturals),
-         intrinsic.domainPoints ? "domain" : "none"});
+         intrinsic.domainPoints ? "domain" : "none",
+         intrinsic.domain == MathematicalIntrinsic::Domain::Boolean ? "bool"
+                                                                    : "field"});
   for (const auto &kernel : protocol::kernels()) {
     std::string value;
     detail::frame(value, "kernel");

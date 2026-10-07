@@ -38,13 +38,15 @@ enum class MathematicalIdentity {
   PolynomialInterpolate,
   PolynomialFixTable
 };
-/// Library authoring hooks for total mathematics. Static roots are a field
-/// followed by the indicated number of naturals. Domain points are canonical
-/// field literals, independently checked by native mathematical admission.
+/// Library authoring hooks for total mathematics. Field operations have a
+/// field root followed by naturals; Boolean operations have no static roots.
+/// Domain points are canonical field literals, independently checked by IR.
 struct MathematicalIntrinsic {
+  enum class Domain { Boolean, Field };
   llvm::StringRef name;
   MathematicalIdentity identity;
-  unsigned naturals;
+  Domain domain;
+  unsigned naturals = 0;
   bool domainPoints = false;
 };
 llvm::ArrayRef<MathematicalIntrinsic> mathematicalIntrinsics();
