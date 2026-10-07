@@ -107,7 +107,8 @@ Catalog-backed data/kernel bindings now cover vector, matrix, sequence and
 iterative folding clients. Mathematical helpers now retain one mathematical body
 when called from local code, using checked realization and existing execution
 recipes. Bounded power-of-two shapes support generic multilinear library types.
-Next, complete formal polynomial authoring and typed predicates and attachments. Preserve actual receives,
+Formal polynomial authoring and explicit R1CS/AIR asset capture are implemented.
+Next, complete typed predicates and attachments. Preserve actual receives,
 service roots and aliases, draw occurrences, ordered guards/stops and resource
 flow through nested applications and control.
 

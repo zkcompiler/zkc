@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_PROJECT_H
 
 #include "zkc/Contracts/Mathematical.h"
+#include "zkc/Language/Assets.h"
 #include "zkc/Language/Types.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
@@ -50,6 +51,7 @@ private:
 /// Requests may lower, but never raise, these per-invocation ceilings.
 struct Limits {
   uint64_t files = 256, fileBytes = 1048576, captureBytes = 8388608;
+  uint64_t assetBytes = 67108864, assetTotalBytes = 67108864;
   uint64_t tokens = 1000000, tokenBytes = 4096;
   uint64_t identifierBytes = 128, moduleBytes = 2048;
   uint64_t parseDepth = 64, expressionDepth = 64;
@@ -310,6 +312,9 @@ class Analysis;
 class ClosedEntry;
 llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
                                         const CaptureOptions & = {});
+llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
+                                        std::vector<AssetBuffer>,
+                                        const CaptureOptions &);
 Analysis analyze(const CapturedProject &, const Limits & = {});
 llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
                                        const Limits & = {});
@@ -317,6 +322,7 @@ llvm::Expected<ClosedEntry> closeEntry(const CheckedProject &, llvm::StringRef,
 class CapturedProject {
 public:
   llvm::ArrayRef<SourceBuffer> sources() const;
+  llvm::ArrayRef<AssetBuffer> assets() const;
   llvm::StringRef identity() const;
   llvm::StringRef format() const;
 
@@ -324,6 +330,7 @@ private:
   explicit CapturedProject(std::shared_ptr<const detail::CaptureStorage>);
   std::shared_ptr<const detail::CaptureStorage> storage;
   friend llvm::Expected<CapturedProject> capture(std::vector<SourceBuffer>,
+                                                 std::vector<AssetBuffer>,
                                                  const CaptureOptions &);
 };
 
@@ -331,6 +338,7 @@ private:
 class CheckedProject {
 public:
   const CapturedProject &capture() const;
+  llvm::ArrayRef<RelationAsset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
   llvm::ArrayRef<Token> tokens(ModuleId) const;
   llvm::StringRef installationIdentity() const;

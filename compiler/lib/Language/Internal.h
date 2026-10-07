@@ -10,12 +10,14 @@
 namespace zkc::language::detail {
 struct CaptureStorage {
   std::vector<SourceBuffer> sources;
+  std::vector<AssetBuffer> assets;
   std::string identity, format;
 };
 struct CheckedStorage {
   explicit CheckedStorage(CapturedProject capture)
       : capture(std::move(capture)) {}
   CapturedProject capture;
+  std::vector<RelationAsset> assets;
   std::vector<std::vector<Token>> tokens;
   std::vector<Declaration> declarations;
   std::string installation;

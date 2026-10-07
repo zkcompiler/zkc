@@ -20,6 +20,7 @@ add_test(NAME math-realization COMMAND zkc-math_realization-test
   "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")
 set_tests_properties(math-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
+add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_natural Language language-natural)
 add_zkc_test(language_power CompilerCore language-power)
 add_zkc_test(language_polynomial CompilerCore)

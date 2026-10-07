@@ -46,6 +46,7 @@ add_zkc_component(Contracts
 )
 add_zkc_component(Language
   lib/Language/Types.cpp
+  lib/Language/Assets.cpp
   lib/Language/Layout.cpp
   lib/Language/Natural.cpp
   lib/Language/Project.cpp
@@ -293,6 +294,7 @@ add_dependencies(ZkcContracts ZkcContractDeclarationsGen)
 target_include_directories(ZkcContracts PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 target_link_libraries(ZkcContracts PUBLIC ZkcSupport)
 target_link_libraries(ZkcRelation PUBLIC ZkcContracts)
+target_link_libraries(ZkcLanguage PUBLIC ZkcRelation)
 target_link_libraries(ZkcProtocol PUBLIC ZkcRelation)
 # IR owns mandatory profile validation; carrier adapters depend on that owner.
 add_dependencies(ZkcIR ZkcIRGen)

@@ -10,6 +10,7 @@ namespace zkc {
 int runLanguageCompiler(int argc, char **argv) {
   using namespace language;
   std::vector<SourceBuffer> sources;
+  std::vector<AssetBuffer> assets;
   std::optional<CapturedProject> captured;
   std::string entry, format;
   EntryRunOptions options;
@@ -56,7 +57,7 @@ int runLanguageCompiler(int argc, char **argv) {
     return refuse(error("source.command", "unknown language command"));
   if (argc > int(limits.files + 8))
     return refuse(error("source.limit", "too many source command arguments"));
-  uint64_t total = 0;
+  uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
     StringRef arg(argv[i]);
     if (arg.consume_front("--source-format=")) {
@@ -70,7 +71,7 @@ int runLanguageCompiler(int argc, char **argv) {
     } else if (arg.consume_front("--module=")) {
       auto [name, path] = arg.split('=');
       if (name.empty() || path.empty() || path.size() > 4096 ||
-          sources.size() == limits.files)
+          sources.size() + assets.size() == limits.files)
         return refuse(
             error("source.options", "expected --module=LOGICAL_NAME=FILE"));
       auto bytes = readInput(
@@ -79,6 +80,23 @@ int runLanguageCompiler(int argc, char **argv) {
         return refuse(bytes.takeError());
       total += bytes->size();
       sources.push_back({name.str(), std::move(*bytes), path.str()});
+    } else if (arg.consume_front("--asset=")) {
+      auto [name, rest] = arg.split('=');
+      auto [format, path] = rest.split('=');
+      if (name.empty() || path.empty() || path.size() > 4096 ||
+          sources.size() + assets.size() == limits.files ||
+          (format != "r1cs-json" && format != "r1cs-binary" &&
+           format != "air-json"))
+        return refuse(
+            error("source.options", "expected --asset=NAME=FORMAT=FILE"));
+      auto bytes =
+          readInput(path, std::min(limits.assetBytes,
+                                   limits.assetTotalBytes - assetTotal));
+      if (!bytes)
+        return refuse(bytes.takeError());
+      assetTotal += bytes->size();
+      assets.push_back(
+          {name.str(), format.str(), std::move(*bytes), path.str()});
     } else if (arg == "--no-simplify")
       options.simplify = false;
     else if (arg == "--release-storage")
@@ -90,8 +108,8 @@ int runLanguageCompiler(int argc, char **argv) {
     return refuse(error(
         "source.options",
         "explicit --source-format=zkc and qualified --entry are required"));
-  auto captureResult =
-      capture(std::move(sources), CaptureOptions{format, limits});
+  auto captureResult = capture(std::move(sources), std::move(assets),
+                               CaptureOptions{format, limits});
   if (!captureResult)
     return refuse(captureResult.takeError());
   captured = std::move(*captureResult);

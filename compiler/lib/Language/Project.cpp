@@ -29,6 +29,8 @@ Error checkLimits(const Limits &limits) {
   CHECK_LIMIT(files);
   CHECK_LIMIT(fileBytes);
   CHECK_LIMIT(captureBytes);
+  CHECK_LIMIT(assetBytes);
+  CHECK_LIMIT(assetTotalBytes);
   CHECK_LIMIT(tokens);
   CHECK_LIMIT(tokenBytes);
   CHECK_LIMIT(identifierBytes);
@@ -117,11 +119,12 @@ Error Work::count(uint64_t &counter, uint64_t limit, StringRef what,
   return Error::success();
 }
 static Error checkSources(ArrayRef<SourceBuffer> sources,
-                          const Limits &limits) {
+                          ArrayRef<AssetBuffer> assets, const Limits &limits) {
   if (sources.empty())
     return failure("source.capture",
                    "capture must contain at least one module");
-  if (sources.size() > limits.files)
+  if (sources.size() > limits.files ||
+      assets.size() > limits.files - sources.size())
     return failure("source.limit", "file count limit exceeded");
   uint64_t total = 0;
   std::set<StringRef> names;
@@ -143,30 +146,60 @@ static Error checkSources(ArrayRef<SourceBuffer> sources,
       return failure("source.encoding",
                      "source is not valid UTF-8: " + source.module);
   }
+  names.clear();
+  total = 0;
+  for (const auto &asset : assets) {
+    if (asset.diagnosticPath.size() > 4096 ||
+        asset.bytes.size() > limits.assetBytes ||
+        asset.bytes.size() > limits.assetTotalBytes - total)
+      return failure("source.limit", "captured asset byte limit exceeded");
+    total += asset.bytes.size();
+    if (!isPath(asset.name, limits) || !names.insert(asset.name).second)
+      return failure("source.asset",
+                     "invalid or duplicate captured asset name");
+    if (asset.format != "r1cs-json" && asset.format != "r1cs-binary" &&
+        asset.format != "air-json")
+      return failure("source.asset", "unknown captured asset format");
+  }
   return Error::success();
 }
 } // namespace detail
 
 Expected<CapturedProject> capture(std::vector<SourceBuffer> sources,
                                   const CaptureOptions &options) {
+  return capture(std::move(sources), {}, options);
+}
+Expected<CapturedProject> capture(std::vector<SourceBuffer> sources,
+                                  std::vector<AssetBuffer> assets,
+                                  const CaptureOptions &options) {
   if (auto error = checkLimits(options.limits))
     return std::move(error);
   if (options.format != "zkc")
     return detail::failure("source.format",
                            "expected explicit source format 'zkc'");
-  if (auto error = detail::checkSources(sources, options.limits))
+  if (auto error = detail::checkSources(sources, assets, options.limits))
     return std::move(error);
   std::sort(sources.begin(), sources.end(),
             [](const auto &a, const auto &b) { return a.module < b.module; });
+  std::sort(assets.begin(), assets.end(),
+            [](const auto &a, const auto &b) { return a.name < b.name; });
   auto storage = std::make_shared<detail::CaptureStorage>();
+  storage->assets = std::move(assets);
   storage->sources = std::move(sources);
   storage->format = options.format;
   std::string identity;
-  detail::frame(identity, "zkc.capture/1");
+  detail::frame(identity, "zkc.capture/2");
   detail::frame(identity, options.format);
+  detail::frame(identity, std::to_string(storage->sources.size()));
   for (const auto &source : storage->sources) {
     detail::frame(identity, source.module);
     detail::frame(identity, source.text);
+  }
+  detail::frame(identity, std::to_string(storage->assets.size()));
+  for (const auto &asset : storage->assets) {
+    detail::frame(identity, asset.name);
+    detail::frame(identity, asset.format);
+    detail::frame(identity, asset.bytes);
   }
   storage->identity = detail::digest(identity);
   return CapturedProject(std::move(storage));
@@ -177,6 +210,9 @@ CapturedProject::CapturedProject(
 ArrayRef<SourceBuffer> CapturedProject::sources() const {
   return storage->sources;
 }
+ArrayRef<AssetBuffer> CapturedProject::assets() const {
+  return storage->assets;
+}
 StringRef CapturedProject::identity() const { return storage->identity; }
 StringRef CapturedProject::format() const { return storage->format; }
 CheckedProject::CheckedProject(
@@ -184,6 +220,9 @@ CheckedProject::CheckedProject(
     : storage(std::move(storage)) {}
 const CapturedProject &CheckedProject::capture() const {
   return storage->capture;
+}
+ArrayRef<RelationAsset> CheckedProject::assets() const {
+  return storage->assets;
 }
 ArrayRef<Declaration> CheckedProject::declarations() const {
   return storage->declarations;
@@ -222,8 +261,18 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
   auto run = [&]() -> Error {
     if (auto error = checkLimits(limits))
       return error;
-    if (auto error = detail::checkSources(capture.sources(), limits))
+    if (auto error =
+            detail::checkSources(capture.sources(), capture.assets(), limits))
       return error;
+    // Each existing reader has its own structural/work bounds. Aggregate input
+    // bytes and file counts are checked before any asset parsing or allocation.
+    for (const auto &asset : capture.assets()) {
+      auto value = RelationAsset::read(asset);
+      if (!value)
+        return detail::failure("source.asset", "in " + asset.name + ": " +
+                                                   toString(value.takeError()));
+      checked->assets.push_back(std::move(*value));
+    }
     checked->tokens.resize(capture.sources().size());
     std::vector<detail::SyntaxModule> modules;
     for (unsigned i = 0; i < capture.sources().size(); ++i) {

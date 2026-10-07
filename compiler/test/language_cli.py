@@ -25,6 +25,21 @@ with case('explicit source path retains its original and interface'):
     assert original.count('"protocol.restrict_roles"') == 3
     (OUT / 'transfer.mlir').write_text(original)
 
+with case('explicit assets change capture without changing executable original'):
+    relations = Path(__file__).resolve().parents[2] / 'examples/relations'
+    asset_args = [f'--asset=circuit=r1cs-json={relations / "multiply.r1cs.json"}',
+                  f'--asset=trace_constraints=air-json={relations / "squaring.air.json"}']
+    commands.run([compiler, 'language-check', *options, *asset_args])
+    captured = json.loads(commands.run([compiler, 'language-interface', *options, *asset_args]))
+    assert captured['capture'] != interface['capture']
+    assert captured['original'] == interface['original']
+    assert commands.run([compiler, 'language-emit', *options, *asset_args]) == original
+    commands.run([compiler, 'language-check', *options, *asset_args, asset_args[0]], refuses='source.asset')
+    commands.run([compiler, 'language-check', *options,
+                  f'--asset=bad=guess={relations / "multiply.r1cs.json"}'], refuses='source.options')
+    commands.run([compiler, 'language-check', *options,
+                  f'--asset=bad=r1cs-binary={relations / "multiply.r1cs.json"}'], refuses='source.asset')
+
 for optimized in (0, 1):
     for released in (0, 1):
         with case(f'participant compilation {optimized=} {released=}'):

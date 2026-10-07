@@ -20,9 +20,27 @@ is captured. Imports never discover files. Imports, declarations, static paramet
 and local bindings cannot shadow visible names. Imports, types and call graphs
 must be acyclic. Every declaration is checked, including unused generic bodies.
 
-Capture identity is SHA-256 over a version marker, explicit format, and modules
-sorted by logical path. Every name and byte string has an unsigned 64-bit
-little-endian length prefix. Diagnostic file paths do not enter identity.
+Capture accepts named assets as explicit bytes alongside modules. Formats are
+`r1cs-json`, `r1cs-binary` and `air-json`; checking never opens a diagnostic path.
+The CLI accepts `--asset=NAME=FORMAT=FILE`. Analysis admits every supplied asset,
+including unused ones, through the existing bounded R1CS or AIR reader. Canonical
+relation identity retains constraint content, field, statement layout and AIR row
+scopes. It does not prove a source-circuit interpretation or key/setup correctness.
+
+Capture identity is SHA-256 over the `zkc.capture/2` marker, explicit source format,
+module count, modules sorted by logical path, asset count, and assets sorted by
+name. Module names/text and asset names/formats/exact bytes are included. Every
+component, including the decimal counts, has an unsigned 64-bit little-endian
+length prefix. Diagnostic paths do not enter identity. Canonical relation identity
+is separate: transport whitespace can change capture identity while retaining the
+same admitted relation definition.
+
+Modules and assets share the file-count limit. Source text retains its own total
+capture-byte limit. Assets have separate per-item and aggregate bounds of 64 MiB;
+each reader retains its own structural and byte limits, including AIR's 8 MiB
+bound. Caller limits may only lower these ceilings. Analysis rechecks the capture
+against its requested limits before parsing assets. Capture alone supplies no
+protocol ports, runtime matrices or specification binding.
 
 ## Definition checking and Entry closure
 

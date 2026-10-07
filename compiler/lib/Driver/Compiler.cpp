@@ -48,6 +48,7 @@ int zkc::runCompiler(int argc, char **argv,
            "language-bundle\n"
            "    --source-format=zkc --entry=MODULE::ENTRY\n"
            "    --module=MODULE=FILE.zkc [--module=MODULE=FILE.zkc ...]\n"
+           "    [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage]\n\n"
            "Protocol developer sources (.pir or JSON; '-' reads stdin):\n"
            "  protocol-resolve       load bounded relation assets into a "
