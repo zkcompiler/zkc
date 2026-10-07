@@ -213,7 +213,7 @@ bool Checker::specialize(DeclarationId selected) {
       fail("source.cycle", "recursive static instantiation", source.span);
       return {};
     }
-    if (++count > work.limits.instances ||
+    if (++count > work.limits.instances || count > work.limits.declarations ||
         !charge(key.size() + 1, source.span)) {
       if (!diagnostic)
         fail("source.limit", "static instance limit exceeded", source.span);
@@ -241,11 +241,6 @@ bool Checker::specialize(DeclarationId selected) {
       return {};
     Declaration result = source;
     DeclarationId id{uint32_t(output.declarations.size())};
-    if (output.declarations.size() >= work.limits.declarations) {
-      fail("source.limit", "specialized declaration count exceeded",
-           result.span);
-      return {};
-    }
     result.id = id;
     result.origin = origin;
     result.staticArguments.assign(args.begin(), args.end());
@@ -280,8 +275,10 @@ bool Checker::specialize(DeclarationId selected) {
     for (auto &service : result.services)
       if (!closeService(service, bindings))
         return {};
-    if (!closeBody(*result.body, bindings, mode))
+    auto body = std::make_shared<Body>(*result.body);
+    if (!closeBody(*body, bindings, mode))
       return {};
+    result.body = std::move(body);
     if (mode == Body::Mode::Local)
       result.kind = Declaration::Kind::Local;
     result.parameters.clear();

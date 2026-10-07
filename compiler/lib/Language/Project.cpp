@@ -3,6 +3,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Language/Layout.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/SHA256.h"
@@ -66,15 +67,15 @@ bool isUnsupported(StringRef name) {
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module", "use",    "pub",      "domain",    "field",     "group",
-      "math",   "fn",     "protocol", "roles",     "entry",     "let",
-      "return", "send",   "bool",     "true",      "false",     "index",
-      "type",   "struct", "enum",     "interface", "component", "where",
-      "nat",    "local",  "if",       "else",      "using",     "guard",
-      "repeat", "match",  "for",      "in",        "capture",   "carry",
-      "yield",  "drop",   "consume",  "require",   "stop",      "opaque",
-      "Type",   "Field",  "Group",    "Copy",      "Drop",      "Share",
-      "Wire"};
+      "module", "use",       "pub",      "domain",    "field",     "group",
+      "math",   "fn",        "protocol", "roles",     "entry",     "let",
+      "return", "send",      "bool",     "true",      "false",     "index",
+      "type",   "struct",    "enum",     "interface", "component", "where",
+      "nat",    "local",     "if",       "else",      "using",     "guard",
+      "repeat", "match",     "for",      "in",        "capture",   "carry",
+      "yield",  "drop",      "consume",  "require",   "stop",      "opaque",
+      "Type",   "Field",     "Group",    "Copy",      "Drop",      "Share",
+      "Wire",   "completes", "finish_if"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {
@@ -289,10 +290,8 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
                                "selection must name an Entry declaration",
                                decl.span);
       detail::Work work{limits};
-      // The retained definition graph was bounded by checkedWork. Charge that
-      // snapshot before copying; specialization has its own additional budget.
-      if (auto error = work.charge(project.checkedWork(), decl.span))
-        return std::move(error);
+      // Metadata is bounded by definition checking. Immutable template bodies
+      // are shared; specialization starts with its own phase budget.
       auto storage = std::make_shared<detail::ClosedStorage>();
       detail::CheckedStorage candidate(project.capture());
       candidate.declarations.assign(project.declarations().begin(),
@@ -302,12 +301,39 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
         return closer.takeError();
       storage->protocol = *candidate.declarations[decl.id.index].target;
       storage->declarations = std::move(candidate.declarations);
-      return ClosedEntry(project, decl.id, std::move(storage));
+      ClosedEntry entry(project, decl.id, std::move(storage));
+      Layouts layouts(entry, limits);
+      std::function<Error(const Body &)> checkMessages =
+          [&](const Body &body) -> Error {
+        for (const auto &op : body.operations) {
+          if (auto e = work.charge(1, op.span))
+            return e;
+          if (auto *exchange = std::get_if<Exchange>(&op.action)) {
+            auto layout =
+                layouts.get(body.values[exchange->payload.index].type);
+            if (!layout)
+              return layout.takeError();
+            if ((*layout)->leaves.empty())
+              return detail::failure(
+                  "source.wire", "message requires a nonempty native payload",
+                  op.span);
+          }
+          if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
+            if (auto e = checkMessages(*repeat->region))
+              return e;
+        }
+        return Error::success();
+      };
+      for (const auto &definition : entry.declarations())
+        if (definition.body)
+          if (auto e = checkMessages(*definition.body))
+            return std::move(e);
+      return entry;
     }
   return detail::failure("source.entry", "unknown qualified Entry: " + name);
 }
 const Declaration &ClosedEntry::entry() const {
-  return checked.declarations()[selected.index];
+  return storage->declarations[selected.index];
 }
 const Declaration &ClosedEntry::protocol() const {
   return storage->declarations[storage->protocol.index];

@@ -303,6 +303,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
                       bool isProtocol) {
   for (auto &s : source.statements) {
     owner.reset();
+    std::optional<unsigned> guardOwner;
     if (s.kind == Statement::Kind::Alias) {
       if (!protocol() || s.owner || !checker.bindingName(decl, s.name, s.span))
         return checker.diagnostic
@@ -315,6 +316,12 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       if (bindings.count(s.name) || !services.emplace(s.name, *root).second)
         return fail("source.shadow",
                     "service alias shadows an existing binding", s.span);
+      ++statement;
+      continue;
+    }
+    if (syntax.expressions[s.expression].kind == Expression::Kind::FinishIf) {
+      if (!complete(s))
+        return false;
       ++statement;
       continue;
     }
@@ -331,15 +338,20 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       continue;
     }
     if (s.resultNames)
-      return fail("source.binding",
-                  "multiple bindings require a protocol application", s.span);
+      return fail(
+          "source.binding",
+          "multiple bindings require a protocol application or control action",
+          s.span);
     if (s.owner) {
       auto selected = checker.roles(decl, {*s.owner}, s.span);
       if (!selected)
         return false;
       if (!active(*selected, s.span))
         return false;
-      owner = selected->front();
+      if (s.kind == Statement::Kind::Guard)
+        guardOwner = selected->front();
+      else
+        owner = selected->front();
     }
     if (s.kind == Statement::Kind::Let &&
         !checker.bindingName(decl, s.name, s.span))
@@ -359,12 +371,13 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     if (!value)
       return false;
     if (s.kind == Statement::Kind::Guard) {
-      if (!protocol() || !owner ||
-          !llvm::is_contained(body.values[value->index].components, *owner))
+      if (!protocol() || !guardOwner ||
+          !llvm::is_contained(body.values[value->index].components,
+                              *guardOwner))
         return fail("source.roles",
                     "guard condition must be available at its owner", s.span);
       if (!use(*value, s.span) ||
-          !emitResults(ProtocolGuard{*value, *owner}, {}, s.span))
+          !emitResults(ProtocolGuard{*value, *guardOwner}, {}, s.span))
         return false;
       body.mayStop = true;
       ++statement;
@@ -610,7 +623,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
        (result.opaque && !decl.effectAllowance->opaque)))
     return fail("source.effect", "body exceeds its written effect allowance",
                 decl.span);
-  decl.body = std::move(result);
+  decl.body = std::make_shared<Body>(std::move(result));
   bodyState[id.index] = 2;
   return true;
 }

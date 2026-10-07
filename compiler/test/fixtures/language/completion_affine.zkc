@@ -1,0 +1,13 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+struct State: Drop { value: Fr }
+fn make(x: Fr) -> State { return State { value: x }; }
+protocol Run roles(P)(n: index @P, go: bool @P, x: Fr @P) -> (state: State @P) completes {
+  local P let state = make(x);
+  let result = repeat roles(P)(i < n, max 4) carry(s = state) capture(go) {
+    let next = finish_if @P(go) (state = s);
+    yield (s = next);
+  };
+  return (state = result);
+}
+entry Demo = Run;

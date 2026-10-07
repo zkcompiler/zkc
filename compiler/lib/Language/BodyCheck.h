@@ -38,6 +38,7 @@ private:
                                                   std::vector<Value>, Span);
   bool application(const Statement &);
   bool repeat(const Statement &);
+  bool complete(const Statement &);
   bool active(llvm::ArrayRef<unsigned>, Span);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
   bool finish(Span);

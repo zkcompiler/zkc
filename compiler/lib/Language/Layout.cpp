@@ -1,4 +1,5 @@
 #include "zkc/Language/Layout.h"
+#include "Internal.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Support/Refusal.h"
@@ -111,36 +112,6 @@ Expected<std::shared_ptr<const Layout>> Layouts::get(const Type &type) {
       if (!decl.origin)
         declarations.emplace(decl.qualifiedName, &decl);
     }
-    // The table is scoped to this retained project. Visit every closed body in
-    // declaration order so query order cannot change a nominal custody slot.
-    std::function<Error(const Body &)> visit = [&](const Body &body) -> Error {
-      for (auto &value : body.values) {
-        auto layout = build(value.type, 1);
-        if (!layout)
-          return layout.takeError();
-      }
-      for (auto &op : body.operations) {
-        if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
-          if (auto e = visit(*repeat->region))
-            return e;
-        if (auto *control = std::get_if<LocalControl>(&op.action))
-          for (auto &region : control->regions)
-            if (auto e = visit(*region))
-              return e;
-      }
-      return Error::success();
-    };
-    for (auto &decl : definitions)
-      if (decl.body && decl.parameters.empty()) {
-        for (auto *ports : {&decl.inputs, &decl.outputs})
-          for (auto &port : *ports) {
-            auto layout = build(port.type, 1);
-            if (!layout)
-              return layout.takeError();
-          }
-        if (auto e = visit(*decl.body))
-          return e;
-      }
     initialized = true;
   }
   return build(type, 1);
@@ -214,9 +185,11 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->custody = (decl->permissions || type.kind == K::Associated) &&
                       !result->permissions.copy;
     if (result->custody) {
-      auto [entry, inserted] =
-          slots.emplace(key, "zkl_resource_" + std::to_string(slots.size()));
-      auto slot = entry->second;
+      auto slot = "zkl_resource_" + detail::digest(key);
+      auto [entry, inserted] = slots.emplace(slot, key);
+      if (!inserted && entry->second != key)
+        return error("source.symbol",
+                     "distinct source types have the same custody identity");
       if (slot.size() > limits.symbolBytes)
         return error("source.limit", "custody identity is too long");
       result->leaves.push_back("resource_unit:" + slot);

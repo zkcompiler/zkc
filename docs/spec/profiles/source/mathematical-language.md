@@ -35,14 +35,13 @@ source errors in any definition still reject analysis.
 
 An instance key contains the qualified declaration name, checked body mode and
 canonical static arguments, with each component length framed. Concrete
-instances retain the encoded declaration symbol. Specializations use `zkl_`
+instances in their declared body mode retain the encoded declaration symbol. Specializations use `zkl_`
 followed by the complete SHA-256 key digest; distinct keys that produce the same
 symbol are refused. No declaration-table index enters the symbol. Local logical
 origins name the source definition, allowing a selector to denote its instances;
 the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
-reachable instances. Closure bounds the copied graph and specialization work
-before original emission.
+reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
 
 ## Types and static terms
 
@@ -356,6 +355,35 @@ A conditional service query can use a one-role repeat with maximum one. An owned
 local helper computes its zero-or-one count. The query executes only in the
 reached iteration; it is never hoisted or evaluated speculatively.
 
+## Conditional participant completion
+
+```text
+protocol Run roles(V)(go: bool @V, x: Fr @V) -> (result: Fr @V) completes {
+  let () = finish_if @V(go) (result = x);
+  return (result = x + x);
+}
+```
+
+`completes` declares an Entry-only protocol: applying it as a reusable component
+refuses, including when its body has no current completion action. `finish_if`
+requires that marker and occupies a complete unannotated `let` RHS. Its Boolean
+condition and named outputs must be available at its owner. The named list
+supplies exactly that owner's declared protocol outputs. Expressions evaluate in
+written order; native operands follow output declaration order.
+
+True completes only that participant, unwinds its enclosing repeats and skips
+its remaining actions. False continues. Neither path informs peers or equates
+shared output components. Every suffix remains statically checked. This action
+is normal completion, distinct from a guard failure or host retry decision.
+
+The binding list names the outputs without `Copy`, in declaration order. Those
+values move on both paths; false returns fresh continuations. Copyable outputs
+remain usable through their original bindings. A product continuation preserves
+its copyable data leaves and replaces each native affine leaf with the action's
+successor. Generic definitions retain their declared move discipline even when
+an instantiation selects a copyable type. Normal cleanup follows the existing
+[entry completion contract](../compiler/entry-completion.md).
+
 ## Translation and retained interface
 
 The source model has Math, Local and Protocol body modes, checked types, explicit
@@ -372,8 +400,7 @@ existing executable bindings. No additional protocol interpreter is introduced.
 Products flatten in declaration order. Variants retain a native tagged descriptor
 with exact nominal identity and payload layouts. A noncopyable restricted nominal
 or associated value has a leading `resource_unit` custody leaf even when its data
-is empty. Slot identities come from a deterministic table scoped to the retained
-project. Empty unrestricted products have no leaves, but remain logical values.
+is empty. Custody slot identities use the complete SHA-256 digest of canonical source type identity, with collision refusal; traversal order does not affect them. Empty unrestricted products have no leaves, but remain logical values.
 
 Qualified symbol components encode as `s` followed by each component's decimal
 byte length, `_`, and spelling. `example::Transfer` becomes `s7_example8_Transfer`.
@@ -386,7 +413,11 @@ whole native module and independently compares actual SSA with checked source.
 It consumes every definition and operation, including unused work, and checks
 layouts, operands, bindings, modes, helper targets, roles, sites, captures, carry,
 variant arms, custody and returns. The comparison never calls emission. An equivalent
-but differently structured rewrite can refuse.
+but differently structured rewrite can refuse. Inputs, receives, restrictions,
+queries, owned calls and protocol results retain exact role sets. Derived math
+and aggregate leaves may have wider native availability than the conservative
+source value; comparison requires containment and still matches their complete
+operation and operand graph.
 
 `CheckedOriginal` owns immutable source, original bytes, comparison counts,
 interface, toolchain identity and a bound diagnostic location map. It exposes no
@@ -417,7 +448,7 @@ spans; diagnostic paths do not affect capture or original identity.
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
 work or recursive-depth budgets are exceeded; no truncated result is returned.
-Checking, layouts, emission, comparison and interface serialization each have a
+Definition checking, specialization, layouts, emission, comparison and interface serialization each have a
 work budget. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
 
@@ -440,8 +471,7 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Conditional participant completion, relation predicates and attachments, proof
-construction, source-facing Host inputs, dynamic arrays and
+Relation predicates and attachments, proof construction, source-facing Host inputs, dynamic arrays and
 member-generic conformance remain outside this profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor

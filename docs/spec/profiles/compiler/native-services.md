@@ -2,8 +2,7 @@
 
 This profile extends [closed mathematical protocols](mathematical-protocols.md)
 with owner-local reusable references and explicit, synchronous service queries.
-It defines a native execution contract. Source correspondence and Lean checking
-for this extension are deferred; existing checked carriers retain their contracts.
+It defines a native execution contract. The [mathematical source profile](../source/mathematical-language.md#managed-services-and-guards) compares emitted service ports, queries and aliases with its checked source. Native Lean checking remains separate; existing checked carriers retain their contracts.
 
 ## Common IR
 
@@ -31,8 +30,8 @@ and guards, so CSE and DCE cannot merge or remove draws.
 
 References are used directly by queries. They cannot be selected, restricted,
 passed to mathematical helpers, exchanged, returned, or bound as statement data.
-These contracts have no data arguments and exactly one field reply. Dynamic
-reference results, service-bearing protocol composition, ownership transfer,
+Static [protocol applications](protocol-composition.md) pass existing references with exact contracts and mapped owners. These contracts have no data arguments and exactly one field reply. Dynamic
+reference results, ownership transfer,
 asynchronous providers and other service contracts require explicit extensions.
 
 ## Participant representation

@@ -141,4 +141,26 @@ for fixture in ('repeat', 'conditional_query', 'repeat_nested', 'repeat_affine')
             bundle = commands.run([compiler, 'language-bundle', *args, *flags])
             (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
 
+
+for fixture in ('completion', 'completion_nested', 'completion_affine'):
+    with case(f'owner completion preserves native control: {fixture}'):
+        args = ['--source-format=zkc', '--entry=sample::Demo',
+                f'--module=sample={FIXTURES / (fixture + ".zkc")}']
+        original = commands.run([compiler, 'language-emit', *args])
+        assert original.count('"protocol.finish_if"') == 1
+        for optimized in (0, 1):
+            flags = [] if optimized else ['--no-simplify']
+            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
+
+
+for fixture in ('dispatch', 'service_order'):
+    with case(f'selected closure keeps distinct bindings: {fixture}'):
+        args = ['--source-format=zkc', '--entry=sample::Demo',
+                f'--module=sample={FIXTURES / (fixture + ".zkc")}']
+        for optimized in (0, 1):
+            flags = [] if optimized else ['--no-simplify']
+            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
+
 counted()

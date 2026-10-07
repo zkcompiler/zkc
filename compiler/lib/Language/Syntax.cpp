@@ -599,6 +599,13 @@ private:
         p.span.end = previousEnd;
         d.outputs.push_back(std::move(p));
       }
+      if (take("completes")) {
+        if (!protocol) {
+          fail("source.mode", "completes requires a protocol");
+          return {};
+        }
+        d.completes = true;
+      }
       if (!requirements(d) || !effects(d))
         return {};
       d.abstract = abstract;
@@ -662,6 +669,27 @@ private:
       if (!expect(")"))
         return {};
       if (take("using") && !names(value.services))
+        return {};
+    } else if (take("finish_if")) {
+      value.kind = Expression::Kind::FinishIf;
+      if (!expect("@") || !name(value.text) || !expect("("))
+        return {};
+      auto condition = expression(decl, depth + 1);
+      if (!condition || !expect(")") || !expect("("))
+        return {};
+      value.children.push_back(*condition);
+      if (!at(")"))
+        do {
+          std::string name;
+          if (!this->name(name) || !expect("="))
+            return {};
+          auto output = expression(decl, depth + 1);
+          if (!output)
+            return {};
+          value.labels.push_back(std::move(name));
+          value.children.push_back(*output);
+        } while (take(",") && !at(")"));
+      if (!expect(")"))
         return {};
     } else if (take("repeat")) {
       value.kind = Expression::Kind::Repeat;

@@ -130,6 +130,13 @@ struct ProtocolGuard {
   ValueId condition;
   unsigned owner;
 };
+struct ProtocolCompletion {
+  ValueId condition;
+  unsigned owner;
+  /// Owner output order; continuations index the logical values moved on false.
+  std::vector<ValueId> values;
+  std::vector<unsigned> continuations;
+};
 struct Exchange {
   unsigned sender, receiver;
   ValueId payload;
@@ -182,7 +189,8 @@ struct LocalControl {
 struct Operation {
   std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
                Projection, LocalPrimitive, Consume, LocalControl,
-               ProtocolApplication, ServiceQuery, ProtocolGuard, ProtocolRepeat>
+               ProtocolApplication, ServiceQuery, ProtocolGuard, ProtocolRepeat,
+               ProtocolCompletion>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;
@@ -266,6 +274,7 @@ struct Declaration {
   std::optional<Type> implementation;
   std::optional<Effects> effectAllowance;
   bool abstract = false;
+  bool completes = false;
   /// Empty or Type is a private representation; Field and Group expose a
   /// domain.
   std::string associatedSort;
@@ -275,7 +284,7 @@ struct Declaration {
   std::vector<std::string> roles;
   std::vector<Port> inputs, outputs;
   std::vector<ServicePort> services;
-  std::optional<Body> body;
+  std::shared_ptr<const Body> body;
   std::optional<DeclarationId> target;
 };
 

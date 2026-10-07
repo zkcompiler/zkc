@@ -88,6 +88,7 @@ struct Expression {
     Apply,
     MethodCall,
     Repeat,
+    FinishIf,
     Add,
     Subtract,
     Multiply,
@@ -146,6 +147,7 @@ struct SyntaxDeclaration {
   Declaration::Kind kind;
   std::string name, domain, target;
   bool isPublic = false;
+  bool completes = false;
   Span span;
   std::vector<std::string> roles;
   std::vector<SyntaxPort> inputs, outputs, services;

@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/Refusal.h"
@@ -209,7 +210,7 @@ class Comparator {
     auto cursor = block.begin();
     std::vector<Values> values(source.values.size());
     unsigned argument = 0;
-    auto bind = [&](unsigned i, Values native) -> bool {
+    auto bind = [&](unsigned i, Values native, bool exact = true) -> bool {
       auto layout = take(layouts.get(source.values[i].type));
       if (!layout ||
           !types(mlir::ValueRange(native).getTypes(), (**layout).leaves))
@@ -218,7 +219,8 @@ class Comparator {
         for (auto value : native) {
           auto found = availability->values.find(value);
           if (found == availability->values.end() ||
-              found->second.count() != source.values[i].components.size())
+              (exact &&
+               found->second.count() != source.values[i].components.size()))
             return fail("participant availability differs");
           for (auto role : source.values[i].components)
             if (role >= found->second.size() || !found->second[role])
@@ -412,6 +414,41 @@ class Comparator {
             !string(*actual, "site", site))
           return fail("managed query method, owner or occurrence differs");
         result = Values(actual->getResults());
+      } else if (auto *completion =
+                     std::get_if<ProtocolCompletion>(&op.action)) {
+        auto input = values[completion->condition.index];
+        llvm::append_range(input, flatten(completion->values));
+        mathematical::NativeTypePolicies policies(module);
+        SmallVector<mlir::Type> successors;
+        SmallVector<unsigned> positions;
+        for (unsigned i = 1; i < input.size(); ++i) {
+          auto policy = policies.get(input[i].getType());
+          if (!policy)
+            return fail("completion leaf has no native policy");
+          if (policy->affine) {
+            positions.push_back(i);
+            successors.push_back(input[i].getType());
+          }
+        }
+        auto *actual = next(block, cursor, op.span, "protocol.finish_if", input,
+                            successors.size());
+        if (!actual)
+          return false;
+        if (!attributes(*actual, {"owner", "site"}) ||
+            !string(*actual, "owner", decl.roles[completion->owner]) ||
+            !string(*actual, "site", site) ||
+            actual->getResultTypes() != mlir::TypeRange(successors))
+          return fail("completion owner, site or affine successors differ");
+        for (unsigned i = 0; i < positions.size(); ++i)
+          input[positions[i]] = actual->getResult(i);
+        unsigned offset = 1;
+        for (unsigned port = 0; port < completion->values.size(); ++port) {
+          unsigned width = values[completion->values[port].index].size();
+          if (llvm::is_contained(completion->continuations, port))
+            result.append(input.begin() + offset,
+                          input.begin() + offset + width);
+          offset += width;
+        }
       } else if (auto *guard = std::get_if<ProtocolGuard>(&op.action)) {
         auto *actual = next(block, cursor, op.span, "protocol.guard",
                             values[guard->condition.index], 0);
@@ -555,11 +592,21 @@ class Comparator {
         return fail("source operation has no comparison rule");
       if (result.size() != leaves.size())
         return fail("operation result layout differs");
+      // Logical products and abstract helper dependencies may conservatively
+      // narrow their leaves. Exact operation/operand matching already fixes
+      // derived native availability; it must contain the source guarantee.
+      bool derived = std::holds_alternative<MathValue>(op.action) ||
+                     std::holds_alternative<Construct>(op.action) ||
+                     std::holds_alternative<Projection>(op.action);
+      if (auto *call = std::get_if<HelperCall>(&op.action))
+        derived = !call->owner;
       unsigned offset = 0;
       for (unsigned i = 0; i < op.results.size(); ++i) {
         const auto count = resultLayouts[i]->leaves.size();
-        if (!bind(op.results[i].index, Values(result.begin() + offset,
-                                              result.begin() + offset + count)))
+        if (!bind(op.results[i].index,
+                  Values(result.begin() + offset,
+                         result.begin() + offset + count),
+                  !derived))
           return false;
         offset += count;
       }

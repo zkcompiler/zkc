@@ -153,6 +153,7 @@ bool Checker::collect() {
         "::" + source.name;
     decl.isPublic = source.isPublic;
     decl.abstract = source.abstract;
+    decl.completes = source.completes;
     decl.permissions = source.permissions;
     decl.effectAllowance = source.effects;
     decl.associatedSort = source.associatedSort;

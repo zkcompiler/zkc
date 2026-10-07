@@ -483,27 +483,14 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar where Wire(G::Scalar){return need(x.x)
           "empty array lost element permissions");
   auto emptySource = check("module m;protocol Run roles(P,V)()->(x:()@V){let "
                            "x=send P->V(());return(x=x);}entry Demo=Run;");
-  mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
-  mlir::MLIRContext context(registry);
-  auto erased = mlir::parseSourceString<mlir::ModuleOp>(R"(
-module {
-  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "protocol.func"() <{function_type = () -> (), input_roles = [], output_roles = [], roles = ["P", "V"], sym_name = "s1_m3_Run"}> ({
-      "protocol.return"() : () -> ()
-    }) : () -> ()
-  }) : () -> ()
-})",
-                                                        &context);
-  require(bool(erased) && succeeded(mlir::verify(*erased)),
-          "erased unit-message module is invalid");
-  auto absentMessage =
-      compareOriginal(must(closeEntry(emptySource, "m::Demo")), *erased);
-  require(!absentMessage,
-          "independent comparison accepted an erased empty message");
-  require(StringRef(toString(absentMessage.takeError()))
-              .contains("source.correspondence"),
-          "wrong empty-message comparison failure");
+  auto emptyClosed = closeEntry(emptySource, "m::Demo");
+  require(!emptyClosed, "empty source message passed closure");
+  bool located = false;
+  handleAllErrors(emptyClosed.takeError(), [&](const DiagnosticError &error) {
+    located = error.diagnostic().code == "source.wire" &&
+              bool(error.diagnostic().primary);
+  });
+  require(located, "empty message refusal lost its source location");
   auto oldVersion = emptySchema;
   (*oldVersion.getAsObject())["format"] = "zkc.language-interface/1";
   std::string oldBytes;
@@ -511,13 +498,6 @@ module {
   auto oldInterface = checkInterface(emptyArray, oldBytes);
   require(bool(oldInterface), "obsolete source interface version accepted");
   consumeError(std::move(oldInterface));
-  auto emptyMessage = prepareOriginal(
-      must(closeEntry(check("module m;protocol Run roles(P,V)()->(x:()@V){let "
-                            "x=send P->V(());return(x=x);}entry Demo=Run;"),
-                      "m::Demo")));
-  require(!emptyMessage, "empty source message silently erased");
-  require(StringRef(toString(emptyMessage.takeError())).contains("source.wire"),
-          "wrong empty-message refusal");
 }
 void layoutsAndCorrespondence() {
   auto layoutProject =

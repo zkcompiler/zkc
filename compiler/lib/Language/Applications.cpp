@@ -18,6 +18,10 @@ bool BodyChecker::application(const Statement &statement) {
   if (callee.kind != Declaration::Kind::Protocol)
     return fail("source.call", "application target must be a protocol",
                 expr.span);
+  if (callee.completes)
+    return fail("source.completion",
+                "a completing protocol can only be selected as an Entry",
+                expr.span);
   const auto names =
       statement.resultNames.value_or(std::vector<std::string>{statement.name});
   if (names.size() != callee.outputs.size() ||

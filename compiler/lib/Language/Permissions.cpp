@@ -202,7 +202,7 @@ bool Checker::ingress(const Type &type, Span span) {
   return caps &&
          (caps->wire ||
           fail("source.ingress",
-               "Entry input requires Wire or an admitted ingress validator",
+               "external input requires Wire or an admitted ingress validator",
                span));
 }
 

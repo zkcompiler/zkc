@@ -3,6 +3,7 @@
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/BoundedStream.h"
@@ -354,6 +355,42 @@ class Emitter {
         if (!actual)
           return false;
         result = Values(actual->getResults());
+      } else if (auto *completion =
+                     std::get_if<ProtocolCompletion>(&op.action)) {
+        auto outputs = flatten(completion->values);
+        auto inputs = values[completion->condition.index];
+        llvm::append_range(inputs, outputs);
+        mathematical::NativeTypePolicies policies(module.get());
+        SmallVector<mlir::Type> affineTypes;
+        SmallVector<bool> affine;
+        for (auto value : outputs) {
+          auto policy = policies.get(value.getType());
+          if (!policy) {
+            failure = error("source.layout",
+                            "completion output has no native policy");
+            return false;
+          }
+          affine.push_back(policy->affine);
+          if (policy->affine)
+            affineTypes.push_back(value.getType());
+        }
+        auto *actual = make(
+            "protocol.finish_if", affineTypes, inputs,
+            {text("owner", decl.roles[completion->owner]), text("site", site)});
+        if (!actual)
+          return false;
+        unsigned successor = 0;
+        for (unsigned i = 0; i < outputs.size(); ++i)
+          if (affine[i])
+            outputs[i] = actual->getResult(successor++);
+        unsigned offset = 0;
+        for (unsigned i = 0; i < completion->values.size(); ++i) {
+          unsigned width = values[completion->values[i].index].size();
+          if (llvm::is_contained(completion->continuations, i))
+            result.append(outputs.begin() + offset,
+                          outputs.begin() + offset + width);
+          offset += width;
+        }
       } else if (auto *guard = std::get_if<ProtocolGuard>(&op.action)) {
         if (!make(
                 "protocol.guard", {}, values[guard->condition.index],
@@ -590,7 +627,9 @@ Expected<std::string> emitOriginal(const ClosedEntry &project,
   if (auto e = checkLimits(limits))
     return e;
   if (project.project().checkedWork() > limits.work ||
-      project.declarations().size() > limits.declarations)
+      uint64_t(llvm::count_if(project.declarations(), [](const auto &decl) {
+        return bool(decl.body);
+      })) > limits.declarations)
     return error("source.limit",
                  "checked project exceeds requested emission limits");
   if (!hasProtocolDialects(context))

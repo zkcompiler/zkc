@@ -7,6 +7,7 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Dialect/Registry.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
@@ -447,6 +448,116 @@ void protocolApplications() {
     });
   });
 }
+void reviewedSourceBoundaries() {
+  auto distinctServices = original(
+      replace(read("service_order.zkc"), "module sample;", "module m;"));
+  must(compileEntry(distinctServices));
+  mutation(distinctServices, "application service roots swapped", [](auto m) {
+    auto *apply = first(m, "protocol.apply");
+    auto left = apply->getOperand(0), right = apply->getOperand(1);
+    apply->setOperand(0, right);
+    apply->setOperand(1, left);
+  });
+  for (auto key : {"owner", "contract", "native", "name"}) {
+    auto forged = must(json::parse(distinctServices.interfaceJson()));
+    auto *service =
+        forged.getAsObject()->getArray("services")->front().getAsObject();
+    (*service)[key] = "forged";
+    std::string bytes;
+    raw_string_ostream(bytes) << forged;
+    refuses(checkInterface(distinctServices, bytes), "source.interface");
+  }
+  for (auto source : {
+           R"(module m;domain Fr=field("bls12-381.fr");
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){let t=(x,y);return(r=t);}entry Demo=Run;)",
+           R"(module m;domain Fr=field("bls12-381.fr");
+interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
+component First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
+math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:Fr@B){return(r=keep<First>(x,y));}entry Demo=Run;)",
+           R"(module m;domain Fr=field("bls12-381.fr");
+math fn pair(x:Fr,y:Fr)->(Fr,Fr){return(x,y);}
+protocol Run roles(A,B)(x:Fr@(A,B),y:Fr@B)->(r:(Fr,Fr)@B){return(r=pair(x,y));}entry Demo=Run;)",
+           R"(module m;math fn yes(x:bool)->bool{return x;}
+protocol Run roles(V)(go:bool@V)->(){guard @V yes(go);return();}entry Demo=Run;)",
+           R"(module m;domain Fr=field("bls12-381.fr");
+protocol Run roles(V)(x:Fr@V)using(coins:Random<Fr>@V)->(){guard @V coins.draw()==x;return();}entry Demo=Run;)",
+       })
+    must(compileEntry(original(source)));
+  sourceRefuses(R"(module m;fn yes(x:bool)->bool{return x;}
+protocol Run roles(V)(go:bool@V)->(){guard @V yes(go);return();}entry Demo=Run;)",
+                "source.mode");
+  auto emptyMessage = check(R"(module m;
+protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}entry Demo=Relay<()>;)");
+  refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
+  auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
+interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
+component First:Mix {math fn mix(a:Fr,b:Fr)->Fr{return a;}}
+component Second:Mix {math fn mix(a:Fr,b:Fr)->Fr{return b;}}
+math fn keep<C:Mix>(x:Fr,y:Fr)->Fr{return C::mix(x,y);}
+protocol Run roles(P)(x:Fr@P,y:Fr@P)->(a:Fr@P,b:Fr@P){return(a=keep<First>(x,y),b=keep<Second>(x,y));}entry Demo=Run;)");
+  must(compileEntry(distinct));
+  mutation(distinct, "selected component changed", [](auto m) {
+    std::vector<mlir::Operation *> calls;
+    m.walk([&](mlir::Operation *op) {
+      if (op->getName().getStringRef() == "func.call")
+        calls.push_back(op);
+    });
+    require(calls.size() >= 2, "dispatch calls missing");
+    calls.back()->setAttr("callee", calls[calls.size() - 2]->getAttr("callee"));
+  });
+}
+void participantCompletion() {
+  auto source = replace(read("completion.zkc"), "module sample;", "module m;");
+  auto checked = original(source);
+  for (auto fixture :
+       {"completion.zkc", "completion_nested.zkc", "completion_affine.zkc"})
+    for (bool simplify : {false, true})
+      must(compileEntry(
+          original(replace(read(fixture), "module sample;", "module m;")),
+          {simplify, false}));
+  for (const auto &[from, to, code] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {" completes", "", "source.completion"},
+           {"finish_if @V(go)", "finish_if @P(go)", "source.roles"},
+           {"(result = x)", "()", "source.completion"},
+           {"(result = x)", "(unknown = x)", "source.completion"},
+           {"(result = x)", "(result = x, result = x)", "source.completion"},
+           {"let () = finish_if", "let unusedResult = finish_if",
+            "source.binding"},
+           {"finish_if @V(go)", "finish_if @V(x)", "source.type"},
+       })
+    sourceRefuses(replace(source, from, to), code);
+  sourceRefuses(source + R"(
+protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V))using(coins:Random<Fr>@V)->(result:Fr@(P,V)){
+ let result=apply Run(go,x)using(coins);return(result=result);
+})",
+                "source.completion");
+  auto affine =
+      replace(read("completion_affine.zkc"), "module sample;", "module m;");
+  sourceRefuses(replace(affine, "yield (s = next)", "yield (s = s)"),
+                "source.move");
+  sourceRefuses(replace(affine, "let next = finish_if", "let () = finish_if"),
+                "source.binding");
+  must(compileEntry(original(R"(module m;domain Fr=field("bls12-381.fr");
+protocol Run<T:Type>roles(P)(x:T@P,go:bool@P)->(value:T@P)completes {
+ let next=finish_if @P(go)(value=x);return(value=next);
+}entry Demo=Run<Fr>;)")));
+  mutation(checked, "completion occurrence changed", [](auto m) {
+    first(m, "protocol.finish_if")
+        ->setAttr("site", mlir::StringAttr::get(m.getContext(), "changed"));
+  });
+  mutation(checked, "completion omitted",
+           [](auto m) { first(m, "protocol.finish_if")->erase(); });
+  mutation(checked, "completion condition changed", [](auto m) {
+    auto *op = first(m, "protocol.finish_if");
+    m.getContext()->template getOrLoadDialect<mlir::arith::ArithDialect>();
+    mlir::OpBuilder builder(op);
+    auto replacement = mlir::arith::ConstantOp::create(
+        builder, op->getLoc(), builder.getBoolAttr(false));
+    op->setOperand(0, replacement);
+  });
+}
 void distributedRepetition() {
   auto source = replace(read("repeat.zkc"), "module sample;", "module m;");
   auto checked = original(source);
@@ -582,6 +693,9 @@ void selectedClosure() {
   const auto definitions = project.declarations().size();
   auto closed = must(closeEntry(project, "m::Demo"));
   auto base = must(prepareOriginal(closed));
+  require(closed.entry().target &&
+              closed.entry().target->index == closed.protocol().id.index,
+          "closed Entry points outside its closed declaration graph");
   require(project.declarations().size() == definitions,
           "Entry closure mutated the definition graph");
   for (const auto &decl : project.declarations())
@@ -651,11 +765,13 @@ void bounds() {
   limits = {};
   limits.declarations = project.declarations().size();
   check(basic, limits);
+  must(prepareOriginal(must(closeEntry(project, "m::Demo", limits)), limits));
   --limits.declarations;
   sourceRefuses(basic, "source.limit", limits);
   limits = {};
   limits.work = project.checkedWork();
   check(basic, limits);
+  must(closeEntry(project, "m::Demo", limits));
   --limits.work;
   sourceRefuses(basic, "source.limit", limits);
   uint64_t tokenCount = project.tokens(ModuleId{0}).size();
@@ -702,7 +818,12 @@ void bounds() {
   sourceRefuses(basic, "source.limit", limits);
 }
 } // namespace
-int main() {
+int main(int argc, char **argv) {
+  InitLLVM initialization(argc, argv);
+  stage = "reviewedSourceBoundaries";
+  reviewedSourceBoundaries();
+  stage = "participantCompletion";
+  participantCompletion();
   stage = "distributedRepetition";
   distributedRepetition();
   stage = "managedServices";

@@ -58,6 +58,7 @@ add_zkc_component(Language
   lib/Language/Calls.cpp
   lib/Language/Applications.cpp
   lib/Language/Repetition.cpp
+  lib/Language/Completion.cpp
   lib/Language/Control.cpp
   lib/Language/Specialize.cpp
 )

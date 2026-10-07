@@ -98,7 +98,7 @@ primitives. The encoding is `lc` followed by `_BYTE_LENGTH_COMPONENT` for every
 path component and the leaf site. ASCII source names make byte lengths explicit
 and the encoding unambiguous. Functions without applications keep their sites. A specialized callee uses its
 logical definition origin, not its generated code symbol. Its enclosing function
-origin retains ordered nominal static bindings for ordinary generic definitions.
+origin retains ordered nominal static bindings for ordinary `.pir` generic definitions. The `.zkc` source profile uses the qualified definition origin with empty native bindings; its checked closure and generated symbol retain the exact static arguments. A definition selector therefore denotes all its `.zkc` instances.
 A checked component member uses `Component.member` as its logical definition;
 its exact selected identity stays in the linked symbol and selection evidence.
 A logical member selector denotes all specializations of that member; the

@@ -201,6 +201,13 @@ fn service_backend(
     registry: &ServiceRegistry,
     root: &ServiceReference,
 ) -> NativeBackend {
+    service_backends(bundle, registry, std::slice::from_ref(root))
+}
+fn service_backends(
+    bundle: &serde_json::Value,
+    registry: &ServiceRegistry,
+    roots: &[ServiceReference],
+) -> NativeBackend {
     let admitted = Bundle::admit(
         bundle.to_string().as_bytes(),
         &backend(bundle, "V"),
@@ -212,19 +219,25 @@ fn service_backend(
         .iter()
         .find(|role| role.entry.role == "V")
         .unwrap();
-    assert_eq!(role.entry.services.len(), 1);
-    let ports = [(role.entry.services[0].name.clone(), root.clone())]
-        .into_iter()
+    assert_eq!(role.entry.services.len(), roots.len());
+    let ports = role
+        .entry
+        .services
+        .iter()
+        .zip(roots)
+        .map(|(port, root)| (port.name.clone(), root.clone()))
         .collect();
     backend(bundle, "V")
         .with_services(registry.clone(), ports)
         .unwrap()
 }
 fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
-    for (n, go) in [(0, false), (1, true), (3, true), (3, false), (5, true)] {
-        if conditional && n != 1 && n != 3 {
-            continue;
-        }
+    let cases: &[(u64, bool)] = if conditional {
+        &[(0, false), (1, true)]
+    } else {
+        &[(0, false), (1, true), (3, true), (3, false), (5, true)]
+    };
+    for &(n, go) in cases {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
             .issue_test_tape("V", 4, (1..=4).map(Scalar::from).collect())
@@ -276,6 +289,90 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
         let state = observed.state.unwrap();
         assert_eq!(state.draw_count, expected_draws);
         assert_eq!(state.budget, 4 - expected_draws);
+    }
+}
+fn ordered_services(bundle: &serde_json::Value) {
+    for go in [false, true] {
+        let registry = ServiceRegistry::new(Policy::default());
+        let first = registry
+            .issue_test_tape(
+                "V",
+                3,
+                vec![Scalar::from(1), Scalar::from(2), Scalar::from(3)],
+            )
+            .unwrap();
+        let second = registry
+            .issue_test_tape("V", 1, vec![Scalar::from(7)])
+            .unwrap();
+        let roots = [first, second];
+        let mut verifier = start(
+            bundle,
+            "V",
+            vec![Value::Bool(go)],
+            service_backends(bundle, &registry, &roots),
+        );
+        if go {
+            let mut prover = runner(bundle, "P", vec![]);
+            let value = send(&mut verifier);
+            expect_field(&value, 9);
+            receive(&mut prover, value);
+            expect_field(&returned(&mut prover)[0], 9);
+            expect_field(&returned(&mut verifier)[0], 13);
+        } else {
+            let Action::Stopped(stop) = next(&mut verifier) else {
+                panic!("expected guard after one draw")
+            };
+            assert!(matches!(stop.kind,StopKind::Explicit(ref reason) if reason=="reject"));
+            assert!(stop.cleanup_errors.is_empty());
+        }
+        for (i, root) in roots.iter().enumerate() {
+            let observed = registry.observe(root).unwrap();
+            assert!(!observed.leased && !observed.poisoned);
+            assert_eq!(
+                observed.state.unwrap().draw_count,
+                if i == 0 {
+                    if go { 3 } else { 1 }
+                } else {
+                    u64::from(go)
+                }
+            );
+        }
+    }
+}
+fn completion_queries(bundle: &serde_json::Value, nested: bool) {
+    for go in [false, true] {
+        let registry = ServiceRegistry::new(Policy::default());
+        let root = registry
+            .issue_test_tape("V", 4, (1..=4).map(Scalar::from).collect())
+            .unwrap();
+        let mut verifier = start(
+            bundle,
+            "V",
+            vec![Value::Bool(go), field(7)],
+            service_backend(bundle, &registry, &root),
+        );
+        let mut prover = runner(bundle, "P", vec![field(3)]);
+        expect_field(&returned(&mut prover)[0], 6);
+        expect_field(&returned(&mut verifier)[0], if go { 7 } else { 14 });
+        assert_eq!(verifier.early_return().is_some(), go);
+        if go {
+            assert_eq!(
+                verifier.early_return().unwrap().0.path.len(),
+                if nested { 2 } else { 0 }
+            );
+        }
+        let observed = registry.observe(&root).unwrap();
+        assert!(!observed.leased && !observed.poisoned);
+        let state = observed.state.unwrap();
+        let expected = if go {
+            0
+        } else if nested {
+            4
+        } else {
+            1
+        };
+        assert_eq!(state.draw_count, expected);
+        assert_eq!(state.budget, 4 - expected);
     }
 }
 fn managed_queries(bundle: &serde_json::Value) {
@@ -343,7 +440,32 @@ fn main() {
         }
     }
     for optimized in [0, 1] {
+        ordered_services(&load(&format!("service_order-{optimized}.bundle")));
+        let values = returned(&mut runner(
+            &load(&format!("dispatch-{optimized}.bundle")),
+            "P",
+            vec![field(2), field(7)],
+        ));
+        expect_field(&values[0], 2);
+        expect_field(&values[1], 7);
+        completion_queries(&load(&format!("completion-{optimized}.bundle")), false);
+        completion_queries(
+            &load(&format!("completion_nested-{optimized}.bundle")),
+            true,
+        );
         for n in [0, 1, 3] {
+            for go in [false, true] {
+                let mut participant = runner(
+                    &load(&format!("completion_affine-{optimized}.bundle")),
+                    "P",
+                    vec![Value::Index(n), Value::Bool(go), field(7)],
+                );
+                let values = returned(&mut participant);
+                assert_eq!(values.len(), 2);
+                assert_eq!(participant.backend().live_resource_units(), 1);
+                expect_field(&values[1], 7);
+                assert_eq!(participant.early_return().is_some(), go && n > 0);
+            }
             let values = returned(&mut runner(
                 &load(&format!("repeat_affine-{optimized}.bundle")),
                 "P",

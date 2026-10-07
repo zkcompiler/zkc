@@ -13,6 +13,8 @@
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/VCSRevision.h"
+#include <algorithm>
+#include <map>
 #include <set>
 
 using namespace llvm;
@@ -28,40 +30,42 @@ void frame(std::string &out, StringRef value) {
     out.push_back(static_cast<char>(size >> (8 * i)));
   out.append(value.data(), value.size());
 }
-DiagnosticLocation sourceSpan(const ClosedEntry &entry, Span span) {
-  const auto &source = entry.project().capture().sources()[span.module.index];
-  unsigned line = 1, column = 1;
-  for (unsigned i = 0; i < span.begin; ++i) {
-    if (source.text[i] == '\n') {
-      ++line;
-      column = 1;
-    } else
-      ++column;
+class SourceCoordinates {
+  const ClosedEntry &entry;
+  std::vector<std::vector<unsigned>> lines;
+
+public:
+  explicit SourceCoordinates(const ClosedEntry &entry) : entry(entry) {
+    for (const auto &source : entry.project().capture().sources()) {
+      std::vector<unsigned> offsets{0};
+      for (unsigned i = 0; i < source.text.size(); ++i)
+        if (source.text[i] == '\n')
+          offsets.push_back(i + 1);
+      lines.push_back(std::move(offsets));
+    }
   }
-  return {source.diagnosticPath.empty() ? source.module : source.diagnosticPath,
-          line, column};
-}
-std::optional<DiagnosticLocation>
-sourceLocation(const ClosedEntry &entry, ArrayRef<SourceLocation> locations,
-               unsigned line, unsigned column) {
-  auto found = llvm::find_if(locations, [&](const auto &position) {
-    return position.line == line && position.column == column;
-  });
-  if (found == locations.end())
-    return {};
-  return sourceSpan(entry, found->source);
-}
+  DiagnosticLocation location(Span span) const {
+    const auto &source = entry.project().capture().sources()[span.module.index];
+    const auto &offsets = lines[span.module.index];
+    auto line = std::upper_bound(offsets.begin(), offsets.end(), span.begin);
+    unsigned number = line - offsets.begin();
+    return {source.diagnosticPath.empty() ? source.module
+                                          : source.diagnosticPath,
+            number, unsigned(span.begin - *(line - 1) + 1)};
+  }
+};
 void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
                        std::vector<DiagnosticLocation> &locations,
                        std::string &diagnostics) {
   std::set<std::string> declarations;
+  std::set<std::pair<unsigned, unsigned>> coordinates;
+  for (const auto &location : locations)
+    if (location.filename == filename)
+      coordinates.emplace(location.line, location.column);
+  SourceCoordinates source(entry);
   module.walk([&](mlir::Operation *op) {
     auto loc = mlir::dyn_cast<mlir::FileLineColLoc>(op->getLoc());
-    if (!loc || !llvm::any_of(locations, [&](const auto &position) {
-          return position.filename == filename &&
-                 position.line == loc.getLine() &&
-                 position.column == loc.getColumn();
-        }))
+    if (!loc || !coordinates.count({loc.getLine(), loc.getColumn()}))
       return;
     for (auto *parent = op; parent; parent = parent->getParentOp()) {
       auto symbol = parent->getAttrOfType<mlir::StringAttr>("sym_name");
@@ -72,9 +76,9 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
     }
   });
   for (const auto &decl : entry.declarations())
-    if (declarations.count(decl.symbol)) {
+    if (declarations.erase(decl.symbol)) {
       diagnostics += "related source declaration: " + decl.qualifiedName + "\n";
-      locations.push_back(sourceSpan(entry, decl.span));
+      locations.push_back(source.location(decl.span));
     }
 }
 Error writeInterface(json::OStream &out, BoundedStream &stream,
@@ -344,13 +348,16 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
     return handleErrors(
         std::move(error), [&](const CompilationError &failure) -> Error {
           auto locations = failure.locations;
+          SourceCoordinates source(original.entry());
+          std::map<std::pair<unsigned, unsigned>, Span> mapping;
+          for (const auto &record : original.locations())
+            mapping.emplace(std::make_pair(record.line, record.column),
+                            record.source);
           for (auto &location : locations)
             if (location.filename == filename) {
-              auto source =
-                  sourceLocation(original.entry(), original.locations(),
-                                 location.line, location.column);
-              if (source)
-                location = std::move(*source);
+              auto found = mapping.find({location.line, location.column});
+              if (found != mapping.end())
+                location = source.location(found->second);
             }
           return make_error<CompilationError>(failure.message, failure.refusals,
                                               std::move(locations),

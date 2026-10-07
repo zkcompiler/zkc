@@ -1,0 +1,10 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+interface Select { math fn select(x: Fr, y: Fr) -> Fr; }
+component First: Select { math fn select(x: Fr, y: Fr) -> Fr { return x; } }
+component Second: Select { math fn select(x: Fr, y: Fr) -> Fr { return y; } }
+math fn selected<C: Select>(x: Fr, y: Fr) -> Fr { return C::select(x, y); }
+protocol Run<A: Select, B: Select> roles(P)(x: Fr @P, y: Fr @P) -> (a: Fr @P, b: Fr @P) {
+  return (a = selected<A>(x,y), b = selected<B>(x,y));
+}
+entry Demo = Run<First,Second>;
