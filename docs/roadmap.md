@@ -98,17 +98,29 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Next package: types and local computation
+### Next package: protocols and specifications
 
-The first `.zkc` compiler path is implemented: concrete mathematics and messages
-reach the existing participant runtime through checked original MLIR. Next,
-refine nominal products/sums, static generics, permissions, checked naturals and
-owned local control/resources. Define each feature's source rules and direct IR
-mapping before enabling syntax. Check generic definitions before selection and
-retain layout, custody, ingress and zero-storage obligations in the acceptance
-controls. Services, protocol composition, specifications, Entry construction and
-the source-facing Host interface follow these foundations. Lean integration and
-consumer retirement retain separate evidence requirements.
+The `.zkc` compiler path and types/local computation are implemented. Next,
+connect managed services, static protocol composition, distributed repetition and
+participant completion to their existing IR contracts. Preserve actual receives,
+service roots and aliases, draw occurrences, ordered guards/stops and resource
+flow through nested applications and control.
+
+Before enabling syntax, check source-to-IR mappings with contrasting protocol
+clients. Resolve conditional service queries and the data access needed by those
+clients under their owning contracts. Fixed source arrays currently offer static
+numeric indexing; existing native dynamic data operations still need a source
+interface. Add member-specific generics only if a concrete library requires them.
+Private input validation and setup authority must connect to the later Host
+boundary before those inputs are admitted.
+
+Then define typed predicates and a versioned attachment schema with an independent
+reader. Keep relation targets separate from input/output conditions and runtime
+guards. Check both runtime-parameter and captured-definition relations, plus
+continuation targets bound to exact component results. Unsupported mappings must
+remain explicit. Entries and Host follows with construction selection and typed
+jobs; integrated stabilization then moves consumers and removes superseded paths.
+Native Lean correspondence remains required before full migration closes.
 
 ### Foundation completion and later migration
 

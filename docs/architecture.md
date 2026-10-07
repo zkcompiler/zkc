@@ -105,7 +105,8 @@ The initial `.zkc` authoring path uses a pure `Language` component, direct
 mathematical MLIR emission and independent structural comparison in Translation.
 CompilerCore retains immutable originals and Entry interfaces before running the
 existing participant pipeline. The [source guide](language/mathematical.md)
-records this boundary and its current scalar scope.
+records the supported mathematics, aggregate types, static components, permissions
+and ordered local control at this boundary.
 
 ### Implementation owners
 
