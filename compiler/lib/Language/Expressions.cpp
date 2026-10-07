@@ -12,6 +12,13 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     return {};
   }
   using K = Expression::Kind;
+  if (expr.kind == K::Kernel) {
+    std::vector<Type> arguments;
+    auto signature = kernelSignature(expr, arguments);
+    if (!signature)
+      return {};
+    return signature->resultType();
+  }
   if (expr.kind == K::MethodCall) {
     auto root = service(syntax.expressions[expr.children.front()]);
     return root ? std::optional<Type>(body.services[root->index].field)
@@ -137,7 +144,9 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
          expr.span);
     return {};
   }
-  if (expr.kind == K::MethodCall) {
+  if (expr.kind == K::Kernel) {
+    result = kernel(expr, depth);
+  } else if (expr.kind == K::MethodCall) {
     if (!protocol() || owner || expr.text != "draw" ||
         expr.children.size() != 1) {
       fail("source.service",

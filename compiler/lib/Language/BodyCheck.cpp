@@ -30,10 +30,7 @@ std::vector<unsigned> BodyChecker::allRoles() const {
   return result;
 }
 bool BodyChecker::data(const Type &type, Span span) {
-  auto p = checker.permissions(type, span, &decl);
-  return p && ((p->copy && p->drop) ||
-               fail("source.mode", "mathematical values require Copy and Drop",
-                    span));
+  return checker.mathematicalData(type, span, &decl);
 }
 bool BodyChecker::addService(const ServicePort &port) {
   if (!protocol() || !checker.bindingName(decl, port.name, port.span) ||
@@ -586,9 +583,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     auto caps = permissions(p.type, p.span, &decl);
     if (!caps)
       return false;
-    if (result.mode == Body::Mode::Math && (!caps->copy || !caps->drop))
-      return fail("source.mode", "math parameters require Copy and Drop",
-                  p.span);
+    if (result.mode == Body::Mode::Math &&
+        !mathematicalData(p.type, p.span, &decl))
+      return false;
     if (result.mode == Body::Mode::Protocol) {
       if (p.roles.size() > 1 && (!caps->copy || !caps->drop || !caps->share))
         return fail("source.permission",
@@ -608,8 +605,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     auto caps = permissions(p.type, p.span, &decl);
     if (!caps)
       return false;
-    if (result.mode == Body::Mode::Math && (!caps->copy || !caps->drop))
-      return fail("source.mode", "math results require Copy and Drop", p.span);
+    if (result.mode == Body::Mode::Math &&
+        !mathematicalData(p.type, p.span, &decl))
+      return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
         (!caps->copy || !caps->drop || !caps->share))
       return fail("source.permission",

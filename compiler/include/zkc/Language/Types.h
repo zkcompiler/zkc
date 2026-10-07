@@ -35,7 +35,8 @@ struct Type {
     Parameter,
     Associated,
     Natural,
-    Component
+    Component,
+    Builtin
   };
   Kind kind = Kind::Boolean;
   std::string domain;

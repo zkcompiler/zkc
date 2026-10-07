@@ -5,11 +5,11 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use zkc_backends::services::{ServiceReference, ServiceRegistry};
 use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
+    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Sequence, Value,
 };
 use zkc_runtime::interactive::{
-    Action, Packet, PathElement, ProgramState, Runner, StopKind, Value as RuntimeValue,
-    admit_supplied,
+    Action, LogicalType, Packet, PathElement, ProgramState, Runner, StopKind,
+    Value as RuntimeValue, admit_supplied,
 };
 use zkc_tools::protocol::run::{Bundle, BundleLimits, HostLimits, RunHost, SetupAuthority};
 
@@ -404,6 +404,105 @@ fn managed_queries(bundle: &serde_json::Value) {
         assert_eq!(state.budget, if go { 0 } else { 2 });
     }
 }
+fn native_data(directory: &Path, optimized: u32) {
+    let load = |name: &str| -> serde_json::Value {
+        serde_json::from_slice(
+            &std::fs::read(directory.join(format!("typed-{name}-{optimized}.bundle"))).unwrap(),
+        )
+        .unwrap()
+    };
+    let dynamic = load("dynamic");
+    for count in [2, 6] {
+        let mut prover = runner(&dynamic, "P", vec![field(3), Value::Index(count)]);
+        let mut verifier = runner(&dynamic, "V", vec![]);
+        receive(&mut verifier, send(&mut prover));
+        receive(&mut verifier, send(&mut prover));
+        assert!(returned(&mut prover).is_empty());
+        let result = returned(&mut verifier);
+        expect_field(&result[0], 3 * count / 2);
+        expect_field(&result[1], 3 * count / 2);
+    }
+    for count in [0, 1, 3] {
+        let mut prover = runner(&dynamic, "P", vec![field(3), Value::Index(count)]);
+        let Action::Stopped(stop) = next(&mut prover) else {
+            panic!("invalid split length did not stop");
+        };
+        assert!(matches!(stop.kind, StopKind::Backend(ref error)
+            if error.code == "refused:split-length"));
+        assert_eq!(prover.backend().active_frames(), 0);
+    }
+    let matrix = load("matrix");
+    let mut prover = runner(
+        &matrix,
+        "P",
+        vec![
+            Value::matrix(
+                2,
+                3,
+                &[(0, 1, Scalar::from(9)), (1, 2, Scalar::from(4))],
+                &Policy::default(),
+            )
+            .unwrap(),
+            Value::Vector(vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)].into()),
+        ],
+    );
+    let mut verifier = runner(&matrix, "V", vec![]);
+    receive(&mut verifier, send(&mut prover));
+    receive(&mut verifier, send(&mut prover));
+    assert!(returned(&mut prover).is_empty());
+    expect_field(&returned(&mut verifier)[0], 47);
+    let trace = load("trace");
+    for shapes in [vec![], vec![(0, 3), (2, 0), (4, 5)]] {
+        let matrices = shapes
+            .iter()
+            .map(|&(r, c)| Value::matrix(r, c, &[], &Policy::default()).unwrap())
+            .collect();
+        let data = Value::Sequence(
+            Sequence::new(
+                LogicalType::parse("matrix:bls12-381.fr").unwrap(),
+                matrices,
+                &Policy::default(),
+            )
+            .unwrap(),
+        );
+        let mut prover = runner(&trace, "P", vec![data]);
+        let mut verifier = runner(&trace, "V", vec![]);
+        receive(&mut verifier, send(&mut prover));
+        assert!(returned(&mut prover).is_empty());
+        assert!(matches!(returned(&mut verifier)[0], Value::Index(n)
+            if n == shapes.iter().map(|&(r,_)|r as u64).sum::<u64>()));
+    }
+    let rounds = load("vector_rounds");
+    for count in 0..=2 {
+        let mut prover = runner(
+            &rounds,
+            "P",
+            vec![
+                Value::Vector((1..=4).map(Scalar::from).collect::<Vec<_>>().into()),
+                Value::Index(count),
+            ],
+        );
+        let registry = ServiceRegistry::new(Policy::default());
+        let root = registry
+            .issue_test_tape("V", 2, vec![Scalar::from(2), Scalar::from(3)])
+            .unwrap();
+        let backend = service_backend(&rounds, &registry, &root);
+        let mut verifier = start(&rounds, "V", vec![field(10), Value::Index(count)], backend);
+        for _ in 0..count {
+            receive(&mut verifier, send(&mut prover));
+            receive(&mut verifier, send(&mut prover));
+            receive(&mut prover, send(&mut verifier));
+        }
+        let expected = [10, 11, 8][count as usize];
+        expect_field(&returned(&mut prover)[0], expected);
+        expect_field(&returned(&mut verifier)[0], expected);
+        assert_eq!(
+            registry.observe(&root).unwrap().state.unwrap().draw_count,
+            count
+        );
+    }
+}
+
 fn main() {
     let directory = std::env::args()
         .nth(1)
@@ -440,6 +539,7 @@ fn main() {
         }
     }
     for optimized in [0, 1] {
+        native_data(Path::new(&directory), optimized);
         ordered_services(&load(&format!("service_order-{optimized}.bundle")));
         let values = returned(&mut runner(
             &load(&format!("dispatch-{optimized}.bundle")),

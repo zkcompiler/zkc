@@ -1,5 +1,6 @@
 #include "Checker.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Language/Builtins.h"
 #include "llvm/ADT/StringExtras.h"
 #include <algorithm>
 #include <limits>
@@ -327,6 +328,21 @@ std::optional<Type> Checker::type(const Declaration &context,
   }
   using S = SyntaxType::Kind;
   using K = Type::Kind;
+  if (s.kind == S::Builtin) {
+    std::vector<Type> arguments;
+    for (const auto &syntax : s.arguments) {
+      auto argument = type(context, syntax, depth + 1);
+      if (!argument)
+        return {};
+      arguments.push_back(std::move(*argument));
+    }
+    auto result = builtinType(s.name, arguments);
+    if (!result) {
+      fail("source.builtin", toString(result.takeError()), s.span);
+      return {};
+    }
+    return std::move(*result);
+  }
   if (s.kind == S::Natural) {
     uint64_t value;
     if (StringRef(s.name).getAsInteger(10, value)) {

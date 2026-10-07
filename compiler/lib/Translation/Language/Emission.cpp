@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
@@ -85,8 +86,9 @@ class Emitter {
   std::optional<Values> primitive(StringRef contract, mlir::ValueRange inputs,
                                   mlir::TypeRange outputs,
                                   ArrayRef<std::string> parameters,
-                                  StringRef site) {
-    if (contract == "bool.constant") {
+                                  StringRef site,
+                                  std::optional<ArrayRef<Type>> statics = {}) {
+    if (!statics && contract == "bool.constant") {
       auto *op = make(
           "local.bool_constant", outputs, {},
           {attr("value", builder.getBoolAttr(parameters.front() == "true")),
@@ -94,7 +96,7 @@ class Emitter {
       return op ? std::optional<Values>(Values(op->getResults()))
                 : std::nullopt;
     }
-    if (contract == "bool.equal") {
+    if (!statics && contract == "bool.equal") {
       auto a = primitive("bool.and", inputs, outputs, {}, site.str() + "_both");
       if (!a)
         return {};
@@ -114,8 +116,14 @@ class Emitter {
       return primitive("bool.or", either, outputs, {}, site);
     }
     std::vector<std::string> arguments;
-    if (contract.starts_with("field.") || contract.starts_with("curve.") ||
-        contract.starts_with("resource_unit.")) {
+    if (statics) {
+      auto roots = take(kernelArguments(contract, *statics));
+      if (!roots)
+        return {};
+      arguments = std::move(*roots);
+    } else if (contract.starts_with("field.") ||
+               contract.starts_with("curve.") ||
+               contract.starts_with("resource_unit.")) {
       auto type = take(protocol::encodeBoundType(
           inputs.empty() ? outputs.front() : inputs.front().getType(), false));
       if (!type)
@@ -325,8 +333,12 @@ class Emitter {
           return false;
         result = Values(actual->getResults());
       } else if (auto *local = std::get_if<LocalPrimitive>(&op.action)) {
-        auto emitted = primitive(local->contract, flatten(local->operands),
-                                 resultTypes, local->parameters, site);
+        auto emitted = primitive(
+            local->contract, flatten(local->operands), resultTypes,
+            local->parameters, site,
+            local->bindingArguments
+                ? std::optional<ArrayRef<Type>>(*local->bindingArguments)
+                : std::nullopt);
         if (!emitted)
           return false;
         result = std::move(*emitted);

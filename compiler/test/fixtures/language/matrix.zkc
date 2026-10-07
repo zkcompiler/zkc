@@ -1,0 +1,14 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+type Vector<F: Field> = builtin("vector", F);
+type Matrix<F: Field> = builtin("matrix", F);
+fn evaluate<F: Field>(m: Matrix<F>, v: Vector<F>) -> F {
+  let product = kernel<F>("matrix.mul_vector", m, v);
+  return kernel<F>("vector.sum", product);
+}
+protocol Run roles(P,V)(m: Matrix<Fr> @P, v: Vector<Fr> @P) -> (r: Fr @V) {
+  let data = send P -> V((m, v));
+  local V let result = evaluate(data.0, data.1);
+  return (r = result);
+}
+entry Demo = Run;

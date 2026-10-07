@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
@@ -670,8 +671,181 @@ void bounds() {
   require(!result, "aggregate leaf bound escaped emission");
   consumeError(result.takeError());
 }
+void nativeData() {
+  const std::string library = prefix + R"(
+    type Vector<F:Field> = builtin("vector", F);
+    type Matrix<F:Field> = builtin("matrix", F);
+    fn sum<F:Field>(v:Vector<F>)->F{return kernel<F>("vector.sum",v);}
+    fn get<F:Field>(v:Vector<F>,i:index)->F{return kernel<F>("vector.get",v,i);}
+  )";
+  auto selected = original(library + R"(
+    fn difference<F:Field>(a:Vector<F>,b:Vector<F>)->Vector<F>{
+      return kernel<F>("vector.sub",a,b);
+    }
+    protocol Run roles(P,V)(a:Vector<Fr>@P,b:Vector<Fr>@P)->(r:Fr@V){
+      local P let d=difference(a,b);
+      let v=send P->V(d);
+      local V let r=sum(v);
+      return(r=r);
+    }
+    entry Demo=Run;
+  )");
+  must(compileEntry(selected));
+  require(selected.bytes().contains("tensor<?x!algebra.field"),
+          "dynamic vector did not retain native representation");
+  mutation(selected, [](mlir::ModuleOp module) {
+    mlir::Builder builder(module.getContext());
+    module.walk([&](mlir::Operation *op) {
+      if (op->getName().getStringRef() == "local.binding" &&
+          op->getAttrOfType<mlir::StringAttr>("contract").getValue() ==
+              "vector.sub")
+        op->setAttr("contract", builder.getStringAttr("vector.add"));
+      if (op->getName().getStringRef() == "algebra.exec.vector_sub") {
+        mlir::OperationState state(op->getLoc(), "algebra.exec.vector_add");
+        state.addOperands(op->getOperands());
+        state.addTypes(op->getResultTypes());
+        state.addAttributes(op->getAttrs());
+        mlir::OpBuilder at(op);
+        auto *replacement = at.create(state);
+        op->replaceAllUsesWith(replacement->getResults());
+        op->erase();
+      }
+    });
+  });
+  must(compileEntry(original(library + R"(
+    fn parts<F:Field>(a:Vector<F>)->(Vector<F>,Vector<F>){
+      return kernel<F>("vector.split",a);
+    }
+    fn length<F:Field>(a:Matrix<F>)->index{
+      return kernel<F>("matrix.dimension",a;"1");
+    }
+    protocol Run roles(P)(a:Vector<Fr>@P,m:Matrix<Fr>@P)->(r:Fr@P,n:index@P){
+      local P let p=parts(a);local P let s=sum(p.0);
+      local P let dims=length(m);return(r=s,n=dims);
+    }entry Demo=Run;
+  )")));
+  must(compileEntry(original(prefix + R"(
+    type Values=builtin("sequence", Fr);
+    fn singleton(x:Fr)->Values{
+      let e=kernel<Fr>("sequence.empty");
+      return kernel<Fr>("sequence.append",e,x);
+    }
+    fn first(xs:Values)->Fr{return kernel<Fr>("sequence.at",xs,0);}
+    protocol Run roles(P,V)(x:Fr@P)->(r:Fr@V){
+      local P let xs=singleton(x);let ys=send P->V(xs);
+      local V let r=first(ys);return(r=r);
+    }entry Demo=Run;
+  )")));
+  for (const auto &body : {"math fn bad<F:Field>(v:Vector<F>)->F{return "
+                           "kernel<F>(\"vector.sum\",v);}",
+                           "protocol Bad "
+                           "roles(P)(v:Vector<Fr>@P)->(r:Fr@P){return(r=kernel<"
+                           "Fr>(\"vector.sum\",v));}"})
+    refuses(library + body + unit, "source.mode");
+  refuses(library +
+              "fn bad(v:Vector<Fr>)->Fr ! {} {return "
+              "kernel<Fr>(\"vector.sum\",v);}" +
+              unit,
+          "source.effect");
+  for (const auto &body :
+       {"fn bad(v:Vector<Fr>)->Fr{return kernel<Fr>(\"vector.get\",v);}",
+        "fn bad(v:Vector<Fr>)->Fr{return kernel<index>(\"vector.sum\",v);}",
+        "fn bad(v:Vector<Fr>)->Fr{return "
+        "kernel<Fr>(\"vector.get\",v,0;\"1\");}",
+        "fn bad()->Fr{return kernel<Fr>(\"field.constant\";\"-1\");}",
+        "fn bad()->Fr{return kernel<Fr>(\"not.installed\");}",
+        "fn bad()->Fr{return kernel<Fr>(\"random.draw\");}",
+        "fn bad()->Fr{return kernel<Fr>(\"transcript.challenge\");}"}) {
+    refuses(library + body + unit, "source.kernel");
+  }
+
+  refuses(library + R"(
+    fn bad<F:Field>(n:index)->F{return kernel<F>("poly.domain_root",n);}
+  )" + unit,
+          "source.kernel");
+  must(compileEntry(original(prefix + R"(
+    domain K=field("koala-bear");
+    fn root(n:index)->K{return kernel<K>("poly.domain_root",n);}
+    protocol Run roles(P)(n:index@P)->(r:K@P){local P let r=root(n);return(r=r);}
+    entry Demo=Run;
+  )")));
+  refuses(prefix + "type Bad=builtin(\"vector\",index);" + unit,
+          "source.builtin");
+  refuses(prefix + "type Bad=builtin(\"resource_unit\");" + unit,
+          "source.builtin");
+  refuses(prefix + "struct Secret{x:Fr}type Bad=builtin(\"sequence\",Secret);" +
+              unit,
+          "source.builtin");
+  refuses(library + R"(
+    fn bad<F:Field>(x:F)->F{return kernel<F>("field.inverse",x);}
+    math fn caller<F:Field>(x:F)->F{return bad(x);}
+  )" + unit,
+          "source.mode");
+  // Native data is not automatically part of the total mathematical vocabulary.
+  for (const auto &head : {"polynomial", "table", "point", "round"}) {
+    const std::string data =
+        "type Data=builtin(\"" + std::string(head) + "\",Fr);";
+    refuses(prefix + data + "math fn bad(x:Data)->Data{return x;}" + unit,
+            "source.mode");
+    refuses(prefix + data +
+                "struct Box{pub value:Data}math fn bad(x:Box)->Box{return x;}" +
+                unit,
+            "source.mode");
+    refuses(prefix + data +
+                "type Items=builtin(\"sequence\",Data);"
+                "math fn bad(x:Items)->Items{return x;}" +
+                unit,
+            "source.mode");
+  }
+  must(compileEntry(original(library + R"(
+    math fn identity<F:Field>(v:Vector<F>)->Vector<F>{return v;}
+    protocol Run roles(P)(v:Vector<Fr>@P)->(r:Vector<Fr>@P){
+      let r=identity(v);return(r=r);
+    }entry Demo=Run;
+  )")));
+  closureRefuses(prefix + R"(
+    type Data=builtin("polynomial",Fr);
+    math fn identity<T:Type+Copy+Drop>(v:T)->T{return v;}
+    protocol Run roles(P)(v:Data@P)->(r:Data@P){
+      let r=identity(v);return(r=r);
+    }entry Demo=Run;
+  )",
+                 "source.mode");
+  closureRefuses(prefix + R"(
+    type Data=builtin("polynomial",Fr);
+    math fn identity<T:Type+Copy+Drop>(v:T)->T{return v;}
+    fn work(v:Data)->Data{return identity(v);}
+    protocol Run roles(P)(v:Data@P)->(r:Data@P){
+      local P let r=work(v);return(r=r);
+    }entry Demo=Run;
+  )",
+                 "source.mode");
+  refuses(prefix + R"(
+    struct Secret{pub value:Fr}
+    fn bad(x:Secret)->index{return kernel<Secret>("sequence.length",x);}
+  )" + unit,
+          "source.kernel");
+  // Full constructor and argument identities distinguish static instances.
+  auto fr = Type(Type::Kind::Field, "bls12-381.fr");
+  auto other = Type(Type::Kind::Field, "koala-bear");
+  auto first = must(builtinType("vector", {fr}));
+  auto second = must(builtinType("vector", {other}));
+  require(typeIdentity(first) != typeIdentity(second),
+          "native static identity erased the field");
+  require(must(kernelArgument(first, "Type")) !=
+              must(kernelArgument(second, "Type")),
+          "native Type argument erased its application");
+  auto constant = original(prefix + R"(
+    fn literal()->Fr{return kernel<Fr>("field.constant";"7");}
+    protocol Run roles(P)()->(r:Fr@P){local P let r=literal();return(r=r);}
+    entry Demo=Run;
+  )");
+  must(compileEntry(constant));
+}
+
 } // namespace
 int main() {
+  nativeData();
   wireAuthority();
   typing();
   layoutsAndCorrespondence();

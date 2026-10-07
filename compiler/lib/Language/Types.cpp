@@ -17,6 +17,12 @@ std::string spelling(const Type &type) {
   default:
     break;
   }
+  if (type.kind == K::Builtin) {
+    std::string result = "builtin(\"" + type.domain + "\"";
+    for (const auto &argument : type.arguments)
+      result += ", " + spelling(argument);
+    return result + ")";
+  }
   if (type.kind == K::Array)
     return "[" + spelling(type.arguments.front()) + "; " +
            type.dimension.spelling() + "]";

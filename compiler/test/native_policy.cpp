@@ -225,14 +225,23 @@ int main() {
       }
     }
   });
+  cases.run("invalid native types refuse during formation", [&] {
+    ScopedDiagnosticHandler expected(&context,
+                                     [](Diagnostic &) { return success(); });
+    auto type = algebra::FieldType::getChecked(
+        [&] { return emitError(UnknownLoc::get(&context)); }, &context,
+        StringRef("unknown"));
+    require(!type, "unknown field acquired a formed native type");
+    auto vector = algebra::FixedVectorType::getChecked(
+        [&] { return emitError(UnknownLoc::get(&context)); }, &context,
+        Type(IntegerType::get(&context, 32)), uint64_t(2));
+    require(!vector, "invalid element acquired a formed native vector");
+  });
   cases.run("unclassified native types", [&] {
     for (Type type :
          {Type(IntegerType::get(&context, 32)),
           Type(local::OpaqueType::get(&context, "arbitrary")),
-          Type(local::CapabilityType::get(&context, "uninstalled:any")),
-          Type(algebra::FieldType::get(&context, "unknown")),
-          Type(algebra::FixedVectorType::get(
-              &context, IntegerType::get(&context, 32), 2))})
+          Type(local::CapabilityType::get(&context, "uninstalled:any"))})
       require(!mathematical::nativeTypePolicy(type),
               "unclassified type acquired permission");
   });

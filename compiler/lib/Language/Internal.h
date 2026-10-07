@@ -51,6 +51,7 @@ struct Work {
 struct SyntaxType {
   enum class Kind {
     Name,
+    Builtin,
     Natural,
     Add,
     Multiply,
@@ -85,6 +86,7 @@ struct Expression {
     Decimal,
     Boolean,
     Call,
+    Kernel,
     Apply,
     MethodCall,
     Repeat,

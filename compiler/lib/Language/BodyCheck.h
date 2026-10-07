@@ -39,6 +39,9 @@ private:
   bool application(const Statement &);
   bool repeat(const Statement &);
   bool complete(const Statement &);
+  std::optional<ValueId> kernel(const Expression &, unsigned);
+  std::optional<Checker::KernelSignature> kernelSignature(const Expression &,
+                                                          std::vector<Type> &);
   bool active(llvm::ArrayRef<unsigned>, Span);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
   bool finish(Span);

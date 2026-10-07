@@ -1,4 +1,7 @@
 #include "Checker.h"
+#include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -147,6 +150,46 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
     return Permissions{true, true, true, true};
+  if (type.kind == K::Builtin) {
+    auto formed = builtinType(type.domain, type.arguments);
+    if (!formed) {
+      fail("source.builtin", toString(formed.takeError()), span);
+      return {};
+    }
+    const auto *base = protocol::typePermissions(type.domain);
+    auto head = protocol::nativeTypeConstructorPolicy(type.domain);
+    if (!head) {
+      fail("source.builtin", "native data lacks an installed type policy",
+           span);
+      return {};
+    }
+    Permissions result{base && base->copy, base && base->drop,
+                       head->shared || type.domain == "sequence", true};
+    for (const auto &argument : type.arguments) {
+      if (argument.kind == K::Natural)
+        continue;
+      auto child = permissions(argument, span, scope, depth + 1);
+      if (!child)
+        return {};
+      result = intersect(result, *child);
+    }
+    if (!symbolic(type)) {
+      auto native = builtinLayout(type);
+      if (!native) {
+        fail("source.builtin", toString(native.takeError()), span);
+        return {};
+      }
+      auto policy = protocol::nativeTypePolicy(*native);
+      result.share &= policy && policy->shared;
+      result.wire &= policy && protocol::nativeMessageData(*native);
+    } else {
+      // Generic message shapes still need a concrete admitted codec at closure.
+      result.wire &= type.domain == "vector" || type.domain == "matrix" ||
+                     type.domain == "groups" || type.domain == "indices" ||
+                     type.domain == "sequence" || type.domain == "field_array";
+    }
+    return result;
+  }
   Permissions result{true, true, true, true};
   std::vector<Type> children;
   if (type.kind == K::Tuple || type.kind == K::Array)
@@ -188,6 +231,50 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
     result = *decl->permissions;
   }
   return result;
+}
+bool Checker::mathematicalData(const Type &type, Span span,
+                               const Declaration *scope, unsigned depth) {
+  if (depth > work.limits.typeDepth || !charge(1, span))
+    return diagnostic ? false
+                      : fail("source.limit", "mathematical type depth", span);
+  auto caps = permissions(type, span, scope, depth);
+  if (!caps || !caps->copy || !caps->drop)
+    return diagnostic ? false
+                      : fail("source.mode",
+                             "mathematical values require Copy and Drop", span);
+  using K = Type::Kind;
+  if (type.kind == K::Builtin) {
+    auto policy = protocol::nativeTypeConstructorPolicy(type.domain);
+    if (!policy || (!policy->total && type.domain != "sequence"))
+      return fail("source.mode",
+                  "native data is outside the mathematical vocabulary", span);
+    for (const auto &arg : type.arguments)
+      if (arg.kind != K::Natural &&
+          !mathematicalData(arg, span, scope, depth + 1))
+        return false;
+  } else if (type.kind == K::Tuple || type.kind == K::Array) {
+    for (const auto &arg : type.arguments)
+      if (!mathematicalData(arg, span, scope, depth + 1))
+        return false;
+  } else if (type.kind == K::Record || type.kind == K::Associated) {
+    if (type.kind == K::Associated && symbolic(type))
+      return true;
+    auto children = fields(type, span, depth + 1);
+    if (!children)
+      return false;
+    for (const auto &child : *children)
+      if (!mathematicalData(child.type, span, scope, depth + 1))
+        return false;
+  } else if (type.kind == K::Variant) {
+    auto alts = alternatives(type, span, depth + 1);
+    if (!alts)
+      return false;
+    for (const auto &alt : *alts)
+      for (const auto &child : alt.fields)
+        if (!mathematicalData(child.type, span, scope, depth + 1))
+          return false;
+  }
+  return true;
 }
 bool Checker::constructorAllowed(const Declaration &context,
                                  const Type &type) const {

@@ -52,6 +52,27 @@ bool Checker::specialize(DeclarationId selected) {
         for (auto &argument : primitive->staticArguments)
           if (!closeType(argument, bindings, op.span))
             return false;
+        if (primitive->bindingArguments) {
+          for (auto &argument : *primitive->bindingArguments)
+            if (!closeType(argument, bindings, op.span))
+              return false;
+          auto signature =
+              kernelSignature(primitive->contract, *primitive->bindingArguments,
+                              primitive->parameters, op.span);
+          if (!signature)
+            return false;
+          if (primitive->operands.size() != signature->inputs.size() ||
+              op.results.size() != 1 ||
+              !(body.values[op.results.front().index].type ==
+                signature->resultType()))
+            return fail("source.kernel", "specialized kernel ports differ",
+                        op.span);
+          for (unsigned i = 0; i < primitive->operands.size(); ++i)
+            if (!(body.values[primitive->operands[i].index].type ==
+                  signature->inputs[i]))
+              return fail("source.kernel", "specialized kernel input differs",
+                          op.span);
+        }
         if (!primitive->staticArguments.empty())
           primitive->parameters = {std::to_string(
               primitive->staticArguments.front().dimension.closedValue())};
@@ -278,6 +299,10 @@ bool Checker::specialize(DeclarationId selected) {
     auto body = std::make_shared<Body>(*result.body);
     if (!closeBody(*body, bindings, mode))
       return {};
+    if (result.kind == Declaration::Kind::Math)
+      for (const auto &value : body->values)
+        if (!mathematicalData(value.type, value.span))
+          return {};
     result.body = std::move(body);
     if (mode == Body::Mode::Local)
       result.kind = Declaration::Kind::Local;

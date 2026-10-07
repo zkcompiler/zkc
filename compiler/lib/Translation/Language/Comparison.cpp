@@ -1,10 +1,12 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Contracts/Kernels.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Interfaces/Mathematical.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
@@ -120,7 +122,7 @@ class Comparator {
   primitive(mlir::Block &block, mlir::Block::iterator &cursor,
             const LocalPrimitive &expected, mlir::ValueRange operands,
             ArrayRef<std::string> outputs, Span span, StringRef site) {
-    if (expected.contract == "bool.constant") {
+    if (!expected.bindingArguments && expected.contract == "bool.constant") {
       auto *actual = next(block, cursor, span, "local.bool_constant", {}, 1);
       if (!actual)
         return {};
@@ -135,7 +137,7 @@ class Comparator {
       }
       return Values(actual->getResults());
     }
-    if (expected.contract == "bool.equal") {
+    if (!expected.bindingArguments && expected.contract == "bool.equal") {
       auto invoke = [&](StringRef contract, mlir::ValueRange ins,
                         StringRef suffix) {
         return primitive(block, cursor, LocalPrimitive{contract.str(), {}, {}},
@@ -179,9 +181,15 @@ class Comparator {
     auto &binding = *found->second;
     usedBindings.insert(found->first);
     std::vector<std::string> args;
-    if (StringRef(expected.contract).starts_with("field.") ||
-        StringRef(expected.contract).starts_with("curve.") ||
-        StringRef(expected.contract).starts_with("resource_unit.")) {
+    if (expected.bindingArguments) {
+      auto roots =
+          take(kernelArguments(expected.contract, *expected.bindingArguments));
+      if (!roots)
+        return {};
+      args = std::move(*roots);
+    } else if (StringRef(expected.contract).starts_with("field.") ||
+               StringRef(expected.contract).starts_with("curve.") ||
+               StringRef(expected.contract).starts_with("resource_unit.")) {
       auto type = take(protocol::encodeBoundType(
           operands.empty() ? actual->getResult(0).getType()
                            : operands[0].getType(),
@@ -196,6 +204,29 @@ class Comparator {
       fail("ordered binding selection differs");
       return {};
     }
+    protocol::BindingApplication application{expected.contract, args, {}};
+    auto selected = take(protocol::resolveBinding(application, false));
+    if (!selected)
+      return {};
+    if (auto err =
+            protocol::checkParameters(application, expected.parameters)) {
+      failure = std::move(err);
+      return {};
+    }
+    auto agree = [&](mlir::TypeRange actualTypes,
+                     ArrayRef<protocol::BoundType> signature) {
+      if (actualTypes.size() != signature.size())
+        return fail("ordered binding port count differs");
+      for (unsigned i = 0; i < signature.size(); ++i) {
+        auto logical = take(protocol::encodeBoundType(actualTypes[i], false));
+        if (!logical || !(*logical == signature[i]))
+          return fail("ordered binding port type differs");
+      }
+      return true;
+    };
+    if (!agree(actual->getOperandTypes(), selected->inputs) ||
+        !agree(actual->getResultTypes(), selected->outputs))
+      return {};
     return Values(actual->getResults());
   }
   bool retire(mlir::Block &block, mlir::Block::iterator &cursor,

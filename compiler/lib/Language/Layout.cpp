@@ -1,7 +1,10 @@
 #include "zkc/Language/Layout.h"
 #include "Internal.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Language/Builtins.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace llvm;
@@ -231,7 +234,19 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->leaves = {"field:" + type.domain};
   else if (type.kind == K::Group)
     result->leaves = {"group:" + type.domain};
-  else if (type.kind == K::Unit) {
+  else if (type.kind == K::Builtin) {
+    auto native = builtinLayout(type);
+    if (!native)
+      return native.takeError();
+    auto policy = protocol::nativeTypePolicy(*native);
+    if (!policy)
+      return error("source.builtin",
+                   "native data lacks an installed type policy");
+    result->leaves = {native->spelling()};
+    result->permissions = {protocol::duplicable(*native),
+                           protocol::discardable(*native), policy->shared,
+                           protocol::nativeMessageData(*native)};
+  } else if (type.kind == K::Unit) {
   } else if (type.kind == K::Tuple) {
     for (unsigned i = 0; i < type.arguments.size(); ++i)
       if (auto e = addField(std::to_string(i), type.arguments[i],

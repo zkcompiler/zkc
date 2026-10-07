@@ -54,7 +54,7 @@ enum Choice<T: Type> { Some(T), None() }
 ```
 
 Runtime types comprise `bool`, `index`, unit `()`, tuples, fixed arrays, installed
-fields/groups, nominal records/variants and associated component types. `(T,)`
+fields/groups, native data containers, nominal records/variants and associated component types. `(T,)`
 is a singleton tuple; `(T)` is grouping. A record's identity includes its declaration
 and every static argument, including phantom arguments. Variant identity includes
 its declaration and static arguments, not only its payload layout. Aliases expand
@@ -84,6 +84,65 @@ array; `a[0]` uses a numeric static index. A symbolic length needs a correspondi
 explicit bound for that index. Dynamic array indexing is outside this profile.
 Runtime loops and `index<N>()` in local code can use a closed natural as an index
 value. Indices are not field elements.
+
+## Native data and library kernels
+
+Libraries can name installed data representations and wrap their operations:
+
+```text
+type Vector<F: Field> = builtin("vector", F);
+type Matrix<F: Field> = builtin("matrix", F);
+fn get<F: Field>(values: Vector<F>, i: index) -> F {
+  return kernel<F>("vector.get", values, i);
+}
+fn columns<F: Field>(matrix: Matrix<F>) -> index {
+  return kernel<F>("matrix.dimension", matrix; "1");
+}
+```
+
+`builtin` selects a logical constructor from the installed catalog. Its argument
+count and kinds are checked. This profile admits `vector`, `matrix`, `groups`,
+`indices`, `polynomial`, `table`, `point`, `round`, `sequence` and `field_array`,
+as well as scalar `field`, `group`, `bool` and `index`. Runtime collections remain
+one native value; fixed source arrays retain their structural layout. Runtime
+polynomial data does not denote a formal polynomial expression. The native type
+policy owns mathematical and shared-data eligibility. Copy and Drop alone do not
+admit runtime polynomial data into `math fn`, including through an aggregate or
+a generic helper instantiated for ordered execution.
+
+A `sequence` element is a scalar or another admitted native data type. Source
+records, variants, products and private representations require their own
+layout-preserving packing contract; they cannot be passed as native Type roots.
+Managed services are separate from these data types. Container permissions retain
+element permissions, and concrete external boundaries require native message
+admission. A symbolic message shape still needs an admitted codec at closure.
+
+`kernel<...>("contract", operands...; "parameter", ...)` calls an installed
+source/construction contract from an ordinary local function. The semicolon and
+parameters are optional. Static arguments explicitly select the contract's root
+terms in declaration order; their kinds come from the catalog. Projections and
+input/output types follow that signature. Multiple native results form a source
+tuple, and no results form unit. Constant parameters use the contract's own
+validation, including field-literal bounds. A generic field admits only `0` and
+`1` as literals; concrete field parameters are checked against that field.
+
+Generic checking may use the declared Field/Group facts and installed capability
+implications. Stronger capabilities must be established by a concrete selection;
+the compiler does not assume them from a field or group sort. Native Type roots
+must be admitted data with Copy and Drop. Unknown contracts,
+compiler-generated contracts, wrong statics, and source representation erasure
+refuse before emission. Selected closure checks concrete native admission and
+exact port agreement with the installed binding. Independent source comparison
+resolves the actual binding again and checks its ports and parameters.
+
+Kernels retain ordered execution and conservatively infer `stop`: the installed
+local contract does not certify totality. Sampling and history transitions require
+their managed interfaces. Type-root data operations refine the catalog's generic
+custody uncertainty only after proving Copy and Drop for their roots and ports.
+The catalog's construction stage includes runtime sequence operations; it does
+not move those calls into Entry setup. Kernels cannot occur in `math fn` or directly
+in protocol expressions. Protocols call library wrappers with an explicit local
+owner. These bindings install no new backend, mathematical identity or provider.
 
 ## Permissions and abstraction
 

@@ -103,7 +103,8 @@ until their own starting point.
 The `.zkc` compiler path and types/local computation are implemented.
 Managed services, static protocol composition, distributed repetition and
 conditional participant completion now connect to their existing IR contracts.
-Next, expose the data operations needed by contrasting clients, then typed
+Catalog-backed data/kernel bindings now cover vector, matrix, sequence and
+iterative folding clients. Next, complete mathematical data authoring and typed
 predicates and attachments. Preserve actual receives,
 service roots and aliases, draw occurrences, ordered guards/stops and resource
 flow through nested applications and control.
@@ -111,8 +112,8 @@ flow through nested applications and control.
 Before enabling syntax, check source-to-IR mappings with contrasting protocol
 clients. Resolve conditional service queries and the data access needed by those
 clients under their owning contracts. Fixed source arrays currently offer static
-numeric indexing; existing native dynamic data operations still need a source
-interface. Add member-specific generics only if a concrete library requires them.
+numeric indexing; dynamic data uses installed native containers. General source
+records in runtime-length collections still need layout-preserving packing. Add member-specific generics only if a concrete library requires them.
 Private input validation and setup authority must connect to the later Host
 boundary before those inputs are admitted.
 

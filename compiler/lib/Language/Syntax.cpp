@@ -250,7 +250,21 @@ private:
     if (!bounded(depth))
       return false;
     out.span = current().span;
-    if (take("[")) {
+    if (take("builtin")) {
+      out.kind = SyntaxType::Kind::Builtin;
+      if (!expect("(") || current().kind != TokenKind::String)
+        return fail("source.syntax", "builtin requires a constructor string");
+      out.name = text().drop_front().drop_back().str();
+      advance();
+      while (take(",")) {
+        SyntaxType argument;
+        if (!type(argument, depth + 1))
+          return false;
+        out.arguments.push_back(std::move(argument));
+      }
+      if (!expect(")"))
+        return false;
+    } else if (take("[")) {
       out.kind = SyntaxType::Kind::Array;
       SyntaxType element, count;
       if (!type(element, depth + 1) || !expect(";") ||
@@ -669,6 +683,42 @@ private:
       if (!expect(")"))
         return {};
       if (take("using") && !names(value.services))
+        return {};
+    } else if (take("kernel")) {
+      value.kind = Expression::Kind::Kernel;
+      if (take("<")) {
+        do {
+          SyntaxType argument;
+          if (!type(argument, depth + 1))
+            return {};
+          value.arguments.push_back(std::move(argument));
+        } while (take(","));
+        if (!expect(">"))
+          return {};
+      }
+      if (!expect("(") || current().kind != TokenKind::String) {
+        fail("source.syntax", "kernel requires an installed contract string");
+        return {};
+      }
+      value.text = text().drop_front().drop_back().str();
+      advance();
+      while (take(",")) {
+        auto input = expression(decl, depth + 1);
+        if (!input)
+          return {};
+        value.children.push_back(*input);
+      }
+      if (take(";")) {
+        do {
+          if (current().kind != TokenKind::String) {
+            fail("source.syntax", "kernel parameters must be literal strings");
+            return {};
+          }
+          value.labels.push_back(text().drop_front().drop_back().str());
+          advance();
+        } while (take(","));
+      }
+      if (!expect(")"))
         return {};
     } else if (take("finish_if")) {
       value.kind = Expression::Kind::FinishIf;

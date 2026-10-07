@@ -169,6 +169,8 @@ struct LocalPrimitive {
   std::vector<ValueId> operands;
   std::vector<std::string> parameters;
   std::vector<Type> staticArguments;
+  /// Explicit installed contract roots, independent of literal parameters.
+  std::optional<std::vector<Type>> bindingArguments;
   LocalPrimitive(std::string contract, std::vector<ValueId> operands,
                  std::vector<std::string> parameters,
                  std::vector<Type> statics = {})

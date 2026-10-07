@@ -39,6 +39,7 @@ add_zkc_component(Contracts
   lib/Contracts/Operations.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
+  lib/Contracts/NativePolicy.cpp
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
 )
@@ -56,6 +57,8 @@ add_zkc_component(Language
   lib/Language/BodyCheck.cpp
   lib/Language/Expressions.cpp
   lib/Language/Calls.cpp
+  lib/Language/Builtins.cpp
+  lib/Language/Kernels.cpp
   lib/Language/Applications.cpp
   lib/Language/Repetition.cpp
   lib/Language/Completion.cpp
