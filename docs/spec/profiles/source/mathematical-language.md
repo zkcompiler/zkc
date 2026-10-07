@@ -93,12 +93,16 @@ value. Indices are not field elements.
 | `Copy` | Reading a value may preserve the original place. Otherwise the read moves it. |
 | `Drop` | A continuing path may leave a value unused. |
 | `Share` | Participant placement may admit multiple components. |
-| `Wire` | The type may be considered for message transport, subject to target codec admission. |
+| `Wire` | A source decoder may construct this value at an external boundary, subject to target codec and layout admission. |
 
 Permissions are independent: `Copy` does not imply `Drop`. Products, arrays and
 variants derive permissions from all their element/payload types. Explicit
 permissions on a record or variant restrict those derived permissions; they cannot
-add permissions that its fields lack. `Field` and `Group` parameters promise `Copy`
+add permissions that its fields lack. Restricted nominal constructors and private
+record fields do not derive `Wire`; writing `Wire` on a restricted record or
+variant is refused without an admitted validator. A private associated
+implementation cannot promise `Wire` from its representation alone. `Field` and
+`Group` parameters promise `Copy`
 and `Drop`. Ground domain availability, sharing and transport still pass the
 installed native type policy and codecs.
 
@@ -121,7 +125,9 @@ native affine custody; an affine runtime value can be cleaned up on a stop.
 
 Entry inputs and message receives refuse private associated representations, restricted
 records/variants, and recursively private record fields without an admitted validator.
-This remains checked after generic selection. Internal protocol applications transfer
+Generic `Wire` bounds therefore discharge source constructor authority before
+selection; native codec, layout and size support are separate target obligations.
+Entry ingress is checked after generic selection. Internal protocol applications transfer
 existing values and do not introduce an ingress boundary. A public native
 representation does not grant authority to construct a private source value.
 

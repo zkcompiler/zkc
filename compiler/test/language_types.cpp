@@ -83,6 +83,51 @@ void mutation(const CheckedOriginal &source,
 const std::string prefix = "module m;domain Fr=field(\"bls12-381.fr\");\n";
 const std::string unit =
     "protocol Run roles(P)()->(){return();}entry Demo=Run;";
+void wireAuthority() {
+  const std::string relay = R"(
+protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){
+  let y=send P->V(x);return(r=y);
+}
+)";
+  for (const auto &type : {"Fr", "bool", "Pair<Fr>", "Choice", "[Fr;2]"}) {
+    auto checked = original(prefix + R"(
+struct Pair<T:Type>{pub first:T,pub second:T}
+enum Choice{Some(Fr),None()}
+)" + relay + "entry Demo=Relay<" +
+                            type + ">;");
+    must(compileEntry(checked));
+  }
+  for (const auto &definition :
+       {"struct Secret {value:Fr}",
+        "struct Secret:Copy+Drop+Share {pub value:Fr}",
+        "enum Secret:Copy+Drop+Share {Some(Fr)}",
+        "struct Hidden{value:Fr}struct Secret{pub value:Hidden}"})
+    refuses(prefix + definition + relay + "entry Demo=Relay<Secret>;",
+            "source.permission");
+  closureRefuses(
+      prefix +
+          "struct Secret{value:Fr}protocol Run "
+          "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry Demo=Run;",
+      "source.ingress");
+  refuses(prefix +
+              "interface I{type State:Wire;}component C:I{type State:Wire=Fr;}",
+          "source.permission");
+  auto emitted = original(prefix + R"(
+struct Secret{value:Fr}
+fn make()->Secret{return Secret{value:1};}
+protocol Run roles(P)()->(r:Secret@P){local P let x=make();return(r=x);}
+entry Demo=Run;
+)");
+  auto schema = must(json::parse(emitted.interfaceJson()));
+  auto *permissions = schema.getAsObject()
+                          ->getArray("outputs")
+                          ->front()
+                          .getAsObject()
+                          ->getObject("schema")
+                          ->getArray("permissions");
+  require(*permissions == json::Array{"Copy", "Drop", "Share"},
+          "private output schema incorrectly advertises Wire");
+}
 void typing() {
   for (auto &[source, code] : std::vector<std::pair<std::string, std::string>>{
            {"math fn bad<T:Type>(x:T)->T{return x;}", "source.mode"},
@@ -315,16 +360,15 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
   refuses(prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
                    "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry Demo=Run;",
           "source.mode");
-  closureRefuses(
-      prefix + "struct Secret:Copy+Drop+Share+Wire {pub x:bool}protocol "
-               "Run<T:Type+Copy+Drop+Share+Wire> "
-               "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
-      "source.ingress");
-  closureRefuses(
-      prefix +
-          "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop+Share+Wire> "
-          "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
-      "source.ingress");
+  refuses(prefix +
+              "struct Secret:Copy+Drop+Share+Wire {pub x:bool}protocol "
+              "Run<T:Type+Copy+Drop+Share+Wire> "
+              "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
+          "source.permission");
+  refuses(prefix +
+              "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop+Share+Wire> "
+              "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
+          "source.permission");
   auto libraryCapture = must(capture({{"lib", R"(module lib;
         pub interface Boxed<F:Field>{type State;fn make(x:F)->State;fn open(x:State)->F;}
         pub component Box<F:Field>:Boxed<F>{type State=F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
@@ -397,18 +441,17 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
       "get(Choice::A(x));}protocol Run roles(P)(x:Fr@P)->(r:Fr@P){local P let "
       "r=nested(x);return(r=r);}entry Demo=Run;");
   must(compileEntry(nestedConstructor));
-  closureRefuses(
-      prefix +
-          "enum Secret:Copy+Drop+Share+Wire {A(bool)}protocol Run "
-          "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry Demo=Run;",
-      "source.ingress");
+  refuses(prefix +
+              "enum Secret:Copy+Drop+Share+Wire {A(bool)}protocol Run "
+              "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry Demo=Run;",
+          "source.permission");
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(
       prefix +
           "enum Secret:Copy+Drop+Share+Wire {A(bool)}fn make()->Secret{return "
           "Secret::A(true);}protocol Run roles(P,V)()->(){local P let "
           "x=make();let y=send P->V(x);return();}",
-      "source.ingress");
+      "source.permission");
   refuses(prefix + "struct Token:Drop+Share+Wire {}fn make()->Token{return "
                    "Token{};}protocol Run roles(P,V)()->(){local P let "
                    "x=make();let y=send P->V(x);return();}",
@@ -649,6 +692,7 @@ void bounds() {
 }
 } // namespace
 int main() {
+  wireAuthority();
   typing();
   layoutsAndCorrespondence();
   bounds();

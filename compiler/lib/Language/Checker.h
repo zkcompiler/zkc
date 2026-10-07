@@ -47,7 +47,7 @@ public:
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool constructorAllowed(const Declaration &, const Type &) const;
-  bool ingress(const Type &, Span, unsigned = 1);
+  bool ingress(const Type &, Span);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   bool body(DeclarationId, unsigned);
   bool specialize(DeclarationId);

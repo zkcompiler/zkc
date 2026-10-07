@@ -215,6 +215,12 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.domain = *def;
     }
   }
+  if (decl.kind == Declaration::Kind::Associated && !decl.abstract &&
+      decl.associatedSort != "Field" && decl.associatedSort != "Group" &&
+      decl.permissions && decl.permissions->wire)
+    return fail("source.permission",
+                "private associated Wire requires an admitted validator",
+                decl.span);
   auto fieldList = [&](ArrayRef<SyntaxPort> from, std::vector<TypeField> &to) {
     std::set<std::string> fields;
     for (auto &src : from) {

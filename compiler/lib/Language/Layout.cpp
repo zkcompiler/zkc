@@ -278,10 +278,12 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
                             result->fields, result->leaves))
         return e;
   } else if (type.kind == K::Record && decl) {
-    for (auto &field : decl->fields)
+    for (auto &field : decl->fields) {
       if (auto e =
               addField(field.name, field.type, result->fields, result->leaves))
         return e;
+      result->permissions.wire &= field.isPublic;
+    }
   } else if (type.kind == K::Associated && decl && !decl->abstract) {
     if (auto e =
             addField("value", decl->domain, result->fields, result->leaves))

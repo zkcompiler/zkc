@@ -377,8 +377,6 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       if (!caps->copy || !caps->drop || !caps->share || !caps->wire)
         return fail("source.permission",
                     "send requires Copy, Drop, Share and Wire", s.span);
-      if (!checker.ingress(before.type, s.span))
-        return false;
       if (*sender == *receiver)
         return fail("source.send", "sender and receiver must be distinct",
                     s.span);

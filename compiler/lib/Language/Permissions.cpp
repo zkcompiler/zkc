@@ -155,8 +155,10 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
     auto fs = fields(type, span, depth + 1);
     if (!fs)
       return {};
-    for (auto &f : *fs)
+    for (auto &f : *fs) {
       children.push_back(f.type);
+      result.wire &= f.isPublic;
+    }
   } else if (type.kind == K::Variant) {
     auto alts = alternatives(type, span, depth + 1);
     if (!alts)
@@ -175,6 +177,9 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
     result = intersect(result, *p);
   }
   if (auto *decl = typeDeclaration(type); decl && decl->permissions) {
+    // Explicit nominal permissions seal constructor authority. Without a
+    // declared validator, that authority cannot arrive from a wire decoder.
+    result.wire = false;
     if (!result.includes(*decl->permissions)) {
       fail("source.permission", "declared permissions exceed field permissions",
            decl->span);
@@ -192,51 +197,13 @@ bool Checker::constructorAllowed(const Declaration &context,
           type.kind == Type::Kind::Associated) &&
          decl->module.index == context.module.index;
 }
-bool Checker::ingress(const Type &type, Span span, unsigned depth) {
-  if (depth > work.limits.typeDepth || !charge(1, span))
-    return diagnostic ? false
-                      : fail("source.limit", "ingress type depth", span);
-  using K = Type::Kind;
-  if (type.kind == K::Associated)
-    return fail("source.ingress",
-                "private associated value needs an admitted ingress validator",
-                span);
-  if (type.kind == K::Tuple || type.kind == K::Array) {
-    for (auto &t : type.arguments)
-      if (!ingress(t, span, depth + 1))
-        return false;
-  }
-  if (type.kind == K::Record) {
-    auto *declaration = typeDeclaration(type);
-    if (declaration && declaration->permissions)
-      return fail("source.ingress",
-                  "restricted record requires an admitted ingress validator",
-                  span);
-    auto fs = fields(type, span, depth + 1);
-    if (!fs)
-      return false;
-    for (auto &f : *fs)
-      if (!f.isPublic || !ingress(f.type, span, depth + 1))
-        return diagnostic ? false
-                          : fail("source.ingress",
-                                 "private record field cannot enter through "
-                                 "protocol ports or messages",
-                                 span);
-  }
-  if (type.kind == K::Variant) {
-    auto *declaration = typeDeclaration(type);
-    if (declaration && declaration->permissions)
-      return fail("source.ingress",
-                  "restricted variant requires an admitted ingress validator",
-                  span);
-    auto as = alternatives(type, span, depth + 1);
-    if (!as)
-      return false;
-    for (auto &a : *as)
-      for (auto &f : a.fields)
-        if (!ingress(f.type, span, depth + 1))
-          return false;
-  }
-  return true;
+bool Checker::ingress(const Type &type, Span span) {
+  auto caps = permissions(type, span);
+  return caps &&
+         (caps->wire ||
+          fail("source.ingress",
+               "Entry input requires Wire or an admitted ingress validator",
+               span));
 }
+
 } // namespace zkc::language::detail
