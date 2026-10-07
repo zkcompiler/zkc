@@ -253,6 +253,7 @@ struct Declaration {
 namespace detail {
 struct CaptureStorage;
 struct CheckedStorage;
+struct ClosedStorage;
 struct AnalysisStorage;
 } // namespace detail
 class CapturedProject;
@@ -310,12 +311,18 @@ public:
   const CheckedProject &project() const { return checked; }
   const Declaration &entry() const;
   const Declaration &protocol() const;
+  /// Original type declarations and the selected Entry's closed instances.
+  /// Only the reachable instances have bodies; declaration IDs remain local.
+  llvm::ArrayRef<Declaration> declarations() const;
 
 private:
-  ClosedEntry(CheckedProject checked, DeclarationId selected)
-      : checked(std::move(checked)), selected(selected) {}
+  ClosedEntry(CheckedProject checked, DeclarationId selected,
+              std::shared_ptr<const detail::ClosedStorage> storage)
+      : checked(std::move(checked)), selected(selected),
+        storage(std::move(storage)) {}
   CheckedProject checked;
   DeclarationId selected;
+  std::shared_ptr<const detail::ClosedStorage> storage;
   friend llvm::Expected<ClosedEntry>
   closeEntry(const CheckedProject &, llvm::StringRef, const Limits &);
 };

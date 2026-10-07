@@ -78,7 +78,7 @@ with case('target admission failure names its phase and related source declarati
     helpers += [f'math fn f{i}()->Fr{{return f{i-1}()+f{i-1}();}}' for i in range(1, 18)]
     source.write_text('module expansion; domain Fr=field("bls12-381.fr");\n' + '\n'.join(helpers) +
                       '\nprotocol Small roles(P)()->(r:Fr@P){return(r=1);}' +
-                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry Demo=Small;')
+                      '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry Demo=Unused;')
     attempt = commands.attempt([compiler, 'language-check', '--source-format=zkc',
                                 '--entry=expansion::Demo', f'--module=expansion={source}'])
     assert attempt.returncode != 0 and not attempt.stdout

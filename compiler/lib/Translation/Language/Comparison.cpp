@@ -39,7 +39,7 @@ bool roleSet(mlir::Attribute value, const Declaration &decl,
   return strings(value, expected);
 }
 class Comparator {
-  const CheckedProject &project;
+  const ClosedEntry &project;
   mlir::ModuleOp module;
   const Limits &limits;
   Layouts layouts;
@@ -510,7 +510,7 @@ class Comparator {
   }
 
 public:
-  Comparator(const CheckedProject &project, mlir::ModuleOp module,
+  Comparator(const ClosedEntry &project, mlir::ModuleOp module,
              const Limits &limits)
       : project(project), module(module), limits(limits),
         layouts(project, limits), remaining(limits.work) {
@@ -576,7 +576,9 @@ public:
         auto origin = function.getAttrOfType<mlir::ArrayAttr>("logical_origin");
         if (!origin || origin.size() != 2 || !strings(origin[1], {}) ||
             !mlir::isa<mlir::StringAttr>(origin[0]) ||
-            mlir::cast<mlir::StringAttr>(origin[0]).getValue() != decl.symbol)
+            mlir::cast<mlir::StringAttr>(origin[0]).getValue() !=
+                (decl.origin ? project.declarations()[decl.origin->index].symbol
+                             : decl.symbol))
           return error("source.correspondence", "local origin differs");
       }
       auto type = function.getAttrOfType<mlir::TypeAttr>("function_type");
@@ -632,12 +634,12 @@ public:
   }
 };
 } // namespace
-Expected<Correspondence> compareOriginal(const CheckedProject &project,
+Expected<Correspondence> compareOriginal(const ClosedEntry &project,
                                          mlir::ModuleOp module,
                                          const Limits &limits) {
   if (auto e = checkLimits(limits))
     return e;
-  if (project.installationIdentity() != installedCatalogIdentity())
+  if (project.project().installationIdentity() != installedCatalogIdentity())
     return error("source.environment",
                  "source was checked against another installed catalog");
   if (!module || mlir::failed(mlir::verify(module)))

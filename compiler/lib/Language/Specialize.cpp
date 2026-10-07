@@ -3,10 +3,11 @@
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
-bool Checker::specialize() {
+bool Checker::specialize(DeclarationId selected) {
   const unsigned templates = output.declarations.size();
   std::map<std::string, DeclarationId> instances;
   std::set<std::string> active;
+  std::map<std::string, std::string> symbolKeys;
   uint64_t count = 0;
   std::function<std::optional<DeclarationId>(DeclarationId, ArrayRef<Type>,
                                              Body::Mode)>
@@ -32,10 +33,6 @@ bool Checker::specialize() {
       if (mode == Body::Mode::Local)
         value.components.clear();
     }
-    if (mode == Body::Mode::Protocol)
-      for (unsigned i = 0; i < body.inputs; ++i)
-        if (!ingress(body.values[i].type, body.values[i].span))
-          return false;
     for (auto &op : body.operations) {
       if (!charge(1, op.span))
         return false;
@@ -168,8 +165,9 @@ bool Checker::specialize() {
     }
     if (!checkArguments(source, args, source.span))
       return {};
-    std::string key = std::to_string(origin.index) + ":" +
-                      std::to_string(unsigned(mode)) + ":";
+    std::string key;
+    detail::frame(key, source.qualifiedName);
+    detail::frame(key, std::to_string(unsigned(mode)));
     for (auto &arg : args) {
       if (symbolic(arg)) {
         fail("source.generic",
@@ -212,26 +210,29 @@ bool Checker::specialize() {
     if (!chargeBody(*source.body))
       return {};
     Declaration result = source;
-    const bool reuse = args.empty() && result.body->mode == mode;
-    DeclarationId id =
-        reuse ? origin : DeclarationId{uint32_t(output.declarations.size())};
-    if (!reuse) {
-      if (output.declarations.size() >= work.limits.declarations) {
-        fail("source.limit", "specialized declaration count exceeded",
-             result.span);
-        return {};
-      }
-      result.id = id;
-      result.origin = origin;
-      result.staticArguments.assign(args.begin(), args.end());
-      result.symbol = "zkl_instance_" + std::to_string(id.index);
-      if (result.symbol.size() > work.limits.symbolBytes) {
-        fail("source.limit", "specialized symbol exceeds byte limit",
-             result.span);
-        return {};
-      }
-      output.declarations.push_back(result);
+    DeclarationId id{uint32_t(output.declarations.size())};
+    if (output.declarations.size() >= work.limits.declarations) {
+      fail("source.limit", "specialized declaration count exceeded",
+           result.span);
+      return {};
     }
+    result.id = id;
+    result.origin = origin;
+    result.staticArguments.assign(args.begin(), args.end());
+    if (!args.empty() || result.body->mode != mode)
+      result.symbol = "zkl_" + detail::digest(key);
+    if (result.symbol.size() > work.limits.symbolBytes) {
+      fail("source.limit", "specialized symbol exceeds byte limit",
+           result.span);
+      return {};
+    }
+    auto [symbol, inserted] = symbolKeys.emplace(result.symbol, key);
+    if (!inserted && symbol->second != key) {
+      fail("source.symbol", "distinct instance keys have the same symbol",
+           result.span);
+      return {};
+    }
+    output.declarations.push_back(result);
     auto bindings = substitution(result, args);
     if (result.parent && output.declarations[result.parent->index].kind ==
                              Declaration::Kind::Component) {
@@ -258,33 +259,20 @@ bool Checker::specialize() {
     active.erase(key);
     return id;
   };
-  // Keep concrete unused definitions checkable and visible in the original.
-  for (unsigned i = 0; i < templates; ++i) {
-    auto &decl = output.declarations[i];
-    if (decl.body && decl.parameters.empty() &&
-        !instantiate(DeclarationId{i}, {}, decl.body->mode))
+  auto target = output.declarations[selected.index].target;
+  auto args = output.declarations[selected.index].staticArguments;
+  if (!target)
+    return fail("source.entry", "Entry has no checked target",
+                output.declarations[selected.index].span);
+  auto instance = instantiate(*target, args, Body::Mode::Protocol);
+  if (!instance)
+    return false;
+  for (const auto &port : output.declarations[instance->index].inputs)
+    if (!ingress(port.type, port.span))
       return false;
-  }
-  for (unsigned i = 0; i < templates; ++i) {
-    if (output.declarations[i].kind != Declaration::Kind::Entry)
-      continue;
-    auto &entry = output.declarations[i];
-    auto &source = *sources[i];
-    auto target = resolve(entry, source.target, source.span);
-    if (!target)
-      return false;
-    auto &protocol = output.declarations[target->index];
-    if (protocol.kind != Declaration::Kind::Protocol)
-      return fail("source.entry", "entry target must be a protocol",
-                  source.span);
-    auto args = arguments(entry, protocol, source.targetArguments, source.span);
-    if (!args)
-      return false;
-    auto instance = instantiate(*target, *args, Body::Mode::Protocol);
-    if (!instance)
-      return false;
-    output.declarations[i].target = *instance;
-  }
+  output.declarations[selected.index].target = *instance;
+  for (unsigned i = 0; i < templates; ++i)
+    output.declarations[i].body.reset();
   return true;
 }
 } // namespace zkc::language::detail

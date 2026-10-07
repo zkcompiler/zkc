@@ -101,7 +101,6 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
 }
 bool Checker::signature(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
-  auto &source = *sources[id.index];
   if (depth > work.limits.typeDepth)
     return fail("source.limit", "type declaration depth limit", decl.span);
   if (signatureState[id.index] == 2)
@@ -109,6 +108,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   if (signatureState[id.index] == 1)
     return fail("source.cycle", "recursive type or static signature",
                 decl.span);
+  auto &source = *sources[id.index];
   signatureState[id.index] = 1;
   if (decl.parent) {
     if (!signature(*decl.parent, depth + 1))

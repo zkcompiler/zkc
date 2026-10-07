@@ -8,6 +8,7 @@ using Substitution = std::map<std::string, Type>;
 class Checker {
 public:
   Checker(std::vector<SyntaxModule>, CheckedStorage &, Work &);
+  Checker(CheckedStorage &, Work &);
   llvm::Error run();
   CheckedStorage &output;
   Work &work;
@@ -49,7 +50,7 @@ public:
   bool ingress(const Type &, Span, unsigned = 1);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   bool body(DeclarationId, unsigned);
-  bool specialize();
+  bool specialize(DeclarationId);
   bool symbolic(const Type &) const;
   Substitution substitution(const Declaration &, llvm::ArrayRef<Type>) const;
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);
@@ -71,6 +72,7 @@ private:
   std::set<unsigned> formingParameters;
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   uint64_t typeNodes = 0;
+  bool entries();
   bool collect();
   bool imports();
   bool signature(DeclarationId, unsigned = 1);

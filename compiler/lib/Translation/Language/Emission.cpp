@@ -13,7 +13,7 @@ namespace zkc::language {
 namespace {
 using Values = SmallVector<mlir::Value>;
 class Emitter {
-  const CheckedProject &project;
+  const ClosedEntry &project;
   const Limits &limits;
   mlir::MLIRContext &context;
   mlir::OpBuilder builder;
@@ -438,7 +438,7 @@ class Emitter {
   }
 
 public:
-  Emitter(const CheckedProject &project, mlir::MLIRContext &context,
+  Emitter(const ClosedEntry &project, mlir::MLIRContext &context,
           const Limits &limits)
       : project(project), limits(limits), context(context), builder(&context),
         location(builder.getUnknownLoc()), layouts(project, limits),
@@ -486,10 +486,14 @@ public:
         if (!local)
           attrs.push_back(text("sym_visibility", "private"));
         if (local)
-          attrs.push_back(
-              attr("logical_origin",
-                   builder.getArrayAttr({builder.getStringAttr(decl.symbol),
-                                         builder.getArrayAttr({})})));
+          attrs.push_back(attr(
+              "logical_origin",
+              builder.getArrayAttr(
+                  {builder.getStringAttr(
+                       decl.origin
+                           ? project.declarations()[decl.origin->index].symbol
+                           : decl.symbol),
+                   builder.getArrayAttr({})})));
       }
       builder.setInsertionPointToEnd(definitions);
       auto *function = make(protocol ? "protocol.func"
@@ -522,12 +526,12 @@ public:
   }
 };
 } // namespace
-Expected<std::string> emitOriginal(const CheckedProject &project,
+Expected<std::string> emitOriginal(const ClosedEntry &project,
                                    mlir::MLIRContext &context,
                                    const Limits &limits) {
   if (auto e = checkLimits(limits))
     return e;
-  if (project.checkedWork() > limits.work ||
+  if (project.project().checkedWork() > limits.work ||
       project.declarations().size() > limits.declarations)
     return error("source.limit",
                  "checked project exceeds requested emission limits");

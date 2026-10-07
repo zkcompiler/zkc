@@ -21,6 +21,10 @@ struct CheckedStorage {
   std::string installation;
   uint64_t work = 0;
 };
+struct ClosedStorage {
+  std::vector<Declaration> declarations;
+  DeclarationId protocol;
+};
 struct AnalysisStorage {
   std::vector<Diagnostic> diagnostics;
   std::vector<std::vector<Token>> tokens;

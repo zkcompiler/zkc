@@ -24,6 +24,26 @@ Capture identity is SHA-256 over a version marker, explicit format, and modules
 sorted by logical path. Every name and byte string has an unsigned 64-bit
 little-endian length prefix. Diagnostic file paths do not enter identity.
 
+## Definition checking and Entry closure
+
+Analysis checks every definition and Entry reference against declared static
+bounds. The resulting `CheckedProject` is immutable. Selecting an Entry creates
+an independent `ClosedEntry` containing the reachable specialized bodies and
+retained type declarations. Only those bodies enter its original MLIR. An
+unselected Entry's target-admission failure does not invalidate another Entry;
+source errors in any definition still reject analysis.
+
+An instance key contains the qualified declaration name, checked body mode and
+canonical static arguments, with each component length framed. Concrete
+instances retain the encoded declaration symbol. Specializations use `zkl_`
+followed by the complete SHA-256 key digest; distinct keys that produce the same
+symbol are refused. No declaration-table index enters the symbol. Local logical
+origins name the source definition, allowing a selector to denote its instances;
+the exact generated symbol and retained closure identify one specialization.
+Adding an unreachable definition changes capture identity but does not rename
+reachable instances. Closure bounds the copied graph and specialization work
+before original emission.
+
 ## Types and static terms
 
 ```text
@@ -99,10 +119,11 @@ path, including empty values and copies made by a new binding. A stopped path
 uses the target's cleanup semantics. This source obligation is distinct from
 native affine custody; an affine runtime value can be cleaned up on a stop.
 
-Protocol ingress and sends refuse private associated representations, restricted
+Entry inputs and message receives refuse private associated representations, restricted
 records/variants, and recursively private record fields without an admitted validator.
-This remains checked after generic selection. A public native representation does
-not grant authority to construct a private source value.
+This remains checked after generic selection. Internal protocol applications transfer
+existing values and do not introduce an ingress boundary. A public native
+representation does not grant authority to construct a private source value.
 
 ## Callables and static components
 

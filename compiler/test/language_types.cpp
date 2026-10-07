@@ -43,6 +43,14 @@ void refuses(StringRef source, StringRef code, const Limits &limits = {}) {
     std::exit(1);
   }
 }
+void closureRefuses(StringRef source, StringRef code,
+                    const Limits &limits = {}) {
+  auto project = check(source, limits);
+  auto selected = closeEntry(project, "m::Demo", limits);
+  require(!selected, "Entry closure unexpectedly accepted");
+  auto message = toString(selected.takeError());
+  require(StringRef(message).contains(code), message);
+}
 CheckedOriginal original(StringRef source) {
   return must(prepareOriginal(must(closeEntry(check(source), "m::Demo"))));
 }
@@ -66,7 +74,7 @@ void mutation(const CheckedOriginal &source,
   edit(*module);
   require(succeeded(mlir::verify(*module)),
           "mutation must remain valid native IR");
-  auto comparison = compareOriginal(source.entry().project(), *module);
+  auto comparison = compareOriginal(source.entry(), *module);
   require(!comparison, "mutation escaped correspondence");
   require(StringRef(toString(comparison.takeError()))
               .contains("source.correspondence"),
@@ -307,15 +315,16 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
   refuses(prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
                    "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry Demo=Run;",
           "source.mode");
-  refuses(prefix +
-              "struct Secret:Copy+Drop+Share+Wire {pub x:bool}protocol "
-              "Run<T:Type+Copy+Drop+Share+Wire> "
-              "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
-          "source.ingress");
-  refuses(prefix +
-              "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop+Share+Wire> "
-              "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
-          "source.ingress");
+  closureRefuses(
+      prefix + "struct Secret:Copy+Drop+Share+Wire {pub x:bool}protocol "
+               "Run<T:Type+Copy+Drop+Share+Wire> "
+               "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
+      "source.ingress");
+  closureRefuses(
+      prefix +
+          "struct Secret {x:bool}protocol Run<T:Type+Copy+Drop+Share+Wire> "
+          "roles(P)(x:T@P)->(r:T@P){return(r=x);}entry Demo=Run<Secret>;",
+      "source.ingress");
   auto libraryCapture = must(capture({{"lib", R"(module lib;
         pub interface Boxed<F:Field>{type State;fn make(x:F)->State;fn open(x:State)->F;}
         pub component Box<F:Field>:Boxed<F>{type State=F;fn make(x:F)->State{return State(x);}fn open(x:State)->F{return unpack(x);}}
@@ -388,9 +397,11 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
       "get(Choice::A(x));}protocol Run roles(P)(x:Fr@P)->(r:Fr@P){local P let "
       "r=nested(x);return(r=r);}entry Demo=Run;");
   must(compileEntry(nestedConstructor));
-  refuses(prefix + "enum Secret:Copy+Drop+Share+Wire {A(bool)}protocol Run "
-                   "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}",
-          "source.ingress");
+  closureRefuses(
+      prefix +
+          "enum Secret:Copy+Drop+Share+Wire {A(bool)}protocol Run "
+          "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry Demo=Run;",
+      "source.ingress");
   refuses(prefix + "struct Copy {}", "source.name");
   refuses(
       prefix +
@@ -443,7 +454,8 @@ module {
                                                         &context);
   require(bool(erased) && succeeded(mlir::verify(*erased)),
           "erased unit-message module is invalid");
-  auto absentMessage = compareOriginal(emptySource, *erased);
+  auto absentMessage =
+      compareOriginal(must(closeEntry(emptySource, "m::Demo")), *erased);
   require(!absentMessage,
           "independent comparison accepted an erased empty message");
   require(StringRef(toString(absentMessage.takeError()))
@@ -614,10 +626,10 @@ void bounds() {
           "wrong schema fanout failure");
   Limits limits;
   limits.instances = 1;
-  refuses(prefix +
-              "math fn id<F:Field>(x:F)->F{return x;}protocol Run "
-              "roles(P)(x:Fr@P)->(r:Fr@P){return(r=id(x));}entry Demo=Run;",
-          "source.limit", limits);
+  closureRefuses(
+      prefix + "math fn id<F:Field>(x:F)->F{return x;}protocol Run "
+               "roles(P)(x:Fr@P)->(r:Fr@P){return(r=id(x));}entry Demo=Run;",
+      "source.limit", limits);
   limits = {};
   limits.naturalTerms = 1;
   refuses(prefix + "type A<N:nat,M:nat>=[Fr;N+M];", "source.limit", limits);

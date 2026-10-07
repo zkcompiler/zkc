@@ -71,7 +71,7 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
       }
     }
   });
-  for (const auto &decl : entry.project().declarations())
+  for (const auto &decl : entry.declarations())
     if (declarations.count(decl.symbol)) {
       diagnostics += "related source declaration: " + decl.qualifiedName + "\n";
       locations.push_back(sourceSpan(entry, decl.span));
@@ -81,7 +81,7 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
                      const ClosedEntry &entry, StringRef original,
                      StringRef toolchain, const Limits &limits) {
   const auto &protocol = entry.protocol();
-  Layouts layouts(entry.project(), limits);
+  Layouts layouts(entry, limits);
   std::vector<std::shared_ptr<const Layout>> inputs, outputs;
   for (bool input : {true, false})
     for (auto &port : input ? protocol.inputs : protocol.outputs) {
@@ -226,7 +226,7 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
-  auto emitted = emitOriginal(entry.project(), context, limits);
+  auto emitted = emitOriginal(entry, context, limits);
   if (!emitted)
     return emitted.takeError();
   if (!mlirNestingWithinLimit(*emitted))
@@ -256,7 +256,7 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
         std::vector<diagnostics::RefusalInfo>{
             {"target.parse", "emitted original failed target parsing"}},
         std::move(locations));
-  auto compared = compareOriginal(entry.project(), *module, limits);
+  auto compared = compareOriginal(entry, *module, limits);
   if (!compared) {
     auto failure = compared.takeError();
     return handleErrors(

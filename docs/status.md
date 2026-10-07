@@ -13,7 +13,7 @@ is realized, and no entry is a cryptographic security theorem.
 
 | Route | Entry and execution | Checking and state |
 |---|---|---|
-| Mathematical source | `.zkc` → mathematical MLIR → existing participant compiler/runtime | Fields/groups, nominal products/variants, static generics/components, permissions, ordered local control, messages, static protocol composition and selected Entries; immutable originals and independent comparison; [scope](spec/profiles/source/mathematical-language.md) |
+| Mathematical source | `.zkc` → mathematical MLIR → existing participant compiler/runtime | Fields/groups, nominal products/variants, static generics/components, permissions, ordered local control, messages, static protocol composition and selected Entries; immutable definition graphs, selected Entry closures and independent comparison; [scope](spec/profiles/source/mathematical-language.md) |
 | Source | `.pir` → `protocol_exec` → `zkc.participants/1`; source/artifact hosts | Supported Lean source/candidate checks; retained while consumers migrate |
 | Native mathematical | Direct MLIR → `zkc.program/1`; `zkc.run/1` bundles or proof deployments | Bounded compiler preservation and runtime admission; foundation complete, native Lean connection open |
 | Finite tables | Table source → direct/physical plans → table session | Independent Lean references and scoped transformation proofs; executable consumers remain |

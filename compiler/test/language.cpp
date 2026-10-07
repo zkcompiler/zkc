@@ -103,7 +103,7 @@ void mutation(const CheckedOriginal &original, StringRef name,
   mutate(*module);
   require(mlir::succeeded(mlir::verify(*module)),
           "mutation failed IR admission instead of correspondence");
-  auto result = compareOriginal(original.entry().project(), *module);
+  auto result = compareOriginal(original.entry(), *module);
   if (result) {
     errs() << "mutation accepted: " << name << '\n';
     std::exit(1);
@@ -321,9 +321,11 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
                  "();}";
   expansion += "\nprotocol Small roles(P)()->(r:F@P){return(r=1);}";
   expansion += "\nprotocol Unused roles(P)()->(r:F@P){return(r=f17());}entry "
-               "Demo=Small;";
-  auto failure = prepareOriginal(must(closeEntry(check(expansion), "m::Demo")));
-  require(!failure, "unused target expansion was not checked");
+               "Demo=Small;entry Large=Unused;";
+  auto alternatives = check(expansion);
+  must(prepareOriginal(must(closeEntry(alternatives, "m::Demo"))));
+  auto failure = prepareOriginal(must(closeEntry(alternatives, "m::Large")));
+  require(!failure, "selected target expansion was not checked");
   bool identified = false;
   handleAllErrors(failure.takeError(), [&](const zkc::CompilationError &error) {
     identified = llvm::any_of(error.refusals,
@@ -346,11 +348,13 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
   require(bool(module), "missing original");
   first(*module, "protocol.func")
       ->setAttr("roles", mlir::StringAttr::get(&context, "bad"));
-  refuses(compareOriginal(full.entry().project(), *module), "target.admission");
+  refuses(compareOriginal(full.entry(), *module), "target.admission");
+  auto usedSource = replace(basic.str(), "let a = x + c;",
+                            "let ignored = helper(true); let a = x + c;");
   auto withUnused = original(
-      basic.str() + "math fn unused(x:bool)->bool{let y=x==x;return x;}");
+      usedSource + "math fn helper(x:bool)->bool{let y=x==x;return x;}");
   auto identityHelper =
-      original(basic.str() + "math fn unused(x:bool)->bool{return x;}");
+      original(usedSource + "math fn helper(x:bool)->bool{return x;}");
   for (auto signedness :
        {mlir::IntegerType::Signed, mlir::IntegerType::Unsigned}) {
     auto candidate = mlir::parseSourceString<mlir::ModuleOp>(
@@ -362,7 +366,7 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
         mlir::TypeAttr::get(mlir::FunctionType::get(&context, {type}, {type})));
     function->getRegion(0).front().getArgument(0).setType(type);
     // Whole-module admission already rejects non-signless helper signatures.
-    refuses(compareOriginal(identityHelper.entry().project(), *candidate),
+    refuses(compareOriginal(identityHelper.entry(), *candidate),
             "target.admission");
   }
   mutation(withUnused, "Boolean equality changed to inequality",
@@ -374,8 +378,13 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
                      mlir::IntegerType::get(candidate.getContext(), 64),
                      static_cast<int64_t>(mlir::arith::CmpIPredicate::ne)));
            });
-  mutation(withUnused, "unused helper omitted",
-           [](auto m) { first(m, "func.func")->erase(); });
+  mutation(withUnused, "extra helper inserted", [](auto m) {
+    auto *existing = first(m, "func.func");
+    auto *copy = existing->clone();
+    copy->setAttr("sym_name", mlir::StringAttr::get(m.getContext(), "extra"));
+    mlir::OpBuilder builder(existing);
+    builder.insert(copy);
+  });
   mutation(withUnused, "unused operation omitted",
            [](auto m) { first(m, "arith.cmpi")->erase(); });
 }
@@ -437,6 +446,38 @@ void protocolApplications() {
         op->erase();
     });
   });
+}
+void selectedClosure() {
+  auto source = replace(read("application.zkc"), "module sample;", "module m;");
+  auto project = check(source);
+  const auto definitions = project.declarations().size();
+  auto closed = must(closeEntry(project, "m::Demo"));
+  auto base = must(prepareOriginal(closed));
+  require(project.declarations().size() == definitions,
+          "Entry closure mutated the definition graph");
+  for (const auto &decl : project.declarations())
+    require(!decl.origin, "analysis produced a closed instance");
+  auto extended =
+      original(replace(source, "domain Fr",
+                       "math fn unrelated(x:bool)->bool{return x;} domain Fr") +
+               "protocol Other roles(P)()->(){return();} entry Extra=Other;");
+  require(base.bytes() == extended.bytes(),
+          "unrelated declaration changed selected original");
+  require(base.identity() == extended.identity(),
+          "unrelated declaration changed instance identity");
+  require(base.entry().project().capture().identity() !=
+              extended.entry().project().capture().identity(),
+          "capture stopped binding unselected source");
+  must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
+  auto privateState = original(R"(module m;
+    struct State:Drop {} fn make()->State{return State{};}
+    fn discard(state:State)->(){consume state;return ();}
+    protocol Create roles(P)()->(state:State@P){local P let state=make();return(state=state);}
+    protocol Consume roles(P)(state:State@P)->(){local P let done=discard(state);return();}
+    protocol Run roles(P)()->(){let state=apply Create();let ()=apply Consume(state);return();}
+    entry Demo=Run;
+  )");
+  must(compileEntry(privateState));
 }
 void bounds() {
   Limits limits;
@@ -533,6 +574,8 @@ void bounds() {
 }
 } // namespace
 int main() {
+  stage = "selectedClosure";
+  selectedClosure();
   stage = "protocolApplications";
   protocolApplications();
   stage = "sourceControls";

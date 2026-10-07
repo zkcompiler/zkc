@@ -10,7 +10,7 @@ struct SourceLocation {
 };
 /// Direct, unsimplified mathematical MLIR. The caller supplies native dialects.
 llvm::Expected<std::string>
-emitOriginal(const CheckedProject &, mlir::MLIRContext &, const Limits & = {});
+emitOriginal(const ClosedEntry &, mlir::MLIRContext &, const Limits & = {});
 struct Correspondence {
   uint64_t declarations = 0, operations = 0;
   std::vector<SourceLocation> locations;
@@ -20,6 +20,6 @@ struct Correspondence {
 /// mutation, re-emission, canonicalization, or executable lowering occurs in
 /// this check.
 llvm::Expected<Correspondence>
-compareOriginal(const CheckedProject &, mlir::ModuleOp, const Limits & = {});
+compareOriginal(const ClosedEntry &, mlir::ModuleOp, const Limits & = {});
 } // namespace zkc::language
 #endif

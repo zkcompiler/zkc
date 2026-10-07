@@ -6,7 +6,11 @@
 using namespace llvm;
 namespace zkc::language {
 Layouts::Layouts(const CheckedProject &project, const Limits &limits)
-    : project(project), limits(limits), remaining(limits.work) {}
+    : definitions(project.declarations()), limits(limits),
+      remaining(limits.work) {}
+Layouts::Layouts(const ClosedEntry &entry, const Limits &limits)
+    : definitions(entry.declarations()), limits(limits),
+      remaining(limits.work) {}
 Error Layouts::charge(uint64_t n) {
   if (n > remaining)
     return error("source.limit", "layout work limit exceeded");
@@ -101,7 +105,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::get(const Type &type) {
   if (auto e = checkLimits(limits))
     return e;
   if (!initialized) {
-    for (const auto &decl : project.declarations()) {
+    for (const auto &decl : definitions) {
       if (auto e = charge(decl.qualifiedName.size() + 1))
         return std::move(e);
       if (!decl.origin)
@@ -122,7 +126,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::get(const Type &type) {
               return e;
       return Error::success();
     };
-    for (auto &decl : project.declarations())
+    for (auto &decl : definitions)
       if (decl.body && decl.parameters.empty()) {
         for (auto *ports : {&decl.inputs, &decl.outputs})
           for (auto &port : *ports) {
@@ -191,7 +195,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     const auto *owner = decl;
     const auto *args = &type.arguments;
     if (type.kind == K::Associated) {
-      owner = &project.declarations()[decl->parent->index];
+      owner = &definitions[decl->parent->index];
       if (type.arguments.front().domain != owner->qualifiedName ||
           decl->abstract)
         return error("source.layout", "associated component identity differs");

@@ -1,4 +1,4 @@
-#include "Internal.h"
+#include "Checker.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
@@ -285,7 +285,21 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
         return detail::failure("source.entry",
                                "selection must name an Entry declaration",
                                decl.span);
-      return ClosedEntry(project, decl.id);
+      detail::Work work{limits};
+      // The retained definition graph was bounded by checkedWork. Charge that
+      // snapshot before copying; specialization has its own additional budget.
+      if (auto error = work.charge(project.checkedWork(), decl.span))
+        return std::move(error);
+      auto storage = std::make_shared<detail::ClosedStorage>();
+      detail::CheckedStorage candidate(project.capture());
+      candidate.declarations.assign(project.declarations().begin(),
+                                    project.declarations().end());
+      detail::Checker closer(candidate, work);
+      if (!closer.specialize(decl.id))
+        return closer.takeError();
+      storage->protocol = *candidate.declarations[decl.id.index].target;
+      storage->declarations = std::move(candidate.declarations);
+      return ClosedEntry(project, decl.id, std::move(storage));
     }
   return detail::failure("source.entry", "unknown qualified Entry: " + name);
 }
@@ -293,7 +307,10 @@ const Declaration &ClosedEntry::entry() const {
   return checked.declarations()[selected.index];
 }
 const Declaration &ClosedEntry::protocol() const {
-  return checked.declarations()[entry().target->index];
+  return storage->declarations[storage->protocol.index];
+}
+ArrayRef<Declaration> ClosedEntry::declarations() const {
+  return storage->declarations;
 }
 
 std::string installedCatalogIdentity() {

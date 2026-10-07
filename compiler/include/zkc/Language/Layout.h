@@ -27,10 +27,11 @@ struct Layout {
 class Layouts {
 public:
   explicit Layouts(const CheckedProject &, const Limits & = {});
+  explicit Layouts(const ClosedEntry &, const Limits & = {});
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
 
 private:
-  const CheckedProject &project;
+  llvm::ArrayRef<Declaration> definitions;
   Limits limits;
   uint64_t remaining;
   bool initialized = false;

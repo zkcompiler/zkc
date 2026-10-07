@@ -511,8 +511,6 @@ bool Checker::body(DeclarationId id, unsigned depth) {
       if (p.roles.size() > 1 && (!caps->copy || !caps->drop || !caps->share))
         return fail("source.permission",
                     "shared input requires Copy, Drop and Share", p.span);
-      if (!ingress(p.type, p.span))
-        return false;
     }
     if (!check.addInput(p.name, p.type,
                         result.mode == Body::Mode::Math
