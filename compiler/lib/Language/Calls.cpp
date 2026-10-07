@@ -349,10 +349,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   } else {
     dependencies.resize(args.size());
     std::iota(dependencies.begin(), dependencies.end(), 0);
-    auto effects =
-        callee.effectAllowance.value_or(std::make_pair(ordered, ordered));
-    body.mayStop |= effects.first;
-    body.opaque |= effects.second;
+    auto effects = callee.effectAllowance.value_or(Effects{ordered, ordered});
+    body.mayStop |= effects.mayStop;
+    body.opaque |= effects.opaque;
   }
   std::vector<unsigned> components;
   if (ordered) {

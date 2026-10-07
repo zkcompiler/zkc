@@ -193,6 +193,11 @@ struct PermissionBound {
   Permissions permissions;
   Span span;
 };
+/// Upper bounds on the observable effects of a callable.
+struct Effects {
+  bool mayStop = false;
+  bool opaque = false;
+};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -222,7 +227,7 @@ struct Declaration {
   std::vector<DeclarationId> members;
   std::optional<DeclarationId> parent;
   std::optional<Type> implementation;
-  std::optional<std::pair<bool, bool>> effectAllowance;
+  std::optional<Effects> effectAllowance;
   bool abstract = false;
   /// Empty or Type is a private representation; Field and Group expose a
   /// domain.

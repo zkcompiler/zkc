@@ -137,7 +137,7 @@ struct SyntaxDeclaration {
   std::vector<SyntaxParameter> parameters;
   std::vector<SyntaxRequirement> requirements;
   std::optional<Permissions> permissions;
-  std::optional<std::pair<bool, bool>> effects;
+  std::optional<Effects> effects;
   std::optional<SyntaxType> definition;
   std::vector<SyntaxType> targetArguments;
   std::vector<SyntaxPort> fields;

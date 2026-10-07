@@ -514,8 +514,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                  result.mode == Body::Mode::Protocol))
     return false;
   if (decl.effectAllowance &&
-      ((result.mayStop && !decl.effectAllowance->first) ||
-       (result.opaque && !decl.effectAllowance->second)))
+      ((result.mayStop && !decl.effectAllowance->mayStop) ||
+       (result.opaque && !decl.effectAllowance->opaque)))
     return fail("source.effect", "body exceeds its written effect allowance",
                 decl.span);
   decl.body = std::move(result);

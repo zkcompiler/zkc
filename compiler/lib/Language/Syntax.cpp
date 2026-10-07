@@ -356,16 +356,16 @@ private:
   bool effects(SyntaxDeclaration &decl) {
     if (!take("!"))
       return true;
-    decl.effects = std::make_pair(false, false);
+    decl.effects = Effects{};
     if (!expect("{"))
       return false;
     if (!at("}"))
       do {
         bool *flag = nullptr;
         if (take("stop"))
-          flag = &decl.effects->first;
+          flag = &decl.effects->mayStop;
         else if (take("opaque"))
-          flag = &decl.effects->second;
+          flag = &decl.effects->opaque;
         else
           return fail("source.effect", "expected stop or opaque effect");
         if (*flag)

@@ -2,6 +2,8 @@
 #define ZKC_LANGUAGE_CHECKER_H
 #include "Internal.h"
 namespace zkc::language::detail {
+Type parameterType(const Parameter &);
+bool runtimeType(const Type &);
 using Substitution = std::map<std::string, Type>;
 class Checker {
 public:

@@ -50,6 +50,9 @@ add_zkc_component(Language
   lib/Language/Syntax.cpp
   lib/Language/Check.cpp
   lib/Language/TypeCheck.cpp
+  lib/Language/Signatures.cpp
+  lib/Language/Permissions.cpp
+  lib/Language/Conformance.cpp
   lib/Language/BodyCheck.cpp
   lib/Language/Expressions.cpp
   lib/Language/Calls.cpp
