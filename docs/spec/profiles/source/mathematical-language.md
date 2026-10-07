@@ -68,6 +68,19 @@ from runtime `index`. Constants, parameters, addition and multiplication normali
 to polynomials with checked unsigned 64-bit coefficients. Equality compares those
 normal forms. Arithmetic overflow refuses rather than wrapping.
 
+`pow2(E)` denotes two to a static natural exponent. Its symbolic exponent must
+normalize to a linear sum of natural parameters and a constant. For example,
+`pow2(N + M)` equals `pow2(N) * pow2(M)`, and `pow2(2 * N + 3)` equals
+`8 * pow2(N) * pow2(N)`. Powers are distinct typed factors, not encoded parameter
+names. Substitution into signatures and explicit bounds checks the same
+restriction during generic definition checking. Body-only static expressions are
+substituted when the selected body closes; a call can therefore pass generic
+checking and fail closing. Symbolic nonlinear exponents and nested symbolic powers
+are unsupported. Closed exponents must be below 64; term, factor and work limits
+bound symbolic expansion.
+This is a sound set of normalization rules, not a complete procedure for
+exponential arithmetic. Static argument inference does not invert `pow2`.
+
 `where 1 <= N` requires a natural bound. `where Copy(T), Drop(T)` adds permission
 requirements; `T: Type + Copy + Drop` expresses the same parameter permissions.
 `where Share(G::Scalar), Wire(G::Scalar)` constrains an associated projection.
@@ -451,7 +464,12 @@ it never reparses templates. Closed instances are memoized by declaration, mode
 and exact static type identity. Only closed definitions enter original MLIR.
 
 Math helpers become private `func.func` definitions. Ordered helpers become
-`local.func`; math helpers used in ordered code receive a local-mode instance.
+`local.func`. A math helper called inside ordered code retains its mathematical
+body and receives a data-only `local.realize` declaration. The local call is an
+ordered `local.apply` occurrence; native preparation realizes the helper through
+the common polynomial and calculation lowerers before expanding that call.
+Formal intermediates never become local runtime values. Inline arithmetic
+written directly inside `fn` remains an ordered primitive.
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use
 existing executable bindings. No additional protocol interpreter is introduced.

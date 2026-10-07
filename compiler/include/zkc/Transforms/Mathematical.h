@@ -9,6 +9,14 @@ mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
+/// Realize admitted data-signature math helpers through the common polynomial
+/// and calculation lowerers. Calls remain ordered and expand with local.apply.
+mlir::LogicalResult expandMathRealizations(mlir::ModuleOp module);
+/// Structural containment check, not an independent proof of the math lowerers.
+/// Checks retained declarations, data-only recipes and binding accounting.
+mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
+                                                    mlir::ModuleOp candidate);
+
 // Closed, bounded checks on actual source/candidate pairs. Keep the original
 // frozen and verify both subjects before calling. Preparation and projection
 // use virtual substitutions and role-indexed value terms; participant rewrites

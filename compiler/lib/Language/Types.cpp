@@ -75,7 +75,7 @@ Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
       (void)coefficient;
       cost += 1;
       for (auto &factor : factors)
-        cost += 1 + factor.size();
+        cost += 1 + factor.name.size();
     }
     for (auto &argument : term.arguments)
       if (auto e = visit(argument, level + 1))

@@ -1,3 +1,4 @@
+#include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/IRMapping.h"
@@ -23,6 +24,20 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
+bool isCalculationContract(StringRef contract) {
+  return is_contained(
+      ArrayRef<StringRef>{
+          "field.constant",   "field.add",       "field.sub",
+          "field.mul",        "field.equal",     "curve.add",
+          "curve.scale",      "curve.equal",     "curve.length",
+          "pairing.apply",    "field_array.at",  "field_array.from_vector",
+          "vector.empty",     "vector.append",   "vector.length",
+          "matrix.dimension", "indices.length",  "index.constant",
+          "index.equal",      "index.less",      "sequence.empty",
+          "sequence.append",  "sequence.length", "bool.and",
+          "bool.or",          "bool.not"},
+      contract);
+}
 namespace {
 // Names are allocated over the entire isolated symbol table, including retained
 // relation declarations and authored executable definitions.
@@ -72,6 +87,8 @@ public:
   }
   FlatSymbolRefAttr get(protocol::BindingApplication application,
                         Location location, OpBuilder &builder) {
+    assert(isCalculationContract(application.contract) &&
+           "mathematical recipe contract is outside the closed vocabulary");
     auto key = std::make_pair(application.contract, application.arguments);
     auto found = bindings.find(key);
     if (found == bindings.end()) {
@@ -737,6 +754,27 @@ public:
   }
 };
 
+LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
+                           const llvm::DenseSet<Operation *> &generated,
+                           BindingSymbols &symbols) {
+  ConversionTarget target(*unit.getContext());
+  target.markUnknownOpDynamicallyLegal([&](Operation *op) {
+    return !generated.contains(op->getParentOfType<local::FuncOp>()) ||
+           (!isTotal(op) && !isa<local::GuardOp>(op));
+  });
+  RewritePatternSet patterns(unit.getContext());
+  patterns.add<Recipe>(unit.getContext(), symbols);
+  ConversionConfig config;
+  // Lowering schedules explicit recipes. Mathematical folding belongs to
+  // preparation/simplification, where generated constants have no sites yet.
+  config.foldingMode = DialectConversionFoldingMode::Never;
+  // Symbol/site allocation is monotone on this owned candidate. A failure
+  // discards the candidate, so conversion need not roll individual recipes
+  // back.
+  config.allowPatternRollback = false;
+  return applyFullConversion(unit, target, std::move(patterns), config);
+}
+
 struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerMathPass)
   void getDependentDialects(DialectRegistry &registry) const final {
@@ -776,23 +814,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
         generated.insert(outlinedSymbols.lookup(reference.getValue()));
       }
     }
-    ConversionTarget target(getContext());
-    target.markUnknownOpDynamicallyLegal([&](Operation *op) {
-      return !generated.contains(op->getParentOfType<local::FuncOp>()) ||
-             (!isTotal(op) && !isa<local::GuardOp>(op));
-    });
-    RewritePatternSet patterns(&getContext());
-    patterns.add<Recipe>(&getContext(), symbols);
-    ConversionConfig config;
-    // Lowering schedules explicit recipes. Mathematical folding belongs to
-    // preparation/simplification, where generated constants have no sites yet.
-    config.foldingMode = DialectConversionFoldingMode::Never;
-    // Symbol/site allocation is monotone on this owned candidate. A failure
-    // discards the candidate, so conversion need not roll individual recipes
-    // back.
-    config.allowPatternRollback = false;
-    if (failed(applyFullConversion(*candidate, target, std::move(patterns),
-                                   config)))
+    if (failed(lowerRecipes(unit, generated, symbols)))
       return signalPassFailure();
     unit.setProfile(protocol_ir::Profile::Exec);
     unit.setExecutionContractAttr(protocol_ir::ExecutionContractAttr::get(
@@ -805,6 +827,21 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   }
 };
 } // namespace
+LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
+                                ArrayRef<local::FuncOp> functions) {
+  BindingSymbols symbols(unit);
+  llvm::DenseSet<Operation *> selected;
+  for (auto function : functions)
+    selected.insert(function);
+  // Preserve the admitted, polynomial-free mathematical bodies for the same
+  // independent recipe matcher used by participant lowering. This transient
+  // candidate is not an executable module until conversion finishes.
+  OwningOpRef<protocol_ir::ProtocolModuleOp> original(
+      cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
+  if (failed(lowerRecipes(unit, selected, symbols)))
+    return failure();
+  return verifyCalculationRecipes(*original, unit, functions);
+}
 } // namespace zkc::mathematical
 std::unique_ptr<mlir::Pass> zkc::protocol::createLowerMathPass() {
   return std::make_unique<mathematical::LowerMathPass>();

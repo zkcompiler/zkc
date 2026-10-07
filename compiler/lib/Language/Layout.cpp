@@ -59,11 +59,14 @@ Expected<Type> Layouts::substitute(const Type &type,
   if (!result.dimension.isClosed()) {
     NaturalArithmetic arithmetic(remaining, limits.naturalTerms,
                                  limits.naturalFactors);
-    std::map<std::string, Natural> nats;
-    for (auto &[name, t] : bindings)
-      if (t.kind == Type::Kind::Natural)
-        nats.emplace(name, t.dimension);
-    auto normalized = arithmetic.substitute(result.dimension, nats);
+    auto normalized = arithmetic.substitute(
+        result.dimension, [&](StringRef name) -> const Natural * {
+          auto found = bindings.find(name.str());
+          return found != bindings.end() &&
+                         found->second.kind == Type::Kind::Natural
+                     ? &found->second.dimension
+                     : nullptr;
+        });
     remaining = arithmetic.remainingWork();
     if (!normalized)
       return normalized.takeError();

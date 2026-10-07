@@ -522,6 +522,27 @@ fn inverse_and_empty(directory: &Path) {
         }
     }
 }
+fn realized_mathematics(directory: &Path) {
+    for name in ["realized", "realized_plain", "realized_release"] {
+        let b = bundle(directory, name);
+        for (a, coefficient, x) in [(2_u64, 3_u64, 5_u64), (7, 0, 11), (0, 4, 0)] {
+            let registry = ServiceRegistry::new(Policy::default());
+            let mut audit = Audit::new(&registry, BTreeMap::new());
+            let report = run_case(
+                &b,
+                "realized_polynomial",
+                BTreeMap::from([("P".into(), vec![field(a), field(coefficient), field(x)])]),
+                &mut audit,
+            );
+            assert_eq!(report.outcome, Outcome::Completed);
+            assert!(audit.messages.is_empty());
+            let expected = Scalar::from((a + coefficient * x).pow(2));
+            assert!(
+                matches!(role(&report, "P").outputs[0], Value::Field(value) if value == expected)
+            );
+        }
+    }
+}
 fn main() {
     let path = std::env::args_os()
         .nth(1)
@@ -530,6 +551,7 @@ fn main() {
     schnorr(directory);
     services(directory);
     inverse_and_empty(directory);
+    realized_mathematics(directory);
     println!(
         "native joint Schnorr, source order, message controls, managed aliases, cleanup and inverse checks passed"
     );

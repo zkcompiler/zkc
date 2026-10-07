@@ -10,6 +10,9 @@
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
+#include <set>
 using namespace llvm;
 namespace zkc::language {
 namespace {
@@ -25,6 +28,8 @@ class Emitter {
   mlir::Block *definitions = nullptr;
   std::map<std::pair<std::string, std::vector<std::string>>, std::string>
       bindings;
+  std::map<std::string, std::string> realizations;
+  std::set<std::string> symbols;
   Error failure = Error::success();
   uint64_t operations = 0, siteOrdinal = 0, remaining;
   template <class T> std::optional<T> take(Expected<T> value) {
@@ -158,6 +163,39 @@ class Emitter {
         {attr("binding", mlir::FlatSymbolRefAttr::get(&context, found->second)),
          attr("parameters", strings(parameters)), text("site", site)});
     return op ? std::optional<Values>(Values(op->getResults())) : std::nullopt;
+  }
+  std::optional<std::string> realization(const Declaration &helper,
+                                         mlir::TypeRange inputs,
+                                         mlir::TypeRange outputs) {
+    if (auto found = realizations.find(helper.symbol);
+        found != realizations.end())
+      return found->second;
+    std::string identity =
+        "zkc.local.realization/1:" + std::to_string(helper.symbol.size()) +
+        ":" + helper.symbol;
+    auto digest = SHA256::hash(arrayRefFromStringRef(identity));
+    std::string name =
+        "zkl_realization_" + toHex(ArrayRef<uint8_t>(digest), true);
+    if (name.size() > limits.symbolBytes) {
+      failure = error("source.limit", "realization symbol exceeds byte limit");
+      return {};
+    }
+    if (!symbols.insert(name).second) {
+      failure = error("source.symbol", "realization symbol collision");
+      return {};
+    }
+    mlir::OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(definitions);
+    if (!make(
+            "local.realize", {}, {},
+            {text("sym_name", name),
+             attr("helper",
+                  mlir::FlatSymbolRefAttr::get(&context, helper.symbol)),
+             attr("function_type", mlir::TypeAttr::get(builder.getFunctionType(
+                                       inputs, outputs)))}))
+      return {};
+    realizations.emplace(helper.symbol, name);
+    return name;
   }
   bool retire(mlir::Value value, StringRef site) {
     return bool(primitive("resource_unit.consume", value, {}, {}, site));
@@ -344,17 +382,28 @@ class Emitter {
         result = std::move(*emitted);
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         const auto &target = project.declarations()[call->callee.index];
-        SmallVector<mlir::NamedAttribute> attrs{attr(
-            "callee", mlir::FlatSymbolRefAttr::get(&context, target.symbol))};
+        auto operands = flatten(call->operands);
+        std::string callee = target.symbol;
+        if (target.kind == Declaration::Kind::Math &&
+            source.mode == Body::Mode::Local) {
+          auto symbol = realization(
+              target, mlir::ValueRange(operands).getTypes(), resultTypes);
+          if (!symbol)
+            return false;
+          callee = *symbol;
+        }
+        SmallVector<mlir::NamedAttribute> attrs{
+            attr("callee", mlir::FlatSymbolRefAttr::get(&context, callee))};
         StringRef name = "func.call";
-        if (target.kind == Declaration::Kind::Local) {
+        if (target.kind == Declaration::Kind::Local ||
+            source.mode == Body::Mode::Local) {
           name = source.mode == Body::Mode::Protocol ? "protocol.local_call"
                                                      : "local.apply";
           attrs.push_back(text("site", site));
           if (call->owner)
             attrs.push_back(text("role", decl.roles[*call->owner]));
         }
-        auto *actual = make(name, resultTypes, flatten(call->operands), attrs);
+        auto *actual = make(name, resultTypes, operands, attrs);
         if (!actual)
           return false;
         result = Values(actual->getResults());
@@ -545,6 +594,9 @@ public:
       : project(project), limits(limits), context(context), builder(&context),
         location(builder.getUnknownLoc()), layouts(project, limits),
         module(mlir::ModuleOp::create(location)), remaining(limits.work) {
+    for (const auto &decl : project.declarations())
+      if (decl.body && decl.parameters.empty())
+        symbols.insert(decl.symbol);
     (void)!!failure;
   }
   Expected<std::string> run() {

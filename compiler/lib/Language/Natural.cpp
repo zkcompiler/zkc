@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <optional>
 
 using namespace llvm;
 namespace zkc::language {
@@ -17,7 +18,7 @@ Expected<Natural> Natural::atom(StringRef name) {
   if (name.empty() || name.size() > 4096 || name.contains('\0'))
     return error("source.natural", "invalid natural atom identity");
   Natural value;
-  value.polynomial.emplace(Monomial{name.str()}, 1);
+  value.polynomial.emplace(Monomial{{Factor::Kind::Atom, name.str()}}, 1);
   return value;
 }
 bool Natural::isClosed() const {
@@ -40,7 +41,8 @@ std::string Natural::spelling() const {
     first = false;
     out << coefficient;
     for (const auto &factor : factors)
-      out << "*" << factor.size() << ":" << factor;
+      out << (factor.kind == Factor::Kind::Atom ? "*a" : "*p")
+          << factor.name.size() << ":" << factor.name;
   }
   return result;
 }
@@ -55,7 +57,7 @@ Error NaturalArithmetic::insert(Natural &into, const Natural::Monomial &key,
   if (auto e = charge(key.size() + 1))
     return e;
   for (auto &factor : key)
-    if (auto e = charge(factor.size()))
+    if (auto e = charge(factor.name.size() + 1))
       return e;
   if (!coefficient)
     return Error::success();
@@ -96,7 +98,7 @@ Expected<Natural> NaturalArithmetic::multiply(const Natural &a,
         return error("source.natural", "natural coefficient overflow");
       for (auto *terms : {&left, &right})
         for (auto &factor : *terms)
-          if (auto e = charge(factor.size()))
+          if (auto e = charge(factor.name.size() + 1))
             return std::move(e);
       Natural::Monomial factors;
       std::merge(left.begin(), left.end(), right.begin(), right.end(),
@@ -106,21 +108,72 @@ Expected<Natural> NaturalArithmetic::multiply(const Natural &a,
     }
   return result;
 }
+Expected<Natural> NaturalArithmetic::powerOfTwo(const Natural &exponent) {
+  if (auto e = charge(exponent.terms().size() + 1))
+    return std::move(e);
+  Natural::Monomial factors;
+  uint64_t coefficient = 1;
+  for (const auto &[term, count] : exponent.terms()) {
+    if (term.empty()) {
+      if (count >= 64)
+        return error("source.natural", "power of two overflows uint64");
+      coefficient = uint64_t{1} << count;
+      continue;
+    }
+    if (term.size() != 1 || term[0].kind != Natural::Factor::Kind::Atom)
+      return error("source.natural", "pow2 requires a linear natural exponent");
+    if (factors.size() > factorLimit || count > factorLimit - factors.size())
+      return error("source.limit", "natural monomial degree limit exceeded");
+    // Charge before allocating or copying identities. The division avoids an
+    // overflow in the accounting itself, even with caller-selected limits.
+    auto identityCost = term[0].name.size() + 1;
+    if (count > remaining / identityCost)
+      return error("source.limit", "natural normalization work limit exceeded");
+    if (auto e = charge(count * identityCost))
+      return std::move(e);
+    factors.insert(factors.end(), count,
+                   {Natural::Factor::Kind::PowerOfTwo, term[0].name});
+  }
+  Natural result;
+  if (auto e = insert(result, factors, coefficient))
+    return std::move(e);
+  return result;
+}
 Expected<Natural>
 NaturalArithmetic::substitute(const Natural &input,
                               const std::map<std::string, Natural> &bindings) {
+  return substitute(input, [&](StringRef name) -> const Natural * {
+    auto found = bindings.find(name.str());
+    return found == bindings.end() ? nullptr : &found->second;
+  });
+}
+Expected<Natural>
+NaturalArithmetic::substitute(const Natural &input,
+                              function_ref<const Natural *(StringRef)> lookup) {
   Natural result;
   for (const auto &[factors, coefficient] : input.terms()) {
     Natural term = Natural::constant(coefficient);
     for (const auto &factor : factors) {
-      if (auto e = charge(1))
+      if (auto e = charge(factor.name.size() + 1))
         return std::move(e);
-      auto found = bindings.find(factor);
-      auto atom = Natural::atom(factor);
-      if (!atom)
-        return atom.takeError();
-      auto next =
-          multiply(term, found == bindings.end() ? *atom : found->second);
+      const Natural *replacement = lookup(factor.name);
+      std::optional<Natural> atom;
+      if (!replacement) {
+        auto identity = Natural::atom(factor.name);
+        if (!identity)
+          return identity.takeError();
+        atom = std::move(*identity);
+        replacement = &*atom;
+      }
+      std::optional<Natural> power;
+      if (factor.kind == Natural::Factor::Kind::PowerOfTwo) {
+        auto expanded = powerOfTwo(*replacement);
+        if (!expanded)
+          return expanded.takeError();
+        power = std::move(*expanded);
+        replacement = &*power;
+      }
+      auto next = multiply(term, *replacement);
       if (!next)
         return next.takeError();
       term = std::move(*next);

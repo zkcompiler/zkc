@@ -3,6 +3,7 @@
 #include "EncodingLimits.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -28,6 +29,7 @@ struct Definition {
   std::map<std::string, std::map<std::string, std::string>> agreements;
   const source::Node *record = nullptr;
   const source::Body *body = nullptr;
+  bool realization = false;
   source::Names arguments;
   std::set<std::string> familyParameters;
   std::string instance, role;
@@ -549,7 +551,7 @@ class Admission {
         if (inMatch && callsMatchUnsafe(call->callee, checked))
           return fail("local-match-challenge");
         auto f = functions.find(call->callee);
-        if (f == functions.end() || !f->second.body)
+        if (f == functions.end() || (!f->second.body && !f->second.realization))
           return fail("algorithm-call-symbol");
         std::vector<Port> inputs;
         if (!operands(call->inputs, env, inputs, consumed) ||
@@ -1170,11 +1172,40 @@ public:
     if (failureLocation)
       *failureLocation = nullptr;
   }
-  Error nativeLocals(const source::Module &module) {
+  Error nativeLocals(const source::Module &module,
+                     ArrayRef<LocalRealization> realizations) {
     if (!module.protocols.empty() || !module.instances.empty() ||
         !module.entries.empty() || module.isLibrary() ||
         !module.relations.empty() || !module.relationViews.empty())
       return error("native-local-definitions-only");
+    if (realizations.size() > 4096 ||
+        module.functions.size() + realizations.size() > 4096)
+      return error("interactive-definition-limit");
+    unsigned typeWork = 200000;
+    bool limited = false;
+    for (const auto &realization : realizations) {
+      if (!name(realization.name) || !symbols.insert(realization.name).second)
+        return error("local-realization-symbol");
+      Definition d;
+      d.realization = true;
+      for (bool input : {true, false}) {
+        const auto &ports = input ? realization.inputs : realization.outputs;
+        if (ports.size() > 1024)
+          return error("interactive-ports");
+        for (const auto &port : ports) {
+          auto type = parseBoundType(port, false);
+          if (!type)
+            return type.takeError();
+          auto policy = nativeTypePolicy(*type, typeWork, limited);
+          if (limited)
+            return error("local-realization-limit");
+          if (!policy || !policy->total || policy->affine)
+            return error("local-realization-signature");
+          (input ? d.inputs : d.outputs).push_back({"", port});
+        }
+      }
+      functions.emplace(realization.name, std::move(d));
+    }
     nativeExecution = true;
     return run(module);
   }
@@ -1203,8 +1234,9 @@ public:
 };
 } // namespace
 
-Error admitNativeLocalDefinitions(const source::Module &value) {
-  return Admission(false, nullptr).nativeLocals(value);
+Error admitNativeLocalDefinitions(const source::Module &value,
+                                  ArrayRef<LocalRealization> realizations) {
+  return Admission(false, nullptr).nativeLocals(value, realizations);
 }
 Error admit(const source::Module &value, bool executable,
             const source::Node **failureLocation) {

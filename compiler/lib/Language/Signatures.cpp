@@ -94,7 +94,7 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
         if (!charge(1, decl.span))
           return false;
         for (const auto &factor : factors)
-          if (!charge(factor.size() + 1, decl.span))
+          if (!charge(factor.name.size() + 1, decl.span))
             return false;
       }
   return true;

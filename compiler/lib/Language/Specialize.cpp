@@ -122,11 +122,10 @@ bool Checker::specialize(DeclarationId selected) {
           target = *found;
           call->arguments = call->component->arguments;
         }
-        auto targetMode = output.declarations[target.index].kind ==
-                                      Declaration::Kind::Local ||
-                                  mode == Body::Mode::Local
-                              ? Body::Mode::Local
-                              : Body::Mode::Math;
+        auto targetMode =
+            output.declarations[target.index].kind == Declaration::Kind::Local
+                ? Body::Mode::Local
+                : Body::Mode::Math;
         auto instance = instantiate(target, call->arguments, targetMode);
         if (!instance)
           return false;
@@ -152,50 +151,6 @@ bool Checker::specialize(DeclarationId selected) {
           if (!closeBody(*copy, bindings, Body::Mode::Local))
             return false;
           region = std::move(copy);
-        }
-      } else if (auto *math = std::get_if<MathValue>(&op.action)) {
-        if (mode == Body::Mode::Local) {
-          std::string contract;
-          switch (math->identity) {
-          case MathematicalIdentity::BooleanConstant:
-            contract = "bool.constant";
-            break;
-          case MathematicalIdentity::BooleanEqual:
-            contract = "bool.equal";
-            break;
-          case MathematicalIdentity::FieldConstant:
-            contract = "field.constant";
-            break;
-          case MathematicalIdentity::FieldAdd:
-            contract = "field.add";
-            break;
-          case MathematicalIdentity::FieldSubtract:
-            contract = "field.sub";
-            break;
-          case MathematicalIdentity::FieldMultiply:
-            contract = "field.mul";
-            break;
-          case MathematicalIdentity::FieldEqual:
-            contract = "field.equal";
-            break;
-          case MathematicalIdentity::GroupAdd:
-            contract = "curve.add";
-            break;
-          case MathematicalIdentity::GroupScale:
-            contract = "curve.scale";
-            break;
-          case MathematicalIdentity::GroupEqual:
-            contract = "curve.equal";
-            break;
-          default:
-            return fail("source.mode",
-                        "mathematical operation has no ordered representation",
-                        op.span);
-          }
-          LocalPrimitive ordered{contract, math->operands, {}};
-          if (!math->literal.empty())
-            ordered.parameters.push_back(math->literal);
-          op.action = std::move(ordered);
         }
       }
     }
@@ -304,8 +259,6 @@ bool Checker::specialize(DeclarationId selected) {
         if (!mathematicalData(value.type, value.span))
           return {};
     result.body = std::move(body);
-    if (mode == Body::Mode::Local)
-      result.kind = Declaration::Kind::Local;
     result.parameters.clear();
     result.bounds.clear();
     result.permissionBounds.clear();

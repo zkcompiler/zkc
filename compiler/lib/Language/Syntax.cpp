@@ -250,7 +250,13 @@ private:
     if (!bounded(depth))
       return false;
     out.span = current().span;
-    if (take("builtin")) {
+    if (take("pow2")) {
+      out.kind = SyntaxType::Kind::PowerOfTwo;
+      SyntaxType exponent;
+      if (!expect("(") || !type(exponent, depth + 1) || !expect(")"))
+        return false;
+      out.arguments.push_back(std::move(exponent));
+    } else if (take("builtin")) {
       out.kind = SyntaxType::Kind::Builtin;
       if (!expect("(") || current().kind != TokenKind::String)
         return fail("source.syntax", "builtin requires a constructor string");

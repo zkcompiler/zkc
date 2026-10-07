@@ -84,13 +84,16 @@ std::optional<Type> Checker::substitute(const Type &input,
       return {};
     arg = std::move(*t);
   }
-  std::map<std::string, Natural> nats;
-  for (auto &[name, arg] : bindings)
-    if (arg.kind == Type::Kind::Natural)
-      nats.emplace(name, arg.dimension);
   if (!result.dimension.isClosed()) {
     auto before = naturals.remainingWork();
-    auto n = naturals.substitute(result.dimension, nats);
+    auto n = naturals.substitute(
+        result.dimension, [&](StringRef name) -> const Natural * {
+          auto found = bindings.find(name.str());
+          return found != bindings.end() &&
+                         found->second.kind == Type::Kind::Natural
+                     ? &found->second.dimension
+                     : nullptr;
+        });
     if (!n) {
       accept(n.takeError());
       return {};
@@ -351,6 +354,27 @@ std::optional<Type> Checker::type(const Declaration &context,
     }
     Type result(K::Natural);
     result.dimension = Natural::constant(value);
+    return result;
+  }
+  if (s.kind == S::PowerOfTwo) {
+    auto exponent = type(context, s.arguments[0], depth + 1);
+    if (!exponent)
+      return {};
+    if (exponent->kind != K::Natural) {
+      fail("source.natural", "pow2 requires a natural exponent", s.span);
+      return {};
+    }
+    auto before = naturals.remainingWork();
+    auto value = naturals.powerOfTwo(exponent->dimension);
+    if (!value) {
+      accept(value.takeError());
+      return {};
+    }
+    if (!charge(before - naturals.remainingWork(), s.span))
+      return {};
+    Type result(K::Natural);
+    result.dimension = std::move(*value);
+    result.symbolic = !result.dimension.isClosed();
     return result;
   }
   if (s.kind == S::Add || s.kind == S::Multiply) {

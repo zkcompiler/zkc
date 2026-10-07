@@ -75,7 +75,7 @@ bool isReserved(StringRef name) {
       "repeat", "match",     "for",       "in",        "capture",   "carry",
       "yield",  "drop",      "consume",   "require",   "stop",      "opaque",
       "Type",   "Field",     "Group",     "Copy",      "Drop",      "Share",
-      "Wire",   "completes", "finish_if", "builtin",   "kernel"};
+      "Wire",   "completes", "finish_if", "builtin",   "kernel",    "pow2"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {

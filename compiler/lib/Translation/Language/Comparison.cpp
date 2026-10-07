@@ -46,6 +46,8 @@ class Comparator {
   mlir::ModuleOp module;
   const Limits &limits;
   Layouts layouts;
+  std::map<std::string, mlir::Operation *> realizations;
+  std::set<mlir::Operation *> usedRealizations;
   Error failure = Error::success();
   Correspondence report;
   uint64_t remaining;
@@ -411,8 +413,11 @@ class Comparator {
         result = std::move(*checked);
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         auto &target = project.declarations()[call->callee.index];
-        bool local = target.kind == Declaration::Kind::Local,
-             owned = local && source.mode == Body::Mode::Protocol;
+        bool local = target.kind == Declaration::Kind::Local ||
+                     source.mode == Body::Mode::Local,
+             owned = local && source.mode == Body::Mode::Protocol,
+             realized = source.mode == Body::Mode::Local &&
+                        target.kind == Declaration::Kind::Math;
         auto *actual = next(block, cursor, op.span,
                             owned   ? "protocol.local_call"
                             : local ? "local.apply"
@@ -421,7 +426,26 @@ class Comparator {
         if (!actual)
           return false;
         auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
-        if (!callee || callee.getValue() != target.symbol ||
+        if (realized) {
+          auto found = callee ? realizations.find(callee.getValue().str())
+                              : realizations.end();
+          if (found == realizations.end())
+            return fail("missing mathematical realization");
+          auto *definition = found->second;
+          auto helper =
+              definition->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
+          auto type =
+              definition->getAttrOfType<mlir::TypeAttr>("function_type");
+          auto signature =
+              type ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
+                   : mlir::FunctionType();
+          if (!helper || helper.getValue() != target.symbol || !signature ||
+              actual->getOperandTypes() != signature.getInputs() ||
+              actual->getResultTypes() != signature.getResults())
+            return fail("mathematical realization target or signature differs");
+          usedRealizations.insert(definition);
+        }
+        if (!callee || (!realized && callee.getValue() != target.symbol) ||
             !attributes(
                 *actual,
                 owned
@@ -686,6 +710,7 @@ public:
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
     SmallVector<mlir::Operation *> functions;
+    std::set<std::string> realizedHelpers;
     for (auto &op : native.getBody().front()) {
       if (op.getName().getStringRef() == "local.binding") {
         auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
@@ -693,6 +718,16 @@ public:
                 op, {"sym_name", "contract", "arguments", "implementation"}) ||
             !name || !bindings.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "invalid or duplicate binding");
+      } else if (op.getName().getStringRef() == "local.realize") {
+        auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
+        auto helper = op.getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
+        if (!name || !helper ||
+            !realizedHelpers.insert(helper.getValue().str()).second ||
+            !attributes(op, {"sym_name", "helper", "function_type"}) ||
+            op.getNumOperands() || op.getNumResults() || op.getNumRegions() ||
+            !realizations.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence",
+                       "invalid or duplicate realization");
       } else
         functions.push_back(&op);
     }
@@ -797,7 +832,8 @@ public:
                 protocol ? &availability : nullptr))
         return std::move(failure);
     }
-    if (index != functions.size() || usedBindings.size() != bindings.size())
+    if (index != functions.size() || usedBindings.size() != bindings.size() ||
+        usedRealizations.size() != realizations.size())
       return error("source.correspondence",
                    "extra definition or unused binding");
     llvm::sort(report.locations, [](auto &a, auto &b) {

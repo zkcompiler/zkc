@@ -1,3 +1,4 @@
+#include "MathematicalSupport.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Domains.h"
@@ -459,8 +460,8 @@ struct EliminatePolynomialsPass
     uint64_t remaining = 100000;
     for (auto participant :
          unit.getBody().front().getOps<protocol_ir::ParticipantOp>())
-      if (mlir::failed(Elimination(&getContext(), remaining)
-                           .run(participant.getBody().front())))
+      if (mlir::failed(
+              eliminatePolynomials(participant.getBody().front(), remaining)))
         return signalPassFailure();
     if (mlir::failed(verify(*candidate)) ||
         mlir::failed(
@@ -471,6 +472,9 @@ struct EliminatePolynomialsPass
   }
 };
 } // namespace
+LogicalResult eliminatePolynomials(Block &body, uint64_t &remaining) {
+  return Elimination(body.getParentOp()->getContext(), remaining).run(body);
+}
 } // namespace zkc::poly
 std::unique_ptr<mlir::Pass> zkc::protocol::createEliminatePolynomialsPass() {
   return std::make_unique<poly::EliminatePolynomialsPass>();

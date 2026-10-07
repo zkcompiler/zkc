@@ -6,6 +6,9 @@
 #include "llvm/ADT/Twine.h"
 
 namespace zkc::mathematical {
+// Whole-module budget shared by admission and helper realization. Subsequent
+// polynomial expansion and executable admission have their own work bounds.
+inline constexpr unsigned realizedHelperOperationLimit = 100000;
 // A static application occurrence prefixes the callee's site. Source-origin
 // capture and actual expansion must use the same injective spelling.
 inline std::string expandedApplicationSite(llvm::StringRef caller,

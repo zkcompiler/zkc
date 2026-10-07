@@ -104,8 +104,10 @@ The `.zkc` compiler path and types/local computation are implemented.
 Managed services, static protocol composition, distributed repetition and
 conditional participant completion now connect to their existing IR contracts.
 Catalog-backed data/kernel bindings now cover vector, matrix, sequence and
-iterative folding clients. Next, complete mathematical data authoring and typed
-predicates and attachments. Preserve actual receives,
+iterative folding clients. Mathematical helpers now retain one mathematical body
+when called from local code, using checked realization and existing execution
+recipes. Bounded power-of-two shapes support generic multilinear library types.
+Next, complete formal polynomial authoring and typed predicates and attachments. Preserve actual receives,
 service roots and aliases, draw occurrences, ordered guards/stops and resource
 flow through nested applications and control.
 

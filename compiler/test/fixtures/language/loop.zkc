@@ -1,3 +1,4 @@
 module sample; domain Fr=field("bls12-381.fr");
-fn sum(x:Fr,n:index)->Fr {let z:Fr=0;let s=for i in 0..n carry(s=z) capture(x) {yield s+x;};return s;}
+math fn add(a:Fr,b:Fr)->Fr{return a+b;}
+fn sum(x:Fr,n:index)->Fr {let z:Fr=0;let s=for i in 0..n carry(s=z) capture(x) {yield add(s,x);};return s;}
 protocol Run roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){local P let s=sum(x,n);return(r=s);}entry Demo=Run;

@@ -100,4 +100,9 @@ with case('reject physical input and invalid invocation without partial output')
     commands.source('protocol-bundle', single, '--no-simplify=yes', refuses='run-option')
     commands.source('protocol-bundle', 'module {', refuses='error')
 
+for suffix, flags in [('', ()), ('_plain', ('--no-simplify',)), ('_release', ('--release-storage',))]:
+    with case(f'mathematical helper realization executes at local call{suffix}'):
+        compile_bundle('realized' + suffix, (FIXTURES / 'helper-realization.mlir').read_text(),
+                       [('P', 'local', 'work', 0)], *flags)
+
 counted()

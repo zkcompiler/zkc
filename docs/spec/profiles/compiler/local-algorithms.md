@@ -11,7 +11,10 @@ the adapter and its limits.
 A local definition contains ordered primitive operations, role-free `apply`
 instructions, [structured local regions](local-control.md), and one final return. An application names a local definition or
 configuration in the same module and supplies exactly its ordered argument and
-result types after checked static substitution. Generic signatures and requirement
+result types after checked static substitution. In the mathematical `protocol`
+profile it may also name a [data-only helper realization](mathematical-protocols.md#executable-local-calls-and-type-use).
+Preparation materializes that declaration before canonical local expansion;
+no unresolved realization enters the portable executable carrier. Generic signatures and requirement
 entailment follow the [generic source profile](../source/generic-definitions.md).
 The portable record is `["apply", site, callee, static_arguments, inputs, outputs]`;
 only this six-field shape is admitted. Specialization eliminates static arguments

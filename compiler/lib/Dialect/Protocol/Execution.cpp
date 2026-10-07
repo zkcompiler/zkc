@@ -188,7 +188,10 @@ class ExecutionModelReader {
     bool local = isa<zkc::local::CallOp, zkc::local::ApplyOp,
                      zkc::protocol_ir::LocalCallOp>(op);
     bool kind =
-        local ? isa_and_nonnull<zkc::local::FuncOp>(definition)
+        local ? (isa_and_nonnull<zkc::local::FuncOp>(definition) ||
+                 (native && common && isa<zkc::local::ApplyOp>(op) &&
+                  profile.getValue() == zkc::protocol_ir::Profile::Protocol &&
+                  isa_and_nonnull<zkc::local::RealizeOp>(definition)))
         : isa<zkc::protocol_ir::ParticipantCallOp>(op)
             ? isa_and_nonnull<zkc::protocol_ir::ParticipantOp>(definition)
             : isa_and_nonnull<zkc::protocol_ir::ExecFuncOp>(definition);
@@ -808,6 +811,7 @@ public:
     common = true;
     physical = false;
     source::Module module;
+    SmallVector<LocalRealization> realizations;
     for (auto &op : root->getRegion(0).front()) {
       if (isa<zkc::local::OperationBindingOp>(op)) {
         if (!attributes(
@@ -817,6 +821,24 @@ public:
         if (!binding)
           return binding.takeError();
         module.bindings.push_back(std::move(*binding));
+      } else if (auto realization = dyn_cast<zkc::local::RealizeOp>(op)) {
+        if (!native ||
+            profile.getValue() != zkc::protocol_ir::Profile::Protocol ||
+            !attributes(&op, {"sym_name", "helper", "function_type"}))
+          return error("local-realization-context");
+        LocalRealization value;
+        value.name = realization.getSymName().str();
+        for (bool input : {true, false})
+          for (auto type : input ? realization.getFunctionType().getInputs()
+                                 : realization.getFunctionType().getResults()) {
+            auto bound = encodeBoundType(type, false);
+            if (!bound) {
+              consumeError(bound.takeError());
+              return error("local-realization-signature");
+            }
+            (input ? value.inputs : value.outputs).push_back(bound->spelling());
+          }
+        realizations.push_back(std::move(value));
       } else if (isa<zkc::local::FuncOp>(op)) {
         auto value = definition(&op, true);
         if (!problem.empty())
@@ -825,8 +847,8 @@ public:
             std::get<source::Function>(std::move(value)));
       }
     }
-    if (auto e =
-            native ? admitNativeLocalDefinitions(module) : admit(module, false))
+    if (auto e = native ? admitNativeLocalDefinitions(module, realizations)
+                        : admit(module, false))
       return std::move(e);
     return module;
   }

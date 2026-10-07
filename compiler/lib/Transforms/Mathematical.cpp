@@ -26,14 +26,12 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-namespace {
 // Only already-admitted acyclic helpers enter here. Expand on the candidate
 // copy, preserving the caller's snapshot and ordinary SSA use-def ownership.
-LogicalResult inlineHelpers(zkc::protocol_ir::MathematicalOp program,
-                            unsigned &remaining, uint64_t &indices,
-                            SymbolTableCollection &tables) {
+LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
+                            uint64_t &indices, SymbolTableCollection &tables) {
   SmallVector<func::CallOp> pending;
-  program.walk([&](func::CallOp call) { pending.push_back(call); });
+  program->walk([&](func::CallOp call) { pending.push_back(call); });
   while (!pending.empty()) {
     auto call = pending.pop_back_val();
     auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
@@ -64,6 +62,7 @@ LogicalResult inlineHelpers(zkc::protocol_ir::MathematicalOp program,
   return success();
 }
 
+namespace {
 class Projector {
   OpBuilder builder;
   SymbolTableCollection sourceSymbols;
@@ -654,7 +653,8 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
     return {};
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  if (failed(expandPolynomialRecipes(*candidate)))
+  if (failed(expandPolynomialRecipes(*candidate)) ||
+      failed(expandMathRealizations(*candidate)))
     return {};
   // Algorithm expansion either leaves admitted IR untouched or returns a
   // verified candidate; static application analysis relies on that contract.
@@ -669,8 +669,9 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
     return {};
   OwningOpRef<protocol_ir::ProtocolModuleOp> expanded(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  // Canonical local application expansion is the only permitted preparation
-  // change to authored execution. Freeze that result before math rewriting.
+  // Freeze canonical local application expansion and realized math helpers
+  // before participant rewriting. A realization's logical_origin names its
+  // original pure helper; its recipes were checked before reaching this point.
   OwningOpRef<ModuleOp> frozenLocals(ModuleOp::create(unit.getLoc()));
   OpBuilder snapshotBuilder(frozenLocals->getBodyRegion());
   for (auto &op : unit.getBody().front())

@@ -59,8 +59,9 @@ bool BodyChecker::infer(const Type &pattern, const Type &actual,
     if (pattern.kind == Type::Kind::Array && !pattern.dimension.isClosed()) {
       for (auto &[factors, coefficient] : pattern.dimension.terms())
         if (pattern.dimension.terms().size() == 1 && coefficient == 1 &&
-            factors.size() == 1) {
-          Type p(Type::Kind::Natural, factors.front());
+            factors.size() == 1 &&
+            factors.front().kind == Natural::Factor::Kind::Atom) {
+          Type p(Type::Kind::Natural, factors.front().name);
           p.symbolic = true;
           p.dimension = pattern.dimension;
           Type a(Type::Kind::Natural);

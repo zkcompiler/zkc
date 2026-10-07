@@ -55,6 +55,7 @@ struct SyntaxType {
     Natural,
     Add,
     Multiply,
+    PowerOfTwo,
     Array,
     Tuple
   } kind = Kind::Name;

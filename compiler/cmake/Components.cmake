@@ -233,6 +233,7 @@ add_zkc_component(Transforms
   lib/Transforms/Mathematical.cpp
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
+  lib/Transforms/MathRealizations.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
   lib/Transforms/PolynomialLowering.cpp

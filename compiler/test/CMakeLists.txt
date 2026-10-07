@@ -15,7 +15,13 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(math_realization Transforms)
+add_test(NAME math-realization COMMAND zkc-math_realization-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/helper-realization.mlir")
+set_tests_properties(math-realization PROPERTIES LABELS native)
+mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
 add_zkc_test(language_natural Language language-natural)
+add_zkc_test(language_power CompilerCore language-power)
 add_zkc_test(language_types CompilerCore language-types)
 mlir_target_link_libraries(zkc-language_types-test PRIVATE MLIRParser)
 add_zkc_test(language CompilerCore language-api)

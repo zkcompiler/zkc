@@ -13,7 +13,7 @@ is realized, and no entry is a cryptographic security theorem.
 
 | Route | Entry and execution | Checking and state |
 |---|---|---|
-| Mathematical source | `.zkc` → mathematical MLIR → existing participant compiler/runtime | Fields/groups, nominal products/variants, static generics/components, permissions, native data/kernel bindings, ordered local control, messages, static protocol composition, managed random services, owner guards, bounded distributed repetition, conditional participant completion and selected Entries; immutable definition graphs, selected Entry closures and independent comparison; [scope](spec/profiles/source/mathematical-language.md) |
+| Mathematical source | `.zkc` → mathematical MLIR → existing participant compiler/runtime | Fields/groups, nominal products/variants, static generics/components, permissions, native data/kernel bindings, mathematical helper realization in local code, ordered local control, messages, static protocol composition, managed random services, owner guards, bounded distributed repetition, conditional participant completion and selected Entries; immutable definition graphs, selected Entry closures and independent comparison; [scope](spec/profiles/source/mathematical-language.md) |
 | Source | `.pir` → `protocol_exec` → `zkc.participants/1`; source/artifact hosts | Supported Lean source/candidate checks; retained while consumers migrate |
 | Native mathematical | Direct MLIR → `zkc.program/1`; `zkc.run/1` bundles or proof deployments | Bounded compiler preservation and runtime admission; foundation complete, native Lean connection open |
 | Finite tables | Table source → direct/physical plans → table session | Independent Lean references and scoped transformation proofs; executable consumers remain |
@@ -21,7 +21,10 @@ is realized, and no entry is a cryptographic security theorem.
 The mathematical source path has source/admitted-IR mutation and limit controls
 in [language.cpp](../compiler/test/language.cpp) and
 [language_types.cpp](../compiler/test/language_types.cpp), bounded normalization in
-[language_natural.cpp](../compiler/test/language_natural.cpp), command controls in
+[language_natural.cpp](../compiler/test/language_natural.cpp) and generic
+power-of-two shapes in [language_power.cpp](../compiler/test/language_power.cpp),
+helper realization and independent recipe controls in
+[math_realization.cpp](../compiler/test/math_realization.cpp), command controls in
 [language_cli.py](../compiler/test/language_cli.py), and actual per-role input and
 receive, joint-host, aggregate, static dispatch, distributed application results, shared service aliases, pre-query stops, nested/per-role repetition, conditional draws, nested early completion, returned affine custody, native vector/matrix/sequence data, iterative folding rounds and affine control/cleanup controls in [language_native.rs](../crates/zkc-tools/examples/language_native.rs).
 The source fragment does not yet expose the full native IR vocabulary or proof

@@ -556,6 +556,63 @@ math fn outer(x:Fr)->Fr{return twice(x);}
 fn choose(x:Fr,go:bool)->Fr {let y=outer(x);return if go capture(x,y){yield y;}else{yield x;};}
 protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){local P let r=choose(outer(x),go);return(r=r);}entry Demo=Run;)");
   must(compileEntry(local));
+  auto sharedMath = original(prefix + R"(
+    enum Choice { Some(Fr), None() }
+    math fn pair(x:Fr)->(Fr,Fr) { return (x,x+1); }
+    fn choose(x:Fr,b:bool)->Fr {
+      let value=if b capture(x) { let p=pair(x); yield Choice::Some(p.1); }
+                else { yield Choice::None(); };
+      return match value capture(x) {
+        Some(y)=>{let p=pair(y); yield p.0;},
+        None()=>{let p=pair(x); yield p.1;}
+      };
+    }
+    protocol Run roles(P)(x:Fr@P,b:bool@P)->(a:Fr@P,c:Fr@P) {
+      let a=pair(x);
+      local P let c=choose(x,b);
+      return(a=a.1,c=c);
+    }
+    entry Demo=Run;
+  )");
+  must(compileEntry(sharedMath));
+  mutation(sharedMath, [](mlir::ModuleOp module) {
+    auto *realization = first(module, "local.realize");
+    auto *duplicate = realization->clone();
+    duplicate->setAttr("sym_name", mlir::StringAttr::get(module.getContext(),
+                                                         "second_realization"));
+    realization->getBlock()->push_back(duplicate);
+    bool changed = false;
+    module.walk([&](mlir::Operation *op) {
+      if (!changed && op->getName().getStringRef() == "local.apply") {
+        op->setAttr("callee", mlir::FlatSymbolRefAttr::get(
+                                  module.getContext(), "second_realization"));
+        changed = true;
+      }
+    });
+    require(changed, "duplicate realization mutation found no call");
+  });
+  require(local.bytes().contains("local.realize") &&
+              local.bytes().contains("func.call"),
+          "math helper was specialized into a local body");
+  mutation(local, [](auto module) {
+    auto *realization = first(module, "local.realize");
+    auto helper = realization->getAttr("helper");
+    mlir::Attribute replacement;
+    module.walk([&](mlir::Operation *op) {
+      if (op->getName().getStringRef() == "func.call" &&
+          op->getAttr("callee") != helper)
+        replacement = op->getAttr("callee");
+    });
+    require(bool(replacement), "missing alternative math helper");
+    realization->setAttr("helper", replacement);
+  });
+  mutation(local, [](auto module) {
+    auto *realization = first(module, "local.realize");
+    auto *duplicate = realization->clone();
+    duplicate->setAttr("sym_name", mlir::StringAttr::get(module.getContext(),
+                                                         "unused_realization"));
+    realization->getBlock()->push_back(duplicate);
+  });
   mutation(local, [](auto module) {
     auto *branch = first(module, "local.if");
     auto &a = branch->getRegion(0).front();

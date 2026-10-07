@@ -126,8 +126,48 @@ normal return. It projects to a role-free `local.call` at that owner. Calls
 remain observable work even with unused or zero results. They are not pure,
 inlined as mathematical helpers, merged, or moved across action cuts.
 
-Preparation expands admitted `local.apply` using `canonical-expanded-locals/1`
-before freezing authored local definitions. Subsequent common preparation,
+The protocol profile can declare an executable realization of a total helper:
+
+```mlir
+local.realize @evaluate = @mathematical_helper : (T...) -> (U...)
+```
+
+The helper is private, defined, acyclic and admitted by the same whole-module
+mathematical checker. Its exact signature must contain only executable total
+data; formal polynomials and capabilities cannot cross this boundary. A local
+body invokes the declaration with `local.apply`. The declaration is a preparation
+request, carries no body or runtime provider, and is forbidden in participant
+and executable profiles. Ordinary portable source admission has no external
+signature permission for such an application.
+
+Preparation expands pure helpers into the requested realization, checks every
+polynomial observation before dead-expression elimination, then reuses polynomial
+elimination and mathematical execution recipes. The resulting `local.func` keeps
+the realization symbol and signature, and its logical origin names the pure
+helper. Admission conservatively bounds expanded helper operations across all
+realizations, including helper call and return overhead.
+Polynomial expansion and final executable instruction limits are checked during
+preparation; an admitted declaration can still exceed these realization limits.
+After polynomial checks and elimination, static dimension queries become index
+constants and unused total expressions are removed before becoming ordered
+execution. This normalization applies to helper realization.
+
+The independent mathematical recipe matcher compares the remaining expressions,
+operands and returns against the generated local body. A separate structural
+containment check preserves unrelated declarations and the realization's exact
+signature and origin. It admits only the closed calculation recipe vocabulary,
+excludes capabilities, history, sampling, unrelated partial contracts and explicit
+stops, and accounts for added bindings. Membership in that vocabulary alone does
+not ensure total execution: for example, vector-to-array conversion also needs an
+exact length. The recipe matcher checks those constructed instances. Helper
+expansion, static shape normalization and polynomial elimination remain trusted
+on this edge; these checks are not an independent proof of their
+arithmetic semantics. Resource exhaustion remains a possible runtime failure, as
+with other realized total calculations.
+
+Preparation then expands admitted `local.apply` using `canonical-expanded-locals/1`
+before freezing local definitions. An application inside a local region remains
+inside that region; it is not hoisted to protocol mathematics. Subsequent common preparation,
 projection, participant simplification and lowering preserve those bodies and their
 binding declarations. Physical selection may change representations and insert
 checked storage releases under the selected execution contract. An authored
