@@ -663,6 +663,46 @@ private:
         return {};
       if (take("using") && !names(value.services))
         return {};
+    } else if (take("repeat")) {
+      value.kind = Expression::Kind::Repeat;
+      value.roles.emplace();
+      if (!expect("roles") || !roleList(*value.roles, true) || !expect("(") ||
+          !name(value.text) || !expect("<"))
+        return {};
+      auto count = expression(decl, depth + 1);
+      SyntaxType maximum;
+      if (!count || !expect(",") || !expect("max") ||
+          !type(maximum, depth + 1) || !expect(")") || !expect("carry") ||
+          !expect("("))
+        return {};
+      value.children.push_back(*count);
+      value.arguments.push_back(std::move(maximum));
+      if (!at(")"))
+        do {
+          std::string n;
+          if (!name(n) || !expect("="))
+            return {};
+          auto initial = expression(decl, depth + 1);
+          if (!initial)
+            return {};
+          value.labels.push_back(std::move(n));
+          value.children.push_back(*initial);
+          std::optional<std::vector<std::string>> roles;
+          if (take("@")) {
+            roles.emplace();
+            if (!roleList(*roles))
+              return {};
+          }
+          value.carriedRoles.push_back(std::move(roles));
+        } while (take(",") && !at(")"));
+      if (!expect(")") || !expect("capture") || !names(value.captures))
+        return {};
+      if (take("using") && !names(value.services))
+        return {};
+      auto region = body(decl, true, true, depth + 1);
+      if (!region)
+        return {};
+      value.regions.push_back(*region);
     } else if (take("if")) {
       value.kind = Expression::Kind::If;
       auto condition = expression(decl, depth + 1);

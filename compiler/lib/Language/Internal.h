@@ -87,6 +87,7 @@ struct Expression {
     Call,
     Apply,
     MethodCall,
+    Repeat,
     Add,
     Subtract,
     Multiply,
@@ -106,6 +107,7 @@ struct Expression {
   std::vector<std::string> labels;
   std::vector<std::string> captures;
   std::vector<std::string> services;
+  std::vector<std::optional<std::vector<std::string>>> carriedRoles;
   std::optional<std::vector<std::string>> roles;
   std::vector<uint32_t> regions;
   std::vector<std::vector<std::string>> payloads;

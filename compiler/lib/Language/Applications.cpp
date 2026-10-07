@@ -47,6 +47,8 @@ bool BodyChecker::application(const Statement &statement) {
     if (llvm::is_contained(mapping, role->front()))
       return fail("source.roles",
                   "protocol role substitution must be injective", expr.span);
+    if (!active(*role, expr.span))
+      return false;
     mapping.push_back(role->front());
   }
   auto mappedRoles = [&](const Port &port) {

@@ -1,14 +1,33 @@
 //! Execute fresh source compiler output with independent participant runners.
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
-use zkc_backends::services::ServiceRegistry;
+use zkc_backends::services::{ServiceReference, ServiceRegistry};
 use zkc_backends::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
 };
-use zkc_runtime::interactive::{Action, Packet, Runner, Value as RuntimeValue, admit_supplied};
+use zkc_runtime::interactive::{
+    Action, Packet, PathElement, ProgramState, Runner, StopKind, Value as RuntimeValue,
+    admit_supplied,
+};
 use zkc_tools::protocol::run::{Bundle, BundleLimits, HostLimits, RunHost, SetupAuthority};
 
+struct Participant {
+    runner: Runner<NativeBackend>,
+    loops: Vec<(String, u64, u64)>,
+}
+impl Deref for Participant {
+    type Target = Runner<NativeBackend>;
+    fn deref(&self) -> &Self::Target {
+        &self.runner
+    }
+}
+impl DerefMut for Participant {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.runner
+    }
+}
 fn field(n: u64) -> Value {
     Value::Field(Scalar::from(n))
 }
@@ -25,7 +44,7 @@ fn backend(bundle: &serde_json::Value, role: &str) -> NativeBackend {
     )
     .unwrap()
 }
-fn runner(bundle: &serde_json::Value, role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
+fn runner(bundle: &serde_json::Value, role: &str, inputs: Vec<Value>) -> Participant {
     start(bundle, role, inputs, backend(bundle, role))
 }
 fn start(
@@ -33,16 +52,61 @@ fn start(
     role: &str,
     inputs: Vec<Value>,
     backend: NativeBackend,
-) -> Runner<NativeBackend> {
+) -> Participant {
     let entry = bundle["entry"].as_str().unwrap();
     let admitted =
         admit_supplied(bundle["candidate"].as_str().unwrap().as_bytes(), &backend).unwrap();
-    Runner::new(&admitted, entry, role, "language_test", backend, inputs)
-        .map_err(|failure| failure.error)
-        .unwrap()
+    Participant {
+        runner: Runner::new(&admitted, entry, role, "language_test", backend, inputs)
+            .map_err(|failure| failure.error)
+            .unwrap(),
+        loops: Vec::new(),
+    }
 }
-fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
+fn next(runner: &mut Participant) -> Action<Value> {
     for _ in 0..100 {
+        let mut origin = runner.root_origin().clone();
+        origin.path.extend(
+            runner
+                .loops
+                .iter()
+                .map(|(site, _, iteration)| PathElement::Loop {
+                    site: site.clone(),
+                    iteration: *iteration,
+                }),
+        );
+        match runner.inspect_program().unwrap() {
+            ProgramState::Unpolled {
+                kind: None,
+                site: Some(site),
+            } => {
+                let site = site.to_owned();
+                // Each fixture supplies the intended local count. Joint count
+                // agreement is the RunHost driver's separate obligation.
+                if let Some(count) = runner.loop_count(&origin, &site).unwrap() {
+                    runner.enter_loop(&origin, &site, count).unwrap();
+                    if count != 0 {
+                        runner.loops.push((site, count, 0));
+                    }
+                }
+                continue;
+            }
+            ProgramState::Yield => {
+                runner.yield_loop(&origin).unwrap();
+                let (_, count, iteration) = runner.loops.last_mut().unwrap();
+                *iteration += 1;
+                if *iteration == *count {
+                    runner.loops.pop();
+                }
+                continue;
+            }
+            ProgramState::ReturnIf { site } => {
+                let site = site.to_owned();
+                runner.return_if(&origin, &site).unwrap();
+                continue;
+            }
+            _ => {}
+        }
         match runner.poll() {
             Action::Local(local) => runner.execute_local(&local.cut).unwrap(),
             Action::Query(query) => runner.execute_query(&query.cut).unwrap(),
@@ -51,7 +115,7 @@ fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
     }
     panic!("participant exceeded bounded fixture steps")
 }
-fn send(runner: &mut Runner<NativeBackend>) -> Value {
+fn send(runner: &mut Participant) -> Value {
     let action = next(runner);
     assert!(
         matches!(action, Action::Send(_)),
@@ -59,7 +123,7 @@ fn send(runner: &mut Runner<NativeBackend>) -> Value {
     );
     runner.take_send(&action.cut().unwrap()).unwrap().payload
 }
-fn receive(runner: &mut Runner<NativeBackend>, value: Value) {
+fn receive(runner: &mut Participant, value: Value) {
     let Action::Receive(expected) = next(runner) else {
         panic!("expected receive")
     };
@@ -76,9 +140,10 @@ fn receive(runner: &mut Runner<NativeBackend>, value: Value) {
         })
         .unwrap();
 }
-fn returned(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
-    let Action::Returned(values) = next(runner) else {
-        panic!("expected return")
+fn returned(runner: &mut Participant) -> Vec<Value> {
+    let action = next(runner);
+    let Action::Returned(values) = action else {
+        panic!("expected return, got {action:?}")
     };
     assert_eq!(runner.backend().active_frames(), 0);
     values
@@ -131,30 +196,95 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
     expect_field(&verifier.outputs[2], 7 - verifier_c);
     assert!(matches!(verifier.outputs[3], Value::Bool(true)));
 }
+fn service_backend(
+    bundle: &serde_json::Value,
+    registry: &ServiceRegistry,
+    root: &ServiceReference,
+) -> NativeBackend {
+    let admitted = Bundle::admit(
+        bundle.to_string().as_bytes(),
+        &backend(bundle, "V"),
+        BundleLimits::default(),
+    )
+    .unwrap();
+    let role = admitted
+        .roles()
+        .iter()
+        .find(|role| role.entry.role == "V")
+        .unwrap();
+    assert_eq!(role.entry.services.len(), 1);
+    let ports = [(role.entry.services[0].name.clone(), root.clone())]
+        .into_iter()
+        .collect();
+    backend(bundle, "V")
+        .with_services(registry.clone(), ports)
+        .unwrap()
+}
+fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
+    for (n, go) in [(0, false), (1, true), (3, true), (3, false), (5, true)] {
+        if conditional && n != 1 && n != 3 {
+            continue;
+        }
+        let registry = ServiceRegistry::new(Policy::default());
+        let root = registry
+            .issue_test_tape("V", 4, (1..=4).map(Scalar::from).collect())
+            .unwrap();
+        let values = if conditional {
+            vec![Value::Bool(go)]
+        } else {
+            vec![Value::Index(n), field(3), Value::Bool(go)]
+        };
+        let mut verifier = start(
+            bundle,
+            "V",
+            values,
+            service_backend(bundle, &registry, &root),
+        );
+        let expected_draws;
+        if conditional {
+            let values = returned(&mut verifier);
+            expect_field(&values[0], if go { 1 } else { 0 });
+            expected_draws = u64::from(go);
+        } else if n > 4 || (n > 0 && !go) {
+            let Action::Stopped(stop) = next(&mut verifier) else {
+                panic!("repeat bound or guard did not stop")
+            };
+            assert!(stop.cleanup_errors.is_empty());
+            if n > 4 {
+                assert!(
+                    matches!(stop.kind, StopKind::Backend(ref e) if e.code == "loop-count-bound")
+                );
+            } else {
+                assert!(matches!(stop.kind, StopKind::Explicit(ref reason) if reason == "reject"));
+            }
+            expected_draws = 0;
+        } else {
+            let mut prover = runner(bundle, "P", vec![Value::Index(n), field(2)]);
+            for i in 0..n {
+                let value = send(&mut verifier);
+                expect_field(&value, i + 1);
+                receive(&mut prover, value);
+            }
+            let sum = n * (n + 1) / 2;
+            expect_field(&returned(&mut prover)[0], 2 + sum);
+            expect_field(&returned(&mut verifier)[0], 3 + sum);
+            expected_draws = n;
+        }
+        assert_eq!(verifier.backend().active_frames(), 0);
+        let observed = registry.observe(&root).unwrap();
+        assert!(!observed.leased && !observed.poisoned);
+        let state = observed.state.unwrap();
+        assert_eq!(state.draw_count, expected_draws);
+        assert_eq!(state.budget, 4 - expected_draws);
+    }
+}
 fn managed_queries(bundle: &serde_json::Value) {
     for go in [false, true] {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
             .issue_test_tape("V", 2, vec![Scalar::from(3), Scalar::from(7)])
             .unwrap();
-        let admitted = Bundle::admit(
-            bundle.to_string().as_bytes(),
-            &backend(bundle, "V"),
-            BundleLimits::default(),
-        )
-        .unwrap();
-        let role = admitted
-            .roles()
-            .iter()
-            .find(|role| role.entry.role == "V")
-            .unwrap();
-        assert_eq!(role.entry.services.len(), 1);
-        let ports = [(role.entry.services[0].name.clone(), root.clone())]
-            .into_iter()
-            .collect();
-        let provider = backend(bundle, "V")
-            .with_services(registry.clone(), ports)
-            .unwrap();
+        let provider = service_backend(bundle, &registry, &root);
         let mut verifier = start(bundle, "V", vec![Value::Bool(go)], provider);
         if go {
             let mut prover = runner(bundle, "P", vec![]);
@@ -213,7 +343,28 @@ fn main() {
         }
     }
     for optimized in [0, 1] {
+        for n in [0, 1, 3] {
+            let values = returned(&mut runner(
+                &load(&format!("repeat_affine-{optimized}.bundle")),
+                "P",
+                vec![Value::Index(n), field(7)],
+            ));
+            expect_field(&values[0], 7);
+            for m in [0, 1, 2] {
+                let values = returned(&mut runner(
+                    &load(&format!("repeat_nested-{optimized}.bundle")),
+                    "P",
+                    vec![Value::Index(n), Value::Index(m), field(3)],
+                ));
+                expect_field(&values[0], 3 * (1 + n * m));
+            }
+        }
         managed_queries(&load(&format!("services-{optimized}.bundle")));
+        repeated_queries(&load(&format!("repeat-{optimized}.bundle")), false);
+        repeated_queries(
+            &load(&format!("conditional_query-{optimized}.bundle")),
+            true,
+        );
         let bundle = load(&format!("application-{optimized}.bundle"));
         let mut prover = runner(&bundle, "P", vec![field(2), field(3)]);
         let mut verifier = runner(&bundle, "V", vec![field(5), field(7)]);

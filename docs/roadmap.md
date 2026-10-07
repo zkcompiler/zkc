@@ -100,9 +100,10 @@ until their own starting point.
 
 ### Next package: protocols and specifications
 
-The `.zkc` compiler path and types/local computation are implemented. Next,
-connect managed services, static protocol composition, distributed repetition and
-participant completion to their existing IR contracts. Preserve actual receives,
+The `.zkc` compiler path and types/local computation are implemented.
+Managed services, static protocol composition and distributed repetition now
+connect to their existing IR contracts. Next, expose conditional participant
+completion and the data operations needed by contrasting clients. Preserve actual receives,
 service roots and aliases, draw occurrences, ordered guards/stops and resource
 flow through nested applications and control.
 

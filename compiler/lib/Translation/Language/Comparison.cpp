@@ -478,6 +478,43 @@ class Comparator {
             return fail("role restriction differs");
           result.push_back(actual->getResult(0));
         }
+      } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+        auto input = values[repeat->count.index];
+        llvm::append_range(input, flatten(repeat->carried));
+        llvm::append_range(input, flatten(repeat->captures));
+        for (auto service : repeat->services)
+          input.push_back(services[service.index]);
+        auto *actual = next(block, cursor, op.span, "protocol.repeat", input,
+                            leaves.size(), 1);
+        if (!actual)
+          return false;
+        auto maximum = actual->getAttrOfType<mlir::IntegerAttr>("maximum");
+        auto carried = actual->getAttrOfType<mlir::IntegerAttr>("carried");
+        auto carriedRoles =
+            actual->getAttrOfType<mlir::ArrayAttr>("carried_roles");
+        if (!attributes(*actual, {"site", "carried", "maximum", "roles",
+                                  "carried_roles"}) ||
+            !string(*actual, "site", site) || !maximum ||
+            !maximum.getType().isSignlessInteger(64) ||
+            maximum.getValue().getZExtValue() !=
+                repeat->maximum.closedValue() ||
+            !carried || !carried.getType().isSignlessInteger(64) ||
+            carried.getValue().getZExtValue() != leaves.size() ||
+            !roleSet(actual->getAttr("roles"), decl, repeat->roles) ||
+            !carriedRoles || carriedRoles.size() != leaves.size())
+          return fail(
+              "repeat site, maximum, roles or carried interface differs");
+        unsigned flat = 0;
+        for (unsigned i = 0; i < op.results.size(); ++i)
+          for (unsigned j = 0; j < resultLayouts[i]->leaves.size(); ++j)
+            if (!roleSet(carriedRoles[flat++], decl,
+                         source.values[op.results[i].index].components))
+              return fail("repeat carried roles differ");
+        if (!llvm::hasSingleElement(actual->getRegion(0)) ||
+            !body(decl, *repeat->region, actual->getRegion(0).front(),
+                  availability, true))
+          return false;
+        result = Values(actual->getResults());
       } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
         auto input = flatten(control->operands);
         bool match = control->kind == LocalControl::Kind::Match;
@@ -536,12 +573,14 @@ class Comparator {
           !string(*stop, "reason", source.stopReason))
         return fail("stop reason or site differs");
     } else {
-      auto *ret = next(block, cursor, decl.span,
-                       region                                ? "local.yield"
-                       : source.mode == Body::Mode::Protocol ? "protocol.return"
-                       : source.mode == Body::Mode::Local    ? "local.return"
+      auto *ret =
+          next(block, cursor, decl.span,
+               region && source.mode == Body::Mode::Protocol ? "protocol.yield"
+               : region                                      ? "local.yield"
+               : source.mode == Body::Mode::Protocol         ? "protocol.return"
+               : source.mode == Body::Mode::Local            ? "local.return"
                                                              : "func.return",
-                       flatten(source.results), 0);
+               flatten(source.results), 0);
       if (!ret)
         return false;
       if (!attributes(*ret, {}))

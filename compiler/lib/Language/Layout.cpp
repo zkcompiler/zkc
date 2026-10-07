@@ -119,11 +119,15 @@ Expected<std::shared_ptr<const Layout>> Layouts::get(const Type &type) {
         if (!layout)
           return layout.takeError();
       }
-      for (auto &op : body.operations)
+      for (auto &op : body.operations) {
+        if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action))
+          if (auto e = visit(*repeat->region))
+            return e;
         if (auto *control = std::get_if<LocalControl>(&op.action))
           for (auto &region : control->regions)
             if (auto e = visit(*region))
               return e;
+      }
       return Error::success();
     };
     for (auto &decl : definitions)

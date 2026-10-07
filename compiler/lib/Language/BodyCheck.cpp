@@ -17,6 +17,13 @@ BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
 bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
   return checker.fail(code, message, span);
 }
+bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
+  auto available = activeRoles.value_or(allRoles());
+  return std::includes(available.begin(), available.end(), roles.begin(),
+                       roles.end()) ||
+         fail("source.roles",
+              "action uses a participant outside the active roster", span);
+}
 std::vector<unsigned> BodyChecker::allRoles() const {
   std::vector<unsigned> result(decl.roles.size());
   std::iota(result.begin(), result.end(), 0);
@@ -311,6 +318,12 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       ++statement;
       continue;
     }
+    if (syntax.expressions[s.expression].kind == Expression::Kind::Repeat) {
+      if (!repeat(s))
+        return false;
+      ++statement;
+      continue;
+    }
     if (syntax.expressions[s.expression].kind == Expression::Kind::Apply) {
       if (!application(s))
         return false;
@@ -323,6 +336,8 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     if (s.owner) {
       auto selected = checker.roles(decl, {*s.owner}, s.span);
       if (!selected)
+        return false;
+      if (!active(*selected, s.span))
         return false;
       owner = selected->front();
     }
@@ -368,7 +383,8 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     if (s.exchange) {
       auto sender = checker.roles(decl, {s.exchange->first}, s.span),
            receiver = checker.roles(decl, {s.exchange->second}, s.span);
-      if (!sender || !receiver)
+      if (!sender || !receiver || !active(*sender, s.span) ||
+          !active(*receiver, s.span))
         return false;
       auto before = body.values[value->index];
       auto caps = checker.permissions(before.type, s.span, &decl);

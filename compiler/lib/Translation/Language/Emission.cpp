@@ -404,6 +404,32 @@ class Emitter {
             return false;
           result.push_back(actual->getResult(0));
         }
+      } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+        auto inputs = values[repeat->count.index];
+        llvm::append_range(inputs, flatten(repeat->carried));
+        llvm::append_range(inputs, flatten(repeat->captures));
+        for (auto service : repeat->services)
+          inputs.push_back(services[service.index]);
+        SmallVector<mlir::Attribute> carriedRoles;
+        for (unsigned i = 0; i < op.results.size(); ++i)
+          for (unsigned j = 0; j < resultLayouts[i]->leaves.size(); ++j)
+            carriedRoles.push_back(
+                roles(decl, source.values[op.results[i].index].components));
+        auto *actual = make(
+            "protocol.repeat", resultTypes, inputs,
+            {text("site", site),
+             attr("carried", builder.getI64IntegerAttr(resultTypes.size())),
+             attr("maximum",
+                  builder.getI64IntegerAttr(repeat->maximum.closedValue())),
+             attr("roles", roles(decl, repeat->roles)),
+             attr("carried_roles", builder.getArrayAttr(carriedRoles))},
+            1);
+        if (!actual)
+          return false;
+        result = Values(actual->getResults());
+        mlir::OpBuilder::InsertionGuard guard(builder);
+        if (!body(decl, *repeat->region, actual->getRegion(0).front(), true))
+          return false;
       } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
         auto inputs = flatten(control->operands);
         bool match = control->kind == LocalControl::Kind::Match;
@@ -456,7 +482,8 @@ class Emitter {
                   {text("site", "stop" + std::to_string(siteOrdinal++)),
                    text("reason", source.stopReason)});
     auto results = flatten(source.results);
-    return make(region                                ? "local.yield"
+    return make(region && source.mode == Body::Mode::Protocol ? "protocol.yield"
+                : region                                      ? "local.yield"
                 : source.mode == Body::Mode::Protocol ? "protocol.return"
                 : source.mode == Body::Mode::Local    ? "local.return"
                                                       : "func.return",

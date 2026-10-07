@@ -447,6 +447,75 @@ void protocolApplications() {
     });
   });
 }
+void distributedRepetition() {
+  auto source = replace(read("repeat.zkc"), "module sample;", "module m;");
+  auto checked = original(source);
+  for (bool simplify : {false, true})
+    must(compileEntry(checked, {simplify, false}));
+  for (const auto &[from, to, code] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {"n: index @(P,V)", "n: index @V", "source.roles"},
+           {"vb = b @V", "vb = b @P", "source.roles"},
+           {"yield (pa = x, vb = y)", "yield (pa = y, vb = x)", "source.roles"},
+           {"capture(go)", "capture(go, go)", "source.duplicate"},
+           {"capture(go)", "capture()", "source.name"},
+           {"using(coins) {", "using() {", "source.service"},
+           {"max N", "max Fr", "source.bound"},
+           {"max N", "max 1048577", "source.bound"},
+           {"let (af, bf)", "let af", "source.binding"},
+           {"let (af, bf)", "let (af, af)", "source.shadow"},
+           {"i < n", "pa < n", "source.duplicate"},
+       })
+    sourceRefuses(replace(source, from, to), code);
+  auto generic = check(source + "entry Large = Run<1048577>;");
+  must(prepareOriginal(must(closeEntry(generic, "m::Demo"))));
+  refuses(closeEntry(generic, "m::Large"), "source.bound");
+  mutation(checked, "repeat maximum changed", [](auto m) {
+    first(m, "protocol.repeat")
+        ->setAttr("maximum",
+                  mlir::IntegerAttr::get(
+                      mlir::IntegerType::get(m.getContext(), 64), 3));
+  });
+  mutation(checked, "repeat occurrence changed", [](auto m) {
+    auto *repeat = first(m, "protocol.repeat");
+    repeat->setAttr("site", mlir::StringAttr::get(m.getContext(), "changed"));
+  });
+  for (auto fixture : {"repeat_nested.zkc", "repeat_affine.zkc"})
+    for (bool simplify : {false, true})
+      must(compileEntry(
+          original(replace(read(fixture), "module sample;", "module m;")),
+          {simplify, false}));
+  auto conditional = original(
+      replace(read("conditional_query.zkc"), "module sample;", "module m;"));
+  must(compileEntry(conditional));
+  const std::string affine = R"(module m;
+struct State:Drop {} fn make()->State{return State{};}
+fn identity(x:State)->State{return x;}
+fn consume_state(x:State)->(){consume x;return ();}
+protocol Run roles(P)(n:index@P)->(){
+ local P let state=make();
+ let final=repeat roles(P)(i<n,max 4) carry(s=state) capture(){
+   local P let next=identity(s);yield(s=next);
+ };
+ local P let done=consume_state(final);return();
+}entry Demo=Run;
+)";
+  must(compileEntry(original(affine)));
+  sourceRefuses(replace(affine, "capture(){", "capture(state){"),
+                "source.permission");
+  auto subset = replace(source, "roles(P,V)(i < n", "roles(V)(i < n");
+  sourceRefuses(subset, "source.roles");
+  auto empty = original(R"(module m;
+fn truth()->bool{return true;}
+protocol Run roles(P,V)(n:index@V)->(){
+ let ()=repeat roles(V)(i<n,max 2)carry()capture(){local V let x=truth();yield();};return();
+}entry Demo=Run;
+)");
+  must(compileEntry(empty));
+  auto nonparticipant = R"(module m;fn truth()->bool{return true;}
+protocol Run roles(P,V)(n:index@V)->(){let ()=repeat roles(V)(i<n,max 2)carry()capture(){local P let x=truth();yield();};return();}entry Demo=Run;)";
+  sourceRefuses(nonparticipant, "source.roles");
+}
 void managedServices() {
   auto source = replace(read("services.zkc"), "module sample;", "module m;");
   auto checked = original(source);
@@ -634,6 +703,8 @@ void bounds() {
 }
 } // namespace
 int main() {
+  stage = "distributedRepetition";
+  distributedRepetition();
   stage = "managedServices";
   managedServices();
   stage = "selectedClosure";

@@ -130,4 +130,15 @@ with case('managed aliases retain ordered queries and owner guards'):
         bundle = commands.run([compiler, 'language-bundle', *args, *flags])
         (OUT / f'services-{optimized}.bundle').write_text(bundle)
 
+for fixture in ('repeat', 'conditional_query', 'repeat_nested', 'repeat_affine'):
+    with case(f'distributed control retains its region: {fixture}'):
+        args = ['--source-format=zkc', '--entry=sample::Demo',
+                f'--module=sample={FIXTURES / (fixture + ".zkc")}']
+        original = commands.run([compiler, 'language-emit', *args])
+        assert original.count('"protocol.repeat"') == (2 if fixture == 'repeat_nested' else 1)
+        for optimized in (0, 1):
+            flags = [] if optimized else ['--no-simplify']
+            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
+
 counted()

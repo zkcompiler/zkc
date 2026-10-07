@@ -18,6 +18,7 @@ private:
   unsigned callDepth;
   uint32_t statement = 0;
   std::optional<unsigned> owner;
+  std::optional<std::vector<unsigned>> activeRoles;
   std::map<std::string, ValueId> bindings;
   std::map<std::string, ServiceId> services;
   std::optional<ServiceId> service(const Expression &);
@@ -36,6 +37,8 @@ private:
   std::optional<std::vector<ValueId>> emitResults(decltype(Operation::action),
                                                   std::vector<Value>, Span);
   bool application(const Statement &);
+  bool repeat(const Statement &);
+  bool active(llvm::ArrayRef<unsigned>, Span);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
   bool finish(Span);
   bool data(const Type &, Span);

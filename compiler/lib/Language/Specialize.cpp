@@ -110,6 +110,21 @@ bool Checker::specialize(DeclarationId selected) {
         if (!instance)
           return false;
         call->callee = *instance;
+      } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+        Type maximum(Type::Kind::Natural);
+        maximum.dimension = repeat->maximum;
+        maximum.symbolic = !repeat->maximum.isClosed();
+        if (!closeType(maximum, bindings, op.span))
+          return false;
+        if (maximum.dimension.closedValue() > 1048576)
+          return fail("source.bound",
+                      "selected repeat maximum exceeds installed limit",
+                      op.span);
+        repeat->maximum = maximum.dimension;
+        auto copy = std::make_shared<Body>(*repeat->region);
+        if (!closeBody(*copy, bindings, Body::Mode::Protocol))
+          return false;
+        repeat->region = std::move(copy);
       } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
         for (auto &region : control->regions) {
           auto copy = std::make_shared<Body>(*region);

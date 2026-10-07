@@ -319,6 +319,43 @@ The combined helper/application graph must be acyclic and obey source and native
 expansion limits. No additional runtime call stack is introduced. `apply` is
 contextual here; library members can still be named `apply`.
 
+## Distributed repetition
+
+```text
+let (af, bf) = repeat roles(P,V)(i < n, max N)
+    carry(a = initialP @P, b = initialV @V) capture(go) using(coins) {
+  guard @V go;
+  let (x, y) = apply Round(a, b) using(coins);
+  yield (a = x, b = y);
+};
+```
+
+A protocol `repeat` is an ordered, isolated region. Its runtime `index` count must
+be available at every listed participant. Its static natural maximum closes to
+at most 1,048,576. Each participant checks its local count before body work. A
+joint host additionally checks count agreement among live participants; source
+availability alone does not prove equal counts.
+
+Carries have separate types and role sets. An optional carry annotation selects
+a nonempty subset of both the initial availability and loop roles; otherwise it
+uses their intersection. Narrowing requires `Drop`; shared carries require
+`Copy + Drop + Share`. The named yield supplies every carry exactly once, with
+matching type and availability. Result bindings follow carry declaration order.
+Zero iterations return the initial values. Affine carries must preserve each
+input's exact native root at the backedge, including through helper applications.
+
+Data captures require `Copy`. Managed captures borrow the same roots and require
+their owners inside the loop. Nested actions may use only loop participants;
+nested regions need their own explicit captures. Total mathematics retains its
+ordinary component semantics. Results cannot hide per-role values in a tuple.
+The native repeat carries flattened data while keeping managed captures separate
+from source data layouts. Source correspondence checks the maximum, roles,
+operands, region signature, nested operations and named yield.
+
+A conditional service query can use a one-role repeat with maximum one. An owned
+local helper computes its zero-or-one count. The query executes only in the
+reached iteration; it is never hoisted or evaluated speculatively.
+
 ## Translation and retained interface
 
 The source model has Math, Local and Protocol body modes, checked types, explicit
@@ -340,7 +377,7 @@ project. Empty unrestricted products have no leaves, but remain logical values.
 
 Qualified symbol components encode as `s` followed by each component's decimal
 byte length, `_`, and spelling. `example::Transfer` becomes `s7_example8_Transfer`.
-Specialized symbols use deterministic declaration ordinals. Ordered site identities
+Specialized symbols use the framed semantic key described above. Ordered site identities
 use a per-function preorder occurrence counter, with bounded leaf suffixes where
 one logical operation expands. Whitespace and comments do not affect these sites.
 
@@ -355,10 +392,10 @@ but differently structured rewrite can refuse.
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol, then emits ordinary `zkc.run/1` and `zkc.program/1` artifacts.
-All emitted protocols pass target preparation, even if not selected.
+Every protocol in the selected closure passes target preparation.
 
 `zkc.language-interface/2` has exactly these JSON members: `format`, `capture`,
-`original`, `toolchain`, `entry`, `protocol`, `roles`, `inputs`, `outputs`.
+`original`, `toolchain`, `entry`, `protocol`, `roles`, `inputs`, `outputs`, `services`.
 Each port has `name`, `type`, `roles`, logical `index`, ordered native leaf indices
 in `native`, and a recursive `schema`. The schema records `type`, `custody`,
 `permissions`, `leaves`, `fields` and `alternatives`. Fields record `name`, leaf
@@ -403,8 +440,8 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Services, distributed protocol control/composition, relation predicates and
-attachments, proof construction, source-facing Host inputs, dynamic arrays and
+Conditional participant completion, relation predicates and attachments, proof
+construction, source-facing Host inputs, dynamic arrays and
 member-generic conformance remain outside this profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor

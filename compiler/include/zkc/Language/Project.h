@@ -139,6 +139,14 @@ struct Restriction {
   std::vector<unsigned> roles;
 };
 struct Body;
+struct ProtocolRepeat {
+  std::vector<unsigned> roles;
+  ValueId count;
+  Natural maximum;
+  std::vector<ValueId> carried, captures;
+  std::vector<ServiceId> services;
+  std::shared_ptr<const Body> region;
+};
 struct Construct {
   enum class Kind { Aggregate, Variant, Unpack };
   std::vector<ValueId> operands;
@@ -174,7 +182,7 @@ struct LocalControl {
 struct Operation {
   std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
                Projection, LocalPrimitive, Consume, LocalControl,
-               ProtocolApplication, ServiceQuery, ProtocolGuard>
+               ProtocolApplication, ServiceQuery, ProtocolGuard, ProtocolRepeat>
       action;
   /// Each result has its own type and participant availability.
   std::vector<ValueId> results;
