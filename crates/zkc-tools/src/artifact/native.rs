@@ -1102,6 +1102,7 @@ impl NativeDeployment {
             Ok(values)
         })();
         let mut report = NativeProofReport {
+            outputs: None,
             outcome: Ok(Vec::new()),
             binding: hex(&binding),
             messages: 0,
@@ -1167,7 +1168,10 @@ impl NativeDeployment {
                             retain_driver_stop(&mut report, &produced);
                             report.outcome = produced
                                 .outcome
-                                .map(|p| p.proof)
+                                .map(|p| {
+                                    report.outputs = Some(self.original_outputs(role, p.outputs));
+                                    p.proof
+                                })
                                 .map_err(|e| host::failure(&e));
                             report.messages = produced.messages;
                             report.bytes = produced.bytes;
@@ -1183,7 +1187,10 @@ impl NativeDeployment {
                             retain_driver_stop(&mut report, &validated);
                             report.outcome = validated
                                 .outcome
-                                .map(|_| Vec::new())
+                                .map(|values| {
+                                    report.outputs = Some(self.original_outputs(role, values));
+                                    Vec::new()
+                                })
                                 .map_err(|e| host::failure(&e));
                             report.messages = validated.messages;
                             report.bytes = validated.bytes;
@@ -1200,6 +1207,17 @@ impl NativeDeployment {
         report.external_work = backend.external_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
         Ok(report)
+    }
+    /// Native admission has checked the output map against the role signature.
+    /// Private successors belong to cleanup, not immutable application results.
+    fn original_outputs(&self, role: &EntryRole, values: Vec<Value>) -> BTreeMap<usize, Value> {
+        self.maps[&role.role]
+            .outputs
+            .iter()
+            .zip(&role.outputs)
+            .zip(values)
+            .filter_map(|((port, ty), value)| ty.is_duplicable().then_some((port.original, value)))
+            .collect()
     }
 }
 fn retire_resources(
@@ -1243,6 +1261,9 @@ fn retire_resources(
     if !report.cleanup_errors.is_empty() && report.outcome.is_ok() {
         report.outcome = Err("native-proof-cleanup".into());
     }
+    if report.outcome.is_err() {
+        report.outputs = None;
+    }
     report.resources = observations;
 }
 fn budget(value: &Json) -> Result<u64> {
@@ -1254,6 +1275,10 @@ fn budget(value: &Json) -> Result<u64> {
 }
 pub struct NativeProofReport {
     pub outcome: Result<Vec<u8>>,
+    /// Successful copyable results indexed by their original protocol output
+    /// port. Absent on rejection, stop, refusal or cleanup failure. Private
+    /// successors are retired; CLI diagnostic reports do not serialize outputs.
+    pub outputs: Option<BTreeMap<usize, Value>>,
     pub binding: String,
     pub messages: usize,
     pub bytes: usize,

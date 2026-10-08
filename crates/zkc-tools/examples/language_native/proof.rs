@@ -117,6 +117,7 @@ pub(super) fn run(directory: &Path) {
                 let produced = deployment.execute(&input(true, 3), None).unwrap();
                 assert!(produced.cleanup_errors.is_empty());
                 assert_eq!(produced.messages, 2);
+                assert!(produced.outputs.as_ref().unwrap().is_empty());
                 let proof = produced.outcome.unwrap();
                 // Separately admitted handle and verifier inputs; no witness or
                 // producer runtime state is available to this invocation.
@@ -125,6 +126,10 @@ pub(super) fn run(directory: &Path) {
                 let validated = verifier.execute(&input(false, 0), Some(&proof)).unwrap();
                 assert!(validated.cleanup_errors.is_empty());
                 validated.outcome.unwrap();
+                assert!(matches!(
+                    validated.outputs.as_ref().unwrap().get(&0),
+                    Some(Value::Bool(true))
+                ));
                 let invalid = deployment.execute(&input(true, 5), None).unwrap();
                 assert!(invalid.cleanup_errors.is_empty());
                 let rejected = verifier
@@ -132,6 +137,7 @@ pub(super) fn run(directory: &Path) {
                     .unwrap();
                 assert!(rejected.cleanup_errors.is_empty());
                 assert_eq!(rejected.outcome.unwrap_err(), "artifact-rejected");
+                assert!(rejected.outputs.is_none());
                 let mut wrong_context = input(false, 0);
                 wrong_context[3] = json!("01");
                 assert!(

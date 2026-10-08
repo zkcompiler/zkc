@@ -82,8 +82,11 @@ body would eventually have returned retry.
 ## API and commands
 
 `NativeDeployment::execute_attempts(inputs, policy)` shares input admission and
-session cleanup with ordinary `execute`. Both return `NativeProofReport`. The
-attempt report includes a canonical policy digest, per-attempt decisions,
+session cleanup with ordinary `execute`. Both return `NativeProofReport`.
+Its `outputs` field returns copyable original results from the successful final
+attempt, keyed by original output index; failures and cleanup errors leave it
+absent. Private state successors remain with the lifecycle. CLI diagnostics do
+not serialize application outputs. The attempt report includes a canonical policy digest, per-attempt decisions,
 interpreter usage, transcript observations and terminal stop coordinates.
 Persistent-root observations describe actual final state, including failures.
 Their `transitions` field reports the backend `draw_count`: bulk sampling charges

@@ -144,6 +144,7 @@ fn run(directory: &Path, case: &Json) {
         let report = deployment.execute_attempts(&producer, &p).unwrap();
         assert_eq!(report.outcome.as_ref().unwrap_err(), "native-attempt-limit");
         assert_eq!(report.attempts.len(), 3);
+        assert!(report.outputs.is_none());
         assert!(report.attempts.iter().all(|a| a.decision == Ok(false)
             && a.bytes > 40
             && a.stop.is_none()
@@ -195,6 +196,7 @@ fn run(directory: &Path, case: &Json) {
     let result = execute(&producer, &p, &[0, 3]);
     if case["fatal"] == true {
         assert!(result.outcome.is_err());
+        assert!(result.outputs.is_none());
         assert_eq!(result.attempts.len(), 1);
         assert!(result.attempts[0].decision.is_err());
         assert_eq!(draws(&result, fold), 1);
@@ -208,6 +210,12 @@ fn run(directory: &Path, case: &Json) {
     assert_eq!(result.attempts.len(), 2);
     assert_eq!(result.attempts[0].decision, Ok(false));
     assert_eq!(result.attempts[1].decision, Ok(true));
+    let outputs = result.outputs.as_ref().unwrap();
+    assert!(matches!(outputs.get(&1), Some(Value::Bool(true))));
+    // RNG successors remain with the attempt lifecycle and are retired.
+    if fold {
+        assert!(!outputs.contains_key(&2));
+    }
     assert_eq!(draws(&result, fold), 2);
     let proof = result.outcome.as_ref().unwrap();
     assert!(
@@ -254,11 +262,13 @@ fn run(directory: &Path, case: &Json) {
     assert_eq!(exhausted.attempts.len(), 4);
     assert_eq!(draws(&exhausted, fold), 4);
     assert_eq!(exhausted.outcome.err().unwrap(), "native-attempt-limit");
+    assert!(exhausted.outputs.is_none());
     if fold {
         let mut limited = p.clone();
         limited.work.iterations = result.attempts[0].usage.iterations;
         let stopped = execute(&producer, &limited, &[0, 3]);
         assert!(stopped.outcome.is_err());
+        assert!(stopped.outputs.is_none());
         assert_eq!(stopped.attempts.len(), 2);
         assert_eq!(stopped.usage.iterations, limited.work.iterations);
         assert_eq!(draws(&stopped, fold), 2);
@@ -298,6 +308,7 @@ fn run(directory: &Path, case: &Json) {
     limited.work.instructions = result.attempts[0].usage.instructions + 1;
     let stopped = execute(&producer, &limited, &[0, 3]);
     assert!(stopped.outcome.is_err());
+    assert!(stopped.outputs.is_none());
     assert_eq!(stopped.instructions, limited.work.instructions);
     assert_eq!(stopped.attempts.len(), 2);
     assert!(stopped.attempts[1].decision.is_err());
@@ -305,6 +316,7 @@ fn run(directory: &Path, case: &Json) {
     limited.values.total_bytes = result.attempts[0].usage.total_value_bytes;
     let stopped = execute(&producer, &limited, &[0, 3]);
     assert!(stopped.outcome.is_err());
+    assert!(stopped.outputs.is_none());
     assert_eq!(stopped.usage.total_value_bytes, limited.values.total_bytes);
     assert_eq!(stopped.attempts.len(), 2);
     assert_eq!(draws(&stopped, fold), 1);
@@ -337,6 +349,7 @@ fn run(directory: &Path, case: &Json) {
     }
     let stopped = execute(&exhausted_input, &p, &[0, 3]);
     assert!(stopped.outcome.is_err());
+    assert!(stopped.outputs.is_none());
     assert_eq!(stopped.attempts.len(), 2);
     // Scalar failure increments its authoritative generation/debit before refusal.
     assert_eq!(draws(&stopped, fold), 2);
@@ -344,6 +357,7 @@ fn run(directory: &Path, case: &Json) {
     exhausted_transcript[5] = json!("0");
     let stopped = execute(&exhausted_transcript, &p, &[0, 3]);
     assert!(stopped.outcome.is_err());
+    assert!(stopped.outputs.is_none());
     assert_eq!(stopped.attempts.len(), 1);
     assert!(stopped.attempts[0].stop.is_some());
     assert_eq!(

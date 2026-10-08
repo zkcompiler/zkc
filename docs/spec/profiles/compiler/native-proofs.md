@@ -402,6 +402,22 @@ proof value and checked by the validator; a joint driver's agreement check is
 unavailable in independent proof execution. Zero trips execute no body draws or
 absorptions. Program and metadata size remain independent of runtime trip count.
 
+### Typed participant results
+
+`NativeProofReport::outputs` contains successful copyable results keyed by their
+original common-program output indices. Producer and validator results use their
+own role maps. It is `None` on rejection, body failure, attempt exhaustion or
+cleanup failure, and `Some` with an empty map when success has no copyable
+original results. Generated transcript results and private RNG/nonce successors
+remain lifecycle state and are retired; they are not exported as data. Result
+selection follows the admitted output map and physical duplicability.
+
+A bounded attempt run retains results only from the final successful attempt.
+Earlier attempts retain their existing decision/usage/stop records. The Host
+uses the same controller and actual provider state across attempts. Adding SDK
+result access neither serializes those values into CLI diagnostics nor places
+them in proof bytes; proof framing and binding remain unchanged.
+
 ## Native attempt policy
 
 The native host accepts this application-owned record alongside a pinned native
@@ -444,8 +460,9 @@ execution and cleanup failures prevent retry and publication. Cleanup diagnostic
 do not replace a prior execution failure.
 
 Only normal completion followed by successful session cleanup returns proof bytes
-to the publisher. Failed/retried bytes and producer outputs never enter the proof
-report. Per-attempt decisions, stop coordinates, counters and a policy digest are
+to the publisher. Failed/retried bytes and producer outputs never enter CLI
+proof diagnostics. The typed SDK returns copyable original outputs only from the
+selected successful final attempt. Per-attempt decisions, stop coordinates, counters and a policy digest are
 private host diagnostics. The digest is SHA-256 of compact UTF-8 JSON for the
 record above, with no whitespace and the supplied pair order. It is not inserted
 into the transcript or proof. The application must authorize the policy itself;

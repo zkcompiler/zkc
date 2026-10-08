@@ -47,6 +47,10 @@ loops, yields and local completion. Its admission separates private external
 inputs from host-created transcript roots. The joint schedule is not the authority
 for an independently executing role. The older `NoninteractiveEntry` remains with
 the source/Lean artifact host and its separate correspondence contract.
+The typed `NativeProofReport` retains successful copyable original results for
+both participants, indexed by their original output ports. Rejection and cleanup
+failure suppress those results. Generated transcript and private successors are
+retired by the same Host; CLI diagnostics do not publish application outputs.
 For a complete executable CLI example, see
 [separate producer and validator](../runtime/bundles.md#separate-producer-and-validator).
 

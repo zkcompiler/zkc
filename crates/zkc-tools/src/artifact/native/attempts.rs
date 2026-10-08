@@ -223,7 +223,7 @@ struct Session<'a> {
 struct Executed {
     backend: NativeBackend,
     record: AttemptRecord,
-    result: Result<(bool, Vec<u8>)>,
+    result: Result<(bool, driver::Produced<Value>)>,
     cleanup: Vec<String>,
     cancelled: bool,
 }
@@ -374,7 +374,7 @@ impl Session<'_> {
                                 for &(input, output) in &self.plan.rng {
                                     inputs[input] = produced.outputs[output].clone();
                                 }
-                                Ok((*complete, produced.proof))
+                                Ok((*complete, produced))
                             })
                     }
                 }
@@ -458,7 +458,7 @@ pub(super) fn execute(
         cleanup: Vec::new(),
         cancelled: false,
     };
-    let execution = Controller::<_, (), ()>::new(state, plan.policy.limits)
+    let execution = Controller::<_, (), BTreeMap<usize, Value>>::new(state, plan.policy.limits)
         .advance(
             plan.policy.limits.attempts as usize + 1,
             |attempt, context| {
@@ -477,8 +477,8 @@ pub(super) fn execute(
                 match executed.result {
                     Err(_) => Err(Stop::Abort),
                     Ok((false, _)) => Ok(Decision::Retry(())),
-                    Ok((true, bytes)) => {
-                        if let Err(reason) = context.append(&bytes) {
+                    Ok((true, produced)) => {
+                        if let Err(reason) = context.append(&produced.proof) {
                             let state = context.state_mut();
                             let error = "native-attempt-buffer-limit".to_owned();
                             state
@@ -488,7 +488,10 @@ pub(super) fn execute(
                                 .decision = Err(error);
                             return Err(reason);
                         }
-                        Ok(Decision::Complete(()))
+                        Ok(Decision::Complete(deployment.original_outputs(
+                            deployment.entry.producer(),
+                            produced.outputs,
+                        )))
                     }
                 }
             },
@@ -496,7 +499,10 @@ pub(super) fn execute(
         .close();
     let mut state = execution.state;
     report.outcome = match execution.outcome {
-        Outcome::Returned(proof) => Ok(proof.bytes),
+        Outcome::Returned(proof) => {
+            report.outputs = Some(proof.value);
+            Ok(proof.bytes)
+        }
         // Body and buffer failures are recorded before stopping. Reaching the
         // attempt bound instead leaves a normal retry as the last decision.
         Outcome::Stopped(_) => Err(state

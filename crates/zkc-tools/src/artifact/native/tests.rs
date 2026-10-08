@@ -209,6 +209,10 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
 }
 fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
     NativeProofReport {
+        outputs: outcome
+            .as_ref()
+            .ok()
+            .map(|_| BTreeMap::from([(0, Value::Bool(true))])),
         outcome,
         binding: String::new(),
         messages: 0,
@@ -269,6 +273,7 @@ fn failed_retirement_discards_completed_bytes_and_preserves_a_primary_failure() 
                 "native-proof-cleanup"
             }
         );
+        assert!(report.outputs.is_none());
         assert_eq!(report.cleanup_errors.len(), 1);
         assert_eq!(report.resources.len(), 1);
         assert!(
