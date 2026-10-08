@@ -16,7 +16,7 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface/2'
+    assert interface['format'] == 'zkc.language-interface/3'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
     assert 'clauses' not in interface

@@ -606,21 +606,41 @@ mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol, then emits ordinary `zkc.run/1` and `zkc.program/1` artifacts.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface/2` has exactly these JSON members: `format`, `capture`,
+`zkc.language-interface/3` has exactly these JSON members: `format`, `capture`,
 `original`, `toolchain`, `entry`, `protocol`, `roles`, `inputs`, `outputs`, `services`.
 Each port has `name`, `type`, `roles`, logical `index`, ordered native leaf indices
-in `native`, and a recursive `schema`. The schema records `type`, `custody`,
+in `native`, and a recursive `schema`. The schema records `kind`, `identity`, display `type`, `custody`,
 `permissions`, `leaves`, `fields` and `alternatives`. Fields record `name`, leaf
 `offset` and child `schema`; alternatives record `name` and their payload `fields`.
 Zero-leaf ports retain empty native indices. Offsets are relative to their product
-or alternative payload. Version 1 and unknown versions refuse. No relation or
+or alternative payload. Versions 1, 2 and unknown versions refuse. No relation or
 clause placeholder is present.
 
 The standalone `readInterface` API admits original MLIR and checks the interface
 against its exact byte hash, selected protocol, flattened types and participant
 roles. It checks contiguous port/field indices, complete native coverage, variant
 labels/payloads, custody prefixes and managed-service contracts. Logical types
-with the same spelling must have consistent schemas. Promised Copy, Drop and
+with the same identity must have consistent kind, label and schema. Kinds are
+`boolean`, `index`, `field`, `group`, `unit`, `tuple`, `array`, `record`, `variant`,
+`associated` and `builtin`. Scalars have their matching single native leaf; unit
+has none. Tuples/arrays have positional fields, with one common element identity
+for nonempty arrays. Records have identifier fields; associated representations
+have exactly one `value` field. Only variants have alternatives. An empty product
+cannot hide data leaves. Custody belongs only to nominal kinds.
+
+`identity` is the lowercase SHA-256 digest of the closed canonical source type
+key used by nominal custody and variant descriptors. It includes static arguments,
+including phantom and zero-length array element types. The key encodes the type
+kind tag, symbolic flag, length-framed domain and normalized dimension, then the
+argument count and recursively framed argument keys; a natural uses its kind tag
+and framed normalized dimension alone. Tags follow `Type::Kind`; framing is an
+unsigned decimal byte length followed by `:` and the exact bytes. The toolchain
+identity fixes this encoding. Native custody carries the exact digest; a variant
+carries its preimage under the `zkc.language` nominal namespace. The reader checks
+both anchors. Other source type identities remain source assertions until checked
+against the retained project. `type` is display text, never equality authority.
+An empty array's element meaning is bound by its identity and source agreement;
+no selectable element field is invented for it. Promised Copy, Drop and
 Wire permissions cannot exceed native leaves; aggregate Share is checked through
 logical children while native admission checks actual placement.
 

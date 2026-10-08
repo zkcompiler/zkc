@@ -108,13 +108,54 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     remaining -= work;
     return true;
   };
+  std::map<const Layout *, std::string> identities;
+  auto kind = [](Type::Kind value) -> StringRef {
+    using K = Type::Kind;
+    switch (value) {
+    case K::Boolean:
+      return "boolean";
+    case K::Index:
+      return "index";
+    case K::Field:
+      return "field";
+    case K::Group:
+      return "group";
+    case K::Unit:
+      return "unit";
+    case K::Tuple:
+      return "tuple";
+    case K::Array:
+      return "array";
+    case K::Record:
+      return "record";
+    case K::Variant:
+      return "variant";
+    case K::Associated:
+      return "associated";
+    case K::Builtin:
+      return "builtin";
+    default:
+      llvm_unreachable("layout has no executable interface kind");
+    }
+  };
   std::function<void(const Layout &)> schema;
   schema = [&](const Layout &layout) {
     if (!charge(1)) {
       out.value(nullptr);
       return;
     }
+    auto found = identities.find(&layout);
+    if (found == identities.end()) {
+      auto key = typeIdentity(layout.type);
+      if (!charge(key.size())) {
+        out.value(nullptr);
+        return;
+      }
+      found = identities.emplace(&layout, digest(key)).first;
+    }
     out.object([&] {
+      out.attribute("kind", kind(layout.type.kind));
+      out.attribute("identity", found->second);
       out.attribute("type", spelling(layout.type));
       out.attribute("custody", layout.custody);
       out.attributeArray("permissions", [&] {
@@ -192,7 +233,7 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     });
   };
   out.object([&] {
-    out.attribute("format", "zkc.language-interface/2");
+    out.attribute("format", "zkc.language-interface/3");
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);

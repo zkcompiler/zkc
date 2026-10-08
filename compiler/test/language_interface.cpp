@@ -29,6 +29,8 @@ module {
 json::Value scalar() {
   return json::Object{
       {"type", "bool"},
+      {"kind", "boolean"},
+      {"identity", std::string(64, '1')},
       {"custody", false},
       {"permissions", json::Array{"Copy", "Drop", "Share", "Wire"}},
       {"leaves", json::Array{"bool"}},
@@ -38,6 +40,8 @@ json::Value scalar() {
 json::Value pair() {
   return json::Object{
       {"type", "sample::Pair"},
+      {"kind", "record"},
+      {"identity", std::string(64, '2')},
       {"custody", false},
       {"permissions", json::Array{"Copy", "Drop", "Share", "Wire"}},
       {"leaves", json::Array{"bool", "bool"}},
@@ -52,7 +56,7 @@ json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
   return json::Object{
-      {"format", "zkc.language-interface/2"},
+      {"format", "zkc.language-interface/3"},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},
       {"toolchain", compilerToolchainIdentity()},
@@ -128,6 +132,78 @@ int main() {
                 std::string(6 * zkc::protocol::VariantSpellingBytes + 1, 'a') +
                 "\"]"),
         "source.limit");
+  });
+  cases.run("logical kinds constrain product and scalar structure", [] {
+    for (StringRef kind : {"unknown", "formal", "boolean", "unit", "associated",
+                           "array", "variant"})
+      mutate([&](auto &v) { shape(v)["kind"] = kind.str(); });
+    mutate([](auto &v) { shape(v).erase("kind"); });
+    mutate([](auto &v) { shape(v)["identity"] = std::string(64, 'G'); });
+    mutate([](auto &v) { shape(v).erase("identity"); });
+    for (StringRef kind : {"record", "array", "tuple", "group", "builtin"})
+      mutate([&](auto &v) {
+        auto &out =
+            *v.getAsObject()->getArray("outputs")->front().getAsObject();
+        (*out.getObject("schema"))["kind"] = kind.str();
+      });
+    for (StringRef version :
+         {"zkc.language-interface/1", "zkc.language-interface/2"})
+      mutate([&](auto &v) { (*v.getAsObject())["format"] = version.str(); });
+  });
+  cases.run("type identities distinguish phantom and empty element types", [] {
+    auto source = compile(R"zkc(module sample;
+struct Box<T:Type>{pub value:bool}
+protocol Run roles(P)(a:Box<bool>@P,b:Box<index>@P,c:[bool;0]@P,d:[index;0]@P)
+  ->(x:Box<bool>@P,y:Box<index>@P,u:[bool;0]@P,v:[index;0]@P){
+  return(x=a,y=b,u=c,v=d);
+}
+entry Demo=Run;)zkc");
+    const auto &v = source.interface();
+    require(v.inputs[0].schema->identity != v.inputs[1].schema->identity &&
+                v.inputs[2].schema->identity != v.inputs[3].schema->identity &&
+                v.inputs[0].schema == v.outputs[0].schema &&
+                v.inputs[2].schema->kind == Type::Kind::Array,
+            "logical identities were reduced to their native representation");
+  });
+  cases.run("display labels are not type identity", [] {
+    auto v = document();
+    auto &out = *v.getAsObject()->getArray("outputs")->front().getAsObject();
+    out["type"] = "sample::Pair";
+    (*out.getObject("schema"))["type"] = "sample::Pair";
+    (*out.getObject("schema"))["identity"] = std::string(64, '3');
+    auto view = take(readInterface(original, zkc::printJson(v)));
+    require(view.inputs[0].schema->type == view.outputs[0].schema->type &&
+                view.inputs[0].schema->identity !=
+                    view.outputs[0].schema->identity,
+            "structural view treated labels as equality authority");
+    (*out.getObject("schema"))["identity"] = std::string(64, '2');
+    refuses(readInterface(original, zkc::printJson(v)), "source.interface");
+  });
+  cases.run("array elements require the same exact logical type", [] {
+    auto v = document();
+    shape(v)["kind"] = "array";
+    auto &fields = *shape(v).getArray("fields");
+    for (unsigned i = 0; i < fields.size(); ++i)
+      (*fields[i].getAsObject())["name"] = std::to_string(i);
+    take(readInterface(original, zkc::printJson(v)));
+    (*fields[1].getAsObject()->getObject("schema"))["identity"] =
+        std::string(64, '4');
+    refuses(readInterface(original, zkc::printJson(v)), "source.interface");
+  });
+  cases.run("custody and variants bind the logical identity digest", [] {
+    for (
+        StringRef code : {
+            R"zkc(module sample; struct Token:Drop{} fn mint()->Token{return Token{};}
+      protocol Run roles(P)()->(x:Token@P){local P let t=mint();return(x=t);}entry Demo=Run;)zkc",
+            R"zkc(module sample; enum Choice{A(bool),B()}
+      protocol Run roles(P)(x:Choice@P)->(y:Choice@P){return(y=x);}entry Demo=Run;)zkc"}) {
+      auto source = compile(code);
+      auto v = take(json::parse(source.interfaceJson()));
+      auto &out = *v.getAsObject()->getArray("outputs")->front().getAsObject();
+      (*out.getObject("schema"))["identity"] = std::string(64, '0');
+      refuses(readInterface(source.bytes(), zkc::printJson(v)),
+              "source.interface");
+    }
   });
   cases.run("original identity is exact, including whitespace", [] {
     refuses(readInterface("\n" + original.str(), zkc::printJson(document())),
@@ -309,6 +385,7 @@ entry Demo=Run;)zkc");
             name.str();
       });
     auto v = document();
+    shape(v)["kind"] = "tuple";
     for (unsigned i = 0; i < 2; ++i)
       (*shape(v).getArray("fields"))[i].getAsObject()->operator[]("name") =
           std::to_string(i);

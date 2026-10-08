@@ -14,7 +14,8 @@ struct InterfaceAlternative {
 };
 /// Logical metadata read without consulting the source layout builder.
 struct InterfaceSchema {
-  std::string type;
+  Type::Kind kind;
+  std::string identity, type;
   Permissions permissions;
   bool custody;
   std::vector<std::string> leaves;

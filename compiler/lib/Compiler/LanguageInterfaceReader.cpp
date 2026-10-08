@@ -7,6 +7,8 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/SHA256.h"
 #include <map>
 #include <set>
 
@@ -30,7 +32,6 @@ class Reader {
   LanguageInterface view;
   std::map<std::string, std::shared_ptr<const InterfaceSchema>> schemas;
   StringMap<unsigned> roleIndices;
-  std::map<std::string, std::string> nominalLabels;
   std::map<std::string, Permissions> nativePermissions;
   bool fail(StringRef message) {
     if (!failure)
@@ -178,13 +179,6 @@ class Reader {
     nativePermissions.emplace(spelling.str(), result);
     return result;
   }
-  bool nominal(StringRef identity, StringRef label) {
-    if (!charge(identity.size() + label.size() + 1))
-      return false;
-    auto [found, inserted] = nominalLabels.emplace(identity.str(), label.str());
-    return inserted || found->second == label ||
-           fail("one native nominal identity has conflicting source labels");
-  }
   bool sameFields(ArrayRef<InterfaceField> a, ArrayRef<InterfaceField> b) {
     if (!charge(a.size() + 1) || a.size() != b.size())
       return false;
@@ -196,8 +190,8 @@ class Reader {
   }
   bool sameSchema(const InterfaceSchema &a, const InterfaceSchema &b) {
     if (!charge(a.leaves.size() + a.alternatives.size() + 1) ||
-        a.custody != b.custody || !(a.permissions == b.permissions) ||
-        a.leaves != b.leaves ||
+        a.kind != b.kind || a.type != b.type || a.custody != b.custody ||
+        !(a.permissions == b.permissions) || a.leaves != b.leaves ||
         a.alternatives.size() != b.alternatives.size() ||
         !sameFields(a.fields, b.fields))
       return false;
@@ -252,6 +246,61 @@ class Reader {
     }
     return offset == leaves.size() || fail("fields omit native leaves");
   }
+  bool shape(const InterfaceSchema &value) {
+    using K = Type::Kind;
+    bool nominal = value.kind == K::Record || value.kind == K::Variant ||
+                   value.kind == K::Associated;
+    if (value.custody && !nominal)
+      return fail("custody requires a nominal type");
+    if (value.kind == K::Variant)
+      return !value.alternatives.empty() ||
+             fail("variant alternatives missing");
+    if (!value.alternatives.empty())
+      return fail("alternatives require a variant type");
+    if (value.kind == K::Associated)
+      return (value.fields.size() == 1 && value.fields[0].name == "value") ||
+             fail("associated representation requires one value field");
+    if ((value.kind == K::Record || value.kind == K::Tuple ||
+         value.kind == K::Array) &&
+        value.fields.empty() && value.leaves.size() != unsigned(value.custody))
+      return fail("empty product hides native data");
+    if (value.kind == K::Record) {
+      for (const auto &field : value.fields)
+        if (!identifier(field.name))
+          return fail("record fields require identifiers");
+      return true;
+    }
+    if (value.kind == K::Tuple || value.kind == K::Array) {
+      for (unsigned i = 0; i < value.fields.size(); ++i) {
+        if (value.fields[i].name != std::to_string(i))
+          return fail("structural product fields require positional indices");
+        if (value.kind == K::Array && value.fields[i].schema->identity !=
+                                          value.fields[0].schema->identity)
+          return fail("array elements have different types");
+      }
+      return true;
+    }
+    if (!value.fields.empty())
+      return fail("scalar schema has product fields");
+    if (value.kind == K::Unit)
+      return value.leaves.empty() || fail("unit schema has native data");
+    if (value.leaves.size() != 1)
+      return fail("scalar schema requires exactly one leaf");
+    auto leafKind = protocol::typeKind(value.leaves[0]);
+    bool matched =
+        value.kind == K::Boolean ? leafKind == "bool"
+        : value.kind == K::Index ? leafKind == "index"
+        : value.kind == K::Field ? leafKind == "field"
+        : value.kind == K::Group
+            ? leafKind == "group"
+            : value.kind == K::Builtin &&
+                  (leafKind == "vector" || leafKind == "matrix" ||
+                   leafKind == "groups" || leafKind == "indices" ||
+                   leafKind == "polynomial" || leafKind == "table" ||
+                   leafKind == "point" || leafKind == "round" ||
+                   leafKind == "sequence" || leafKind == "field_array");
+    return matched || fail("logical kind differs from native leaf kind");
+  }
   std::shared_ptr<const InterfaceSchema>
   schema(const json::Value &value, unsigned depth,
          ArrayRef<std::string> expected) {
@@ -261,16 +310,36 @@ class Reader {
     }
     if (!charge(1))
       return {};
-    auto *obj = object(value, {"type", "custody", "permissions", "fields",
-                               "alternatives", "leaves"});
+    auto *obj =
+        object(value, {"kind", "identity", "type", "custody", "permissions",
+                       "fields", "alternatives", "leaves"});
     if (!obj)
       return {};
-    auto type = text(*obj, "type");
+    auto type = text(*obj, "type"), kindName = text(*obj, "kind"),
+         identity = text(*obj, "identity", 64);
     auto custody = obj->getBoolean("custody");
     auto *perms = array(*obj, "permissions"), *fs = array(*obj, "fields"),
          *alts = array(*obj, "alternatives"), *ls = array(*obj, "leaves");
-    if (!type || !perms || !fs || !alts || !ls)
+    if (!type || !kindName || !identity || !perms || !fs || !alts || !ls)
       return {};
+    using K = Type::Kind;
+    auto kind = StringSwitch<std::optional<K>>(*kindName)
+                    .Case("boolean", K::Boolean)
+                    .Case("index", K::Index)
+                    .Case("field", K::Field)
+                    .Case("group", K::Group)
+                    .Case("unit", K::Unit)
+                    .Case("tuple", K::Tuple)
+                    .Case("array", K::Array)
+                    .Case("record", K::Record)
+                    .Case("variant", K::Variant)
+                    .Case("associated", K::Associated)
+                    .Case("builtin", K::Builtin)
+                    .Default(std::nullopt);
+    if (!kind || !hash(*identity)) {
+      fail("invalid logical kind or exact type identity");
+      return {};
+    }
     auto caps = permissions(*perms);
     if (!caps)
       return {};
@@ -281,6 +350,8 @@ class Reader {
       return {};
     }
     auto result = std::make_shared<InterfaceSchema>();
+    result->kind = *kind;
+    result->identity = identity->str();
     result->type = type->str();
     result->custody = *custody;
     result->permissions = *caps;
@@ -314,13 +385,11 @@ class Reader {
     if (start &&
         (result->leaves.empty() || caps->copy || caps->wire ||
          !StringRef(result->leaves.front()).starts_with(custodyPrefix) ||
-         !hash(StringRef(result->leaves.front())
-                   .drop_front(custodyPrefix.size())))) {
+         StringRef(result->leaves.front()).drop_front(custodyPrefix.size()) !=
+             *identity)) {
       fail("invalid nominal custody prefix");
       return {};
     }
-    if (start && !nominal(result->leaves.front(), result->type))
-      return {};
     if (!alts->empty()) {
       if (result->leaves.size() != start + 1) {
         fail("variant schema requires one native variant leaf");
@@ -331,13 +400,14 @@ class Reader {
         fail("variant alternatives differ");
         return {};
       }
-      auto *identity = descriptor->nominal.getAsArray();
-      if (!identity || identity->size() != 2 ||
-          (*identity)[0].getAsString() != "zkc.language" ||
-          !(*identity)[1].getAsString() ||
-          (*identity)[1].getAsString()->empty() ||
-          !nominal("variant:" + (*identity)[1].getAsString()->str(),
-                   result->type)) {
+      auto *nominal = descriptor->nominal.getAsArray();
+      if (!nominal || nominal->size() != 2 ||
+          (*nominal)[0].getAsString() != "zkc.language" ||
+          !(*nominal)[1].getAsString() ||
+          (*nominal)[1].getAsString()->empty() ||
+          toHex(
+              SHA256::hash(arrayRefFromStringRef(*(*nominal)[1].getAsString())),
+              true) != *identity) {
         if (!failure)
           fail("variant lacks a source nominal identity");
         return {};
@@ -370,7 +440,9 @@ class Reader {
       fail("aggregate schema omits field or variant structure");
       return {};
     }
-    auto [found, inserted] = schemas.emplace(result->type, result);
+    if (!shape(*result))
+      return {};
+    auto [found, inserted] = schemas.emplace(result->identity, result);
     if (!inserted && !sameSchema(*found->second, *result)) {
       if (!failure)
         fail("one logical type has conflicting schemas");
@@ -451,7 +523,7 @@ class Reader {
     if (!format || !capture || !original || !toolchain || !entry || !symbol ||
         !rs || !ins || !outs || !services)
       return false;
-    if (*format != "zkc.language-interface/2" || !hash(*capture) ||
+    if (*format != "zkc.language-interface/3" || !hash(*capture) ||
         *original != digest || *toolchain != compilerToolchainIdentity())
       return fail("interface format, original or toolchain identity differs");
     SmallVector<StringRef> entryParts;

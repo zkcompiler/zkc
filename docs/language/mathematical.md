@@ -95,7 +95,8 @@ Fixed arrays currently use static numeric indices. Private ingress requires a
 validator that this source profile does not yet expose. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
-`language-interface` emits `zkc.language-interface/2`. A logical port's `native`
+`language-interface` emits `zkc.language-interface/3`. Schemas retain an exact
+logical type identity and kind separately from their display label. A logical port's `native`
 indices and recursive `schema` describe its flattened fields, variant payloads and
 custody. These indices refer to the original mathematical signature, not a promise
 that downstream physical storage uses the same positions. Host adapters must also

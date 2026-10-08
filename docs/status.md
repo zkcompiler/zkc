@@ -32,7 +32,7 @@ receive, joint-host, aggregate, static dispatch, distributed application results
 The source fragment does not yet expose the full native IR vocabulary or proof
 construction. Fixed arrays use static numeric indexing; private ingress without a
 validator, member-generic conformance and zero-leaf messages refuse. Source schema
-`zkc.language-interface/2` retains logical ports, native layouts and separate managed-service bindings. Existing
+`zkc.language-interface/3` retains logical ports, native layouts and separate managed-service bindings. Existing
 frontend consumers have not migrated.
 
 ## Foundation capability map
