@@ -14,8 +14,8 @@ pub use session::{Exchange, Hooks, NoHooks, RoleInput, RunLimits, StartError, Wi
 
 mod host;
 pub use host::{
-    HostLimits, HostReport, InputValue, NativeCapacity, PreparedRun, RoleInputs, RunHost,
-    RunInputs, SetupAuthority,
+    HostLimits, HostReport, InputValue, NativeCapacity, PreparedRun, ProverMaterial, RoleInputs,
+    RunHost, RunInputs, SetupAuthority,
 };
 mod cli;
 pub use cli::run as run_cli;

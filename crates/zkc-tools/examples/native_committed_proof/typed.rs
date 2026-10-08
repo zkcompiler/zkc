@@ -82,3 +82,72 @@ pub(super) fn policy_before_file(
         "native-attempt-completion"
     );
 }
+
+pub(super) fn material_request(input: &Json, keys: &Keys) -> ProofInputs {
+    use zkc_tools::artifact::native::{NativeCapacity, ProverMaterial};
+    let capacity = NativeCapacity::default();
+    let material = ProverMaterial::from_bytes(
+        &keys
+            .prover_key()
+            .to_bytes(&Policy::default().ark_bounds())
+            .unwrap(),
+        keys.prover_key().material_fingerprint(),
+        keys.verifier_key(),
+        capacity,
+    )
+    .unwrap();
+    let mut typed = request(input);
+    for value in &mut typed.inputs {
+        if matches!(value, InputValue::ProverKeyFile { .. }) {
+            *value = InputValue::ProverKey(material.clone());
+        }
+    }
+    typed
+}
+pub(super) fn material_parity(
+    deployment: &NativeDeployment,
+    input: &Json,
+    keys: &Keys,
+    validator: &Json,
+    expected: &[u8],
+) {
+    let typed = material_request(input, keys);
+    let other = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
+    let wrong = material_request(input, &other);
+    assert_eq!(
+        deployment.execute_typed(&wrong, None).err().unwrap(),
+        "native-proof-input-setup"
+    );
+    let mut bad_validator = request(validator);
+    let key = typed
+        .inputs
+        .iter()
+        .find_map(|value| match value {
+            InputValue::ProverKey(material) => Some(material.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let slot = bad_validator
+        .inputs
+        .iter_mut()
+        .find(|value| matches!(value, InputValue::VerifierKey))
+        .unwrap();
+    *slot = InputValue::ProverKey(key);
+    assert_eq!(
+        deployment
+            .execute_typed(&bad_validator, Some(expected))
+            .err()
+            .unwrap(),
+        "native-proof-role-input-kind"
+    );
+    std::thread::scope(|scope| {
+        let calls: Vec<_> = (0..2)
+            .map(|_| scope.spawn(|| deployment.execute_typed(&typed, None).unwrap()))
+            .collect();
+        for call in calls {
+            let report = call.join().unwrap();
+            assert!(report.cleanup_errors.is_empty());
+            assert_eq!(report.outcome.unwrap(), expected);
+        }
+    });
+}

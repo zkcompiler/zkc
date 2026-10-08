@@ -165,7 +165,8 @@ pub(super) fn prepare(
             ("wire", input) => crate::host::admission::check_native_data(ty, input, host.capacity)?,
             ("rng" | "nonce", InputValue::Resource { budget }) => check_budget(*budget)?,
             ("verifier_key", InputValue::VerifierKey) => {}
-            ("prover_key_file", InputValue::ProverKeyFile { .. }) if producer => {}
+            ("prover_key_file", InputValue::ProverKeyFile { .. } | InputValue::ProverKey(_))
+                if producer => {}
             _ => return Err("native-proof-role-input-kind".into()),
         }
     }
@@ -307,6 +308,18 @@ pub(super) fn prepare(
             InputValue::VerifierKey => *public_ids
                 .get(&port.original)
                 .ok_or("native-proof-key-port")?,
+            InputValue::ProverKey(material) => admission.add(
+                Input::Ready(
+                    material.operand(
+                        ty,
+                        selected(port.original)
+                            .as_deref()
+                            .ok_or("native-proof-setup-required")?,
+                        &backend,
+                    )?,
+                ),
+                &policy,
+            )?,
             InputValue::ProverKeyFile { path, fingerprint } => admission.add(
                 Input::Key {
                     path,

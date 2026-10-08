@@ -77,6 +77,9 @@ the existing native proof/attempt lifecycle. Typed public inputs are canonically
 bound and checked against shared role inputs; private native data avoids encoding.
 Controls cover exact typed/encoded proof parity, both installed source transcript
 suites, named service selection, rejection, nested authored values and unit ports.
+Native run/proof callers can also reuse authenticated immutable `ProverMaterial`;
+each invocation retains its setup association and input/runtime charges. Controls
+cover file removal, wrong setup, lowered quotas and independent concurrent calls.
 Explicit source setup associations, package CLI and thin Rust bindings remain in
 progress. Existing frontend consumers have not migrated.
 

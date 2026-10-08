@@ -538,3 +538,85 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
         assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
     }
 }
+
+#[test]
+fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
+    let capacity = NativeCapacity::default();
+    let bounds = capacity.backend().ark_bounds();
+    let keys = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+    let other = zkc_arkworks::Keys::setup_for_development(1, &bounds).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("material.pk");
+    std::fs::write(&path, keys.prover_key().to_bytes(&bounds).unwrap()).unwrap();
+    let material = ProverMaterial::from_file(
+        &path,
+        keys.prover_key().material_fingerprint(),
+        keys.verifier_key(),
+        capacity,
+    )
+    .unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let authority = SetupAuthority {
+        keys: BTreeMap::from([("setup".into(), keys.verifier_key().metadata().key_id())]),
+        inputs: BTreeMap::from([
+            (("Alice".into(), 0), "setup".into()),
+            (("Bob".into(), 0), "setup".into()),
+        ]),
+    };
+    let (raw, _) = fixture("prover_key:multilinear.kzg.bls12-381/1");
+    let admit = |limits| {
+        RunHost::admit(
+            &raw,
+            &Sha256::digest(&raw).into(),
+            limits,
+            authority.clone(),
+        )
+        .unwrap()
+    };
+    let host = admit(HostLimits::default());
+    let mut inputs = request(|| InputValue::ProverKey(material.clone()));
+    inputs.setups.insert(
+        "setup".into(),
+        keys.verifier_key().to_bytes(&bounds).unwrap(),
+    );
+    crate::host::admission::IMPORT_COUNT.set(0);
+    let first = host.prepare_typed(&inputs).unwrap().execute();
+    assert_eq!(
+        first.execution.as_ref().unwrap().outcome,
+        Outcome::Completed
+    );
+    assert!(first.cleanup_errors.is_empty());
+    assert_eq!(crate::host::admission::IMPORT_COUNT.get(), 0);
+    std::thread::scope(|scope| {
+        let calls: Vec<_> = (0..2)
+            .map(|_| scope.spawn(|| host.prepare_typed(&inputs).unwrap().execute().json()))
+            .collect();
+        for call in calls {
+            assert_eq!(call.join().unwrap(), first.json());
+        }
+    });
+    let mut limits = HostLimits::default();
+    limits.capacity.values.live_bytes = 2 * material.value().retained_bytes()
+        + Value::VerifierKey(Arc::new(keys.verifier_key().clone())).retained_bytes()
+        - 1;
+    assert_eq!(
+        refusal(&admit(limits), &inputs),
+        "artifact-input-bytes-limit"
+    );
+    limits = HostLimits::default();
+    limits.capacity.value_bytes = material.value().retained_bytes() - 1;
+    assert!(refusal(&admit(limits), &inputs).contains("output-bytes"));
+    let wrong = ProverMaterial::from_bytes(
+        &other.prover_key().to_bytes(&bounds).unwrap(),
+        other.prover_key().material_fingerprint(),
+        other.verifier_key(),
+        capacity,
+    )
+    .unwrap();
+    inputs.roles[0].inputs[0] = InputValue::ProverKeyFile {
+        path: path.to_str().unwrap().into(),
+        fingerprint: material.fingerprint(),
+    };
+    inputs.roles[1].inputs[0] = InputValue::ProverKey(wrong);
+    assert_eq!(refusal(&host, &inputs), "native-proof-input-setup");
+}

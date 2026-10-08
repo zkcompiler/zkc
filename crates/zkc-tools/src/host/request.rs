@@ -1,4 +1,5 @@
 //! In-process invocation data. These descriptions confer no execution authority.
+use super::material::ProverMaterial;
 use zkc_backends::Value;
 
 /// One native entry operand. Immutable data may be supplied without encoding;
@@ -19,6 +20,8 @@ pub enum InputValue {
     },
     /// Use the verifier key selected by the admitted input association.
     VerifierKey,
+    /// Reuse authenticated material under this invocation's setup and quotas.
+    ProverKey(ProverMaterial),
     ProverKeyFile {
         path: String,
         fingerprint: [u8; 32],

@@ -248,7 +248,7 @@ fn check_declaration(
             Err("native-input-private".into())
         }
         ("verifier_key", InputValue::VerifierKey)
-        | ("prover_key_file", InputValue::ProverKeyFile { .. }) => {
+        | ("prover_key_file", InputValue::ProverKeyFile { .. } | InputValue::ProverKey(_)) => {
             if !host
                 .authority
                 .inputs
@@ -391,6 +391,14 @@ pub(super) fn prepare<'a>(host: &'a RunHost, request: &RunInputs) -> Result<Prep
                     }
                     admission.add(Input::Ready(value), &policy)?
                 }
+                InputValue::ProverKey(material) => admission.add(
+                    Input::Ready(material.operand(
+                        ty,
+                        selected.ok_or("bundle-setup-input")?,
+                        &backend,
+                    )?),
+                    &policy,
+                )?,
                 InputValue::ProverKeyFile { path, fingerprint } => admission.add(
                     Input::Key {
                         path,

@@ -178,6 +178,18 @@ fn key_attempts(directory: &Path, keys: &Keys) {
         };
         typed::policy_before_file(&deployment, &producer, &policy);
         let first = deployment.execute_attempts(&producer, &policy).unwrap();
+        let typed = typed::material_request(&producer, keys);
+        let reused = deployment.execute_attempts_typed(&typed, &policy).unwrap();
+        assert_eq!(reused.outcome, first.outcome);
+        assert_eq!(reused.binding, first.binding);
+        assert_eq!(
+            reused.usage.total_value_bytes,
+            first.usage.total_value_bytes
+        );
+        assert_eq!(reused.usage.instructions, first.usage.instructions);
+        assert_eq!(reused.resources, first.resources);
+        assert_eq!(reused.attempts.len(), first.attempts.len());
+        assert!(reused.cleanup_errors.is_empty());
         assert_eq!(first.attempts.len(), 1);
         assert_eq!(first.attempts[0].decision, Ok(complete));
         assert!(first.cleanup_errors.is_empty());
@@ -274,6 +286,9 @@ fn main() {
                 typed::preflight(&deployment, &envelope, &p);
             }
             let proof = accepted(&deployment, &p, None);
+            if n == 1 {
+                typed::material_parity(&deployment, &p, key, &v, &proof);
+            }
             let instance = (
                 family.to_owned(),
                 envelope[2][1][5].as_str().unwrap().to_owned(),

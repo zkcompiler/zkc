@@ -1,6 +1,7 @@
 //! Application-owned loading and lifecycle for an authenticated native bundle.
 use super::*;
 pub use crate::host::capacity::NativeCapacity;
+pub use crate::host::material::ProverMaterial;
 use crate::host::{
     admission::{Admission, Input, Operand, ResourceInput, entry_values},
     inputs::*,

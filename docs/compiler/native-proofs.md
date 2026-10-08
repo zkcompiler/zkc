@@ -55,7 +55,11 @@ retired by the same Host; CLI diagnostics do not publish application outputs.
 explicit provider/key declarations through the same preparation. Public data
 is canonically bound; private data avoids a serialization roundtrip. Source
 `entry::ProofEntry` adds named inputs/results and explicit authored binding
-acknowledgement over these methods. An outer `Ok` reports successful preparation;
+acknowledgement over these methods. Native callers may import `ProverMaterial`
+once from bytes or a regular file and supply `InputValue::ProverKey` on repeated
+calls. The handle shares immutable material while each call retains its own
+setup admission, quotas and runtime state. Source setup bindings are still needed
+to expose this constructor through named source inputs. An outer `Ok` reports successful preparation;
 check `ProofReport::is_success()` for acceptance and complete cleanup, or use
 `into_result()` to branch while retaining the full report on failure.
 For a complete executable CLI example, see

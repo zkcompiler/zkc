@@ -327,7 +327,10 @@ request contains the session, exact ordered `RoleInputs` (role name, data inputs
 service budgets), and named verifier-key bytes. `InputValue` accepts bounded native
 wire bytes, supported immutable native values, RNG/nonce budget declarations,
 the verifier key assigned by admitted setup authority, or authenticated
-prover-key files. The typed `VerifierKey` declaration carries no repeated selector;
+prover-key files or reusable `ProverMaterial`. The latter uses the shared
+[authenticated material contract](native-proofs.md#typed-invocation-inputs) and
+`InputValue::ProverKey`; every call retains setup checks and per-operand charges.
+The typed `VerifierKey` declaration carries no repeated selector;
 the positional adapter checks its named selector against that assignment. `From<Value>`
 constructs the immutable-value case. Native values must match the complete
 physical type, be duplicable, and belong to the installed native wire profile;

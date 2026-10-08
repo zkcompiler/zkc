@@ -113,8 +113,9 @@ resolve through the native proof compiler without authored site names. Relation
 purpose remains separate from public authorization; target export respects the
 native statement ABI. Package authentication, interface/native binding, typed run
 preparation, named run inputs/results, and independent typed/named proof calls
-are implemented. Continue with explicit source setup associations and immutable
-material, then common CLI and thin bindings.
+are implemented. Native requests also support immutable authenticated prover
+material. Continue with explicit source setup associations and initialization,
+then common CLI and thin bindings.
 
 Bind the checked source interface, exact original, toolchain, compilation options
 and resulting deployment into one package. Common CLI and SDK paths must use the

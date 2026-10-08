@@ -422,6 +422,19 @@ pins. A role's unit `VerifierKey` declaration selects its admitted public key;
 a prover key uses its separate authenticated material constructor. Foreign
 capabilities or key handles cannot enter through ordinary native data.
 
+`ProverMaterial::from_bytes` imports immutable proving material against a complete
+material fingerprint and the supplied verifier key. Import alone grants no
+invocation authority: each call selects its own independently pinned setup.
+`from_file` captures
+one bounded regular file and delegates to the same import. The handle has private
+storage and supports shared ownership; requests use `InputValue::ProverKey`.
+Each invocation rechecks the actual selected setup, complete physical type and
+current backend limits before loading files or issuing resources. Retained data,
+loading work and every runtime/retry operand remain charged. Reuse avoids file
+reads and key parsing; it shares no live capability or mutable session. Import
+checks per-object wire/retention limits; execution budgets belong to each call.
+A material fingerprint authenticates identity, not the honesty of setup bases.
+
 Constructor shapes, complete native types, wire lengths and the statically known
 binding-root size are checked before importing verifier keys. The whole
 invocation reserves loading capacity before data decoding, key-file

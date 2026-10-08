@@ -2,6 +2,7 @@
 mod attempts;
 mod inputs;
 pub use crate::host::capacity::NativeCapacity;
+pub use crate::host::material::ProverMaterial;
 pub use crate::host::request::InputValue;
 pub use inputs::ProofInputs;
 mod setups;
