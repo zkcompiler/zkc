@@ -8,6 +8,12 @@ pub enum InputValue {
     /// Immutable data satisfying its upstream scalar/group library invariants.
     Native(Box<Value>),
     Wire(Vec<u8>),
+    /// An active arm of the admitted native variant type. Payloads contain only
+    /// immutable data; no key, service, or private capability is issued here.
+    Variant {
+        alternative: usize,
+        payload: Vec<InputValue>,
+    },
     Resource {
         budget: u64,
     },

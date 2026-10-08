@@ -590,3 +590,11 @@ must satisfy their upstream library invariants, including canonical internal
 scalar representations; unchecked constructors do not establish those invariants.
 Native wire hosts can call `native_input_retained_bytes` before payload decoding;
 this framing/retention bound does not replace canonical value decoding.
+
+Host-assembled variants use `measure_native_input`, `measure_native_wire` and
+`measure_native_variant` to accumulate the recursive native data profile's counts
+and retained sizes before loading. `NativeInputSize` is an opaque measurement,
+not a value-admission token. The complete arm checks exact child types, aggregate
+collection limits and construction peak. The Host still reserves invocation-wide
+capacity, decodes canonical elements, checks setup associations and validates
+entry constraints. These measurements create no capabilities or setup authority.

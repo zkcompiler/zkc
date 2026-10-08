@@ -66,14 +66,23 @@ impl Variant {
         const {
             assert!(std::mem::size_of::<Self>() <= 256);
         }
-        let bytes = (|| {
-            let mut bytes = self.descriptor.retained_bytes().checked_add(256)?;
-            bytes = bytes.checked_add(self.payload.len().checked_mul(512)?)?;
-            for value in self.payload.iter() {
-                bytes = bytes.checked_add(value.retained_bytes())?;
-            }
-            Some(bytes)
-        })();
-        bytes.unwrap_or(usize::MAX)
+        let payload = self
+            .payload
+            .iter()
+            .try_fold(0usize, |sum, value| sum.checked_add(value.retained_bytes()));
+        payload
+            .and_then(|bytes| Self::storage_bytes(&self.descriptor, self.payload.len(), bytes))
+            .unwrap_or(usize::MAX)
+    }
+    pub(crate) fn storage_bytes(
+        descriptor: &VariantDescriptor,
+        length: usize,
+        payload_bytes: usize,
+    ) -> Option<usize> {
+        descriptor
+            .retained_bytes()
+            .checked_add(256)?
+            .checked_add(length.checked_mul(512)?)?
+            .checked_add(payload_bytes)
     }
 }

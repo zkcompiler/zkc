@@ -3,7 +3,7 @@ mod bn254;
 mod domains;
 pub(crate) mod native;
 use crate::{NativeBackend, Policy, Result, Value, ark, exhausted, refused};
-pub use native::{NativeWireError, has_native_wire, native_wire_size};
+pub use native::{NativeInputSize, NativeWireError, has_native_wire, native_wire_size};
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_arkworks::{Scalar, Table, VerifierKey, decode_scalar, encode_scalar, parse_decimal};
 use zkc_runtime::interactive::{

@@ -67,8 +67,13 @@ publication pins and mismatched native choices. The existing run Host now accept
 in-process immutable values and wire requests through one typed preparation path,
 with shared setup/entry checks and pre-issuance capacity accounting. Controls cover
 native/wire execution parity, foreign capability refusal and nested PCS setup
-selection. Named source inputs/results, typed proof calls and thin Rust bindings
-remain in progress. Existing frontend consumers have not migrated.
+selection. `entry::RunEntry` now accepts named logical inputs and service budgets,
+uses shared admission for mixed native/wire variant payloads, and returns named
+copyable results after successful execution and cleanup. Compiler-generated tests
+cover nested sums/products, unit inputs/results, constructor permission and affine
+export refusal. Typed proof calls, explicit source setup associations, package CLI
+and thin Rust bindings remain in progress. Existing frontend consumers have not
+migrated.
 
 ## Foundation capability map
 

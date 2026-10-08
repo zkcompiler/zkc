@@ -9,3 +9,8 @@ pub use package::{CompileOptions, Package, PackageError};
 
 mod interface;
 pub use interface::{Interface, InterfaceError};
+
+mod value;
+pub use value::Value;
+mod run;
+pub use run::{NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport, RunRequest};

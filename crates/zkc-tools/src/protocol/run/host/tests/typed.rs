@@ -177,7 +177,54 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
             .unwrap(),
         );
         let wire = backend.encode_native_value(&value).unwrap();
+        let wrapped_type =
+            zkc_test_support::variants::logical("Committed", json!([["data", [seq.spelling()]]]));
+        let (wrapped_raw, _) = fixture(&wrapped_type);
+        let wrapped_host = RunHost::admit(
+            &wrapped_raw,
+            &Sha256::digest(&wrapped_raw).into(),
+            HostLimits::default(),
+            authority.clone(),
+        )
+        .unwrap();
         for native in [false, true] {
+            let mut wrapped = request(|| InputValue::Variant {
+                alternative: 0,
+                payload: vec![if native {
+                    value.clone().into()
+                } else {
+                    InputValue::Wire(wire.clone())
+                }],
+            });
+            wrapped.setups = BTreeMap::from([
+                (
+                    "first".into(),
+                    first.verifier_key().to_bytes(&policy.ark_bounds()).unwrap(),
+                ),
+                (
+                    "other".into(),
+                    other.verifier_key().to_bytes(&policy.ark_bounds()).unwrap(),
+                ),
+            ]);
+            if allowed {
+                assert_eq!(
+                    wrapped_host
+                        .prepare_typed(&wrapped)
+                        .unwrap()
+                        .execute()
+                        .execution
+                        .unwrap()
+                        .outcome,
+                    Outcome::Completed
+                );
+            } else {
+                crate::host::admission::DECODE_COUNT.set(0);
+                assert_eq!(refusal(&wrapped_host, &wrapped), "native-proof-input-setup");
+                if native {
+                    assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
+                }
+            }
+
             let mut inputs = request(|| {
                 if native {
                     InputValue::from(value.clone())
@@ -383,5 +430,111 @@ fn typed_key_imports_use_explicit_authorized_constructors() {
         assert_eq!(refusal(&host, &inputs), "native-input-private");
         inputs.roles[0].inputs[0] = InputValue::Wire(vec![]);
         assert_eq!(refusal(&host, &inputs), "bundle-input-kind");
+    }
+}
+
+#[test]
+fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
+    let inner =
+        zkc_test_support::variants::logical("Maybe", json!([["none", []], ["some", ["bool"]]]));
+    let outer =
+        zkc_test_support::variants::logical("Envelope", json!([["packet", [inner, "index"]]]));
+    let (raw, _) = fixture(&outer);
+    let host = self::host(&raw, HostLimits::default());
+    let request = request(|| InputValue::Variant {
+        alternative: 0,
+        payload: vec![
+            InputValue::Variant {
+                alternative: 1,
+                payload: vec![InputValue::Wire(b"ZKCV\x01\x05\x01".to_vec())],
+            },
+            Value::Index(9).into(),
+        ],
+    });
+    crate::host::admission::DECODE_COUNT.set(0);
+    let plan = host.prepare_typed(&request).unwrap();
+    assert_eq!(crate::host::admission::DECODE_COUNT.get(), 2);
+    let report = plan.execute();
+    assert_eq!(
+        report.execution.as_ref().unwrap().outcome,
+        Outcome::Completed
+    );
+    let execution = report.execution.as_ref().unwrap();
+    let backend = &execution.backends[0].1;
+    let expected = backend
+        .encode_native_value(&execution.roles[0].outputs[0])
+        .unwrap();
+    let wire = self::request(|| InputValue::Wire(expected.clone()));
+    assert_eq!(
+        host.prepare_typed(&wire).unwrap().execute().json(),
+        report.json()
+    );
+    let data = execution.roles[0].outputs[0].clone();
+    let native = self::request(|| InputValue::from(data.clone()));
+    assert_eq!(
+        host.prepare_typed(&native).unwrap().execute().json(),
+        report.json()
+    );
+}
+
+#[test]
+fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
+    let ty = zkc_test_support::variants::logical(
+        "Pair",
+        json!([["pair", ["vector:bls12-381.fr", "vector:bls12-381.fr"]]]),
+    );
+    let (raw, _) = fixture(&ty);
+    let mut limits = HostLimits::default();
+    limits.capacity.elements = 4;
+    let host = self::host(&raw, limits);
+    let vector = || InputValue::from(Value::Vector(vec![zkc_backends::Scalar::from(1); 3].into()));
+    let mut wire = b"ZKCV\x01\x42\x03\0\0\0".to_vec();
+    // Valid shape, deliberately invalid field encodings. Whole-value count
+    // refusal must occur before expensive canonical element decoding.
+    wire.extend_from_slice(&[255; 96]);
+    let inputs = request(|| InputValue::Variant {
+        alternative: 0,
+        payload: vec![InputValue::Wire(wire.clone()), vector()],
+    });
+    crate::host::admission::DECODE_COUNT.set(0);
+    assert_eq!(refusal(&host, &inputs), "native-wire-limit");
+    assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
+    for (value, expected) in [
+        (
+            InputValue::Variant {
+                alternative: 1,
+                payload: vec![],
+            },
+            "native-input-alternative",
+        ),
+        (
+            InputValue::Variant {
+                alternative: 0,
+                payload: vec![],
+            },
+            "native-input-payload",
+        ),
+        (
+            InputValue::Variant {
+                alternative: 0,
+                payload: vec![vector(), Value::Bool(false).into()],
+            },
+            "native-input-type",
+        ),
+        (
+            InputValue::Variant {
+                alternative: 0,
+                payload: vec![vector(), InputValue::Resource { budget: 1 }],
+            },
+            "native-input-private",
+        ),
+    ] {
+        let mut inputs = request(|| InputValue::Variant {
+            alternative: 0,
+            payload: vec![vector(), vector()],
+        });
+        inputs.roles[0].inputs[0] = value;
+        assert_eq!(refusal(&host, &inputs), expected);
+        assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
     }
 }

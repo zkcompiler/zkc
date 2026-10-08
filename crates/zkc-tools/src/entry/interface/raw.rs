@@ -1,4 +1,5 @@
-//! Strict carrier records. These are decoded data, never execution authority.
+//! Strict decoded carrier records. Only an authenticated package and validated
+//! Interface may supply their constructor permissions to an execution adapter.
 use serde::{Deserialize, Deserializer};
 
 // A nullable field is required in the carrier. serde's ordinary Option default

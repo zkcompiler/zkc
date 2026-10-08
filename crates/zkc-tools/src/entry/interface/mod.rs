@@ -67,6 +67,9 @@ impl Interface {
     pub fn entry(&self) -> &str {
         &self.document.entry
     }
+    pub(in crate::entry) fn selected_protocol(&self) -> &raw::Protocol {
+        &self.document.protocols[self.selected]
+    }
     pub fn protocol(&self) -> &str {
         &self.document.protocols[self.selected].symbol
     }

@@ -1,0 +1,11 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+enum Inner { Empty(), Pair(Fr, Fr) }
+enum Choice { Empty(), Data(Inner, (bool, ()), [Fr; 2]) }
+struct Payload { pub choice: Choice, pub marker: bool }
+protocol Echo roles(P, V)(payload: Payload @P, empty: () @P)
+    -> (sent: Payload @P, received: Payload @V, empty: () @V) {
+  let received = send P -> V(payload);
+  return(sent = payload, received = received, empty = ());
+}
+entry Demo = Echo;

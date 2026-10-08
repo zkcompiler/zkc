@@ -1,6 +1,8 @@
 //! Closed native wire profile. Errors are classified where they occur; opaque
 //! BackendError strings are never parsed into receive failures.
 mod bulk;
+mod input;
+pub use input::NativeInputSize;
 mod pcs;
 mod structured;
 use crate::{NativeBackend, Policy, Value};
@@ -206,7 +208,7 @@ impl NativeBackend {
             return Err(unsupported());
         }
         if structured::tag(&ty).is_some() {
-            structured::check_value_counts(value, self.policy())?;
+            structured::value_counts(value, self.policy())?;
         } else if bulk::format(&ty).is_some() {
             bulk::value_counts(value, self.policy())?;
         }

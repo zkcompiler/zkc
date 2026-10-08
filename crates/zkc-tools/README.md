@@ -188,3 +188,31 @@ constraints before execution. The prepared call owns its loaded inputs.
 Custom joint-driver callers pass `RunLimits` and receive effective limits in `Report`. Retained source-driver callers pass `DriverLimits` to `drive`
 or `drive_with_decoder`; `Schedule::new_with_work_limit` selects source traversal
 capacity. These schedules and byte counters retain distinct contracts.
+
+
+## Named source Entries
+
+`entry::RunEntry` binds an authenticated `entry::Package` to its source interface
+and the native run Host. `RunRequest` supplies role names, named inputs and named
+service budgets. `entry::Value` represents logical records, tuples, arrays,
+variants, associated values and unit; scalar/native leaves use `Value::from` or
+`InputValue::Wire`. Empty products remain required input values. Source constructor
+permissions apply to native and encoded inputs alike.
+
+```rust,ignore
+use zkc_tools::entry::{Package, RunEntry};
+use zkc_tools::protocol::run::{HostLimits, SetupAuthority};
+
+let package = Package::capture(&bytes, &authorized_digest, Package::MAX_BYTES)?;
+let entry = RunEntry::admit(package, HostLimits::default(), SetupAuthority::default())?;
+let report = entry.prepare(named_request)?.execute();
+// Complete named results exist only after successful execution and cleanup.
+let results = report.outputs;
+```
+
+The [source contract](../../docs/spec/profiles/source/mathematical-language.md#named-run-calls)
+defines result delivery and constructor/custody refusals. The native report retains
+stops, failures, usage and cleanup; it does not interpret a returned Boolean as
+proof acceptance. Affine result export requires a custody API and currently refuses
+at Entry admission. Named proof calls, source setup associations, package CLI and
+thin generated bindings remain separate work in this frontend package.

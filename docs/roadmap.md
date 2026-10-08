@@ -111,7 +111,10 @@ Entries now select run or proof jobs, participants, public inputs, acceptance,
 an optional target and explicit transcript construction. Challenge occurrences
 resolve through the native proof compiler without authored site names. Relation
 purpose remains separate from public authorization; target export respects the
-native statement ABI. Continue with package authentication and Host integration.
+native statement ABI. Package authentication, interface/native binding, typed run
+preparation and named run inputs/results are implemented. Continue with typed
+independent proof calls and explicit source setup associations, then common CLI
+and thin bindings.
 
 Bind the checked source interface, exact original, toolchain, compilation options
 and resulting deployment into one package. Common CLI and SDK paths must use the

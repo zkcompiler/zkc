@@ -940,6 +940,41 @@ those choices are authenticated package metadata. The compiler/checker publicati
 path owns source correspondence and relation meaning. Reading metadata or binding
 its ports does not interpret MLIR or establish a protocol security judgment.
 
+### Named run calls
+
+Rust `entry::RunEntry::admit` retains an authenticated package, validates its
+interface and admits the exact run artifact through `RunHost`. Proof jobs use a
+separate API. Before accepting a run, every logical output must be copyable and
+have no affine custody; unsupported custody returns `entry-output-custody`.
+Every input must have source `Wire` constructor permission or admission returns
+`entry-input-constructor`. These checks precede native bundle admission.
+
+`RunRequest` names every participant, its input ports and service budgets exactly.
+Each role remains required even when it has no inputs. Unit values and empty
+products also remain explicit. Records use exact field names, tuples and arrays
+use ordered elements, variants name an active alternative and its payload fields,
+and associated values wrap their checked representation. Numeric alternative
+field names follow the declared payload order. The checked schema supplies all
+native slices and nominal descriptors; display type strings are not executable
+layout descriptions.
+
+Ordinary leaves use `entry::Value::Leaf(InputValue::Native(...))` or `Wire`.
+The admitted source schema's `Wire` constructor permission applies recursively
+through products and alternative payloads. A matching native representation does
+not confer private constructor authority. Source randomness comes through named
+managed services; setup keys require a separately admitted initialization route. Native leaves retain the upstream cryptographic library invariants stated
+by the run Host. Variant payloads can mix native and wire data; common admission
+checks complete types, aggregate collection counts and retention before decoding
+or constructing payload containers.
+
+`prepare` consumes the named request and returns a single-use plan backed by the
+same native Host. `execute` retains the complete native outcome, usage and cleanup
+report. On complete execution with successful cleanup, it reconstructs all named
+results, including empty products. Other outcomes publish no complete logical
+result; they remain visible in the native report. An unexpected reconstruction
+failure has its own `output_error` and cannot become successful named output.
+No source evaluation or protocol-specific execution loop is added.
+
 ## Bounds and scope
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
@@ -968,8 +1003,8 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Source-facing Host inputs, dynamic source arrays and member-generic conformance
-remain outside the implemented profile. Reserved future syntax
+Named proof calls, source setup initialization, dynamic source arrays and
+member-generic conformance remain outside the implemented profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor
 protocol security.

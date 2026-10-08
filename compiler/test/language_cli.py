@@ -116,7 +116,7 @@ with case('target admission failure names its phase and related source declarati
     assert f'at {source}:' in diagnostic
 
 for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
-             'associated', 'associated_domain', 'bool', 'boolean_formula', 'branch', 'resource_control', 'group', 'variant_wire', 'variant_custody', 'index', 'dynamic', 'matrix', 'trace', 'vector_rounds'):
+             'associated', 'associated_domain', 'bool', 'boolean_formula', 'branch', 'resource_control', 'group', 'variant_wire', 'variant_custody', 'index', 'dynamic', 'matrix', 'trace', 'vector_rounds', 'host_values'):
     args = ['--source-format=zkc', '--entry=sample::Demo',
             f'--module=sample={FIXTURES / (name + ".zkc")}']
     with case(f'typed source participant compilation: {name}'):
@@ -168,6 +168,7 @@ with case('managed aliases retain ordered queries and owner guards'):
     schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
     assert schema['services'] == [{'name': 'coins', 'owner': 'V',
                                    'contract': 'random.bls12-381.fr/1', 'native': 1}]
+    (OUT / 'host-services.entry').write_text(commands.run([compiler, 'language-package', *args]))
     for optimized in (0, 1):
         flags = [] if optimized else ['--no-simplify']
         bundle = commands.run([compiler, 'language-bundle', *args, *flags])
@@ -221,6 +222,12 @@ for fixture, entry in [('relation_sumcheck', 'Demo'), ('relation_sumcheck', 'Pro
             flags = [] if optimized else ['--no-simplify']
             bundle = commands.run([compiler, 'language-bundle', *args, *flags])
             (OUT / f'{fixture}-{entry}-{optimized}.bundle').write_text(bundle)
+
+with case('source Host export admission retains affine custody obligations'):
+    args = ['--source-format=zkc', '--entry=sample::Demo',
+            f'--module=sample={FIXTURES / "completion_affine.zkc"}']
+    package = commands.run([compiler, 'language-package', *args])
+    (OUT / 'host-custody.entry').write_text(package)
 
 with case('maximum source schema depth binds in the native Host'):
     nested = 'bool'

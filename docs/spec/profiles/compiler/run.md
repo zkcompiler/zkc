@@ -335,6 +335,15 @@ upstream cryptographic library invariants; unchecked scalar constructors cannot
 be used to import invalid field representations. Untrusted bytes use `Wire`,
 whose decoder checks canonical encoding and element validity.
 
+`InputValue::Variant` names an active alternative by index and supplies its
+ordered immutable payload requests. The admitted native type supplies the full
+nominal descriptor; the caller cannot replace it. Shape, type, aggregate element
+and group counts, retention and construction peak are checked before decoding
+payloads. Nested native/wire inputs share this planning path; resources and setup
+key handles are not ordinary variant payload constructors. Every wire scan and
+native payload measurement consumes cumulative loading work. Whole-value limits
+cannot be multiplied by splitting data across payload children.
+
 Both adapters check selected setup associations recursively, backend value
 validity, entry constraints and invocation-wide retained/work limits before
 issuance. Native data incurs its retained charge even when immutable backing is

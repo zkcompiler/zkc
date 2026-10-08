@@ -672,3 +672,97 @@ fn native_and_wire_collection_admission_agree_across_nested_shapes() {
         }
     }
 }
+
+#[test]
+fn host_assembly_measures_complete_type_counts_and_construction_peak() {
+    let backend = common::ark_backend(None);
+    let ty = LogicalType::parse(&logical("HostPair", json!([["pair", ["bool", "bool"]]]))).unwrap();
+    let physical = zkc_runtime::interactive::PhysicalType::default_for(ty.clone()).unwrap();
+    let a = Value::Bool(false);
+    let b = Value::Bool(true);
+    let sizes = [
+        backend.measure_native_input(&a).unwrap(),
+        backend.measure_native_input(&b).unwrap(),
+    ];
+    let measured = backend
+        .measure_native_variant(&physical, 0, &sizes)
+        .unwrap();
+    let value = Value::Variant(
+        Variant::new(ty.variant_descriptor().unwrap().clone(), 0, vec![a, b]).unwrap(),
+    );
+    assert_eq!(measured.retained_bytes(), value.retained_bytes());
+    let limited = bounded(Policy {
+        max_value_bytes: measured.retained_bytes() * 2 - 1,
+        ..Policy::default()
+    });
+    assert_eq!(
+        limited
+            .measure_native_variant(&physical, 0, &sizes)
+            .unwrap_err(),
+        Error::Limit
+    );
+    let changed = [
+        backend.measure_native_input(&Value::Index(0)).unwrap(),
+        backend.measure_native_input(&Value::Bool(false)).unwrap(),
+    ];
+    assert!(
+        backend
+            .measure_native_variant(&physical, 0, &changed)
+            .is_err()
+    );
+    assert!(
+        backend
+            .measure_native_variant(&physical, 1, &sizes)
+            .is_err()
+    );
+    assert!(
+        backend
+            .measure_native_variant(&physical, 0, &sizes[..1])
+            .is_err()
+    );
+}
+
+#[test]
+fn mixed_host_payloads_charge_wire_peak_with_retained_siblings() {
+    let backend = common::ark_backend(None);
+    let logical = LogicalType::parse(&logical(
+        "Mixed",
+        json!([["pair", ["vector:bls12-381.fr", "vector:bls12-381.fr"]]]),
+    ))
+    .unwrap();
+    let ty = zkc_runtime::interactive::PhysicalType::default_for(logical).unwrap();
+    let vector = Value::Vector(vec![Scalar::from(1); 512].into());
+    let wire = backend.encode_native_value(&vector).unwrap();
+    let sizes = [
+        backend.measure_native_input(&vector).unwrap(),
+        backend
+            .measure_native_wire(&vector.physical_type(), &wire)
+            .unwrap(),
+    ];
+    let total = backend
+        .measure_native_variant(&ty, 0, &sizes)
+        .unwrap()
+        .retained_bytes();
+    let limit = total * 2;
+    assert!(total + 3 * wire.len() > limit);
+    let bounded = bounded(Policy {
+        max_value_bytes: limit,
+        ..Policy::default()
+    });
+    // Both individual children fit. Their combined live buffers do not.
+    assert!(bounded.measure_native_input(&vector).is_ok());
+    assert!(
+        bounded
+            .measure_native_wire(&vector.physical_type(), &wire)
+            .is_ok()
+    );
+    assert_eq!(
+        bounded.measure_native_variant(&ty, 0, &sizes).unwrap_err(),
+        Error::Limit
+    );
+    let native = [
+        bounded.measure_native_input(&vector).unwrap(),
+        bounded.measure_native_input(&vector).unwrap(),
+    ];
+    assert!(bounded.measure_native_variant(&ty, 0, &native).is_ok());
+}

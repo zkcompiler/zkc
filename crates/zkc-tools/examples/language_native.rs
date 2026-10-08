@@ -15,6 +15,8 @@ use zkc_tools::protocol::run::{
     Bundle, BundleLimits, HostLimits, InputValue, RoleInputs, RunHost, RunInputs, SetupAuthority,
 };
 
+#[path = "language_native/host.rs"]
+mod host;
 #[path = "language_native/interface.rs"]
 mod interface;
 #[path = "language_native/proof.rs"]
@@ -565,6 +567,7 @@ fn main() {
             }
         }
     }
+    host::run(Path::new(&directory));
     proof::run(Path::new(&directory));
     for optimized in [0, 1] {
         for released in [0, 1] {

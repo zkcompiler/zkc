@@ -28,7 +28,8 @@ pub use public_operands::{PublicRolePolicy, requires_public_operands};
 
 pub use backend::{EntryPolicy, NativeBackend, PortConstraint, PublicInputs};
 pub use codec::{
-    InputBindings, InputPlan, NativeWireError, has_native_wire, native_wire_size, requires_setup,
+    InputBindings, InputPlan, NativeInputSize, NativeWireError, has_native_wire, native_wire_size,
+    requires_setup,
 };
 pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;

@@ -1,4 +1,5 @@
 //! Per-bind admission and authenticated immutable import reuse. No global cache.
+mod native;
 use super::{
     inputs::{Result, read_key, text, unhex},
     material::{KeyIdentity, MaterialCache},
@@ -72,6 +73,12 @@ pub(crate) enum Input<'a> {
         estimate: usize,
         selected: Option<Arc<VerifierKey>>,
     },
+    Variant {
+        ty: PhysicalType,
+        alternative: usize,
+        payload: Vec<Input<'a>>,
+        estimate: usize,
+    },
     Key {
         path: &'a str,
         fingerprint: [u8; 32],
@@ -117,7 +124,9 @@ impl<'a> Input<'a> {
     fn ty(&self) -> Type {
         match self {
             Self::Wire { ty, .. } => ty.kind(),
-            Self::NativeWire { ty, .. } | Self::Native { ty, .. } => ty.kind(),
+            Self::NativeWire { ty, .. } | Self::Native { ty, .. } | Self::Variant { ty, .. } => {
+                ty.kind()
+            }
             Self::Key { .. } => Type::ProverKey,
             Self::Ready(value) => value.ty(),
         }
@@ -135,7 +144,7 @@ impl<'a> Input<'a> {
             }
             Self::Ready(value) => Ok(value.retained_bytes()),
             Self::Native { value, .. } => Ok(value.retained_bytes()),
-            Self::NativeWire { estimate, .. } => Ok(*estimate),
+            Self::NativeWire { estimate, .. } | Self::Variant { estimate, .. } => Ok(*estimate),
         }
     }
 }
@@ -319,12 +328,7 @@ impl<'a> Admission<'a> {
         // Refuse already constructed data before decoding earlier wires or
         // opening key files. The complete invocation charge is reserved first.
         for (input, _) in &self.inputs {
-            if let Input::Native {
-                value, selected, ..
-            } = input
-            {
-                check_native(backend, value, selected.as_deref())?;
-            }
+            native::check(backend, input)?;
         }
         let mut values = Vec::new();
         let mut actual_bytes = 0;
@@ -333,24 +337,9 @@ impl<'a> Admission<'a> {
         for (input, estimate) in std::mem::take(&mut self.inputs) {
             let value = match input {
                 Input::Ready(value) => value,
-                Input::Native { value, .. } => value.clone(),
-                Input::NativeWire {
-                    ty,
-                    bytes,
-                    selected,
-                    ..
-                } => {
-                    #[cfg(test)]
-                    DECODE_COUNT.with(|n| n.set(n.get() + 1));
-                    let value = backend
-                        .decode_native_value(&ty, &bytes)
-                        .map_err(|e| e.to_string())?;
-                    if value.physical_type() != ty {
-                        return Err("native-input-type".into());
-                    }
-                    check_native(backend, &value, selected.as_deref())?;
-                    value
-                }
+                input @ (Input::Native { .. }
+                | Input::NativeWire { .. }
+                | Input::Variant { .. }) => native::load(backend, input)?,
                 Input::Wire { ty, setup, hex } => {
                     let encoded = text(hex)?;
                     let identity = (
