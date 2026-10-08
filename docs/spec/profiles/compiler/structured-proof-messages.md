@@ -1,26 +1,16 @@
 # Structured native proof messages
 
-This profile extends [committed native proofs](native-proofs.md#committed-deployment-profile)
-with complete typed messages. It uses the same protocol/participant/executable/
-physical stages, local machine, proof host and deployment authority.
+This chapter defines complete typed messages and setup authorization for the
+single [native proof contract](native-proofs.md). Flat messages, bounded repeats,
+PCS and nested data all use policy `/4`, `zkc.native-origin/2`, `ZKCPRF01` proof
+framing and `zkc.native-proof-inputs/1` invocation records.
 
-## Profiles and complete types
+## Complete types
 
-The policy, envelope, descriptor, construction map and invocation binding use
-their respective `/4` tags. They retain `/3` field layouts, indexed origins,
-repeat bounds, optional authored execution, key authority and input records.
-Proof framing remains `ZKCPRF01`. Invocation inputs remain `/1`.
-Versions `/1`–`/3` keep their closed matrices; installing this codec does not
-extend an older deployment's input or message admission.
-
-`zkc.program/1`, selected by `program`, admits record/sum and dynamic numeric
-messages alongside flat and iterated programs. All native proof policies use
-this same physical program format. Proof admission checks the selected policy's
-actual message, input, key and control restrictions; the shared program tag
-does not grant `/4` permissions to an older proof policy. Superseded executable
-tags are refused. Ordinary older source participant transport retains its
-existing public numeric codecs. Program admission alone grants neither proof
-deployment nor transport support in another host.
+`zkc.program/1` carries these values through the existing protocol, participant,
+exec and physical profiles. Proof admission independently checks message,
+input, key and control restrictions. Program admission alone grants no proof
+deployment authority or transport support in another Host.
 
 The complete logical message grammar is:
 
@@ -60,7 +50,7 @@ a record of vectors is not an implicit sequence of records.
 ## Canonical value frames
 
 All integers below are unsigned little-endian. All frames begin with ASCII
-`ZKCV`, byte `1`, and one tag byte. New frames are:
+`ZKCV`, byte `1`, and one tag byte. Aggregate frames are:
 
 | Tag | Expected type | Bytes after the header |
 |---|---|---|
@@ -134,7 +124,7 @@ estimate and `W` the frame size, require `max(2R, R + 3W)` within the configured
 value-byte budget. Type formation does not promise that every value fits the
 default runtime budgets. Structured numeric counts conservatively use scalar
 width even for indices. Aggregate ceilings apply to the complete new frame;
-standalone older leaf frames retain their existing limits. Checked arithmetic and fallible reservations preserve limit
+standalone leaf frames retain their existing limits. Checked arithmetic and fallible reservations preserve limit
 outcomes. The native implementation additionally verifies actual retained size.
 These are deterministic resource ceilings, not an exact allocator measurement.
 
@@ -152,7 +142,7 @@ alternative or empty sequence, the deployment requires at least one public
 verifier-key input. Up to 64 such ports are admitted. Every key port, including
 unused and terminal-only inputs, must be independently authorized by the host.
 
-`NativeDeployment::admit_with_setups` accepts application configuration with two
+`NativeDeployment::admit` accepts application configuration with two
 maps, indexed by original common-program input ports:
 
 - `keys`: every public verifier-key port to its expected key ID;
@@ -165,8 +155,7 @@ aggregate input uses one selected key recursively for all active PCS leaves.
 Received aggregates may contain leaves from different authorized setups.
 Path-specific authority within a host input is outside this profile.
 
-The CLI selects this configuration with `--setups=PATH`, mutually exclusive with
-`--key-id`. The bounded configuration format is:
+The CLI selects this configuration with `--setups=PATH`. The bounded format is:
 
 ```text
 ["zkc.native-setup-authority/1",
@@ -175,9 +164,8 @@ The CLI selects this configuration with `--setups=PATH`, mutually exclusive with
 ```
 
 Ports are canonical decimal strings. The file is bounded to 64 KiB; key IDs are
-32 bytes encoded as lowercase hex. `admit_with_key` and `--key-id` remain the
-one-key shorthand and normalize to the same maps. Invocation input records and
-prover-key file constructors retain their existing formats. Invocation data and
+32 bytes encoded as lowercase hex. A single key uses the same maps. Invocation
+input records and prover-key file constructors retain their existing formats. Invocation data and
 proof headers cannot supply this authority.
 
 Before PCS decoding or entropy issuance, the host imports every public key under
@@ -190,18 +178,24 @@ prover key checks the complete material fingerprint and selected verifier key.
 For multiple authorized keys, decoding first bounds the fixed PCS header, uses
 its key ID to locate already authorized material, and then checks exact width,
 kind, arity, setup ID, key ID, subgroup and canonical encoding. The header can
-select a registry member but cannot add one. A singleton retains its earlier
-length-before-header check. An unknown key is an invalid header; incompatible
+select a registry member but cannot add one. A singleton checks length before
+its header. An unknown key is an invalid header; incompatible
 producer metadata reports `native-wire-setup-mismatch`. A received value under a
 different authorized key may decode, but an actual `pcs.check` with the wrong
 key operand stops with a backend key mismatch when shapes agree; an arity
-check can refuse earlier when they differ. Neither returns a valid proof decision. `pcs.equal` compares canonical values including setup identity, so
-values under different setups compare false. Actual source operands remain authoritative.
+check can refuse earlier when they differ. Neither returns a valid proof decision.
+`pcs.equal` compares canonical values including setup identity, so values under
+different setups compare false. Actual source operands remain authoritative.
 
 The invocation root already binds each public key's complete canonical bytes at
 its original port. The setup-authority maps govern host input acceptance; they
-do not add root fields. Policy, descriptor, origin and proof bytes retain their
-versions. Versions `/1`–`/3` retain their prior key and domain matrices.
+do not add root fields. These maps do not pin receives to a source site or bind
+outputs to a setup slot.
+A returned commitment or proof that has not passed an explicit key-consuming
+check may belong to any authorized setup. Applications needing a specific output
+setup must enforce that condition in their protocol; the Host supplies no output
+setup-slot contract. Wrong input bindings and wrong terminal key/arity remain
+distinct refusal boundaries.
 
 ## Transcript observation
 
@@ -224,8 +218,7 @@ Complete-type observation absorbs bytes, so its payload domain need not equal
 the challenge field. For example, a BN254 group frame can be observed under the
 KoalaBear ext8 suite. Type identity, origin and exact canonical framing remain
 bound. This does not install a BN254 challenge suite, change a sampler or claim
-security for an arbitrary protocol using mixed domains. Older per-kind
-observation contracts retain their existing compatibility rules. The semantic facets identify
+security for an arbitrary protocol using mixed domains. The semantic facets identify
 the observation payload and affine history successor. The dedicated MLIR op is
 `crypto.exec.indexed_transcript_observe_data`; physical selection uses the
 existing bound-kernel path. This adds no source generic wildcard or runner action.

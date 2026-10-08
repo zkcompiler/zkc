@@ -9,7 +9,7 @@ def EnvelopeKeep : ZKC_Operation<"envelope.keep", [EnvelopeElement, EnvelopeLeng
   [ZKC_Apply<EnvelopeValue, [EnvelopeElement, EnvelopeLength]>],
   [ZKC_Apply<EnvelopeValue, [EnvelopeElement, EnvelopeLength]>]>;
 def EnvelopeKeepExport : ZKC_OperationExport<"zkc::envelope", "keep", EnvelopeKeep, ["value"]>;
-// A second operation exercises generic multi-result source checking without
+// A second operation exercises generic multi-result contract declarations without
 // claiming that every logical declaration has a native implementation.
 def EnvelopeOther : ZKC_Root<"Other", NatParameter>;
 def EnvelopePair : ZKC_Operation<"envelope.pair",

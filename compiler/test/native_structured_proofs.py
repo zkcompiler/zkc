@@ -28,7 +28,7 @@ for version in (1, 2, 3):
         selected[0] = f"zkc.native-proof-policy/{version}"
         policy = OUT / f"old_{version}.policy"
         policy.write_text(json.dumps(selected))
-        commands.run([compiler, "protocol-proof", source, policy], refuses="native-proof-wire-type")
+        commands.run([compiler, "protocol-proof", source, policy], refuses="native-proof-policy")
 # Standalone numeric collections use the same new frame family and carrier.
 # Wrapping them in a record is not required to select the correct boundary.
 for name, ty in [("vector", "tensor<?x!algebra.field<\"bls12-381.fr\">>"),

@@ -1,8 +1,8 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Admission.h"
-#include "zkc/Source/Codec.h"
+#include "zkc/Program/Admission.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
@@ -64,7 +64,7 @@ class ArtifactCorrespondence {
         return false;
     return true;
   }
-  static bool pairs(ArrayAttr actual, const source::Assignments &expected,
+  static bool pairs(ArrayAttr actual, const protocol::Assignments &expected,
                     bool reference = false) {
     if (!actual || actual.size() != expected.size())
       return false;
@@ -89,8 +89,8 @@ class ArtifactCorrespondence {
     return encoded->spelling() == spelling;
   }
   bool signature(Block &body, FunctionType signature,
-                 const std::vector<source::Parameter> &arguments,
-                 const source::Names &results, Environment &environment) {
+                 const std::vector<program::Parameter> &arguments,
+                 const program::Names &results, Environment &environment) {
     if (signature.getNumInputs() != arguments.size() ||
         signature.getNumResults() != results.size() ||
         body.getNumArguments() != arguments.size())
@@ -113,7 +113,7 @@ class ArtifactCorrespondence {
         return false;
     return true;
   }
-  bool body(Block &block, const source::Body &instructions,
+  bool body(Block &block, const program::Body &instructions,
             Environment environment, unsigned depth = 0,
             std::optional<unsigned> yieldWidth = {}) {
     if (depth > 64 || block.getOperations().size() != instructions.size())
@@ -130,10 +130,9 @@ class ArtifactCorrespondence {
       auto outputs = [&](ArrayRef<std::string> names) {
         return environment.outputs(op.getResults(), names);
       };
-      if (auto r = record.get<source::Operation>()) {
+      if (auto r = record.get<program::Operation>()) {
         auto kernel = dyn_cast<plan::ExecuteKernelOp>(op);
         if (!kernel || symbol(&op, "binding") != r->callee ||
-            !r->staticArguments.empty() ||
             !strings(op.getAttrOfType<ArrayAttr>("parameters"),
                      r->attributes) ||
             !inputs(r->inputs) || !outputs(r->outputs))
@@ -144,34 +143,33 @@ class ArtifactCorrespondence {
         if (!declaration ||
             kernel.getKernel() != declaration.getImplementation())
           return false;
-      } else if (auto r = record.get<source::LocalCall>()) {
-        if (!isa<local::CallOp>(op) || !r->role.empty() ||
-            symbol(&op, "callee") != r->callee || !inputs(r->inputs) ||
-            !outputs(r->outputs))
+      } else if (auto r = record.get<program::LocalCall>()) {
+        if (!isa<local::CallOp>(op) || symbol(&op, "callee") != r->callee ||
+            !inputs(r->inputs) || !outputs(r->outputs))
           return false;
-      } else if (auto r = record.get<source::Send>()) {
+      } else if (auto r = record.get<program::Send>()) {
         if (!isa<protocol_ir::EmitOp>(op) || text(&op, "schema") != r->schema ||
             text(&op, "peer") != r->peer || !inputs({r->input}))
           return false;
-      } else if (auto r = record.get<source::Receive>()) {
+      } else if (auto r = record.get<program::Receive>()) {
         if (!isa<protocol_ir::AwaitOp>(op) ||
             text(&op, "schema") != r->schema || text(&op, "peer") != r->peer ||
             !type(op.getResult(0).getType(), r->type) || !outputs({r->output}))
           return false;
-      } else if (auto r = record.get<source::ServiceQuery>()) {
+      } else if (auto r = record.get<program::ServiceQuery>()) {
         if (!isa<protocol_ir::ParticipantQueryOp>(op) ||
             text(&op, "port") != r->port || text(&op, "method") != r->method ||
             !inputs(r->inputs) || !outputs(r->outputs))
           return false;
-      } else if (auto r = record.get<source::BooleanConstant>()) {
+      } else if (auto r = record.get<program::BooleanConstant>()) {
         auto literal = dyn_cast<plan::BoolConstantOp>(op);
         if (!literal || literal.getValue() != r->value || !outputs({r->output}))
           return false;
-      } else if (auto r = record.get<source::Return>()) {
+      } else if (auto r = record.get<program::Return>()) {
         if (!isa<local::ReturnOp, protocol_ir::FinishOp>(op) ||
             !inputs(r->values))
           return false;
-      } else if (auto r = record.get<source::Yield>()) {
+      } else if (auto r = record.get<program::Yield>()) {
         if (!isa<local::LocalYieldOp, local::LocalConditionOp,
                  protocol_ir::ProtocolYieldOp>(op))
           return false;
@@ -181,33 +179,32 @@ class ArtifactCorrespondence {
         if (width > op.getNumOperands() ||
             !environment.inputs(op.getOperands().take_front(width), r->values))
           return false;
-      } else if (auto r = record.get<source::Release>()) {
+      } else if (auto r = record.get<program::Release>()) {
         if (!isa<plan::ReleaseOp>(op) || !inputs(r->values))
           return false;
-      } else if (auto r = record.get<source::Stop>()) {
-        if (!isa<local::StopOp>(op) || !r->role.empty() ||
-            text(&op, "reason") != r->reason)
+      } else if (auto r = record.get<program::Stop>()) {
+        if (!isa<local::StopOp>(op) || text(&op, "reason") != r->reason)
           return false;
-      } else if (auto r = record.get<source::ReturnIf>()) {
+      } else if (auto r = record.get<program::ReturnIf>()) {
         if (!isa<protocol_ir::FinishIfOp>(op) ||
             !environment.inputs(op.getOperands().take_front(),
                                 {r->condition}) ||
             !environment.inputs(op.getOperands().drop_front(), r->values) ||
             !outputs(r->continuations))
           return false;
-      } else if (auto r = record.get<source::VariantConstruct>()) {
+      } else if (auto r = record.get<program::VariantConstruct>()) {
         if (!isa<local::VariantInjectOp>(op) ||
             text(&op, "alternative") != r->alternative ||
             !type(op.getResult(0).getType(), r->type) || !inputs(r->payload) ||
             !outputs({r->output}))
           return false;
-      } else if (auto r = record.get<source::Conditional>()) {
+      } else if (auto r = record.get<program::Conditional>()) {
         if (!isa<local::LocalIfOp>(op) ||
             !environment.inputs(op.getOperands().take_front(),
                                 {r->condition}) ||
             !environment.inputs(op.getOperands().drop_front(), r->captures))
           return false;
-        const source::Body *arms[] = {&r->thenBody, &r->elseBody};
+        const program::Body *arms[] = {&r->thenBody, &r->elseBody};
         for (unsigned i = 0; i < 2; ++i) {
           Environment inner;
           auto &region = op.getRegion(i).front();
@@ -217,7 +214,7 @@ class ArtifactCorrespondence {
         }
         if (!outputs(r->outputs))
           return false;
-      } else if (auto r = record.get<source::Match>()) {
+      } else if (auto r = record.get<program::Match>()) {
         auto match = dyn_cast<local::LocalMatchOp>(op);
         if (!match || r->arms.size() != op.getNumRegions() ||
             !environment.inputs(op.getOperands().take_front(), {r->input}) ||
@@ -242,7 +239,7 @@ class ArtifactCorrespondence {
         }
         if (!outputs(r->outputs))
           return false;
-      } else if (auto r = record.get<source::For>()) {
+      } else if (auto r = record.get<program::For>()) {
         if (!isa<local::LocalForOp>(op) ||
             r->carried.size() != op.getNumResults() ||
             !environment.inputs(op.getOperands().take_front(2),
@@ -271,22 +268,14 @@ class ArtifactCorrespondence {
                   op.getNumResults() + unsigned(conditional)) ||
             !outputs(r->outputs))
           return false;
-      } else if (auto r = record.get<source::Loop>()) {
+      } else if (auto r = record.get<program::Loop>()) {
         auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op);
         if (!loop || r->carried.size() != op.getNumResults())
           return false;
-        unsigned offset = loop.getMaximum() ? 1 : 0;
-        if (offset) {
-          if (r->count.kind != source::LoopCount::Kind::Value ||
-              r->count.maximum != *loop.getMaximum() ||
-              !environment.inputs(op.getOperands().take_front(),
-                                  {r->count.value}))
-            return false;
-        } else if (r->count.kind != (loop.getParameter()
-                                         ? source::LoopCount::Kind::Parameter
-                                         : source::LoopCount::Kind::Constant) ||
-                   r->count.value != loop.getCount() || r->count.maximum ||
-                   !r->count.induction.empty())
+        constexpr unsigned offset = 1;
+        if (!loop.getMaximum() || r->count.maximum != *loop.getMaximum() ||
+            !environment.inputs(op.getOperands().take_front(),
+                                {r->count.value}))
           return false;
         auto &region = loop.getBody().front();
         if (region.getNumArguments() !=
@@ -316,12 +305,9 @@ class ArtifactCorrespondence {
 
 public:
   bool check(protocol_ir::ProtocolModuleOp module,
-             const source::Participants &program) {
+             const program::Participants &program) {
     if (module.getProfile() != protocol_ir::Profile::Physical ||
-        !module.getExecutionContract() ||
-        !protocol_ir::isProgram(*module.getExecutionContract()) ||
-        !source::isProgram(program.contract) ||
-        program.stage != source::Participants::Stage::Physical)
+        program.stage != program::Participants::Stage::Physical)
       return false;
     unsigned binding = 0, function = 0, participant = 0, entry = 0;
     for (auto &op : module.getBody().front()) {
@@ -343,7 +329,7 @@ public:
           return false;
         const auto &expected = program.functions[function++];
         if (fn.getSymName() != expected.name || !fn.getBody().hasOneBlock() ||
-            !expected.body || !expected.origin)
+            !expected.origin)
           return false;
         auto origin = fn->getAttrOfType<ArrayAttr>("logical_origin");
         if (!origin || origin.size() != 2 ||
@@ -355,7 +341,7 @@ public:
         auto &block = fn.getBody().front();
         if (!signature(block, fn.getFunctionType(), expected.arguments,
                        expected.results, environment) ||
-            !body(block, *expected.body, std::move(environment)))
+            !body(block, expected.body, std::move(environment)))
           return false;
       } else if (auto p = dyn_cast<protocol_ir::ParticipantOp>(op)) {
         if (participant == program.participants.size())
@@ -363,8 +349,7 @@ public:
         const auto &expected = program.participants[participant++];
         if (p.getSymName() != expected.name ||
             p.getInstance() != expected.instance ||
-            p.getRole() != expected.role || !p.getParameters().empty() ||
-            !expected.parameters.empty())
+            p.getRole() != expected.role)
           return false;
         auto ports = p->getAttrOfType<ArrayAttr>("service_ports");
         if ((ports ? ports.size() : 0) != expected.services.size())
@@ -403,7 +388,8 @@ public:
   bool exhausted() const { return !remaining; }
 };
 } // namespace
-Error verifyProgramArtifact(Operation *subject, StringRef bytes) {
+Expected<program::Participants> verifyProgramArtifact(Operation *subject,
+                                                      StringRef bytes) {
   if (!subject || failed(verify(subject)))
     return error("artifact-correspondence-subject");
   if (auto wrapper = dyn_cast<ModuleOp>(subject)) {
@@ -417,19 +403,17 @@ Error verifyProgramArtifact(Operation *subject, StringRef bytes) {
   auto json = parseJson(bytes);
   if (!json)
     return json.takeError();
-  auto decoded = source::decode(*json);
+  auto decoded = program::decode(*json);
   if (!decoded)
     return decoded.takeError();
-  auto *program = std::get_if<source::Participants>(&*decoded);
-  if (!program)
-    return error("artifact-correspondence-profile");
-  if (auto e = admit(*program, true))
+  auto *program = &*decoded;
+  if (auto e = admit(*program))
     return e;
   ArtifactCorrespondence checker;
   if (!checker.check(module, *program))
     return error(checker.exhausted() ? "artifact-correspondence-limit"
                                      : "artifact-correspondence",
                  checker.detail());
-  return Error::success();
+  return std::move(*decoded);
 }
 } // namespace zkc::protocol

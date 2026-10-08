@@ -7,7 +7,10 @@ program. The validator receives an authorized public context and a candidate
 proof; it does not require the producer, its witness, or its live resources.
 [Status](../../../status.md) records implementation coverage;
 [native proof compilation](../../../compiler/native-proofs.md) records the
-implementation, supported policy versions and executable examples.
+implementation and executable examples. The sole policy, deployment, descriptor,
+construction map and binding use `/4`; occurrences use `zkc.native-origin/2`.
+Flat programs, loops, PCS and structured messages share this contract and
+`zkc.program/1`. Other proof versions refuse without compatibility decoding.
 
 ## Program, construction and deployment
 
@@ -71,7 +74,7 @@ also bound where present. A key fingerprint is checked against the application's
 expected key, not against a key chosen by the proof. Duplicate bindings at an
 invocation must agree.
 
-The first flat profile adds no participant data inputs. Its producer host takes
+The profile adds no participant data inputs. Its producer host takes
 labelled `(role, port)` public values and uses them in the initial transcript
 root. The generated participant data-input map is empty; only the internal
 transcript input/result is added. For a port shared by producer and validator,
@@ -82,7 +85,7 @@ need additional participant data inputs through an explicit checked map. A
 construction cannot obtain a validator-private value by relabelling it public. A
 witness-dependent verifier input must either be deliberately published and
 bound, be fixed by a separately specified commitment protocol, or make this
-deployment inapplicable. The first flat profile refuses a relation operand with
+deployment inapplicable. The profile refuses a relation operand with
 purpose `witness` when its original input port is available to the validator,
 even if the statement selects the producer component. This includes shared
 witness ports and the current composed R1CS assignment. Admitting a deliberately public assignment or committed replacement
@@ -131,9 +134,9 @@ Program identity, candidate identity and invocation binding have different uses:
 Candidate checking binds the actual source, policy and emitted candidate.
 Generated helper names, process/session identifiers, backend addresses and
 physical implementation names do not become cryptographic occurrence labels. The
-first native policy identifies the exact source bytes; it does not promise
-identity under source reformatting. A normalized identity policy needs its own
-definition and comparisons.
+native policy identifies the exact source bytes; it does not promise
+identity under source reformatting. This profile provides no normalized
+source identity policy.
 
 ## Ordered construction
 
@@ -177,11 +180,11 @@ Construction does not issue a dummy zero-budget RNG to stand in for a
 transcript. Resource mappings describe correspondence; transcript generations
 need not equal source RNG generations.
 
-The first construction profile has one validator random service port. A direct
+The construction has one validator random service port. A direct
 query takes exactly that service reference, no data arguments, and returns one
 field. Its sole delivery uses that exact SSA result: derived values and
-`protocol.restrict_roles` wrappers refuse. Pairing is checked in the same flat
-body after unsimplified static expansion, retaining the authored call path.
+`protocol.restrict_roles` wrappers refuse. Pairing is checked in the same source
+block after unsimplified static expansion, retaining the authored call path.
 There is no intervening query or producer-to-validator message. Two outstanding
 draws, batched/derived delivery and undelivered private coins refuse this profile.
 It refuses other validator service ports, unselected queries, unused selected
@@ -189,7 +192,7 @@ draws, nonchallenge reverse messages, existing transcript inputs, and selected
 draws hidden in local programs. Those restrictions bound the constructor, not
 the common IR or every authored deployment.
 
-The selected authority includes every alias of its root. Policy `/1`'s
+The selected authority includes every alias of its root. The construction's
 single validator port and native service owner contract exclude another
 validator alias and cross-owner binding respectively. A deployment attempting to
 share the validator challenge root with producer entropy refuses at registry
@@ -205,7 +208,7 @@ canonical root bytes under the installed suite's fixed `binding` label. The
 proof header contains their SHA-256 digest; it does not replace those bytes in
 initialization. Local transcript kernels consume the current state and return
 its successor. Loops carry successors explicitly. A capability cannot be
-serialized, copied, reset or restored from public bytes. The first constructor
+serialized, copied, reset or restored from public bytes. The constructor
 appends the final transcript as an internal participant result, mapped
 separately from source results. The host disposes it after normal return;
 stop/cancellation follows the ordinary cleanup contract. It never becomes proof
@@ -222,30 +225,18 @@ compiler constructs and checks the actual candidate and carries its regenerated
 descriptor. This authenticates that compilation result; lowering correctness is
 still the compiler's stated evidence level, not a theorem supplied by a hash.
 
-A selected occurrence identifies the original entry, authored call/iteration
-path, operation and owner. Native query and message occurrences use a distinct
-versioned native-origin grammar. Its static path records authored composition;
-its dynamic-coordinate vector is empty for the first flat profile. Query records
-identify the original service port, contract, method, site and owner. Message
-records identify the original protocol, site, schema and effective source roles
-after static application role substitution. The
-constructor supplies canonical occurrence bytes explicitly as a lowercase-hex
-static operation attribute, at most 2 KiB before hex encoding. Native origin
-bindings consume those bytes directly; they do not reconstruct them from
-generated helper names or runtime frames. The source-route logical-origin
-contracts retain their original meaning. Dynamic iteration indices and attempt
-context are explicit when the corresponding profile admits them. Occurrence
-resolution precedes generated renaming and optimization. Repeated execution is
-not identified by a static site alone. Exact-source identity does not remove the
-need for these dynamic coordinates.
+A selected occurrence identifies the original entry, authored call/repeat path,
+operation and owner. The indexed contract carries a bounded static template and
+explicit induction operands; its dynamic-coordinate vector is empty for flat
+programs. The [occurrence encoding](#native-occurrence-encoding) fixes those
+bytes and bounds. Generated helper names and runtime diagnostic frames do not
+determine transcript identity. Occurrence resolution precedes optimization.
 
-For the first flat proof policy, each inserted origin operation is top-level in
-a straight-line local helper and executes at one top-level participant call site
-per role. No such operation is under local `if`, `match` or `for`, or reachable
-through a participant call or loop. Its helper has exactly one origin operation.
-The roles may use separate helpers for the same occurrence. Sharing a helper
-between them is permitted only when each role uses it once for that occurrence.
-Reusing it twice within one role refuses.
+Each inserted transition is top-level in a straight-line local helper containing
+only its coordinate construction, transition, complete return and admitted
+storage releases. The helper executes at one static participant site per role;
+an enclosing participant loop may reach that site repeatedly. Local conditional
+or repeated execution of the transition inside the helper refuses.
 
 The checked deployment includes the role-independent ordered occurrence list.
 Each role's statically planned inserted sequence must match that list exactly;
@@ -259,18 +250,16 @@ Proof admission also closes the generated state chain: each role has exactly one
 chain from its mapped internal transcript input to its mapped internal result,
 and every transition is a listed native-origin operation. Only those operations
 and their explicit helper entry/return wiring may consume or produce that suite
-state. No legacy or extra transition, alternate state root, dropped successor,
+state. No extra transition, alternate state root, dropped successor,
 or native-origin operation elsewhere is admitted. An occurrence-list match
 alone is insufficient to establish the actual transcript sequence.
 
-A separate native-origin attribute rule requires exactly one lowercase, even-
-length hex string of at most 4096 characters, checks that bound before decoding,
-then validates the exact bounded tree grammar, native version, empty dynamic
-vector and absence of trailing bytes. Old message/challenge attribute rules
-remain unchanged. Installed primitive admission alone grants neither source
-correspondence nor occurrence uniqueness. A generic supplied runner can execute
-the admitted literal-label kernel contract, but cannot authorize a native proof
-deployment or its construction claim without the separately checked envelope.
+The indexed-origin attribute rule checks lowercase, even-length hex and its
+bound before decoding the exact static template grammar, empty coordinate array
+and absence of trailing bytes. Installed primitive admission alone grants
+neither source correspondence nor occurrence uniqueness. A generic supplied
+runner can execute the indexed kernel but cannot authorize a proof deployment
+or construction claim without its separately checked envelope.
 
 The suite fixes framing, absorb grouping, domain labels, challenge mapping and
 failure behavior. Equal output fields do not make two suites interchangeable. A
@@ -298,11 +287,19 @@ protocol equations or choose challenges. Message types, occurrences, peer roles
 and decoding policies come from the admitted deployment. A candidate proof
 cannot choose a different program, codec or verifier configuration.
 
-For the internal framed profile, reuse the bounded length-delimited payload
-grammar of the [artifact format](../../../compiler/artifact-format.md#artifact-execution).
-The native invocation binding has a distinct versioned root domain. Reusing the
-outer framing does not grant compatibility with an old constructed artifact.
-Expected context is always supplied independently.
+The framed proof starts with the eight bytes `ZKCPRF01`, followed by the 32-byte
+SHA-256 digest of the canonical invocation binding. Each expected message is a
+u64 little-endian payload length followed by that payload. Expected type and
+occurrence come from the admitted deployment. The header is checked context, not
+authority to choose configuration. Expected context is supplied independently.
+
+The proof ceiling is 16 MiB, including header and message lengths; a Host may
+lower it. Length arithmetic and payload bounds are checked before allocation or
+consumption. Reading a length remains a consumed prefix if its payload is
+truncated; a later decode failure likewise retains consumed message bytes.
+Validation requires complete proof consumption, so trailing bytes refuse.
+Transport does not absorb transcript data a second time: explicit program
+operations perform observations.
 
 The internal profile admits canonical-only codecs: successful decoding satisfies
 `encode(decode(bytes)) = bytes` for the exact admitted type/domain/shape. Transcript
@@ -339,7 +336,7 @@ the host checks the constructed maps and event order in the pinned deployment.
 An affine external transcript value or unmapped resource input refuses. Copyable
 external construction state uses the ordinary `/4` data-input contract and
 [authored transition rules](../../realization/external-constructions.md#authored-native-deployment).
-The first authored control
+Authored execution
 has no generated transcripts and refuses authored validator transcript inputs.
 Other validator resources require a separate explicit policy; a witness or
 ambient oracle cannot enter through this exception.
@@ -473,17 +470,17 @@ The native host accepts this application-owned record alongside a pinned native
 deployment. It is not supplied by a candidate proof or inferred from its header:
 
 ```text
-["zkc.native-attempt-policy/1", completion_original_result,
+["zkc.native-attempt-policy/2", completion_original_result,
  [[rng_original_input, rng_original_result], ...],
  [attempt_limit, proof_byte_limit],
- [instruction_limit, call_limit, iteration_limit],
+ [instruction_limit, iteration_limit],
  [live_payload_limit, total_payload_limit]]
 ```
 
 Every number is a canonical unsigned decimal string. Parsing is bounded to
 64 KiB and the existing logical JSON tree limits. Port indices are below 1024;
 attempts are 1 through 1024. Proof bytes cannot exceed 16 MiB; instruction,
-call, iteration and payload limits cannot exceed the corresponding interpreter
+iteration and payload limits cannot exceed the corresponding interpreter
 hard ceilings. Zero work, payload or proof budgets are deliberate execution
 refusals, not unbounded values. The proof cap includes the framing header.
 
@@ -519,7 +516,7 @@ verifier acceptance does not certify which retry policy the producer used. A
 retry attempt may itself contain an accepting proof; discarding its bytes is a
 host publication property, not an additional verifier predicate.
 
-The selected native host supports existing constructed BLS transcript profiles
+The native host supports the registered native transcript suites
 and deployments with authored copyable external state. This policy does not expand the
 constructor's rejection of authored transcript inputs, hidden selected draws or
 unsupported message types.
@@ -540,51 +537,114 @@ initialization assumptions, honest delivery and observers are separate premises.
 See the [observation requirements](../../../compiler/ir-foundation.md#information-retained-for-observation-analyses).
 Their preservation does not require implementing the future affine analyzer.
 
-Each reader admits only its supported profiles and explicitly refuses others. Native structural checking does not inherit a Lean source interpreter,
-a proof about another carrier, or a Fiat–Shamir security theorem.
+Readers admit only this proof contract. Native structural checking does not
+inherit an independent Lean source interpreter, a proof about another carrier,
+or a Fiat–Shamir security theorem.
 
-## Flat native occurrence encoding
+## Native occurrence encoding
 
-`zkc.native-origin/1` uses the canonical logical string/array tree encoding
-(tag 0 followed by a u64 little-endian UTF-8 byte count and bytes; tag 1 followed
-by a u64 little-endian element count and elements). The exact tree is:
+An indexed native kernel carries the bounded static template:
 
 ```text
-["zkc.native-origin/1", entry, [original_apply_site, ...], [], event]
+["zkc.native-origin-template/1", entry, [step, ...], [], event]
 event = ["query", protocol, site, service_port, service_contract, method, owner]
       | ["message", protocol, site, schema, sender, receiver]
+step = ["apply", original_caller_protocol, original_apply_site]
+     | ["repeat", original_protocol, original_repeat_site]
 ```
 
-The apply path excludes the event's own site, which occurs in `event`. Service
-ports are spelled `input_N`, where N is the original callee input index,
-encoded as a canonical unsigned 64-bit decimal without leading zeroes. Owners,
-senders and receivers are source roles after applying the occurrence's static
-role substitution. Generated participant or helper names never enter an origin.
-In this flat profile, a message's schema is its original source site. The
-prepared wire schema is its prepared site; the checked deployment map connects
-these occurrences without making generated names part of transcript identity.
-Names are nonempty printable ASCII strings (bytes 33 through 126), at most
-128 bytes each. The path has at most 64 elements. The dynamic-coordinate array
-is empty in this version. The complete encoded tree is at most 2048 bytes and
-is carried as exactly one lowercase hexadecimal attribute of at most 4096
-characters. Check these bounds before decoding. Trailing bytes, alternate
-shapes, unknown tags and noncanonical hex refuse. Query contracts admit only a
-query event; observation contracts admit only a message event. This is syntax
-admission; source correspondence and unique execution require the separate
-construction and proof-admission checks.
+The tree uses the canonical logical encoding: tag 0 followed by a u64
+little-endian UTF-8 byte count and string bytes, or tag 1 followed by a u64
+little-endian element count and recursively encoded elements. An application
+step precedes its callee's steps; a repeat step precedes every event in its body.
+The path excludes the final event. Roles reflect static application substitution.
+Service ports are `input_N`, with the original input index as a canonical u64
+decimal. A message schema is its original source site. The checked wire map
+connects it to the prepared site without using generated names in the origin.
 
-The Crypto dialect has distinct `exec.native_transcript_challenge` and
-`exec.native_transcript_observe` wrappers because their attribute contract differs
-from `exec.transcript_challenge` and `exec.transcript_observe`, whose origins
-use five identifiers. They reuse the same affine state,
-logical sampling/history facets, physical selection and backend transitions.
+Names are nonempty printable ASCII (bytes 33 through 126), at most 128 bytes.
+Paths have at most 64 steps. The encoded template is at most 2048 bytes and is
+carried as exactly one lowercase, even-length hex attribute, at most 4096
+characters. Its coordinate array must be empty. Unknown tags, alternate shapes,
+noncanonical hex and trailing bytes refuse. Challenges require query events;
+observations require message events. These checks establish syntax, not source
+correspondence or unique execution.
 
-## Flat deployment policy and descriptor
+The dynamic operation takes an explicit `indices` value. Its entries are the
+actual induction values of the enclosing repeats, outermost first, with one
+entry per `repeat` step. The final absorbed bytes encode:
+
+```text
+["zkc.native-origin/2", entry, [step, ...], [iteration_decimal, ...], event]
+```
+
+Each iteration is a canonical unsigned 64-bit decimal string. The vector has
+at most 64 entries; the final encoding is bounded by 4096 bytes. A length
+mismatch refuses. The operation neither reads runtime frame names nor infers
+coordinates from dispatch order. Query labels still name the source validator's
+draw when executed by the producer. Zero trips perform no body transition.
+The existing suite framing absorbs the dynamic bytes under its static `origin`
+label, so dynamic instances introduce no dynamically interned Merlin labels.
+
+The generated contracts are `transcript.native.indexed.challenge` and
+`transcript.native.indexed.observe.data`. They retain the affine transcript,
+sampling/observation/history facets and
+resource transitions. The final kernel operand is `indices`. A generated local
+helper instead receives one scalar index argument per enclosing loop, constructs
+that vector with exactly one `indices.empty` followed by ordered
+`indices.append` operations, performs one transition and returns its complete
+results. Each append must use the next helper argument directly. Other
+computation or local control in that helper refuses. Physical releases follow
+the ordinary last-use rules: intermediate index vectors may be released between
+appends, and the observed payload may be released after the transition.
+Transcript capabilities and returned values cannot be released.
+
+## Compact state and independent admission
+
+The descriptor keeps a flat static event list in source depth-first order. It
+stores each source template once, regardless of runtime count. It does not
+repeat a second control tree already present in the participant programs.
+
+Construction appends the transcript as the last carried value of every
+participant loop whose subtree contains selected transcript events. The body
+receives that state, consumes/produces its successors and yields the final
+successor last. The loop result feeds subsequent events. Outer induction values
+are explicit captures in nested loops. Event-free loops retain their original
+state and may belong to one role. They cannot contain hidden transcript events
+or unobserved proof messages.
+
+Final Rust admission checks every role recursively. Each inserted helper is
+used at exactly one static site per role; a loop may execute that site repeatedly.
+Helper coordinate arguments must be exactly the enclosing induction operands in
+order. For each origin path prefix ending in `repeat`, admission derives a
+bijection to the actual participant loop site and maximum. Both roles must have
+the same mapping. Every listed event must appear, and every helper must be used.
+Observation operands must be the actual sent/received value or the newly derived
+challenge delivery. The state must flow from the internal entry port through
+every transition and loop to the final internal result. Capturing, dropping,
+substituting or bypassing that state refuses.
+
+Draw/delivery pairs remain within one source block. A selected draw cannot remain
+pending at a loop boundary. Original guards, local work, producer service draws,
+nonselected messages and action order are retained. The source-relative checker
+reconstructs the transformation and compares the complete unsimplified candidate,
+including count operands, loop bounds, state wiring and metadata. Physical
+admission does not independently prove equivalence of two count expressions.
+Current provenance admission requires preserved loop structure; peeling,
+unrolling or fusion needs a separate correspondence rule before admission.
+
+The independent driver advances each reached loop through the runner's explicit
+local-control API, using that role's count and bound. It establishes no peer
+count agreement. An authored verifier must validate any semantic count condition
+needed by its protocol. Proof exhaustion and ordinary stops retain their existing
+meaning. The joint driver continues to use its separate count-agreement policy.
+
+## Deployment policy and descriptor
 
 The compiler's policy is an exact array (JSON spelling carries no identity):
 
 ```text
-["zkc.native-proof-policy/1", entry, producer, validator, acceptance,
+["zkc.native-proof-policy/4", entry, producer, validator, acceptance,
  suite, service, public_inputs, [[query_site, delivery_site], ...]]
 ```
 
@@ -601,7 +661,7 @@ this policy.
 The immutable compiler descriptor is:
 
 ```text
-["zkc.native-proof-descriptor/1", policy, "zkc.native-origin/1",
+["zkc.native-proof-descriptor/4", policy, "zkc.native-origin/2",
  [[event_kind, origin_hex], ...],
  [[validator, original_port, logical_type, codec], ...],
  [[message_origin_hex, logical_type, codec], ...]]
@@ -615,7 +675,7 @@ the bounded logical tree encoding when hashing or constructing an invocation
 root.
 
 A constructed projection interface adds a `construction` dictionary with
-`format = "zkc.native-construction/1"`, the logical `transcript` type,
+`format = "zkc.native-construction/4"`, the logical `transcript` type,
 `removed_services` (the original service index), and a complete actual `actions`
 map. All original interface fields, port lists and action records remain
 unchanged. Each participant appends exactly one transcript input and result;
@@ -623,23 +683,19 @@ original data and output positions remain unchanged. Formation checks the new
 signatures, remaining services and every actual action. It retains original
 producer queries, messages, local calls and guards exactly and in order. Only
 queries at the removed service owner and that owner's outgoing challenge
-messages can disappear. Inserted actions must call a helper containing exactly
-one top-level native transcript transition wired directly from all entry
-arguments to the complete return. Physical payload releases may follow that
-transition; nested calls and other computations refuse. Repeated use of an
-inserted helper within one participant refuses this flat map. Retained authored
+messages can disappear. Inserted actions call the indexed helpers defined above.
+Complete state and coordinate checks apply recursively through participant loops. Retained authored
 actions cannot call inserted helpers. These formation checks do not establish
 source correspondence. Source-relative checking reconstructs the admitted
-transformation and compares the whole candidate,
-including operands, local definitions and metadata, ignoring locations.
+transformation and compares the whole candidate, including operands, local
+definitions and metadata, ignoring locations.
 
-
-## Flat deployment and invocation records
+## Deployment and invocation records
 
 The owned `compileNativeProof` API and `protocol-proof` command return:
 
 ```text
-["zkc.native-proof/1", source_sha256,
+["zkc.native-proof/4", source_sha256,
  descriptor, descriptor_sha256,
  candidate_json, candidate_sha256,
  [[role, participant_symbol,
@@ -689,9 +745,10 @@ A role invocation is:
 
 Public rows enumerate every validator data input in source order. Role input
 rows enumerate that role's mapped data ports in source order. `input_kind` is
-`wire` with lowercase canonical wire hex, or producer-only `nonce`/`rng` with a
-canonical decimal transition budget. Issued resources use BLS12-381 Fr and the
-role's exact host domain. Service rows select mapped producer random services;
+`wire` with lowercase canonical wire hex, producer-only `nonce`/`rng` with a
+canonical decimal transition budget, or an authorized key constructor described
+[below](#setup-authority-and-input-ownership). Issued resources use their exact
+admitted physical type and the role's host domain. Service rows select mapped producer random services;
 the validator has none. Budgets are at most 1,000,000. Context decodes to at most
 4096 bytes. An authored no-transcript invocation requires transcript budget zero.
 Input trees obey the common logical-tree limits, including through the direct
@@ -704,7 +761,7 @@ Budgets are explicit application caps and may be lower than the required work.
 The exact invocation root tree is:
 
 ```text
-["zkc.native-proof-binding/1", "sha256", "zkc.native-origin/1", source_sha256,
+["zkc.native-proof-binding/4", "sha256", "zkc.native-origin/2", source_sha256,
  entry, producer, validator, descriptor,
  [[validator, original_port, logical_type, canonical_wire_hex], ...],
  context_hex, [], [], []]
@@ -725,245 +782,85 @@ Final proof admission checks both roles' exact ordered native transitions,
 unique origins and complete affine state chain. It also checks matching wire
 layouts and that each message observation consumes the actual sent/received
 value (or the freshly derived erased delivery). An extra unreachable transition,
-a dropped final observation, duplicate helper use or legacy transcript operation
+a dropped final observation, duplicate static helper use or an unlisted transcript operation
 refuses. Ordinary supplied-carrier admission grants none of these proof-specific
 properties.
 
-## Iterated deployment profile
 
-`zkc.native-proof-policy/2` selects the same policy fields as `/1`, requires a
-nonempty supported suite, and admits bounded mathematical repeats with static
-applications. Authored no-transcript execution remains a `/1` profile. The `/2`
-construction uses the existing participant loops and physical carrier; it adds
-no IR profile or participant instruction kind. Both flat and iterated
-constructions use `zkc.program/1`. Proof admission checks loop permission and
-message types against the proof policy independently of that program format.
-The deployment, descriptor, construction metadata and invocation binding use
-`zkc.native-proof/2`, `zkc.native-proof-descriptor/2`,
-`zkc.native-construction/2` and `zkc.native-proof-binding/2`, respectively.
-Their field layouts are unchanged. The descriptor and binding name
-`zkc.native-origin/2`. Invocation inputs remain `zkc.native-proof-inputs/1`.
-Version `/1` policy records and kernels retain their interpretation. Deployments
-embedding the refused `zkc.native-participants/1`–`/3` formats require recompilation
-and independent authorization of the replacement. Recompilation changes program
-bytes and deployment-file digests; the origin and transcript codec domains
-retain their declared interpretation.
+## Message and public-input types
 
-### Explicit occurrences
+The [complete message grammar and codecs](structured-proof-messages.md) cover
+scalar, numeric and structured payloads, including PCS values. Public inputs
+also admit standalone BLS12-381 multilinear tables in `arkworks.mle-lsb/1` and
+authorized verifier keys. Tables and keys are not proof-message payloads.
 
-An indexed native kernel carries the bounded static template:
+A BLS field-array frame is `ZKCV`, byte `1`, tag `64`, then the exact
+type-declared number of canonical 32-byte scalars. Index uses tag `0x31` and a u64
+little-endian value. A public table uses tag `2`, u32 little-endian arity, then
+exactly `2^arity` canonical scalars in logical MSB order. Arity, allocation and
+exact frame length are checked before allocation or scalar decoding. The root
+binds the complete canonical public bytes under invocation limits.
 
-```text
-["zkc.native-origin-template/1", entry, [step, ...], [], event]
-step = ["apply", original_caller_protocol, original_apply_site]
-     | ["repeat", original_protocol, original_repeat_site]
-```
+Ordinary validator local functions may use admitted copyable data, polynomial
+arithmetic and immutable verifier keys. They cannot consume or produce live
+resources. Generated transcript helpers obey the complete-state rule above.
+This supports a Sumcheck verifier that checks every round and evaluates the
+original public polynomial at its final point. A committed terminal additionally
+needs the explicit PCS check below.
 
-`event` has the same query/message shape and original-source meaning as the
-flat encoding above. An application step precedes its callee's steps. A repeat
-step precedes every event in its body. The path excludes the final event itself.
-The same identifier, 64-step and 2048-byte template limits apply. The contract
-accepts exactly one lowercase hex attribute and requires empty coordinates in
-that attribute. Ordinary flat kernels reject templates; indexed kernels reject
-flat origin literals.
+## Setup authority and input ownership
 
-The dynamic operation takes an explicit `indices` value. Its entries are the
-actual induction values of the enclosing repeats, outermost first, with one
-entry per `repeat` step. The final absorbed bytes encode:
+The [setup registry contract](structured-proof-messages.md#application-authorized-setups)
+defines exact public-key and input-port authorization, including multiple setups.
+The installed PCS is `multilinear.kzg.bls12-381/1`. A verifier key is immutable
+host input data with descriptor codec `zkc.native-verifier-key/1` and canonical
+`ZKCAR006` bytes; keys and opening states never cross the proof wire.
 
-```text
-["zkc.native-origin/2", entry, [step, ...], [iteration_decimal, ...], event]
-```
-
-Each iteration is a canonical unsigned 64-bit decimal string. The vector has
-at most 64 entries; the final encoding is bounded by 4096 bytes. A length
-mismatch refuses. The operation neither reads runtime frame names nor infers
-coordinates from dispatch order. Query labels still name the source validator's
-draw when executed by the producer. Zero trips perform no body transition.
-The existing suite framing absorbs the dynamic bytes under its static `origin`
-label, so dynamic instances introduce no dynamically interned Merlin labels.
-
-Installed indexed contracts are `transcript.native.indexed.challenge` and
-`transcript.native.indexed.observe.{bool,field,group,index,field_array}`. They
-retain the existing affine transcript, sampling/observation/history facets and
-resource transitions. The final kernel operand is `indices`. A generated local
-helper instead receives one scalar index argument per enclosing loop, constructs
-that vector with exactly one `indices.empty` followed by ordered
-`indices.append` operations, performs one transition and returns its complete
-results. Each append must use the next helper argument directly. Other
-computation or local control in that helper refuses. Physical releases follow
-the ordinary last-use rules: intermediate index vectors may be released between
-appends, and the observed payload may be released after the transition.
-Transcript capabilities and returned values cannot be released.
-
-### Compact state and independent admission
-
-The descriptor keeps a flat static event list in source depth-first order. It
-stores each source template once, regardless of runtime count. It does not
-repeat a second control tree already present in the participant programs.
-
-Construction appends the transcript as the last carried value of every
-participant loop whose subtree contains selected transcript events. The body
-receives that state, consumes/produces its successors and yields the final
-successor last. The loop result feeds subsequent events. Outer induction values
-are explicit captures in nested loops. Event-free loops retain their original
-state and may belong to one role. They cannot contain hidden transcript events
-or unobserved proof messages.
-
-Final Rust admission checks every role recursively. Each inserted helper is
-used at exactly one static site per role; a loop may execute that site repeatedly.
-Helper coordinate arguments must be exactly the enclosing induction operands in
-order. For each origin path prefix ending in `repeat`, admission derives a
-bijection to the actual participant loop site and maximum. Both roles must have
-the same mapping. Every listed event must appear, and every helper must be used.
-Observation operands must be the actual sent/received value or the newly derived
-challenge delivery. The state must flow from the internal entry port through
-every transition and loop to the final internal result. Capturing, dropping,
-substituting or bypassing that state refuses.
-
-Draw/delivery pairs remain within one source block. A selected draw cannot remain
-pending at a loop boundary. Original guards, local work, producer service draws,
-nonselected messages and action order are retained. The source-relative checker
-reconstructs the transformation and compares the complete unsimplified candidate,
-including count operands, loop bounds, state wiring and metadata. Physical
-admission does not independently prove equivalence of two count expressions.
-Current provenance admission requires preserved loop structure; peeling,
-unrolling or fusion needs a separate correspondence rule before admission.
-
-The independent driver advances each reached loop through the runner's explicit
-local-control API, using that role's count and bound. It establishes no peer
-count agreement. An authored verifier must validate any semantic count condition
-needed by its protocol. Proof exhaustion and ordinary stops retain their existing
-meaning. The joint driver continues to use its separate count-agreement policy.
-
-### Wire and public context
-
-In addition to the flat Bool, BLS12-381 Fr and G1 messages, `/2` admits canonical
-`index` and shape-bound BLS12-381 `field_array` messages. The array codec identity
-is `zkc.native-field-array/1`; its logical type binds the element count. Its
-payload is `ZKCV`, byte `1`, tag `64`, then exactly that many canonical 32-byte
-scalars. Index uses the existing tag `31` and u64 little-endian payload.
-Observation and proof production call the same closed native encoder.
-
-Public inputs admit the same Bool, Fr, G1, index and field-array codecs, plus
-BLS12-381 multilinear tables in the installed
-`arkworks.mle-lsb/1` representation. Table wire bytes retain the existing logical
-MSB order: `ZKCV`, byte `1`, tag `2`, a u32 little-endian arity, then exactly
-`2^arity` canonical scalars. Check arity and derived allocation bounds before
-shifting or allocating; check the exact frame length before decoding scalars.
-The public root binds the complete canonical table bytes under the existing
-input/root limits. Tables are not admitted as proof-message payloads in this
-profile. A backend representation or codec alone does not extend this matrix.
-
-Ordinary validator local functions may use checked serializable data and native
-field arrays, including points, tables and polynomial arithmetic. They may not
-consume or produce live resources. Generated transcript helpers are checked by
-the separate complete-state rule above. This supports a Sumcheck verifier that
-checks every round and evaluates the original public polynomial at the final
-point. A private commitment terminal requires its own relation/key/PCS contract;
-a residual final value alone is not that terminal.
-
-
-The [structured message extension](structured-proof-messages.md) defines `/4`,
-including its complete-type observer and canonical aggregate frames.
-
-## Committed deployment profile
-
-`zkc.native-proof-policy/3` retains the nine policy fields and bounded repeats
-of `/2`. Its suite may be empty, with empty service and draw selections, to
-select authored execution. The deployment, descriptor, construction metadata
-and invocation root use their respective `/3` tags. Field layouts remain the
-same. Origins remain `zkc.native-origin/2`, with explicit coordinates and the
-same compact template rules. Invocation inputs remain `/1`; the proof framing
-remains `ZKCPRF01`. Versions `/1` and `/2` retain their closed type matrices and
-interpretations. Authored `/3` does not insert observations or challenges.
-
-### Setup authority and input ownership
-
-This profile supports one configured `multilinear.kzg.bls12-381/1` setup. A
-program exposing PCS objects in its prepared entry signature or protocol-operation
-operand/result types must have one validator verifier-key input, explicitly
-selected for public binding. This gate follows the selected entry; unrelated
-local definitions do not by themselves require a key. Multiple
-verifier-key inputs refuse in `/3`; the [structured profile](structured-proof-messages.md#application-authorized-setups)
-defines `/4` multi-key authority. That input is immutable data, not a live capability.
-The descriptor codec for it is `zkc.native-verifier-key/1`; its canonical bytes
-are the existing `ZKCAR006` verifier-key envelope. It is a host input codec only:
-verifier keys, prover keys and opening states are never proof messages.
-
-The application independently supplies both the expected deployment SHA-256 and
-the expected verifier key ID. The key ID must come from authorized configuration;
-neither invocation bytes nor proof headers authorize it. The host imports the
-public key under that ID, checks its shape, canonical encoding and fingerprint,
-and configures the backend before decoding any PCS value. Passing a key ID to
-a deployment without a verifier-key input also refuses. The entire canonical
-verifier key is bound as a public value in the invocation root. The separate
-reserved relation/key/config arrays remain empty: relation and configuration
-are represented by the captured source, explicit public ports and application
-context, rather than a second key registry or duplicate root fields.
-
-A role input `[original_port, ["verifier_key", public_port]]` must name that
-same authorized verifier-key port. A producer-only prover-key input is:
+A role input `[original_port, ["verifier_key", public_port]]` selects its
+authorized public key. A producer-only prover-key input is:
 
 ```text
 [original_port, ["prover_key_file", [path, expected_material_fingerprint_hex]]]
 ```
 
-The full-material fingerprint is independently supplied producer configuration.
-The existing bounded loader checks it, the selected verifier projection and setup
-identity. The path resolves relative to the host working directory. Imports read
-one bounded regular file; symlinks may resolve to regular files. Descriptor
-validation and nonblocking open on Unix refuse devices/directories/FIFOs without
-waiting for a FIFO writer. Input byte, value and work budgets apply before key
-loading and before resource issuance. No proof byte can request a key file.
+The application supplies the full-material fingerprint independently. The loader
+checks it, the selected verifier projection and setup identity. Paths resolve
+relative to the Host working directory. Imports capture one bounded regular
+file; symlinks may resolve to regular files. Descriptor validation and nonblocking
+open on Unix refuse devices, directories and FIFOs without waiting for a writer.
+Input byte, value and work budgets apply before key loading and resource issuance.
+No proof byte requests a key file. Local paths are trusted Host configuration;
+an external request does not itself authorize a filesystem read.
 
-All tables committed under that key must have exactly its positive arity;
-`pcs.commit` checks this before invoking the upstream commitment routine.
-The verifier never needs a prover key, witness table or opening state. Its local
-functions may consume the configured immutable verifier key. The public-input
-matrix otherwise extends `/2` by commitments and opening proofs of the same
-nominal PCS identity; private producer values retain their ordinary local types.
-Entry type admission does not provide a host constructor for every such type:
-the native host refuses a deployment when a mapped data input has neither an
-installed native wire codec nor one of the exact key/entropy constructors above.
-The same selection validates each invocation's input kind. In particular, an
-opening state is created by local commitment work, not imported by this host.
-The host validates key/commitment/proof metadata against its selected setup.
-Authorizing material does not prove correct setup generation or an SRS law.
-
-Local key paths in invocation records are trusted host configuration. A network
-adapter must not forward request-selected filesystem paths into this API.
-Fingerprint and verifier-key checks authenticate loaded material; they do not
-authorize a filesystem read or hide whether a configured file exists.
+All tables committed under a key must have exactly its positive arity;
+`pcs.commit` checks this before invoking the upstream routine. Opening states
+are created by local commitment work, not imported. Every mapped input, including
+unused inputs and inactive PCS alternatives, needs its installed constructor and
+setup association. Authorizing material does not prove honest setup generation
+or an SRS law.
 
 ### PCS message bytes
 
-Only the installed default physical representations of the exact PCS identity
-are admitted. The canonical native frame is `ZKCV`, byte `1`, then tag `6`
-(commitment) or `7` (opening proof), followed by the existing `ZKCAR006` envelope:
+Default representations use `ZKCV`, byte `1`, tag `6` (commitment) or `7`
+(opening proof), followed by:
 
 ```text
 "ZKCAR006" | kind:u8 | arity:u64le | setup_id:32 | key_id:32 | group_payload
 ```
 
 Inner kind is `2` for a commitment and `3` for an opening proof. A commitment
-has one 48-byte compressed G1 point, totaling 135 native bytes. An opening proof
-has exactly `arity` compressed 96-byte G2 points, totaling `87 + 96*arity` bytes.
-The decoder derives the expected length from the configured key before examining
-peer arity or allocating a vector. It then checks frame/header/arity, wire and
-allocation bounds, setup metadata, subgroup membership and exact canonical
-re-encoding. Canonical infinity is valid; noncanonical encodings refuse.
-Length/header/group failures remain decode outcomes; budgets and backend failures
-retain their distinct outcomes. Peer metadata never selects a different key.
+contains one 48-byte compressed G1 point (135 native bytes total); an opening
+proof contains exactly `arity` compressed 96-byte G2 points (`87 + 96*arity`
+bytes total). Registry selection and complete metadata checks follow the setup
+contract. Decoding checks bounds, subgroup membership and canonical re-encoding;
+canonical infinity is valid. Malformed receives stop before observation.
 
-The derived constructor uses
-`transcript.native.indexed.observe.{commitment,proof}` with the same explicit
-origin and affine successor contracts as the other indexed observations. The
-encoder shared with proof production supplies the exact canonical value bytes.
-Malformed receives stop before observation. No hidden absorption or special PCS
-proof action is added to the runner.
+The constructor observes PCS data through the same complete-type
+`transcript.native.indexed.observe.data` contract. A value under another authorized
+key can decode and be observed before the explicit `pcs.check` rejects it against
+the verifier-key operand. There is no per-receive expected-key selector.
 
-### Terminal composition
+## Terminal composition
 
 The protocol author is responsible for naming the original commitment, actual
 verifier point, claimed value, opening proof and authorized verifier key, and for
@@ -985,7 +882,7 @@ Sumcheck restrictions produce separate scratch tables. Opening the original
 state through aliases, including repeated openings, cannot replace its backing
 with a restricted table. The installed PCS requires positive arity; a
 zero-variable committed invocation refuses instead of silently padding. Public
-zero-variable Sumcheck remains available through `/2`.
+zero-variable Sumcheck remains available without this PCS terminal.
 
 These contracts establish representation and execution boundaries. They do not
 establish PCS or Fiat–Shamir security, hiding, a zero-knowledge protocol or native

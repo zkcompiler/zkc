@@ -3,11 +3,8 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use zkc_arkworks::Keys;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Value};
-use zkc_tools::artifact::{
-    hex,
-    native::{NativeDeployment, SetupAuthority},
-};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_tools::proof::{NativeDeployment, SetupAuthority, hex};
 fn inputs(
     envelope: &Json,
     keys: &[Keys],
@@ -49,12 +46,12 @@ fn inputs(
         };
         let codec = NativeBackend::new(
             policy,
-            EntryPolicy::new(
-                Domain::new("P", "test", "main", None),
-                None,
-                PublicInputs::LocalOnly,
-            ),
-            Some(k.verifier_key().clone()),
+            EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+            zkc_backends::SetupRegistry::new(
+                vec![k.verifier_key().clone()],
+                &zkc_backends::Policy::default(),
+            )
+            .unwrap(),
         )
         .unwrap();
         hex(&codec.encode_native_value(&v).unwrap())
@@ -153,8 +150,18 @@ fn main() {
         let bytes = std::fs::read(dir.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         let pin = hex(&Sha256::digest(&bytes));
-        assert!(NativeDeployment::admit(&bytes, &pin).is_err());
-        assert!(NativeDeployment::admit_with_key(&bytes, &pin, authority.keys[&2]).is_err());
+        assert!(NativeDeployment::admit(&bytes, &pin, Default::default()).is_err());
+        assert!(
+            NativeDeployment::admit(
+                &bytes,
+                &pin,
+                SetupAuthority {
+                    keys: BTreeMap::from([(2, authority.keys[&2])]),
+                    inputs: authority.inputs.clone()
+                }
+            )
+            .is_err()
+        );
         for bad in [
             SetupAuthority::default(),
             SetupAuthority {
@@ -167,11 +174,11 @@ fn main() {
             },
         ] {
             assert_eq!(
-                NativeDeployment::admit_with_setups(&bytes, &pin, bad).unwrap_err(),
+                NativeDeployment::admit(&bytes, &pin, bad).unwrap_err(),
                 "native-proof-key-authority"
             );
         }
-        let d = NativeDeployment::admit_with_setups(
+        let d = NativeDeployment::admit(
             &bytes,
             &pin,
             SetupAuthority::parse(&serde_json::to_vec(&config).unwrap()).unwrap(),
@@ -258,7 +265,7 @@ fn main() {
         // A correctly authorized key remains wrong for another configured input.
         let mut swapped = authority.clone();
         swapped.inputs.insert(3, 8);
-        let wrong = NativeDeployment::admit_with_setups(&bytes, &pin, swapped).unwrap();
+        let wrong = NativeDeployment::admit(&bytes, &pin, swapped).unwrap();
         assert_eq!(
             run(&wrong, &p, None).unwrap_err(),
             "native-proof-input-setup"

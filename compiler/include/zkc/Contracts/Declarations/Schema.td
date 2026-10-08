@@ -97,7 +97,6 @@ def MatrixIdentity : ZKC_Parameters<"MatrixIdentity", 1, 1>;
 def MatrixVector : ZKC_Parameters<"MatrixVector", 3, 3>;
 def GatherIndices : ZKC_Parameters<"GatherIndices", 0, -1>;
 def ScatterIndices : ZKC_Parameters<"ScatterIndices", 1, -1>;
-def TranscriptOrigin : ZKC_Parameters<"TranscriptOrigin", 5, 5>;
 def NativeOrigin : ZKC_Parameters<"NativeOrigin", 1, 1>;
 class ZKC_Facet : ZKC_Declaration;
 def PublicReplay : ZKC_Facet;

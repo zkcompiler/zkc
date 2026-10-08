@@ -2,15 +2,12 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Value};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::{
     attempt::Limits,
     interactive::{ValueBudget, WorkBudget},
 };
-use zkc_tools::artifact::{
-    hex,
-    native::{AttemptPolicy, NativeDeployment, NativeProofReport},
-};
+use zkc_tools::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, hex};
 
 mod controls;
 mod reference;
@@ -18,12 +15,8 @@ mod reference;
 fn codec() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "authored", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "authored", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -130,7 +123,9 @@ fn main() {
         let family = case["family"].as_str().unwrap();
         let snapshot = case["snapshot"] == true;
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+        let deployment =
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         if family == "prefix" {
             controls::prefix_controls(directory, name, &deployment, &envelope);

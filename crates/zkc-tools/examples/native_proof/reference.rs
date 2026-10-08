@@ -5,7 +5,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 pub use transcript::*;
 use zkc_backends::{GroupPoint, Scalar};
-use zkc_tools::artifact::hex;
+use zkc_tools::proof::hex;
 pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: Option<Scalar>) {
     let root = root(envelope, input);
     assert_eq!(&proof[..8], b"ZKCPRF01");
@@ -41,8 +41,31 @@ pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: O
         } else {
             json!(["message", protocol, site, site, sender, receiver])
         };
-        let origin = tree(&json!(["zkc.native-origin/1", entry, path, [], event]));
-        assert_eq!(envelope[2][3][event_index], json!([kind, hex(&origin)]));
+        let mut parent = entry;
+        let path = path
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .map(|(n, site)| {
+                let step = json!(["apply", parent, site]);
+                parent = if n == 0 && path.as_array().unwrap().len() == 2 {
+                    "middle"
+                } else {
+                    protocol
+                };
+                step
+            })
+            .collect::<Vec<_>>();
+        let template = tree(&json!([
+            "zkc.native-origin-template/1",
+            entry,
+            path,
+            [],
+            event
+        ]));
+        assert_eq!(envelope[2][3][event_index], json!([kind, hex(&template)]));
+        let origin = tree(&json!(["zkc.native-origin/2", entry, path, [], event]));
         event_index += 1;
         origin
     };

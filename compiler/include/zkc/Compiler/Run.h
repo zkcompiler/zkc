@@ -34,7 +34,7 @@ struct CompiledRun {
 };
 /// Compile mathematical MLIR through the native protocol pipeline. This API
 /// enforces 16 MiB text, nesting 64 and 4096-byte entry/filename limits.
-/// source() is null: this invocation's input is MLIR, not a source Document.
+/// This invocation owns its mathematical MLIR input and compiled artifact.
 /// The final module remains valid with its Compilation. Every failure is an
 /// owned CompilationError; no partial executable is returned.
 llvm::Expected<CompiledRun> compileRun(llvm::StringRef text,

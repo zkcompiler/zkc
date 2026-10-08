@@ -5,21 +5,46 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use zkc_arkworks::Keys;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Value};
-use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_tools::proof::{NativeDeployment, hex};
 
+fn authority(keys: &Keys, authored: bool) -> zkc_tools::proof::SetupAuthority {
+    let (vk, ports) = if authored {
+        (2, vec![1, 3])
+    } else {
+        (6, vec![5, 7, 8])
+    };
+    zkc_tools::proof::SetupAuthority {
+        keys: BTreeMap::from([(vk, keys.verifier_key().metadata().key_id())]),
+        inputs: ports.into_iter().map(|p| (p, vk)).collect(),
+    }
+}
+fn authority_record(keys: &Keys, authored: bool) -> Json {
+    let a = authority(keys, authored);
+    json!([
+        "zkc.native-setup-authority/1",
+        a.keys
+            .iter()
+            .map(|(p, id)| json!([p.to_string(), hex(id)]))
+            .collect::<Vec<_>>(),
+        a.inputs
+            .iter()
+            .map(|(p, key)| json!([p.to_string(), key.to_string()]))
+            .collect::<Vec<_>>()
+    ])
+}
 fn digest(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
 fn backend(keys: &Keys) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        Some(keys.verifier_key().clone()),
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        zkc_backends::SetupRegistry::new(
+            vec![keys.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap()
 }
@@ -150,19 +175,15 @@ fn accepted(deployment: &NativeDeployment, input: &Json, proof: Option<&[u8]>) -
 }
 fn key_attempts(directory: &Path, keys: &Keys) {
     use zkc_runtime::attempt::Limits;
-    use zkc_tools::artifact::native::AttemptPolicy;
+    use zkc_tools::proof::AttemptPolicy;
 
     let path = directory.join("1.pk");
     for complete in [true, false] {
         let bytes =
             std::fs::read(directory.join(format!("key_attempt_{complete}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit_with_key(
-            &bytes,
-            &digest(&bytes),
-            keys.verifier_key().metadata().key_id(),
-        )
-        .unwrap();
+        let deployment =
+            NativeDeployment::admit(&bytes, &digest(&bytes), authority(keys, true)).unwrap();
         let producer = inputs(&envelope, "authored", keys, &path, true);
         let validator = inputs(&envelope, "authored", keys, &path, false);
         let expected = accepted(&deployment, &producer, None);
@@ -263,7 +284,7 @@ fn main() {
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
         assert!(
-            NativeDeployment::admit(&bytes, &digest(&bytes))
+            NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
                 .unwrap_err()
                 .contains("key-authority")
         );
@@ -273,10 +294,10 @@ fn main() {
             &[1, 2, 3, 8][..]
         } {
             let key = &keys[&n];
-            let deployment = NativeDeployment::admit_with_key(
+            let deployment = NativeDeployment::admit(
                 &bytes,
                 &digest(&bytes),
-                key.verifier_key().metadata().key_id(),
+                authority(key, matches!(family, "authored" | "structured")),
             )
             .unwrap_or_else(|e| panic!("{name}: {e}"));
             let path = directory.join(format!("{n}.pk"));
@@ -304,8 +325,12 @@ fn main() {
             reference::verify(&envelope, &v, &proof, family, n);
             if n == 1 {
                 std::fs::write(
-                    directory.join(format!("{name}.key-id")),
-                    hex(&key.verifier_key().metadata().key_id()),
+                    directory.join(format!("{name}.setups.json")),
+                    serde_json::to_vec(&authority_record(
+                        key,
+                        matches!(family, "authored" | "structured"),
+                    ))
+                    .unwrap(),
                 )
                 .unwrap();
                 std::fs::write(

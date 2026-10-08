@@ -2562,7 +2562,6 @@ dependencies = [
  "p3-symmetric 0.4.3",
  "p3-symmetric 0.5.1",
  "rand 0.8.8",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "sha3",
@@ -2576,8 +2575,6 @@ dependencies = [
 name = "zkc-runtime"
 version = "0.1.0"
 dependencies = [
- "num-bigint 0.4.8",
- "num-traits",
  "serde_json",
  "zkc-test-support",
 ]

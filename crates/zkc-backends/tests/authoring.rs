@@ -38,8 +38,8 @@ fn same_ports_distinct_dot_algorithms_preserve_results_and_refusals() {
             .0
             .unwrap();
         assert_eq!(
-            native.encode_value(&x[0]).unwrap(),
-            native.encode_value(&y[0]).unwrap()
+            native.encode_native_value(&x[0]).unwrap(),
+            native.encode_native_value(&y[0]).unwrap()
         );
     }
     for b in [normal, alternate] {
@@ -170,25 +170,18 @@ fn unused_retained_bindings_still_require_independent_physical_admission() {
     assert_eq!(error.code, ErrorCode::Signature);
 }
 #[test]
-fn artifact_text_cannot_remove_installed_security_requirements() {
+fn retired_msm_is_uninstalled_and_bindings_cannot_add_authority_facets() {
     let b = OperationBinding {
         contract: "curve.msm".into(),
         arguments: vec!["ristretto255.group".into()],
         implementation: "dalek-vartime/curve.msm".into(),
     };
-    // The carrier has no producer-supplied security facet. Omitting a facet
-    // cannot remove the requirement attached to the selected native owner.
-    assert_eq!(
-        one(
-            backend(Policy::default()),
-            b.clone(),
-            &[],
-            vec![vector(true, &[]), support::groups(true, &[])]
-        )
-        .0
-        .unwrap_err(),
-        "refused:public-operands-required"
-    );
+    assert!(b.signature().is_err());
+    assert!(backend(Policy::default()).binding_signature(&b).is_none());
+    let b = OperationBinding {
+        implementation: "dalek/curve.msm".into(),
+        ..b
+    };
     let sig = b.signature().unwrap();
     let mut bytes: serde_json::Value =
         serde_json::from_slice(&program(&[b], &sig.inputs, vec![], &[], &[])).unwrap();

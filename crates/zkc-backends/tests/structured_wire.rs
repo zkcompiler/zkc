@@ -11,7 +11,7 @@ fn variant(ty: &str, tag: usize, values: Vec<Value>) -> Value {
     Value::Variant(Variant::new(ty.variant_descriptor().unwrap().clone(), tag, values).unwrap())
 }
 fn bounded(policy: Policy) -> NativeBackend {
-    NativeBackend::new(policy, common::entry(None), None).unwrap()
+    NativeBackend::new(policy, common::entry(None), Default::default()).unwrap()
 }
 fn roundtrip(value: &Value) -> Vec<u8> {
     let backend = common::ark_backend(None);
@@ -580,14 +580,20 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             "session",
             backend,
             vec![state, value.clone(), Value::Indices(vec![].into())],
-        )
-        .unwrap_or_else(|error| panic!("{}", error.error));
-        let (outcome, backend) = common::finish(runner);
-        if configured {
-            outcome.unwrap();
-        } else {
-            assert!(common::code(&outcome.unwrap_err()).contains("native-wire-setup-required"));
-        }
+        );
+        let backend = match runner {
+            Ok(runner) => {
+                assert!(configured);
+                let (outcome, backend) = common::finish(runner);
+                outcome.unwrap();
+                backend
+            }
+            Err(error) => {
+                assert!(!configured);
+                assert!(error.error.to_string().contains("unauthorized-setup"));
+                error.backend
+            }
+        };
         assert_eq!(
             backend.observe(&token).unwrap().generation,
             u64::from(configured)

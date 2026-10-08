@@ -2,10 +2,10 @@ mod common;
 use common::*;
 use zkc_backends::*;
 use zkc_runtime::interactive::Backend;
+use zkc_runtime::interactive::Identity;
 
 fn prover_program() -> Vec<u8> {
     program(
-        None,
         &[("x", "field"), ("c", "field"), ("nonce", "nonce")],
         vec![
             op("generator", "arkworks/curve.generator", &[], &["g"]),
@@ -37,7 +37,6 @@ fn prover_program() -> Vec<u8> {
 }
 fn verifier_program() -> Vec<u8> {
     program(
-        None,
         &[
             ("X", "group"),
             ("R", "group"),
@@ -74,8 +73,10 @@ fn verifier_program() -> Vec<u8> {
 #[test]
 fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
     let mut p = backend().build();
-    let nonce = p.issue_nonce(domain(), 2).unwrap();
-    assert!(p.encode_value(&nonce).is_err());
+    let nonce = p
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
+    assert!(p.encode_native_value(&nonce).is_err());
     let (out, p) = run(&prover_program(), p, vec![f(7), f(11), nonce.clone()]);
     let out = out.unwrap();
     let state = p.observe(token(&nonce)).unwrap();
@@ -104,31 +105,31 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
     let verifier = backend().build();
     let mut public = vec![
         verifier
-            .decode_typed_value(
-                zkc_runtime::interactive::PhysicalType::default_for(
+            .decode_native_value(
+                &zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("group:bls12-381.g1").unwrap(),
                 )
                 .unwrap(),
-                &p.encode_value(&out[0]).unwrap(),
+                &p.encode_native_value(&out[0]).unwrap(),
             )
             .unwrap(),
         verifier
-            .decode_typed_value(
-                zkc_runtime::interactive::PhysicalType::default_for(
+            .decode_native_value(
+                &zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("group:bls12-381.g1").unwrap(),
                 )
                 .unwrap(),
-                &p.encode_value(&out[1]).unwrap(),
+                &p.encode_native_value(&out[1]).unwrap(),
             )
             .unwrap(),
         f(11),
         verifier
-            .decode_typed_value(
-                zkc_runtime::interactive::PhysicalType::default_for(
+            .decode_native_value(
+                &zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
                 )
                 .unwrap(),
-                &p.encode_value(&out[2]).unwrap(),
+                &p.encode_native_value(&out[2]).unwrap(),
             )
             .unwrap(),
     ];
@@ -156,11 +157,14 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
 #[test]
 fn nonce_response_before_commit_fails_after_consuming_and_no_suffix() {
     let mut p = backend().build();
-    let nonce = p.issue_nonce(domain(), 2).unwrap();
-    let outside = p.issue_nonce(domain(), 2).unwrap();
+    let nonce = p
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
+    let outside = p
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let before = p.observe(token(&outside)).unwrap();
     let bytes = program(
-        None,
         &[("x", "field"), ("c", "field"), ("n", "nonce")],
         vec![op(
             "bad",
@@ -189,9 +193,10 @@ fn nonce_response_before_commit_fails_after_consuming_and_no_suffix() {
 #[test]
 fn nonce_cannot_commit_twice_even_using_valid_successor() {
     let mut p = backend().build();
-    let nonce = p.issue_nonce(domain(), 3).unwrap();
+    let nonce = p
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 3)
+        .unwrap();
     let bytes = program(
-        None,
         &[("n", "nonce")],
         vec![
             op("generator", "arkworks/curve.generator", &[], &["g"]),

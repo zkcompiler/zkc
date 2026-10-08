@@ -870,7 +870,7 @@ pub(crate) fn opening_state_bytes(original: &Table, arity: usize) -> Result<usiz
 #[cfg(test)]
 mod admission_size_tests {
     use super::*;
-    use crate::{Domain, EntryPolicy, NativeBackend, PublicInputs};
+    use crate::{Domain, EntryPolicy, NativeBackend};
     use zkc_arkworks::Keys;
 
     #[test]
@@ -911,12 +911,9 @@ mod admission_size_tests {
         let keys = Keys::setup_for_development(2, &policy.ark_bounds()).unwrap();
         let backend = NativeBackend::new(
             policy,
-            EntryPolicy::new(
-                Domain::new("P", "s", "main", None),
-                Some(2),
-                PublicInputs::LocalOnly,
-            ),
-            Some(keys.verifier_key().clone()),
+            EntryPolicy::new(Domain::new("P", "s", "main", None), Some(2)),
+            crate::SetupRegistry::new(vec![keys.verifier_key().clone()], &crate::Policy::default())
+                .unwrap(),
         )
         .unwrap();
         let mut values = vec![
@@ -938,9 +935,13 @@ mod admission_size_tests {
         values.push(Value::Commitment(Arc::new(committed.commitment().clone())));
         values.push(Value::Proof(Arc::new(proof)));
         for value in values {
-            let bytes = backend.encode_value(&value).unwrap();
+            if !crate::has_native_wire(&value.physical_type()) {
+                assert!(backend.encode_native_value(&value).is_err());
+                continue;
+            }
+            let bytes = backend.encode_native_value(&value).unwrap();
             let decoded = backend
-                .decode_typed_value(value.physical_type(), &bytes)
+                .decode_native_value(&value.physical_type(), &bytes)
                 .unwrap();
             assert_eq!(
                 Value::wire_retained_bytes_bound(value.ty(), bytes.len(), &policy).unwrap(),

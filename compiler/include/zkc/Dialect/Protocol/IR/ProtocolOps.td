@@ -9,16 +9,6 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/Kernels.td"
 
-class CallableProtocolOp<string name> : Op<ProtocolDialect, name,
-    [Symbol, IsolatedFromAbove,
-     DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
-  let arguments = (ins SymbolNameAttr:$sym_name, TypeAttrOf<FunctionType>:$function_type,
-    ArrayAttr:$input_roles, ArrayAttr:$output_roles, ArrayAttr:$roles,
-    ArrayAttr:$parameters, ArrayAttr:$dependencies, BoolAttr:$external,
-    OptionalAttr<ArrayAttr>:$argument_names);
-  let regions = (region AnyRegion:$body);
-  let hasRegionVerifier = 1;
-}
 
 def AwaitOp : Op<ProtocolDialect, "receive",
     [ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
@@ -82,23 +72,11 @@ def GuardOp : Op<ProtocolDialect, "guard",
   let assemblyFormat = "$condition attr-dict";
 }
 
-def HaltOp : Op<ProtocolDialect, "stop",
-    [Terminator, ParentOneOf<["zkc::protocol_ir::ExecFuncOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
-  let arguments = (ins StrAttr:$site, StrAttr:$reason, StrAttr:$role);
-}
 
-def IncompleteOp : Op<ProtocolDialect, "incomplete",
-    [Terminator, ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
-  let arguments = (ins StrAttr:$site);
-}
 
-def InstanceOp : Op<ProtocolDialect, "instance", [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
-  let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$protocol,
-    ArrayAttr:$parameters, ArrayAttr:$dependencies, ArrayAttr:$roles);
-}
 
 def LocalCallOp : Op<ProtocolDialect, "local_call",
-    [ParentOneOf<["zkc::protocol_ir::ExecFuncOp", "zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
+    [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
     StrAttr:$site, StrAttr:$role);
@@ -119,7 +97,7 @@ def RepeatOp : Op<ProtocolDialect, "repeat", [IsolatedFromAbove, SingleBlock,
 }
 
 def ProtocolLoopOp : Op<ProtocolDialect, "loop", [IsolatedFromAbove, SingleBlock,
-     ParentOneOf<["zkc::protocol_ir::ExecFuncOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
+     ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site,
     I64Attr:$carried, StrAttr:$count, BoolAttr:$parameter,
     OptionalAttr<I64Attr>:$maximum);
@@ -129,7 +107,7 @@ def ProtocolLoopOp : Op<ProtocolDialect, "loop", [IsolatedFromAbove, SingleBlock
 }
 
 def MathematicalReturnOp : Op<ProtocolDialect, "return",
-    [Terminator, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ExecFuncOp"]>]> {
+    [Terminator, ParentOneOf<["zkc::protocol_ir::MathematicalOp"]>]> {
   let arguments = (ins Variadic<AnyType>:$values);
 }
 
@@ -142,17 +120,10 @@ def MathematicalOp : Op<ProtocolDialect, "func",
   let hasRegionVerifier = 1;
 }
 
-def MessageOp : Op<ProtocolDialect, "message",
-    [SameOperandsAndResultType, ParentOneOf<["zkc::protocol_ir::ExecFuncOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
-  let arguments = (ins AnyType:$input, StrAttr:$site, StrAttr:$schema,
-    StrAttr:$sender, StrAttr:$receiver);
-  let results = (outs AnyType:$output);
-}
 
 def ProtocolModuleOp : Op<ProtocolDialect, "module",
     [IsolatedFromAbove, SymbolTable, SingleBlock, NoTerminator]> {
-  let arguments = (ins ProtocolProfileAttr:$profile,
-    OptionalAttr<ProtocolExecutionContractAttr>:$execution_contract);
+  let arguments = (ins ProtocolProfileAttr:$profile);
   let regions = (region AnyRegion:$body);
   let hasVerifier = 1;
   let hasRegionVerifier = 1;
@@ -166,22 +137,13 @@ def ProjectionOp : Op<ProtocolDialect, "projection",
   let arguments = (ins ArrayAttr:$interfaces, ArrayAttr:$calculations);
 }
 
-def ParticipantOp : Op<ProtocolDialect, "participant", [Symbol, IsolatedFromAbove, SingleBlock,
-    DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+def ParticipantOp : Op<ProtocolDialect, "participant", [Symbol, IsolatedFromAbove, SingleBlock]> {
   let arguments = (ins SymbolNameAttr:$sym_name, TypeAttrOf<FunctionType>:$function_type,
-    StrAttr:$instance, StrAttr:$role, ArrayAttr:$parameters,
-    OptionalAttr<ArrayAttr>:$argument_names);
+    StrAttr:$instance, StrAttr:$role);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
 }
 
-def ParticipantCallOp : Op<ProtocolDialect, "participant_call",
-    [ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>,
-     DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
-  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site,
-    FlatSymbolRefAttr:$callee);
-  let results = (outs Variadic<AnyType>:$outputs);
-}
 
 def ParticipantQueryOp : Op<ProtocolDialect, "service_query",
     [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
@@ -189,14 +151,7 @@ def ParticipantQueryOp : Op<ProtocolDialect, "service_query",
   let results = (outs Variadic<AnyType>:$outputs);
 }
 
-def ExecFuncOp : CallableProtocolOp<"exec_func">;
 
-def ProtocolCallOp : Op<ProtocolDialect, "call",
-    [ParentOneOf<["zkc::protocol_ir::ExecFuncOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>,
-     DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
-  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site, StrAttr:$dependency);
-  let results = (outs Variadic<AnyType>:$outputs);
-}
 
 def QueryOp : Op<ProtocolDialect, "query",
     [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {

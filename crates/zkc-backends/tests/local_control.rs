@@ -2,6 +2,7 @@ mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::*;
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
     Action, Backend, BackendError, BoundSignature, ErrorCode, Frame, FrameExit, Invocation, Limits,
     OperationBinding, PathElement, Runner, StopKind, Usage, ValueBudget, admit_supplied,
@@ -58,7 +59,7 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
     }
     gather(&body, &mut bindings);
     serde_json::to_vec(&json!([
-        "zkc.participants/1",
+        "zkc.program/1",
         bindings.into_values().collect::<Vec<_>>(),
         "physical",
         [["function", "local", ports, outputs, body, ["local", []]]],
@@ -73,7 +74,8 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
             [
                 ["local", "run", "local", inputs, results],
                 ["return", results]
-            ]
+            ],
+            []
         ]],
         [["entry", "main", [["P", "root"]]]]
     ]))
@@ -185,7 +187,7 @@ fn selected_branch_only_guards_and_exact_accounting() {
         vec![Value::Bool(true), Value::Bool(true)],
     ));
     assert!(matches!(out.unwrap()[0], Value::Bool(true)));
-    assert_eq!((u.instructions, u.iterations, u.calls), (6, 0, 0)); // local, if, op, yield, function return, participant return
+    assert_eq!((u.instructions, u.iterations), (6, 0)); // local, if, op, yield, function return, participant return
     assert_eq!(b.events.len(), 1);
     assert_eq!(b.events[0][0], "selected");
     assert_eq!(b.events[0][1][4], json!([["if", "choose", "then"]]));
@@ -319,8 +321,12 @@ fn affine_rng_selected_once_each_iteration_and_exhaustion_unwinds() {
         (true, 1, 3, 2, false),
     ] {
         let mut native = ark_backend(None);
-        let rng = native.issue_rng(domain(), budget).unwrap();
-        let outside = native.issue_rng(domain(), 7).unwrap();
+        let rng = native
+            .issue_rng_for(Identity::Bls12381Fr, domain(), budget)
+            .unwrap();
+        let outside = native
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 7)
+            .unwrap();
         let before = native.observe(token(&outside)).unwrap();
         let (out, u, b) = execute(load(
             &random_loop(),
@@ -549,58 +555,40 @@ fn region_storage_release_keeps_ghost_charge_and_final_return_charge() {
 }
 
 #[test]
-fn local_region_depth_includes_participant_call_frames() {
-    let mut value: Json = serde_json::from_slice(&choose()).unwrap();
-    let root = value[4][0].clone();
-    let count = 62;
-    let mut participants = vec![];
-    for i in 0..count {
-        let mut p = root.clone();
-        p[1] = json!(format!("p{i}"));
-        p[2] = json!(format!("instance{i}"));
-        if i + 1 < count {
-            p[7][0] = json!([
-                "call",
-                "next",
-                format!("p{}", i + 1),
-                ["cond", "ok"],
-                ["result0"]
+fn local_region_depth_counts_every_active_native_frame() {
+    for (depth, succeeds) in [(20, true), (62, false)] {
+        let mut body = json!([["yield", ["ok"]]]);
+        for i in 0..depth {
+            body = json!([
+                [
+                    "if",
+                    format!("branch{i}"),
+                    "ok",
+                    ["ok"],
+                    body,
+                    [["yield", ["ok"]]],
+                    ["out"]
+                ],
+                ["yield", ["out"]]
             ]);
         }
-        participants.push(p);
+        body.as_array_mut().unwrap().last_mut().unwrap()[0] = json!("return");
+        let bytes = candidate(json!([["ok", "bool"]]), json!(["bool"]), body);
+        if !succeeds {
+            let error = admit_supplied(&bytes, &ark_backend(None)).unwrap_err();
+            assert_eq!(error.code, ErrorCode::Limit);
+            continue;
+        }
+        let (out, usage, backend) = execute(load(
+            &bytes,
+            Traced::new(ark_backend(None)),
+            vec![Value::Bool(true)],
+        ));
+        assert!(out.is_ok());
+        assert_eq!(backend.frames.len(), depth + 2);
+        assert_eq!(usage.live_values, 1); // The returned Boolean remains owned.
+        assert_eq!(backend.inner.active_frames(), 0);
     }
-    value[4] = json!(participants);
-    value[5][0][2][0][1] = json!("p0");
-    let bytes = serde_json::to_vec(&value).unwrap();
-    let (out, _, b) = execute(load(
-        &bytes,
-        Traced::new(ark_backend(None)),
-        vec![Value::Bool(true), Value::Bool(true)],
-    ));
-    assert!(out.is_ok()); // 62 participant + local + region = 64
-    assert_eq!(b.frames.len(), Limits::STACK_DEPTH);
-    let mut value: Json = serde_json::from_slice(&bytes).unwrap();
-    value[3][0][4][0][4] = json!([
-        [
-            "if",
-            "nested",
-            "ok",
-            ["ok"],
-            [["yield", ["ok"]]],
-            [["yield", ["ok"]]],
-            ["result"]
-        ],
-        ["yield", ["result"]]
-    ]);
-    let (out, u, b) = execute(load(
-        &serde_json::to_vec(&value).unwrap(),
-        Traced::new(ark_backend(None)),
-        vec![Value::Bool(true), Value::Bool(true)],
-    ));
-    assert_eq!(out.unwrap_err().kind, StopKind::Limit);
-    assert_eq!(b.frames.len(), Limits::STACK_DEPTH);
-    assert_eq!(u.live_values, 0);
-    assert_eq!(b.inner.active_frames(), 0);
 }
 
 #[test]
@@ -651,11 +639,6 @@ fn instruction_exhaustion_does_not_execute_suffix_or_next_iteration() {
 fn recursive_installation_inventory_and_reinstallation_cover_nested_operations() {
     let bytes = random_loop();
     let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
-    let roles = admitted.executable_implementation_roles("main").unwrap();
-    assert_eq!(
-        roles["arkworks/random.draw"].iter().collect::<Vec<_>>(),
-        vec!["P"]
-    );
     let mut backend = Traced::new(ark_backend(None));
     backend.blocked = Some("random.draw".into());
     assert_eq!(
@@ -677,7 +660,9 @@ fn recursive_installation_inventory_and_reinstallation_cover_nested_operations()
 #[test]
 fn nested_cleanup_failure_is_recorded_without_hiding_consumed_rng_exhaustion() {
     let mut native = ark_backend(None);
-    let rng = native.issue_rng(domain(), 0).unwrap();
+    let rng = native
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 0)
+        .unwrap();
     let mut b = Traced::new(native);
     b.fail_leave = Some(4); // entry/local/for/if
     let (out, u, b) = execute(load(

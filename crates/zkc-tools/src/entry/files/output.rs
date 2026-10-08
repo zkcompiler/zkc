@@ -48,28 +48,58 @@ fn encode(value: impl Serialize) -> Result<Vec<u8>> {
 // Native wire frames depend on value shape and capacity, not the session domain.
 // Outputs have already been admitted under their role's setup policy; encoding
 // here adds no setup authorization and issues no resources.
-fn backend(capacity: NativeCapacity) -> Result<NativeBackend> {
+fn backend(capacity: NativeCapacity, setups: zkc_backends::SetupRegistry) -> Result<NativeBackend> {
     capacity.check()?;
     NativeBackend::new(
         capacity.backend(),
         zkc_backends::EntryPolicy::new(
             zkc_backends::Domain::new("host", "entry_results", "results", None),
             None,
-            zkc_backends::PublicInputs::LocalOnly,
         ),
-        None,
+        setups,
     )
     .map_err(|e| e.to_string())
 }
+/// Authenticate the same invocation setup material for result serialization.
+/// This registry grants no authority to execute or accept a proof.
+pub fn output_setups(
+    material: &std::collections::BTreeMap<String, Vec<u8>>,
+    authority: &super::SetupAuthority,
+    capacity: NativeCapacity,
+) -> Result<zkc_backends::SetupRegistry> {
+    capacity.check()?;
+    if material.len() != authority.keys.len() {
+        return Err("entry-setup-material".into());
+    }
+    let policy = capacity.backend();
+    let mut imports = crate::host::setups::VerifierKeys::new(policy.ark_bounds());
+    let mut keys = Vec::new();
+    for (name, bytes) in material {
+        capacity.check_wire(bytes.len())?;
+        let pin = *authority.keys.get(name).ok_or("entry-setup-authority")?;
+        let key = imports.import(bytes, pin, "entry-output-setup")?;
+        if !keys
+            .iter()
+            .any(|old: &zkc_arkworks::VerifierKey| old.metadata() == key.metadata())
+        {
+            keys.push((*key).clone());
+        }
+    }
+    zkc_backends::SetupRegistry::new(keys, &policy).map_err(|e| e.to_string())
+}
 /// Encode explicitly requested role results under the admitted capacity and a
 /// 16 MiB whole-file limit. Private capabilities retain their codec refusal.
-pub fn run_outputs(values: &RoleValues, capacity: NativeCapacity) -> Result<Vec<u8>> {
+pub fn run_outputs(
+    values: &RoleValues,
+    capacity: NativeCapacity,
+    setups: zkc_backends::SetupRegistry,
+) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
         roles: T,
     }
-    let backend = backend(capacity)?;
+    let backend = backend(capacity, setups)?;
     struct Roles<'a> {
         values: &'a RoleValues,
         backend: &'a NativeBackend,
@@ -99,13 +129,17 @@ pub fn run_outputs(values: &RoleValues, capacity: NativeCapacity) -> Result<Vec<
     })
 }
 /// Encode one proof participant's named results without changing runtime state.
-pub fn proof_outputs(values: &NamedValues, capacity: NativeCapacity) -> Result<Vec<u8>> {
+pub fn proof_outputs(
+    values: &NamedValues,
+    capacity: NativeCapacity,
+    setups: zkc_backends::SetupRegistry,
+) -> Result<Vec<u8>> {
     #[derive(Serialize)]
     struct Document<T> {
         format: &'static str,
         values: T,
     }
-    let backend = backend(capacity)?;
+    let backend = backend(capacity, setups)?;
     encode(Document {
         format: "zkc.entry-outputs/1",
         values: Named {
@@ -210,6 +244,45 @@ impl Serialize for Item<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zkc_runtime::interactive::Identity;
+    #[test]
+    fn pcs_outputs_require_explicit_authenticated_setup_material() {
+        let capacity = NativeCapacity::default();
+        let policy = capacity.backend();
+        let keys = zkc_arkworks::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
+        let table = zkc_arkworks::Table::from_logical_vec(
+            vec![zkc_backends::Scalar::from(1); 2],
+            &policy.ark_bounds(),
+        )
+        .unwrap();
+        let commitment = keys.prover_key().commit(&table).unwrap();
+        let value = Native::Commitment(std::sync::Arc::new(commitment.commitment().clone()));
+        let values = [("commitment".into(), value.clone().into())].into();
+        assert_eq!(
+            proof_outputs(&values, capacity, Default::default()).unwrap_err(),
+            "entry-output-encoding"
+        );
+        let material = [(
+            "setup".into(),
+            keys.verifier_key().to_bytes(&policy.ark_bounds()).unwrap(),
+        )]
+        .into();
+        let authority = super::super::SetupAuthority {
+            keys: [("setup".into(), keys.verifier_key().metadata().key_id())].into(),
+        };
+        let registry = output_setups(&material, &authority, capacity).unwrap();
+        let expected = backend(capacity, registry.clone())
+            .unwrap()
+            .encode_native_value(&value)
+            .unwrap();
+        let document: serde_json::Value =
+            serde_json::from_slice(&proof_outputs(&values, capacity, registry).unwrap()).unwrap();
+        assert_eq!(document["values"]["commitment"], hex(&expected));
+        let mut wrong = authority.clone();
+        wrong.keys.get_mut("setup").unwrap()[0] ^= 1;
+        assert!(output_setups(&material, &wrong, capacity).is_err());
+        assert!(output_setups(&material, &Default::default(), capacity).is_err());
+    }
     #[test]
     fn exact_file_limit_and_no_partial_result() {
         let exact = "a".repeat(MAX_REQUEST_BYTES - 2);
@@ -219,9 +292,10 @@ mod tests {
     #[test]
     fn private_capabilities_refuse_without_consuming_them() {
         let capacity = NativeCapacity::default();
-        let mut native = backend(capacity).unwrap();
+        let mut native = backend(capacity, Default::default()).unwrap();
         let value = native
-            .issue_rng(
+            .issue_rng_for(
+                Identity::Bls12381Fr,
                 zkc_backends::Domain::new("host", "entry_results", "results", None),
                 1,
             )
@@ -229,7 +303,12 @@ mod tests {
         let Native::Rng(token) = &value else { panic!() };
         let token = token.clone();
         assert_eq!(
-            proof_outputs(&[("private".into(), value.into())].into(), capacity).unwrap_err(),
+            proof_outputs(
+                &[("private".into(), value.into())].into(),
+                capacity,
+                Default::default()
+            )
+            .unwrap_err(),
             "entry-output-encoding"
         );
         assert_eq!(native.retire(&token).unwrap().draw_count, 0);
@@ -243,7 +322,7 @@ mod tests {
             ..capacity
         };
         assert_eq!(
-            proof_outputs(&values, small).unwrap_err(),
+            proof_outputs(&values, small, Default::default()).unwrap_err(),
             "entry-output-encoding"
         );
     }
@@ -259,6 +338,7 @@ mod tests {
         let outputs = proof_outputs(
             &[("nested".into(), value)].into(),
             NativeCapacity::default(),
+            Default::default(),
         )
         .unwrap();
         let values: serde_json::Value = serde_json::from_slice(&outputs).unwrap();
@@ -279,7 +359,7 @@ mod tests {
             ),
         )]
         .into();
-        let bytes = proof_outputs(&values, NativeCapacity::default()).unwrap();
+        let bytes = proof_outputs(&values, NativeCapacity::default(), Default::default()).unwrap();
         let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(document["values"]["record"]["index"], u64::MAX);
         let mut nested = Value::Unit;
@@ -287,8 +367,12 @@ mod tests {
             nested = Value::Associated(Box::new(nested));
         }
         assert_eq!(
-            proof_outputs(&[("deep".into(), nested)].into(), NativeCapacity::default())
-                .unwrap_err(),
+            proof_outputs(
+                &[("deep".into(), nested)].into(),
+                NativeCapacity::default(),
+                Default::default()
+            )
+            .unwrap_err(),
             "entry-output-encoding"
         );
     }

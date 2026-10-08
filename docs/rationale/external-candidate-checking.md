@@ -10,7 +10,7 @@ executor consumes. Direct lowering stays as the regression baseline, and its
 [format](../spec/profiles/compiler/direct-plan.md#context-validity-and-accepted-metadata)
 accepts only its exact direct lowering; a changed plan travels in an exact
 format of its own, specified together with its first consumer. The
-[lowering design](../compiler/design.md#4-lowering-and-final-evidence) lists
+[lowering design](../compiler/preservation.md#checking-boundaries) lists
 what the boundary binds. Transformation validity, phase admission and usability
 are separate judgments about those shared operands.
 

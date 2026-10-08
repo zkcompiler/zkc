@@ -3,7 +3,8 @@
 This specification defines the finite atomic model selected by
 [docs](../README.md): its mathematical objects, admitted programs,
 complete executions, checking judgments, property claims and realization
-requirements, with explicit outer iteration over finite bodies. It does not prescribe an IR hierarchy or a physical runtime.
+requirements, with explicit outer iteration over finite bodies. Common laws do not prescribe an IR hierarchy or physical runtime; native
+profiles separately fix the supported compiler and executable contracts.
 Start with [conventions](conventions.md) for notation, execution scope and
 conformance claims.
 
@@ -70,8 +71,10 @@ profile rather than to the whole language.
 
 ### 7. Selected profiles
 
-The [profile inventory](profiles/README.md) defines profile parameters and
-locates contrasting reference clients at their actual scope.
+The [profile inventory](profiles/README.md) separates current native contracts
+from independent semantic models and locates reference clients at their actual
+scope. Formal source/direct-plan/table results concern those independent models,
+not additional supported execution paths or native pipeline validation.
 
 The inventory is the complete list. Its groups are source formation and input
 binding; compiler plans and local control; concrete realization; providers;

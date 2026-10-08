@@ -25,7 +25,7 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
     deployment = commands.run([compiler, 'protocol-proof', source_path, policy_path, *options])
     (OUT / f'{name}.deployment').write_text(deployment)
     envelope = json.loads(deployment)
-    assert envelope[0] == 'zkc.native-proof/1'
+    assert envelope[0] == 'zkc.native-proof/4'
     assert envelope[1] == hashlib.sha256(source.encode()).hexdigest()
     assert envelope[2][1] == policy
     assert envelope[5] == hashlib.sha256(envelope[4].encode()).hexdigest()
@@ -35,7 +35,7 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
 
 
 def policy(suite, public=None):
-    return ['zkc.native-proof-policy/1', 'main', 'Alice', 'Bob', '0', suite,
+    return ['zkc.native-proof-policy/4', 'main', 'Alice', 'Bob', '0', suite,
             '4' if suite else '', public or ['0', '2'],
             [['draw_challenge', 'challenge']] if suite else []]
 
@@ -182,25 +182,33 @@ with case('source-relative actual candidate checking'):
 with case('constructed transcript helpers have a closed body and one use per role'):
     # These mutations preserve ordinary types and action occurrences. The
     # construction record must also constrain inserted helper bodies and reuse.
-    extra = candidate.replace('      return %0 :',
-                              '      %unused = "local.bool_constant"() {value = true, site = "unused"} : () -> i1\n      return %0 :', 1)
-    assert extra != candidate
+    extra, count = re.subn(r'(?m)^(      return %)',
+                           r'      %unused = "local.bool_constant"() {value = true, site = "unused"} : () -> i1\n\1', candidate, count=1)
+    assert count == 1
     commands.verified(extra, 'mathematical-projection: invalid inserted transcript helper')
-    repeated = candidate.replace('callee = @_transcript_6', 'callee = @_transcript_5').replace(
-        'local.call @_transcript_6', 'local.call @_transcript_5')
+    # The two scalar-observation helpers have identical callable signatures.
+    helpers = re.findall(r'local.func @(_transcript_\d+)\(%arg0: [^\n]+, %arg1: !algebra.field<"bls12-381.fr">\)', candidate)
+    assert len(helpers) == 2, helpers
+    repeated = candidate.replace(f'callee = @{helpers[1]}', f'callee = @{helpers[0]}').replace(
+        f'local.call @{helpers[1]}', f'local.call @{helpers[0]}')
     assert repeated != candidate
     commands.verified(repeated, 'mathematical-projection: repeated inserted transcript helper')
 
 with case('retained action cannot disguise an extra inserted helper call'):
-    forged = candidate.replace(
-        '      %3:2 = local.call @_transcript_3(%2)',
-        f'      %extra_state = local.call @_transcript_1(%2, %1) {{site = "authored_extra"}} : (!local.capability<"transcript:{SUITES[0]}">, !algebra.group<"bls12-381.g1">) -> !local.capability<"transcript:{SUITES[0]}">\n'
-        '      %3:2 = local.call @_transcript_3(%extra_state)', 1)
-    assert forged != candidate
-    extra = '{callee = @_transcript_1, kind = "protocol.local_call", site = "authored_extra", targets = [{operation = "local.call", participant = @_math_0}]}'
+    absorb = re.search(r'(?m)^      (%\w+) = local.call @(_transcript_\d+)\((%\w+), (%\w+)\) \{site = "([^\"]+)"\}( : [^\n]+)', candidate)
+    assert absorb
+    state, helper, _, payload, site, signature = absorb.groups()
+    challenge = re.search(r'(?m)^      %\w+:2 = local.call @_transcript_\d+\(' + re.escape(state) + r'\)[^\n]+', candidate)
+    assert challenge
+    inserted_call = f'      %extra_state = local.call @{helper}({state}, {payload}) {{site = "authored_extra"}}{signature}\n'
+    forged = candidate.replace(challenge[0], inserted_call + challenge[0].replace(f'({state})', '(%extra_state)'), 1)
+    participant = re.search(r'"protocol.participant"[^\n]+sym_name = "([^\"]+)"', candidate)[1]
+    extra = f'{{callee = @{helper}, kind = "protocol.local_call", site = "authored_extra", targets = [{{operation = "local.call", participant = @{participant}}}]}}'
     original_next = '{kind = "protocol.query", site = "draw_challenge",'
+    assert original_next in forged
     forged = forged.replace(original_next, extra + ', ' + original_next, 1)
-    inserted = '{callee = @_transcript_1, kind = "protocol.local_call", site = "_transcript_7", targets = [{operation = "local.call", participant = @_math_0}]}'
+    inserted = f'{{callee = @{helper}, kind = "protocol.local_call", site = "{site}", targets = [{{operation = "local.call", participant = @{participant}}}]}}'
+    assert inserted in forged
     forged = forged.replace(inserted, inserted + ', ' + extra, 1)
     commands.verified(forged, 'mathematical-projection: inserted transcript helper used by retained action')
 
@@ -258,17 +266,21 @@ with case('unused validator services are not ambient inputs'):
     source_path.write_text(added)
     commands.verified(added, None)
     commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-verifier-service')
-with case('wire admission remains closed for unsigned public data'):
+with case('all unsigned public data must be bound'):
     added = schnorr.replace(f'%challenge_service: {service}):', f'%challenge_service: {service}, %n: ui64):')
     added = added.replace(f', {service}) -> (i1)', f', {service}, ui64) -> (i1)')
     added = added.replace('["Alice"], ["Bob"]], output_roles', '["Alice"], ["Bob"], ["Bob"]], output_roles')
     source_path.write_text(added)
     commands.verified(added, None)
-    commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-wire-type')
-with case('bounded iteration requires the later dynamic-origin profile'):
-    source_path.write_text((FIXTURES / 'iteration.mlir').read_text())
-    commands.verified(source_path.read_text(), None)
-    commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-flat-profile')
+    commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-public-bindings')
+with case('retired and unknown policy tags refuse before source preparation'):
+    source_path.write_text(schnorr)
+    for tag in ('1', '2', '3', '0', '5', '99', 'unknown'):
+        selected = policy(SUITES[0])
+        selected[0] = 'zkc.native-proof-policy/' + tag
+        policy_path.write_text(json.dumps(selected))
+        commands.run([compiler, 'protocol-proof', source_path, policy_path], refuses='native-proof-policy')
+
 
 (OUT / 'manifest.json').write_text(json.dumps(manifest))
 counted()

@@ -4,17 +4,12 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     interactive::{ValueBudget, WorkBudget},
 };
-use zkc_tools::artifact::{
-    hex,
-    native::{AttemptPolicy, NativeDeployment, NativeProofReport},
-};
+use zkc_tools::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, hex};
 
 fn data(len: usize) -> (Vec<Scalar>, Vec<GroupPoint>) {
     (
@@ -27,12 +22,8 @@ fn data(len: usize) -> (Vec<Scalar>, Vec<GroupPoint>) {
 fn inputs(envelope: &Json, producing: bool, n: u64, a: &[Scalar], g: &[GroupPoint]) -> Json {
     let codec = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "composed", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "composed", None), None),
+        Default::default(),
     )
     .unwrap();
     // The batch consumes a prefix; unused witness/base suffixes are legal.
@@ -135,7 +126,8 @@ fn run(directory: &Path, case: &Json) {
     let fold = case["family"] == "fold";
     let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-    let d = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+    let d =
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
     for (n, coefficients, bases) in if fold {
         vec![
             (0, 0, 0),

@@ -1,8 +1,7 @@
 //! Executes compiler-generated mixed math/local participants with real custody.
 use std::path::Path;
-use zkc_backends::{
-    Capability, Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
+use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{Action, Runner, StopKind, admit_supplied};
 fn domain(role: &str) -> Domain {
     Domain::new(role, "mixed_test", "main", None)
@@ -10,8 +9,8 @@ fn domain(role: &str) -> Domain {
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(domain("P"), None, PublicInputs::LocalOnly),
-        None,
+        EntryPolicy::new(domain("P"), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -132,7 +131,9 @@ fn main() {
         assert_eq!(after.budget, 7 - draws);
         // A correctly typed resource issued to another owner is still refused.
         let mut native = backend();
-        let wrong = native.issue_rng(domain("V"), 7).unwrap();
+        let wrong = native
+            .issue_rng_for(Identity::Bls12381Fr, domain("V"), 7)
+            .unwrap();
         let admitted = admit_supplied(&bytes, &native).unwrap();
         assert!(
             Runner::new(
@@ -203,7 +204,9 @@ fn custody_boundaries(directory: &str) {
                         "mixed-custody-root"
                     ]))
                     .unwrap();
-                    let transcript = native.issue_transcript(domain("P"), 7, &root).unwrap();
+                    let transcript = native
+                        .issue_transcript_for(Identity::Merlin3Fr64Be, domain("P"), 7, &root)
+                        .unwrap();
                     let Value::Transcript(handle) = &transcript else {
                         panic!("transcript")
                     };

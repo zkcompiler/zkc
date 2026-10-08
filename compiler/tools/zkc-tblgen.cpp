@@ -131,43 +131,6 @@ bool sameEnvelope(const Record *left, const Record *right) {
          lp->getValueAsInt("maximum") == rp->getValueAsInt("maximum");
 }
 
-// This is a representation-specific observation adapter, not permission to
-// merge arbitrary signatures. Neutral validation checks each declaration's
-// complete scope, payload requirements and matching history successor first.
-// Only the payload and its static context may differ; the state is a common
-// transcript root and the port layout is fixed. Runtime binding still checks
-// the selected declaration's full signature, parameters and requirements.
-const Record *observationState(const Record *contract) {
-  const Record *observation = nullptr, *history = nullptr;
-  auto facets = contract->getValueAsListOfDefs("facets");
-  for (const auto *facet : facets) {
-    if (facet->isSubClassOf("ZKC_Observation"))
-      observation = facet;
-    if (facet->isSubClassOf("ZKC_History"))
-      history = facet;
-  }
-  auto inputs = contract->getValueAsListOfDefs("inputs");
-  auto outputs = contract->getValueAsListOfDefs("outputs");
-  if (!observation || !history || facets.size() != 2 || inputs.size() != 2 ||
-      outputs.size() != 1 || observation->getValueAsInt("stateInput") != 0 ||
-      observation->getValueAsInt("payloadInput") != 1 ||
-      observation->getValueAsInt("stateOutput") != 0 ||
-      history->getValueAsInt("stateInput") != 0 ||
-      history->getValueAsInt("stateOutput") != 0 ||
-      name(contract->getValueAsDef("stage")) != "Construction" ||
-      (name(contract->getValueAsDef("parameters")) != "TranscriptOrigin" &&
-       name(contract->getValueAsDef("parameters")) != "NativeOrigin"))
-    PrintFatalError(contract, "incompatible observation contract mapping");
-  auto arguments = inputs[0]->getValueAsListOfDefs("arguments");
-  if (arguments.size() != 1 || parent(arguments[0]))
-    PrintFatalError(contract, "observation mapping requires a transcript root");
-  const auto *parameter = arguments[0]->getValueAsDef("parameter");
-  if (name(parameter->getValueAsDef("kind")) != "Domain" ||
-      parameter->getValueAsString("sort") != "Transcript")
-    PrintFatalError(contract, "observation mapping requires a transcript root");
-  return arguments[0];
-}
-
 void quoted(raw_ostream &os, StringRef text) {
   os << '"';
   os.write_escaped(text);
@@ -248,41 +211,23 @@ bool emitContractMappings(raw_ostream &os, const RecordKeeper &records) {
       PrintFatalError(record, "contract mapping must belong to an Op record");
     validateMappedProperties(record, records);
     auto contracts = record->getValueAsListOfDefs("contracts");
-    auto observations = record->getValueAsListOfDefs("observationContracts");
-    if (contracts.empty() && observations.empty())
+    if (contracts.empty())
       PrintFatalError(record,
                       "contract mapping requires a logical declaration");
-    if (!contracts.empty() && !observations.empty())
-      PrintFatalError(record,
-                      "cannot mix exact and observation contract lists");
     auto operation = operationName(record);
-    const Record *firstState = nullptr;
-    for (const auto *contract : observations) {
-      const auto *state = observationState(contract);
-      if (firstState && (name(firstState) != name(state) ||
-                         !sameParameter(firstState->getValueAsDef("parameter"),
-                                        state->getValueAsDef("parameter"))))
-        PrintFatalError(record, "incompatible observation state signature");
-      firstState = state;
+    for (const auto *contract : contracts) {
+      if (!sameEnvelope(contracts.front(), contract) ||
+          !sameSignature(contracts.front(), contract))
+        PrintFatalError(record, "incompatible mapped contract signatures: " +
+                                    name(contracts.front()) + " / " +
+                                    name(contract));
+      associations.push_back({name(contract).str(), operation, record});
     }
-    auto append = [&](ArrayRef<const Record *> values, bool observation) {
-      for (const auto *contract : values) {
-        if (!sameEnvelope(values.front(), contract) ||
-            (!observation && !sameSignature(values.front(), contract)))
-          PrintFatalError(record, "incompatible mapped contract signatures: " +
-                                      name(values.front()) + " / " +
-                                      name(contract));
-        associations.push_back({name(contract).str(), operation, record});
-      }
-    };
-    append(contracts, false);
-    append(observations, true);
   }
 
   llvm::sort(associations,
              [](const auto &a, const auto &b) { return a.key < b.key; });
-  // Observations have already expanded into exact declarations, so this also
-  // rejects all exact/observation overlaps, including within one Op.
+  // Reject repeated declarations, including duplicates within one Op.
   for (size_t i = 1; i < associations.size(); ++i) {
     const auto &previous = associations[i - 1];
     const auto &current = associations[i];

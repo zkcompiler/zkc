@@ -7,8 +7,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use zkc_runtime::interactive::ServiceContract;
 
-pub const RANDOM_FIELD_SERVICE: &str = "random.bls12-381.fr/1";
-
 struct Authority;
 struct LeaseIdentity;
 
@@ -134,9 +132,6 @@ impl ServiceRegistry {
             contract: ServiceContract::for_field(state.roots[&id].token.identity())
                 .expect("installed service field"),
         })
-    }
-    pub fn issue_random(&self, owner: &str, budget: u64) -> Result<ServiceReference> {
-        self.issue_random_for(owner, ServiceContract::RandomBls12381Field, budget)
     }
     pub fn issue_random_for(
         &self,
@@ -345,7 +340,6 @@ impl ServiceBindings {
     }
     pub(crate) fn enter(&mut self, frame: &zkc_runtime::interactive::Frame) -> Result<()> {
         if self.lease.is_some()
-            || !frame.origin().format.is_program()
             || frame.services().len() != self.ports.len()
             || frame.services().iter().any(|port| {
                 !self

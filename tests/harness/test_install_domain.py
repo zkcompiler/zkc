@@ -50,8 +50,7 @@ def test_private_registration_fragments_refused_before_consumer_build(tmp_path, 
 def driver(monkeypatch, tmp_path, native_config):
     developer = load("developer", "scripts/develop.py")
     calls = []
-    controls = {"missing_package": False, "inventory": None, "junit": None,
-                "identities": None, "fail": False, "execution": False}
+    controls = {"missing_package": False, "inventory": None, "junit": None, "fail": False}
 
     def run(arguments, **kwargs):
         args = list(map(str, arguments))
@@ -62,15 +61,8 @@ def driver(monkeypatch, tmp_path, native_config):
             package = Path(args[-1]) / "lib/cmake/ZkcCompiler"
             package.mkdir(parents=True)
             (package / "ZkcCompilerConfig.cmake").write_text("# fake installed config\n")
-        if args[-1] == "--checked-identities":
-            kwargs["stdout"].write(json.dumps(controls["identities"] if controls["identities"] is not None
-                                              else [str(Path(args[0]).parent.name)]))
         if args[0] == "ctest":
             names = ["installed-envelope", "installed-declarations"]
-            if Path(args[2]).name == "domain-consumer":
-                names.append("installed-specialization")
-                if controls["execution"]:
-                    names.append("installed-execution")
             if "--show-only=json-v1" in args:
                 kwargs["stdout"].write(json.dumps({"tests": [
                     {"name": n} for n in (controls["inventory"] if controls["inventory"] is not None else names)
@@ -108,7 +100,7 @@ def test_both_prefixes_and_exact_ctest_evidence(driver, tmp_path, profile, reuse
         assert record["profile"] == profile and record["skip_build"] == reuse
         assert all(c["status"] == "pass" for c in record["commands"])
         assert [len(json.loads((output / f"{name}-tests.json").read_text())["tests"])
-                for name in ("base", "domain")] == [2, 3]
+                for name in ("base", "domain")] == [2, 2]
         assert (output / "base-ctest.xml").is_file() and (output / "domain-ctest.xml").is_file()
     configurations = [c for c in calls if "--preset" in c]
     assert len(configurations) == (0 if reuse else 4)
@@ -211,14 +203,6 @@ def test_absent_static_linkage_cache_entry_is_supported(tmp_path, native_config)
     check_cache(build, "release", selected, "")
 
 
-@pytest.mark.parametrize("identities", [[], ["same-key"], [1]])
-def test_missing_or_unchanged_captured_environment_refused(driver, identities):
-    invoke, _, controls = driver
-    controls["identities"] = identities
-    with pytest.raises(ValueError, match="identit"):
-        invoke()
-
-
 def test_installed_prefix_entry_point_uses_same_consumer_checks(driver, monkeypatch, tmp_path):
     _, calls, _ = driver
     module = load("installed_domain", "scripts/install_domain.py")
@@ -267,22 +251,10 @@ def test_unconfigured_or_symlink_build_is_refused(driver, tmp_path, kind):
     assert not calls
 
 
-def test_optional_execution_is_part_of_exact_ctest_inventory(driver, tmp_path):
-    invoke, calls, controls = driver
-    controls["execution"] = True
-    invoke("--runtime", sys.executable, "--checker", sys.executable)
-    configurations = [call for call in calls if "-DEXPECT_ENVELOPE=ON" in call]
-    assert len(configurations) == 1
-    assert f"-DZKC_DOMAIN_RUNTIME={Path(sys.executable).resolve()}" in configurations[0]
-    assert f"-DZKC_DOMAIN_CHECKER={Path(sys.executable).resolve()}" in configurations[0]
-
-
-@pytest.mark.parametrize("arguments", [
-    ["--runtime", sys.executable], ["--checker", sys.executable],
-    ["--runtime", "/absent/zkc", "--checker", sys.executable],
-])
-def test_invalid_execution_tools_refuse_before_building(driver, arguments):
+@pytest.mark.parametrize("option", ["--runtime", "--checker"])
+def test_retired_source_execution_options_are_rejected(driver, option):
     invoke, calls, _ = driver
-    with pytest.raises(ValueError, match="independent execution"):
-        invoke(*arguments)
+    with pytest.raises(SystemExit) as error:
+        invoke(option, "/absent/tool")
+    assert error.value.code == 2
     assert not calls

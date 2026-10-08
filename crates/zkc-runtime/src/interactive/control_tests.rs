@@ -360,3 +360,25 @@ fn false_exits_preserve_every_iteration_and_legacy_records_refuse() {
         assert!(admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).is_err());
     }
 }
+
+#[test]
+fn removed_source_participant_forms_cannot_enter_native_execution() {
+    let base = artifact(body(false), json!([]));
+    for parameters in [json!([["n", "2"]]), json!([["n", ["ingress", "8", []]]])] {
+        let mut program = base.clone();
+        program[4][0][4] = parameters;
+        let error =
+            admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).unwrap_err();
+        assert_eq!(error.detail, "program-parameters-unsupported");
+    }
+    for instruction in [
+        json!(["call", "child", "other", [], []]),
+        json!(["loop", "fixed", "2", [], [], [["yield", []]], []]),
+        json!(["loop", "parameterized", "n", [], [], [["yield", []]], []]),
+        json!(["incomplete", "end"]),
+    ] {
+        let mut program = base.clone();
+        program[4][0][7] = json!([instruction, ["return", []]]);
+        assert!(admit_supplied(&serde_json::to_vec(&program).unwrap(), &Store::default()).is_err());
+    }
+}

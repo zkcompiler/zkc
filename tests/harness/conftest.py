@@ -3,12 +3,11 @@
 import os
 
 import pytest
-import workspace
 
 
 @pytest.fixture(autouse=True)
 def clean_environment(monkeypatch):
-    for name in list(workspace.REMOVED) + [
+    for name in [
         "ZKC_COMPILER_BIN", "ZKC_NATIVE_BIN", "ZKC_LEAN_BIN", "ZKC_REPORTS_DIR",
         "CARGO_TARGET_DIR", "PYTEST_XDIST_AUTO_NUM_WORKERS",
         "CC", "CXX", "MLIR_DIR", "LLVM_CONFIG",

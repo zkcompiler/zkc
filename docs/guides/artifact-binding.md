@@ -43,12 +43,12 @@ of these laws.
 
 [BIND-05–09](../spec/realization/artifacts.md#lifecycle-and-release) distinguish
 lifecycle state, exact selected subject, requirements and format scope. The
-current direct-plan artifact admits only its own rule and complete-execution
-claim, with no introduced requirements. Its exact tagged-array codecs are a
-finite exchange profile; canonical binary sealing and general native dependency
-resolution are separate work. The
-[native implementation](../runtime/reference-execution.md) retains the checked bytes
-and decoded plan under a trusted checker-process policy.
+independent direct-plan model admits only its own rule and complete-execution
+claim, with no introduced requirements. Its tagged-array codec is a model-specific
+exchange profile. Current native packages use the
+[exact identity contract](../runtime/artifact-identity.md), with authentication
+and execution through the shared Host. Model proofs do not validate that byte
+boundary.
 
 Sealing identifies a fixed subject and evidence/trust references. It does not
 make private captures, generated code, digests or diagnostics safe to release.

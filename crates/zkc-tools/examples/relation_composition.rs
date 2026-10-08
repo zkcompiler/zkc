@@ -3,11 +3,9 @@
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::services::ServiceRegistry;
-use zkc_backends::{
-    Domain, EntryPolicy, FieldArray, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interactive::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
-use zkc_tools::protocol::run::*;
+use zkc_tools::run::*;
 
 #[derive(Deserialize)]
 struct Experiment {
@@ -56,12 +54,8 @@ fn elements(value: &Value) -> &[Scalar] {
 fn backend(role: &str, entry: &str) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new(role, "composition", entry, None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new(role, "composition", entry, None), None),
+        Default::default(),
     )
     .unwrap()
 }

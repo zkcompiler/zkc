@@ -1,8 +1,9 @@
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::Value as RuntimeValue;
 mod common;
 use common::*;
 use serde_json::json;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use zkc_backends::*;
 use zkc_runtime::interactive::{Runner, admit_supplied};
 
@@ -30,7 +31,6 @@ fn every_field_polynomial_kernel_matches_hand_calculation() {
         op("require", "arkworks/control.require", &["yes"], &[]),
     ];
     let bytes = program(
-        Some(2),
         &[
             ("a", "table"),
             ("b", "table"),
@@ -71,7 +71,6 @@ fn committed_fixture() -> (NativeBackend, Keys, Value, Vec<Value>) {
     let keys = Keys::setup_for_development(2, &p.ark_bounds()).unwrap();
     let t = table(&[2, 3, 5, 7]);
     let bytes = program(
-        Some(2),
         &[
             ("pk", "prover_key"),
             ("t", "table"),
@@ -98,7 +97,10 @@ fn committed_fixture() -> (NativeBackend, Keys, Value, Vec<Value>) {
     );
     let (out, backend) = run(
         &bytes,
-        ark_backend(Some(2)),
+        backend()
+            .arity(2)
+            .verifier(keys.verifier_key().clone())
+            .build(),
         vec![
             Value::ProverKey(Arc::new(keys.prover_key().clone())),
             t.clone(),
@@ -122,42 +124,46 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         &Policy::default().ark_bounds(),
     )
     .unwrap();
-    let verifier =
-        NativeBackend::new(Policy::default(), entry(Some(2)), Some(key.clone())).unwrap();
+    let verifier = NativeBackend::new(
+        Policy::default(),
+        entry(Some(2)),
+        zkc_backends::SetupRegistry::new(vec![key.clone()], &zkc_backends::Policy::default())
+            .unwrap(),
+    )
+    .unwrap();
     let c = verifier
-        .decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        .decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse(
                     "commitment:multilinear.kzg.bls12-381/1",
                 )
                 .unwrap(),
             )
             .unwrap(),
-            &prover.encode_value(&out[0]).unwrap(),
+            &prover.encode_native_value(&out[0]).unwrap(),
         )
         .unwrap();
     let y = verifier
-        .decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        .decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
             )
             .unwrap(),
-            &prover.encode_value(&out[1]).unwrap(),
+            &prover.encode_native_value(&out[1]).unwrap(),
         )
         .unwrap();
     let proof = verifier
-        .decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        .decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("proof:multilinear.kzg.bls12-381/1")
                     .unwrap(),
             )
             .unwrap(),
-            &prover.encode_value(&out[2]).unwrap(),
+            &prover.encode_native_value(&out[2]).unwrap(),
         )
         .unwrap();
     assert_eq!(verifier.active_frames(), 0);
     let bytes = program(
-        Some(2),
         &[
             ("vk", "verifier_key"),
             ("c", "commitment"),
@@ -191,7 +197,12 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
     bad[3] = f(0);
     let (failed, _) = run(
         &bytes,
-        NativeBackend::new(Policy::default(), entry(Some(2)), Some(key)).unwrap(),
+        NativeBackend::new(
+            Policy::default(),
+            entry(Some(2)),
+            zkc_backends::SetupRegistry::new(vec![key], &zkc_backends::Policy::default()).unwrap(),
+        )
+        .unwrap(),
         bad,
     );
     assert_eq!(code(&failed.unwrap_err()), "rejected:require");
@@ -207,7 +218,6 @@ fn opening_refuses_table_and_folded_scratch_at_admission() {
     // No earlier commit in the same body supplies implicit access to an original.
     for replacement in ["t", "scratch"] {
         let bytes = program(
-            Some(2),
             &[
                 ("pk", "prover_key"),
                 ("t", "table"),
@@ -246,61 +256,76 @@ fn hostile_key_aware_codec_and_exact_length() {
     let recv = NativeBackend::new(
         Policy::default(),
         entry(Some(2)),
-        Some(keys.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![keys.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     let other = Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
     let wrong = NativeBackend::new(
         Policy::default(),
         entry(Some(2)),
-        Some(other.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![other.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     let different_arity = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     let wrong_n = NativeBackend::new(
         Policy::default(),
         entry(Some(1)),
-        Some(different_arity.verifier_key().clone()),
+        zkc_backends::SetupRegistry::new(
+            vec![different_arity.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap();
     for index in [0, 2] {
         let v = &out[index];
         let ty = v.physical_type();
-        let valid = prover.encode_value(v).unwrap();
-        assert!(recv.decode_typed_value(ty.clone(), &valid).is_ok());
-        assert!(wrong.decode_typed_value(ty.clone(), &valid).is_err());
-        assert!(wrong_n.decode_typed_value(ty.clone(), &valid).is_err());
+        let valid = prover.encode_native_value(v).unwrap();
+        assert!(recv.decode_native_value(&ty.clone(), &valid).is_ok());
+        assert!(wrong.decode_native_value(&ty.clone(), &valid).is_err());
+        assert!(wrong_n.decode_native_value(&ty.clone(), &valid).is_err());
         assert!(
             ark_backend(Some(2))
-                .decode_typed_value(ty.clone(), &valid)
+                .decode_native_value(&ty.clone(), &valid)
                 .is_err()
         );
         for end in 0..valid.len() {
-            assert!(recv.decode_typed_value(ty.clone(), &valid[..end]).is_err());
+            assert!(
+                recv.decode_native_value(&ty.clone(), &valid[..end])
+                    .is_err()
+            );
         }
         let mut trailing = valid.clone();
         trailing.push(0);
-        assert!(recv.decode_typed_value(ty.clone(), &trailing).is_err());
+        assert!(recv.decode_native_value(&ty.clone(), &trailing).is_err());
         for position in [0, 5, 6, 14, 23, 55] {
             let mut damaged = valid.clone();
             damaged[position] ^= 0xff;
             assert!(
-                recv.decode_typed_value(ty.clone(), &damaged).is_err(),
+                recv.decode_native_value(&ty.clone(), &damaged).is_err(),
                 "accepted offset {position}"
             );
         }
         let mut arity = valid.clone();
         arity[15..23].copy_from_slice(&u64::MAX.to_le_bytes());
-        assert!(recv.decode_typed_value(ty.clone(), &arity).is_err());
+        assert!(recv.decode_native_value(&ty.clone(), &arity).is_err());
         let mut point = valid.clone();
         point[87..].fill(0xff);
-        assert!(recv.decode_typed_value(ty.clone(), &point).is_err());
+        assert!(recv.decode_native_value(&ty.clone(), &point).is_err());
     }
-    let mut noncanonical = recv.encode_value(&f(1)).unwrap();
+    let mut noncanonical = recv.encode_native_value(&f(1)).unwrap();
     noncanonical[6..].fill(0xff);
     assert!(
-        recv.decode_typed_value(
-            zkc_runtime::interactive::PhysicalType::default_for(
+        recv.decode_native_value(
+            &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap()
             )
             .unwrap(),
@@ -310,15 +335,15 @@ fn hostile_key_aware_codec_and_exact_length() {
     );
     assert!(zkc_runtime::interactive::LogicalType::parse("scalar:bls12-381.fr").is_err());
     // The removed scalar carrier's wire tag cannot be decoded as a nominal field.
-    let mut old_scalar = recv.encode_value(&f(1)).unwrap();
+    let mut old_scalar = recv.encode_native_value(&f(1)).unwrap();
     old_scalar[5] = 8;
     assert!(
-        recv.decode_typed_value(f(1).physical_type(), &old_scalar)
+        recv.decode_native_value(&f(1).physical_type(), &old_scalar)
             .is_err()
     );
     assert!(
         prover
-            .encode_value(&Value::ProverKey(Arc::new(keys.prover_key().clone())))
+            .encode_native_value(&Value::ProverKey(Arc::new(keys.prover_key().clone())))
             .is_err()
     );
     let small = NativeBackend::new(
@@ -327,21 +352,21 @@ fn hostile_key_aware_codec_and_exact_length() {
             ..Policy::default()
         },
         entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     assert_eq!(
         small
-            .decode_typed_value(
-                zkc_runtime::interactive::PhysicalType::default_for(
+            .decode_native_value(
+                &zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap()
                 )
                 .unwrap(),
-                &recv.encode_value(&f(1)).unwrap()
+                &recv.encode_native_value(&f(1)).unwrap()
             )
             .unwrap_err()
-            .code,
-        "exhausted:wire-bytes"
+            .to_string(),
+        "native-wire-limit"
     );
 }
 #[test]
@@ -349,7 +374,6 @@ fn entry_shape_setup_and_public_correspondence_policy() {
     let keys = Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
     let other = Keys::setup_for_development(2, &Policy::default().ark_bounds()).unwrap();
     let bytes = program(
-        Some(2),
         &[
             ("pk", "prover_key"),
             ("vk", "verifier_key"),
@@ -364,7 +388,10 @@ fn entry_shape_setup_and_public_correspondence_policy() {
         (keys.verifier_key().clone(), table(&[1, 2])),
         (other.verifier_key().clone(), table(&[1, 2, 3, 4])),
     ] {
-        let b = ark_backend(Some(2));
+        let b = backend()
+            .arity(2)
+            .verifier(keys.verifier_key().clone())
+            .build();
         let admitted = admit_supplied(&bytes, &b).unwrap();
         assert!(
             Runner::new(
@@ -383,39 +410,12 @@ fn entry_shape_setup_and_public_correspondence_policy() {
             .is_err()
         );
     }
-    let policy = EntryPolicy::new(
-        domain(),
-        Some(2),
-        PublicInputs::Exact(BTreeMap::from([("claim".into(), f(7))])),
-    );
-    let b = NativeBackend::new(Policy::default(), policy, None).unwrap();
-    let admitted = admit_supplied(&bytes, &b).unwrap();
-    let result = Runner::new(
-        &admitted,
-        "main",
-        "P",
-        "session",
-        b,
-        vec![
-            Value::ProverKey(Arc::new(keys.prover_key().clone())),
-            Value::VerifierKey(Arc::new(keys.verifier_key().clone())),
-            table(&[1, 2, 3, 4]),
-            f(8),
-        ],
-    );
-    match result {
-        Err(e) => {
-            assert!(e.error.to_string().contains("public-input-mismatch"));
-            assert_eq!(e.backend.active_frames(), 0);
-        }
-        Ok(_) => panic!(),
-    }
 }
+
 #[test]
 fn zero_arity_polynomial_and_policy_failures() {
     let b = ark_backend(Some(0));
     let bytes = program(
-        Some(0),
         &[("t", "table"), ("p", "point")],
         vec![op(
             "evaluate",
@@ -436,31 +436,25 @@ fn zero_arity_polynomial_and_policy_failures() {
     assert!(Value::table(&[], &policy).is_err());
 }
 #[test]
-fn json_input_api_uses_only_admitted_role_ports_and_host_bindings() {
+fn native_wire_inputs_match_admitted_ports_and_keep_host_capabilities() {
     let mut b = ark_backend(Some(1));
-    let rng = b.issue_rng(domain(), 2).unwrap();
+    let rng = b.issue_rng_for(Identity::Bls12381Fr, domain(), 2).unwrap();
     let bytes = program(
-        Some(1),
         &[("t", "table"), ("claim", "field"), ("rng", "rng")],
         vec![],
         &["field"],
         &["claim"],
     );
-    let admitted = admit_supplied(&bytes, &b).unwrap();
-    let role = admitted.entry("main").unwrap().remove(0);
-    let mut host = InputBindings::new();
-    host.insert("challenge", rng).unwrap();
-    let input=br#"["zkc.inputs/1",[["t",["table",["2","3"]]],["claim",["field","5"]],["rng",["host","challenge"]]]]"#;
-    let values = b.inputs_from_json(&role, input, &host).unwrap();
-    assert_eq!(values.len(), 3);
-    let (out, _) = run(&bytes, b, values);
+    let values = [table(&[2, 3]), f(5)].map(|value| {
+        let wire = b.encode_native_value(&value).unwrap();
+        b.decode_native_value(&value.physical_type(), &wire)
+            .unwrap()
+    });
+    let mut inputs = Vec::from(values);
+    inputs.push(rng);
+    let (out, backend) = run(&bytes, b, inputs);
     assert_eq!(scalar(&out.unwrap()[0]), Scalar::from(5u64));
-    let b = ark_backend(Some(1));
-    for bad in [br#"["zkc.inputs/1",[["t",["table",["02","3"]]],["claim",["field","5"]],["rng",["host","challenge"]]]]"#.as_slice(),
-        br#"["zkc.inputs/1",[["t",["table",["2","3"]]],["claim",["field","5"]],["rng",["rng","0"]]]]"#,
-        br#"["zkc.inputs/1",[["t",["table",["2","3"]]],["t",["field","5"]],["rng",["host","challenge"]]]]"#] {
-        assert!(b.inputs_from_json(&role,bad,&host).is_err());
-    }
+    assert_eq!(backend.active_frames(), 0);
 }
 
 #[test]
@@ -473,12 +467,16 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
         point(&[5, 6]),
         Value::Round([1u64, 2, 3].map(Scalar::from)),
     ] {
-        let bytes = backend.encode_value(&v).unwrap();
+        if !zkc_backends::has_native_wire(&v.physical_type()) {
+            assert!(backend.encode_native_value(&v).is_err());
+            continue;
+        }
+        let bytes = backend.encode_native_value(&v).unwrap();
         assert_eq!(
             backend
-                .encode_value(
+                .encode_native_value(
                     &backend
-                        .decode_typed_value(v.physical_type(), &bytes)
+                        .decode_native_value(&v.physical_type(), &bytes)
                         .unwrap()
                 )
                 .unwrap(),
@@ -487,7 +485,7 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
         for end in 0..bytes.len() {
             assert!(
                 backend
-                    .decode_typed_value(v.physical_type(), &bytes[..end])
+                    .decode_native_value(&v.physical_type(), &bytes[..end])
                     .is_err()
             );
         }
@@ -495,7 +493,7 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
         extra.push(0);
         assert!(
             backend
-                .decode_typed_value(v.physical_type(), &extra)
+                .decode_native_value(&v.physical_type(), &extra)
                 .is_err()
         );
         if matches!(v, Value::Table(_) | Value::Point(_)) {
@@ -503,17 +501,17 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
             count[6..10].fill(0xff);
             assert!(
                 backend
-                    .decode_typed_value(v.physical_type(), &count)
+                    .decode_native_value(&v.physical_type(), &count)
                     .is_err()
             );
         }
     }
-    let mut boolean = backend.encode_value(&Value::Bool(true)).unwrap();
+    let mut boolean = backend.encode_native_value(&Value::Bool(true)).unwrap();
     boolean[6] = 2;
     assert!(
         backend
-            .decode_typed_value(
-                zkc_runtime::interactive::PhysicalType::default_for(
+            .decode_native_value(
+                &zkc_runtime::interactive::PhysicalType::default_for(
                     zkc_runtime::interactive::LogicalType::parse("bool").unwrap()
                 )
                 .unwrap(),
@@ -527,8 +525,11 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
 fn keys_must_match_entry_arity_and_opening_must_match_point() {
     let keys = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     for ty in ["prover_key", "verifier_key"] {
-        let bytes = program(Some(2), &[("key", ty)], vec![], &[], &[]);
-        let b = ark_backend(Some(2));
+        let bytes = program(&[("key", ty)], vec![], &[], &[]);
+        let b = backend()
+            .arity(2)
+            .verifier(keys.verifier_key().clone())
+            .build();
         let admitted = admit_supplied(&bytes, &b).unwrap();
         let key = if ty == "prover_key" {
             Value::ProverKey(Arc::new(keys.prover_key().clone()))
@@ -537,9 +538,9 @@ fn keys_must_match_entry_arity_and_opening_must_match_point() {
         };
         assert!(Runner::new(&admitted, "main", "P", "session", b, vec![key]).is_err());
     }
-    let (backend, _, _, out) = committed_fixture();
+    let (_, keys, _, out) = committed_fixture();
+    let backend = backend().verifier(keys.verifier_key().clone()).build();
     let bytes = program(
-        Some(2),
         &[("state", "opening_state"), ("p", "point")],
         vec![op(
             "open",

@@ -83,7 +83,7 @@ def component_pages():
     """Include component guides without walking build or private dependency trees."""
     ignored = {".git", ".lake", "target", "build", "node_modules", "__pycache__",
                ".cache", ".work", "records"}
-    for folder in (".github", "bench", "compiler", "crates", "examples", "tests",
+    for folder in (".github", "compiler", "crates", "examples", "tests",
                    "formal/consumers"):
         for directory, children, files in os.walk(ROOT / folder):
             children[:] = sorted(name for name in children if name not in ignored
@@ -163,7 +163,7 @@ def check(include_components=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--all", action="store_true", help="also check component, benchmark and fixture guides")
+    parser.add_argument("--all", action="store_true", help="also check component and fixture guides")
     args = parser.parse_args()
     result = check(include_components=args.all)
     if args.output:

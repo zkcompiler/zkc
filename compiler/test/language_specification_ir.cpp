@@ -47,7 +47,7 @@ zkc::relation::DeclareOp relation(mlir::ModuleOp module) {
 int main() {
   zkc::test::Cases cases;
   mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
+  zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   auto entry = close(source);

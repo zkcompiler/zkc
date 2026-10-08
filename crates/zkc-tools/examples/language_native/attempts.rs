@@ -7,7 +7,7 @@ use zkc_tools::{
         AttemptOptions, BindingPolicy, DEFAULT_DRAW_BUDGET, NamedValues, Package, ProofEntry,
         ProofOptions, ProofRequest, RoleInputs, RunEntry, RunRequest,
     },
-    protocol::run::HostLimits,
+    run::HostLimits,
 };
 fn package(directory: &Path, entry: &str, suite: usize) -> Package {
     let bytes = std::fs::read(directory.join(format!("attempt-{entry}-{suite}.entry"))).unwrap();

@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{Scalar, Value as Native};
 use zkc_tools::{
     entry::{Package, RoleInputs, RunEntry, RunRequest, SetupAuthority, Value},
-    protocol::run::{HostLimits, InputValue, Outcome},
+    run::{HostLimits, InputValue, Outcome},
 };
 fn package(directory: &Path, name: &str) -> Package {
     let bytes = std::fs::read(directory.join(name)).unwrap();

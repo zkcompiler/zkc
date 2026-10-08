@@ -39,13 +39,14 @@ merging evaluations. An unused invalid evaluation still refuses before a
 following provider call. [Changed-candidate controls](../../Tests/TableOptimization.lean)
 cover alias chains, shared suffixes, original certificates and invalid deletions.
 
-Build with `lake build table-physical-reference` from `formal/`, then run from
-the repository root:
+From `formal/`, with the pinned dependencies prepared, supply `SOURCE` and
+`INPUTS` in the [table model's formats](../TableProtocol/README.md):
 
 ```sh
-formal/.lake/build/bin/table-physical-reference lower lazy examples/tables/source.json > /tmp/table-lazy.json
-formal/.lake/build/bin/table-physical-reference check examples/tables/source.json /tmp/table-lazy.json
-formal/.lake/build/bin/table-physical-reference run examples/tables/source.json /tmp/table-lazy.json examples/tables/inputs.json
+lake build table-physical-reference
+.lake/build/bin/table-physical-reference lower lazy SOURCE > /tmp/table-lazy.json
+.lake/build/bin/table-physical-reference check SOURCE /tmp/table-lazy.json
+.lake/build/bin/table-physical-reference run SOURCE /tmp/table-lazy.json INPUTS
 ```
 
 Replace `lazy` with `materialized` for the other choice. Execution reports the
@@ -55,21 +56,19 @@ final read in the evaluation count. Counts are instrumentation of this reference
 not proved native costs, elapsed time or a universal profitability claim.
 
 The `lower` command retains the Lean-only `zkc-table-physical-reference` profile.
-The same checker/evaluator also accepts `zkc-table-physical-plan`, emitted by
-MLIR and consumed by the Rust `run-physical` command. Its acknowledgement names
-the selected realization, so a direct or reference-only receipt cannot admit a
-native physical candidate. Both formats use the same typed body and theorem;
-the new format tag does not extend the theorem to compiled Rust.
+The same checker/evaluator also accepts the retained `zkc-table-physical-plan`
+tag. Its former MLIR producer and Rust executor have been retired. Both formats
+use the same typed body and theorem; the tag does not extend the theorem to
+compiled Rust or the current `zkc.program/1` carrier.
 
-For a native physical candidate, `admit` and `run-admitted` additionally accept
+For a candidate carrying that plan tag, `admit` and `run-admitted` also accept
 the installed `table-round/1` profile and source certificate. `admit-entry` and
 `run-entry` consume `table-endpoint/1` with an explicit actor/phase entry. Both
 tools share policy resolution in [TableAdmission](../../Tools/TableAdmission.lean).
 The physical tool validates the actual endpoint state before binding inputs.
 The interpreter's fallback for an undecodable operand is `.stopped .refused`.
 Related inputs and the immutable frame make that branch unreachable in the
-correspondence theorem. Native invalid references remain host errors; that
-fallback does not identify them with a protocol stop.
+correspondence theorem. That fallback does not classify errors in a native host.
 
 `Checked.audit_correct` instantiates the general simulation with the existing
 logical `ExecutionPath.handler`. Its call audit and final phase survive physical
@@ -83,8 +82,7 @@ reply and a stopped draw that changes state and emits an event.
 The reference's scalar store is unbounded and lacks
 native issuer/generation identity; tables, residuals and points remain mathematical
 values. Ordinary invocation uses the existing finite two-field kernel/provider
-meaning. The native implementation supplies storage and bounded admission,
-validated by differential execution. Differential tests connect that phase result
-to owned native endpoints. Native formal verification, arbitrary operation
+meaning. Earlier native storage/admission and endpoint comparisons are historical,
+unmaintained evidence. Current native correspondence, arbitrary operation
 expansion, general endpoint admission and protocol security remain outside this
 result.

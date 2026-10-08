@@ -10,7 +10,6 @@ namespace zkc {
 struct LinearContractionStats;
 }
 namespace zkc::protocol {
-llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>> project(mlir::ModuleOp);
 mlir::LogicalResult lowerPhysical(
     mlir::ModuleOp,
     llvm::ArrayRef<std::pair<std::string, std::string>> selections = {},

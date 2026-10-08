@@ -315,7 +315,7 @@ pub fn rust(package: &Package) -> Result<String> {
     } else {
         (
             "::zkc_tools::entry::RunEntry",
-            "::zkc_tools::protocol::run::HostLimits",
+            "::zkc_tools::run::HostLimits",
         )
     };
     generator.add(format!("pub fn admit(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc_tools::entry::SetupAuthority)->::core::result::Result<{host},::zkc_tools::entry::EntryError>{{let package=::zkc_tools::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc_tools::entry::Package::MAX_BYTES)?;{host}::admit(package,options,setups)}}\n"))?;

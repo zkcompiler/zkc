@@ -1,7 +1,7 @@
-"""Compiler-produced native carriers execute with real backends and fail old gates.
+"""Compiler-produced programs execute through the common Runner and Host.
 
-The native tests use explicit expected outcomes and resource observations. The
-old Lean checker is used only to assert refusal, not as a native semantics oracle.
+Expected values, resource observations, and malformed input checks are independent
+of the optional Lean research package.
 """
 from pathlib import Path
 import os
@@ -14,7 +14,7 @@ from journal import Journal
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize(('generator', 'example'), [
+NATIVE_CASES = [
     ('mathematical', 'mathematical_native'),
     ('mixed_mathematical', 'mixed_native'),
     ('native_boolean', 'native_boolean'),
@@ -39,7 +39,10 @@ ROOT = Path(__file__).resolve().parents[2]
     ('structured_mathematics', 'structured_math'),
     ('relation_composition', 'relation_composition'),
     ('public_coin', 'public_coin'),
-])
+]
+
+
+@pytest.mark.parametrize(('generator', 'example'), NATIVE_CASES)
 def test_generated_native_execution(toolchain, directory, monkeypatch, generator, example):
     # Each invocation produces its own carriers, independent of earlier CTest
     # outputs. The generator needs compiler tools only; this test adds execution.
@@ -85,8 +88,8 @@ def check_authored_transcript_commands(toolchain, journal, directory):
     import json
 
     attempt_policy = directory / 'prefix.attempts.json'
-    attempt_policy.write_text(json.dumps(['zkc.native-attempt-policy/1', '1', [['2', '2']],
-                                          ['3', '1048576'], ['1000000', '4096', '100000'],
+    attempt_policy.write_text(json.dumps(['zkc.native-attempt-policy/2', '1', [['2', '2']],
+                                          ['3', '1048576'], ['1000000', '100000'],
                                           ['1048576', '16777216']]))
     prefix_summaries = {}
     for case in json.loads((directory / 'manifest.json').read_text()):
@@ -121,21 +124,18 @@ def check_authored_transcript_commands(toolchain, journal, directory):
         assert checked['status'] == 'accepted', checked
         assert checked['external_work_limit'] == 16777216
         assert proof.read_bytes() == (directory / f'{name}.proof').read_bytes()
-    check_legacy_reader(toolchain, journal, directory, directory / 'monero.deployment',
-                        candidate_refusal='non-array-json-token')
 
 
 def check_nested_proof_commands(toolchain, journal, directory):
     import hashlib
     import json
 
-    key_id = (directory / 'nested.key-id').read_text()
     for case in json.loads((directory / 'manifest.json').read_text()):
         name = case['name']
         deployment = directory / f'{name}.deployment'
         proof = directory / f'{name}.cli.proof'
         args = [deployment, hashlib.sha256(deployment.read_bytes()).hexdigest()]
-        options = [f'--key-id={key_id}'] if case['family'] == 'batched-openings' else []
+        options = [f'--setups={directory / "nested.setups.json"}'] if case['family'] == 'batched-openings' else []
         produced = journal.json([toolchain.runtime, 'produce-native-proof', *args,
                                  directory / f'{name}.producer.json', proof, *options])
         assert produced['status'] == 'produced'
@@ -143,34 +143,6 @@ def check_nested_proof_commands(toolchain, journal, directory):
                                 directory / f'{name}.validator.json', proof, *options])
         assert checked['status'] == 'accepted'
         assert proof.read_bytes() == (directory / f'{name}.proof').read_bytes()
-    check_legacy_reader(toolchain, journal, directory, directory / 'batched-openings.deployment',
-                        candidate_refusal='non-array-json-token')
-
-
-@pytest.mark.parametrize(('fixture_name', 'refusal'), [
-    # Without literals the legacy decoder reaches the version check. Native
-    # Boolean JSON is refused even earlier by its array/string-only tokenizer.
-    ('receives', 'binding-candidate'),
-    ('booleans', 'non-array-json-token'),
-    ('iteration', 'binding-candidate'),
-])
-def test_old_lean_checker_refuses_native_carrier(toolchain, directory, fixture_name, refusal):
-    journal = Journal(directory)
-    source_text = (ROOT / 'tests/fixtures/generic-operations.pir').read_text()
-    source = directory / 'source.json'
-    source.write_text(journal.run([toolchain.compiler, 'protocol-source', '-'], source_text))
-    legacy = directory / 'legacy.json'
-    legacy.write_text(journal.run([toolchain.compiler, 'protocol-compile', '-'], source_text))
-    checker = toolchain.checker('interactive-protocol')
-    assert journal.json([checker, '--check-generic', source, legacy])[:2] == [
-        'checked', 'generic-structural-correspondence']
-    fixture = (ROOT / f'compiler/test/fixtures/mathematical/{fixture_name}.mlir').read_text()
-    ir = journal.run([toolchain.optimizer, '--verify-each', '--zkc-project-protocol',
-                      '--zkc-lower-math', '--zkc-select-physical'], fixture)
-    native = directory / 'native.json'
-    native.write_text(journal.run([toolchain.compiler, 'protocol-export', '-'], ir))
-    assert journal.json([checker, '--check-generic', source, native],
-                        refuses=refusal) == ['refused', refusal]
 
 
 def check_native_proof_commands(toolchain, journal, directory):
@@ -208,35 +180,13 @@ def check_native_proof_commands(toolchain, journal, directory):
         assert not missing.exists(), 'failed production published a partial proof'
 
     deployment = directory / 'schnorr_0.deployment'
+    unexpected_authority = directory / 'unexpected.setups.json'
+    unexpected_authority.write_text(json.dumps(['zkc.native-setup-authority/1', [['0', '00' * 32]], []]))
     journal.json([toolchain.runtime, 'validate-native-proof', deployment,
                   hashlib.sha256(deployment.read_bytes()).hexdigest(),
                   directory / 'schnorr_0.validator.json', directory / 'schnorr_0.cli.proof',
-                  '--key-id=' + '00' * 32], refuses='native-proof-key-authority')
-    check_legacy_reader(toolchain, journal, directory, deployment)
+                  f'--setups={unexpected_authority}'], refuses='native-proof-key-authority')
     assert 'EXPECTED_SHA256' in journal.run([toolchain.runtime, 'produce-native-proof', '--help'])
-
-
-def check_legacy_reader(toolchain, journal, directory, deployment,
-                        candidate_refusal='binding-candidate'):
-    import json
-    # The old checker still accepts its original source/candidate and refuses
-    # both the native deployment and its carried participant format.
-    source_text = (ROOT / 'tests/fixtures/generic-operations.pir').read_text()
-    source = directory / 'legacy-source.json'
-    source.write_text(journal.run([toolchain.compiler, 'protocol-source', '-'], source_text))
-    legacy = directory / 'legacy-candidate.json'
-    legacy.write_text(journal.run([toolchain.compiler, 'protocol-compile', '-'], source_text))
-    checker = toolchain.checker('interactive-protocol')
-    assert journal.json([checker, '--check-generic', source, legacy])[:2] == [
-        'checked', 'generic-structural-correspondence']
-    native = directory / 'proof-candidate.json'
-    native.write_text(json.loads(deployment.read_text())[4])
-    # Native Boolean literals fail the old array/string tokenizer before its
-    # format gate; the enclosing deployment stores the program as a string.
-    for candidate, refusal in ((deployment, 'binding-candidate'), (native, candidate_refusal)):
-        assert journal.json([checker, '--check-generic', source, candidate],
-                            refuses=refusal) == ['refused', refusal]
-
 
 
 def check_iterated_proof_commands(toolchain, journal, directory):
@@ -274,12 +224,18 @@ def check_committed_proof_commands(toolchain, journal, directory):
         producer = directory / f'{name}.producer.json'
         validator = directory / f'{name}.validator.json'
         proof = directory / f'{name}.cli.proof'
-        pin = '--key-id=' + (directory / f'{name}.key-id').read_text()
+        authority = directory / f'{name}.setups.json'
+        pin = f'--setups={authority}'
         journal.json([toolchain.runtime, 'produce-native-proof', *args, producer, proof], refuses='native-proof-key-authority')
         assert not proof.exists()
         assert journal.json([toolchain.runtime, 'produce-native-proof', *args, producer, proof, pin])['status'] == 'produced'
         assert journal.json([toolchain.runtime, 'validate-native-proof', *args, validator, proof, pin])['status'] == 'accepted'
-        journal.json([toolchain.runtime, 'validate-native-proof', *args, validator, proof, '--key-id=' + '00' * 32], refuses='key-mismatch')
+        wrong = json.loads(authority.read_text())
+        wrong[1][0][1] = '00' * 32
+        wrong_authority = directory / f'{name}.wrong-setups.json'
+        wrong_authority.write_text(json.dumps(wrong))
+        journal.json([toolchain.runtime, 'validate-native-proof', *args, validator, proof,
+                      f'--setups={wrong_authority}'], refuses='key-mismatch')
         bad = directory / f'{name}.missing-key.json'
         inputs = json.loads(producer.read_text())
         key = next(r for r in inputs[2] if r[1][0] == 'prover_key_file')
@@ -288,8 +244,6 @@ def check_committed_proof_commands(toolchain, journal, directory):
         before = proof.read_bytes()
         journal.json([toolchain.runtime, 'produce-native-proof', *args, bad, proof, pin], refuses='artifact-io')
         assert proof.read_bytes() == before
-
-    check_legacy_reader(toolchain, journal, directory, directory / 'product_0.deployment')
 
 
 def check_native_attempt_commands(toolchain, journal, directory):
@@ -304,8 +258,8 @@ def check_native_attempt_commands(toolchain, journal, directory):
             producer = directory / f'{name}.producer.json'
             validator = directory / f'{name}.validator.json'
             proof = directory / f'{name}.cli.proof'
-            policy = ['zkc.native-attempt-policy/1', '1', [['2', '2']] if family == 'fold' else [],
-                      ['4', '16777216'], ['1000000', '100000', '100000'], ['67108864', '268435456']]
+            policy = ['zkc.native-attempt-policy/2', '1', [['2', '2']] if family == 'fold' else [],
+                      ['4', '16777216'], ['1000000', '100000'], ['67108864', '268435456']]
             policy_path = directory / f'{name}.attempts'
             policy_path.write_text(json.dumps(policy))
             args = [toolchain.runtime, 'produce-native-proof', deployment, pin, producer, proof,
@@ -363,8 +317,8 @@ def check_composed_state_commands(toolchain, journal, directory):
             deployment = directory / f'{name}.deployment'
             pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
             proof = directory / f'{name}.cli.proof'
-            policy = ['zkc.native-attempt-policy/1', '1', [['4', '2']],
-                      ['4', '16777216'], ['1000000', '100000', '100000'],
+            policy = ['zkc.native-attempt-policy/2', '1', [['4', '2']],
+                      ['4', '16777216'], ['1000000', '100000'],
                       ['67108864', '268435456']]
             attempts = directory / f'{name}.attempts'
             attempts.write_text(json.dumps(policy))
@@ -406,8 +360,6 @@ def check_relation_binding_commands(toolchain, journal, directory):
         journal.json([toolchain.runtime, 'validate-native-proof', deployment, '0' * 64,
                       directory / f'{name}.validator.json', proof],
                      refuses='native-proof-deployment-binding')
-    check_legacy_reader(toolchain, journal, directory, directory / 'r1cs.deployment',
-                        candidate_refusal='non-array-json-token')
 
 
 def check_domain_commands(toolchain, journal, directory, setups):
@@ -446,17 +398,14 @@ def check_domain_commands(toolchain, journal, directory, setups):
         journal.json([toolchain.runtime, 'validate-native-proof', deployment,
                       '0' * 64, validator, proof, *options],
                      refuses='native-proof-deployment-binding')
-    check_legacy_reader(toolchain, journal, directory,
-                        directory / (cases[0]['name'] + '.deployment'),
-                        candidate_refusal='binding-candidate')
 
 
 def check_composition_commands(toolchain, journal, directory):
     import hashlib
     import json
 
-    capacity = ['zkc.native-capacity/1', '65536', '8192', '16777216', '67108864',
-                ['1000000', '100000', '100000'], ['67108864', '268435456']]
+    capacity = ['zkc.native-capacity/2', '65536', '8192', '16777216', '67108864',
+                ['1000000', '100000'], ['67108864', '268435456']]
     path = directory / 'capacity.json'
     for name in ['qap-composition', 'air-composition', 'target-accumulation']:
         deployment = directory / f'{name}.deployment'
@@ -486,7 +435,7 @@ def check_composition_commands(toolchain, journal, directory):
         assert result['stop']['role'] in ('P', 'Prover')
         assert result['stop']['origin'][0] == 'zkc.origin/2'
         attempt = directory / 'excessive-attempt-policy.json'
-        attempt.write_text(json.dumps(['zkc.native-attempt-policy/1', '0', [],
+        attempt.write_text(json.dumps(['zkc.native-attempt-policy/2', '0', [],
                                        ['1', '16777216'], capacity[5], capacity[6]]))
         journal.json([toolchain.runtime, 'produce-native-proof', *args, producer,
                       proof, option, f'--attempts={attempt}'], refuses='native-attempt-limits')
@@ -566,8 +515,8 @@ def check_bundle_commands(toolchain, journal, directory):
     limits.write_text(json.dumps(['zkc.bundle-limits/1', '0', '4096', '16777216', '16777217']))
     invoke('single', options=[f'--limits={limits}'], refusal='bundle-limits')
     capacity = directory / 'bundle.capacity.json'
-    capacity.write_text(json.dumps(['zkc.native-capacity/1', '1048577', '0', '0', '0',
-                                    ['0', '0', '0'], ['0', '0']]))
+    capacity.write_text(json.dumps(['zkc.native-capacity/2', '1048577', '0', '0', '0',
+                                    ['0', '0'], ['0', '0']]))
     invoke('single', options=[f'--capacity={capacity}'], refusal='native-capacity-limit')
     setups = directory / 'bundle.setups.json'
     setups.write_text(json.dumps(['zkc.bundle-setups/1', [], [['Alice', '0', 'missing']]]))

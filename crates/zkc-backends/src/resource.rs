@@ -336,9 +336,6 @@ impl Resources {
             .remove(&token.id);
         Ok(())
     }
-    pub fn issue_transcript(&mut self, domain: Domain, budget: u64, root: &[u8]) -> Result<Value> {
-        self.issue_transcript_for(Identity::Merlin3Fr64Be, domain, budget, root)
-    }
     pub fn issue_transcript_for(
         &mut self,
         suite: Identity,
@@ -346,18 +343,7 @@ impl Resources {
         budget: u64,
         root: &[u8],
     ) -> Result<Value> {
-        if !matches!(
-            suite,
-            Identity::Merlin3Fr64Be
-                | Identity::Merlin3KoalaBearExt8
-                | Identity::Merlin3Ristretto64Le
-                | Identity::Spongefish074KeccakFr64Be
-        ) {
-            return Err(refused("transcript-suite"));
-        }
-        // No source/descriptor correspondence is inferred from this decoder.
-        zkc_runtime::logical::decode_tree(root).map_err(|_| refused("transcript-root"))?;
-        let transcript = crate::transcript::Transcript::new(suite, root);
+        let transcript = crate::transcript::Transcript::new(suite, root)?;
         Ok(Value::Transcript(self.issue(
             domain,
             budget,
@@ -413,29 +399,7 @@ impl Resources {
         next.generation = slot.generation;
         Ok((value, next))
     }
-    pub fn transcript_index(
-        &mut self,
-        f: &Frame,
-        t: &Capability,
-        origin: &[u8],
-        bound: u64,
-    ) -> Result<(Value, Capability)> {
-        if t.identity != Identity::Merlin3KoalaBearExt8 {
-            return Err(refused("query-suite"));
-        }
-        crate::sampling::index_bound(bound)?;
-        let slot = self.consume(f, t, Type::Transcript)?;
-        let State::Transcript(transcript, _) = &mut slot.state else {
-            unreachable!("validated kind")
-        };
-        transcript.append_message(b"origin", origin);
-        transcript.append_message(b"query-bound", &bound.to_le_bytes());
-        let mut bytes = [0; 64];
-        transcript.challenge_bytes(b"query-index", &mut bytes);
-        let mut next = t.clone();
-        next.generation = slot.generation;
-        Ok((Value::Index(crate::sampling::index(&bytes, bound)?), next))
-    }
+
     pub fn draw_index(
         &mut self,
         f: &Frame,
@@ -492,7 +456,14 @@ impl Resources {
         budget: u64,
     ) -> Result<Value> {
         match field {
-            Identity::Bls12381Fr => self.issue_nonce(domain, budget),
+            Identity::Bls12381Fr => {
+                let k = RandomSource::from_os().map_err(ark)?.scalar();
+                Ok(Value::Nonce(self.issue(
+                    domain,
+                    budget,
+                    State::IssuedNonce(k),
+                )?))
+            }
             Identity::Ristretto255Scalar => {
                 use rand::SeedableRng;
                 let mut rng = rand::rngs::StdRng::from_rng(rand::rngs::OsRng)
@@ -725,22 +696,6 @@ impl Resources {
             State::Rng(Source::Tape(tape.into())),
         )
     }
-    pub fn issue_rng(&mut self, domain: Domain, budget: u64) -> Result<Value> {
-        let source = Source::Os(Box::new(RandomSource::from_os().map_err(ark)?));
-        Ok(Value::Rng(self.issue(
-            domain,
-            budget,
-            State::Rng(source),
-        )?))
-    }
-    pub fn issue_nonce(&mut self, domain: Domain, budget: u64) -> Result<Value> {
-        let k = RandomSource::from_os().map_err(ark)?.scalar();
-        Ok(Value::Nonce(self.issue(
-            domain,
-            budget,
-            State::IssuedNonce(k),
-        )?))
-    }
     #[cfg(feature = "test-utils")]
     pub fn test_rng(&mut self, domain: Domain, budget: u64, seed: [u8; 32]) -> Result<Value> {
         Ok(Value::Rng(self.issue(
@@ -885,7 +840,6 @@ impl Resources {
                 if f.role() != parent.frame.role()
                     || f.origin().session != parent.frame.origin().session
                     || f.origin().entry != parent.frame.origin().entry
-                    || f.origin().format != parent.frame.origin().format
                 {
                     return Err(refused("frame-domain"));
                 }
@@ -1004,7 +958,7 @@ impl Resources {
         Ok(s)
     }
     // Called only by the native registry after authenticating its exclusive
-    // root lease. Legacy frame-based access and alias checks remain unchanged.
+    // root lease. Frame-based access and alias checks still apply.
     pub(crate) fn draw_managed(
         &mut self,
         owner: &str,
@@ -1053,7 +1007,6 @@ fn same_frame(a: &Frame, b: &Frame) -> bool {
         && a.origin() == b.origin()
         && a.kind() == b.kind()
         && a.inputs() == b.inputs()
-        && a.parameters() == b.parameters()
 }
 
 #[cfg(test)]
@@ -1063,8 +1016,12 @@ mod tests {
     fn successor_check_authenticates_both_roots_and_current_generation() {
         let mut store = Resources::new(Policy::default());
         let domain = Domain::new("P", "session", "main", None);
-        let a = store.issue_rng(domain.clone(), 2).unwrap();
-        let b = store.issue_rng(domain.clone(), 2).unwrap();
+        let a = store
+            .issue_rng_for(Identity::Bls12381Fr, domain.clone(), 2)
+            .unwrap();
+        let b = store
+            .issue_rng_for(Identity::Bls12381Fr, domain.clone(), 2)
+            .unwrap();
         let root = a.capability().unwrap();
         store.verify_successor(root, root).unwrap();
         assert!(
@@ -1073,7 +1030,9 @@ mod tests {
                 .is_err()
         );
         let mut other = Resources::new(Policy::default());
-        let foreign = other.issue_rng(domain, 2).unwrap();
+        let foreign = other
+            .issue_rng_for(Identity::Bls12381Fr, domain, 2)
+            .unwrap();
         assert_eq!(foreign.capability().unwrap().id, root.id);
         assert!(
             store
@@ -1103,9 +1062,14 @@ mod tests {
             ..Policy::default()
         });
         let domain = Domain::new("P", "session", "main", None);
-        let first = store.issue_rng(domain.clone(), 1).unwrap();
+        let first = store
+            .issue_rng_for(Identity::Bls12381Fr, domain.clone(), 1)
+            .unwrap();
         assert_eq!(
-            store.issue_rng(domain.clone(), 1).unwrap_err().code,
+            store
+                .issue_rng_for(Identity::Bls12381Fr, domain.clone(), 1)
+                .unwrap_err()
+                .code,
             "exhausted:capability-slots"
         );
         let token = first.capability().unwrap();
@@ -1116,7 +1080,9 @@ mod tests {
             "refused:capability-forged"
         );
         store.retire(token).unwrap();
-        let second = store.issue_rng(domain, 1).unwrap();
+        let second = store
+            .issue_rng_for(Identity::Bls12381Fr, domain, 1)
+            .unwrap();
         assert!(second.capability().unwrap().id > token.id);
         assert_eq!(
             store.validate(token, Type::Rng).unwrap_err().code,
@@ -1127,8 +1093,12 @@ mod tests {
     fn forged_numeric_ids_and_per_slot_seals_do_not_authenticate() {
         let mut store = Resources::new(Policy::default());
         let domain = Domain::new("P", "s", "entry", None);
-        let a = store.issue_rng(domain.clone(), 2).unwrap();
-        let b = store.issue_rng(domain, 2).unwrap();
+        let a = store
+            .issue_rng_for(Identity::Bls12381Fr, domain.clone(), 2)
+            .unwrap();
+        let b = store
+            .issue_rng_for(Identity::Bls12381Fr, domain, 2)
+            .unwrap();
         let mut forged = a.capability().unwrap().clone();
         forged.id = b.capability().unwrap().id;
         assert_eq!(

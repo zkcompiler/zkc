@@ -312,9 +312,8 @@ compileNativeProof(StringRef text, StringRef filename,
     return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
   };
   json::Value deployment(json::Array{
-      "zkc.native-proof/" + std::to_string(policy->version), digest(text),
-      constructed->descriptor, digest(*descriptorBytes), candidate,
-      digest(candidate), std::move(maps),
+      "zkc.native-proof/4", digest(text), constructed->descriptor,
+      digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
       json::Array{options.simplify ? "true" : "false",
                   options.releaseStorage ? "true" : "false"},
       json::Array(constructed->wireSites)});

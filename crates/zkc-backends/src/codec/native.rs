@@ -1,6 +1,8 @@
 //! Closed native wire profile. Errors are classified where they occur; opaque
 //! BackendError strings are never parsed into receive failures.
+mod bn254;
 mod bulk;
+mod domains;
 mod input;
 pub use input::NativeInputSize;
 mod pcs;
@@ -91,7 +93,7 @@ fn table_type(ty: &PhysicalType) -> bool {
 pub(crate) fn encode(
     value: &Value,
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
 ) -> Result<Vec<u8>, NativeWireError> {
     if bulk::format(&value.physical_type()).is_some() {
         return bulk::encode(value, policy);
@@ -100,9 +102,7 @@ pub(crate) fn encode(
         return structured::encode(value, policy, key);
     }
     if pcs::tag(&value.physical_type()).is_some() {
-        if key.is_registered() {
-            pcs::encoded_width(value, key)?;
-        }
+        pcs::encoded_width(value, key)?;
         return pcs::encode(value, policy);
     }
     if let Value::Table(table) = value {

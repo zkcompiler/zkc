@@ -2,13 +2,13 @@
 use super::*;
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_tools::artifact::native::ProofInputs;
-use zkc_tools::artifact::{hex, native::NativeDeployment};
 use zkc_tools::entry::SetupAuthority as ProofSetups;
 use zkc_tools::entry::{
     BindingPolicy, BindingScope, NamedValues, Package, ProofEntry, ProofOptions, ProofRequest,
     RoleInputs as NamedRoleInputs, Value as LogicalValue,
 };
+use zkc_tools::proof::ProofInputs;
+use zkc_tools::proof::{NativeDeployment, hex};
 
 pub(super) fn run(directory: &Path) {
     authored(directory);
@@ -52,8 +52,12 @@ pub(super) fn run(directory: &Path) {
                 // language-bundle command's presentation newline.
                 let bytes = package.artifact().as_bytes();
                 let envelope: Json = serde_json::from_slice(bytes).unwrap();
-                let deployment =
-                    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes))).unwrap();
+                let deployment = NativeDeployment::admit(
+                    bytes,
+                    &hex(&Sha256::digest(bytes)),
+                    Default::default(),
+                )
+                .unwrap();
                 checked.check_proof(&deployment).unwrap();
                 interface::controls(&package, |view| view.check_proof(&deployment));
                 interface::changed_publication_cannot_reuse_pin(&package);
@@ -307,8 +311,12 @@ pub(super) fn run(directory: &Path) {
                 let proof = produced.outcome.unwrap();
                 // Separately admitted handle and verifier inputs; no witness or
                 // producer runtime state is available to this invocation.
-                let verifier =
-                    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes))).unwrap();
+                let verifier = NativeDeployment::admit(
+                    bytes,
+                    &hex(&Sha256::digest(bytes)),
+                    Default::default(),
+                )
+                .unwrap();
                 let validated = verifier.execute(&input(false, 0), Some(&proof)).unwrap();
                 assert!(validated.cleanup_errors.is_empty());
                 validated.outcome.unwrap();

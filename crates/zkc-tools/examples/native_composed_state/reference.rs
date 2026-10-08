@@ -10,7 +10,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use transcript::{Transcript, scalar_wire, tree};
 use zkc_backends::{GroupPoint, Scalar};
-use zkc_tools::artifact::hex;
+use zkc_tools::proof::hex;
 
 pub fn msm(a: &[Scalar], g: &[GroupPoint]) -> GroupPoint {
     assert_eq!(a.len(), g.len());

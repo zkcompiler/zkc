@@ -3,7 +3,6 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Source/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/LogicalTree.h"
 #include "zkc/Translation/Protocol.h"
@@ -21,9 +20,9 @@ bool owns(Attribute owners, StringAttr role) {
   return is_contained(cast<ArrayAttr>(owners), role);
 }
 Expected<json::Array> ports(pir::MathematicalOp source,
-                            const source::Participants &program,
+                            const program::Participants &program,
                             const NativeProofPolicy &policy) {
-  const source::ParticipantEntry *entry = nullptr;
+  const program::ParticipantEntry *entry = nullptr;
   for (const auto &candidate : program.entries)
     if (candidate.name == policy.entry)
       entry = &candidate;
@@ -35,7 +34,7 @@ Expected<json::Array> ports(pir::MathematicalOp source,
   auto type = source.getFunctionType();
   for (auto item : source.getRoles()) {
     auto role = cast<StringAttr>(item);
-    const source::Participant *participant = nullptr;
+    const program::Participant *participant = nullptr;
     for (const auto &mapping : entry->participants)
       if (mapping.first == role.getValue())
         for (const auto &candidate : program.participants)
@@ -119,11 +118,9 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
     return actualDescriptor.takeError();
   auto *record = out[2].getAsArray();
   if (!candidate || !record || record->size() != 6 ||
-      (*record)[0].getAsString() !=
-          "zkc.native-proof-descriptor/" + std::to_string(policy.version) ||
+      (*record)[0].getAsString() != "zkc.native-proof-descriptor/4" ||
       (*record)[1] != encodeNativeProofPolicy(policy) ||
-      out[0].getAsString() !=
-          "zkc.native-proof/" + std::to_string(policy.version) ||
+      out[0].getAsString() != "zkc.native-proof/4" ||
       out[1].getAsString() != digest(sourceBytes) ||
       *actualDescriptor != *expectedDescriptor ||
       out[3].getAsString() != digest(*actualDescriptor) ||
@@ -133,21 +130,16 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
                                   options.releaseStorage ? "true" : "false"}) ||
       !out[8].getAsArray() || *out[8].getAsArray() != wireSites)
     return error("native-deployment-correspondence");
-  if (auto e = protocol::verifyProgramArtifact(physical, *candidate))
-    return e;
-  auto carrier = parseJson(*candidate);
-  if (!carrier)
-    return carrier.takeError();
-  auto decoded = source::decode(*carrier);
+  auto decoded = protocol::verifyProgramArtifact(physical, *candidate);
   if (!decoded)
     return decoded.takeError();
-  auto *program = std::get_if<source::Participants>(&*decoded);
+  auto *program = &*decoded;
   pir::MathematicalOp entry;
   source.walk([&](pir::MathematicalOp op) {
     if (op.getSymName() == policy.entry)
       entry = op;
   });
-  if (!program || !entry)
+  if (!entry)
     return error("native-deployment-subject");
   auto maps = ports(entry, *program, policy);
   if (!maps)

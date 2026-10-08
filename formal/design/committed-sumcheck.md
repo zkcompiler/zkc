@@ -6,9 +6,8 @@ The deterministic connection reaches the maintained direct-source acceptance
 event on the **same adaptive round strategy and same verifier tape**.
 
 This is a mathematical connection to `Sumcheck.Source.rounds` and
-`Security.source_soundness`. There is no theorem yet interpreting the portable
-`examples/protocols/two-factor.json` module, its generated roles, or its native
-arkworks execution as this experiment.
+`Security.source_soundness`. It does not interpret a current `.zkc` module,
+generated MLIR participants or native execution as this experiment.
 
 ## Objects and execution
 
@@ -143,9 +142,8 @@ test modules, including generated declarations and transitive axioms, and
 prints the main theorem assumptions. Regenerate exhaustive audit imports when
 adopting these files so the normal main-package audit also includes them.
 
-The actual portable example has a `ProductSumcheck` child and two invocations
-of `FactorOpening`, followed by `CheckTerminal`. A future source/native bridge
-must show that its admitted inputs and selected setup/key denote this
+A future source/native bridge must identify an actual program and show that
+its admitted inputs and selected setup/key denote this
 `Statement`; its immutable commitments and ordered point follow this layout;
 its hostile replies and failures correspond to this runner; and its actual
 challenge service has the stated tape law. The current proof supplies neither

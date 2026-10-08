@@ -112,14 +112,13 @@ void selectorPolicies(const ImplementationCatalog &installed) {
     refuse(ImplementationCatalog::create({bad}, {}),
            "implementation-catalog-policy");
   }
-  bad = *installed.find("transcript.observe.field",
-                        "arkworks/transcript.observe.field");
-  bad.providerTerm = 1; // A Field cannot select a Transcript policy.
+  bad = *installed.find("transcript.native.indexed.observe.data",
+                        "arkworks/transcript.native.indexed.observe.data");
+  bad.providerTerm = 1; // A Type cannot select a Transcript policy.
   refuse(ImplementationCatalog::create({bad}, {}),
          "implementation-catalog-policy");
   bad.compatibility = Compatibility::Nominal;
-  bad.providerTerm =
-      2; // Codec is a Domain kind, but never a provider selector.
+  bad.providerTerm = 2; // An absent scope term cannot select a provider.
   refuse(ImplementationCatalog::create({bad}, {}),
          "implementation-catalog-policy");
   bad.providerTerm =
@@ -127,26 +126,14 @@ void selectorPolicies(const ImplementationCatalog &installed) {
   refuse(ImplementationCatalog::create({bad}, {}),
          "implementation-catalog-policy");
 
-  // A later formal Domain root also selects a preference. The different suite
-  // provider still fails nominal applicability: preference grants no support.
-  auto payloadSelected = bad;
-  payloadSelected.providerTerm = 1;
-  payloadSelected.identity = "custom/payload-selected";
-  auto payloadCatalog = accept(ImplementationCatalog::create(
-      {payloadSelected},
-      {{payloadSelected.contract, "arkworks", payloadSelected.identity}}));
-  BindingApplication observe{"transcript.observe.field",
-                             {"spongefish0.7.4.keccak.bls12-381.fr64be/1",
-                              "bls12-381.fr", "zkcv.field.bls12-381.fr/1"},
-                             ""};
-  require(accept(payloadCatalog.defaultFor(observe))->identity ==
-              payloadSelected.identity,
-          "later Domain root did not select the provider preference");
-  auto payloads = accept(
-      resolveStaticArguments(scopeFor(observe.contract), observe.arguments));
-  refuse(checkImplementationArguments(payloadSelected,
-                                      scopeFor(observe.contract), payloads),
-         "binding-implementation");
+  // Typed observations select providers from the transcript suite alone.
+  BindingApplication observe{
+      "transcript.native.indexed.observe.data",
+      {"spongefish0.7.4.keccak.bls12-381.fr64be/1", "field:bls12-381.fr"},
+      ""};
+  require(accept(installed.defaultFor(observe))->identity ==
+              "spongefish/transcript.native.indexed.observe.data",
+          "typed payload changed transcript provider selection");
 
   // Exercise the same scope validator used by catalog creation on a reordered
   // structural scope; this does not install a new operation or realization.
@@ -217,8 +204,9 @@ void selectorPolicies(const ImplementationCatalog &installed) {
   zkc::generic::Scope transcript{
       {{"Payload"}, {"N"}, {"Suite"}, {"Field"}, {"Codec"}},
       {"Type", "Nat", "Transcript", "Field", "Codec"}};
-  auto transcriptSelected = *installed.find(
-      "transcript.observe.field", "spongefish/transcript.observe.field");
+  auto transcriptSelected =
+      *installed.find("transcript.native.indexed.observe.data",
+                      "spongefish/transcript.native.indexed.observe.data");
   transcriptSelected.providerTerm = 2;
   succeeds(checkImplementationScope(transcriptSelected, transcript));
   auto transcriptIdentities = accept(resolveStaticArguments(
@@ -329,33 +317,31 @@ int main() {
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/1", "plonky3"},
       {"spongefish0.7.4.keccak.bls12-381.fr64be/1", "spongefish"}};
   for (const auto &[suite, provider] : suites) {
-    std::string impl = (provider + "/transcript.challenge").str();
-    defaultIs("transcript.challenge", {suite.str()}, impl);
-    auto ports = physical("transcript.challenge", {suite.str()}, impl);
+    std::string impl =
+        (provider + "/transcript.native.indexed.challenge").str();
+    defaultIs("transcript.native.indexed.challenge", {suite.str()}, impl);
+    auto ports =
+        physical("transcript.native.indexed.challenge", {suite.str()}, impl);
     require(ports.inputs[0].representation == "host.resource/1",
             "shared host representation changed nominal provider selection");
   }
   const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/1";
   const std::string extension =
       "merlin3.koala-bear.ext8-binomial3.rejection31le/1";
-  physical("transcript.observe.field",
-           {spongefish, "bls12-381.fr", "zkcv.field.bls12-381.fr/1"},
-           "spongefish/transcript.observe.field");
-  physical("transcript.observe.field",
-           {extension, "koala-bear", "zkcv.field.koala-bear/1"},
-           "plonky3/transcript.observe.field");
-  physical("transcript.observe.group",
-           {spongefish, "bls12-381.g1", "zkcv.group.bls12-381.g1/1"},
-           "spongefish/transcript.observe.group");
-  refuse(resolveBinding({"transcript.observe.field",
-                         {spongefish, "ristretto255.scalar",
-                          "zkcv.field.ristretto255.scalar/1"},
-                         "spongefish/transcript.observe.field"},
+  for (auto [suite, payload, provider] :
+       {std::tuple{spongefish, "field:bls12-381.fr", "spongefish"},
+        std::tuple{extension, "field:koala-bear", "plonky3"},
+        std::tuple{spongefish, "group:bls12-381.g1", "spongefish"}})
+    physical("transcript.native.indexed.observe.data", {suite, payload},
+             std::string(provider) + "/transcript.native.indexed.observe.data");
+  refuse(resolveBinding({"transcript.native.indexed.observe.data",
+                         {spongefish, "rng:bls12-381.fr"},
+                         "spongefish/transcript.native.indexed.observe.data"},
                         true),
-         "binding-implementation");
-  refuse(resolveBinding({"transcript.challenge",
+         "native-proof-wire-type");
+  refuse(resolveBinding({"transcript.native.indexed.challenge",
                          {spongefish},
-                         "arkworks/transcript.challenge"},
+                         "arkworks/transcript.native.indexed.challenge"},
                         true),
          "binding-implementation");
 
@@ -457,10 +443,10 @@ int main() {
       resolveBinding(
           {"vector.mul", {"bn254.fr"}, "arkworks-diagonal/vector.mul"}, true),
       "binding-implementation");
-  auto vartime =
-      physical("curve.msm", {"ristretto255.group"}, "dalek-vartime/curve.msm");
-  require(!isDiagonalRepresentation(vartime.inputs[1].representation),
-          "vartime choice implies a diagonal layout");
+  refuse(resolveBinding(
+             {"curve.msm", {"ristretto255.group"}, "dalek-vartime/curve.msm"},
+             true),
+         "binding-implementation");
   refuse(resolveBinding(
              {"curve.msm", {"bls12-381.g1"}, "dalek-vartime/curve.msm"}, true),
          "binding-implementation");

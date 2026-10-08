@@ -47,7 +47,7 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
    integration validation, not for every edit. Run optional suites when their
    integration boundary changes, and describe the checks actually performed.
    Automatic CI checks sources, formatting, documentation and the test harness.
-   Full builds, Nix packaging and cross-language suites are separate manual
+   Full builds, Nix packaging and native integration suites are separate manual
    workflow scopes. Run affected checks locally and record their results; see the
    [maintenance guide](../docs/development/maintenance.md).
 2. Open the pull request and write its title and body as described below.
@@ -109,13 +109,14 @@ belongs in the pull request body, which is what survives the squash.
   intended model and is not weakened to match what is built; what is built
   belongs on the [status page](../docs/status.md), not in the
   specification.
-- **Carrier formats.** These may change freely at v0; a break
-  is the norm rather than an event. What a change carries is that the
-  compiler, the native workspace and the Lean reference move in the same
-  change set, and that loading stays fail closed.
-- **Independent implementations.** The compiler, the native runtime and the
-  Lean reference admit the same carriers independently. A change to a surface
-  they share moves all of them. Where they disagree, the specification decides.
+- **Carrier formats.** These may change freely at v0. Update the compiler and
+  native runtime together when their shared executable carrier changes, and
+  keep loading fail closed. Independent formal research is not a compatibility
+  requirement for that carrier.
+- **Independent implementations.** The compiler and native runtime independently
+  validate the executable program carrier. A change to that surface moves both.
+  Formal research checks do not establish correspondence with current native
+  execution unless an explicit maintained bridge states that claim.
 - **Diagnostics.** Identifiers are the stable surface and message prose is
   not, so a new diagnostic is asserted by a test that names
   the identifier.

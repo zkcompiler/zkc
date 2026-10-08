@@ -20,7 +20,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     select,
     providers: &["arkworks", "dalek", "plonky3", "spongefish"],
     alternatives: &[],
-    logical_refusals: &[],
     physical_error: "uninstalled operation binding",
     physical_only: false,
 };

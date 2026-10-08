@@ -321,9 +321,6 @@ byte, control-depth, vocabulary-depth and execution-work capacity are distinct
 implementation policies. In particular, a low control-depth limit is not a
 bound on loop iterations or total interpreter work.
 
-*Note (informative).* The [source-plan example's capacities](../../../compiler/source-plan.md#example-capacity-and-input-policy)
-instantiate the resource policies separately from this format. Its file reader,
-work measure and fixed invocation values are described there.
 
 ## Phase-certificate sidecar
 
@@ -425,9 +422,10 @@ interpreter-work policies.
 The phase-certificate grammar includes compact binding. The maintained checker
 and its conformance/return-cover theorem traverse regions directly, sharing the
 same algorithm with tree programs. Native transport, changed-candidate rules and
-physical realization require their actual consumer connections. The installed
-table consumer supplies local phase transport and the
+physical realization require their actual consumer connections. The independent
+table model supplies local phase transport and the
 [physical scalar/folding application](finite-phases.md#physical-scalar-application);
 this does not extend the exact direct-lowering rule defined here.
-The [implementation and design analysis](../../../compiler/regions.md) records
-the broader remaining joins and the proof declarations.
+The [program correspondence map](../../correspondence/programs.md) identifies
+the exact formal declarations. These independent model results do not provide a
+native table/plan executor.

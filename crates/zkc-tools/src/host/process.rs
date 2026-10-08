@@ -15,6 +15,15 @@ pub(crate) enum Error {
     Timeout,
     OutputLimit,
 }
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Process(error) | Self::Io(error) => write!(f, "{error}"),
+            Self::Timeout => f.write_str("process deadline exceeded"),
+            Self::OutputLimit => f.write_str("process output limit exceeded"),
+        }
+    }
+}
 struct Running(Child);
 impl Drop for Running {
     fn drop(&mut self) {
@@ -144,7 +153,7 @@ mod tests {
         let pid_file = dir.path().join("pid");
         let mut command = Command::new("sh");
         command
-            .args(["-c", r#"echo $$ > "$1"; exec sleep 30"#, "checker"])
+            .args(["-c", r#"echo $$ > "$1"; exec sleep 30"#, "bounded-child"])
             .arg(&pid_file);
         assert!(matches!(
             capture(

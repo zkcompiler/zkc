@@ -4,7 +4,7 @@ scheduling and trace evaluation, including residual localization."""
 import json
 from pathlib import Path
 from commands import Commands
-from tools import compiler, corpus, optimizer, records
+from tools import compiler, optimizer, records
 
 repository = Path(__file__).resolve().parents[2]
 
@@ -23,7 +23,7 @@ def run(tool, *args, data=None, error=None):
 
 
 directory = records()
-cases = corpus / "air"
+cases = Path(__file__).parent / "fixtures/air"
 relation = directory / "relation.json"
 trace = directory / "trace.json"
 statement = directory / "statement.json"

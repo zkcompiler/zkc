@@ -20,7 +20,6 @@ stdenv.mkDerivation {
   ];
   cmakeFlags = [
     "-DZkcCompiler_DIR=${compiler}/lib/cmake/ZkcCompiler"
-    "-DZKC_SERVICE_SOURCE=${../../compiler/examples/service}"
     "-DMLIR_DIR=${lib.getDev llvm.mlir}/lib/cmake/mlir"
   ];
   doCheck = true;

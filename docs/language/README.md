@@ -1,46 +1,24 @@
 # Writing protocols
 
-For `.zkc` authoring, use the [mathematical source guide](mathematical.md) and
-[Entry execution guide](entries.md). These compile directly to mathematical MLIR
-and execute through the common Host. The older `.pir` route below retains its
-source/checker consumers during [migration](../compiler/migration.md).
+Write `.zkc` modules and select an Entry to compile and execute a protocol. The
+Language implementation checks the source and emits mathematical MLIR for the
+common participant compiler and Rust Host.
 
-Start with the [first-run walkthrough](../getting-started.md), then the
-[reusable Schnorr and Sumcheck projects](../../examples/projects/README.md).
-The [source profile](../spec/profiles/source/mathematical-language.md) defines
-precise typing, effects, availability, resources and Entry semantics.
+Start with the [walkthrough](../getting-started.md), then read the
+[mathematical source guide](mathematical.md). The maintained
+[Schnorr and Sumcheck projects](../../examples/projects/README.md) show reusable
+libraries with separately authored clients.
 
-## Retained source route
-
-The `.pir` language describes local algorithms, participant interactions and
-reusable protocol libraries. It elaborates into common PIR, where interaction,
-resource and operation checks apply independently. Source conveniences such as
-nominal records and static components are checked before that boundary.
-
-For these consumers, read the [retained source reference](reference.md) beside a
-[protocol example](../../examples/protocols/README.md). The
-[committed-proof workflow](../compiler/committed-example.md) retains independent
-Lean source and participant checks.
-
-| Task | Read |
+| Task | Reference |
 |---|---|
-| Declare roles, local algorithms, messages, challenges and protocol calls | [Source reference](reference.md) |
-| Group values and place computation at participants | [Products, local blocks and outputs](values.md) |
-| Use records, checked constructors, operators and requirement bundles | [Data forms](data.md) |
-| Keep domains and implementations selectable | [Generic definitions](generics.md) and [protocol families](families.md) |
-| Specify and implement a reusable component interface | [Checked interfaces and components](components.md) |
-| Split libraries and clients into files | [Projects, imports and visibility](projects.md) |
-| Consume a compiled circuit or trace relation | [Compiled relations](relations.md) |
-| Supply runtime inputs and setup selections | [Local host input format](../runtime/inputs.md) |
-| Select an interactive, noninteractive or transcript construction | [Construction notation](reference.md#construction-descriptor) and [construction/execution](../compiler/artifact-execution.md) |
+| Define types, helpers, roles, services and control | [Mathematical source](mathematical.md) |
+| Compile, run, prove or verify an Entry | [Entry execution](entries.md) |
+| Capture relation data and bind its meaning | [Relation Assets](relations.md) |
+| Read exact typing, effects and Entry rules | [Mathematical language profile](../spec/profiles/source/mathematical-language.md) |
 
-An author controls the mathematical domains and contracts required by a
-definition. A backend implementation must satisfy the selected operation
-contracts; changing a kernel is different from changing the field or proof
-construction. The compiler does not infer cryptographic assumptions from a
-function name or a successful type check.
-
-For the meaning beneath the syntax, use the [semantic guides](../guides/README.md).
-For retained source analysis, elaboration and lowering APIs, use the
-[frontend implementation](../compiler/frontend.md). Current supported routes
-and limitations are recorded in [status](../status.md).
+The compiler checks declared contracts and availability. A relation clause alone
+adds no runtime guard or proof of satisfaction. Backend implementations must
+satisfy their operation and representation contracts; a successful type check
+does not infer cryptographic assumptions. [Status](../status.md) records supported
+syntax and native capabilities, and [model guides](../guides/README.md) explain
+the independent semantic foundations.

@@ -117,7 +117,7 @@ interpretation may obtain the hash and permutation through an explicit primitive
 interface, whose replies are bound to exact inputs and call origins. Such a
 provider assumption alone establishes neither primitive correctness nor a
 complete native correspondence. Current APIs and evidence are recorded in the
-[implementation guide](../../compiler/interactive-execution.md#external-construction-execution)
+[authored native guide](../../compiler/authored-transcripts.md)
 and [backend adapter](../../../crates/zkc-backends/src/external/README.md).
 
 ## Authored native deployment

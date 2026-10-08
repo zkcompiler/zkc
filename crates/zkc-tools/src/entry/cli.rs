@@ -7,7 +7,7 @@ use crate::{
         inputs::{digest, hex, read_regular as read},
         io::publish,
     },
-    protocol::run::HostLimits,
+    run::HostLimits,
 };
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
@@ -44,8 +44,7 @@ impl Options {
             match key {
                 "--setups" => options.setups = files::authority(&read(value, 64 * 1024)?)?,
                 "--capacity" => {
-                    let capacity =
-                        crate::artifact::native::NativeCapacity::parse(&read(value, 4096)?)?;
+                    let capacity = crate::proof::NativeCapacity::parse(&read(value, 4096)?)?;
                     options.proof.capacity = capacity;
                     options.run.capacity = capacity;
                 }
@@ -143,7 +142,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             return Ok(());
         }
         if command == "run-entry" {
-            let host = RunEntry::admit(package, options.run, options.setups)?;
+            let host = RunEntry::admit(package, options.run, options.setups.clone())?;
             report["entry"] = json!(host.interface().entry());
             report["capacity"] = host.limits().capacity.record();
             report["phase"] = json!("inputs");
@@ -154,6 +153,11 @@ pub fn run(command: &str, args: &[String]) -> Json {
                 &outputs,
                 request.roles.values().flat_map(|role| role.inputs.values()),
             )?;
+            let output_setups = if options.results.is_some() {
+                files::output_setups(&request.setups, &options.setups, host.limits().capacity)?
+            } else {
+                Default::default()
+            };
             let result = host.prepare(request)?.execute();
             report["phase"] = json!("execution");
             report["execution"] = result.native.diagnostics();
@@ -163,7 +167,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             let outputs = result.outputs.ok_or("entry-run-incomplete")?;
             if let Some(path) = options.results {
                 report["phase"] = json!("results");
-                let encoded = files::run_outputs(&outputs, host.limits().capacity)?;
+                let encoded = files::run_outputs(&outputs, host.limits().capacity, output_setups)?;
                 report["phase"] = json!("publication");
                 publish(&path, &encoded)?;
                 report["results_published"] = json!(true);
@@ -171,7 +175,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             report["status"] = json!("executed");
         } else if command == "prove" || command == "verify" {
             let producer = command == "prove";
-            let host = ProofEntry::admit(package, options.proof, options.setups)?;
+            let host = ProofEntry::admit(package, options.proof, options.setups.clone())?;
             report["entry"] = json!(host.interface().entry());
             report["binding_scope"] = json!(match host.binding_scope() {
                 BindingScope::Transcript => "transcript",
@@ -183,6 +187,11 @@ pub fn run(command: &str, args: &[String]) -> Json {
                 .interface()
                 .proof_request(&read(inputs, files::MAX_REQUEST_BYTES)?, producer)?;
             protect_materials(&outputs, request.private.inputs.values())?;
+            let output_setups = if options.results.is_some() {
+                files::output_setups(&request.setups, &options.setups, options.proof.capacity)?
+            } else {
+                Default::default()
+            };
             let result = if producer {
                 if let Some(attempts) = options.attempts {
                     host.prove_attempts(request, attempts)?
@@ -192,7 +201,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             } else {
                 host.verify(
                     request,
-                    &read(proof_path.unwrap(), crate::artifact::MAX_PROOF_BYTES)?,
+                    &read(proof_path.unwrap(), crate::proof::MAX_PROOF_BYTES)?,
                 )?
             };
             report["phase"] = json!("execution");
@@ -211,8 +220,11 @@ pub fn run(command: &str, args: &[String]) -> Json {
             }
             if let Some(path) = options.results {
                 report["phase"] = json!("results");
-                let values =
-                    files::proof_outputs(result.outputs.as_ref().unwrap(), options.proof.capacity)?;
+                let values = files::proof_outputs(
+                    result.outputs.as_ref().unwrap(),
+                    options.proof.capacity,
+                    output_setups,
+                )?;
                 report["phase"] = json!("publication");
                 publish(&path, &values)?;
                 report["results_published"] = json!(true);
@@ -264,7 +276,7 @@ fn protect_materials<'a>(
     values: impl Iterator<Item = &'a super::Value>,
 ) -> Result<()> {
     use super::Value;
-    use crate::protocol::run::InputValue;
+    use crate::run::InputValue;
     for value in values {
         match value {
             Value::Leaf(InputValue::ProverKeyFile { path, .. }) => {

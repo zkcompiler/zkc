@@ -89,7 +89,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
             representation: zkc_runtime::interactive::Representation::FrDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-diagonal/vector.dot",
@@ -101,7 +100,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
             representation: zkc_runtime::interactive::Representation::FrDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "dalek-diagonal/curve.scale_each",
@@ -113,7 +111,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
             representation: zkc_runtime::interactive::Representation::RistrettoDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
-        public_operands: false,
     },
     crate::backend::registry::Alternative {
         identity: "dalek-diagonal/curve.msm",
@@ -125,6 +122,5 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
             representation: zkc_runtime::interactive::Representation::RistrettoDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
-        public_operands: false,
     },
 ];

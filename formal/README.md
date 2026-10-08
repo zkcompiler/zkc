@@ -1,7 +1,10 @@
 # zkc formal library
 
-Lean definitions and proofs for the finite atomic PIR kernel, structured
-sources, outer iteration, checked transformations and protocol applications.
+These are independent semantic models and model-specific tools. They do not
+currently establish correspondence with the supported `.zkc`/MLIR/Rust execution
+path. The optional Lean package retains definitions and proofs for the finite
+atomic PIR kernel, structured sources, outer iteration, checked transformations
+and protocol applications.
 [docs](../docs/README.md) owns the prose semantics. Its
 [specification](../docs/spec/README.md) owns the selected model's normative
 contracts. Correspondence maps cover
@@ -18,10 +21,10 @@ Start with [capability support](SUPPORT.md) for actual statements, premises and
 clients. [The verification map](design/verification-map.md) distinguishes
 semantic laws, compiler refinement, checker soundness, realization and protocol
 security. [The implementation requirements](design/native-obligations.md)
-state what these results require of the MLIR/C++ and Rust implementations.
+state obligations for a future connection to native implementations.
 
 The independent [artifact identity consumer](Tools/Artifact/Identity.lean)
-implements normalized construction identity, the default policy. Run
+implements normalized construction identity for its own source model. Run
 `formal/.lake/build/bin/artifact-reference identity SOURCE DESCRIPTOR [CONFIGURATION]`
 from the repository root to inspect admitted source and normalized identity.
 The [typed laws](Tools/Artifact/Identity/Laws.lean) reuse region renaming under an
@@ -68,7 +71,7 @@ narrow imports for other capabilities. There is no compatibility aggregate.
 | `Zkc.Protocols.Sumcheck.Committed.Security` | Fixed-original, honestly committed adaptive Sumcheck with joint opening-loss bound; [precise security scope](design/committed-sumcheck.md) |
 | `Zkc.Compiler.DefinitionInlining` | Optional capture-safe inlining with separate definition-reference renaming and complete execution equality |
 | `Zkc.Source.RegionBounds` | Compositional semantic call bounds without expanding shared suffixes |
-| `Zkc.Compiler.RegionArtifact` | Typed erasure and consumer-bound direct checking for `region-source-1`; [native connection](../docs/compiler/regions.md) |
+| `Zkc.Compiler.RegionArtifact` | Typed erasure and consumer-bound direct checking for `region-source-1`; [model and laws](Zkc/Compiler/RegionArtifact.lean) |
 | `Zkc.Compiler.RegionFolding` | Checked alias substitution through compact regions under total procedure laws; [logical-to-physical table instance](Examples/TableProtocol/Optimization.lean) |
 | `Zkc.Source.LocalInputs` | Available inputs/captures and permitted-view locality |
 | `Zkc.Source.PhaseAdmissionInterpretation` | Checked summaries under lawful interpretation |
@@ -94,8 +97,8 @@ narrow imports for other capabilities. There is no compatibility aggregate.
 | `Zkc.Protocols.Sumcheck.Connection` | Separate round producer and direct evaluator connected at the actual ordered point and value |
 | `Zkc.Protocols.Sumcheck.Preparation` | Prepared values drive the actual source's next claim while construction/provider effects remain external |
 | `Zkc.Polynomial.EvenOdd`, `Zkc.Polynomial.DegreeAdjustment` | Even/odd reconstruction, coefficient and degree laws, antipodal evaluation, arbitrary-word two-correction degree bounds, honest correction completeness and exceptional-challenge uniqueness; no FRI soundness claim |
-| `Zkc.Polynomial.Table` | Immutable tables and all-ring ordered restriction/evaluation laws; [executable native client](Examples/TableProtocol/README.md) |
-| `Zkc.Algebra.LinearCombination` | Finite module contraction, matrix pullback, diagonal and ordered product laws; mathematical basis of the shared compiler analysis |
+| `Zkc.Polynomial.Table` | Immutable tables and all-ring ordered restriction/evaluation laws; [executable formal client](Examples/TableProtocol/README.md) |
+| `Zkc.Algebra.LinearCombination` | Finite module contraction, matrix pullback, diagonal and ordered product laws; independent mathematical results |
 | `Zkc.Compiler.Storage` | Dead discardable local storage erasure preserves exact abstract local outputs/failures, logical accounting and observations; native/admission correspondence remains separate |
 | `Zkc.Algebra.BatchVerification` | Exact accepting-fiber count for fixed residuals and independent uniform field coefficients; no native RNG or protocol-security theorem |
 | `Zkc.Protocols.LinearRelation` | Completeness and distinct-challenge extraction for a fixed linear map, with actual MSM/matrix product-map bridge; no probabilistic knowledge or native theorem |
@@ -131,9 +134,11 @@ nix build '.#formal^library'  # sources and compiled library objects
 nix build .#arklib          # optional package and standalone consumer checks
 ```
 
-For interactive development inside `nix develop`, use the ordinary Lake recipes:
+For interactive development inside `nix develop .#formal`, prepare the pinned
+dependencies and use the optional Lake recipes:
 
 ```sh
+just fetch-lean          # prepare the main package's pinned dependencies
 just build-lean          # lake build: every library and executable the package declares
 just test-lean           # the structural, tool and consumer checks over it
 just test-lean-integration   # the optional ArkLib package and its consumers
@@ -143,7 +148,8 @@ What `lake build` builds is `lakefile.toml`'s default targets, and
 `test_checks.py` fails if a declared library or executable is not one of them,
 so neither this page nor a workflow keeps its own list. What `just test-lean`
 runs is discovered by [the shared test driver](../tests/run.py) from
-`checks/*.py` and `consumers/*/check.py`; just forwards the command.
+`checks/*.py` and `consumers/*/check.py`, with fixture-helper controls supplied
+by the driver. The recipe builds the formal prerequisites before running it.
 
 Build the optional library separately from `formal/integrations/arklib` with
 `lake build`. The main build checks every maintained library/test/example module;
@@ -153,7 +159,7 @@ versions, and permits only `propext`, `Classical.choice` and `Quot.sound`.
 The independent `Tools.Interactive` and `Tools.Artifact` consumers, including their
 `Tools.Crypto` dependencies, are included explicitly in the declaration audit and
 compiled as `interactive-protocol` and `artifact-reference`. The crypto modules
-provide the bounded, independent Keccak/Merkle reference used by oracle tests.
+provide bounded, independent Keccak/Merkle reference computations.
 The importable [requirement-certificate transport](Tools/RequirementChecker/Transport.lean)
 is also audited; its separate `requirement-checker` wrapper owns the process entry.
 Other tool IO wrappers
@@ -162,16 +168,15 @@ kernel, its native code generator or the adequacy of a theorem's statement.
 The maintained tool controls include isolated forbidden-axiom, import-header,
 input-capacity and executable-selection regressions. The
 [build workflow](../.github/workflows/ci.yml) runs documentation and source/harness
-checks automatically on pull requests and pushes to main. Its manual `main`
-scope runs main builds, exhaustive audits, standalone consumers, enforcement
-controls, compiled tool controls and design experiments. Manual `optional` and
-`fresh` scopes additionally run ArkLib and reproduce both formal packages without
-a restored project cache. These scopes need the
-[documented runner capacity](../docs/development/maintenance.md#workflow-scopes-and-runner-requirements).
+checks automatically on pull requests and pushes to main. Formal builds, audits,
+consumers and tool controls belong to its manual optional package checks;
+the `fresh` scope reproduces both formal packages without a restored project
+cache. See [workflow scopes and reports](../docs/development/maintenance.md#workflow-scopes-and-reports)
+for orchestration boundaries.
 Passing quick checks does not establish any of these formal results, and a
 workflow definition is not evidence of a hosted run.
 
-For fresh builds, choose new output directories:
+For fresh builds, run from `formal/` and choose new output directories:
 
 ```sh
 python3 checks/check_foundation.py --output /tmp/zkc-foundation
@@ -191,8 +196,8 @@ Omit cache options to fetch the manifest URLs. The installed Lean/Std toolchain
 remains trusted. Source drift causes failure; historical snapshots are not inputs.
 
 The [original-source artifact reference](design/artifact-reference.md) explains
-`Tools.Artifact`, its public cryptographic service and its independent native
-comparisons. Executable consumers and framing lemmas have separate assurance
+`Tools.Artifact` and its explicit public cryptographic reply assumptions.
+Executable consumers and framing lemmas have separate assurance
 scopes; neither imports an implicit Fiat–Shamir security theorem.
 
 ## Scope and development
@@ -205,4 +210,5 @@ cubic rounds returning opening obligations and a conditional terminal-error boun
 The common `Proc` denotation does not prescribe a flat compiler IR. Protocol
 structure, construction choice, role availability, logical algorithms and physical
 representation have distinct retained information and transformation obligations.
-Native consumers retain the [implementation obligations](design/native-obligations.md).
+A future native connection must discharge the relevant
+[implementation obligations](design/native-obligations.md).

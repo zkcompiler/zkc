@@ -12,7 +12,7 @@ fn ty(domain: &str) -> String {
 }
 fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> Json {
     json!([
-        "zkc.participants/1",
+        "zkc.program/1",
         [
             [
                 "make",
@@ -43,7 +43,8 @@ fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> J
             [],
             ports,
             results,
-            [["local", "work", "Local", args, names], ["return", names]]
+            [["local", "work", "Local", args, names], ["return", names]],
+            []
         ]],
         [["entry", "main", [["P", "root_P"]]]]
     ])
@@ -123,8 +124,8 @@ fn create_pass_consume_and_host_alias_refusal() {
     let value = values.unwrap().remove(0);
     assert!(matches!(value, Value::ResourceUnit(_)));
     assert_eq!(
-        backend.encode_value(&value).unwrap_err().code,
-        "refused:nonserializable"
+        backend.encode_native_value(&value).unwrap_err().to_string(),
+        "native-wire-backend:native-wire-type"
     );
     let unrelated = ark_backend(None);
     assert_eq!(

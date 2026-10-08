@@ -81,15 +81,15 @@ Successful proof bytes are unchanged when different ceilings are sufficient.
 The CLI reports the effective record, including defaults:
 
 ```text
-["zkc.native-capacity/1", "elements", "groups", "wire_bytes", "value_bytes",
- ["instructions", "calls", "iterations"], ["live_bytes", "total_bytes"]]
+["zkc.native-capacity/2", "elements", "groups", "wire_bytes", "value_bytes",
+ ["instructions", "iterations"], ["live_bytes", "total_bytes"]]
 ```
 
 All entries are canonical decimal strings. The file is at most 4 KiB and has
 exact arity; unknown fields or versions refuse. Defaults are 65,536 elements,
 4,096 collection/aggregate group points, 16 MiB wire, 64 MiB per value/live
 values, a 256 MiB cumulative runtime value charge, one million instructions and
-100,000 participant calls/iterations. Element/group counts may rise to 1,048,576/32,768. Other
+100,000 iterations. Element/group counts may rise to 1,048,576/32,768. Other
 ceilings may only be lowered. Numeric elements and group points are counted
 across a complete nested message, not separately for each child collection. For
 the QAP matrix sequence, the nonzeros across A, B and C share the element ceiling:
@@ -117,8 +117,8 @@ preflight for native wire inputs precedes decoding; the loading ledger admits
 the decoded value afterward, so a reduced loading ceiling alone does not prevent
 a single decode allocation permitted by the backend value ceiling.
 
-This setting does not configure other hosts such as the older joint observation
-host. The group quota covers one collection or complete nested message. It is not
+The [joint Host](../runtime/bundles.md) uses the same capacity record. The group
+quota covers one collection or complete nested message. It is not
 a cumulative per-proof subgroup-work bound: many standalone G2/GT messages remain
 bounded by proof size and execution limits. Neither this count nor the instruction
 budget measures CPU time. A weighted subgroup-work ledger remains a possible

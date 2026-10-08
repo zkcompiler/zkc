@@ -11,7 +11,6 @@ namespace zkc::protocol_ir {
 bool isMathematicalProfile(Profile profile);
 bool isExecutableProfile(Profile profile);
 // Services are features of these explicit contracts, never a stage inference.
-bool isProgram(ExecutionContract contract);
 } // namespace zkc::protocol_ir
 
 #endif

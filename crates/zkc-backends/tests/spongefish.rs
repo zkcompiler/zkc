@@ -38,18 +38,12 @@ fn root() -> Vec<u8> {
     ]))
 }
 fn origin(kind: &str) -> Vec<u8> {
-    tree(&json!([
-        "zkc.logical-origin/1",
-        "main",
-        "instance",
-        [],
-        [kind, "Source", "site", "Schema", "P", "V"]
-    ]))
+    native_origin(kind, "site", false)
 }
 fn binding_for(suite: Identity, contract: &str) -> OperationBinding {
     let mut arguments = vec![suite.name().into()];
-    if contract == "transcript.observe.field" {
-        arguments.extend(["bls12-381.fr".into(), "zkcv.field.bls12-381.fr/1".into()]);
+    if contract == "transcript.native.indexed.observe.data" {
+        arguments.push("field:bls12-381.fr".into());
     }
     OperationBinding {
         contract: contract.into(),
@@ -66,25 +60,26 @@ fn binding_for(suite: Identity, contract: &str) -> OperationBinding {
     }
 }
 fn program_for(suite: Identity, observations: bool) -> Vec<u8> {
-    let challenge = binding_for(suite, "transcript.challenge");
-    let observe = binding_for(suite, "transcript.observe.field");
-    let mut inputs = challenge.signature().unwrap().inputs;
+    let challenge = binding_for(suite, "transcript.native.indexed.challenge");
+    let observe = binding_for(suite, "transcript.native.indexed.observe.data");
+    let mut inputs = vec![challenge.signature().unwrap().inputs[0].clone()];
     let outputs = challenge.signature().unwrap().outputs;
-    let attrs = ["Source", "site", "Schema", "P", "V"];
+    let message = native_attributes("message", "site");
+    let query = native_attributes("query", "site");
     let (bindings, ops) = if observations {
         inputs.push(observe.signature().unwrap().inputs[1].clone());
         (
             vec![observe, challenge],
             vec![
-                json!(["op", "message", "b0", attrs, ["a0", "a1"], ["t1"]]),
-                json!(["op", "draw1", "b1", attrs, ["t1"], ["c1", "t2"]]),
-                json!(["op", "draw2", "b1", attrs, ["t2"], ["c2", "t3"]]),
+                json!(["op", "message", "b0", message, ["a0", "a1"], ["t1"]]),
+                json!(["op", "draw1", "b1", query, ["t1"], ["c1", "t2"]]),
+                json!(["op", "draw2", "b1", query, ["t2"], ["c2", "t3"]]),
             ],
         )
     } else {
         (
             vec![challenge],
-            vec![json!(["op", "draw", "b0", attrs, ["a0"], ["c2", "t3"]])],
+            vec![json!(["op", "draw", "b0", query, ["a0"], ["c2", "t3"]])],
         )
     };
     program(
@@ -96,19 +91,22 @@ fn program_for(suite: Identity, observations: bool) -> Vec<u8> {
     )
 }
 fn direct(root: &[u8], wire: &[u8]) -> ([u8; 64], [u8; 64]) {
+    direct_frames(root, wire, &origin("message"), &origin("query"))
+}
+fn direct_frames(root: &[u8], wire: &[u8], message: &[u8], query: &[u8]) -> ([u8; 64], [u8; 64]) {
     let mut t = Keccak::default();
     for data in [
         frame(0, b"domain", b"zkc.artifact/1"),
         frame(0, b"suite", SUITE.name().as_bytes()),
         frame(1, b"binding", root),
-        frame(1, b"origin", &origin("message")),
+        frame(1, b"origin", message),
         frame(1, b"value", wire),
     ] {
         t.absorb(&data);
     }
     let mut output = [[0; 64]; 2];
     for wide in &mut output {
-        t.absorb(&frame(1, b"origin", &origin("challenge")));
+        t.absorb(&frame(1, b"origin", query));
         t.absorb(&frame(2, b"challenge", &64u64.to_be_bytes()));
         t.squeeze(wide);
     }
@@ -144,8 +142,18 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
     let value = field(false, 7);
     // This fixture is canonical Fr wire, checked independently below.
     let wire = [b"ZKCV\x01\x01".as_slice(), &[7], &[0; 31]].concat();
-    assert_eq!(b.encode_value(&value).unwrap(), wire);
-    let (first, second) = direct(&root(), &wire);
+    assert_eq!(b.encode_native_value(&value).unwrap(), wire);
+    // Retain the published raw primitive fixture; it is not a generated contract.
+    let raw = |kind| {
+        tree(&json!([
+            "zkc.logical-origin/1",
+            "main",
+            "instance",
+            [],
+            [kind, "Source", "site", "Schema", "P", "V"]
+        ]))
+    };
+    let (first, second) = direct_frames(&root(), &wire, &raw("message"), &raw("challenge"));
     let vector: Json = serde_json::from_str(
         &std::fs::read_to_string(zkc_test_support::source("transcript-vectors.json"))
             .expect("frozen transcript vector fixture must be present"),
@@ -164,6 +172,7 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
         zkc_arkworks::scalar_from_wide_be(&second).to_string(),
         vector["second_fr"].as_str().unwrap()
     );
+    let (_, second) = direct(&root(), &wire);
     let p = program_for(SUITE, true);
     for _ in 0..2 {
         let t = b.issue_transcript_for(SUITE, domain(), 3, &root()).unwrap();
@@ -190,7 +199,10 @@ fn nominal_provider_codec_and_wrong_field_admission() {
     assert_eq!(SUITE.transcript(), Some(SUITE));
     assert_eq!(Identity::Bls12381Fr.transcript(), None);
     let b = backend(Policy::default());
-    for contract in ["transcript.challenge", "transcript.observe.field"] {
+    for contract in [
+        "transcript.native.indexed.challenge",
+        "transcript.native.indexed.observe.data",
+    ] {
         let valid = binding_for(SUITE, contract);
         assert_eq!(
             b.binding_signature(&valid),
@@ -205,8 +217,8 @@ fn nominal_provider_codec_and_wrong_field_admission() {
             assert!(b.binding_signature(&mutant).is_none());
         }
     }
-    let mut obs = binding_for(SUITE, "transcript.observe.field");
-    obs.arguments[2] = "zkcv.field.ristretto255.scalar/1".into();
+    let mut obs = binding_for(SUITE, "transcript.native.indexed.observe.data");
+    obs.arguments[1] = "zkcv.field.ristretto255.scalar/1".into();
     assert!(obs.signature().is_err());
     assert!(b.binding_signature(&obs).is_none());
     obs.arguments[1] = "ristretto255.scalar".into();
@@ -259,7 +271,7 @@ fn stale_handle_and_malformed_origin_do_not_create_a_successor() {
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![old]).is_err());
     let b = backend(Policy::default());
     let mut malformed: Json = serde_json::from_slice(&p).unwrap();
-    malformed[3][0][4][0][3] = json!(["Source", "site", "Schema", "P", "bad/frame"]);
+    malformed[3][0][4][1][3] = json!(["Source", "site", "Schema", "P", "bad/frame"]);
     assert!(admit_supplied(&serde_json::to_vec(&malformed).unwrap(), &b).is_err());
 }
 #[test]
@@ -287,8 +299,8 @@ fn prefix_lengths_domain_context_and_event_binding() {
     bad.push(0);
     let b = backend(Policy::default());
     let ty = field(false, 7).physical_type();
-    assert!(b.decode_typed_value(ty.clone(), &bad).is_err());
+    assert!(b.decode_native_value(&ty.clone(), &bad).is_err());
     bad = wire;
     bad[1] ^= 1;
-    assert!(b.decode_typed_value(ty.clone(), &bad).is_err());
+    assert!(b.decode_native_value(&ty.clone(), &bad).is_err());
 }

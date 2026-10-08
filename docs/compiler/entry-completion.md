@@ -66,8 +66,8 @@ state from the reached trial. It completes this local loop only.
   remain distinct from application completion data.
 - Attempt and joint reports retain the reached return coordinate. Successful
   outputs are published only after required retention and custody cleanup.
-- The source-route Lean readers refuse native program records. Frontend syntax
-  and a native Lean execution theorem remain open.
+- [Language](../language/mathematical.md) exposes completion under its source
+  rules. Native Lean execution correspondence remains open.
 
 ## Maintained evidence
 
@@ -94,9 +94,8 @@ role count agreement after a peer returns and distinct owner-local result values
 Owner/signature/component, continuation and source/candidate mutations check
 admission and construction boundaries.
 
-The Lean readers refuse the native program carrier (or its lexical tokens)
-before instruction semantics. These refusals are compatibility gates; they do
-not establish a Lean interpretation of `return_if` or `for_while`.
+Independent formal models do not interpret the native `return_if` and
+`for_while` records. Their source/control theorems establish no native connection.
 One-shot proof production reports `return_at` and returns proof bytes without
 an attempt history;
 use the attempt report for retained retry decisions and prefixes. A producer
@@ -111,4 +110,4 @@ conditional completion after the first of two setup-backed applications under a
 derived transcript, in ordinary, unsimplified and storage-release modes. Both
 participants return the current state; the skipped setup still requires entry
 authorization. A distinct second evaluation point also exercises the false
-completion branch through both setups and final return. Consumer migration remains in the [roadmap](../roadmap.md).
+completion branch through both setups and final return. Further native work is recorded in the [roadmap](../roadmap.md).

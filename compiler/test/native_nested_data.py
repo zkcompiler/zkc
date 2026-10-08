@@ -38,7 +38,7 @@ for family, public in [("batched-openings", ["2", "3", "4"]),
             path = OUT / f"{family}_{version}.policy"
             path.write_text(json.dumps(old))
             commands.run([compiler, "protocol-proof", source, path],
-                         refuses="native-proof-policy" if version == 2 else "native-proof-wire-type")
+                         refuses="native-proof-policy")
 
 standalone = OUT / "matrix.mlir"
 standalone.write_text('''!m = tensor<?x?x!algebra.field<"bls12-381.fr">>
@@ -59,7 +59,7 @@ for version in (1, 2, 3, 4):
         policy.write_text(json.dumps([f"zkc.native-proof-policy/{version}", "main", "P", "V", "0", "", "", ["1", "2"], []]))
         if version < 4:
             commands.run([compiler, "protocol-proof", standalone, policy],
-                         refuses="native-proof-policy" if version == 2 else "native-proof-wire-type")
+                         refuses="native-proof-policy")
         else:
             for suffix, options in [("", ()), ("_plain", ("--no-simplify",)), ("_release", ("--release-storage",))]:
                 name = "matrix" + suffix

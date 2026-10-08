@@ -8,7 +8,7 @@ execution loop.
 
 The [native proof specification](../spec/profiles/compiler/native-proofs.md#native-attempt-policy)
 owns the policy format and lifecycle. [Status](../status.md#foundation-capability-map)
-records coverage; the [roadmap](../roadmap.md) orders the remaining consumer migration.
+records coverage; the [roadmap](../roadmap.md) records further native work.
 
 ## Design and ownership
 
@@ -19,7 +19,7 @@ records coverage; the [roadmap](../roadmap.md) orders the remaining consumer mig
 | Application | Authorize the deployment, retry result and RNG mapping, public context and resource/work limits. |
 | Native host | Issue persistent roots once, reinstall the same service references for each entry, create/retire an attempt transcript, and recover backend custody on every outcome. |
 | Controller | Discard retry bytes, preserve successor state and stop at the attempt limit. |
-| Interpreter | Enforce the remaining instruction/call/iteration and payload budgets inside execution, including local bodies and initialization. |
+| Interpreter | Enforce the remaining instruction/iteration and payload budgets inside execution, including local bodies and initialization. |
 | Publisher | Publish only a completed result after session cleanup succeeds. |
 
 The host resolves original common-program port indices through the deployment's
@@ -64,7 +64,7 @@ cryptographic retry probability.
 |---|---|
 | Attempt count | Whole host invocation; 1 through 1024. |
 | Proof bytes | Each tentative proof, including framing, enforced by the writer during production. |
-| Instructions, participant calls, iterations | Cumulative across all runners in the invocation, bounded by interpreter hard ceilings. |
+| Instructions and iterations | Cumulative across all runners in the invocation, bounded by interpreter hard ceilings. |
 | Retained payload charge | Live limit per runner and cumulative total charge across attempts; counts bindings, not process RSS. |
 | RNG and service draws | One persistent root budget; failed scalar consumes can increment generation/debit before refusal. |
 | Transcript transitions | Per freshly issued attempt transcript; observations remain in the attempt record. |
@@ -137,7 +137,7 @@ The [source generator](../../compiler/test/native_attempts.py) and
 - A transcript-free, header-only client with no resources, including 1,024
   deterministic retries, normal first-attempt completion and a completion output
   after another producer result.
-- Both installed transcript suites, ordinary/unsimplified/released storage,
+- Both BLS transcript suites, ordinary/unsimplified/released storage,
   forced retry through the fourth attempt, shorter completed proofs after longer
   discarded prefixes, first-attempt completion and fatal stops.
 - Exact equality with a single attempt supplied the advanced random value;
@@ -147,7 +147,7 @@ The [source generator](../../compiler/test/native_attempts.py) and
   bytes, wrong same-typed RNG result maps on both retry and completion, malformed
   policies and one-shot input refusal. A partial setup failure retires the
   already-issued RNG and retains its policy digest.
-- [Committed-profile attempts](../../crates/zkc-tools/examples/native_committed_proof/main.rs)
+- [PCS attempts](../../crates/zkc-tools/examples/native_committed_proof/main.rs)
   reuse an actual prover key for PCS commit/open execution, accept a completed
   proof independently, and charge entry payloads again on retry even when key
   storage is shared. Exact canonical policy-digest bytes are checked separately.

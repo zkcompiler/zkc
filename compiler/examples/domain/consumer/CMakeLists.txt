@@ -1,14 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(EnvelopeConsumer LANGUAGES C CXX)
-find_package(ZkcCompiler REQUIRED CONFIG)
+find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS IR Transforms)
 option(EXPECT_ENVELOPE "Require the envelope contribution in this prefix" ON)
-set(ZKC_DOMAIN_RUNTIME "" CACHE FILEPATH "Optional zkc runtime for independent execution checks")
-set(ZKC_DOMAIN_CHECKER "" CACHE FILEPATH "Optional Lean interactive-protocol executable")
-if((ZKC_DOMAIN_RUNTIME AND NOT ZKC_DOMAIN_CHECKER) OR (ZKC_DOMAIN_CHECKER AND NOT ZKC_DOMAIN_RUNTIME))
-  message(FATAL_ERROR "Independent execution requires both ZKC_DOMAIN_RUNTIME and ZKC_DOMAIN_CHECKER")
-endif()
 add_executable(envelope-consumer main.cpp)
-target_link_libraries(envelope-consumer PRIVATE Zkc::Frontend Zkc::Translation MLIRParser)
+target_link_libraries(envelope-consumer PRIVATE Zkc::Transforms MLIRParser)
 target_compile_features(envelope-consumer PRIVATE cxx_std_17)
 target_compile_options(envelope-consumer PRIVATE -Wall -Wextra -Werror)
 target_compile_definitions(envelope-consumer PRIVATE EXPECT_ENVELOPE=$<BOOL:${EXPECT_ENVELOPE}>)
@@ -25,27 +20,3 @@ endforeach()
 add_test(NAME installed-declarations COMMAND ${Python3_EXECUTABLE}
   "${CMAKE_CURRENT_SOURCE_DIR}/declarations.py"
   --tool $<TARGET_FILE:Zkc::zkc-tblgen> ${declaration_includes})
-
-if(EXPECT_ENVELOPE)
-  # Build each public contribution header without an umbrella header supplying
-  # missing prerequisites. Generated dialect declarations need MLIR first.
-  foreach(header Envelope Specialization)
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${header}-header.cpp"
-      "#include <envelope/${header}.h>\n")
-    add_library(envelope-${header}-header OBJECT "${CMAKE_CURRENT_BINARY_DIR}/${header}-header.cpp")
-    target_link_libraries(envelope-${header}-header PRIVATE Zkc::CompilerCore)
-    target_compile_features(envelope-${header}-header PRIVATE cxx_std_17)
-    target_compile_options(envelope-${header}-header PRIVATE -Wall -Wextra -Werror)
-  endforeach()
-  add_executable(envelope-specialization specialization.cpp)
-  target_link_libraries(envelope-specialization PRIVATE Zkc::CompilerCore)
-  target_compile_features(envelope-specialization PRIVATE cxx_std_17)
-  target_compile_options(envelope-specialization PRIVATE -Wall -Wextra -Werror)
-  add_test(NAME installed-specialization COMMAND envelope-specialization)
-  if(ZKC_DOMAIN_RUNTIME)
-    add_test(NAME installed-execution COMMAND ${Python3_EXECUTABLE}
-      "${CMAKE_CURRENT_SOURCE_DIR}/execution.py"
-      --consumer $<TARGET_FILE:envelope-specialization>
-      --runtime "${ZKC_DOMAIN_RUNTIME}" --checker "${ZKC_DOMAIN_CHECKER}")
-  endif()
-endif()

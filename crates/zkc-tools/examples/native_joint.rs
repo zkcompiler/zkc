@@ -3,21 +3,15 @@
 //! protocol and its arithmetic, independently of the generated dispatch plan.
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::services::{ServiceObservation, ServiceReference, ServiceRegistry};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
-use zkc_runtime::interactive::{CutKind, DecodeReason};
-use zkc_tools::protocol::run::*;
+use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_runtime::interactive::{CutKind, DecodeReason, ServiceContract};
+use zkc_tools::run::*;
 
 fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new(role, session, entry, None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new(role, session, entry, None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -137,7 +131,6 @@ fn run_case(
         .collect();
     assert!(values.is_empty());
     let report = run(bundle, session, inputs, RunLimits::default(), audit).unwrap();
-    assert!(bundle.admitted().checked_source().is_none());
     assert!(audit.after.values().flatten().all(|o| !o.leased));
     report
 }
@@ -274,9 +267,20 @@ fn schnorr(directory: &Path) {
         BTreeMap::from([
             (
                 "Alice".into(),
-                vec![registry.issue_random("Alice", 1).unwrap()],
+                vec![
+                    registry
+                        .issue_random_for("Alice", ServiceContract::RandomBls12381Field, 1)
+                        .unwrap(),
+                ],
             ),
-            ("Bob".into(), vec![registry.issue_random("Bob", 1).unwrap()]),
+            (
+                "Bob".into(),
+                vec![
+                    registry
+                        .issue_random_for("Bob", ServiceContract::RandomBls12381Field, 1)
+                        .unwrap(),
+                ],
+            ),
         ]),
     );
     let report = run_case(&b, "random", schnorr_inputs(), &mut audit);

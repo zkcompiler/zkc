@@ -140,7 +140,7 @@ reply-dependent continuations, alias/generation refusals and failed consumption.
 These generic confinement laws do not prove native capability authenticity or
 physical non-aliasing. Those remain explicit backend checks and test obligations.
 
-## Controls and native adoption
+## Controls and implementation boundary
 
 `Tests.RoleProjection` covers stored protocol calls, caller binding restoration,
 nested paths, bind, mixed accumulators, zero/positive repeats, each message role,
@@ -151,12 +151,9 @@ branches and nested definitions and checks resume after partial progress.
 environment exists, but both receiver interpretations execute arbitrary ingress
 without that value.
 
-The native [interactive path](../../docs/compiler/interactive-execution.md)
-implements owned operands/results, receive destinations, resolved instances,
-explicit incomplete/stop and resumable stacks. Physical lowering retains control
-and origins. The independent portable consumer is in `Tools.Interactive`; it
-checks the actual candidate and runs a source reference without importing the
-native compiler. The executable checker, typed theorem and native differential
-comparison are three distinct results. Raw decoding, multi-result elaboration,
-role remapping, native stack refinement and checker soundness are not proved by
-the typed projection theorem. Full ExecutionProof bodies remain future work.
+The independent portable consumer in [`Tools.Interactive`](interactive-reference.md)
+checks candidates and runs a source reference in its own format. It does not
+validate the supported `.zkc`/MLIR/`zkc.program/1` path. Raw decoding, multi-result
+elaboration, role remapping, native stack refinement and executable checker
+soundness are not proved by the typed projection theorem. Connecting these laws
+to the common Rust Runner and its Hosts requires a separate interpretation.

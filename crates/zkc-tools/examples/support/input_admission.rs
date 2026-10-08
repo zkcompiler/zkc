@@ -1,7 +1,7 @@
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Value};
-use zkc_tools::artifact::native::{AttemptPolicy, NativeDeployment};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_tools::proof::{AttemptPolicy, NativeDeployment};
 
 // An empty test provider distinguishes refusal before issuance from reaching
 // the issuance phase. The expected byte total is computed from public codec
@@ -15,12 +15,8 @@ pub fn private_input_admission_boundary(
     use zkc_runtime::interactive::{LogicalType, PhysicalType};
     let codec = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap();
     assert_ne!(envelope[2][1][5], "", "control must select a transcript");

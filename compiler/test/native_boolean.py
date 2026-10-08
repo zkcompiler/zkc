@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 from commands import Commands
-from tools import records
+from tools import records, canonical_program
 
 out = records()
 commands = Commands(out)
@@ -55,20 +55,20 @@ for optimize in (False, True):
             True, False, a and b, a or b, a != b, a == b, a != b, not a,
             a if c else b, 11 if c else 23, 31 if c else 47]
     (out / f"booleans-{int(optimize)}.json").write_text(encoded)
-    assert json.loads(commands.source("protocol-export", commands.source("protocol-import", encoded))) == carrier
+    assert json.loads(canonical_program(commands, encoded)) == carrier
 
 mutant = copy.deepcopy(carrier)
 mutant[0] = "zkc.participants/1"
 for p in mutant[4]: p.pop()
-commands.source("protocol-import", json.dumps(mutant), refuses="interactive-instruction")
+canonical_program(commands, json.dumps(mutant), refuses="interactive-format")
 for value in ("true", 1, None, []):
     mutant = copy.deepcopy(carrier)
     literal = next(op for f in mutant[3] for op in f[4] if op[0] == "bool_constant")
     literal[3] = value
-    commands.source("protocol-import", json.dumps(mutant), refuses="native-boolean-value")
+    canonical_program(commands, json.dumps(mutant), refuses="native-boolean-value")
 mutant = copy.deepcopy(carrier)
 mutant[4][0][7].insert(0, ["bool_constant", "root_literal", "new_value", True])
-commands.source("protocol-import", json.dumps(mutant), refuses="native-boolean-context")
+canonical_program(commands, json.dumps(mutant), refuses="native-boolean-context")
 
 for predicate in ("ult", "ule", "ugt", "uge", "slt", "sle", "sgt", "sge"):
     commands.verified(source.replace("cmpi eq", "cmpi " + predicate), "mathematical-dependencies", "--canonicalize", "--cse")
@@ -121,10 +121,10 @@ condition_arm = json.loads(commands.source('protocol-export', bound))
 for a, b, c in itertools.product((False, True), repeat=3):
     assert evaluate(condition_arm, [a, b, c, 11, 23, 31, 47])[8] == (c or b)
 
-# Legacy MLIR cannot acquire the literal by changing the execution selector.
-commands.verified(physical.replace('program', 'legacy_participants_v1'), 'native-boolean-context')
+# The profile owns the phase boundary; a stale selector is an unknown property.
+commands.verified(physical.replace('#protocol.profile<physical>', '#protocol.profile<physical>, execution_contract="program"'), 'mlir-unknown-property')
 for length in (128, 129):
     named = copy.deepcopy(carrier)
     literal = next(op for f in named[3] for op in f[4] if op[0] == 'bool_constant')
     literal[1] = 's' * length
-    commands.source('protocol-import', json.dumps(named), refuses=None if length == 128 else 'interactive-name')
+    canonical_program(commands, json.dumps(named), refuses=None if length == 128 else 'interactive-name')

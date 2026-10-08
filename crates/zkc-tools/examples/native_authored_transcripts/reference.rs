@@ -10,7 +10,7 @@ use zkc_backends::{
     external::{monero, openvm},
 };
 use zkc_runtime::interactive::LogicalType;
-use zkc_tools::artifact::native::NativeDeployment;
+use zkc_tools::proof::NativeDeployment;
 fn packed(state: &openvm::Duplex) -> Value {
     let s = state.snapshot();
     words(
@@ -158,13 +158,15 @@ pub(super) fn openvm_data(
     )
 }
 pub(super) fn archived_answers(deployment: &NativeDeployment, envelope: &Json, family: &str) {
-    let fixture = |name: &str| zkc_test_support::source(&format!("external-transcript/{name}"));
+    // Embed the reference data so installed consumers do not need the build checkout.
     let (values, expected) = if family == "monero" {
         let saved: Json = serde_json::from_slice(
-            &std::fs::read(fixture("ordinary-monero-1.transcript.json")).unwrap(),
+            include_bytes!("../../../zkc-test-support/fixtures/external-transcript/ordinary-monero-1.transcript.json"),
         )
         .unwrap();
-        let proof = std::fs::read(fixture("ordinary-monero-1.proof")).unwrap();
+        let proof = include_bytes!(
+            "../../../zkc-test-support/fixtures/external-transcript/ordinary-monero-1.proof"
+        );
         let public: Vec<u8> = saved["V"]
             .as_array()
             .unwrap()
@@ -203,7 +205,7 @@ pub(super) fn archived_answers(deployment: &NativeDeployment, envelope: &Json, f
         )
     } else {
         let saved: Json = serde_json::from_slice(
-            &std::fs::read(fixture("ordinary-openvm-0.transcript.json")).unwrap(),
+            include_bytes!("../../../zkc-test-support/fixtures/external-transcript/ordinary-openvm-0.transcript.json"),
         )
         .unwrap();
         let rows = saved.as_array().unwrap();

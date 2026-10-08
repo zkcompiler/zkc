@@ -130,12 +130,12 @@ table. A request-count control has three source requests and four target request
 and rejects reuse of the old bound. These are Lean checks, not new MLIR/Rust
 differential or performance results.
 
-The next production-facing step is extraction of separately callable role modules
-and their public coordination structure. It must retain the established schedule
-and complete stopping behavior, then connect actual symbols, inputs and source
-sites to this resolved target. A source-level proof does not bind emitted native
-code to these subjects. The existing finite native/prototype evidence remains
-separate until the matching operations and differential tests are implemented.
+A native correspondence would need to connect actual callable role modules,
+coordination, symbols, inputs and source sites to this resolved target, preserving
+the selected schedule and complete stopping behavior. A source-level proof does
+not bind emitted native code to these subjects. The supported compiler uses its
+own [native pipeline](../../../compiler/protocol-pipeline.md); this model
+imposes no requirement to reproduce its reference carrier there.
 
 Global choice, role remapping, independent endpoint artifacts and asynchronous
 progress remain open. Local-effect, information-flow, resource, sampling and

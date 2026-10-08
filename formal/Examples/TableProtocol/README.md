@@ -1,7 +1,7 @@
 # Executable table protocol profile
 
 A finite interpretation of the generic typed source/direct-plan machinery for
-native differential testing. This example uses fields F₂/F₇, original immutable
+independent reference execution. This example uses fields F₂/F₇, original immutable
 tables, ordered prefixes and complete state/events. It adds a closed one-variable
 Sumcheck trace and toy natural-pair Merkle operations, not protocol security.
 
@@ -21,6 +21,8 @@ through `Zkc.Polynomial.Table`. The example imports `Zkc.Source` and
 maintained declaration audit includes every example module and an explicit
 `Tests.TableProtocolAudit` audit.
 
+From `formal/`, with the pinned dependencies prepared:
+
 ```sh
 lake build table-protocol Tests.TableProtocolAudit
 .lake/build/bin/table-protocol check SOURCE PLAN
@@ -29,11 +31,10 @@ lake build table-protocol Tests.TableProtocolAudit
 .lake/build/bin/table-protocol run-admitted SOURCE PLAN INPUTS table-round/1 CERTIFICATE
 ```
 
-The native [compiler client](../../../compiler/README.md) gives a complete example.
-Exact direct lowering is checked over decoded source and plan. Compiler decoding,
-Rust allocation/kernels, challenge randomness and native code generation remain
-outside this theorem. Differential execution checks that connection at a finite
-scope.
+Exact direct lowering is checked over decoded source and plan in this example's
+own format. The native table executor has been retired. Compiler decoding, Rust
+allocation/kernels, challenge randomness and native code generation remain
+outside these formal laws.
 
 The [physical client](../TablePhysical/README.md) additionally checks logical
 folding against the original source before composing physical correspondence.

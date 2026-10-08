@@ -34,7 +34,7 @@ fn assert_ports(signature: &KernelSignature<LogicalType>, inputs: &[&str], outpu
 }
 
 #[test]
-fn open_legacy_bindings_have_exact_logical_ports() {
+fn installed_bindings_have_exact_logical_ports() {
     type SignatureCase<'a> = (
         &'a str,
         &'a [&'a str],
@@ -139,11 +139,11 @@ fn open_legacy_bindings_have_exact_logical_ports() {
             AttributeRule::None,
         ),
         (
-            "transcript.observe.bool",
-            &["merlin3.bls12-381.fr64be/1", "zkcv.bool/1"],
-            &["transcript:merlin3.bls12-381.fr64be/1", "bool"],
+            "transcript.native.indexed.observe.data",
+            &["merlin3.bls12-381.fr64be/1", "bool"],
+            &["transcript:merlin3.bls12-381.fr64be/1", "bool", "indices"],
             &["transcript:merlin3.bls12-381.fr64be/1"],
-            AttributeRule::MessageOrigin,
+            AttributeRule::NativeMessageTemplate,
         ),
         (
             "resource_unit.create",
@@ -271,67 +271,29 @@ fn open_selection_does_not_relax_nominal_requirements() {
 }
 
 #[test]
-fn cross_field_observations_form_logically_but_unsupported_selections_refuse() {
-    for (suite, provider, kind, domain, codec) in [
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "arkworks",
-            "field",
-            "koala-bear",
-            "zkcv.field.koala-bear/1",
-        ),
-        (
-            "merlin3.ristretto255.scalar64le/1",
-            "dalek",
-            "vector",
-            "bls12-381.fr",
-            "zkcv.vector.bls12-381.fr/1",
-        ),
-        (
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
-            "plonky3",
-            "group",
-            "bn254.g1",
-            "zkcv.group.bn254.g1/1",
-        ),
-        (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/1",
-            "spongefish",
-            "proof",
-            "rows.merkle-keccak256.koala-bear/1",
-            "zkcv.proof.rows-merkle-keccak256.koala-bear/1",
-        ),
-        (
-            "merlin3.ristretto255.scalar64le/1",
-            "dalek",
-            "commitment",
-            "multilinear.kzg.bls12-381/1",
-            "zkcv.commitment.multilinear-kzg.bls12-381/1",
-        ),
+fn retired_transcript_contracts_are_not_logical_or_physical_bindings() {
+    for contract in [
+        "transcript.challenge",
+        "transcript.draw_index",
+        "transcript.native.challenge",
+        "transcript.observe.bool",
+        "transcript.native.observe.field",
+        "transcript.native.indexed.observe.bool",
+        "transcript.native.indexed.observe.field",
+        "transcript.native.indexed.observe.group",
+        "transcript.native.indexed.observe.index",
+        "transcript.native.indexed.observe.field_array",
+        "transcript.native.indexed.observe.commitment",
+        "transcript.native.indexed.observe.proof",
     ] {
-        let contract = format!("transcript.observe.{kind}");
-        let mut b = binding(&contract, &[suite, domain, codec], "");
-        let logical = b.logical_signature().unwrap();
-        let transcript = format!("transcript:{suite}");
-        let payload = format!("{kind}:{domain}");
-        assert_ports(&logical, &[&transcript, &payload], &[&transcript]);
-        assert_eq!(logical.attributes, AttributeRule::MessageOrigin);
-        assert_eq!(b.signature().unwrap_err().code, ErrorCode::Signature);
-
-        b.implementation = format!("{provider}/{contract}");
-        assert_eq!(
-            b.logical_signature().unwrap_err().code,
-            ErrorCode::Signature
+        let b = binding(
+            contract,
+            &["merlin3.bls12-381.fr64be/1"],
+            &format!("arkworks/{contract}"),
         );
-        assert_eq!(b.signature().unwrap_err().code, ErrorCode::Signature);
-        let error = admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend)
-            .err()
-            .unwrap();
-        assert_eq!(error.code, ErrorCode::Signature);
-
-        b.implementation.clear();
-        b.arguments[2] = "zkcv.bool/1".into();
-        assert!(b.logical_signature().is_err(), "{b:?}");
+        assert!(b.logical_signature().is_err(), "{contract}");
+        assert!(b.signature().is_err(), "{contract}");
+        assert!(admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend).is_err());
     }
 }
 
@@ -351,7 +313,7 @@ fn selected_observations_keep_the_installed_suite_policy() {
         (
             "spongefish0.7.4.keccak.bls12-381.fr64be/1",
             "spongefish",
-            "table:bls12-381.fr",
+            "matrix:bls12-381.fr",
         ),
         (
             "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
@@ -375,12 +337,8 @@ fn selected_observations_keep_the_installed_suite_policy() {
         ),
     ] {
         let ty = LogicalType::parse(payload).unwrap();
-        let contract = format!("transcript.observe.{}", ty.kind().name());
-        let mut b = binding(
-            &contract,
-            &[suite, ty.identity().name(), &ty.codec().unwrap()],
-            "",
-        );
+        let contract = "transcript.native.indexed.observe.data";
+        let mut b = binding(contract, &[suite, payload], "");
         let logical = b.logical_signature().unwrap();
         b.implementation = format!("{provider}/{contract}");
         assert_eq!(b.logical_signature().unwrap(), logical);
@@ -391,7 +349,7 @@ fn selected_observations_keep_the_installed_suite_policy() {
             format!("transcript:{suite}")
         );
         assert_eq!(selected.outputs, [selected.inputs[0].clone()]);
-        assert_eq!(selected.attributes, AttributeRule::MessageOrigin);
+        assert_eq!(selected.attributes, AttributeRule::NativeMessageTemplate);
     }
 }
 
@@ -449,10 +407,10 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
         (
             "curve.msm",
             vec!["ristretto255.group"],
-            "dalek-vartime/curve.msm",
-            Representation::RistrettoVector,
+            "dalek/curve.msm",
+            Representation::DalekVector,
             false,
-            1,
+            0,
         ),
         (
             "resource_unit.pass",
@@ -463,9 +421,9 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
             0,
         ),
         (
-            "transcript.challenge",
+            "transcript.native.indexed.challenge",
             vec!["spongefish0.7.4.keccak.bls12-381.fr64be/1"],
-            "spongefish/transcript.challenge",
+            "spongefish/transcript.native.indexed.challenge",
             Representation::Resource,
             false,
             0,
@@ -743,7 +701,7 @@ impl Backend for NoBackend {
 
 fn carrier(b: &OperationBinding) -> serde_json::Value {
     json!([
-        "zkc.participants/1",
+        "zkc.program/1",
         [["op", b.contract, b.arguments, b.implementation]],
         "physical",
         [],
@@ -755,7 +713,8 @@ fn carrier(b: &OperationBinding) -> serde_json::Value {
             [],
             [],
             [],
-            [["return", []]]
+            [["return", []]],
+            []
         ]],
         [["entry", "Main", [["role", "Participant"]]]]
     ])

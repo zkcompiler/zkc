@@ -8,7 +8,6 @@ import sys
 
 import pytest
 
-from differential import Run
 from journal import Journal, Refused
 
 
@@ -96,11 +95,8 @@ def test_binary_output_and_non_utf8_diagnostics_are_retained(tmp_path):
     assert Path(saved["output"]).read_text() == "\ufffd"
 
 
-def test_differential_report_rejects_a_crash_after_valid_json(tmp_path):
-    # The report boundary itself needs no compiler or Lean installation.
-    run = object.__new__(Run)
-    run.directory = tmp_path
-    run.journal = Journal(tmp_path)
+def test_json_report_rejects_a_crash_after_valid_json(tmp_path):
+    journal = Journal(tmp_path)
     with pytest.raises(Refused, match="signal"):
-        run.report("native", *command("import os, signal; print('{}', flush=True); "
-                                      "os.kill(os.getpid(), signal.SIGTERM)"))
+        journal.json(command("import os, signal; print('{}', flush=True); "
+                             "os.kill(os.getpid(), signal.SIGTERM)"))

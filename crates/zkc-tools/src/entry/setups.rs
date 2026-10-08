@@ -1,6 +1,6 @@
 //! Translate authenticated Entry choices to each native Host's authority map.
 use super::Interface;
-use crate::{artifact::native, protocol::run};
+use crate::{proof as native, run};
 use std::collections::BTreeMap;
 
 type Result<T> = std::result::Result<T, String>;

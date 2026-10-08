@@ -8,7 +8,6 @@
   llvm,
   source,
   fetchSource,
-  withPcl ? false,
   pin ? (builtins.fromJSON (builtins.readFile ../compiler/adapters/llzk/pins.json)).llzk-current,
 }:
 let
@@ -44,7 +43,7 @@ let
       "-DClang_DIR=${lib.getDev llvm.libclang}/lib/cmake/clang"
       "-DMLIR_TABLEGEN_EXE=${llvm.tblgen}/bin/mlir-tblgen"
       "-DLLVM_TABLEGEN_EXE=${llvm.tblgen}/bin/llvm-tblgen"
-      "-DLLZK_WITH_PCL=${if withPcl then "ON" else "OFF"}"
+      "-DLLZK_WITH_PCL=OFF"
       "-DLLZK_ENABLE_BINDINGS_PYTHON=OFF"
       "-DLLZK_TBLGEN_USE_LIBCLANGCPP=ON"
       "-DBUILD_TESTING=OFF"

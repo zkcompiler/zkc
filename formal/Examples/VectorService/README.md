@@ -1,7 +1,7 @@
 # Executable vector service
 
 An independent consumer of the existing typed source and direct-plan semantics,
-used to test native library resolution and request-dependent replies.
+with request-dependent replies and a model-specific executable interface.
 
 | Module | Responsibility |
 |---|---|
@@ -22,6 +22,8 @@ seed; a send returns the required Boolean. Every attempted call increments the
 state counter and emits its request event, even when the tape is empty and the
 call stops with `exhausted`. All example declarations enter the maintained audit.
 
+From `formal/`, with the pinned dependencies prepared:
+
 ```sh
 lake build vector-service
 .lake/build/bin/vector-service check SOURCE PLAN
@@ -33,7 +35,9 @@ numbers; seeds are canonical values below seven. Both finite tree source and
 compact regions use the maintained generic artifact checker. This example adds
 no phase policy, cryptographic security claim or native correctness theorem.
 
-The [native library guide](../../../docs/compiler/libraries.md) explains the
-representation boundary. Differential controls include invalid replies and a
-well-shaped reply that violates the selected provider's value law. Those are native negative controls; Lean's typed reply does
-not acquire malformed values to reproduce a host error as a logical stop.
+The [typed language](Language.lean) fixes the representation and provider laws.
+Earlier native differential controls covered invalid replies and well-shaped
+replies that violated a provider's value law. Those controls are historical,
+unmaintained evidence; the native library route has been retired. A Lean typed
+reply cannot contain a malformed value merely to reproduce a host error as a
+logical stop.

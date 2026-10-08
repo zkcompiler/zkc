@@ -3,6 +3,7 @@ mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::{Policy, Value};
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
     Backend, ErrorCode, LogicalType, PhysicalType, StopKind, Value as RuntimeValue, admit_supplied,
 };
@@ -34,7 +35,7 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
         .map(|(i, _)| format!("out{i}"))
         .collect::<Vec<_>>();
     json!([
-        "zkc.participants/1",
+        "zkc.program/1",
         [
             ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
             [
@@ -72,7 +73,8 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
             [],
             ports,
             results,
-            [["local", "work", "Local", args, names], ["return", names]]
+            [["local", "work", "Local", args, names], ["return", names]],
+            []
         ]],
         [["entry", "main", [["P", "root_P"]]]]
     ])
@@ -270,7 +272,7 @@ fn malformed_descriptor_graphs_name_the_failed_check() {
 }
 
 #[test]
-fn native_active_payload_has_unequal_layouts_and_no_wire_codec() {
+fn native_active_payload_has_unequal_layouts_and_exact_wire_codec() {
     let ty = logical(
         "Unequal",
         json!([
@@ -299,9 +301,15 @@ fn native_active_payload_has_unequal_layouts_and_no_wire_codec() {
     let backend = ark_backend(None);
     for value in [&empty, &scalar, &wide] {
         backend.validate_value(value).unwrap();
-        assert_eq!(
-            backend.encode_value(value).unwrap_err().code,
-            "refused:nonserializable"
+        let bytes = backend.encode_native_value(value).unwrap();
+        let decoded = backend
+            .decode_native_value(&value.physical_type(), &bytes)
+            .unwrap();
+        assert_eq!(backend.encode_native_value(&decoded).unwrap(), bytes);
+        assert!(
+            backend
+                .decode_native_value(&value.physical_type(), &bytes[..bytes.len() - 1])
+                .is_err()
         );
     }
     assert_eq!(
@@ -320,10 +328,10 @@ fn native_active_payload_has_unequal_layouts_and_no_wire_codec() {
     );
     assert_eq!(
         backend
-            .decode_typed_value(empty.physical_type(), b"")
+            .decode_native_value(&empty.physical_type(), b"")
             .unwrap_err()
-            .code,
-        "refused:nonserializable"
+            .to_string(),
+        "native-wire-invalid:length"
     );
     // A value that is not a variant has no alternative to unpack.
     assert_eq!(
@@ -454,9 +462,13 @@ fn nested_affine_rng_crosses_only_selected_frames_and_keeps_authority() {
         ]),
     );
     let mut backend = ark_backend(None);
-    let rng = backend.issue_rng(domain(), 2).unwrap();
+    let rng = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     let old = rng.clone();
-    let outside = backend.issue_rng(domain(), 7).unwrap();
+    let outside = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 7)
+        .unwrap();
     let before = backend.observe(token(&outside)).unwrap();
     let (out, backend) = run(&bytes(&j), backend, vec![rng]);
     let out = out.unwrap();
@@ -504,7 +516,9 @@ fn terminal_stops_bypass_other_arms_and_preserve_categories() {
             ]),
         );
         let mut backend = ark_backend(None);
-        let rng = backend.issue_rng(domain(), 2).unwrap();
+        let rng = backend
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 2)
+            .unwrap();
         let old = rng.clone();
         let (out, backend) = run(&bytes(&j), backend, vec![rng]);
         let stop = out.unwrap_err();
@@ -637,7 +651,7 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     let error = admit_supplied(&bytes(&entry), &backend).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
-        (ErrorCode::Type, "variant-participant-boundary")
+        (ErrorCode::Signature, "operand type x")
     );
     let mut send = base.clone();
     send[3][0][3] = json!([ty]);
@@ -648,11 +662,8 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
         ["return", []]
     ]);
     send[4][0][6] = json!([]);
-    let error = admit_supplied(&bytes(&send), &backend).unwrap_err();
-    assert_eq!(
-        (error.code, error.detail.as_str()),
-        (ErrorCode::Type, "nonserializable message type")
-    );
+    // An immutable sum of native public data is a valid native message.
+    assert!(admit_supplied(&bytes(&send), &backend).is_ok());
 }
 
 #[test]
@@ -758,7 +769,9 @@ fn active_retained_bytes_and_resource_exhaustion_stay_terminal() {
         ]),
     );
     let mut backend = ark_backend(None);
-    let r = backend.issue_rng(domain(), 0).unwrap();
+    let r = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 0)
+        .unwrap();
     let old = r.clone();
     let (out, backend) = run(&bytes(&j), backend, vec![r]);
     assert!(
@@ -869,7 +882,9 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
     );
     for upper in [0, 1] {
         let mut backend = ark_backend(None);
-        let rng = backend.issue_rng(domain(), 4).unwrap();
+        let rng = backend
+            .issue_rng_for(Identity::Bls12381Fr, domain(), 4)
+            .unwrap();
         let old = rng.clone();
         let (out, backend) = run(
             &bytes(&j),
@@ -951,7 +966,10 @@ fn private_match_cannot_schedule_transcript_challenges() {
     let ty = physical("Private", json!([["a", []], ["b", []]]));
     let transcript = "transcript:merlin3.bls12-381.fr64be/1@host.resource/1";
     let mut j = fixture(
-        json!([["t", transcript]]),
+        json!([
+            ["t", transcript],
+            ["coordinates", "indices@native.indices/1"]
+        ]),
         json!([]),
         json!([
             ["variant", "pack", ty, "a", [], "v"],
@@ -959,7 +977,7 @@ fn private_match_cannot_schedule_transcript_challenges() {
                 "match",
                 "case",
                 "v",
-                ["t"],
+                ["t", "coordinates"],
                 [
                     [
                         "a",
@@ -969,8 +987,8 @@ fn private_match_cannot_schedule_transcript_challenges() {
                                 "op",
                                 "challenge",
                                 "challenge",
-                                ["Protocol", "instance", "P", "V", "site"],
-                                ["t"],
+                                common::transcript_attributes("query", "Source", "draw", "P", "V"),
+                                ["t", "coordinates"],
                                 ["x", "next"]
                             ],
                             ["yield", []]
@@ -985,9 +1003,9 @@ fn private_match_cannot_schedule_transcript_challenges() {
     );
     j[1].as_array_mut().unwrap().push(json!([
         "challenge",
-        "transcript.challenge",
+        "transcript.native.indexed.challenge",
         ["merlin3.bls12-381.fr64be/1"],
-        "arkworks/transcript.challenge"
+        "arkworks/transcript.native.indexed.challenge"
     ]));
     let mut outside_match = j.clone();
     outside_match[3][0][4] = json!([j[3][0][4][1][4][0][2][0], ["return", []]]);
@@ -999,7 +1017,7 @@ fn private_match_cannot_schedule_transcript_challenges() {
 #[test]
 fn shared_descriptor_graph_refusal_corpus() {
     let cases: Json = serde_json::from_str(include_str!(
-        "../../../tests/fixtures/variants/descriptors.json"
+        "../../zkc-test-support/fixtures/variants/descriptors.json"
     ))
     .unwrap();
     for row in cases.as_array().unwrap() {

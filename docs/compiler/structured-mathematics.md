@@ -3,7 +3,7 @@
 This design is implemented for the closed subset specified in
 [structured native mathematics](../spec/profiles/compiler/structured-mathematics.md).
 That profile owns exact signatures, limits, codecs and checked compilation;
-[status](../status.md#native-mathematical-protocol-path) records coverage and
+[status](../status.md#foundation-capability-map) records coverage and
 the [roadmap](../roadmap.md) owns remaining work.
 
 ## One program, retained mathematical meaning
@@ -250,7 +250,7 @@ no performance gain. Another executable representation needs a concrete consumer
 This formal-polynomial subset admits flat expressions and static finite data. Retain the
 [flat SSA decision](../rationale/flat-mathematical-ssa.md). Generic collection regions, `tensor.generate`, authored `linalg` and higher-order
 polynomial functions remain outside this subset. Dynamic tensors and structured
-control have their own [foundation contracts](ir-foundation.md#aggregate-and-shape-contract). A universal `compute` wrapper or `at<T,A>` type is not
+control have their own [foundation contracts](../spec/profiles/compiler/structured-iteration.md). A universal `compute` wrapper or `at<T,A>` type is not
 required by the selected subset.
 
 Before any region mathematics is admitted, availability, helper summaries,
@@ -259,6 +259,6 @@ covering operands and free body captures. Region bodies also need positive
 totality and index/bounds rules. The current direct-operand interface is correct
 only for its admitted flat scope.
 
-The [decision checkpoints](../roadmap.md#design-checkpoints) name when
+The [decision checkpoints](../roadmap.md#extend-on-demonstrated-demand) name when
 to reconsider these choices. They do not promise every deferred feature or
 prevent a counterexample from reopening the design earlier.

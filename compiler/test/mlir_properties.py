@@ -5,7 +5,7 @@ import re
 
 from cases import case
 from commands import Commands
-from tools import ROOT, corpus, records
+from tools import ROOT, records
 
 
 commands = Commands(records())
@@ -45,80 +45,35 @@ def reject_both(label, text, code=UNKNOWN, export="protocol-export"):
         commands.source(export, text, refuses=code)
 
 
-source = (corpus / "local-control.pir").read_text()
-for mode, import_command, families in (
-    ("common", "protocol-import", (
-        ("protocol.module", "profile"),
-        ("local.binding", "contract"),
-        ("protocol.exec_func", "sym_name"),
-        ("protocol.instance", "protocol"),
-        ("protocol.entry", "targets"),
-        ("protocol.local_call", "callee"),
-        ("algebra.exec.field_add", "binding"),
-        ("local.if", "site"),
-        ("local.for", "site"),
-    )),
-    ("physical", "protocol-physical-ir", (
-        ("protocol.module", "profile"),
-        ("protocol.participant", "instance"),
-        ("plan.kernel", "site"),
-        ("local.if", "site"),
-        ("local.for", "site"),
-    )),
+source = (ROOT / "compiler/test/fixtures/mathematical/local-execution.mlir").read_text()
+for mode, options, families in (
+    ("mathematical", [], (
+        ("protocol.module", "profile"), ("local.binding", "contract"),
+        ("protocol.func", "sym_name"), ("protocol.local_call", "callee"),
+        ("algebra.exec.field_add", "binding"), ("local.if", "site"))),
+    ("physical", ["--zkc-participant-pipeline"], (
+        ("protocol.module", "profile"), ("protocol.participant", "instance"),
+        ("protocol.entry", "targets"), ("plan.kernel", "site"),
+        ("local.if", "site"))),
 ):
-    ir = commands.source(import_command, source)
-    with case(f"{mode}: valid properties and typed operation registration"):
+    ir = commands.verified(source, None, *options, "--mlir-print-op-generic")
+    if mode == "physical":
         expected = json.loads(commands.source("protocol-export", ir))
         printed = commands.verified(ir)
         assert json.loads(commands.source("protocol-export", printed)) == expected
-
     for operation, required in families:
         reject_both(f"{mode}: {operation} extra field", extra(ir, operation))
         typo = properties(ir, operation, lambda fields: re.sub(
             rf"\b{required}\s*=", f"{required}_typo =", fields, count=1))
         reject_both(f"{mode}: {operation} required-field typo", typo)
-
-    # A namespaced key is still unknown when placed in the owned dictionary.
     reject_both(f"{mode}: namespaced property",
                 extra(ir, "protocol.module", "debug.note"))
-
-    with case(f"{mode}: ordinary unknown module attribute stays refused"):
-        prefix, suffix = ir.rsplit("}) : () -> ()", 1)
-        ordinary = prefix + '}) {surprise = "retained"} : () -> ()' + suffix
-        commands.source("protocol-export", ordinary,
-                        refuses="interactive-module")
-
-    # Property-free terminators already reject nonempty property dictionaries
-    # in MLIR itself. The asserted prose here belongs to upstream MLIR, not a
-    # stable zkc identifier. Do not turn this into a successful no-op.
     no_fields = re.sub(r'("local.yield"\([^\n)]*\))',
                        r'\1 <{surprise = "must-not-disappear"}>', ir, count=1)
     assert no_fields != ir
     reject_both(f"{mode}: empty property schema", no_fields, "empty properties")
 
-common = commands.source("protocol-import", source)
-with case("discardable debug metadata survives optimizer"):
-    # protocol.module already has a closed exporter schema. Use an operation that
-    # admits discardable metadata so this tests preservation of that policy.
-    metadata = '''module {
-      "claim.kind"() <{sym_name = "K", types = [], meaning = "example"}>
-        {debug.note = "retained"} : () -> ()
-    }'''
-    assert 'debug.note = "retained"' in commands.verified(metadata)
-
-with case("ordinary unknown operation attribute stays refused"):
-    match = re.search(r'"algebra.exec.field_add"[^\n]*?\}>', common)
-    assert match
-    ordinary = (common[:match.end()] + ' {surprise = "retained"}'
-                + common[match.end():])
-    commands.source("protocol-export", ordinary,
-                    refuses="interactive-unknown-attribute")
-
-# The registration policy also covers dialects absent from this protocol.
-# These deliberately incomplete operations must fail at property conversion,
-# before their operand/type/domain verifiers could reject the incomplete shape.
-for operation in ("poly.exec.fold", "pcs.exec.commit", "oracle.exec.commit", "claim.kind",
-                  "relation.r1cs"):
+for operation in ("poly.exec.fold", "pcs.exec.commit", "oracle.exec.commit", "relation.r1cs"):
     malformed = (f'module {{ "{operation}"() '
                  '<{surprise = "must-not-disappear"}> : () -> () }')
     reject_both(f"{operation}: conversion precedes verification", malformed)

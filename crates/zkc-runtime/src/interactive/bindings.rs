@@ -12,16 +12,6 @@ fn representation_error(detail: &str) -> AdmissionError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ArtifactFormat {
-    ExplicitBindings = 0,
-    Program = 2,
-}
-impl ArtifactFormat {
-    pub fn is_program(self) -> bool {
-        self == Self::Program
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Identity {
     None,
     Bn254Fr,
@@ -825,10 +815,8 @@ impl PhysicalType {
         ) && self.logical.is_native_message_data()
             && Self::default_for(self.logical.clone()).ok().as_ref() == Some(self)
     }
-    pub(super) fn is_message_type(&self, format: ArtifactFormat) -> bool {
-        self.is_serializable()
-            || (format.is_program()
-                && (self.has_native_array_frame() || self.has_native_data_frame()))
+    pub(super) fn is_message_type(&self) -> bool {
+        self.is_serializable() || self.has_native_array_frame() || self.has_native_data_frame()
     }
     pub fn is_serializable(&self) -> bool {
         self.kind().is_serializable()

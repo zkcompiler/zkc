@@ -29,7 +29,7 @@ cones, and records input hashes for the current checkout. It permits only
 consumer objects are built in the new output directory.
 
 Run it with `just test-lean`. The [workflow](../../../.github/workflows/ci.yml)'s
-manual `main` scope also runs it; pull-request checks do not build Lean.
+manual `optional` formal-checks scope also runs it; pull-request checks do not build Lean.
 
 ## Reproduce
 

@@ -817,8 +817,6 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     if (failed(lowerRecipes(unit, generated, symbols)))
       return signalPassFailure();
     unit.setProfile(protocol_ir::Profile::Exec);
-    unit.setExecutionContractAttr(protocol_ir::ExecutionContractAttr::get(
-        &getContext(), protocol_ir::ExecutionContract::Program));
     if (failed(verify(*candidate)) ||
         failed(verifyProjectionPreserved(source, *candidate)))
       return signalPassFailure();

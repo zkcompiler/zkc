@@ -36,7 +36,7 @@ Any future noninteractive instantiation must specify when and how it is fixed.
 
 | Candidate | Decision and reason |
 |---|---|
-| Explicit transcript transformation | Selected in the [native proof design](native-proofs.md): analyze retained common source, emit role-local affine calls after projection, and admit exact host-created transcript resources. Selected construction and independent execution are implemented under proof policies `/1`–`/4`. |
+| Explicit transcript transformation | Selected in the [native proof design](native-proofs.md): analyze retained common source, emit role-local affine calls after projection, and admit exact host-created transcript resources. Selected construction and independent execution are implemented under the single proof policy `/4`. |
 | Pure deterministic derivation on role-family values | Not selected as the execution representation. It does not preserve affine custody, stopped prefixes or transition accounting by itself. A suite-specific mathematical interpretation can still support later analysis. |
 | Verifier-view analysis | Implemented at the bounded scope below. It detects missing actual input binding on existing clients and changed challenge edges in synthetic controls; it specifies the values a construction must account for. |
 | Algebraic completeness/special soundness | Defer until a client needs an interpreted relation ideal or a two-transcript extraction experiment. Existing scalar Schnorr examples and exact Sumcheck correspondence do not supply that extractor experiment or imply those analyses. |
@@ -63,8 +63,8 @@ and exact emitted bundle, while preserving the narrower structural claim.
 ## Adopted construction boundary
 
 The [native proof profile](../spec/profiles/compiler/native-proofs.md) fixes the
-selected independent execution and construction boundary. The [supported policies](native-proofs.md#supported-policies-and-formats)
-cover flat, iterated, committed and structured clients. Broader automatic
+selected independent execution and construction boundary. The [single policy](native-proofs.md#policy-and-formats)
+covers flat, iterated, committed and structured clients. Broader automatic
 derivation and new security theorems remain separate work. This public-coin report
 keeps its existing meaning and does not itself authorize the construction.
 
@@ -78,7 +78,7 @@ analyzer is separate from retaining these inputs and from placement correctness.
 Construction checks source draw/delivery pairing, complete public bindings and
 actual candidate operands against the retained source. It then threads explicit
 state in each projected role, avoiding a new common role-family assembly
-operation. The flat profile supplies authorized public values to the host
+operation. The construction supplies authorized public values to the host
 for transcript-root initialization and adds no participant data inputs. Private
 verifier inputs are not silently disclosed. Iterated prefixes and local public replay
 recipes require extensions beyond the current static report. Diagnostic sites

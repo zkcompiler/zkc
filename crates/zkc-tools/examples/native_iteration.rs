@@ -3,20 +3,16 @@
 //! protocol and its arithmetic, independently of the generated dispatch plan.
 use std::collections::BTreeMap;
 use zkc_backends::services::{ServiceObservation, ServiceReference, ServiceRegistry};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Value};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 
 use zkc_runtime::interactive::Value as RuntimeValue;
-use zkc_tools::protocol::run::*;
+use zkc_tools::run::*;
 
 fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new(role, session, entry, None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new(role, session, entry, None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -137,7 +133,6 @@ fn run_case(
         .collect();
     assert!(values.is_empty());
     let report = run(bundle, session, inputs, RunLimits::default(), audit).unwrap();
-    assert!(bundle.admitted().checked_source().is_none());
     assert!(audit.after.values().flatten().all(|o| !o.leased));
     report
 }

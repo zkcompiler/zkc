@@ -3,14 +3,15 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc_tools::{
-    artifact::native::NativeCapacity,
     entry::{self, NamedValues, ProofRequest, SetupAuthority},
+    proof::NativeCapacity,
 };
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
-fn named(values: &NamedValues) -> Json {
-    let bytes = entry::files::proof_outputs(values, NativeCapacity::default()).unwrap();
+fn named(values: &NamedValues, registry: &zkc_backends::SetupRegistry) -> Json {
+    let bytes =
+        entry::files::proof_outputs(values, NativeCapacity::default(), registry.clone()).unwrap();
     serde_json::from_slice::<Json>(&bytes).unwrap()["values"].take()
 }
 fn save(directory: &Path, name: &str, value: &Json) -> String {
@@ -25,6 +26,9 @@ pub(super) fn setups(
     authority: SetupAuthority,
     keys: Vec<(Vec<u8>, [u8; 32])>,
 ) {
+    let registry =
+        entry::files::output_setups(&producer.setups, &authority, NativeCapacity::default())
+            .unwrap();
     let mut imports = Vec::new();
     for (i, (bytes, pin)) in keys.into_iter().enumerate() {
         let name = format!("pk{i}");
@@ -33,7 +37,7 @@ pub(super) fn setups(
         std::fs::write(&path, bytes).unwrap();
         imports.push((name, json!({"path":path,"sha256":hex(&pin)})));
     }
-    let mut producer_values = named(&producer.private.inputs);
+    let mut producer_values = named(&producer.private.inputs, &registry);
     for (name, value) in imports {
         producer_values[&name] = value;
     }
@@ -42,11 +46,11 @@ pub(super) fn setups(
         .iter()
         .map(|(k, v)| (k.clone(), json!(hex(v))))
         .collect();
-    let public = named(&producer.public);
+    let public = named(&producer.public, &registry);
     for name in public.as_object().unwrap().keys() {
         producer_values.as_object_mut().unwrap().remove(name);
     }
-    let mut verifier_values = named(&verifier.private.inputs);
+    let mut verifier_values = named(&verifier.private.inputs, &registry);
     let producer_file = save(
         directory,
         "cli-producer.json",

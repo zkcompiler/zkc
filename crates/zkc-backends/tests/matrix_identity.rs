@@ -101,7 +101,7 @@ fn exact_content_binding_all_carriers_and_wire_roundtrip() {
         assert!(check(d, m.clone(), known));
         let b = backend(Policy::default());
         let decoded = b
-            .decode_typed_value(m.physical_type(), &b.encode_value(&m).unwrap())
+            .decode_native_value(&m.physical_type(), &b.encode_native_value(&m).unwrap())
             .unwrap();
         assert!(check(d, decoded, known));
         // Actual same-shape, same-nnz coefficient mismatch, not a shape refusal.

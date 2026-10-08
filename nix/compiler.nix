@@ -35,10 +35,8 @@ stdenv.mkDerivation {
   ];
   doCheck = true;
   postInstall = ''
-    mkdir -p "$testSupport/bin/examples/service" "$testSupport/bin/test"
-    ln -s "$out/bin/zkc-compile" "$out/bin/zkc-opt" "$testSupport/bin/"
-    cp zkc-source-bench "$testSupport/bin/"
-    find examples/service -maxdepth 1 -type f -executable -exec cp {} "$testSupport/bin/examples/service/" \;
+    mkdir -p "$testSupport/bin/test"
+    ln -s "$out/bin/zkc-compile" "$out/bin/zkc-opt" "$out/bin/zkc-tblgen" "$testSupport/bin/"
     find test -maxdepth 1 -type f -executable -exec cp {} "$testSupport/bin/test/" \;
   '';
   meta = {

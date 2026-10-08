@@ -2,21 +2,15 @@
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use zkc_backends::{
-    Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Sequence, Value, Variant,
-};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value, Variant};
 use zkc_runtime::interactive::LogicalType;
-use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_tools::proof::{NativeDeployment, hex};
 
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "relations", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "relations", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -264,7 +258,9 @@ fn main() {
         let family = case["family"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+        let deployment =
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap();
         let config_type = LogicalType::parse(envelope[2][4][0][2].as_str().unwrap()).unwrap();
         let data = |n, change| {
             let values = if family == "r1cs" {

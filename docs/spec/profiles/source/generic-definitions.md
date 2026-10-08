@@ -1,12 +1,10 @@
 # Generic requirements and type instantiation
 
-This profile specifies constrained generic source, its native elaboration and
-the mechanized static foundation. It extends
-[resolved source definitions](definitions.md). Native execution has independent
-backend admission and bounded original-source executable correspondence checks;
-raw/native elaboration adequacy remains unproved.
-The implementation decision is in
-[the compiler carrier](../../../compiler/specialization.md).
+This profile specifies the independent static model of requirements and typed
+instantiation used by [resolved source definitions](definitions.md). Its Lean
+laws concern the stated interpretation and derivation rules. Current `.zkc`
+generics are specified by [Language](mathematical-language.md); these theorems
+do not establish its native elaboration correctness.
 
 ## Requirement meaning
 
@@ -103,9 +101,8 @@ shapes, extra/missing premises and forward/self references refuse the entire
 certificate, even if all requested answers are unresolved. No checker trusts the
 producer's search procedure.
 
-Each checker replays this rule set independently of the producer. The
-separate execution-bound claim contract/certificate service is unaffected by
-this carrier.
+The independent model checker replays this rule set against the supplied
+request and candidate certificate.
 
 The executable replay profile also bounds expanded work before interpreting the
 indexed term DAG. A root has weight 1, a projection 1 plus its parent's weight,
@@ -149,98 +146,3 @@ Substituting associated operation meanings, interning/sharing native code,
 preserving logical source origins, physical representation conversion and generic
 portable parsing each require their own checked connection. Existing execution
 relations supply the target obligations; these are not discharged by this theorem.
-
-## Native definitions and configurations
-
-The readable development frontend retains generic source before specialization:
-
-```text
-use zkc::poly;
-fn Fold<F: domain Field>(table: poly::Table<F>, r: F::Element) -> poly::Table<F>
-    requires (CommRing(F)) {
-  [r#fold] let result = poly::r#fold::<F>(table, r);
-  return result;
-}
-configure Partial = Fold();
-configure Direct = Partial(F = "bls12-381.fr");
-configure OtherLayout = Partial(F = "bls12-381.fr")
-    using (r#fold = "arkworks-msb/poly.fold");
-```
-
-`F: domain Field` declares only the sort of a static identity. `CommRing(F)` is an
-algebraic requirement, not a runtime field object. An operation has explicit static term
-arguments and ordinary SSA operands. Empty static argument lists support helpers
-such as `Both<>` with no cryptographic dependencies. Associated members retain
-their own sorts: `G::Scalar`, `C::ValueField`, `C::PointField`,
-`C::EvaluationField` and `T::ChallengeField` do not acquire generic equality merely
-because the current finite installation uses the same field for them.
-
-Formation checks every definition, including unused definitions. It checks
-parameter/member sorts, installed predicate arities, SSA signatures, affine
-operand use and `Q entails R`. The current executable body fragment is a sequence
-of installed operations and acyclic local `apply` applications followed by a
-return. Symbolic control regions and arbitrary user-declared capability predicates
-are outside this authoring fragment; the typed theorem covers a richer language.
-
-Installed constructor and operation parameters distinguish nominal domain sorts,
-`Type` and `Nat`. `Type` and `Nat` are reserved kind tokens, not domain identities
-or capability predicates. Native scopes represent constructor applications in
-the same ordered term DAG as the requirement checker: every child precedes its
-parent, and derived applications are not configuration roots. Canonical natural
-constants and closed logical type constants retain their kinds. A type application
-substitutes all arguments recursively; its identity cannot be reduced to its
-first domain parameter. For example, `FixedVector<F::Element, N>` retains both
-the field-element type and the length after configuration and participant
-projection. [Logical type formation](operation-bindings.md#carrier) owns its
-closed spelling and bounds.
-
-The existing congruence rules compare these applications. They do not infer
-constructor injectivity, compute natural arithmetic, or solve type equations
-backwards. Unknown Type parameters conservatively withhold copy/drop permissions.
-This executable kinded instantiation support does not add a theorem equating
-the native frontend with the Lean source model.
-
-A generic application `apply [site] (outputs) = Helper<F>(inputs);` substitutes
-ordered static terms into the target generic signature. A configuration target
-uses the same rule for only its residual parameters, in base declaration order.
-Fixed parameters become nominal constants, not caller arguments or invented
-capabilities. Ground obligations are validated against the installed domains;
-all residual obligations must follow from the caller's public requirements.
-Operand and result equality obligations and affine consumption are checked by
-the same inference discipline as primitive operations. The whole declaration
-graph, including unused definitions and configuration-resolved edges, must be
-acyclic and satisfy the bounded depth profile. Implementation choices at helper
-application sites are refused; the target configuration owns its primitive
-choices. See [canonical local expansion](../compiler/local-algorithms.md).
-
-Configurations are immutable and acyclic. They may leave parameters unresolved
-and inherit an earlier configuration, but cannot rebind an assigned parameter.
-All configurations are checked, including unused ones: known nominal
-contradictions and ineligible fixed implementations are errors. Requirements
-depending on unresolved parameters remain pending. Equality closure must also
-reject a contradiction derived through an unresolved term.
-
-Demand from a protocol-local call requires complete bindings and closes over
-nested helper applications. An ordinary closed function can also call a generic
-definition or configuration with concrete residual identities. Elaboration emits
-closed functions and operation bindings, preserving mathematical operation
-boundaries and retaining local calls for explicit MLIR expansion. Equivalent
-definition/static-binding/implementation selections share
-code. Physical variants retain the same logical origin; different runtime calls
-retain their own dynamic origins and resource views. An unused partial
-configuration emits no executable function.
-
-The retained interchange is:
-
-```text
-["zkc.library/1", generic_definitions, configurations, closed_common]
-generic = ["generic_function", name, parameters, requirements, inputs, outputs, body]
-configuration = ["configure", name, base, assignments, implementation_choices]
-```
-
-Elaboration produces the [closed explicit-binding `/1` carrier](operation-bindings.md), without
-replacing the retained original source. Generic field constants denote natural
-number casts: the source permits bounded canonical decimal naturals, while
-closed elaboration reduces them modulo the selected field. This literal
-elaboration needs its own source correspondence check; it is not proved by the
-structural type-substitution theorem.

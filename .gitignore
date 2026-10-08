@@ -11,11 +11,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Nix result links, local caches and benchmark records.
+# Nix result links and local caches.
 /result
 /result-*
 .cache/
-/bench/*/records/
 
 # Editor and operating-system metadata.
 .vscode/

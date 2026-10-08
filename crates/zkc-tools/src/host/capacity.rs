@@ -36,7 +36,6 @@ impl NativeCapacity {
             || self.wire_bytes > INPUT_LIMIT
             || self.value_bytes > Limits::VALUE_BYTES
             || self.work.instructions > Limits::INSTRUCTIONS
-            || self.work.calls > Limits::CALLS
             || self.work.iterations > Limits::ITERATIONS
             || self.values.live_bytes > Limits::VALUE_BYTES
             || self.values.total_bytes > Limits::TOTAL_VALUE_BYTES
@@ -65,14 +64,13 @@ impl NativeCapacity {
     /// semantic binding root; changing a quota cannot change successful values.
     pub fn record(&self) -> Json {
         json!([
-            "zkc.native-capacity/1",
+            "zkc.native-capacity/2",
             self.elements.to_string(),
             self.groups.to_string(),
             self.wire_bytes.to_string(),
             self.value_bytes.to_string(),
             [
                 self.work.instructions.to_string(),
-                self.work.calls.to_string(),
                 self.work.iterations.to_string()
             ],
             [
@@ -85,12 +83,12 @@ impl NativeCapacity {
     pub fn parse(bytes: &[u8]) -> Result<Self> {
         let value = parse(bytes, 4096)?;
         let row = array(&value, 7)?;
-        if text(&row[0])? != "zkc.native-capacity/1" {
+        if text(&row[0])? != "zkc.native-capacity/2" {
             return Err("native-capacity-format".into());
         }
         let size =
             |v| usize::try_from(natural(v)?).map_err(|_| String::from("native-capacity-limit"));
-        let work = array(&row[5], 3)?;
+        let work = array(&row[5], 2)?;
         let values = array(&row[6], 2)?;
         let result = Self {
             elements: size(&row[1])?,
@@ -99,8 +97,7 @@ impl NativeCapacity {
             value_bytes: size(&row[4])?,
             work: WorkBudget {
                 instructions: natural(&work[0])?,
-                calls: natural(&work[1])?,
-                iterations: natural(&work[2])?,
+                iterations: natural(&work[1])?,
             },
             values: ValueBudget {
                 live_bytes: size(&values[0])?,

@@ -59,10 +59,10 @@ why that does not establish Fiat–Shamir security. Product-provider `2ε` and
 correlated-service observation laws likewise retain their own subjects.
 
 [Protocol maps](protocols.md) distinguish expression, mathematical,
-wire and native coverage. The [security companion](../roadmap.md#4-the-security-companion)
-tracks native realization of one complete source/property/checked-transformation
-application. Its formal example is maintained; the optimized native artifact and
-its correspondence remain implementation work.
+wire and native coverage. The [transcript assurance direction](../roadmap.md#develop-transcript-assurance)
+requires a fixed native protocol, construction and security experiment. The
+formal examples provide mathematical results to assess against those subjects,
+not an obligation to port their executable references.
 
 ## Judgments, premises and use
 

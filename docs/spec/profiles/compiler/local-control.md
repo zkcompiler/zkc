@@ -2,8 +2,8 @@
 
 This compiler profile extends [local algorithms](local-algorithms.md) with
 isolated conditional, finite-variant match and finite-loop regions. It applies inside local functions,
-not protocol bodies. The readable frontend infers captures and state results;
-portable source, native MLIR and independent admission check them explicitly.
+not protocol bodies. Language checks source captures and state results; native MLIR and executable
+admission check their explicit representation.
 
 ## Formation
 
@@ -71,7 +71,7 @@ charged at the enclosing result bindings. Physical `release` has no instruction
 cost and retains the existing ghost-accounting rule. These are retained-payload
 charges, not measurements of actual allocator memory or constant-time execution.
 
-Native local calls, ingress selectors and nested regions use the same frame
+Native local calls and nested regions use the same frame
 lifecycle. A body stop remains primary when frame cleanup also fails; cleanup
 errors are retained in the actual inner-to-outer order of frame exits. If the
 body succeeds but its cleanup fails, the role stops with that backend error;
@@ -80,12 +80,10 @@ backend transitions are not rolled back by cleanup.
 
 Bound rejection happens before the first body effect. Cumulative iteration or
 instruction exhaustion may occur after earlier effects. Deterministic bound
-rejection is reported as `exhausted:local-bound-limit`
-by Rust and `exhausted` / `local-bound-limit` by Lean. Rust uses a coarse
-machine-limit stop for cumulative budgets; Lean additionally names
-`local-iteration-limit`. Comparisons must retain the stop
-class, reached effect prefix and resource state, not identify all failures with
-ordinary protocol rejection. Interpreter-work limits are separately reported.
+rejection reports `exhausted:local-bound-limit`. Cumulative work exhaustion
+retains its machine-limit cause. Comparisons preserve stop class, reached
+prefix and resource state instead of identifying all failures with rejection.
+Interpreter-work limits are separate.
 
 Helper applications expand recursively before participant projection. Expansion
 retains regions and does not unroll loops. Helpers introduce no runtime frames;
@@ -96,20 +94,16 @@ including helper definitions reachable only inside a region.
 
 ## Analyses and construction
 
-Consumers requiring an unconditional static primitive schedule refuse local
-control with `execution-local-control-static-trace`. The artifact observer's full
-static-manifest mode refuses with `artifact-observer-local-control-unsupported`;
-ordinary execution and artifact execution with tracing disabled retain local
-control. Refusal is preferable to silently flattening both arms or one iteration.
+Analyses traverse every branch and retained body, while execution follows only
+the chosen path. Exact resource-origin checks preserve actual affine successors
+through control; unknown or conflicting origins refuse at the boundary that
+requires them. See [resource origins](../../../compiler/resource-origins.md).
 
-The current Fiat–Shamir constructor preserves an entire local body when its
-boundary and every nested primitive signature contain only duplicable values.
-This includes guards and ordinary fallible computation; it does not imply purity
-or permission to reorder. Resource-bearing control and selected draws inside it
-are refused (`construction-local-control-resource` / `-draw`). A demand to replay
-such a body's output at the other participant is refused (`-replay`). These construction checks are separate from local variant admission's lexical
-history-operation restriction. The latter does not track implicit dataflow
-through a match result into a later conditional. Branch-dependent challenge schedules and cross-role control replay need separate design.
+Native transcript construction applies the selected
+[proof policy](native-proofs.md), including its loop, observation and state-chain
+conditions. Local variant admission independently forbids specified history
+operations inside matches. Neither structural control admission nor a local
+Boolean result proves public transcript schedule safety.
 
 ## Formal interpretation and assurance boundary
 
@@ -120,25 +114,19 @@ adapters check bounds before instantiation. No unbounded process constructor is
 added. Structural laws for a fixed typed region do not by themselves prove raw
 frontend elaboration, candidate decoding or native execution correct.
 
-The independent Lean checker recursively admits source and candidate regions and
-compares their control, types, captures, carries, operations and ordered effects.
-Logical and bounded physical reference execution support differential tests.
-This is not a general refinement theorem for the C++ or Rust implementation,
-nor a cryptographic security or constant-time theorem. See the
-[implementation and evidence](../../../compiler/local-control.md).
+Independent Lean models and model-specific tools interpret their own region and
+carrier contracts. Their correspondence results are separate from the current
+native executable. See [implementation and evidence](../../../compiler/local-control.md).
 
 ## Explicit local stops
 
-The common source carrier spells a role-free local stop as
-`["stop", site, "", reason]`; projected/physical local code spells it as
-`["stop", site, reason]`. A common protocol-body stop supplies its participant
-instead of the empty role. Reasons are `reject`, `abort`, `exhausted`, `incomplete`
-and `refused`. Local source syntax is `stop reason;`. All are terminal, including
-inside a match arm or a called algorithm. They produce no result or fabricated
+Executable local code spells a stop as `["stop", site, reason]`. Reasons are
+`reject`, `abort`, `exhausted`, `incomplete` and `refused`. All are terminal,
+including inside a match or called algorithm. They produce no result or invented
 yield. Continuing alternatives retain their normal result/resource obligations.
 
 ## Conditional completion extension
 
 The native mathematical path also supports [conditional entry completion and
-bounded local termination](entry-completion.md). Its program-only records do
-not extend the legacy carrier or its formal checker.
+bounded local termination](entry-completion.md). Its executable records have no automatic correspondence to an independent
+formal carrier.

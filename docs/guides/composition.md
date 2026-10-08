@@ -62,7 +62,7 @@ transports phase laws through such an interpretation.
 
 Execution preservation alone cannot supply the phase premises. A
 value-dependent guard may require stronger analysis than the current finite
-phase-set checker; [its design guide](../compiler/phase-admission.md) explains
+phase-set checker; [the profile](../spec/profiles/compiler/finite-phases.md#precision-and-unsupported-cases) explains
 that incompleteness.
 
 ## 6. Theory and formal coverage

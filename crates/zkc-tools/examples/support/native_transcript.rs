@@ -92,16 +92,10 @@ pub fn root(envelope: &Json, input: &Json) -> Vec<u8> {
         .zip(envelope[2][4].as_array().unwrap())
         .map(|(v, p)| json!([v[0], v[1], p[2], v[2]]))
         .collect::<Vec<_>>();
-    let version = envelope[0].as_str().unwrap().rsplit('/').next().unwrap();
-    let iterated = version != "1";
     tree(&json!([
-        format!("zkc.native-proof-binding/{version}"),
+        "zkc.native-proof-binding/4",
         "sha256",
-        if iterated {
-            "zkc.native-origin/2"
-        } else {
-            "zkc.native-origin/1"
-        },
+        "zkc.native-origin/2",
         envelope[1],
         policy[1],
         policy[2],

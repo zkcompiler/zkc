@@ -1,6 +1,6 @@
 use super::model::LogicalOrigin;
 use super::{BoundSignature, OperationBinding, Origin, PhysicalType, ResolvedBinding};
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{fmt, sync::Arc};
 
 /// Trusted adapter value, preferably an enum of typed immutable/Arc-backed values.
 /// Cloning a capability copies its handle, never its issuance authority or state.
@@ -79,7 +79,6 @@ impl FrameId {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameKind {
     Entry,
-    Call { site: String },
     Loop { site: String, iteration: u64 },
     Local { site: String, function: String },
 }
@@ -97,7 +96,6 @@ pub struct Frame {
     pub(crate) parent: Option<FrameId>,
     pub(crate) role: String,
     pub(crate) origin: Origin,
-    pub(crate) parameters: Arc<BTreeMap<String, u64>>,
     pub(crate) kind: FrameKind,
     pub(crate) inputs: Vec<(String, PhysicalType)>,
     pub(crate) services: Vec<super::ServicePort>,
@@ -120,9 +118,6 @@ impl Frame {
     }
     pub fn origin(&self) -> &Origin {
         &self.origin
-    }
-    pub fn parameters(&self) -> &BTreeMap<String, u64> {
-        &self.parameters
     }
     pub fn kind(&self) -> &FrameKind {
         &self.kind
@@ -163,11 +158,7 @@ impl Invocation<'_> {
             self.site,
             [binding.contract, serde_json::json!(binding.arguments)],
             self.attributes,
-            self.frame
-                .parameters
-                .iter()
-                .map(|(k, v)| [k.clone(), v.to_string()])
-                .collect::<Vec<_>>()
+            []
         ]))
         .expect("string/array domain serialization cannot fail")
     }
@@ -252,21 +243,19 @@ pub trait Backend {
 #[cfg(test)]
 mod domain_tests {
     use super::*;
-    use crate::interactive::{ArtifactFormat, LogicalOrigin, OperationBinding};
+    use crate::interactive::{LogicalOrigin, OperationBinding};
 
-    fn frame(format: ArtifactFormat, function: &str) -> Frame {
+    fn frame(function: &str) -> Frame {
         Frame {
             id: FrameId(3),
             parent: Some(FrameId(1)),
             role: "P".into(),
             origin: Origin {
-                format,
                 session: "s".into(),
                 entry: "main".into(),
                 instance: "root".into(),
                 path: vec![],
             },
-            parameters: Arc::new(BTreeMap::from([("n".into(), 2)])),
             kind: FrameKind::Local {
                 site: "round".into(),
                 function: function.into(),
@@ -292,8 +281,8 @@ mod domain_tests {
         };
         let lsb = binding("arkworks/poly.fold");
         let msb = binding("arkworks-msb/poly.fold");
-        let a = frame(ArtifactFormat::ExplicitBindings, "generated_lsb");
-        let mut b = frame(ArtifactFormat::ExplicitBindings, "generated_msb");
+        let a = frame("generated_lsb");
+        let mut b = frame("generated_msb");
         let domain =
             |frame: &Frame, binding: &ResolvedBinding, origin: &LogicalOrigin, site: &str| {
                 Invocation {
@@ -329,7 +318,7 @@ mod domain_tests {
             definition: "Add".into(),
             arguments: vec![],
         };
-        let frame = frame(ArtifactFormat::ExplicitBindings, "add");
+        let frame = frame("add");
         let bytes = Invocation {
             frame: &frame,
             site: "op",
@@ -349,7 +338,7 @@ mod domain_tests {
             "op",
             ["field.add", ["bls12-381.fr"]],
             [],
-            [["n", "2"]]
+            []
         ]);
         assert_eq!(bytes, serde_json::to_vec(&expected).unwrap());
     }

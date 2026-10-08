@@ -6,10 +6,7 @@ class DialectRegistry;
 class MLIRContext;
 } // namespace mlir
 namespace zkc {
-enum class InvocationPrecondition {
-  LoadedProtocolDialects,
-  LoadedTableDialect
-};
+enum class InvocationPrecondition { LoadedProtocolDialects };
 /// An embedding configuration failure, not a semantic source refusal.
 class DialectRegistrationError
     : public llvm::ErrorInfo<DialectRegistrationError> {
@@ -26,13 +23,9 @@ public:
   }
 };
 
-/// Register protocol, mathematical and executable dialects, standard func/arith
-/// and mathematical interface models, plus installed contributions.
-/// The finite-table dialect and source library models are excluded.
-void registerNativeDialects(mlir::DialectRegistry &registry);
-/// Register all built-in dialects; source library models remain opt-in.
+/// Register all native mathematical and execution dialects and interfaces.
 void registerDialects(mlir::DialectRegistry &registry);
-/// Test the protocol import precondition (independent of Table and arith)
+/// Test the native dialect registration precondition
 /// without loading dialects or changing the
 /// context.
 bool hasProtocolDialects(mlir::MLIRContext &context);

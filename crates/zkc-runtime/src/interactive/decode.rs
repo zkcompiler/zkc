@@ -1,7 +1,5 @@
 use super::model::*;
-use super::{
-    ArtifactFormat, OperationBinding, PhysicalType, ResolvedBinding, ServiceContract, ServicePort,
-};
+use super::{OperationBinding, PhysicalType, ResolvedBinding, ServiceContract, ServicePort};
 use serde_json::Value as Json;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -121,53 +119,7 @@ fn name(v: &Json) -> Result<String> {
 pub(crate) fn canonical_decimal(s: &str) -> bool {
     !s.is_empty() && (s.len() == 1 || !s.starts_with('0')) && s.bytes().all(|b| b.is_ascii_digit())
 }
-fn family_ingress(value: &Json) -> Result<FamilyIngress> {
-    let fields = record(value, "ingress", 3)?;
-    let spelling = string(&fields[1])?;
-    if !canonical_decimal(spelling) {
-        return Err(err(ErrorCode::Parameters, "interactive-family-binding"));
-    }
-    // A canonical natural past the limit is out of bound however large.
-    let bound = spelling
-        .parse::<u64>()
-        .ok()
-        .filter(|bound| *bound <= Limits::PARAMETER)
-        .ok_or_else(|| err(ErrorCode::Parameters, "interactive-family-bound"))?;
-    let mut selectors = BTreeMap::new();
-    for item in list(&fields[2], Limits::PORTS)? {
-        let pair = array(item)?;
-        if pair.len() != 3 {
-            return Err(err(ErrorCode::Parameters, "interactive-family-binding"));
-        }
-        let role = name(&pair[0])?;
-        if selectors.contains_key(&role) {
-            return Err(err(ErrorCode::Parameters, "interactive-family-roles"));
-        }
-        let function = name(&pair[1])?;
-        let arguments = names(&pair[2])?;
-        if arguments
-            .iter()
-            .collect::<std::collections::BTreeSet<_>>()
-            .len()
-            != arguments.len()
-        {
-            return Err(err(ErrorCode::Parameters, "interactive-family-argument"));
-        }
-        insert(
-            &mut selectors,
-            role,
-            FamilySelector {
-                function,
-                arguments,
-            },
-            ErrorCode::Parameters,
-        )?;
-    }
-    if selectors.is_empty() {
-        return Err(err(ErrorCode::Parameters, "interactive-family-roles"));
-    }
-    Ok(FamilyIngress { bound, selectors })
-}
+
 fn natural(v: &Json) -> Result<u64> {
     let s = string(v)?;
     if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
@@ -208,7 +160,6 @@ fn insert<T>(map: &mut BTreeMap<String, T>, key: String, value: T, code: ErrorCo
     Ok(())
 }
 struct Decoder {
-    format: ArtifactFormat,
     bindings: BTreeMap<String, Arc<ResolvedBinding>>,
     instructions: usize,
     types: BTreeMap<String, PhysicalType>,
@@ -278,7 +229,7 @@ impl Decoder {
             self.charge()?;
             let a = array(v)?;
             body.push(match a.first().and_then(Json::as_str) {
-                Some("bool_constant") if self.format.is_program() => {
+                Some("bool_constant") => {
                     let a = record(v, "bool_constant", 4)?;
                     LocalInstruction::BoolConstant {
                         site: name(&a[1])?,
@@ -360,9 +311,7 @@ impl Decoder {
                         outputs: names(&a[6])?,
                     }
                 }
-                Some(tag @ "for") | Some(tag @ "for_while")
-                    if tag == "for" || self.format.is_program() =>
-                {
+                Some(tag @ "for") | Some(tag @ "for_while") => {
                     let a = record(v, tag, 9)?;
                     LocalInstruction::For {
                         conditional: tag == "for_while",
@@ -456,42 +405,17 @@ impl Decoder {
                         ty: self.physical_type(&a[5])?,
                     }
                 }
-                Some("call") => {
-                    let a = record(v, "call", 5)?;
-                    Instruction::Call {
-                        site: name(&a[1])?,
-                        participant: name(&a[2])?,
-                        inputs: names(&a[3])?,
-                        outputs: names(&a[4])?,
-                    }
-                }
                 Some("loop") => {
                     let a = record(v, "loop", 7)?;
-                    let count = if a[2].is_array() {
-                        let parts = array(&a[2])?;
-                        if parts.first().and_then(Json::as_str) == Some("value")
-                            && self.format.is_program()
-                        {
-                            let parts = record(&a[2], "value", 4)?;
-                            let maximum = natural(&parts[2])?;
-                            if maximum > Limits::LOOP_COUNT {
-                                return Err(err(ErrorCode::Limit, "loop count ceiling"));
-                            }
-                            Count::Value {
-                                value: name(&parts[1])?,
-                                maximum,
-                                induction: name(&parts[3])?,
-                            }
-                        } else {
-                            let parts = record(&a[2], "parameter", 2)?;
-                            Count::Parameter(name(&parts[1])?)
-                        }
-                    } else {
-                        let n = natural(&a[2])?;
-                        if n > Limits::LOOP_COUNT {
-                            return Err(err(ErrorCode::Limit, "loop count ceiling"));
-                        }
-                        Count::Constant(n)
+                    let parts = record(&a[2], "value", 4)?;
+                    let maximum = natural(&parts[2])?;
+                    if maximum > Limits::LOOP_COUNT {
+                        return Err(err(ErrorCode::Limit, "loop count ceiling"));
+                    }
+                    let count = LoopCount {
+                        value: name(&parts[1])?,
+                        maximum,
+                        induction: name(&parts[3])?,
                     };
                     Instruction::Loop {
                         site: name(&a[1])?,
@@ -502,7 +426,7 @@ impl Decoder {
                         outputs: names(&a[6])?,
                     }
                 }
-                Some("return_if") if self.format.is_program() => {
+                Some("return_if") => {
                     let a = record(v, "return_if", 5)?;
                     Instruction::ReturnIf {
                         site: name(&a[1])?,
@@ -513,21 +437,7 @@ impl Decoder {
                 }
                 Some("yield") => Instruction::Yield(names(&record(v, "yield", 2)?[1])?),
                 Some("return") => Instruction::Return(names(&record(v, "return", 2)?[1])?),
-                Some("stop") => {
-                    let a = record(v, "stop", 3)?;
-                    let reason = string(&a[2])?;
-                    if !matches!(
-                        reason,
-                        "reject" | "abort" | "exhausted" | "incomplete" | "refused"
-                    ) {
-                        return Err(err(ErrorCode::Record, "unknown stop reason"));
-                    }
-                    Instruction::Stop {
-                        site: name(&a[1])?,
-                        reason: reason.to_owned(),
-                    }
-                }
-                Some("query") if self.format.is_program() => {
+                Some("query") => {
                     let a = record(v, "query", 6)?;
                     Instruction::Query {
                         site: name(&a[1])?,
@@ -537,9 +447,6 @@ impl Decoder {
                         outputs: names(&a[5])?,
                     }
                 }
-                Some("incomplete") => Instruction::Incomplete {
-                    site: name(&record(v, "incomplete", 2)?[1])?,
-                },
                 _ => return Err(err(ErrorCode::Record, "unknown participant instruction")),
             };
             body.push(i);
@@ -547,9 +454,8 @@ impl Decoder {
         Ok(body.into())
     }
     fn participant(&mut self, v: &Json) -> Result<Participant> {
-        let native = self.format.is_program();
-        let a = record(v, "participant", if native { 9 } else { 8 })?;
-        let services = if native {
+        let a = record(v, "participant", 9)?;
+        let services = {
             list(&a[8], Limits::PORTS)?
                 .iter()
                 .map(|v| {
@@ -565,37 +471,15 @@ impl Decoder {
                     })
                 })
                 .collect::<Result<Vec<_>>>()?
-        } else {
-            vec![]
         };
-        let mut parameters = BTreeMap::new();
-        let mut families = BTreeMap::new();
-        for v in list(&a[4], Limits::PORTS)? {
-            let p = array(v)?;
-            if p.len() != 2 {
-                return Err(err(ErrorCode::Record, "parameter pair arity"));
-            }
-            let key = name(&p[0])?;
-            if parameters.contains_key(&key) || families.contains_key(&key) {
-                return Err(err(ErrorCode::Parameters, "duplicate family parameter"));
-            }
-            if p[1].is_array() {
-                families.insert(key, family_ingress(&p[1])?);
-                continue;
-            }
-            let value = natural(&p[1])?;
-            if value > Limits::PARAMETER {
-                return Err(err(ErrorCode::Limit, "public parameter ceiling"));
-            }
-            insert(&mut parameters, name(&p[0])?, value, ErrorCode::Parameters)?;
+        if !array(&a[4])?.is_empty() {
+            return Err(err(ErrorCode::Record, "program-parameters-unsupported"));
         }
         Ok(Participant {
             services,
             symbol: name(&a[1])?,
             instance: name(&a[2])?,
             role: name(&a[3])?,
-            parameters,
-            families,
             inputs: self.ports(&a[5])?,
             outputs: self.types(&a[6])?,
             body: self.body(&a[7], 0)?,
@@ -612,8 +496,8 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
     }
     let mut bindings = BTreeMap::new();
     let mut binding_type_bytes = 0usize;
-    let format = match string(&a[0])? {
-        tag @ ("zkc.participants/1" | "zkc.program/1") => {
+    match string(&a[0])? {
+        "zkc.program/1" => {
             for value in list(&a[1], Limits::DEFINITIONS)? {
                 let r = array(value)?;
                 if r.len() != 4 {
@@ -646,11 +530,6 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
                     ErrorCode::Symbol,
                 )?;
             }
-            if tag == "zkc.participants/1" {
-                ArtifactFormat::ExplicitBindings
-            } else {
-                ArtifactFormat::Program
-            }
         }
         _ => return Err(err(ErrorCode::Record, "unknown participant module format")),
     };
@@ -661,7 +540,6 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
         ));
     }
     let mut decoder = Decoder {
-        format,
         bindings,
         instructions: 0,
         types: BTreeMap::new(),
@@ -713,7 +591,6 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
         }
     }
     Ok(Program {
-        format,
         functions,
         participants,
         entries,

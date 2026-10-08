@@ -158,12 +158,11 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     let width = width(value, policy)?;
     policy.wire(width).map_err(|_| Error::Limit)?;
     peak(policy, value.retained_bytes(), width)?;
-    // Reuse checked canonical producers. Only BLS native vector tags differ
-    // from the older logical codec; their payload layout is identical.
+    // Reuse the type-owned canonical payload encoders.
     let mut bytes = crate::matrix::encode(value, policy)
         .or_else(|| crate::oracle::encode(value, policy))
-        .or_else(|| super::super::bn254::encode(value, policy))
-        .or_else(|| super::super::domains::encode(value, policy))
+        .or_else(|| super::bn254::encode(value, policy))
+        .or_else(|| super::domains::encode(value, policy))
         .unwrap_or_else(|| {
             if let Value::Groups(v) = value {
                 let mut out = Vec::new();
@@ -196,6 +195,8 @@ fn matrix<S: crate::matrix::Wire>(bytes: &[u8], p: &Policy) -> Result<Value> {
     let mut entries = Vec::new();
     entries.try_reserve_exact(n).map_err(|_| Error::Limit)?;
     let mut previous = None;
+    // This generic associated width cannot be a stable Rust array length.
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     for b in bytes[18..].chunks_exact(S::WIDTH + 8) {
         let row = u32::from_le_bytes(b[..4].try_into().unwrap());
         let col = u32::from_le_bytes(b[4..8].try_into().unwrap());

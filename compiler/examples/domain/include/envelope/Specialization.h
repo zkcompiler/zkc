@@ -10,13 +10,12 @@ namespace envelope {
 void populateFieldSumSpecializationPatterns(mlir::RewritePatternSet &patterns);
 void populateFieldSumDecompositionPatterns(mlir::RewritePatternSet &patterns);
 
-/// Check source admission, then apply the specialization once in program order.
-/// The intermediate module intentionally cannot pass checked source export.
+/// Verify the native module, then specialize once in program order.
+/// The temporary composite must be decomposed before native compilation.
 mlir::LogicalResult specializeFieldSums(mlir::ModuleOp module);
 
-/// Full conversion eliminates the temporary operation, then checked export
-/// admits the entire restored module. Other operations still require their
-/// existing export/admission checks. A failure must never be published.
+/// Full conversion eliminates the temporary operation and verifies the entire
+/// restored module. Executable compilation and export retain their own checks.
 mlir::LogicalResult decomposeFieldSums(mlir::ModuleOp module);
 } // namespace envelope
 

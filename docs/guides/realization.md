@@ -3,8 +3,8 @@
 The [representation specification](../spec/realization/representations.md),
 [codec/receive specification](../spec/realization/codecs.md) and
 [binding specification](../spec/realization/artifacts.md) own these contracts. This guide
-connects them to the [runtime design](../runtime/design.md), the current
-[direct-plan implementation](../runtime/reference-execution.md) and mathematical adapter examples.
+connects them to mathematical adapter examples and the obligations of the
+current [runtime design](../runtime/design.md).
 Rationale records explain the [representation relation](../rationale/representation-relation.md)
 and the [relations of identity](../rationale/identity-purposes.md);
 [correspondence](../spec/correspondence/realization.md) states proof scope.
@@ -48,7 +48,7 @@ A replacement backend uses an actual relational law. Equal weak unary contracts
 alone do not establish equivalence. Immutable preparation validity, live fact
 survival and allocation ownership retain their different premises. The
 [native correspondence design](../../formal/design/native-correspondence.md)
-and [assurance policy](../assurance.md#6-implementation-correspondence-policy)
+and [assurance policy](../assurance.md#6-native-correspondence-policy)
 distinguish differential evidence, explicit trust and optional implementation
 proofs.
 
@@ -69,8 +69,8 @@ distributed consistency or hostile-owner authentication.
 ## 5. Correspondence evidence and regression controls
 
 [REAL-12](../spec/conventions.md#conformance-claims) owns the evidence
-boundary. The maintained native plan and interactive routes have bounded differential
-evidence; [status](../status.md) records their coverage. Broader preparation
+boundary. The mathematical compiler and shared Rust Runner have bounded native
+evidence; [status](../status.md) records its coverage. Broader preparation
 reuse and enclosing-controller delivery remain on the roadmap.
 Controls for each implemented interface must exercise its actual parser,
 lowering and runtime: changed captures, wrong domain/world, same-typed swaps,
@@ -82,6 +82,6 @@ Data refinement, explicit contracts and source-relative validation connect
 these interfaces. They permit implementation progress without claiming that a
 mathematical model has already verified the native backend.
 
-The opt-in [public-operand Ristretto MSM](../runtime/public-msm.md) illustrates a compatible
-kernel substitution with an additional leakage premise, checked artifact-role
-admission, and a separate backend caller-authority boundary.
+The native implementation retains constant-time MSM and diagonal contraction
+kernels. Their [physical selection](../compiler/representation.md#checked-physical-decisions)
+does not infer public-input authority or prove a protocol-level leakage contract.

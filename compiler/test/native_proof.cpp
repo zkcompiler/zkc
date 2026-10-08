@@ -26,14 +26,14 @@ std::string print(ModuleOp module) {
 int main(int argc, char **argv) {
   require(argc == 2, "fixture argument");
   DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   auto source = parseSourceFile<ModuleOp>(argv[1], &context);
   require(bool(source), "source parse");
   auto original = print(*source);
   auto policy = parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/1", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/1", "4", ["0", "2"], [["draw_challenge", "challenge"]]])");
+      R"(["zkc.native-proof-policy/4", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/1", "4", ["0", "2"], [["draw_challenge", "challenge"]]])");
   if (!policy) {
     errs() << toString(policy.takeError());
     return 1;

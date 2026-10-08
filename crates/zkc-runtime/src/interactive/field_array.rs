@@ -48,10 +48,6 @@ pub(super) fn signature(
 use super::operations::{Contract, Contribution};
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
-    logical_refusals: &[(
-        "transcript.observe.field_array",
-        "field-array-observation-uninstalled",
-    )],
     physical_error: "binding-implementation",
     physical_only: false,
 

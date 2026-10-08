@@ -1,19 +1,19 @@
 # Compiler connection and proof checking
 
-**Target design.** Read the [boundary map](verification-map.md) first. API and
-format names below describe responsibilities, not existing exported declarations
-or a frozen wire ABI.
+**Research design.** Read the [boundary map](verification-map.md) first. API and
+format names below describe a possible formal connection, not existing native
+interfaces or a frozen wire ABI. Lean migration is deferred; this design is not
+an implementation or compatibility gate.
 
 ## 1. One meaning, several useful representations
 
 Keep the semantic effect tree, typed source, MLIR graph and runtime plan distinct.
 `Proc` describes interaction. Typed source exposes finite structure for binding,
 substitution and analysis. MLIR provides mutable SSA/region infrastructure for
-search and transformation. The executable plan exposes scheduling and contracted
-operations in a form with a small interpreter.
-
-This plan is a first supported realization carrier, not a new independent
-protocol semantics or a requirement for every future backend to use one graph.
+search and transformation. A formal target plan exposes scheduling and contracted
+operations in a form with a small interpreter. Connecting that model to the
+supported `zkc.program/1` carrier and common Rust Runner requires a separate
+interpretation.
 
 Use the [source architecture](../DESIGN.md#3-mathematical-objects-and-source-representation):
 intrinsically typed local operands and contexts, explicit region arguments and
@@ -38,8 +38,8 @@ checker obtains the original from that retained input, not from a producer's
 claim about what it optimized. Otherwise the producer could validate a correct
 transformation of the wrong protocol.
 
-Start with validation of original source against the final supported target
-plan. Intermediate rewrite witnesses can make checking efficient, but validation
+For a future checker, start with validation of original source against the
+actual emitted program. Intermediate rewrite witnesses can make checking efficient, but validation
 must account for the whole exported result. Proving an isolated rewrite theorem
 does not prove that C++ selected the right operands or applied it in a permitted
 context. Translation validation is the established separation between an
@@ -72,8 +72,9 @@ constructors select registered, versioned rules with their actual judgments.
 The first checker implements a finite supported set and rejects unknown claims
 or rules. Later property transport and generated-code evidence extend this
 dispatch with sound interpretations; they do not reinterpret an existing
-successful local check. Artifact packaging retains the realization kind and
-required capabilities described in the [runtime design](../../docs/runtime/design.md#3-artifact-and-checking-boundary).
+successful local check. A native connection must bind its checked subject to
+the actual [program carrier](../../docs/spec/profiles/compiler/program.md) and
+selected runtime contracts.
 
 The producer may choose a candidate and a search strategy. It cannot choose a
 weaker observer, replace the field interpretation or omit failed-call effects.
@@ -126,12 +127,11 @@ consumer explicitly accepts it as trust. Missing disposition prevents execution
 admission even when the conditional theorem was checked successfully. Runtime
 guards do not test an arbitrary mathematical provider law.
 
-Build source and direct Plan denotations before optimizer rules. The first
-checkable path includes actual decoder and representation connections; it is
-not closed by reflexivity on a producer-supplied AST. Registered MLIR lowering
-and a minimal native executor then exercise the same path without optimization.
-Only after this baseline discriminates wrong bindings, failed-state changes and
-changed plans does the first shared pass use it as its integration reference.
+A correspondence claim needs source and target denotations, decoder adequacy
+and representation connections; reflexivity on a producer-supplied AST is
+insufficient. A future adapter should exercise the existing MLIR lowering and
+common Rust Runner, including wrong bindings, failed-state changes and changed
+programs. It does not require another native executor.
 
 Malformed input, unsupported syntax, resource exhaustion, missing evidence,
 rejected certificates and established counterexamples have different meanings.
@@ -162,7 +162,7 @@ general separation-logic framework initially, but disjointness assumptions must
 be proved or supplied by the actual allocator when native aliasing matters.
 [S10–S11](sources.md#s10)
 
-The first end-to-end pass is demand reduction plus immutable preparation reuse
+A candidate formal connection is demand reduction plus immutable preparation reuse
 around an actual module call and a readiness failure branch. It exercises fact
 production, invalidation and continuation. It is more discriminating than a
 collection of pure arithmetic rewrite identities.
@@ -225,8 +225,8 @@ erasure from this relation. Relational verification is the relevant established
 method; robust security against foreign contexts requires additional hypotheses.
 [S12](sources.md#s12), [S4](sources.md#s4)
 
-The first lowering target is a typed/coarse plan with calls to contracted kernels.
-Prove erasure into executable operands and instruction dispatch against it.
+A typed target model can describe calls to contracted kernels. Connecting it to
+`zkc.program/1` requires erasure and instruction-dispatch correspondence.
 Backend selection can happen before validation if its configuration is part of
 the checked subject. Selection after validation needs a theorem covering all
 allowed implementations of the selected contract.
@@ -240,7 +240,7 @@ Executable command-line decoding and reporting belong in a tool target, not
 imports required by every theorem. No stable public API should expose generated
 names from an extraction tool.
 
-The implementation uses the small owned finite typed carrier in `Zkc.Source`.
+The formal library uses the small owned finite typed carrier in `Zkc.Source`.
 Reconsider a Lean-MLIR adapter
 when a compatible core supports the same effectful client and a useful rewrite
 with less maintenance than the owned API. CSLib remains a candidate for
@@ -249,5 +249,4 @@ route for candidate checking and counterexamples; their semantic lowering must
 agree with PIR before those results become zkc judgments.
 [S13–S16](sources.md#s13)
 
-External tool integration does not need to precede the entire library
-migration.
+External tool integration remains optional research work.

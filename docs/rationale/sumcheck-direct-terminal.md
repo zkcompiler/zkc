@@ -24,7 +24,7 @@ component whose result is a scalar.
 **End in a commitment opening.** An opening terminal is a different contract.
 It needs a selected construction and a security argument of its own, and the
 direct-terminal theorem does not prove that composition. The
-[committed experiment](../compiler/protocol-pipeline.md#8-assurance-and-the-next-design-boundary)
+[committed experiment](../compiler/protocol-pipeline.md#semantic-boundary)
 is stated over the direct terminal, not instead of it: outside a false-opening
 event, committed acceptance implies direct-terminal acceptance, and the opening
 loss is added to the bound.

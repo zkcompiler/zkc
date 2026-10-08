@@ -1,7 +1,7 @@
 # Rust and backend correspondence
 
-**Target design.** This chapter implements the boundary choices of the
-[realization reference](../../docs/guides/realization.md). Mathematical
+**Research design.** This chapter develops possible connections to the
+[realization contracts](../../docs/guides/realization.md). Mathematical
 backend contracts remain the interface; verification of a particular native
 implementation is an independently strengthen-able assurance component.
 
@@ -74,24 +74,23 @@ the joint law. Couplings provide a compositional tool when randomized executions
 are related; they are not an automatic license to resample correlated state.
 [S30](sources.md#s30)
 
-### 2.1. Default validation route
+### 2.1. Future validation route
 
-The [assurance policy](../../docs/assurance.md#6-implementation-correspondence-policy)
-adopts differential testing for the native connection. Its explicit milestones
-permit mathematical MLIR/program foundation stabilization before that connection,
-with source-to-emitted validation and independent references at their declared
-scope. Native Lean differential evidence stays open for each such slice and is
-required before native migration completes. Existing Lean-checked routes retain
-their current requirement; unsupported native formats still refuse.
+The [native correspondence policy](../../docs/assurance.md#6-native-correspondence-policy)
+keeps independent formal models separate from current implementation evidence.
+The [roadmap](../../docs/roadmap.md#establish-native-correspondence) calls for one
+concrete native subject and an explicit semantic connection. Lean migration is
+deferred; existing formal formats and checks are not a compatibility requirement
+or a native migration gate.
 
-For the native connection, drive actual MLIR import, transformation and export,
-then execute the resulting admitted plan in Lean and Rust. Compare against source execution or an independent evaluator
-where feasible: running both interpreters on the same wrongly exported plan
-alone would miss a shared source-to-plan defect. An eventual generated-code
-route needs its own execution comparison.
+For a future connection, drive actual `.zkc`/MLIR compilation and execute the
+emitted `zkc.program/1` with the common Rust Runner. Relate that execution to an
+independent source or target interpretation with stated adequacy. Merely running
+two interpreters on the same wrongly exported object would miss a shared export
+defect.
 
-For each supported slice, define executable representations and the comparison
-relation, connected by Lean laws to its mathematical meaning where a separate
+For each selected correspondence slice, define executable representations and
+the comparison relation, connected by Lean laws to its mathematical meaning where a separate
 reference evaluator is needed. Compare outcomes, failure states and selected
 events, including cache/handle validity and provider consumption where present.
 Generate programs, inputs and admissible initial states; retain explicit cases
@@ -108,9 +107,7 @@ execution behavior. If a transformation changes draws or their joint law, first
 establish the required coupling/property relation rather than forcing identical
 seeds to stand for security preservation.
 
-Native proofs below are selective extensions of this method; their absence does
-not prevent delivering a tested native slice under its stated implementation
-assumptions.
+Native proofs below are optional extensions of this proposed method.
 
 ## 3. Connecting a native implementation
 
@@ -120,17 +117,17 @@ failure branch. The arithmetic primitive inside the call may initially remain
 contracted/trusted. Test the wrapper that zkc actually adds, where a mistake
 would invalidate otherwise correct backend mathematics.
 
-The native runtime is a coarse-grained plan interpreter. A plan
-instruction should invoke a useful kernel, batch or module action; a mandatory
-dispatch for every field multiplication would unnecessarily constrain performance.
+The native runtime executes `zkc.program/1` through the common Runner and
+Entry/proof/run Hosts. An instruction can invoke a kernel, batch or module action;
+a mandatory dispatch for every field multiplication would unnecessarily constrain performance.
 The interpreter is an execution engine, not an independent Rust authority for
-PIR semantics. Its actual behavior must be related to the Lean plan meaning.
+PIR semantics. A formal correspondence claim must relate its actual behavior
+to an adequately interpreted formal subject.
 
-This provides a stable baseline for generated execution. If interpretation is
-too expensive, keep it as a correctness/reference route and add a generated
-route with its own correspondence or explicit downstream compiler trust. Do not
-claim that a proof about the interpreter verifies generated code that bypasses
-it. Backend kernel acceleration can be shared by both routes.
+A future generated-code experiment would need its own correspondence or
+explicit downstream compiler trust. A proof about an interpreter would not
+verify generated code that bypasses it. No such alternative execution route is
+currently supported.
 
 Validate the actual capture order, state/error handling, bounds and cache
 invalidation of the wrapper through the differential route. Then add one

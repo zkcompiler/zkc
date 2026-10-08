@@ -2,8 +2,8 @@
 
 This profile defines the `.zkc` source language and its translation to
 [mathematical protocol MLIR](../compiler/mathematical-protocols.md). It separates
-total mathematics, ordered local computation and participant interaction. The
-`.pir` profile has a separate parser and checking path; format selection is explicit.
+total mathematics, ordered local computation and participant interaction within
+the supported source-language path.
 
 ## Capture and names
 
@@ -591,7 +591,10 @@ message transmission, nested/private key construction or opening-state ingress.
 Other input constructors keep their existing permission requirements. Current
 source slots require an input association; they do not express receive-only keys
 or a separate expected key per receive site. The native Host's authorized setup
-registry still governs incoming PCS headers.
+registry governs incoming PCS headers. An authorized value may decode and be
+observed before `pcs.check` rejects a different explicit verifier key. Slots do
+not name outputs: an unchecked returned commitment or proof is authorized but
+not automatically tied to a specific output setup.
 
 ## Managed services and guards
 

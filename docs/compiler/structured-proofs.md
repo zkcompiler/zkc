@@ -66,7 +66,7 @@ combines common and non-generic declarations without widening common admission.
 ## Validation
 
 - [Compiler clients](../../compiler/test/native_structured_proofs.py) exercise
-  both BLS transcript suites, simplification/storage modes, old-profile refusal
+  both BLS transcript suites, simplification/storage modes, unsupported-format refusal
   and standalone numeric frames.
 - [Batch runtime client](../../crates/zkc-tools/examples/native_structured_proof.rs)
   exercises every alternative, empty and dynamic batches, recomputed dishonest
@@ -97,5 +97,4 @@ data-operation contract; local construction already handles the present PCS
 case. Installed domain/key generalization and [authored transcript deployments](authored-transcripts.md)
 execute; the [validation map](foundation-validation.md) records their evidence
 and limits. Shrinking group/vector
-compositions execute in the [composed-state clients](composed-state.md). Full protocol libraries, native Lean semantics and retiring legacy
-consumers retain their separate roadmap obligations.
+compositions execute in the [composed-state clients](composed-state.md). Additional protocol libraries and native Lean semantics remain separate work.

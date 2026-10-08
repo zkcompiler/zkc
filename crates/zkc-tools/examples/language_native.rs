@@ -5,13 +5,13 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use zkc_backends::services::{ServiceReference, ServiceRegistry};
 use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Sequence, Value,
+    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value,
 };
 use zkc_runtime::interactive::{
     Action, LogicalType, Packet, PathElement, ProgramState, Runner, StopKind,
     Value as RuntimeValue, admit_supplied,
 };
-use zkc_tools::protocol::run::{
+use zkc_tools::run::{
     Bundle, BundleLimits, HostLimits, InputValue, RoleInputs, RunHost, RunInputs, SetupAuthority,
 };
 
@@ -50,12 +50,8 @@ fn backend(bundle: &serde_json::Value, role: &str) -> NativeBackend {
     let entry = bundle["entry"].as_str().unwrap();
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new(role, "language_test", entry, None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new(role, "language_test", entry, None), None),
+        Default::default(),
     )
     .unwrap()
 }

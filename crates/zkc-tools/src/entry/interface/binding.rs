@@ -1,6 +1,6 @@
 //! Bind authenticated source metadata to the native owner's admitted ABI.
 use super::{Interface, InterfaceError as E, Result, raw::*, require};
-use crate::{artifact::native::NativeDeployment, protocol::run::RunHost};
+use crate::{proof::NativeDeployment, run::RunHost};
 use zkc_runtime::interactive::LogicalType;
 
 impl Interface {
@@ -63,8 +63,7 @@ impl Interface {
         let suite = proof.suite.as_deref();
         let service = proof.transcript.map(|i| p.services[i].native as usize);
         require(
-            native.version == 4
-                && native.publication == self.artifact
+            native.publication == self.artifact
                 && native.source == self.original()
                 && native.choices == [self.options.simplify, self.options.release_storage]
                 && entry.entry() == p.symbol

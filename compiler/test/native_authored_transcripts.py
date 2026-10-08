@@ -5,7 +5,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
-from tools import compiler, optimizer, records
+from tools import compiler, optimizer, records, canonical_program, tool
 
 OUT = records()
 commands = Commands(OUT)
@@ -43,11 +43,9 @@ with case("conditional loop import and malformed terminators"):
     assert short != source
     commands.run([optimizer, "--verify-each"], stdin=short, refuses="control flow edge")
     program = json.loads((OUT / "openvm_early.deployment").read_text())[4]
-    imported = commands.run([compiler, "protocol-import", "-"], stdin=program)
-    assert '"local.condition"' in imported
-    canonical = commands.run([compiler, "protocol-export", "-"], stdin=imported)
-    again = commands.run([compiler, "protocol-import", "-"], stdin=canonical)
-    assert json.loads(commands.run([compiler, "protocol-export", "-"], stdin=again)) == json.loads(canonical)
+    canonical = canonical_program(commands, program)
+    assert '"for_while"' in canonical
+    assert json.loads(canonical_program(commands, canonical)) == json.loads(canonical)
     malformed = json.loads(canonical)
 
     def stop_conditional_loop(value):
@@ -59,7 +57,7 @@ with case("conditional loop import and malformed terminators"):
         return sum(stop_conditional_loop(child) for child in value)
 
     assert stop_conditional_loop(malformed) == 1
-    commands.run([compiler, "protocol-import", "-"], stdin=json.dumps(malformed),
+    commands.run([tool("program_codec")], stdin=json.dumps(malformed),
                  refuses="local-control-yield")
 
 for family in ("monero", "openvm"):

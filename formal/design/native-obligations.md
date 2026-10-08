@@ -1,13 +1,12 @@
 # Native implementation obligations
 
-This page states what each native abstraction must retain and relate to the
-formal model. [Support](../SUPPORT.md) owns theorem scope; the
-[specification](../../docs/spec/README.md) owns semantics and the
-[roadmap](../../docs/roadmap.md) owns implementation order.
-The [assurance policy](../../docs/assurance.md#6-implementation-correspondence-policy)
-uses differential testing for the native connection, with implementation proofs
-as an optional strengthening. Lean reference structures do not prescribe mutable
-compiler representations.
+This page states obligations for future claims connecting native abstractions
+to the formal models. [Support](../SUPPORT.md) owns theorem scope; the
+[specification](../../docs/spec/README.md) distinguishes current native contracts
+from independent formal subjects. The
+[roadmap](../../docs/roadmap.md#establish-native-correspondence) selects future
+correspondence work. Lean migration is deferred and does not gate implementation
+or require compatibility with these reference structures.
 
 ## 1. Preserve useful distinctions
 
@@ -52,8 +51,8 @@ role information before the passes that need them have run.
 
 ### Component and observation contracts
 
-The following semantic contracts constrain compiler behavior without prescribing
-one dialect per formal abstraction.
+A native correspondence claim using the following semantic contracts must
+account for their premises without prescribing one dialect per formal abstraction.
 
 | Adopted contract | Compiler consequence | Reference and required control |
 |---|---|---|
@@ -74,14 +73,14 @@ selected call, storage and provider contracts. Differential tests should compare
 the actual bound source, complete outcome, ordered events and exposed residuals;
 performance measurements separately compare work, memory and compile/check cost.
 
-Before implementing a verifier-relation target for a transcript-derived
-verifier, supply its own `Acceptance` instance. Bind each challenge to the actual
+To relate a verifier-relation target for a transcript-derived verifier to this
+model, supply its own `Acceptance` instance. Bind each challenge to the actual
 frames, codec and selected query derivation; `Sumcheck.Framed.reference` supplies
 the existing execution correspondence. The fresh-tape instance does not satisfy
 this obligation. An arithmetic target must also represent proof messages and
 constrain all auxiliary assignments. FS security remains a separate theorem.
 
-Each concrete lowering must supply an `InputBinding` client across its
+Each claimed lowering connection must supply an `InputBinding` client across its
 actual different source/target contexts, and demonstrate that any shared erasure
 serves every remaining consumer before the native/relation target split. Choose
 cache placement, store/bypass policy, charged costs and heterogeneous value
@@ -152,12 +151,13 @@ Protocol-level, algebraic and physical passes can coexist in one MLIR module.
 Dialect conversion legality must reflect which semantic information has been
 resolved. A legal-looking generic side-effect annotation does not prove that
 transcript queries commute or correlated randomness can be reused. Supply the
-specific semantic law used by the pass. The existing native finite-source route
-is an integration experiment; its thin operation set is not the final PIR design.
+specific semantic law used by the pass when claiming formal preservation.
+The former native finite-source route has been retired; these research models
+do not define the supported Language/MLIR/program carrier.
 
-## 5. Theory and tooling at the next decisions
+## 5. Theory and tooling for correspondence research
 
-| Decision | Established theory/tool to use | Required result before accepting the decision |
+| Decision | Established theory/tool to use | Evidence needed for the corresponding formal claim |
 |---|---|---|
 | Region/binding and dialect boundaries | Intrinsic typing, substitution, algebraic effects; MLIR regions/interfaces; the recorded Lean-MLIR carrier trial | Represent a full protocol with logical objects and a selectively lowered child, then show exported-source adequacy and a rejected unavailable capture |
 | Fact propagation and preparation placement | Abstract interpretation, outcome-sensitive Hoare/frame reasoning, dependency-sensitive memoization | Actual invariant producer/checker, failed-write invalidation and a profitable versus unprofitable case; correctness does not imply profitability |

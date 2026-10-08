@@ -1,6 +1,5 @@
 //! Versioned logical construction encoding. Codec validity is not evidence that
 //! an origin or root corresponds to an admitted original source/descriptor.
-use crate::interactive::{Limits, Origin, PathElement};
 use serde_json::{Value, json};
 
 /// Construction trees contain public wire hex as well as source identifiers.
@@ -148,85 +147,6 @@ pub fn natural_index(s: &str) -> Result<u64> {
     }
     s.parse().map_err(|_| CodecError("natural-index"))
 }
-/// Five original source identifiers, in the exact positional contract order.
-/// This validates their representation only, not construction correspondence.
-pub fn validate_source_attributes(attrs: &[String]) -> Result<()> {
-    if attrs.len() != 5
-        || attrs.iter().any(|s| {
-            s.is_empty()
-                || s.len() > 128
-                || !s
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
-        })
-    {
-        return Err(CodecError("source-attributes"));
-    }
-    Ok(())
-}
-fn origin(origin: &Origin, attrs: &[String], tag: &str) -> Result<Vec<u8>> {
-    validate_source_attributes(attrs)?;
-    if origin.path.len() > Limits::STACK_DEPTH {
-        return Err(CodecError("tree-limit"));
-    }
-    // Origin is public host data: bound every string BEFORE json! clones it.
-    let bounded = |s: &str| s.len() <= Limits::STRING_BYTES;
-    if !bounded(&origin.entry)
-        || !bounded(&origin.instance)
-        || origin.path.iter().any(|p| match p {
-            PathElement::Match { site, alternative } => !bounded(site) || !bounded(alternative),
-            PathElement::Call { site, instance } => !bounded(site) || !bounded(instance),
-            PathElement::Loop { site, .. }
-            | PathElement::Conditional { site, .. }
-            | PathElement::For { site, .. } => !bounded(site),
-        })
-    {
-        return Err(CodecError("tree-limit"));
-    }
-    // Runtime fields must retain ORIGINAL entry/instance/call/loop identities.
-    // Session, executor profile/role and local function frame are intentionally absent.
-    let path = origin
-        .path
-        .iter()
-        .map(|p| match p {
-            PathElement::Match { site, alternative } => json!(["match", site, alternative]),
-            PathElement::Conditional { site, taken } => {
-                json!(["if", site, if *taken { "then" } else { "else" }])
-            }
-            PathElement::For { site, index } => json!(["for", site, index.to_string()]),
-            PathElement::Call { site, instance } => json!(["call", site, instance]),
-            PathElement::Loop { site, iteration } => json!(["loop", site, iteration.to_string()]),
-        })
-        .collect::<Vec<_>>();
-    let mut event = vec![Value::String(tag.into())];
-    event.extend(attrs.iter().cloned().map(Value::String));
-    encode_tree(&json!([
-        "zkc.logical-origin/1",
-        origin.entry,
-        origin.instance,
-        path,
-        event
-    ]))
-}
-/// `[protocol, message site, schema, source sender, source receiver]`.
-pub fn message_origin(runtime_origin: &Origin, attrs: &[String]) -> Result<Vec<u8>> {
-    origin(runtime_origin, attrs, "message")
-}
-/// `[protocol, local call site, function, operation site, source role]`.
-pub fn challenge_origin(runtime_origin: &Origin, attrs: &[String]) -> Result<Vec<u8>> {
-    origin(runtime_origin, attrs, "challenge")
-}
-
-/// Explicit original-source occurrence bytes for flat native construction.
-/// Runtime frame names are deliberately absent. This checks syntax only.
-pub fn native_origin(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
-    read_native_origin(attrs, kind, false)
-}
-/// A source template contains ordered static apply/repeat steps and no dynamic
-/// coordinates. Coordinates are explicit operands of its indexed transition.
-pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
-    read_native_origin(attrs, kind, true)
-}
 pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> Result<Vec<u8>> {
     let encoded = native_origin_template(attrs, kind)?;
     let mut tree = decode_tree(&encoded)?;
@@ -246,7 +166,9 @@ pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> R
     }
     encode_tree(&tree)
 }
-fn read_native_origin(attrs: &[String], kind: &str, indexed: bool) -> Result<Vec<u8>> {
+/// A source template contains ordered static apply/repeat steps and no dynamic
+/// coordinates. Coordinates are explicit operands of its indexed transition.
+pub fn native_origin_template(attrs: &[String], kind: &str) -> Result<Vec<u8>> {
     if attrs.len() != 1 {
         return Err(CodecError("native-origin"));
     }
@@ -280,26 +202,17 @@ fn read_native_origin(attrs: &[String], kind: &str, indexed: bool) -> Result<Vec
         _ => 0,
     };
     if parts.len() != 5
-        || parts[0]
-            != if indexed {
-                "zkc.native-origin-template/1"
-            } else {
-                "zkc.native-origin/1"
-            }
+        || parts[0] != "zkc.native-origin-template/1"
         || !name(&parts[1])
         || !parts[2].as_array().is_some_and(|p| {
             p.len() <= 64
                 && p.iter().all(|step| {
-                    if indexed {
-                        step.as_array().is_some_and(|a| {
-                            a.len() == 3
-                                && (a[0] == "apply" || a[0] == "repeat")
-                                && name(&a[1])
-                                && name(&a[2])
-                        })
-                    } else {
-                        name(step)
-                    }
+                    step.as_array().is_some_and(|a| {
+                        a.len() == 3
+                            && (a[0] == "apply" || a[0] == "repeat")
+                            && name(&a[1])
+                            && name(&a[2])
+                    })
                 })
         })
         || !parts[3].as_array().is_some_and(Vec::is_empty)

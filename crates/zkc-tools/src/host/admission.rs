@@ -1,16 +1,12 @@
 //! Per-bind admission and authenticated immutable import reuse. No global cache.
 mod native;
-use super::{
-    inputs::{Result, read_regular, text, unhex},
-    material::{KeyIdentity, MaterialCache},
-};
+use super::inputs::{Result, read_regular};
 pub(crate) use native::check_native_data;
-use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
-use zkc_arkworks::{Metadata, ProverKey, VerifierKey};
+use zkc_arkworks::{ProverKey, VerifierKey};
 use zkc_backends::{NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{Limits, LogicalType, PhysicalType, Type, Value as RuntimeValue};
+use zkc_runtime::interactive::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
 /// cumulative loading work. Each is clamped to the existing runtime hard limit.
@@ -58,11 +54,6 @@ pub(crate) fn entry_values<'a>(
 }
 
 pub(crate) enum Input<'a> {
-    Wire {
-        ty: LogicalType,
-        setup: Option<Metadata>,
-        hex: &'a Json,
-    },
     Native {
         ty: PhysicalType,
         value: &'a Value,
@@ -110,21 +101,8 @@ impl<'a> Input<'a> {
             selected,
         })
     }
-    pub fn wire(ty: LogicalType, setup: Option<Metadata>, hex: &'a Json) -> Result<Self> {
-        // Scan without allocating the binary payload; canonical hex is required.
-        let s = text(hex)?;
-        if !s.len().is_multiple_of(2)
-            || !s
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        {
-            return Err("artifact-hex".into());
-        }
-        Ok(Self::Wire { ty, setup, hex })
-    }
     fn ty(&self) -> Type {
         match self {
-            Self::Wire { ty, .. } => ty.kind(),
             Self::NativeWire { ty, .. } | Self::Native { ty, .. } | Self::Variant { ty, .. } => {
                 ty.kind()
             }
@@ -132,14 +110,8 @@ impl<'a> Input<'a> {
             Self::Ready(value) => value.ty(),
         }
     }
-    fn estimate(&self, policy: &Policy) -> Result<usize> {
+    fn estimate(&self) -> Result<usize> {
         match self {
-            Self::Wire { ty, hex, .. } => Value::typed_wire_retained_bytes_bound(
-                PhysicalType::default_for(ty.clone()).map_err(|e| e.to_string())?,
-                text(hex)?.len() / 2,
-                policy,
-            )
-            .map_err(|e| e.to_string()),
             Self::Key { verifier, .. } => {
                 Value::key_retained_bytes(Type::ProverKey, verifier).map_err(|e| e.to_string())
             }
@@ -220,18 +192,15 @@ impl<'a> Admission<'a> {
         let estimate = backend
             .native_input_retained_bytes(&ty, &bytes)
             .map_err(|e| e.to_string())?;
-        self.add(
-            Input::NativeWire {
-                ty,
-                bytes,
-                estimate,
-                selected,
-            },
-            backend.policy(),
-        )
+        self.add(Input::NativeWire {
+            ty,
+            bytes,
+            estimate,
+            selected,
+        })
     }
-    pub fn add(&mut self, input: Input<'a>, policy: &Policy) -> Result<usize> {
-        let estimate = input.estimate(policy)?;
+    pub fn add(&mut self, input: Input<'a>) -> Result<usize> {
+        let estimate = input.estimate()?;
         if self.inputs.len() + self.private_values >= self.limits.values {
             return Err("artifact-input-count-limit".into());
         }
@@ -271,10 +240,6 @@ impl<'a> Admission<'a> {
         self.private_values += 1;
         Ok(())
     }
-    pub fn same_wire(&self, index: usize, input: &Input<'_>) -> bool {
-        matches!((&self.inputs[index].0, input),
-            (Input::Wire { ty: a, setup: s, hex: x }, Input::Wire { ty: b, setup: t, hex: y }) if a == b && s == t && x == y)
-    }
     fn operand(&mut self, index: usize, ty: Type) -> Result<()> {
         let (input, estimate) = &self.inputs[index];
         if input.ty() != ty {
@@ -303,29 +268,11 @@ impl<'a> Admission<'a> {
         self.private_operand(Value::capability_retained_bytes())?;
         Ok(Operand::Resource(input))
     }
-    #[cfg(test)]
-    pub fn load(self, backend: &NativeBackend, policy: &Policy) -> Result<Vec<Value>> {
-        self.load_cached(backend, policy, &mut MaterialCache::disabled())
-    }
-    pub fn load_cached(
-        mut self,
-        backend: &NativeBackend,
-        policy: &Policy,
-        cache: &mut MaterialCache,
-    ) -> Result<Vec<Value>> {
+    pub fn load(mut self, backend: &NativeBackend, policy: &Policy) -> Result<Vec<Value>> {
         // Work is a cumulative conservative proxy: bytes read/scanned plus
         // retained charges for every value, including cache hits. Reserve all
         // charges before material reads; charge actual file lengths as read.
         self.work(self.pool_bytes)?;
-        let wire_bytes = self.inputs.iter().try_fold(0usize, |sum, (input, _)| {
-            let len = match input {
-                Input::Wire { hex, .. } => text(hex)?.len() / 2,
-                _ => 0,
-            };
-            sum.checked_add(len)
-                .ok_or_else(|| "artifact-input-work-limit".to_string())
-        })?;
-        self.work(wire_bytes)?;
         // Refuse already constructed data before decoding earlier wires or
         // opening key files. The complete invocation charge is reserved first.
         for (input, _) in &self.inputs {
@@ -333,7 +280,6 @@ impl<'a> Admission<'a> {
         }
         let mut values = Vec::new();
         let mut actual_bytes = 0;
-        let mut wire_cache = BTreeMap::new();
         let mut key_cache = BTreeMap::new();
         for (input, estimate) in std::mem::take(&mut self.inputs) {
             let value = match input {
@@ -341,32 +287,6 @@ impl<'a> Admission<'a> {
                 input @ (Input::Native { .. }
                 | Input::NativeWire { .. }
                 | Input::Variant { .. }) => native::load(backend, input)?,
-                Input::Wire { ty, setup, hex } => {
-                    let encoded = text(hex)?;
-                    let identity = (
-                        ty.clone(),
-                        setup.map(|s| (s.arity(), s.setup_id(), s.key_id())),
-                        encoded,
-                    );
-                    if let Some(value) = wire_cache.get(&identity) {
-                        Value::clone(value)
-                    } else {
-                        let bytes = unhex(hex)?;
-                        let physical = PhysicalType::default_for(ty).map_err(|e| e.to_string())?;
-                        let value = match setup {
-                            Some(setup) => backend.decode_for_setup(physical, setup, &bytes),
-                            None => backend.decode_typed_value(physical, &bytes),
-                        }
-                        .map_err(|e| e.to_string())?;
-                        if backend.encode_value(&value).map_err(|e| e.to_string())? != bytes {
-                            return Err("artifact-canonical-value".into());
-                        }
-                        wire_cache.insert(identity, value.clone());
-                        #[cfg(test)]
-                        DECODE_COUNT.with(|n| n.set(n.get() + 1));
-                        value
-                    }
-                }
                 Input::Key {
                     path,
                     fingerprint,
@@ -389,18 +309,15 @@ impl<'a> Admission<'a> {
                     // The material pin is NOT the wire SHA. Include both, and
                     // full VK bytes, so only a previously authenticated import
                     // can hit. A different file with a claimed pin must import.
-                    let identity = KeyIdentity::Prover {
-                        wire_sha256: digest,
+                    let identity = (
+                        digest,
                         fingerprint,
-                        verifier: verifier
+                        verifier
                             .to_bytes(&policy.ark_bounds())
                             .map_err(|e| e.to_string())?,
-                    };
+                    );
                     if let Some(key) = key_cache.get(&identity) {
                         Value::ProverKey(Arc::clone(key))
-                    } else if let Some(key) = cache.prover(&identity) {
-                        key_cache.insert(identity, key.clone());
-                        Value::ProverKey(key)
                     } else {
                         #[cfg(test)]
                         IMPORT_COUNT.with(|n| n.set(n.get() + 1));
@@ -413,7 +330,6 @@ impl<'a> Admission<'a> {
                             )
                             .map_err(|e| e.to_string())?,
                         );
-                        cache.retain_prover(identity.clone(), key.clone());
                         key_cache.insert(identity, key.clone());
                         Value::ProverKey(key)
                     }
@@ -437,15 +353,15 @@ impl<'a> Admission<'a> {
 
 #[cfg(test)]
 thread_local! {
-    pub(crate) static IMPORT_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static DECODE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static IMPORT_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use zkc_arkworks::Keys;
-    use zkc_backends::{Domain, EntryPolicy, PublicInputs};
+    use zkc_backends::{Domain, EntryPolicy};
 
     #[test]
     fn cache_requires_full_vk_identity_and_checked_sums_never_wrap() {
@@ -461,24 +377,21 @@ mod tests {
         .unwrap();
         let mut plan = Admission::new(LoadLimits::default());
         for verifier in [first.verifier_key(), other.verifier_key()] {
-            plan.add(
-                Input::Key {
-                    path: path.to_str().unwrap(),
-                    fingerprint: first.prover_key().material_fingerprint(),
-                    verifier: Arc::new(verifier.clone()),
-                },
-                &policy,
-            )
+            plan.add(Input::Key {
+                path: path.to_str().unwrap(),
+                fingerprint: first.prover_key().material_fingerprint(),
+                verifier: Arc::new(verifier.clone()),
+            })
             .unwrap();
         }
         let backend = NativeBackend::new(
             policy,
-            EntryPolicy::new(
-                Domain::new("P", "s", "main", None),
-                Some(1),
-                PublicInputs::LocalOnly,
-            ),
-            Some(first.verifier_key().clone()),
+            EntryPolicy::new(Domain::new("P", "s", "main", None), Some(1)),
+            zkc_backends::SetupRegistry::new(
+                vec![first.verifier_key().clone()],
+                &zkc_backends::Policy::default(),
+            )
+            .unwrap(),
         )
         .unwrap();
         IMPORT_COUNT.set(0);

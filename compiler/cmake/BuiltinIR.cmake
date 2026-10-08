@@ -5,14 +5,13 @@ set(zkc_builtin_dialects
   "local|Local|types"
   "data|Data|types"
   "crypto|Crypto|none"
-  "table|Table|types"
   "algebra|Algebra|types"
   "poly|Polynomial|types"
   "plan|Plan|types"
   "pcs|PCS|types"
   "oracle|Oracle|types"
   "relation|Relation|none"
-  "claim|Claim|types")
+)
 
 # Type-binding owner record | generated output stem. Owners need not be dialects.
 set(zkc_builtin_type_adapters

@@ -4,7 +4,7 @@ use super::{clean, codec, inputs, messages, policy, replace, unhex, words};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{NativeBackend, Scalar, Value, external::openvm};
-use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_tools::proof::{NativeDeployment, hex};
 pub(super) fn prefix_controls(
     directory: &Path,
     name: &str,
@@ -100,7 +100,7 @@ pub(super) fn prefix_controls(
     );
     let summary = json!({"external_work":report.external_work,"resources":report.resources,
         "attempts":report.attempts.iter().map(|r| json!({"decision":r.decision,"messages":r.messages,
-            "bytes":r.bytes,"instructions":r.usage.instructions,"calls":r.usage.calls,
+            "bytes":r.bytes,"instructions":r.usage.instructions,
             "iterations":r.usage.iterations,"external_work":r.external_work})).collect::<Vec<_>>()});
     std::fs::write(
         directory.join(format!("{name}.summary.json")),

@@ -4,7 +4,7 @@ use zkc_runtime::interactive::Value as RuntimeValue;
 
 /// Host-authorized public verifier material. Registering keys is an explicit
 /// trust decision; identifiers in peer messages never extend this registry.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SetupRegistry {
     keys: Vec<VerifierKey>,
 }
@@ -31,64 +31,22 @@ impl SetupRegistry {
     pub fn get(&self, identity: Metadata) -> Option<&VerifierKey> {
         self.keys.iter().find(|key| key.metadata() == identity)
     }
-    pub(crate) fn only(&self) -> Option<&VerifierKey> {
-        match self.keys.as_slice() {
-            [key] => Some(key),
-            _ => None,
-        }
-    }
     pub(crate) fn validate(&self, policy: &Policy) -> Result<()> {
         // Registry construction is bounded, but a backend may select a tighter policy.
         Self::new(self.keys.clone(), policy).map(|_| ())
     }
 }
 
-/// Direct native callers supply trusted key operands; a registry additionally
-/// authorizes every setup before use. Neither policy selects source semantics.
-pub(crate) enum Setups {
-    InputKeys(Option<VerifierKey>),
-    Registered(SetupRegistry),
-}
-impl Setups {
-    pub(crate) fn only(&self) -> Option<&VerifierKey> {
-        match self {
-            Self::InputKeys(key) => key.as_ref(),
-            Self::Registered(keys) => keys.only(),
-        }
-    }
-    pub(crate) fn get(&self, identity: Metadata) -> Option<&VerifierKey> {
-        match self {
-            Self::InputKeys(key) => key.as_ref().filter(|key| key.metadata() == identity),
-            Self::Registered(keys) => keys.get(identity),
-        }
-    }
+impl SetupRegistry {
     pub(crate) fn check(&self, identity: Metadata) -> Result<()> {
-        match self {
-            Self::InputKeys(Some(key)) if key.metadata() != identity => {
-                Err(refused("key-mismatch"))
-            }
-            Self::Registered(keys) if keys.get(identity).is_none() => {
-                Err(refused("unauthorized-setup"))
-            }
-            _ => Ok(()),
-        }
+        self.get(identity)
+            .map(|_| ())
+            .ok_or_else(|| refused("unauthorized-setup"))
     }
     pub(crate) fn is_empty(&self) -> bool {
-        match self {
-            Self::InputKeys(key) => key.is_none(),
-            Self::Registered(keys) => keys.keys.is_empty(),
-        }
+        self.keys.is_empty()
     }
     pub(crate) fn by_key_id(&self, id: &[u8]) -> Option<&VerifierKey> {
-        match self {
-            Self::InputKeys(key) => key.as_ref().filter(|key| key.metadata().key_id() == id),
-            Self::Registered(registry) => registry
-                .keys
-                .iter()
-                .find(|key| key.metadata().key_id() == id),
-        }
-    }
-    pub(crate) fn is_registered(&self) -> bool {
-        matches!(self, Self::Registered(_))
+        self.keys.iter().find(|key| key.metadata().key_id() == id)
     }
 }

@@ -1,8 +1,9 @@
 mod common;
 use common::*;
 use serde_json::json;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use zkc_backends::*;
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
     Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, Runner, Type,
     Value as RuntimeValue, admit_supplied,
@@ -17,7 +18,6 @@ fn private_state(keys: &Keys, original: &Value) -> Value {
 }
 fn open_program() -> Vec<u8> {
     program(
-        None,
         &[("state", "opening_state"), ("p", "point")],
         vec![op(
             "open",
@@ -70,7 +70,6 @@ fn exact_contracts_and_legacy_candidates_fail_closed() {
         ),
     ] {
         let bytes = program(
-            None,
             &[("pk", "prover_key"), ("t", "table"), ("p", "point")],
             vec![old],
             &[],
@@ -89,7 +88,6 @@ fn two_originals_survive_sumcheck_scratch_and_open_at_the_same_reached_point() {
     let a = table(&[2, 3, 5, 7]);
     let b = table(&[11, 13, 17, 19]);
     let bytes = program(
-        Some(2),
         &[
             ("pk", "prover_key"),
             ("vk", "verifier_key"),
@@ -230,7 +228,10 @@ fn two_originals_survive_sumcheck_scratch_and_open_at_the_same_reached_point() {
     );
     let (out, backend) = run(
         &bytes,
-        ark_backend(Some(2)),
+        common::backend()
+            .arity(2)
+            .verifier(k.verifier_key().clone())
+            .build(),
         vec![
             Value::ProverKey(Arc::new(k.prover_key().clone())),
             Value::VerifierKey(Arc::new(k.verifier_key().clone())),
@@ -273,7 +274,6 @@ fn equal_tables_issue_distinct_states_and_backend_retains_no_hidden_state() {
     };
     assert!(!Arc::ptr_eq(ta, tb));
     let bytes = program(
-        None,
         &[("pk", "prover_key"), ("a", "table"), ("b", "table")],
         vec![
             op("a", "arkworks/pcs.commit", &["pk", "a"], &["ca", "sa"]),
@@ -291,13 +291,13 @@ fn equal_tables_issue_distinct_states_and_backend_retains_no_hidden_state() {
     );
     let (out, backend) = run(
         &bytes,
-        ark_backend(None),
+        common::backend().verifier(k.verifier_key().clone()).build(),
         vec![Value::ProverKey(Arc::new(k.prover_key().clone())), a, b],
     );
     let out = out.unwrap();
     assert_eq!(
-        backend.encode_value(&out[0]).unwrap(),
-        backend.encode_value(&out[1]).unwrap()
+        backend.encode_native_value(&out[0]).unwrap(),
+        backend.encode_native_value(&out[1]).unwrap()
     );
     let states = out[2..]
         .iter()
@@ -315,7 +315,7 @@ fn equal_tables_issue_distinct_states_and_backend_retains_no_hidden_state() {
     for state in &out[2..] {
         let (opened, _) = run(
             &open_program(),
-            ark_backend(None),
+            common::backend().verifier(k.verifier_key().clone()).build(),
             vec![state.clone(), point(&[7])],
         );
         assert_eq!(scalar(&opened.unwrap()[0]), Scalar::from(9u64));
@@ -327,7 +327,7 @@ fn equal_tables_issue_distinct_states_and_backend_retains_no_hidden_state() {
 }
 
 #[test]
-fn state_passes_explicit_local_and_child_ports_and_can_be_borrowed_twice() {
+fn state_passes_explicit_local_ports_and_can_be_borrowed_twice() {
     let k = keys(1);
     let state = private_state(&k, &table(&[2, 3]));
     let bytes = participants(json!([
@@ -341,46 +341,36 @@ fn state_passes_explicit_local_and_child_ports_and_can_be_borrowed_twice() {
                 ["return", ["y", "proof"]]
             ]
         ]],
-        [
+        [[
+            "participant",
+            "root",
+            "root_instance",
+            "P",
+            [],
+            [["s", "opening_state"], ["p", "point"]],
+            ["field", "field"],
             [
-                "participant",
-                "root",
-                "root_instance",
-                "P",
-                [],
-                [["s", "opening_state"], ["p", "point"]],
-                ["field", "field"],
-                [
-                    ["call", "first", "child", ["s", "p"], ["y1"]],
-                    ["call", "second", "child", ["s", "p"], ["y2"]],
-                    ["return", ["y1", "y2"]]
-                ]
+                ["local", "first", "open", ["s", "p"], ["y1", "proof1"]],
+                ["local", "second", "open", ["s", "p"], ["y2", "proof2"]],
+                ["return", ["y1", "y2"]]
             ],
-            [
-                "participant",
-                "child",
-                "opening_instance",
-                "P",
-                [],
-                [["s", "opening_state"], ["p", "point"]],
-                ["field"],
-                [
-                    ["local", "local", "open", ["s", "p"], ["y", "proof"]],
-                    ["return", ["y"]]
-                ]
-            ]
-        ],
+            []
+        ],],
         [["entry", "main", [["P", "root"]]]]
     ]))
     .unwrap();
-    let (out, backend) = run(&bytes, ark_backend(None), vec![state.clone(), point(&[7])]);
+    let (out, backend) = run(
+        &bytes,
+        common::backend().verifier(k.verifier_key().clone()).build(),
+        vec![state.clone(), point(&[7])],
+    );
     assert!(out.unwrap().iter().all(|v| scalar(v) == Scalar::from(9u64)));
     assert_eq!(backend.active_frames(), 0);
     // No parent variable can be fetched in a child whose port list omits it.
     let mut unpassed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    unpassed[4][1][5] = json!([["p", "point:bls12-381.fr@arkworks.point/1"]]);
-    unpassed[4][0][7][0][4] = json!(["p"]);
-    unpassed[4][0][7][1][4] = json!(["p"]);
+    unpassed[3][0][2] = json!([["p", "point:bls12-381.fr@arkworks.point/1"]]);
+    unpassed[4][0][7][0][3] = json!(["p"]);
+    unpassed[4][0][7][1][3] = json!(["p"]);
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&unpassed).unwrap(), &backend)
             .unwrap_err()
@@ -388,7 +378,6 @@ fn state_passes_explicit_local_and_child_ports_and_can_be_borrowed_twice() {
         ErrorCode::Ssa
     );
     let aliases = program(
-        None,
         &[("a", "opening_state"), ("b", "opening_state")],
         vec![],
         &["opening_state", "opening_state"],
@@ -404,23 +393,27 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
     let other = keys(1);
     let bytes = open_program();
     for (entry_policy, verifier, expected) in [
-        (entry(Some(2)), None, "entry-shape"),
+        (
+            entry(Some(2)),
+            Some(k.verifier_key().clone()),
+            "entry-shape",
+        ),
         (
             entry(None),
             Some(other.verifier_key().clone()),
-            "key-mismatch",
-        ),
-        (
-            EntryPolicy::new(
-                domain(),
-                None,
-                PublicInputs::Exact(BTreeMap::from([("state".into(), state.clone())])),
-            ),
-            None,
-            "nonserializable",
+            "unauthorized-setup",
         ),
     ] {
-        let backend = NativeBackend::new(Policy::default(), entry_policy, verifier).unwrap();
+        let backend = NativeBackend::new(
+            Policy::default(),
+            entry_policy,
+            zkc_backends::SetupRegistry::new(
+                (verifier).into_iter().collect(),
+                &zkc_backends::Policy::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let admitted = admit_supplied(&bytes, &backend).unwrap();
         match Runner::new(
             &admitted,
@@ -443,7 +436,7 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
             ..Policy::default()
         },
         entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     assert_eq!(
@@ -451,13 +444,12 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
         "exhausted:arity-limit"
     );
     let mixed = program(
-        None,
         &[("s", "opening_state"), ("pk", "prover_key")],
         vec![],
         &[],
         &[],
     );
-    let backend = ark_backend(None);
+    let backend = common::backend().verifier(k.verifier_key().clone()).build();
     let admitted = admit_supplied(&mixed, &backend).unwrap();
     match Runner::new(
         &admitted,
@@ -470,7 +462,7 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
             Value::ProverKey(Arc::new(other.prover_key().clone())),
         ],
     ) {
-        Err(e) => assert!(e.error.to_string().contains("entry-key-mismatch")),
+        Err(e) => assert!(e.error.to_string().contains("unauthorized-setup")),
         Ok(_) => panic!("accepted state from a different setup"),
     }
 }
@@ -480,18 +472,22 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
     let k = keys(1);
     let original = table(&[2, 3]);
     let state = private_state(&k, &original);
-    let mut backend = ark_backend(None);
-    let rng = backend.issue_rng(domain(), 2).unwrap();
+    let mut backend = common::backend().verifier(k.verifier_key().clone()).build();
+    let rng = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     // Independently authorized native setup: wrong private custody must fail
     // without consuming an unrelated nonce.
     let other_key = keys(1);
-    let mut receiver = NativeBackend::with_setups(
+    let mut receiver = NativeBackend::new(
         Policy::default(),
         entry(None),
         SetupRegistry::new(vec![other_key.verifier_key().clone()], &Policy::default()).unwrap(),
     )
     .unwrap();
-    let nonce = receiver.issue_nonce(domain(), 2).unwrap();
+    let nonce = receiver
+        .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
+        .unwrap();
     for value in [
         state.clone(),
         Value::ProverKey(Arc::new(k.prover_key().clone())),
@@ -499,26 +495,29 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
         rng,
     ] {
         assert_eq!(
-            backend.encode_value(&value).unwrap_err().code,
-            "refused:nonserializable"
+            backend.encode_native_value(&value).unwrap_err().to_string(),
+            "native-wire-backend:native-wire-type"
         );
         for forged in [
             &[][..],
             &b"ZKCV\x01\x00"[..],
-            &backend.encode_value(&f(2)).unwrap()[..],
+            &backend.encode_native_value(&f(2)).unwrap()[..],
         ] {
             assert_eq!(
                 backend
-                    .decode_typed_value(value.physical_type(), forged)
+                    .decode_native_value(&value.physical_type(), forged)
                     .unwrap_err()
-                    .code,
-                "refused:nonserializable"
+                    .to_string(),
+                "native-wire-backend:native-wire-type"
             );
         }
     }
     assert_eq!(
-        receiver.encode_value(&nonce).unwrap_err().code,
-        "refused:nonserializable"
+        receiver
+            .encode_native_value(&nonce)
+            .unwrap_err()
+            .to_string(),
+        "native-wire-backend:native-wire-type"
     );
     let before_nonce = receiver.observe(token(&nonce)).unwrap();
     assert_eq!(
@@ -526,44 +525,15 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
         "refused:unauthorized-setup"
     );
     assert_eq!(receiver.observe(token(&nonce)).unwrap(), before_nonce);
-    let admitted = admit_supplied(&open_program(), &backend).unwrap();
-    let role = admitted.entry("main").unwrap().remove(0);
-    let mut host = InputBindings::new();
-    host.insert("selected-original", state).unwrap();
-    host.insert("scratch", original).unwrap();
-    let input = |record| {
-        serde_json::to_vec(&json!([
-            "zkc.inputs/1",
-            [["state", record], ["p", ["point", ["7"]]]]
-        ]))
-        .unwrap()
-    };
-    let actual = backend
-        .inputs_from_json(&role, &input(json!(["host", "selected-original"])), &host)
-        .unwrap();
     assert_eq!(
-        scalar(&run(&open_program(), backend, actual).0.unwrap()[0]),
+        scalar(
+            &run(&open_program(), backend, vec![state, point(&[7])])
+                .0
+                .unwrap()[0]
+        ),
         Scalar::from(9u64)
     );
-    let backend = ark_backend(None);
-    for (record, error) in [
-        (json!(["opening_state", "0"]), "refused:input-tag"),
-        (
-            json!(["opening_state", {"key_id": "fake", "table": ["2", "3"]}]),
-            "refused:input-tag",
-        ),
-        (json!(["wire", "5a4b43560100"]), "refused:nonserializable"),
-        (json!(["host", "scratch"]), "refused:input-type"),
-        (json!(["host", "absent"]), "refused:input-host-handle"),
-    ] {
-        assert_eq!(
-            backend
-                .inputs_from_json(&role, &input(record), &host)
-                .unwrap_err()
-                .code,
-            error
-        );
-    }
+    let backend = common::backend().verifier(k.verifier_key().clone()).build();
     for action in [
         json!(["send", "leak", "schema", "V", "state"]),
         json!([
@@ -590,14 +560,19 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
 fn failed_opening_keeps_rng_prefix_and_unpassed_resources_and_allows_retry() {
     let k = keys(1);
     let state = private_state(&k, &table(&[2, 3]));
-    let mut backend = ark_backend(None);
-    let first = backend.issue_rng(domain(), 3).unwrap();
-    let suffix = backend.issue_rng(domain(), 4).unwrap();
-    let outside = backend.issue_rng(domain(), 5).unwrap();
+    let mut backend = common::backend().verifier(k.verifier_key().clone()).build();
+    let first = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 3)
+        .unwrap();
+    let suffix = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 4)
+        .unwrap();
+    let outside = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 5)
+        .unwrap();
     let suffix_before = backend.observe(token(&suffix)).unwrap();
     let outside_before = backend.observe(token(&outside)).unwrap();
     let bytes = program(
-        None,
         &[
             ("state", "opening_state"),
             ("p", "point"),
@@ -692,7 +667,7 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
             ..Policy::default()
         },
         entry(None),
-        None,
+        Default::default(),
     )
     .unwrap();
     assert_eq!(
@@ -700,7 +675,6 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
         "exhausted:output-bytes"
     );
     let bytes = program(
-        None,
         &[("pk", "prover_key"), ("t", "table")],
         vec![op(
             "commit",
@@ -720,7 +694,7 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
         let (out, b) = run(
             &bytes,
             OutputLimit {
-                inner: ark_backend(None),
+                inner: common::backend().verifier(k.verifier_key().clone()).build(),
                 bytes: available,
             },
             vec![pk.clone(), t.clone()],
@@ -740,7 +714,7 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
     let (failed, backend) = run(
         &open_program(),
         OutputLimit {
-            inner: ark_backend(None),
+            inner: common::backend().verifier(k.verifier_key().clone()).build(),
             bytes: proof_required - 1,
         },
         vec![state.clone(), point(&[7])],
@@ -748,8 +722,12 @@ fn retention_includes_original_capacity_and_key_and_preflights_both_commit_outpu
     assert_eq!(code(&failed.unwrap_err()), "exhausted:output-bytes");
     assert_eq!(backend.inner.active_frames(), 0);
     assert!(
-        run(&open_program(), ark_backend(None), vec![state, point(&[7])])
-            .0
-            .is_ok()
+        run(
+            &open_program(),
+            common::backend().verifier(k.verifier_key().clone()).build(),
+            vec![state, point(&[7])]
+        )
+        .0
+        .is_ok()
     );
 }

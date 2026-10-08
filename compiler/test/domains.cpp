@@ -508,7 +508,7 @@ void installedBindings() {
         any_of(operation.signature.requirements, [](const auto &predicate) {
           return predicate.relation == "TwoAdicField";
         });
-    source::OperationBinding binding{{}, "test", {operation.name, {}, ""}};
+    protocol::OperationBinding binding{"test", {operation.name, {}, ""}};
     for (auto [i, term] : enumerate(operation.signature.scope.terms))
       if (!term.parent && !term.arguments &&
           !operation.signature.scope.constants.count(i)) {
@@ -516,14 +516,8 @@ void installedBindings() {
         binding.application.arguments.push_back(
             sort == "Codec"
                 ? codecs.at(StringRef(operation.name).rsplit('.').second.str())
-            : sort == "Commitment" &&
-                    (oracle ||
-                     operation.name == "transcript.observe.commitments")
+            : sort == "Commitment" && oracle
                 ? "rows.merkle-keccak256.koala-bear/1"
-            : sort == "Transcript" &&
-                    (operation.name == "transcript.draw_index" ||
-                     operation.name == "transcript.observe.commitments")
-                ? "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
             : sort == "Field" && (embedding || operation.name == "random.index")
                 ? "koala-bear.ext8-binomial3"
             : sort == "Field" && (operation.name == "pairing.check" ||
@@ -587,8 +581,7 @@ void installedBindings() {
   refuse(parseBoundType("table:unsupported@arkworks.mle-lsb/1", true),
          "binding-type-identity");
 
-  source::OperationBinding conversion{
-      {},
+  protocol::OperationBinding conversion{
       "convert",
       {"table.relayout",
        {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
@@ -627,7 +620,7 @@ void numericalField() {
                          "transcript", "prover_key", "verifier_key"})
     require(!catalog.defaultRepresentation(kind, "koala-bear"),
             "field availability does not imply unrelated representations");
-  source::OperationBinding dot{{}, "dot", {"vector.dot", {"koala-bear"}, ""}};
+  protocol::OperationBinding dot{"dot", {"vector.dot", {"koala-bear"}, ""}};
   require(accept(defaultImplementation(dot.application)) ==
               "plonky3/vector.dot",
           "numerical provider selected from the installed contract");
@@ -663,7 +656,7 @@ void extensionField() {
                          "prover_key", "verifier_key"})
     require(!catalog.defaultRepresentation(kind, extension),
             "no unsupported extension services");
-  source::OperationBinding embed{{}, "embed", {"field.embed", {extension}, ""}};
+  protocol::OperationBinding embed{"embed", {"field.embed", {extension}, ""}};
   const auto logical = accept(resolveBinding(embed.application, false));
   require(
       logical.inputs == std::vector<BoundType>{{"field", "koala-bear", ""}} &&
@@ -738,7 +731,7 @@ void bn254Domains() {
       if (!StringRef(op.name).starts_with("curve.") ||
           op.name == "curve.commit" || op.name == "curve.response")
         continue;
-      source::OperationBinding binding{{}, "bn", {op.name, {group.str()}, ""}};
+      protocol::OperationBinding binding{"bn", {op.name, {group.str()}, ""}};
       binding.application.implementation =
           accept(defaultImplementation(binding.application));
       require(binding.application.implementation == "arkworks/" + op.name,
@@ -761,14 +754,13 @@ void bn254Domains() {
   require(!catalog.hasFact("Encodes.field",
                            {"zkcv.field.bn254.fr/1", "bls12-381.fr"}),
           "BN254 and BLS scalar codecs remain nominally distinct");
-  source::OperationBinding msb{{},
-                               "round",
-                               {"poly.round_evaluate",
-                                {"bn254.fr"},
-                                "arkworks-msb/poly.round_evaluate"}};
+  protocol::OperationBinding msb{"round",
+                                 {"poly.round_evaluate",
+                                  {"bn254.fr"},
+                                  "arkworks-msb/poly.round_evaluate"}};
   refuse(resolveBinding(msb.application, true), "binding-implementation");
-  source::OperationBinding pairing{
-      {}, "check", {"pairing.check", {"bn254.fr"}, ""}};
+  protocol::OperationBinding pairing{"check",
+                                     {"pairing.check", {"bn254.fr"}, ""}};
   auto logical = accept(resolveBinding(pairing.application, false));
   require(boundOperationName(pairing.application.contract) ==
                   "algebra.exec.pairing_check" &&
@@ -796,8 +788,8 @@ void bn254Domains() {
         "poly.domain_points", "poly.even_odd_fold", "poly.opening_quotient",
         "poly.divide_opening", "poly.univariate_evaluate",
         "poly.round_evaluate", "random.draw", "random.vector"}) {
-    source::OperationBinding binding{
-        {}, "bn", {contract.str(), {"bn254.fr"}, ""}};
+    protocol::OperationBinding binding{"bn",
+                                       {contract.str(), {"bn254.fr"}, ""}};
     require(accept(defaultImplementation(binding.application)) ==
                 ("arkworks/" + contract).str(),
             "BN254 numerical contracts have installed physical carriers");

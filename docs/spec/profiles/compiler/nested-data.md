@@ -39,7 +39,7 @@ Mathematical operations require the existing total-data policy for their complet
 types. Checked local `data.exec.sequence_*` operations also handle immutable
 non-total payloads, including PCS records. Closed contracts carry the complete
 logical element type as a static argument and select `native/sequence.*`.
-This does not widen the older source generic-operation profile.
+Source use additionally requires an admitted Language operation binding.
 
 `sequence.at` succeeds exactly when `index < length`. It returns the element
 without changing the sequence. Otherwise it stops with `refused:sequence-index`;
@@ -127,6 +127,5 @@ peak accounting and setup rules. Complete types containing PCS data require the
 independently authorized deployment key even when empty; active leaves also
 check actual key/setup metadata.
 
-Older proof policies do not acquire these message permissions. Broader native
-Lean semantics, frontend authoring and external protocol byte compatibility are
-separate obligations.
+Native Lean semantics and external protocol byte compatibility remain separate
+obligations; the message grammar alone establishes neither.

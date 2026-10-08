@@ -165,4 +165,4 @@ host, external transcript deployment or security theorem follows.
 `produce_admitted` driver. The [structured proof boundary](structured-proofs.md),
 [nested data](nested-data.md) and [mathematical composition](mathematical-composition.md)
 use the same participant execution path. The [roadmap](../roadmap.md) records
-remaining consumer migration and formalization.
+remaining native correspondence work.

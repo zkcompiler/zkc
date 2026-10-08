@@ -45,10 +45,6 @@ pub(super) fn signature(
 use super::operations::{Contract, Contribution};
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
-    logical_refusals: &[(
-        "transcript.observe.fixed_vector",
-        "fixed-vector-observation-uninstalled",
-    )],
     physical_error: "binding-implementation",
     physical_only: false,
 

@@ -49,21 +49,19 @@ fn canonical_transcript_observations_match_direct_merlin_and_suite_reduction() {
             let mut b = backend(Policy::default());
             let transcript = b.issue_transcript_for(suite, domain(), 2, &root).unwrap();
             let handle = token(&transcript).clone();
-            let kind = value.ty().name();
-            let mut observe = binding(d, &format!("transcript.observe.{kind}"));
-            observe.arguments = vec![suite.name().into()];
-            if value.ty() != zkc_runtime::interactive::Type::Bool {
-                observe
-                    .arguments
-                    .push(value.physical_type().logical().identity().name().into());
+            if !value.physical_type().logical().is_native_message_data() {
+                assert!(b.encode_native_value(&value).is_err());
+                continue;
             }
-            observe
-                .arguments
-                .push(value.physical_type().logical().codec().unwrap());
-            let challenge = binding(d, "transcript.challenge");
+            let mut observe = binding(d, "transcript.native.indexed.observe.data");
+            observe.arguments = vec![
+                suite.name().into(),
+                value.physical_type().logical().spelling(),
+            ];
+            let challenge = binding(d, "transcript.native.indexed.challenge");
             let out = challenge.signature().unwrap().outputs;
-            let attrs = ["Source", "message", "Schema", "P", "V"];
-            let draw_attrs = ["Source", "call", "Draw", "draw", "V"];
+            let attrs = native_attributes("message", "message");
+            let draw_attrs = native_attributes("query", "call");
             let bytes = program(
                 &[observe, challenge],
                 &[transcript.physical_type(), value.physical_type()],
@@ -74,30 +72,12 @@ fn canonical_transcript_observations_match_direct_merlin_and_suite_reduction() {
                 &out,
                 &["c".into(), "t2".into()],
             );
-            let encoded = b.encode_value(&value).unwrap();
+            let encoded = b.encode_native_value(&value).unwrap();
             let mut direct = merlin::Transcript::new(b"zkc.artifact/1");
             direct.append_message(b"binding", &root);
-            direct.append_message(
-                b"origin",
-                &tree(&json!([
-                    "zkc.logical-origin/1",
-                    "main",
-                    "instance",
-                    [],
-                    ["message", "Source", "message", "Schema", "P", "V"]
-                ])),
-            );
+            direct.append_message(b"origin", &native_origin("message", "message", false));
             direct.append_message(b"value", &encoded);
-            direct.append_message(
-                b"origin",
-                &tree(&json!([
-                    "zkc.logical-origin/1",
-                    "main",
-                    "instance",
-                    [],
-                    ["challenge", "Source", "call", "Draw", "draw", "V"]
-                ])),
-            );
+            direct.append_message(b"origin", &native_origin("query", "call", false));
             let mut wide = [0; 64];
             direct.challenge_bytes(b"challenge", &mut wide);
             let expected = if d {
@@ -139,8 +119,8 @@ fn advancing_os_masks_do_not_issue_nonce_capabilities_and_capacity_preflight_con
         );
         let second = second.unwrap();
         assert_ne!(
-            b.encode_value(&first[0]).unwrap(),
-            b.encode_value(&second[0]).unwrap()
+            b.encode_native_value(&first[0]).unwrap(),
+            b.encode_native_value(&second[0]).unwrap()
         );
         let state = b.observe(&h).unwrap();
         assert_eq!(

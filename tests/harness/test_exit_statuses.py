@@ -1,7 +1,7 @@
 """A refusal is an ordinary exit with a nonzero status, never a signal.
 
-The shared runners (`tests/support/journal.py`, `tests/support/differential.py`)
-already treat a child killed by a signal as a failure of the test, not as the
+The shared journal (`tests/support/journal.py`)
+already treats a child killed by a signal as a failure of the test, not as the
 refusal it asserted. An assertion written directly against an exit status must
 say the same: `returncode > 0` for a refusal, `returncode == 0` or
 `not returncode` for success. `returncode != 0` and a bare `returncode` used as

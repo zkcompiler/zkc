@@ -6,25 +6,18 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc_backends::{
     Bn254G1, Bn254G2, Bn254Scalar as F, Domain, EntryPolicy, KoalaBear as B, KoalaBearExt8 as E,
-    NativeBackend, Policy, PublicInputs, Sequence, Value,
+    NativeBackend, Policy, Sequence, Value,
 };
 use zkc_runtime::interactive::LogicalType;
-use zkc_tools::artifact::{
-    hex,
-    native::{NativeCapacity, NativeDeployment},
-};
+use zkc_tools::proof::{NativeCapacity, NativeDeployment, hex};
 fn codec() -> NativeBackend {
     NativeBackend::new(
         Policy {
             max_groups: 8192,
             ..Policy::default()
         },
-        EntryPolicy::new(
-            Domain::new("P", "composition", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "composition", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -183,7 +176,7 @@ fn target(n: usize) -> Vec<Value> {
     ]
 }
 fn admit(bytes: &[u8], groups: usize) -> NativeDeployment {
-    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes)))
+    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes)), Default::default())
         .unwrap()
         .with_capacity(NativeCapacity {
             groups,
@@ -372,10 +365,14 @@ fn main() {
                     {
                         continue;
                     }
-                    let limited = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)))
-                        .unwrap()
-                        .with_capacity(capacity)
-                        .unwrap();
+                    let limited = NativeDeployment::admit(
+                        &bytes,
+                        &hex(&Sha256::digest(&bytes)),
+                        Default::default(),
+                    )
+                    .unwrap()
+                    .with_capacity(capacity)
+                    .unwrap();
                     let error = run(&limited, &producer, None)
                         .err()
                         .unwrap_or_else(|| panic!("{name}: capacity {kind} did not stop"));
@@ -423,16 +420,20 @@ fn main() {
                 );
             }
             if family == "target-accumulation" && n == 16 {
-                let limited = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)))
-                    .unwrap()
-                    .with_capacity(NativeCapacity {
-                        work: zkc_runtime::interactive::WorkBudget {
-                            iterations: 0,
-                            ..Default::default()
-                        },
+                let limited = NativeDeployment::admit(
+                    &bytes,
+                    &hex(&Sha256::digest(&bytes)),
+                    Default::default(),
+                )
+                .unwrap()
+                .with_capacity(NativeCapacity {
+                    work: zkc_runtime::interactive::WorkBudget {
+                        iterations: 0,
                         ..Default::default()
-                    })
-                    .unwrap();
+                    },
+                    ..Default::default()
+                })
+                .unwrap();
                 assert_eq!(
                     run(&limited, &producer, None).unwrap_err(),
                     "artifact-stopped:Limit"
@@ -460,7 +461,6 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
     let digest = hex(&Sha256::digest(bytes));
     for kind in [
         "instructions",
-        "calls",
         "iterations",
         "live",
         "total",
@@ -473,7 +473,6 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
             let mut c = NativeCapacity::default();
             match kind {
                 "instructions" => c.work.instructions = n as u64,
-                "calls" => c.work.calls = n as u64,
                 "iterations" => c.work.iterations = n as u64,
                 "live" => c.values.live_bytes = n,
                 "total" => c.values.total_bytes = n,
@@ -488,7 +487,6 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
         let c = NativeCapacity::default();
         let ceiling = match kind {
             "instructions" => c.work.instructions as usize,
-            "calls" => c.work.calls as usize,
             "iterations" => c.work.iterations as usize,
             "live" => c.values.live_bytes,
             "total" => c.values.total_bytes,
@@ -500,7 +498,7 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
         };
         for (input, incoming) in [(producer, None), (validator, Some(proof))] {
             let probe = |n| {
-                let d = NativeDeployment::admit(bytes, &digest)
+                let d = NativeDeployment::admit(bytes, &digest, Default::default())
                     .unwrap()
                     .with_capacity(set(n))
                     .unwrap();
@@ -534,9 +532,7 @@ fn capacity_boundaries(bytes: &[u8], producer: &Json, validator: &Json, proof: &
             let below = if low > 0 {
                 let error = probe(low - 1).unwrap_err();
                 let expected: &[&str] = match kind {
-                    "instructions" | "calls" | "iterations" => {
-                        &["execution:artifact-stopped:Limit"]
-                    }
+                    "instructions" | "iterations" => &["execution:artifact-stopped:Limit"],
                     "live" | "total" => &[
                         "admission:artifact-input-bytes-limit",
                         "execution:artifact-stopped:Limit",

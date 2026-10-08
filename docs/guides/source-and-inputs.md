@@ -104,10 +104,10 @@ instances of the same endpoint contract. [Effectful source](effectful-sources.md
 connects rounds, source selection, installed namespaces, repeated services and
 session scheduling. These are separately justified interpretations.
 
-The [source/plan implementation](../compiler/source-plan.md),
-[phase checker](../compiler/phase-admission.md) and
-[native route](../runtime/reference-execution.md) report their achieved scopes.
-The common contracts do not require their present implementation choices.
+The [direct-plan](../spec/profiles/compiler/direct-plan.md) and
+[finite phase](../spec/profiles/compiler/finite-phases.md) profiles describe
+independent formal models. Current native support is recorded in
+[status](../status.md); these laws do not imply a native table executor.
 
 ## Source inputs, scoped expressions and captures
 

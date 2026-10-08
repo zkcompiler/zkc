@@ -10,8 +10,10 @@ The library has a small common execution foundation, typed source and lawful
 interpretation APIs, source-relative transformation checking, concrete module
 and protocol applications, and a separately resolved ArkLib integration. These
 are semantic dependencies, not a prescribed stack of compiler IR dialects.
-The [implementation obligations](design/native-obligations.md) record which
-information each native abstraction must retain before it can be lowered.
+The independent models do not currently establish correspondence with the
+supported `.zkc`/MLIR/Rust execution path. The
+[implementation obligations](design/native-obligations.md) describe what a future
+correspondence claim must connect; they do not gate native development.
 
 The [verification map](design/verification-map.md) separates actual source
 adequacy, checker soundness, compiler refinement, native correspondence and
@@ -62,7 +64,7 @@ pins. A version check rejects conflicting Lean or shared Mathlib revisions.
 The root package still resolves Mathlib even when a particular module imports
 only `Std`; no zero-dependency installation claim follows from a small import.
 Lake supports separate packages and local path dependencies; its configuration
-syntax is verified against the toolchain chosen for migration. [1]
+syntax follows the package's pinned toolchain. [1]
 
 Logical areas are not separate repositories or independently versioned packages:
 
@@ -300,9 +302,9 @@ interpretation is not advertised as a complete Sumcheck security development.
 Generic algebra and probability results are factored down only when their
 statements and proofs are independent of those protocol choices.
 
-The current source-bound authorized export is a logical realization adapter
+The modeled source-bound authorized export is a logical realization adapter
 combining source admission, an installed policy and an isolated ledger. Its
-complete laws must survive under Realization; it is not part of the minimal
+complete laws belong under Realization; it is not part of the minimal
 execution vocabulary. Pure continuation/returned-phase laws remain in Semantics.
 Typed identifiers prevent accidental mixing but do not establish native
 unforgeability, isolation, alias freedom or generative authority.
@@ -319,10 +321,10 @@ extraction, external models, progress/failure obligations and build-input bindin
 Proving an extraction-friendly rewrite requires a separate connection to the
 production function unless that rewrite is the function actually executed.
 
-### 5.1 Protocol proofs as actual compiler clients
+### 5.1 Protocol proofs as formal compiler clients
 
 The property interfaces must support both externally proved protocols and
-proofs of experiments interpreted from the same PIR that the compiler consumes.
+proofs of experiments interpreted from the same PIR as the formal compiler laws.
 An external-theorem adapter relates the actual statement, program, allowed
 strategies, initialization, observations and terminal event. A direct PIR game
 interpretation needs the corresponding adequacy law. Neither interface requires
@@ -344,17 +346,18 @@ translation and quantitative loss. Native realization is not inferred from
 either theorem. Likewise a verifier soundness theorem quantifying over arbitrary
 provers does not by itself establish honest completion after a prover rewrite.
 
-General theorems are developed and audited with the library. Individual
-compilations instantiate them for the retained source, target, configuration and
-policy; finite certificates supply the decidable evidence. New security ideas
+General theorems are developed and audited with the library. A future native
+checker would instantiate them for the retained source, target, configuration
+and policy; finite certificates supply the decidable evidence. New security ideas
 still need proofs, not just executable checker branches. Runtime guards check
 actual dynamic conditions, and the protocol verifier separately checks each
 received proof. These operations share definitions but have different subjects
 and assurance boundaries.
 
-The [first security companion](../docs/roadmap.md#4-the-security-companion)
-is an implementation client of these interfaces, not a claim that a scalar
-probability theorem alone supplies a whole Sumcheck argument. Reuse is evaluated
+The [ordinary Sumcheck development](Zkc/Protocols/Sumcheck/Security.lean)
+is a formal client of these interfaces. Its scoped theorem does not by itself
+supply the [transcript assurance](../docs/roadmap.md#develop-transcript-assurance)
+needed for a native Fiat–Shamir argument. Reuse is evaluated
 on exact declarations and their transitive assumptions; an imported unfinished
 theorem is not admitted evidence.
 
@@ -451,10 +454,11 @@ Toolchain upgrades are separate from semantic changes. Rebuild supported main an
 optional targets, recheck declarations and exact pins, and state evidence for any
 changed external assumption.
 
-## 9. What the compiler consumes
+## 9. Future native correspondence
 
-The [implementation obligations](design/native-obligations.md) record each abstraction's source
-form, denotation, retained information, legal transformations, lowering relation,
+The [implementation obligations](design/native-obligations.md) record each formal
+abstraction's source form, denotation, retained information, legal transformations,
+lowering relation,
 runtime requirements and discriminating checks. Construction choice, roles,
 logical algorithms and physical representation are separate design decisions.
 The shared `Proc` meaning does not flatten them into one native IR. Native

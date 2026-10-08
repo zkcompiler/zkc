@@ -1,5 +1,6 @@
 //! Native installation of authenticated row access. A root authenticates a
-//! rectangular vector; polynomial meaning and query scheduling belong to PIR.
+//! rectangular vector; authored mathematical programs define polynomial meaning
+//! and query scheduling.
 use crate::plonky3::oracle::{self as tree, Digest, Error, Shape};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
@@ -349,8 +350,6 @@ fn tag(domain: Domain, kind: Type) -> Option<u8> {
         (Domain::Base, Type::Proof) => Some(34),
         (Domain::Extension, Type::Commitment) => Some(35),
         (Domain::Extension, Type::Proof) => Some(36),
-        (Domain::Base, Type::Commitments) => Some(37),
-        (Domain::Extension, Type::Commitments) => Some(38),
         _ => None,
     }
 }
@@ -358,7 +357,6 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
     let (domain, kind, hashes): (_, _, &[Digest]) = match value {
         Value::OracleRoot(d, root) => (*d, Type::Commitment, std::slice::from_ref(root)),
         Value::OraclePath(d, path) => (*d, Type::Proof, path),
-        Value::OracleRoots(d, roots) => (*d, Type::Commitments, roots),
         _ => return None,
     };
     Some((|| {
@@ -387,46 +385,6 @@ pub(crate) fn validate_hash_count(kind: Type, count: usize, policy: &Policy) -> 
         return Err(refused("oracle-path-length"));
     }
     policy.vector_width(count, 32)
-}
-pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], policy: &Policy) -> Option<Result<Value>> {
-    let domain = Domain::from_identity(ty.logical().identity())?;
-    Some((|| {
-        let kind = ty.kind();
-        let tag = tag(domain, kind).ok_or_else(|| refused("nonserializable"))?;
-        policy.wire(bytes.len())?;
-        if bytes.get(..5) != Some(b"ZKCV\x01") || bytes.get(5) != Some(&tag) {
-            return Err(refused("wire-header"));
-        }
-        let (count, payload) = if kind == Type::Commitment {
-            (1, &bytes[6..])
-        } else {
-            let count = u32::from_le_bytes(
-                bytes
-                    .get(6..10)
-                    .ok_or_else(|| refused("wire-length"))?
-                    .try_into()
-                    .map_err(|_| refused("wire-length"))?,
-            ) as usize;
-            (count, &bytes[10..])
-        };
-        if count.checked_mul(32) != Some(payload.len()) {
-            return Err(refused("wire-length"));
-        }
-        validate_hash_count(kind, count, policy)?;
-        if kind == Type::Commitment {
-            return Ok(Value::OracleRoot(
-                domain,
-                payload.try_into().map_err(|_| refused("wire-length"))?,
-            ));
-        }
-        let mut hashes = crate::kernels::arithmetic::reserve(count)?;
-        hashes.extend(payload.as_chunks::<32>().0.iter().copied());
-        Ok(if kind == Type::Proof {
-            Value::OraclePath(domain, hashes.into())
-        } else {
-            Value::OracleRoots(domain, hashes.into())
-        })
-    })())
 }
 
 pub(crate) const OPERATIONS: &[&str] = &[

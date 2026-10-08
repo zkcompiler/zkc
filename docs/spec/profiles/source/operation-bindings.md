@@ -1,9 +1,9 @@
 # Closed operation bindings
 
-This profile makes nominal domains and operation applications explicit in the
-common-protocol carrier. Authored source imports curated installed APIs or names
-logical contracts in explicit bindings. Module profile headings are not accepted,
-and the portable carrier does not accept a profile string in place of bindings.
+This profile defines closed installed operation bindings and physical types for
+[executable programs](../compiler/program.md). The mathematical compiler and Rust
+admission consume the same declared contracts independently. Source spelling and
+capabilities are owned by [Language](mathematical-language.md).
 
 ## Meaning and ownership
 
@@ -25,12 +25,11 @@ selected.
 
 ## Carrier
 
-The protocol and participant carriers retain an explicit operation-binding
-array alongside their callable bodies and entry points:
+The executable retains an explicit operation-binding array alongside its
+local functions, participants and entry points:
 
 ```
-["zkc.protocol/1", bindings, functions, protocols, instances, entries]
-["zkc.participants/1", bindings, stage, functions, participants, entries]
+["zkc.program/1", bindings, "physical", functions, participants, entries]
 
 binding = [symbol, logical_contract, static_arguments, implementation]
 ```
@@ -88,22 +87,9 @@ acquire copying through a wrapper. A public or serializable element does not
 give the container a codec: codec, observation and implementation support remain
 explicit installation facts.
 
-The text form omits a module-wide profile:
-
-```text
-use zkc::poly::Point;
-bind empty = "poly.empty_point"("bls12-381.fr");
-fn Empty() -> Point<"bls12-381.fr"> {
-  let point = empty();
-  return point;
-}
-```
-
-In an authored module a `bind` target must permit the `Source` authoring stage;
-spelling an installed contract directly cannot expose construction-only
-transcript operations. The separate common carrier can contain those operations
-without establishing construction provenance. [Resolved authoring](authoring.md)
-owns this source boundary.
+Source names and direct kernel use obey the Language profile's permissions and
+installed source stage. Catalog presence alone cannot expose construction-only
+transcript operations or establish construction provenance.
 
 In MLIR, `local.binding` is a symbol declaration. Mathematical dialect
 operations reference it with a `binding` symbol attribute. This includes
@@ -116,33 +102,21 @@ Field facts remain independent of group and PCS associations. The octic
 extension, its selected transcript/index-sampling suite, and the separately
 named [vector commitments](../../domains/oracles.md) add their own capabilities;
 they do not manufacture a group or multilinear opening capability. Unavailable operations or
-wrong-provider selections refuse. The [domain guide](../../../compiler/protocol-libraries.md)
-and [wire catalogue](../../../compiler/artifact-format.md#explicit-vector-and-ristretto-domains)
+wrong-provider selections refuse. The [operation guide](../../../compiler/operation-contracts.md)
+and [structured wire contract](../compiler/structured-proof-messages.md)
 record the implementation boundary; generic signatures remain independent of
 these installed choices.
 
-Transcript observation selects its payload identity and codec independently from
-the transcript's challenge domain. For example, `transcript.observe.table` takes
-transcript, coefficient field and codec identities and requires `Encodes.table(E,F)`.
-The installed `zkcv.table.bls12-381.fr/1` codec is the existing ZKCV version-one
-framing and logical MSB-coordinate scalar serialization. The generic contract
-does not equate the observed field with `T.ChallengeField`. Challenge generation
-does use the transcript construction's associated challenge field.
+Transcript observation binds the complete payload type and its admitted codec
+independently of the transcript challenge domain. The native
+[proof profile](../compiler/native-proofs.md) and
+[structured observation contract](../compiler/structured-proof-messages.md#transcript-observation)
+fix the exact supported combinations.
 
-Function records carry a logical-origin pair, consisting of the
-original definition name and ordered static parameter bindings. MLIR stores it
-as `logical_origin`; projection and planning preserve it. Generated executable
-symbols and implementation choices are separate. Ordinary source functions use
-their declared name with no static bindings by default; an explicit origin can
-group functions without equating them.
-
-Concrete symbols and logical origins are separate namespaces. An explicit root
-origin reserves its actual logical origin, not the function's concrete name;
-ordinary helper specializations can share an origin with an existing concrete
-function. Self-origins, shared groups and materialized configurations' generic
-definition origins are valid. Neither the origin spelling nor a generated-symbol
-prefix grants declaration authority. Preserving origin metadata is not by itself
-a proof that native code implements the original generic definition.
+Function records retain logical-origin metadata separately from executable
+symbols and implementation choices. `.zkc` origins identify qualified source
+definitions; exact static selection is retained by the checked closure and
+emitted symbol. Preserving metadata alone proves no source correspondence.
 
 ## Representations and conversion
 
@@ -164,18 +138,16 @@ Allocation, limits and stopped executions remain obligations of the execution
 and correspondence adapters. Neither type agreement nor an ordinary successful
 value comparison proves preservation for an arbitrarily constrained allocator.
 
-Fixed implementation selections are supplied to the native driver with
-`--implementations=FILE`, containing `[binding_symbol, implementation]` pairs.
-Unknown symbols, duplicate selections and incompatible implementations fail.
-Planning is transactional: an unsuccessful selection leaves the logical MLIR
-module intact. This interface supplies reproducible fixed choices, not search.
+Physical selection validates explicit implementation choices against the actual
+binding. Planning is transactional: unsuccessful selection leaves logical IR
+intact. The [physical decision contract](../../../compiler/representation.md#checked-physical-decisions)
+distinguishes proposals, validation and materialization.
 
 ## Implementation boundaries
 
 - [Native contracts and types](../../../../compiler/include/zkc/Contracts/Bindings.h)
   and [MLIR planning](../../../../compiler/lib/Conversion/Bindings.cpp).
-- [Mixed operation fixture](../../../../tests/fixtures/bound-operations.pir)
-  and [native pipeline controls](../../../../compiler/test/bound_protocols.py).
+- [Native preservation checks](../../../compiler/preservation.md).
 - [Generic static requirements](generic-definitions.md).
 
 This carrier does not implicitly interchange opening protocols with different

@@ -1,4 +1,4 @@
-"""External container, canonical subject, structured IR and staging controls."""
+"""External R1CS containers, canonical data, native IR and captured Assets."""
 
 import copy
 import json
@@ -132,22 +132,13 @@ for field, prime in FIELDS.items():
         baseline["subject"]
         != json.loads(run("relation-inspect", changed))["subject"]
     )
-    # Local libraries currently need a field with table/point/PCS support.
-    if field == "bls12-381.fr":
-        code = run("relation-compile", model, "Circuit")
-        assert b'"vector.scatter_sum"' in code and b'"vector.constant"' in code
-        invoke(compiler, "protocol-import", "-", data=code)
-        staged = run("relation-compile-data", model, "Circuit")
-        assert b'"matrix.mul_vector"' in staged and b'"matrix.bilinear"' in staged
-        assert b'"vector.scatter_sum"' not in staged
-        invoke(compiler, "protocol-import", "-", data=staged)
-        changed[3:5] = model[3:5]
-        changed[5][0][0][0][1] = "2"
-        assert run("relation-compile-data", changed, "Circuit") != staged
-        assert b'"matrix.identity_check"' in staged
-        assert run("relation-compile", changed, "Circuit") != code
-        matrices = json.loads(run("relation-matrices", model))
-        assert matrices == [["2", "4", [["0", str(c), "1"]]] for c in (2, 3, 1)]
+    matrices = json.loads(run("relation-matrices", model))
+    assert matrices == [["2", "4", [["0", str(c), "1"]]] for c in (2, 3, 1)]
+    # Explicit binary Assets are admitted by the Language capture boundary.
+    module = directory / "asset.zkc"
+    module.write_text("module asset; protocol Echo roles(P)(x:bool@P)->(y:bool@P){return(y=x);} entry Run=Echo;")
+    invoke(compiler, "language-check", "--source-format=zkc", "--entry=asset::Run", f"--module=asset={module}",
+           f"--asset=circuit=r1cs-binary={binary}")
 
 prime = FIELDS["koala-bear"]
 rows = [[[(2, 1)], [(3, 1)], [(1, 1)]]]
@@ -189,18 +180,6 @@ invoke(
     refuses="relation-symbol",
 )
 
-# Consumer limits are distinct from relation formation. Large sparse data
-# must remain usable even when embedding its indices into code is refused.
-large = canonical("bls12-381.fr", rows=[[[["0", "1"]], [], []]] * 16384)
-run("relation-compile", large, refuses="relation-specialization-attributes")
-assert b'"matrix.mul_vector"' in run("relation-compile-data", large)
-public = canonical("bls12-381.fr", rows=[], columns=130, outputs=0, inputs=129)
-run("relation-compile-data", public, refuses="relation-public-opening-limit")
-long_coefficients = canonical(
-    "bls12-381.fr",
-    rows=[[[["0", str(FIELDS["bls12-381.fr"] - 1)]], [], []]] * 15000,
-)
-run("relation-compile", long_coefficients, refuses="source-limit")
 for rows, code in (
     ([[[], []]], "relation-row"),
     ([[[["0"]], [], []]], "relation-term"),
@@ -224,4 +203,4 @@ for opening, closing, value in (("[", "]", "0 : i64"), ("<tuple", ">", "i1")):
     invoke(compiler, "relation-export", irfile, refuses="relation-depth-limit")
     invoke(compiler, "relation-air-export", irfile, refuses="air-ir-depth-limit")
 
-print(f"{commands.save()} relation import/IR/staging checks passed")
+print(f"{commands.save()} relation data/IR/Asset checks passed")

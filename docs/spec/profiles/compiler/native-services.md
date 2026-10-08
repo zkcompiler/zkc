@@ -2,13 +2,15 @@
 
 This profile extends [closed mathematical protocols](mathematical-protocols.md)
 with owner-local reusable references and explicit, synchronous service queries.
-It defines a native execution contract. The [mathematical source profile](../source/mathematical-language.md#managed-services-and-guards) compares emitted service ports, queries and aliases with its checked source. Native Lean checking remains separate; existing checked carriers retain their contracts.
+It defines a native execution contract. The [mathematical source profile](../source/mathematical-language.md#managed-services-and-guards) compares emitted service ports, queries and aliases with its checked source. Native Lean checking remains separate.
 
 ## Common IR
 
 `!protocol.service_ref<Contract>` is a reference to one managed service root.
 Installed contracts are `random.bls12-381.fr/1`, `random.bn254.fr/1`,
 `random.ristretto255.scalar/1` and `random.koala-bear.ext8-binomial3/1`.
+These four RNG distributions/providers are the complete registered service
+surface. Arbitrary user-defined request/reply families require a future extension.
 Each has method `draw`, no arguments, and one result in its named field under
 that field's default representation. KoalaBear base has no installed random
 service. The contract fixes the distribution signature; it does not authenticate
@@ -64,18 +66,11 @@ A query record is `["query", site, port, method, data_inputs, data_outputs]`.
 Bounded participant loops may contain queries. Participant calls, static
 parameters and family selectors remain outside this contract.
 
-The obsolete `zkc.service-participants/1` tag and its MLIR execution selector
-are refused. Required service behavior uses Program; there is no compatibility
-decoder. The older source `zkc.participants/1` carrier admits neither service
-rows nor query instructions.
-
 Native carriers enter through `admit_supplied`. Admission checks the closed
 contract, method signature, port namespace, indices, query result types and the
 installed backend's signature. Supplied admission grants no source correspondence.
 Native proof execution additionally requires an admitted deployment and selected
-construction policy. Older physical-correspondence admission, Lean participant
-checking, the older noninteractive checker and source-bound artifact drivers
-refuse Program.
+construction policy. Independent Lean models do not provide Program execution correspondence.
 
 ## Registry and entry binding
 
@@ -170,7 +165,7 @@ The loop frame inherits its service port map without acquiring another lease.
 Zero trips perform no body query; each reached query advances the same root once.
 Nested return releases frame state without releasing entry authority. Final stop,
 return or cancellation retains completed service state and releases the entry
-lease. This extension does not change older carrier admission.
+lease. All these rules use the same closed program carrier.
 
 The [port representation rationale](../../../rationale/service-query-ports.md)
 explains why projected service references use separate named ports.

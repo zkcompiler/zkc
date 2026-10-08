@@ -6,21 +6,25 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
 use zkc_arkworks::Keys;
-use zkc_backends::{
-    Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Sequence, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::interactive::LogicalType;
-use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_tools::proof::{NativeDeployment, hex};
 
+fn authority(keys: &Keys) -> zkc_tools::proof::SetupAuthority {
+    zkc_tools::proof::SetupAuthority {
+        keys: std::collections::BTreeMap::from([(2, keys.verifier_key().metadata().key_id())]),
+        inputs: std::collections::BTreeMap::from([(1, 2), (3, 2)]),
+    }
+}
 fn backend(keys: &Keys) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "nested", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        Some(keys.verifier_key().clone()),
+        EntryPolicy::new(Domain::new("P", "nested", "main", None), None),
+        zkc_backends::SetupRegistry::new(
+            vec![keys.verifier_key().clone()],
+            &zkc_backends::Policy::default(),
+        )
+        .unwrap(),
     )
     .unwrap()
 }
@@ -199,8 +203,13 @@ fn main() {
     let directory = Path::new(&directory);
     let keys = Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     std::fs::write(
-        directory.join("nested.key-id"),
-        hex(&keys.verifier_key().metadata().key_id()),
+        directory.join("nested.setups.json"),
+        serde_json::to_vec(&json!([
+            "zkc.native-setup-authority/1",
+            [["2", hex(&keys.verifier_key().metadata().key_id())]],
+            [["1", "2"], ["3", "2"]]
+        ]))
+        .unwrap(),
     )
     .unwrap();
     checked_indexing(directory, &keys);
@@ -223,12 +232,14 @@ fn main() {
         let hash = hex(&Sha256::digest(&bytes));
         let deployment = if family == "batched-openings" {
             assert_eq!(
-                NativeDeployment::admit(&bytes, &hash).err().as_deref(),
+                NativeDeployment::admit(&bytes, &hash, Default::default())
+                    .err()
+                    .as_deref(),
                 Some("native-proof-key-authority")
             );
-            NativeDeployment::admit_with_key(&bytes, &hash, keys.verifier_key().metadata().key_id())
+            NativeDeployment::admit(&bytes, &hash, authority(&keys))
         } else {
-            NativeDeployment::admit(&bytes, &hash)
+            NativeDeployment::admit(&bytes, &hash, Default::default())
         }
         .unwrap();
         for count in [0, 1, 3, 8, 17] {
@@ -393,7 +404,7 @@ fn main() {
 }
 
 fn checked_indexing(directory: &Path, keys: &Keys) {
-    use zkc_tools::protocol::run::*;
+    use zkc_tools::run::*;
     for suffix in ["", "_plain", "_release"] {
         let bytes = std::fs::read(directory.join(format!("checked{suffix}.bundle"))).unwrap();
         let bundle = Bundle::admit(&bytes, &backend(keys), BundleLimits::default()).unwrap();

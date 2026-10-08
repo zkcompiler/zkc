@@ -209,6 +209,9 @@ The one-direction [reduction contract](../properties/relations.md#soundness-dire
 remains appropriate for reductions with residual obligations and bad events;
 it is not strengthened to exact acceptance realization.
 
+The [acceptance-target decision](../../rationale/acceptance-targets.md) explains
+why a realization states whether it acts on decoded values or actual bytes.
+
 ## Source-selected adapters
 
 A concrete adapter MUST connect the consumer's selected source and operation

@@ -357,3 +357,7 @@ cells, axis order, factor multiplicity, source, compilation result and terminal
 point. They establish neither a native decoding theorem nor knowledge, zero
 knowledge, a polynomial-commitment terminal, a larger degree profile or
 Fiat–Shamir security.
+
+The [direct-terminal decision](../../../rationale/sumcheck-direct-terminal.md)
+explains why this formal profile evaluates the original polynomial at the actual
+challenge point rather than trusting a caller-supplied terminal value.

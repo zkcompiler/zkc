@@ -1,18 +1,14 @@
 //! Joint completion and partial-peer outcomes over compiler-produced schedules.
 use serde_json::Value as Json;
 use std::path::Path;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Scalar, Value};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interactive::PathElement;
-use zkc_tools::protocol::run::*;
+use zkc_tools::run::*;
 fn backend(role: &str) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new(role, "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new(role, "test", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }

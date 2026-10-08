@@ -47,7 +47,7 @@ void string(std::string &out, StringRef value) {
   out.append(value.data(), value.size());
 }
 } // namespace
-Error checkNativeOrigin(StringRef hex, StringRef kind, bool indexed) {
+Error checkNativeOrigin(StringRef hex, StringRef kind) {
   auto invalid = [] { return error("interactive-native-origin"); };
   if (hex.empty() || hex.size() > 4096 || hex.size() % 2 ||
       !all_of(hex, [](char c) {
@@ -63,17 +63,13 @@ Error checkNativeOrigin(StringRef hex, StringRef kind, bool indexed) {
   StringRef value;
   uint64_t count;
   if (!reader.array(5) || !reader.string(value) ||
-      value !=
-          (indexed ? "zkc.native-origin-template/1" : "zkc.native-origin/1") ||
-      !reader.name() || !reader.header(1, count) || count > 64)
+      value != "zkc.native-origin-template/1" || !reader.name() ||
+      !reader.header(1, count) || count > 64)
     return invalid();
   for (uint64_t i = 0; i < count; ++i) {
-    if (indexed) {
-      if (!reader.array(3) || !reader.string(value) ||
-          (value != "apply" && value != "repeat") || !reader.name() ||
-          !reader.name())
-        return invalid();
-    } else if (!reader.name())
+    if (!reader.array(3) || !reader.string(value) ||
+        (value != "apply" && value != "repeat") || !reader.name() ||
+        !reader.name())
       return invalid();
   }
   unsigned fields = kind == "query" ? 7 : kind == "message" ? 6 : 0;
@@ -93,45 +89,6 @@ Error checkNativeOrigin(StringRef hex, StringRef kind, bool indexed) {
     }
   }
   return reader.bytes.empty() ? Error::success() : invalid();
-}
-Expected<std::string> encodeNativeOrigin(StringRef entry,
-                                         ArrayRef<std::string> path,
-                                         ArrayRef<std::string> event) {
-  if (!identifier(entry) || path.size() > 64 || event.empty() ||
-      event.size() > 7 || !all_of(path, identifier) ||
-      !all_of(event, identifier))
-    return error("interactive-native-origin");
-  // Preflight the complete encoding before allocating it.
-  size_t size = 9 + 9 + StringRef("zkc.native-origin/1").size() + 9 +
-                entry.size() + 9 + 9 + 9;
-  for (const auto &part : path)
-    size += 9 + part.size();
-  for (const auto &part : event)
-    size += 9 + part.size();
-  if (size > 2048)
-    return error("interactive-native-origin");
-  std::string bytes;
-  bytes.reserve(size);
-  header(bytes, 1, 5);
-  string(bytes, "zkc.native-origin/1");
-  string(bytes, entry);
-  header(bytes, 1, path.size());
-  for (const auto &part : path)
-    string(bytes, part);
-  header(bytes, 1, 0);
-  header(bytes, 1, event.size());
-  for (const auto &part : event)
-    string(bytes, part);
-  constexpr char digits[] = "0123456789abcdef";
-  std::string hex;
-  hex.reserve(bytes.size() * 2);
-  for (unsigned char byte : bytes) {
-    hex.push_back(digits[byte >> 4]);
-    hex.push_back(digits[byte & 15]);
-  }
-  if (auto e = checkNativeOrigin(hex, event.front()))
-    return std::move(e);
-  return hex;
 }
 Expected<std::string>
 encodeNativeOriginTemplate(StringRef entry,
@@ -176,7 +133,7 @@ encodeNativeOriginTemplate(StringRef entry,
     hex.push_back(digits[byte >> 4]);
     hex.push_back(digits[byte & 15]);
   }
-  if (auto e = checkNativeOrigin(hex, event.front(), true))
+  if (auto e = checkNativeOrigin(hex, event.front()))
     return std::move(e);
   return hex;
 }

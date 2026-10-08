@@ -24,25 +24,16 @@ be inferred from a profile's name. An implementation states which selected
 profiles it realizes and supplies the corresponding
 [conformance claims](../conventions.md#conformance-claims).
 
-## Definition inventory
+## Native compiler and execution contracts
 
-The following links identify the definitions and selected scope of each profile.
+These profiles define the supported path's contracts. Exact implementation
+coverage is recorded in [status](../../status.md). A specification is not itself
+a native correctness or security proof.
 
 | Group | Profile | Selected scope |
 |---|---|---|
 | Source | [Mathematical source language](source/mathematical-language.md) | Explicit `.zkc` capture, scalar mathematics, participant components, messages, Entries and independent source correspondence |
-| Source | [Named inputs and role stores](source/named-inputs.md) | Exact ordered string-named binding, diagnostics, permitted views and local runs |
-| Source | [Public dimensions](source/public-dimensions.md) | Scoped natural expressions, formation, actual public values and substitution |
-| Source | [Invocation-selected families](source/families.md) | Public input selection, dependent protocol shapes, complete outcomes and bounded admission |
-| Source | [Resolved authoring](source/authoring.md) | Source environments, naming, elaboration, identity and authored selection |
-| Source | [Checked libraries](source/checked-libraries.md) | Interface requirements, components, prepared values and relation-bound preparation facts |
-| Source | [Expressions and captures](source/expressions.md) | Positional reads, ring expressions, dependencies and immutable issuance |
-| Source | [Resolved definitions](source/definitions.md) | Shared acyclic bodies, typed calls, complete stopping, capture/reference renaming and optional inlining |
-| Source | [Generic static foundation](source/generic-definitions.md) | Checked equality/capability derivations and structured type substitution with complete execution preservation; native generic resolution is separate |
 | Source | [Closed operation bindings](source/operation-bindings.md) | Native nominal types, explicit operation applications and per-value physical selection |
-| Source | [Located calls and shared control](source/located-execution.md) | Role-local execution/admission, complete stop origins, peer-state frames and actual guard/count agreement |
-| Source | [Resolved common protocols](source/common-protocols.md) | Role-owned ports, shared protocol bodies, selected bindings, independent reception and fixed public loops with complete stopping |
-| Compiler | [Direct plans](compiler/direct-plan.md) | Evaluator, exact direct checking, version-1 grammar and separate phase sidecar |
 | Compiler | [Executable programs](compiler/program.md) | Physical programs, local Boolean literals, structured control and messages, supplied execution and consumer refusals |
 | Compiler | [Joint execution bundles](compiler/run.md) | Supplied schedules, source-order host dispatch, typed wire failure, bounded handoff and explicit cleanup |
 | Compiler | [Native reusable service references](compiler/native-services.md) | Owner-local service ports, explicit query cuts, registry leases and atomic state transitions |
@@ -55,13 +46,33 @@ The following links identify the definitions and selected scope of each profile.
 | Compiler | [Protocol composition](compiler/protocol-composition.md) | Static applications, role substitution, bounded expansion and residual-to-terminal bindings |
 | Compiler | [Structured proof messages](compiler/structured-proof-messages.md) | Complete typed frames, installed domains and authorized setups under proof policy `/4` |
 | Compiler | [Nested data](compiler/nested-data.md) | Immutable sequences, ragged matrix frames, recursive permissions and cumulative bounds |
-| Compiler | [Scheduled participant lowering](compiler/scheduled-participants.md) | Role-local operands, distinct send/receive instructions, shared calls/loops and complete source-to-target execution equality |
-| Compiler | [Finite phase certificates](compiler/finite-phases.md) | All-reply summaries, finite covers, structural checking and realized admission |
-| Compiler | [Factor preparation](compiler/factor-preparation.md) | Live facts, guarded typed rule, frames, allocation and immutable preparation |
 | Compiler | [Local algorithms](compiler/local-algorithms.md) | Shared acyclic local calls, bound entailment, expansion and complete stopping; not equivalence to a separately charged call stack |
 | Compiler | [Conditional entry completion](compiler/entry-completion.md) | Owner-local return, affine continuation, nested cleanup, retained prefixes and bounded local termination |
 | Compiler | [Local control](compiler/local-control.md) | Typed local conditionals and bounded loops, resources and failure behavior; no dynamic protocol choice or unbounded loops |
 | Compiler | [Local variants](compiler/local-variants.md) | Nominal variant construction, exhaustive matching and payload/resource bounds |
+
+## Independent semantic models
+
+These profiles describe independently formalized programs, analyses, protocols
+and experiments. Their model-specific formats and executable references are not
+additional native compiler or runtime paths. Correspondence applies to the exact
+Lean subjects and premises named by each page; it does not validate `.zkc` or
+`zkc.program/1`.
+
+| Group | Profile | Selected scope |
+|---|---|---|
+| Source | [Named inputs and role stores](source/named-inputs.md) | Exact ordered string-named binding, diagnostics, permitted views and local runs |
+| Source | [Public dimensions](source/public-dimensions.md) | Scoped natural expressions, formation, actual public values and substitution |
+| Source | [Invocation-selected families](source/families.md) | Public input selection, dependent protocol shapes, complete outcomes and bounded admission |
+| Source | [Expressions and captures](source/expressions.md) | Positional reads, ring expressions, dependencies and immutable issuance |
+| Source | [Resolved definitions](source/definitions.md) | Shared acyclic bodies, typed calls, complete stopping, capture/reference renaming and optional inlining |
+| Source | [Generic static foundation](source/generic-definitions.md) | Checked equality/capability derivations and structured type substitution with complete execution preservation; native generic resolution is separate |
+| Source | [Located calls and shared control](source/located-execution.md) | Role-local execution/admission, complete stop origins, peer-state frames and actual guard/count agreement |
+| Source | [Resolved common protocols](source/common-protocols.md) | Role-owned ports, shared protocol bodies, selected bindings, independent reception and fixed public loops with complete stopping |
+| Compiler | [Direct plans](compiler/direct-plan.md) | Evaluator, exact direct checking, version-1 grammar and separate phase sidecar |
+| Compiler | [Scheduled participant lowering](compiler/scheduled-participants.md) | Role-local operands, distinct send/receive instructions, shared calls/loops and complete source-to-target execution equality |
+| Compiler | [Finite phase certificates](compiler/finite-phases.md) | All-reply summaries, finite covers, structural checking and realized admission |
+| Compiler | [Factor preparation](compiler/factor-preparation.md) | Live facts, guarded typed rule, frames, allocation and immutable preparation |
 | Realization | [Instruction-list execution](realization/instruction-machine.md) | Embedded exits, list execution and justified resumption |
 | Realization | [Scalar bytes](realization/scalar-bytes.md) | Selected width/modulus, prefix decoding and actual failed receive effects |
 | Providers | [Product tapes](providers/product-tapes.md) | Persistent transitions, residual reconstruction and actual next-request consumer |

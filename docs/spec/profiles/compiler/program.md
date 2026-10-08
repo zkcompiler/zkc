@@ -13,11 +13,11 @@ and security certificates remain separate.
 
 ## IR stages and interchange
 
-Math lowering always selects `#protocol.execution_contract<program>`.
-Flat bodies, loops, copyable aggregates, empty arrays and dynamic messages use
-the same executable contract. The selector distinguishes this contract from
-the transitional source contract; it is not a feature version.
-Physical selection produces `physical` with the same selector.
+The four profiles `protocol`, `participant`, `exec` and `physical`, with their
+mandatory formation checks, select the IR semantics. Flat bodies, loops,
+copyable aggregates, empty arrays and dynamic messages share one executable
+contract. Physical selection produces the `physical` profile; no separate
+execution-contract property selects a second interpretation.
 
 The external tag is `zkc.program/1`, with the six-field root
 `[tag, bindings, "physical", functions, participants, entries]`. Function records
@@ -25,29 +25,19 @@ retain their existing logical-origin field. Each participant has the service
 profile's ninth field: a list of `[name, contract, input_index]` service rows,
 including an empty list for participants without services. Indices are canonical
 nonnegative decimal strings. Entry maps and all existing instruction records
-retain their positional shapes.
+retain their positional shapes. The reserved participant parameter array must
+be empty. The constant `"physical"` field and empty parameter slot are required
+parts of this closed grammar, not compatibility-reader branches.
 
 Only physical programs have an interchange encoding. A compiler may
 reconstruct a logical execution model internally to validate and select
 representations. That internal check is not public serialization admission:
-`source::checkStructure`, program JSON decoding and JSON export refuse a
+`program::checkStructure`, program JSON decoding and JSON export refuse a
 logical program root. Public checked export runs full MLIR verification, including
 projection metadata and native type policy, before reconstructing the model.
 
-The superseded `zkc.native-participants/1`, `/2` and `/3` formats and their
-MLIR execution selectors are refused. There is no compatibility decoder or
-automatic tag conversion. Programs must be recompiled from their retained input.
-
-The obsolete `zkc.service-participants/1` tag and `service_participants_v1`
-selector are also refused. Direct model/API clients use the Program contract
-with physical stage and its nine-field participant records; re-import or
-recompile the retained source under that contract. Service queries retain their
-installed signatures, result values and lease lifecycle. There is no automatic
-tag conversion.
-
-The older source tag `zkc.participants/1` keeps its grammar and
-`legacy_participants_v1` selector. It admits neither Boolean literals nor service
-ports. Renaming a tag does not bypass the selected contract's admission rules.
+Only the exact `zkc.program/1` tag is admitted. No compatibility decoder or
+automatic tag conversion supplies another execution contract.
 
 ## Data boundaries
 
@@ -55,8 +45,7 @@ The program contract admits copyable variants at participant ports, recursively
 checking all payloads; affine variants remain local. Common and participant IR
 use the same type policy. One-owner RNG and
 resource ports remain admitted. Port permission implies neither a codec nor an
-installed representation. The transitional source tags retain their existing rules.
-Programs admit variant messages under the complete closed grammar in
+installed representation. Programs admit variant messages under the complete closed grammar in
 [structured messages](structured-proof-messages.md). They retain the
 participant machine's control and custody rules.
 
@@ -118,7 +107,7 @@ wrappers are checked independently and their logical components must satisfy
 the same policy. A type's presence in an installed catalog is insufficient to
 extend the native profile. The [structured profile](structured-mathematics.md#native-array-boundary)
 adds native wire permission for complete static BLS field-array types,
-independent of the old common codec. Other nonserializable private data and
+under its own complete-type codec contract. Other nonserializable private data and
 affine capabilities cannot cross a message edge. Copies of capability handles do not copy authority.
 
 A generated guard branches locally: true yields; false stops with explicit
@@ -143,15 +132,14 @@ to a mathematical source. A generic role runner can expose a message to a named
 external peer; its host must authorize the peer roster and route/envelope. Joint
 bundle and proof admission enforce their own closed roster policies.
 The [proof host](native-proofs.md) and joint host consume
-this same program format with distinct policies. Proof-policy versions constrain
-actual messages, loops, keys and transcript transitions independently of the
-program tag; the program format alone grants no proof-policy authority.
-Older source-relative artifact and correspondence adapters refuse this format.
-Existing Lean participant readers do not implement it and continue to refuse it.
-New checking support requires its own interpretation and evidence.
+this same program format with distinct Host responsibilities. The single proof
+policy independently constrains actual messages, loops, keys and transcript
+transitions; the program format alone grants no proof authority.
+Independent Lean participant models do not interpret this format. Native checking
+support requires its own interpretation and correspondence evidence.
 
 ## Conditional completion extension
 
 The native mathematical path also supports [conditional entry completion and
-bounded local termination](entry-completion.md). Its program-only records do
-not extend the legacy carrier or its formal checker.
+bounded local termination](entry-completion.md). Its records belong to this executable contract; independent formal models
+require their own explicit interpretation.

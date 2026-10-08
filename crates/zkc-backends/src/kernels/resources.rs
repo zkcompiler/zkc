@@ -9,22 +9,18 @@ pub(crate) fn apply(
     i: &Invocation<'_>,
     p: &Policy,
     r: &mut Resources,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
 ) -> Option<Result<Vec<Value>>> {
     if !matches!(
         name,
         "random.index"
-            | "transcript.draw_index"
             | "random.draw"
             | "random.vector"
             | "curve.commit"
             | "curve.response"
-            | "transcript.challenge"
-            | "transcript.native.challenge"
-    ) && !name.starts_with("transcript.observe.")
-        && !name.starts_with("transcript.native.observe.")
-        && !name.starts_with("transcript.native.indexed.")
-    {
+            | "transcript.native.indexed.challenge"
+            | "transcript.native.indexed.observe.data"
+    ) {
         return None;
     }
     Some((|| {
@@ -34,13 +30,6 @@ pub(crate) fn apply(
                 p.output(1024, i.max_output_bytes)?;
                 let (v, t) = r.draw_index(i.frame, t, *bound)?;
                 Ok(vec![v, Rng(t)])
-            }
-            ("transcript.draw_index", [Transcript(t), Index(bound)]) => {
-                p.output(1024, i.max_output_bytes)?;
-                let origin = zkc_runtime::logical::challenge_origin(i.frame.origin(), i.attributes)
-                    .map_err(|_| refused("transcript-origin"))?;
-                let (v, t) = r.transcript_index(i.frame, t, &origin, *bound)?;
-                Ok(vec![v, Transcript(t)])
             }
             ("random.draw", [Rng(t)]) => {
                 let (v, t) = r.draw_value(i.frame, t)?;
@@ -66,9 +55,7 @@ pub(crate) fn apply(
                 let (v, t) = r.transcript_challenge_value(i.frame, t, &origin)?;
                 Ok(vec![v, Transcript(t)])
             }
-            (name, [Transcript(t), v, Indices(indices)])
-                if name.starts_with("transcript.native.indexed.observe.") =>
-            {
+            ("transcript.native.indexed.observe.data", [Transcript(t), v, Indices(indices)]) => {
                 p.output(512, i.max_output_bytes)?;
                 let origin =
                     zkc_runtime::logical::indexed_native_origin(i.attributes, "message", indices)
@@ -78,33 +65,6 @@ pub(crate) fn apply(
                     crate::NativeWireError::Backend(e) => e,
                     crate::NativeWireError::Invalid(_) => refused("native-wire-value"),
                 })?;
-                Ok(vec![Transcript(
-                    r.transcript_observe(i.frame, t, &origin, &bytes)?,
-                )])
-            }
-            (name @ ("transcript.challenge" | "transcript.native.challenge"), [Transcript(t)]) => {
-                p.output(1024, i.max_output_bytes)?;
-                let origin = if name == "transcript.native.challenge" {
-                    zkc_runtime::logical::native_origin(i.attributes, "query")
-                } else {
-                    zkc_runtime::logical::challenge_origin(i.frame.origin(), i.attributes)
-                }
-                .map_err(|_| refused("transcript-origin"))?;
-                let (v, t) = r.transcript_challenge_value(i.frame, t, &origin)?;
-                Ok(vec![v, Transcript(t)])
-            }
-            (name, [Transcript(t), v])
-                if name.starts_with("transcript.observe.")
-                    || name.starts_with("transcript.native.observe.") =>
-            {
-                p.output(512, i.max_output_bytes)?;
-                let origin = if name.starts_with("transcript.native.") {
-                    zkc_runtime::logical::native_origin(i.attributes, "message")
-                } else {
-                    zkc_runtime::logical::message_origin(i.frame.origin(), i.attributes)
-                }
-                .map_err(|_| refused("transcript-origin"))?;
-                let bytes = crate::codec::encode(v, p)?;
                 Ok(vec![Transcript(
                     r.transcript_observe(i.frame, t, &origin, &bytes)?,
                 )])
@@ -167,48 +127,6 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Field, Transcript],
             AttributeRule::NativeChallengeTemplate,
         ),
-        transcript::observation(
-            "transcript.native.indexed.observe.bool",
-            &[Transcript, Bool, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
-        transcript::observation(
-            "transcript.native.indexed.observe.field",
-            &[Transcript, Field, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
-        transcript::observation(
-            "transcript.native.indexed.observe.group",
-            &[Transcript, Group, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
-        transcript::observation(
-            "transcript.native.indexed.observe.commitment",
-            &[Transcript, Commitment, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
-        transcript::observation(
-            "transcript.native.indexed.observe.proof",
-            &[Transcript, Proof, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
-        transcript::observation(
-            "transcript.native.indexed.observe.index",
-            &[Transcript, Index, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
-        transcript::observation(
-            "transcript.native.indexed.observe.field_array",
-            &[Transcript, FieldArray, Indices],
-            &[Transcript],
-            AttributeRule::NativeMessageTemplate,
-        ),
         curve::operation(
             "curve.commit",
             &[Groups, Nonce],
@@ -221,29 +139,11 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Field],
             AttributeRule::None,
         ),
-        transcript::challenge(
-            "transcript.native.challenge",
-            &[Transcript],
-            &[Field, Transcript],
-            AttributeRule::NativeChallengeOrigin,
-        ),
-        transcript::challenge(
-            "transcript.challenge",
-            &[Transcript],
-            &[Field, Transcript],
-            AttributeRule::ChallengeOrigin,
-        ),
         random::operation(
             "random.index",
             &[Rng, Index],
             &[Index, Rng],
             AttributeRule::None,
-        ),
-        transcript::challenge(
-            "transcript.draw_index",
-            &[Transcript, Index],
-            &[Index, Transcript],
-            AttributeRule::ChallengeOrigin,
         ),
         random::operation("random.draw", &[Rng], &[Field, Rng], AttributeRule::None),
         random::operation(
@@ -251,120 +151,6 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             &[Rng],
             &[Vector, Rng],
             AttributeRule::NaturalIndex,
-        ),
-    ]
-};
-pub(crate) const OBSERVATIONS: &[crate::bindings::Contract] = {
-    use crate::bindings::transcript;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
-    &[
-        transcript::observation(
-            "transcript.observe.index",
-            &[Transcript, Index],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.indices",
-            &[Transcript, Indices],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.commitments",
-            &[Transcript, Commitments],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.native.observe.bool",
-            &[Transcript, Bool],
-            &[Transcript],
-            AttributeRule::NativeMessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.bool",
-            &[Transcript, Bool],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.native.observe.field",
-            &[Transcript, Field],
-            &[Transcript],
-            AttributeRule::NativeMessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.field",
-            &[Transcript, Field],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.matrix",
-            &[Transcript, Matrix],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.vector",
-            &[Transcript, Vector],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.polynomial",
-            &[Transcript, Polynomial],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.round",
-            &[Transcript, Round],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.table",
-            &[Transcript, Table],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.point",
-            &[Transcript, Point],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.native.observe.group",
-            &[Transcript, Group],
-            &[Transcript],
-            AttributeRule::NativeMessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.group",
-            &[Transcript, Group],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.groups",
-            &[Transcript, Groups],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.commitment",
-            &[Transcript, Commitment],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
-        ),
-        transcript::observation(
-            "transcript.observe.proof",
-            &[Transcript, Proof],
-            &[Transcript],
-            AttributeRule::MessageOrigin,
         ),
     ]
 };

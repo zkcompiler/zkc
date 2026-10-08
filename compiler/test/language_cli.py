@@ -109,7 +109,7 @@ with case('target admission failure names its phase and related source declarati
                       '\nprotocol Unused roles(P)()->(r:Fr@P){return(r=f17());}entry Demo=Unused;')
     attempt = commands.attempt([compiler, 'language-check', '--source-format=zkc',
                                 '--entry=expansion::Demo', f'--module=expansion={source}'])
-    assert attempt.returncode != 0 and not attempt.stdout
+    assert attempt.returncode > 0 and not attempt.stdout
     diagnostic = attempt.stderr
     assert 'target.admission' in diagnostic
     assert 'related source declaration: expansion::' in diagnostic

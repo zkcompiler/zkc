@@ -39,15 +39,13 @@ graphs.
 | `protocol`, `local`, `crypto` | Existing roles/messages/services, ordered local programs/capabilities, and bound transcript kernels |
 | Shared compiler pipeline | `compileRun` and `compileNativeProof` share physical participant compilation |
 | `zkc-runtime` | One `Runner` and its native control/cut API; structural admission with a selected proof-entry policy |
-| `zkc-tools` artifact host | Source-specific admission adapters feeding shared binding, codecs, proof framing, publication and per-invocation resource handling |
+| `zkc-tools::proof` Host | Native deployment admission, shared binding, codecs, proof framing, publication and per-invocation resource handling |
 | Backends | Existing Arkworks/Dalek/Plonky3 and transcript implementations; no whole-protocol callbacks |
 
 The native proof host uses `NativeProofEntry` and the runner's control API for
 loops, yields and local completion. Its admission separates private external
 inputs from host-created transcript roots. The joint schedule is not the authority
-for an independently executing role. The older `NoninteractiveEntry` remains with
-the source/Lean artifact host and its separate correspondence contract.
-The typed `NativeProofReport` retains successful copyable original results for
+for an independently executing role. The typed `NativeProofReport` retains successful copyable original results for
 both participants, indexed by their original output ports. Rejection and cleanup
 failure suppress those results. Generated transcript and private successors are
 retired by the same Host; CLI diagnostics do not publish application outputs.
@@ -58,8 +56,7 @@ is canonically bound; private data avoids a serialization roundtrip. Source
 acknowledgement over these methods. Native callers may import `ProverMaterial`
 once from bytes or a regular file and supply `InputValue::ProverKey` on repeated
 calls. The handle shares immutable material while each call retains its own
-setup admission, quotas and runtime state. Source setup bindings are still needed
-to expose this constructor through named source inputs. An outer `Ok` reports successful preparation;
+setup admission, quotas and runtime state. Named source setup bindings expose this constructor through the Entry Host. An outer `Ok` reports successful preparation;
 check `ProofReport::is_success()` for acceptance and complete cleanup, or use
 `into_result()` to branch while retaining the full report on failure.
 For a complete executable CLI example, see
@@ -92,7 +89,7 @@ both interfaces and the map; the source-relative checker validates its meaning.
 The maps are frozen before participant simplification and lowering; metadata
 cannot replace the source-relative check.
 
-The flat policy adds only an internal transcript input/result to each
+The construction adds only an internal transcript input/result to each
 participant and removes the selected validator service. The producer host
 receives all explicitly authorized public bindings for root initialization;
 there are no generated participant data inputs. Shared public components must
@@ -111,26 +108,20 @@ mechanics. Use operation-owned effects/dependencies and ordinary SSA mappings,
 region arguments and symbol references. Admission remains closed; unknown
 operations or unrealized casts cannot slip through a partial conversion.
 
-## Supported policies and formats
+## Policy and formats
 
-Proof policy versions select different admitted programs. They are independent
-of the execution formats: every policy embeds `zkc.program/1`; joint execution
-uses `zkc.run/1`. The deployment envelope version matches its policy version.
-Superseded `zkc.native-participants/*` and `zkc.native-run/*` tags are refused.
+`zkc.native-proof-policy/4` is the sole proof policy for flat programs, bounded
+loops, PCS, structured messages and authored execution. Deployment, descriptor,
+construction metadata and invocation binding also use `/4`. Every proof embeds
+`zkc.program/1`; joint execution uses `zkc.run/1`. This is one proof contract
+within the four IR profiles. Other proof versions have no compatibility reader.
 
-| Policy | Admitted boundary | Contract |
-|---|---|---|
-| `zkc.native-proof-policy/1` | Flat BLS Fr/G1/Boolean programs, selected direct verifier challenges or authored execution | [Flat profile](../spec/profiles/compiler/native-proofs.md) |
-| `zkc.native-proof-policy/2` | Compact nested iteration, explicit dynamic occurrence coordinates and loop-carried transcript state | [Iterated profile](../spec/profiles/compiler/native-proofs.md#iterated-deployment-profile) |
-| `zkc.native-proof-policy/3` | Original-commitment terminals with a separately authorized BLS multilinear PCS setup | [Committed profile](../spec/profiles/compiler/native-proofs.md#committed-deployment-profile) |
-| `zkc.native-proof-policy/4` | Structured messages, runtime-count nested data, installed domain leaves and multiple authorized setups | [Structured profile](../spec/profiles/compiler/structured-proof-messages.md) |
-
-Native-origin transcript contracts have their own names, attributes and dynamic
-coordinate operands. They do not reinterpret source-local transcript labels.
-Signature, history effect, attribute admission, physical binding and export must
-agree. A new catalog domain does not automatically extend a proof policy's suite
-or codec allow-list. Existing Lean source/participant readers refuse native
-records; their correspondence evidence does not transfer through format naming.
+Generated transcripts use `transcript.native.indexed.challenge` and
+`transcript.native.indexed.observe.data`, with explicit indexed origins even for
+flat programs. Signature, history effect, attribute admission, physical binding
+and export must agree. Authored `external.*` primitives keep their own contracts.
+A catalog domain does not automatically extend the suite or codec allow-list.
+Independent Lean models require their own native interpretation and correspondence.
 
 ## Construction and admission
 
@@ -176,30 +167,30 @@ are bounded checks, not a derivation theorem or native Lean semantics.
 
 Installed transcript suites use explicit affine state. Authored external
 Monero/OpenVM data-state transitions retain their distinct contracts. The BLS
-profiles use `merlin3.bls12-381.fr64be/1` or
-`spongefish0.7.4.keccak.bls12-381.fr64be/1`; `/4` also admits selected Ristretto and
-ext8 suites. BN254 challenges remain outside the profile.
+suites are `merlin3.bls12-381.fr64be/1` and
+`spongefish0.7.4.keccak.bls12-381.fr64be/1`; Ristretto and
+ext8 suites are also registered. BN254 challenges remain outside the profile.
 
 The native root binds source and policy identity, ordered actual public values,
 application context and applicable setup material. Its exact encoding and bounds
-belong to the [deployment and invocation contract](../spec/profiles/compiler/native-proofs.md#flat-deployment-and-invocation-records).
+belong to the [deployment and invocation contract](../spec/profiles/compiler/native-proofs.md#deployment-and-invocation-records).
 The complete canonical root enters the suite under `binding`; its SHA-256 digest
 is the proof-header binding. Candidate hashes bind compilation separately.
 The installed Spongefish kernel uses raw `Keccak::default()` with zkc framing;
 it does not claim upstream `DomainSeparator` or I/O-pattern semantics.
 
-[Occurrences](../spec/profiles/compiler/native-proofs.md#flat-native-occurrence-encoding)
-bind original entry/call paths and query/message sites. Iterated contracts add
-explicit induction coordinates. Generated helper names, physical renaming and
-runtime diagnostic paths do not determine transcript bytes. The descriptor keeps
+[Occurrences](../spec/profiles/compiler/native-proofs.md#native-occurrence-encoding)
+bind original entry/call/repeat paths and query/message sites, with explicit
+induction coordinates for enclosing repeats. Generated helper names, physical
+renaming and runtime diagnostic paths do not determine transcript bytes. The descriptor keeps
 a flat static event list; loop ancestry and SSA control supply the structure.
 A second recursive descriptor would duplicate that control.
 
 Canonical decoding precedes observation of received values. Structured codecs
 bind complete types, tags, lengths and actual payloads. External raw-byte formats
 need an explicit adapter retaining the relevant bytes; a permissive internal
-decoder would change transcript meaning. The existing `ZKCPRF01` outer frame is
-shared, while source and native adapters choose distinct binding domains.
+decoder would change transcript meaning. The `ZKCPRF01` outer frame carries the
+SHA-256 digest of the canonical native invocation root.
 
 A completed producer may return only a proof prefix. The independent validator
 checks the actual final decision and proof exhaustion. Header consistency alone
@@ -278,8 +269,8 @@ participant mathematics; `protocol-check-proof` checks a supplied candidate
 against original source and policy. The C++ API is `compileNativeProof` in
 [`NativeProof.h`](../../compiler/include/zkc/Compiler/NativeProof.h).
 
-Setup-bearing deployments require application authorization: `--key-id=EXPECTED_KEY_ID` for
-one setup or `--setups=AUTHORITY` for a `/4` setup registry. `--attempts=POLICY` selects
+Setup-bearing deployments require application authorization through
+`--setups=AUTHORITY`, including deployments with one key. `--attempts=POLICY` selects
 [bounded attempts](native-attempts.md); `--capacity=LIMITS` selects host limits.
 These settings do not authorize keys or program identities supplied by a prover.
 
@@ -293,12 +284,18 @@ in [Thaler's text](https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.pdf)
 Repeated openings use ordinary immutable state; no second affine lifecycle is
 needed. The installed PCS requires positive arity and is nonhiding.
 
-`NativeDeployment::admit_with_key` takes independent expected deployment and key
-identities. The public key is canonical, fingerprint checked, root bound and
-installed before PCS decoding. Prover material has its own full-material pin.
-The `/4` `admit_with_setups` API assigns authority to each setup-bearing input;
-proof metadata cannot authorize a new key. One-key admission uses the same
-registry checks. Path-specific mixed-setup input authorization remains unsupported.
+`NativeDeployment::admit` in `zkc_tools::proof` takes independent
+deployment and setup authority. The Host imports canonical, fingerprint-checked
+public keys before PCS decoding and binds their full bytes in the invocation
+root. Prover material has a separate full-material pin. Each setup-bearing input
+has an authorized key association; peer metadata may select only a registry key.
+
+An incoming value under another authorized setup may decode and be observed.
+The explicit verifier-key operand at `pcs.check` enforces the protocol's expected
+key and arity. A returned PCS value without that check is authorized but need not
+belong to a specific output setup. The Host has no output setup slots or
+per-receive source selectors. Path-specific mixed-setup input authorization
+remains unsupported. See the [setup contract](../spec/profiles/compiler/structured-proof-messages.md#application-authorized-setups).
 
 Admission checks every mapped input, including unused ports and inactive PCS
 alternatives. Internal point/opening-state types can be valid IR without an
@@ -336,13 +333,11 @@ ceilings; raising one does not raise the others. See
 
 The references independently reconstruct equations, roots, origins and frames,
 while reusing trusted upstream arithmetic/transcript primitives. They are bounded
-execution evidence. Full Groth16, BP+ and zkVM libraries, native Lean semantics
-and cryptographic proofs remain separate work.
+execution evidence. These controls are not complete Groth16, BP+ or zkVM libraries. Native Lean
+semantics and cryptographic proofs remain separate work.
 
-New schemes, dynamic protocol composition, differing-root affine joins, native
-normalized identity and broader construction recipes require explicit design and
-admission rules. Existing [structured data](structured-proofs.md), [nested data](nested-data.md),
+New schemes, dynamic protocol composition, differing-root affine joins and
+broader construction recipes require explicit design and admission rules. Existing [structured data](structured-proofs.md), [nested data](nested-data.md),
 [authored transcripts](authored-transcripts.md), [relation bindings](relation-bindings.md)
-and [entry completion](entry-completion.md) already use this pipeline. The
-[migration inventory](migration.md) retains source-route consumers until their
-behavior and checking obligations move.
+and [entry completion](entry-completion.md) already use this pipeline. [Roadmap](../roadmap.md) records further native work;
+retired source/application consumers impose no porting obligation.

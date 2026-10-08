@@ -1,8 +1,7 @@
 //! Small runnable host input boundary; not a complete protocol CLI.
 use std::sync::Arc;
-use zkc_backends::{
-    Domain, EntryPolicy, InputBindings, Keys, NativeBackend, Policy, PublicInputs, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, Keys, NativeBackend, Policy, Value};
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{Action, Runner, admit_supplied};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -13,31 +12,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let domain = Domain::new("P", "demo-session", "main", Some("demo"));
     let mut backend = NativeBackend::new(
         policy,
-        EntryPolicy::new(domain.clone(), Some(1), PublicInputs::LocalOnly),
-        None,
+        EntryPolicy::new(domain.clone(), Some(1)),
+        Default::default(),
     )?;
-    let mut host = InputBindings::new();
-    host.insert(
-        "prover-key",
-        Value::ProverKey(Arc::new(keys.prover_key().clone())),
-    )?;
-    host.insert("challenge-source", backend.issue_rng(domain, 1)?)?;
-    let artifact = br#"["zkc.participants/1",[["commit","pcs.commit",["multilinear.kzg.bls12-381/1"],"arkworks/pcs.commit"],["draw","random.draw",["bls12-381.fr"],"arkworks/random.draw"]],"physical",
+    let key = Value::ProverKey(Arc::new(keys.prover_key().clone()));
+    let rng = backend.issue_rng_for(Identity::Bls12381Fr, domain, 1)?;
+    let artifact = br#"["zkc.program/1",[["commit","pcs.commit",["multilinear.kzg.bls12-381/1"],"arkworks/pcs.commit"],["draw","random.draw",["bls12-381.fr"],"arkworks/random.draw"]],"physical",
       [["function","commit_one",[["pk","prover_key:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1"],["t","table:bls12-381.fr@arkworks.mle-lsb/1"],["rng","rng:bls12-381.fr@host.resource/1"]],["commitment:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","opening_state:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","field:bls12-381.fr@arkworks.fr/1","rng:bls12-381.fr@host.resource/1"],
         [["op","commit","commit",[],["pk","t"],["C","state"]],
          ["op","draw","draw",[],["rng"],["r","next"]],
          ["return",["C","state","r","next"]]], ["commit_one",[]]]],
-      [["participant","prover","demo","P",[["n","1"]],[["pk","prover_key:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1"],["t","table:bls12-381.fr@arkworks.mle-lsb/1"],["rng","rng:bls12-381.fr@host.resource/1"]],["commitment:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","opening_state:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","field:bls12-381.fr@arkworks.fr/1","rng:bls12-381.fr@host.resource/1"],
-        [["local","local_commit","commit_one",["pk","t","rng"],["C","state","r","next"]],["return",["C","state","r","next"]]]]],
+      [["participant","prover","demo","P",[],[["pk","prover_key:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1"],["t","table:bls12-381.fr@arkworks.mle-lsb/1"],["rng","rng:bls12-381.fr@host.resource/1"]],["commitment:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","opening_state:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1","field:bls12-381.fr@arkworks.fr/1","rng:bls12-381.fr@host.resource/1"],
+        [["local","local_commit","commit_one",["pk","t","rng"],["C","state","r","next"]],["return",["C","state","r","next"]]], []]],
       [["entry","main",[["P","prover"]]]]]"#;
     let admitted = admit_supplied(artifact, &backend)?;
-    let role = admitted.entry("main").ok_or("entry")?.remove(0);
-    let json = br#"["zkc.inputs/1",[
-      ["pk",["host","prover-key"]],
-      ["t",["table",["2","3"]]],
-      ["rng",["host","challenge-source"]]
-    ]]"#;
-    let inputs = backend.inputs_from_json(&role, json, &host)?;
+    let table = Value::table(
+        &[zkc_backends::Scalar::from(2), zkc_backends::Scalar::from(3)],
+        &policy,
+    )?;
+    let wire = backend.encode_native_value(&table)?;
+    let decoded = backend.decode_native_value(
+        &zkc_runtime::interactive::Value::physical_type(&table),
+        &wire,
+    )?;
+    let inputs = vec![key, decoded, rng];
     let mut runner = Runner::new(&admitted, "main", "P", "demo-session", backend, inputs)
         .map_err(|e| e.error)?;
     loop {
@@ -52,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 println!(
                     "public commitment bytes: {}",
-                    runner.backend().encode_value(&values[0])?.len()
+                    runner.backend().encode_native_value(&values[0])?.len()
                 );
                 if let Value::Rng(token) = &values[3] {
                     println!("resource state: {:?}", runner.backend().observe(token)?);

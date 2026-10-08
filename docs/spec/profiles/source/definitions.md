@@ -145,10 +145,10 @@ contracts rather than treat a type-correct call as an equivalence proof.
 The [located-call profile](located-execution.md) supplies role-state lifting,
 local-effect admission and shared-control agreement. It also proves that the
 positive-round whole Sumcheck definition cannot be treated as a communication-free
-local block. Distributed grammar, projection and native connections still remain.
+local block. [Common protocols](common-protocols.md) and their scheduled target
+separately define distributed grammar and projection.
 
-The native [canonical local algorithm profile](../compiler/local-algorithms.md)
-connects a straight-line closed subset to source parsing, MLIR calls,
-construction, independent candidate checking and execution. Its canonical
-expanded accounting is explicit; the generic inlining theorem does not by
-itself prove native resource equivalence.
+The native [local algorithm profile](../compiler/local-algorithms.md) defines
+acyclic calls and checked expansion in mathematical MLIR. Its expanded accounting
+is explicit; this independent inlining theorem does not establish native
+resource equivalence.

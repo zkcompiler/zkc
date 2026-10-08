@@ -9,6 +9,14 @@ pub(crate) enum ReadError {
     Io(io::Error),
     Limit,
 }
+impl std::fmt::Display for ReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(f, "{error}"),
+            Self::Limit => f.write_str("input byte limit exceeded"),
+        }
+    }
+}
 pub(crate) fn read_bounded(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
     read_from(std::fs::File::open(path).map_err(ReadError::Io)?, limit)
 }

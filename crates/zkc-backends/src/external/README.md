@@ -44,26 +44,6 @@ accounting. The primitive helpers install no global counters, RNG or private
 attempt buffers. The owning runtime controls handle
 identity, snapshot/cloning authorization, capacity, and complete outcomes.
 
-`grinding::Search` owns a candidate provider, an explicit role/purpose namespace,
-and the fixed transcript seed. `advance(fuel)` runs a finite prefix on clones;
-its candidate-call limit and `Work::units()` ceiling persist across resumptions.
-Provider failures and exhausted deployment budgets stop permanently with retained
-counters. Invalid candidates consume a provider call but no cryptographic work.
-Zero difficulty returns witness zero without a provider call or trial. Finding
-a witness does not mutate a live transcript: the caller explicitly checks that
-witness once, including through `external.openvm.check_witness`. A direct failed
-check retains its state effects. This sequential driver does not reproduce the
-upstream parallel search's choice order or establish a search-success bound.
-
-`WireMap::new(Vec<WireItem>)` admits named values and origins with optional
-container positions. Construction never changes a transcript. A wire item is a
-vector of raw words, canonical fields, or opaque bytes. `validate_mapping` checks
-coverage against explicit observed item identities and `Unobserved {item,guard}`
-obligations. Duplicate identities/positions, missing items, uncovered items,
-conflicting classifications, and empty guard identities refuse. Repeated
-observations are allowed because the selected protocol decides whether they are
-required. A guard identity **does not execute or prove** a verifier guard.
-
 All primitive errors are returned as `external:*` codes. The main adapter selects
 the enclosing malformed/refused/exhausted policy; a false witness predicate is a
 normal result with its actual state effects. The provider knows no BP+ rounds or
@@ -89,91 +69,15 @@ implement or independently prove its hash-to-point derivation. Six additional
 primitive vectors use the retained pinned native `cn_fast_hash` shared library
 and independent Python integer reduction, including empty input.
 
-## JSON replay interface, version 1
+## Independent validation
 
-```sh
-cargo run --offline --locked -p zkc-backends --example external_replay -- input.json
-# Omit path, or use -, to read stdin. Success: one JSON result. Failure: exit 1.
-```
+`cargo test -p zkc-backends --test external_transcript --all-features` compares
+installed primitives with separately implemented pinned challenger transitions
+and saved Keccak/scalar vectors. Native authored `external.*` operations also
+exercise persistent resource accounting, snapshots, invalid-input refusal and
+failed witness checks. Protocol methods own their explicit trial loops and
+proof framing. No standalone replay, wire-map or grinding service is installed.
 
-A document has exactly these members:
-
-```json
-{
-  "version": 1,
-  "profile": "openvm-babybear-poseidon2-v1",
-  "items": [
-    {"id":"vk", "origin":"application:vk", "wire_index":null,
-     "kind":"fields", "values":[17,19]},
-    {"id":"response", "origin":"proof:opening", "wire_index":0,
-     "kind":"opaque", "values":"1234"}
-  ],
-  "unobserved": [{"item":"response", "guard":"protocol:authenticated-opening"}],
-  "events": [
-    {"op":"observe", "items":["vk"]},
-    {"op":"sample_ext"},
-    {"op":"sample_bits", "bits":3},
-    {"op":"trial_witness", "bits":3, "witness":17}
-  ]
-}
-```
-
-`wire_index` is a distinct container ordinal or `null` for external/derived
-inputs. It never sorts events. `origin` is required descriptive source metadata,
-not an authenticated identity. `kind` is `words` (array of 64 lowercase hex digit
-strings), `fields` (array of canonical u32 values), or `opaque` (lowercase hex).
-Each named item must be referenced or listed once in `unobserved`. Opaque items
-cannot feed a primitive directly; the protocol must decode them into typed items.
-
-Profiles and events:
-
-| Profile | Events |
-|---|---|
-| `monero-hash-chain-v1` | Required `initial`: 64 hex digits. `hash` with `items` and unique `output` computes a stateless scalar hash, available by that name to later events. `update` with `items` updates the chain. `items:[]` is allowed in both. |
-| `openvm-babybear-poseidon2-v1` | No `initial` member. `observe` with `items`; `sample`; `sample_ext`; `sample_bits` with `bits`; `check_witness` or `trial_witness` with `bits,witness`. |
-
-Every event optionally accepts `expect` and `expect_state`. `expect` matches the
-result: hex word for hash/update, null for observe, integer for sample/bits, four
-integers for extension, boolean for witness checks. `expect_state` matches either
-the chain's hex word or `{ "state": [16 integers], "absorb_index": n,
-"sample_index": n }`. A mismatch fails replay. Expected values never influence
-primitive calculations. Stateless hash and clone trials leave live state intact.
-
-Output contains `version`, `profile`, `checkpoints`, and total `work`. Each
-checkpoint contains `index`, `op`, `value`, live `state`, and `work`. Trial work is
-included in total work even though its events do not enter the live transcript.
-This lets a separate schedule interpreter compare every transition and convert
-challenges independently while treating Keccak/Poseidon2 as explicit trusted
-primitives. The CLI is a diagnostic replayer, not the complete-outcome runtime;
-on malformed input/mismatch/exhaustion it exits without a partial result.
-
-Duplicate JSON keys, unknown members/operations, noninteger inputs, forward or
-missing references, wrong value kinds, invalid hex, trailing data, and invalid
-profile/parameter combinations refuse. The tool bounds ingress bytes, item/event
-counts, per-event values, hashed bytes and permutations through `replay::Limits`.
-`replay_json` is the byte ingress; `replay(&Value,limits)` assumes JSON has already
-been decoded and cannot retrospectively detect duplicate keys.
-
-## Real fixture replay
-
-```sh
-cargo test --offline --locked -p zkc-backends --test external_transcript
-python3 tests/external-transcripts/make_replays.py build/reports/external-replays
-cargo run --offline --locked -p zkc-backends --example external_replay -- build/reports/external-replays/ordinary-monero-16.replay.json
-cargo run --offline --locked -p zkc-backends --example external_replay -- build/reports/external-replays/ordinary-openvm-mixture-4.replay.json
-```
-
-The test-only Python converter authors 20 schedules. BP+ decodes bounded saved
-proof containers and combines separately supplied V, proving the distinction
-between wire order and hash-call grouping. It covers ordinary/instrumented sizes
-1,2,3,4,8,9,16 and one accepted consistent-torsion fixture. Native tests author the
-same schedule independently in Rust. OpenVM converts all 6,871 recorded scalar
-observe/sample events from five real proof executions, including two 12-AIR
-interaction/cached/preprocessed mixtures. Their log-origin identities do not
-claim a full OpenVM container-field decoder. Synthetic omission tests exercise
-mapping obligations separately; full proof-field mapping belongs to the protocol.
-
-Passing replay establishes finite checkpoint correspondence only. It does not
-establish proof verification, full decoder/acceptance-set equivalence, native
-compiler or Lean integration, full OpenVM guest/recursive endpoints, production
-security parameters, independent cryptographic proofs, or a performance claim.
+Passing these tests establishes finite primitive correspondence. It does not
+establish full external proof verification, decoder/acceptance-set equivalence,
+protocol security or a performance claim.

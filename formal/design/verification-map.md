@@ -1,10 +1,10 @@
 # Connecting the formal library to executable zkc
 
-This
-dossier develops the implementation connection of the [library design](../DESIGN.md).
-It does not replace the [selected PIR semantics](../../docs/spec/README.md).
-Its recommendations are architectural decisions for implementation, not evidence
-that the present compiler or an external backend already satisfies them.
+This research design develops a future implementation connection for the
+[library](../DESIGN.md). It does not replace the
+[specification](../../docs/spec/README.md) or establish current native
+correspondence. The optional formal tools and formats impose no native
+compatibility or migration gate.
 
 The [integrated roadmap](../../docs/roadmap.md) owns current delivery scope and
 sequencing; [support](../SUPPORT.md) records the formal capabilities these
@@ -12,14 +12,12 @@ chapters connect.
 
 ## 1. The connection in outline
 
-Build a maintained Lean library of meanings, contracts, algorithms and theorems.
-Connect it to an untrusted optimization producer through checked, finite data.
-Connect that data to execution through a small runtime and explicit backend
-contracts. Use [differential testing](../../docs/assurance.md#6-implementation-correspondence-policy)
-as the default validation between executable Lean meanings and actual MLIR/Rust
-paths, and prove selected native boundaries where useful. This combines verified
-components, translation validation and empirical execution evidence with distinct
-assurance scopes; neither the entire optimizer nor runtime needs a proof first.
+The library supplies meanings, contracts, algorithms and theorems. A future
+connection must relate actual source and emitted program data to those meanings,
+then relate execution to explicit backend contracts. Differential tests and
+selected implementation proofs can support different, precisely scoped claims;
+the [native correspondence policy](../../docs/assurance.md#6-native-correspondence-policy)
+does not treat old reference checks as current execution evidence.
 
 | Document | Question answered |
 |---|---|
@@ -28,37 +26,28 @@ assurance scopes; neither the entire optimizer nor runtime needs a proof first.
 | [Native correspondence](native-correspondence.md) | How do Rust, codecs, state and external primitives implement the contracts? |
 | [References](sources.md) | Primary references behind these chapters, and the limits of what they establish |
 
-There are two deliverable execution routes. A coarse-grained plan interpreter
-is the first recommended correspondence baseline. A generated implementation
-can become the performance route with its own lowering/code-generation evidence
-or an explicit compiler trust assumption. Both consume the same admitted
-algorithm and module contracts. Neither route is a prerequisite for proving all
-cryptographic backend internals.
+The supported execution path is `.zkc` Language → mathematical MLIR
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/1` → common Rust
+Runner and Entry/proof/run Hosts. Formal checking is optional and independent.
+A generated-code route would be separate future work with its own evidence.
 
 ## 2. A map of the complete connection
 
 ```mermaid
 flowchart TD
-  U[Author source and intended experiment] --> P[Decoded and typed finite PIR]
-  E[Actual inputs, module environment and policy] --> P
-  P --> M[MLIR candidate generation]
-  M --> C[Target plan and certificate data]
-  P --> K[Lean checking and proof replay]
-  C --> K
-  E --> K
-  K --> A[Admitted plan with explicit requirements]
-  A --> R[Rust plan interpreter]
-  A --> G[Generated implementation]
-  R --> B[Backend adapters and external primitives]
-  G --> B
-  B --> X[Actual complete execution and observations]
-  L[Lean denotations and contracts] -. correspondence theorems .-> K
-  L -. differential validation or scoped proof .-> R
-  L -. route-specific validation or proof .-> G
-  L -. conditional adapter laws .-> B
+  U[.zkc Language] --> M[Mathematical MLIR]
+  M --> C[zkc.program/1]
+  C --> R[Common Rust Runner and Hosts]
+  R --> B[Backend kernels and external primitives]
+  B --> X[Actual execution and observations]
+  L[Independent Lean models and contracts] --> K[Model-specific checking and proofs]
+  L -. future source interpretation .-> U
+  K -. future emitted-program correspondence .-> C
+  L -. future scoped runtime correspondence .-> R
+  L -. conditional adapter obligations .-> B
 ```
 
-The bottom of this diagram is not automatically proved by its top. A theorem
+The dotted connections in this diagram remain future obligations. A theorem
 about a Lean denotation is a theorem about that denotation. Every actual carrier
 and execution boundary needs a relation, a check, or a stated trust assumption.
 
@@ -79,8 +68,8 @@ and execution boundary needs a relation, a check, or a stated trust assumption.
 | Execution relation → claimed property | The experiment, observer, strategy class and losses satisfy a transport theorem | `Properties`; individual property theorem, not a generic security Boolean |
 | Proof production → trusted theorem | Exact theorem statement and its transitive axioms meet the assurance policy | Lean kernel, pinned dependencies, theorem/axiom audit and proof replay |
 
-This map intentionally includes compilation after validation. Validating PIR
-and subsequently trusting arbitrary generated native code leaves a compiler
+The research boundary table also accounts for possible compilation after
+validation. Validating PIR and subsequently trusting arbitrary generated native code leaves a compiler
 boundary open; it does not invalidate the PIR theorem, but limits the end-to-end
 claim. CompCert and CakeML are useful precedents for stating such boundaries
 and composing compiler correctness results. [S1–S3](sources.md#s1)
@@ -134,7 +123,7 @@ supplied source under two related handlers. [S4](sources.md#s4)
 |---|---|---|
 | [Execution](../Zkc/Semantics/Execution.lean): `replacement_then`, `run_related` | Replacement under continuation and common-process handler refinement | Heterogeneous logical values are handled by `Simulation` below; actual native instances remain work |
 | [Simulation](../Zkc/Realization/Simulation.lean): `Execution.Relates`, `follow`, `trans` | State-dependent heterogeneous returned values, exact stops, related final states and projected events; sequencing/composition laws | Logical source/plan and allocation/load clients exist; actual native decoder/storage correspondence and progress remain work |
-| [Endpoint](../Zkc/Source/Endpoint.lean) and [local-code admission](../Zkc/Protocols/Sumcheck/LocalProver/Admission.lean) | Admitted source/body association and explicit joined formation/execution premises | Finite typed source, direct-plan codecs and selected effectful frontends exist; arbitrary external frontend/native adequacy remains work |
+| [Endpoint](../Zkc/Source/Endpoint.lean) and [local-code admission](../Zkc/Protocols/Sumcheck/LocalProver/Admission.lean) | Admitted source/body association and explicit joined formation/execution premises | Independent finite typed source, direct-plan codecs and effectful source models exist; current Language/MLIR/native adequacy remains work |
 | [Binding](../Zkc/Modules/FactorBinding.lean): `instantiated_valid`, `instantiated_caller` | Actual modeled installation produces facts consumed by a caller | Native heap allocation, aliasing, loader and actual backend realization |
 | [GuardedCompilation](../Zkc/Polynomial/Bilinear/Compilation.lean) | Analysis/preparation simulation up to actual readiness refusal under reached-call conditions | A serialized certificate checker and native compiler pass applying it |
 | [Judgment](../Zkc/Properties/Judgment.lean) | Logical conditional evidence and requirement composition | A logical proof-bearing result is not yet a portable executable proof artifact |

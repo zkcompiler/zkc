@@ -115,6 +115,12 @@ them through the checked associations. A prover-key input uses
 the invoking process's working directory. Key files are bounded regular files,
 authenticated before use. The package and supplied material confer no setup trust.
 
+Input setup associations pin the selected inputs; the Host registry authorizes
+incoming PCS metadata. The protocol enforces a particular expected key by
+consuming it at `pcs.check`, which can reject after a received value was observed.
+An unchecked returned commitment or proof may use any authorized setup. Entry
+setup slots select inputs, with no output-slot or per-receive selector syntax.
+
 ## Reports and returned values
 
 Standard output contains a structured status report. It retains resource usage,
@@ -182,5 +188,4 @@ in private inputs refuse. Native admission independently checks the assembled
 values against the artifact. Regenerate bindings when the authorized package changes.
 
 The [source profile](../spec/profiles/source/mathematical-language.md#named-run-calls)
-owns exact admission semantics. Native Lean correspondence and remaining older
-consumer migration are separate obligations in the [roadmap](../roadmap.md).
+owns exact admission semantics. Native Lean correspondence remains separate work in the [roadmap](../roadmap.md).

@@ -96,7 +96,7 @@ mlir::Operation *first(mlir::ModuleOp module, StringRef name,
 void mutation(const CheckedOriginal &original, StringRef name,
               const std::function<void(mlir::ModuleOp)> &mutate) {
   mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
+  zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   auto module =
       mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);
@@ -464,7 +464,7 @@ let sent=send V->P(x);return(r=sent);}entry Demo=Run;)",
           "target admission lost its phase or related source declaration");
   auto full = original(basic);
   mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
+  zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   mlir::ScopedDiagnosticHandler silence(
       &context, [](mlir::Diagnostic &) { return mlir::success(); });

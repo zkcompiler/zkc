@@ -28,8 +28,7 @@ Use the same options with `language-emit` to print checked original MLIR,
 `language-bundle` for the selected run bundle or proof deployment, or
 `language-package` for the immutable package containing original, interface,
 artifact and compilation options. Every command checks source, target
-admission and source correspondence. There is no implicit import discovery or
-fallback to the `.pir` parser. `--no-simplify` and `--release-storage` select
+admission and source correspondence. Module and Asset capture is explicit. `--no-simplify` and `--release-storage` select
 existing downstream compiler options for bundle production.
 
 `--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported

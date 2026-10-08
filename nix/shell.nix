@@ -2,7 +2,6 @@
   pkgs,
   llvm,
   rust,
-  lean,
   python,
   environment,
 }:
@@ -19,15 +18,13 @@ pkgs.mkShell.override { stdenv = llvm.stdenv; } (
       pkgs.just
       pkgs.git
       pkgs.pkg-config
-      pkgs.time
       rust
-      lean
       python
       pkgs.uv
       pkgs.nixfmt
     ];
     shellHook = environment.development + ''
-      # Lean also bundles clang. Select the main compiler explicitly.
+      # Select the compiler matching the main MLIR package explicitly.
       export PATH="${llvm.clang}/bin:$PATH"
       if [ -z "''${TZ+x}" ] && [ ! -r /etc/localtime ]; then export TZ=UTC; fi
     '';

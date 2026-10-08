@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 
@@ -16,14 +15,7 @@ import workspace
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize("old", workspace.REMOVED)
-def test_removed_alias_cannot_select_a_different_tool(old, monkeypatch):
-    monkeypatch.setenv(old, "/obsolete/path")
-    with pytest.raises(ValueError, match=old):
-        Toolchain()
-
-
-@pytest.mark.parametrize("name", ["ZKC_COMPILER_BIN", "ZKC_NATIVE_BIN", "ZKC_LEAN_BIN", "ZKC_REPORTS_DIR"])
+@pytest.mark.parametrize("name", ["ZKC_COMPILER_BIN", "ZKC_NATIVE_BIN", "ZKC_REPORTS_DIR"])
 def test_empty_explicit_paths_are_errors(name, monkeypatch):
     monkeypatch.setenv(name, "")
     with pytest.raises(ValueError, match="nonempty"):
@@ -92,12 +84,7 @@ def test_profile_directory_agrees_with_cmake_presets(profile, relative):
     assert workspace.compiler_directory(profile) == ROOT / relative
 
 
-def test_every_tool_resolver_defaults_to_the_same_build_directories():
-    """Rust tests resolve tools without running Python, so they keep their own
-    copy of the defaults; the compiler's is the release preset's directory."""
-    source = (ROOT / "crates/zkc-test-support/src/lib.rs").read_text()
-    rust = set(re.findall(r'Build::\w+ => \("(ZKC_\w+)", "([^"]+)"\)', source))
-    assert rust == set(workspace.DIRECTORIES.values())
+def test_default_compiler_directory_agrees_with_release_preset():
     assert ROOT / workspace.DIRECTORIES["compiler"][1] == workspace.compiler_directory("release")
 
 
@@ -132,17 +119,17 @@ def test_just_forwards_profile_and_native_environment_without_reinterpreting(mon
     assert all(c["cwd"] == str(ROOT / "compiler") and c["jobs"] == "3" for c in commands)
 
 
-def test_cross_driver_preserves_report_path_as_one_argument(monkeypatch, tmp_path):
+def test_integration_driver_preserves_report_path_as_one_argument(monkeypatch, tmp_path):
     fake_command(tmp_path, "uv")
     record = tmp_path / "commands.jsonl"
     monkeypatch.setenv("COMMAND_RECORD", str(record))
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "report space"))
     monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "2")
-    subprocess.run([sys.executable, str(ROOT / "tests/run.py"), "cross"],
+    subprocess.run([sys.executable, str(ROOT / "tests/run.py"), "integration"],
                    cwd=tmp_path, check=True, capture_output=True, text=True)
     command = json.loads(record.read_text())
-    reports = list((tmp_path / "report space/runs").glob("cross-*"))
+    reports = list((tmp_path / "report space/runs").glob("integration-*"))
     assert len(reports) == 1
     assert command["arguments"][-3:] == ["-n", "2", f"--junit-xml={reports[0] / 'tests.xml'}"]
     assert json.loads((reports[0] / "run.json").read_text())["status"] == "pass"
@@ -150,8 +137,6 @@ def test_cross_driver_preserves_report_path_as_one_argument(monkeypatch, tmp_pat
 
 
 @pytest.mark.parametrize("recipe,arguments", [
-    ("test-artifact", ["tests/run.py", "artifact", "--output"]),
-    ("bench", ["scripts/develop.py", "bench", "--output"]),
     ("test-install", ["scripts/develop.py", "install", "--output"]),
 ])
 def test_just_output_argument_is_forwarded_literally(recipe, arguments, monkeypatch, tmp_path):
@@ -202,26 +187,6 @@ def test_lean_reproduction_receives_the_selected_report_directory(monkeypatch, t
     assert [output.joinpath("evidence").read_text() for output in outputs] == ["1", "2"]
     assert all(call[:-1] == [sys.executable, str(ROOT / "formal/reproduce.py"),
                             "--with-arklib", "--output"] for call in calls)
-
-
-@pytest.mark.parametrize("exists", [False, True])
-def test_explicit_missing_or_nonexecutable_lean_snapshot_fails_before_testing(tmp_path, exists):
-    baseline = tmp_path / "snapshot"
-    if exists:
-        baseline.write_text("not executable")
-    result = subprocess.run([sys.executable, str(ROOT / "formal/checks/FrontendIdentity.py"),
-                             "--baseline", str(baseline)], capture_output=True, text=True, timeout=10)
-    assert result.returncode == 2
-    assert "explicit baseline is not an executable file" in result.stderr
-
-
-def test_doctor_accepts_gnu_time_without_a_packaged_version(monkeypatch):
-    doctor = load("doctor", "scripts/doctor.py")
-    monkeypatch.setattr(doctor.shutil, "which", lambda name: "/usr/bin/time")
-    monkeypatch.setattr(doctor, "run_process", lambda *args, **kwargs:
-                        subprocess.CompletedProcess(args[0], 0, "time (GNU Time) UNKNOWN\n", ""))
-    assert doctor.inspect("gnu-time", ["time", "--version"])["status"] == "pass"
-    assert doctor.inspect("rust", ["rustc", "--version"], "1.98.0")["status"] == "fail"
 
 
 def test_cleanup_refuses_symlink_before_resolving_reports(monkeypatch, tmp_path):

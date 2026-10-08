@@ -1,7 +1,8 @@
 # Formal capability support
 
-This page records the supported statements, their concrete consumers and their
-limits.
+This page records statements about the independent formal models, their concrete
+consumers and their limits. The optional tools do not currently establish
+correspondence with the supported `.zkc`/MLIR/Rust execution path.
 
 The library supplies finite module contraction and ordered folding laws, cubic
 Sumcheck coefficients, range residual/parent identities and conditional integer
@@ -19,8 +20,8 @@ preparation APIs are listed below.
 Count-parametric common/participant/role syntax retains resolved `Nat` meaning.
 Symbolic dimension instantiation preserves syntax size and commutes with both
 projections, including stored definitions. Complete ingress retains failures and
-role-knowledge obligations. Runtime-symbolic native common protocols are not
-implemented; native carriers still contain resolved counts.
+role-knowledge obligations. These laws concern the Lean syntax; native count
+formation and execution need a separate interpretation.
 
 `Family.Admitted.selected_at` requires the selected member's initial phase to
 match an interpretation of the actual ingress residual state; member admission
@@ -34,15 +35,13 @@ configuration-dependent input types. Role delivery remains a separate premise.
 represented member execution, retaining ingress failures and observations.
 
 The Std-only iteration API proves prefix composition, terminal stability,
-per-body admission/bound transport and complete simulation. A Rust controller
-implements resumable finite prefixes with explicit deployment closure. The
-`iteration-reference` differential corpus covers pending, success, all five stop
-reasons, split resumption with carried values, explicit closure, state and events.
-These are tests, not a native refinement proof. Host resource
-retirement is tested through real native frames and consuming failures; there is
-no Lean proof of the Rust resource store. Finite probability laws preserve stopped
-mass and bound retry tails under explicit reached-law assumptions. They prove no
-concrete protocol's retry rate, eventual production or cryptographic security.
+per-body admission/bound transport and complete simulation. The optional
+`iteration-reference` tool exercises this model. Earlier Rust controller and
+resource-retirement comparisons are historical, unmaintained evidence; they do
+not establish correspondence with the current Runner or its resource store.
+Finite probability laws preserve stopped mass and bound retry tails under
+explicit reached-law assumptions. They prove no concrete protocol's retry rate,
+eventual production or cryptographic security.
 
 `evaluateM` reuses `Proc.runM` for actual finite prefixes, with resumption and
 pure-handler embedding laws. Outer effects must still supply complete records
@@ -60,43 +59,37 @@ observations for future transitions.
 
 ## Maintained APIs and actual consumers
 
-The authored interactive implementation uses the
-[source-role connection](design/role-execution.md), scoped source-cut and resource
-laws, and the [committed Sumcheck connection](design/committed-sumcheck.md).
-`Tools.Interactive` is a separate executable portable checker/source interpreter.
-Its concrete artifact checks and native differential comparisons do not prove
-raw-to-typed elaboration or native refinement. See the
-[running compiler guide](../docs/compiler/interactive-execution.md) for the
-actual source → MLIR → admitted Rust route and its boundaries.
+The [source-role connection](design/role-execution.md), scoped source-cut and
+resource laws, and [committed Sumcheck connection](design/committed-sumcheck.md)
+state typed mathematical results. `Tools.Interactive` is a separate executable
+source interpreter and candidate checker for its own portable records.
 
-The explicit-binding path independently checks original generic definitions,
-requirements, partial configurations, literal normalization, local representation
-conversions and common participant control. It returns source port/call maps used
-by the actual Rust host. See [generic validation](../docs/compiler/library-design/validation.md).
-This structural checker reifies straight-line source locals into typed regions
-through ordered result bundles; admitted controlled locals instantiate finite
-typed branches/iterations after reading runtime bounds (see [scope](design/local-control.md)).
-Generic reference execution runs those computations under independent mathematical/RNG/nonce/transcript-state services
-and explicit group/hash/PCS contracts, with interpreter-owned PCS custody. A
-separate source-checked local physical interpreter compares payload budgets and
-consuming failures. General resource-view correspondence, raw elaboration
-adequacy and construction integration remain unfinished. None follows automatically from typed substitution or the bundle
-adapter's execution theorem.
+It checks original generic definitions, requirements, partial configurations,
+literal normalization, local representation conversions and common participant
+control. Its returned source port/call maps belong to that model. Straight-line
+locals are reified into typed regions through ordered result bundles; controlled
+locals instantiate finite typed branches/iterations after reading runtime bounds
+(see [scope](design/local-control.md)). Reference execution uses independent
+mathematical/RNG/nonce/transcript-state services, explicit group/hash/PCS contracts
+and interpreter-owned PCS custody. A separate source-checked physical local
+interpreter models payload budgets and consuming failures. Raw elaboration
+adequacy and current native correspondence remain unproved. Earlier comparisons
+with retired executors are historical, unmaintained evidence.
 
 | Capability | Definitions and laws | Consumer and scope |
 |---|---|---|
-| Kinded logical extension admission | [logical types](Tools/Interactive/LogicalTypes.lean), [module-owned binding resolver](Tools/Interactive/Bindings.lean), [registration controls](Tests/BindingRegistration.lean), [fixed-vector reference](Tools/Interactive/FixedVectorReference.lean), [controls](Tests/StructuralTypes.lean) | Independent Domain/Type/Nat formation, canonical structural spelling, shared bounds and conditional resource permissions. Exact-length vector data and independent scalar arithmetic support finite source/native comparisons. Declarations do not supply an interpretation or prove native refinement |
-| Generic static requirements and type substitution | [Requirements](Zkc/Source/Requirements.lean), [TypeInstantiation](Zkc/Source/TypeInstantiation.lean), [controls](Tests/TypeInstantiation.lean) | Proof-producing finite derivation checking and actual structured type substitution preserve their stated meanings, including stopped executions. Native requirement certificates have independent Lean and Rust replay, including versioned pure-application congruence. Raw elaboration, implementation selection and native refinement have separate scope; see [profile](../docs/spec/profiles/source/generic-definitions.md) |
+| Kinded logical extension admission | [logical types](Tools/Interactive/LogicalTypes.lean), [module-owned binding resolver](Tools/Interactive/Bindings.lean), [registration controls](Tests/BindingRegistration.lean), [fixed-vector reference](Tools/Interactive/FixedVectorReference.lean), [controls](Tests/StructuralTypes.lean) | Independent Domain/Type/Nat formation, canonical structural spelling, shared bounds and conditional resource permissions. Exact-length vector data and independent scalar arithmetic support finite reference execution. Declarations do not supply an interpretation or prove native refinement |
+| Generic static requirements and type substitution | [Requirements](Zkc/Source/Requirements.lean), [TypeInstantiation](Zkc/Source/TypeInstantiation.lean), [controls](Tests/TypeInstantiation.lean) | Proof-producing finite derivation checking and actual structured type substitution preserve their stated meanings, including stopped executions. The independent Lean requirement checker supports certificate replay, including versioned pure-application congruence. Raw elaboration, implementation selection and native refinement have separate scope; see [profile](../docs/spec/profiles/source/generic-definitions.md) |
 | Runtime-selected finite local control | [FiniteControl](Zkc/Source/FiniteControl.lean), [adapter scope](design/local-control.md) | Admitted runtime bounds, zero/inverted/count/index laws, existing Region.iterate denotation and a uniform semantic call bound. Executable adapters check both branches and actual candidates; raw adequacy and native refinement remain unproved |
 | Ordered multi-result local operations | [ResultBundle](Zkc/Source/ResultBundle.lean), [source reifier](Tools/Interactive/TypedLocal.lean), [adapter controls](Tests/ResultBundle.lean), [reification controls](Tests/TypedLocal.lean) | Unit and heterogeneous results use the existing region carrier with pure projections. Invocation preserves complete operation execution, including stops and events. Straight-line generic preparation retains actual typed locals; controlled locals use runtime-selected finite instantiation. The raw reifier has executable controls, not an adequacy theorem; affinity is checked separately and bundles do not model physical allocation |
-| Portable generic source correspondence | [formation](Tools/Interactive/GenericSource.lean), [configurations](Tools/Interactive/Configuration.lean), [shared local relation](Tools/Interactive/LocalValidation.lean), [whole-source checking](Tools/Interactive/GenericValidation.lean) | Independent bounded formation and source-owned specialization; exact local conversions and original control are checked against actual native output. Returned maps support shared code and original host ports. Executable structural checking, not a raw-to-typed or native refinement theorem |
-| Generic reference execution | [shared control](Tools/Interactive/Control.lean), [source interpreter](Tools/Interactive/GenericReference.lean), [typed local execution](Tools/Interactive/ReferenceRuntime.lean), [resource services](Tools/Interactive/ReferenceResources.lean), [controls](Tests/GenericReference.lean), [native comparison](../crates/zkc-tools/tests/generic_reference.rs) | Original source executes independently of native participants. Field/polynomial math, RNG consumption, nonce stage transitions, transcript history/canonical origins/field reduction, full nominal types and exact external G1/hash/PCS requests are exercised. Native comparisons cover ordered messages and primitive logs, distinct role results, actual terminal cuts, polynomial domain errors, nested calls/loops and mixed representations. Logical operation locations are finer than native local-call stop sites. PCS custody retains immutable originals; evaluations and key/rank/receiving selection are independently checked. G1/PCS equations and hash bytes are conditional provider evidence; physical accounting is a separate row below |
-| Participant lifecycle reference | [source suspension and schedule](Tools/Interactive/ReferenceControl.lean), [in-process controls](Tests/ReferenceLifecycle.lean), [cross-build controls](../tests/execution/test_participant_lifecycle.py) | Independent original-source traversal retains each role's iteration allowance and frame lifecycle. Completed roots keep returned units; stopped or cancelled roots retire units, including pre-body ingress failure. Reference-fixture postflight errors do not reopen completed roots. Native comparison is bounded; peer ingress event prefixes can differ on failure, and no general scheduler or resource-store refinement theorem is claimed |
-| Checked physical local execution | [Interpreter](Tools/Interactive/PhysicalLocal.lean), [native comparisons](../crates/zkc-tools/tests/generic_reference/physical.rs) | Original-source checking precedes selected local execution. Mathematical contracts, representation crossings, retained-payload charges, output budgets and consuming failures are compared with the native runner. Explicit input capacity and successful exact-capacity allocation are premises. Single-root/local/return scope; view counts do not establish frame membership, and no native adequacy theorem is claimed |
+| Portable generic source correspondence | [formation](Tools/Interactive/GenericSource.lean), [configurations](Tools/Interactive/Configuration.lean), [shared local relation](Tools/Interactive/LocalValidation.lean), [whole-source checking](Tools/Interactive/GenericValidation.lean) | Independent bounded formation and source-owned specialization; exact local conversions and original control are checked against a supplied candidate in the tool's portable format. Returned maps identify shared code and original source ports. Executable structural checking, not a raw-to-typed or native refinement theorem |
+| Generic reference execution | [shared control](Tools/Interactive/Control.lean), [source interpreter](Tools/Interactive/GenericReference.lean), [typed local execution](Tools/Interactive/ReferenceRuntime.lean), [resource services](Tools/Interactive/ReferenceResources.lean), [controls](Tests/GenericReference.lean) | Original model source executes independently of candidate participants. Field/polynomial math, RNG consumption, nonce stage transitions, transcript history/canonical origins/field reduction, full nominal types and exact external G1/hash/PCS requests are exercised. PCS custody retains immutable originals; evaluations and key/rank/receiving selection are independently checked. G1/PCS equations and hash bytes are conditional provider evidence; physical accounting is a separate row below |
+| Participant lifecycle reference | [source suspension and schedule](Tools/Interactive/ReferenceControl.lean), [in-process controls](Tests/ReferenceLifecycle.lean) | Independent original-source traversal retains each role's iteration allowance and frame lifecycle. Completed roots keep returned units; stopped or cancelled roots retire units, including pre-body ingress failure. Reference-fixture postflight errors do not reopen completed roots. Peer ingress event prefixes can differ on failure; no general scheduler or native resource-store refinement theorem is claimed |
+| Checked physical local execution | [Interpreter](Tools/Interactive/PhysicalLocal.lean) | Original-source checking precedes selected local execution. The interpreter models mathematical contracts, representation crossings, retained-payload charges, output budgets and consuming failures. Explicit input capacity and successful exact-capacity allocation are premises. Single-root/local/return scope; view counts do not establish frame membership, and no native adequacy theorem is claimed |
 | Physical values in compact regions | [RegionSimulation](Zkc/Realization/RegionSimulation.lean), [physical table client](Examples/TablePhysical/README.md) | Generic local-to-region execution refinement with final-state value relations and preservation of all old represented values. The two-field client checks actual lazy/materialized candidates, logical input coverage and both installed local phase policies through call instrumentation. Native allocation/progress, broader endpoint policies and releasing stores remain separate obligations |
 | Checked logical operation folding | [RegionFolding](Zkc/Compiler/RegionFolding.lean), [table law](Examples/TableProtocol/Optimization.lean), [controls](Tests/TableOptimization.lean) | Generic alias traversal and source-relative folded-body comparison preserve complete procedures. Identical-endpoint interpolation composes with physical checking and original-source phase admission for every handler. Guarded reuse, effectful rewrites and native implementation proofs remain separate |
 | Component connections and replacement | [RelationComposition](Zkc/Semantics/RelationComposition.lean) | [Non-machine component client](Examples/ComponentConnections.lean) uses different proof/signature boundaries and re-encodes a key; [controls](Tests/RelationComposition.lean) check incompatible witnesses, missing representation coverage and circular removal of checks. Contextual replacement preserves the connected relation, not complete native execution |
-| Finite obligation closure | [Obligations](Zkc/Semantics/Obligations.lean) | Ordered multi-premise derivations cover independently supplied source requirements; rules compose through actual available facts and permit reuse. Soundness assumes terminal truth and each rule's law, with explicit bad events. [Controls](Tests/Obligations.lean) include whole-chain deletion, subject/context substitution, cycles and accepted but unsound rule syntax. Native differential evidence concerns finite closure; actual-body binding and cryptographic laws remain separate |
+| Finite obligation closure | [Obligations](Zkc/Semantics/Obligations.lean) | Ordered multi-premise derivations cover independently supplied source requirements; rules compose through actual available facts and permit reuse. Soundness assumes terminal truth and each rule's law, with explicit bad events. [Controls](Tests/Obligations.lean) include whole-chain deletion, subject/context substitution, cycles and accepted but unsound rule syntax. These are finite closure laws; native actual-body binding and cryptographic laws remain separate |
 | Application arithmetic boundaries | [BoundedResidues](Zkc/Algebra/BoundedResidues.lean), [Pedersen](Zkc/Protocols/Pedersen.lean), [Schnorr](Zkc/Protocols/Schnorr.lean) | Total bounds recover integer balance and word-addition meaning from field equations. Actual shared openings give the excess identity; different challenges at one nonce give the two-response extraction equation. Controls exhibit modular-wrap and incompatible existential-opening counterexamples. These laws do not prove native ISA adequacy, nonce generation, joint extraction or either complete application's security |
 | Acceptance and exposed outputs | [Acceptance](Zkc/Realization/Acceptance.lean) | [Decision and deferred-output clients](Examples/Acceptance.lean) preserve selected source outputs for every satisfying witness. [Opening reduction](Examples/OpeningReduction/Acceptance.lean) binds the actual source residual and complete three-claim bundle; satisfying forged reports cannot discharge the following opening obligations. Reduction soundness and cryptographic security remain separate |
 | Direct Sumcheck acceptance realization | [Acceptance](Zkc/Protocols/Sumcheck/Acceptance.lean), [controls](Tests/SumcheckAcceptance.lean) | Actual staged source, original polynomial and ordered field tape bind a direct evaluator. `honest_complete` reuses source completeness at arbitrary arity over a commutative semiring; executable Z/5Z controls include non-Boolean challenges and wrong object/point/value. This is not a PCS or native implementation |
@@ -189,7 +182,7 @@ retaining both masked responses, exhausted tapes and complete history. These
 interface tests do not constitute a complete binary-field proof system.
 
 `Horner.rule` is a real mathematical checker rule with a `Unit` certificate.
-The native artifact codec and CLI admit only the direct rule.
+The formal direct-plan artifact codec and CLI admit only the direct rule.
 Selecting a serialized rule, its certificate codec and its interpretation remains
 an explicit engineering join. The fixed-object/materialization rule below has its own proved premises.
 
@@ -325,10 +318,9 @@ and certificate codec controls. The [artifact admission join](Zkc/Compiler/Admis
 actual checked region and proves call/return permission; maintained artifact
 tests exercise both. The table application supplies
 [all-reply summary laws](Examples/TableProtocol/Admission.lean) and
-[artifact permission instances](Tests/TableAdmission.lean). Its
-[native certificate consumer](../docs/compiler/phase-admission.md#native-table-admission)
-retains the selected profile and evidence with the actual plan; native code
-correspondence remains an implementation assumption tested differentially.
+[artifact permission instances](Tests/TableAdmission.lean). These are model-specific
+artifact laws; the retired native table certificate consumer supplies no current
+execution route.
 
 The finite phase checker joins both branch exits without refining their guards.
 The source's validity-dependent challenge branch therefore uses its proved
@@ -410,10 +402,10 @@ logical cache work is a new native speedup claim.
 
 The [original-source artifact reference](design/artifact-reference.md) executes
 actual candidate proof bytes from original explicit-binding or generic-library source
-for the installed two-role public-artifact profile. Explicit configuration admits
+for its model-specific two-role public-artifact profile. Explicit configuration admits
 multiple authorized setups with source-port and executable receive selection.
 It owns source control, arithmetic, framing and observations, with exact public
-SHA/Merlin/group/PCS requests through an explicitly trusted native service;
+SHA/Merlin/group/PCS requests answered through explicitly supplied trusted replies;
 Lean independently reduces raw Merlin bytes. Full nominal admission, failure
 prefixes and byte/field vectors have [executable controls](Tests/ArtifactReference.lean).
 These are executable consumers and bounded evidence, separate from the existing
@@ -433,12 +425,11 @@ and do not measure maturity.
 
 ## Remaining realization and research
 
-The [implementation obligations](design/native-obligations.md) specifies the required MLIR/Rust
-joins; [implementation status](../docs/status.md) records which are built.
-The laws in this library do not themselves prove the native optimizer, storage
-runtime or protocol executor. The controller comparison and resource tests
-likewise retain their bounded evidence scope rather than supplying an
-actual-source Rust refinement proof.
+The [implementation obligations](design/native-obligations.md) describe future
+MLIR/Rust correspondence work; [implementation status](../docs/status.md) records
+the supported native path. The laws in this library do not themselves prove its
+optimizer, storage runtime or protocol executor. Lean migration is deferred and
+is not a native implementation or compatibility gate.
 
 The [research agenda](design/formal-questions.md) retains automatic phase-sensitive
 analysis/projection, stronger probability/security transport, FS/duplex/QROM,
@@ -453,30 +444,29 @@ divisibility at distinct row points. ONE/public binding stays explicit.
 Padding, appended public rows with zero B/C, and finite vector-slice laws are
 reusable and separate from security.
 The source-C interpolant equals the rowwise A-times-B interpolant under actual
-R1CS satisfaction; that hypothesis is enforced by the authored producer's check.
+R1CS satisfaction; that hypothesis belongs to the theorem's premises.
 The executable reference adds independent BN254 scalar, vector, matrix and
 polynomial arithmetic; generic PairingField/G1/G2 formation and source-relative
 endpoint checks; exact matrix identity serialization; and bounded slicing.
 Pairing/group validity and SHA256 retain the named external-service assumptions.
 
-The native relation envelope is explicitly materialized before Lean admission.
-This does not prove native relation generation or raw elaboration adequate.
-Complete membership proving runs natively; independent Lean direct transforms
-are bounded to 128 cells.
+Independent Lean direct transforms are bounded to 128 cells. The retired
+native relation/membership application is not a reproduction route for this
+model. Native relation generation and raw elaboration adequacy remain separate.
 
 ## External representation and schedule boundaries
 
 `Zkc.Algebra.Representations` separates raw observations from many-to-one images
 and proves conditional scalar-action, inverse-eight, interpolation, embedding
 and reindexing laws. `Tests.Representations` includes torsion-action and ordered-axis
-counterexamples. The native Edwards and table adapters are tested against these
-obligations; their correspondence is not proved by importing the Lean module.
+counterexamples. These laws do not prove correspondence of native Edwards or
+table adapters; each adapter needs its own representation argument.
 
 `Tools.Interactive.ExternalReference` is an independently executable schedule
-reference for the installed external Monero/OpenVM transitions. It computes
+reference for modeled external Monero/OpenVM transitions. It computes
 state-envelope checks and transition order, using explicit trusted replies for
-exact versioned hash/permutation requests. Archived checkpoints supply finite
-correspondence evidence. No primitive security proof, complete BP+/OpenVM
-verification or native resource refinement is claimed. Input-selected carrier
+exact versioned hash/permutation requests. Earlier native checkpoints are
+historical, unmaintained finite evidence. No primitive security proof, complete
+BP+/OpenVM verification or native resource refinement is claimed. Input-selected carrier
 execution likewise reuses the family/count laws without a proved raw-to-typed
 elaboration of the serialized input.

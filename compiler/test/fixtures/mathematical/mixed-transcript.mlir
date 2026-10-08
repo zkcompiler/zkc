@@ -1,7 +1,9 @@
 module { "protocol.module"() ({
-"local.binding"() {sym_name="binding_draw", contract="transcript.challenge", arguments=["merlin3.bls12-381.fr64be/1"], implementation=""} : () -> ()
+ "local.binding"() {sym_name="coordinates",contract="indices.empty",arguments=[],implementation=""} : ()->()
+"local.binding"() {sym_name="binding_draw", contract="transcript.native.indexed.challenge", arguments=["merlin3.bls12-381.fr64be/1"], implementation=""} : () -> ()
 local.func @draw(%state: !local.capability<"transcript:merlin3.bls12-381.fr64be/1">) -> (!algebra.field<"bls12-381.fr">, !local.capability<"transcript:merlin3.bls12-381.fr64be/1">) attributes {logical_origin=["draw", []]} {
-%v:2 = "crypto.exec.transcript_challenge"(%state) {binding=@binding_draw, parameters=["Round", "challenge", "Challenge", "draw", "P"], site="draw"} : (!local.capability<"transcript:merlin3.bls12-381.fr64be/1">) -> (!algebra.field<"bls12-381.fr">, !local.capability<"transcript:merlin3.bls12-381.fr64be/1">)
+%coordinates = "algebra.exec.indices_empty"() {binding=@coordinates,parameters=[],site="coordinates"} : ()->tensor<?xui64>
+%v:2 = "crypto.exec.indexed_transcript_challenge"(%state,%coordinates) {binding=@binding_draw, parameters=["010500000000000000001c000000000000007a6b632e6e61746976652d6f726967696e2d74656d706c6174652f310004000000000000006d61696e0100000000000000000100000000000000000107000000000000000005000000000000007175657279000500000000000000526f756e6400040000000000000064726177000700000000000000696e7075745f3000150000000000000072616e646f6d2e626c7331322d3338312e66722f310004000000000000006472617700010000000000000050"], site="draw"} : (!local.capability<"transcript:merlin3.bls12-381.fr64be/1">,tensor<?xui64>) -> (!algebra.field<"bls12-381.fr">, !local.capability<"transcript:merlin3.bls12-381.fr64be/1">)
 local.return %v#0, %v#1 : !algebra.field<"bls12-381.fr">, !local.capability<"transcript:merlin3.bls12-381.fr64be/1">
 }
 

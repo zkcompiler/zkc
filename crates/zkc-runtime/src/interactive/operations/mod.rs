@@ -106,31 +106,20 @@ pub(super) struct Contribution {
     pub(super) providers: &'static [&'static str],
     pub(super) select: PhysicalResolver,
     pub(super) alternatives: &'static [Alternative],
-    pub(super) logical_refusals: &'static [(&'static str, &'static str)],
     pub(super) physical_error: &'static str,
     pub(super) physical_only: bool,
 }
 struct Registry {
     logical: BTreeMap<&'static str, (&'static Contract, &'static Contribution)>,
-    refusals: BTreeMap<&'static str, &'static str>,
     physical: BTreeMap<String, (&'static str, Selection)>,
 }
 impl Registry {
     fn assemble(contributions: &[&'static Contribution]) -> Result<Self> {
         let mut registry = Self {
             logical: BTreeMap::new(),
-            refusals: BTreeMap::new(),
             physical: BTreeMap::new(),
         };
         for &contribution in contributions {
-            for &(contract, detail) in contribution.logical_refusals {
-                if registry.refusals.insert(contract, detail).is_some() {
-                    return Err(AdmissionError::new(
-                        ErrorCode::Signature,
-                        "duplicate-logical-owner",
-                    ));
-                }
-            }
             for contract in contribution.contracts {
                 if registry
                     .logical
@@ -157,16 +146,6 @@ impl Registry {
                     Selection::Alternative(alternative),
                 )?;
             }
-        }
-        if registry
-            .refusals
-            .keys()
-            .any(|name| registry.logical.contains_key(name))
-        {
-            return Err(AdmissionError::new(
-                ErrorCode::Signature,
-                "duplicate-logical-owner",
-            ));
         }
         if registry
             .physical
@@ -250,9 +229,6 @@ pub(super) fn logical_signature(
     binding: &OperationBinding,
 ) -> Result<KernelSignature<LogicalType>> {
     let registry = installed()?;
-    if let Some(detail) = registry.refusals.get(binding.contract.as_str()) {
-        return Err(AdmissionError::new(ErrorCode::Signature, *detail));
-    }
     let (contract, owner) = registry
         .logical
         .get(binding.contract.as_str())

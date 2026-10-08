@@ -1,9 +1,10 @@
 //! Execute fresh compiler carriers through the shared participant interpreter.
 //! Resource counts are derived from the authored loops, not the exported plan.
 use std::path::Path;
-use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Value};
+use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::PathElement;
-use zkc_tools::protocol::run::*;
+use zkc_tools::run::*;
 
 fn domain() -> Domain {
     Domain::new("P", "origins", "main", None)
@@ -11,8 +12,8 @@ fn domain() -> Domain {
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(domain(), None, PublicInputs::LocalOnly),
-        None,
+        EntryPolicy::new(domain(), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -86,10 +87,12 @@ fn execute(directory: &Path, suffix: &str, mode: Mode, outer: u64, inner: u64, g
     } else {
         64
     };
-    let rng = native.issue_rng(domain(), rng_budget).unwrap();
+    let rng = native
+        .issue_rng_for(Identity::Bls12381Fr, domain(), rng_budget)
+        .unwrap();
     let root = zkc_runtime::logical::encode_tree(&serde_json::json!(["origin-test"])).unwrap();
     let transcript = native
-        .issue_transcript(domain(), transcript_budget, &root)
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), transcript_budget, &root)
         .unwrap();
     let mut audit = Audit {
         cancel: mode == Mode::Cancel,

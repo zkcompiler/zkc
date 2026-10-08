@@ -3,7 +3,7 @@ set -euo pipefail
 
 # This is an explicit cache acceptance mode, not the ordinary cache-miss path.
 # The isolation probe already ran; every other main check and the expensive
-# library must be absent before we try substitution without any builders.
+# execution toolkit must be absent before we try substitution without any builders.
 check_names=$(nix eval --raw .#checks.x86_64-linux --apply 'checks: builtins.concatStringsSep " " (builtins.attrNames checks)')
 read -r -a checks <<< "$check_names"
 targets=()
@@ -12,7 +12,7 @@ for check in "${checks[@]}"; do
     targets+=(".#checks.x86_64-linux.$check")
   fi
 done
-for package in compiler.testSupport tools tools.testSupport formal formal.library; do
+for package in compiler.testSupport tools tools.testSupport; do
   targets+=(".#packages.x86_64-linux.$package")
 done
 mkdir -p build/reports/environment

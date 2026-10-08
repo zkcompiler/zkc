@@ -57,17 +57,7 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
   }
   if (validator == ParameterValidator::NativeOrigin)
     return checkNativeOrigin(parameters.front(),
-                             key.ends_with(".challenge") ? "query" : "message",
-                             key.starts_with("transcript.native.indexed."));
-  if (validator == ParameterValidator::TranscriptOrigin) {
-    for (const auto &p : parameters)
-      if (p.empty() || p.size() > 128 || !all_of(p, [](char c) {
-            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                   (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-';
-          }))
-        return error("interactive-transcript-origin");
-    return Error::success();
-  }
+                             key.ends_with(".challenge") ? "query" : "message");
   for (const auto &parameter : parameters) {
     StringRef n = parameter;
     auto code = (validator == ParameterValidator::FieldLiteral ||

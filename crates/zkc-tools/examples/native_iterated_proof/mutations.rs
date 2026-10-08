@@ -12,7 +12,7 @@ fn refused(envelope: &Json, candidate: &Json, reason: &str) {
         .expect("mutation passes ordinary SSA/type/affine admission");
     let bytes = repin(envelope, candidate);
     assert_eq!(
-        NativeDeployment::admit(&bytes, &digest(&bytes)).unwrap_err(),
+        NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
         reason
     );
 }
@@ -81,7 +81,7 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
         replace(&mut candidate, &name, &format!("renamed{name}"));
     }
     let bytes = repin(envelope, &candidate);
-    let deployment = NativeDeployment::admit(&bytes, &digest(&bytes)).unwrap();
+    let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap();
     assert!(
         execute(&deployment, input, Some(proof), "nested")
             .outcome

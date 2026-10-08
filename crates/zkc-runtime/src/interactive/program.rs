@@ -1,7 +1,7 @@
 //! Immutable action layouts and observations for executable programs.
 use super::{
     AdmissionError, Admitted, CutKind, EntryRole, ErrorCode, Origin, PhysicalType, Stop,
-    model::{Body, Count, Instruction, Participant},
+    model::{Body, Instruction, LoopCount, Participant},
 };
 use std::collections::BTreeMap;
 
@@ -100,13 +100,9 @@ pub enum ProgramState<'a> {
 }
 
 impl Admitted {
-    /// Inspect an admitted program entry. Role order is the candidate map's
-    /// order, not the original source roster order. No correspondence is granted.
+    /// Inspect an admitted program entry in its role map's canonical order.
     pub fn program_entry(&self, entry: &str) -> Result<Vec<ProgramRole>, AdmissionError> {
         let refuse = |detail| AdmissionError::new(ErrorCode::Record, detail);
-        if !self.format().is_program() {
-            return Err(refuse("program-layout-format"));
-        }
         let roles = self
             .entry(entry)
             .ok_or_else(|| refuse("program-layout-entry"))?;
@@ -116,9 +112,6 @@ impl Admitted {
             .map_err(|_| refuse("program-layout-allocation"))?;
         for role in roles {
             let participant = &self.program.participants[&role.participant];
-            if !participant.parameters.is_empty() || !participant.families.is_empty() {
-                return Err(refuse("program-layout-composition"));
-            }
             let env: BTreeMap<_, _> = participant.inputs.iter().cloned().collect();
             let mut actions = Vec::new();
             actions
@@ -216,14 +209,11 @@ impl Admitted {
                     body,
                     outputs,
                 } => {
-                    let Count::Value {
+                    let LoopCount {
                         value,
                         maximum,
                         induction,
-                    } = count
-                    else {
-                        return Err(refuse("program-layout-loop-count"));
-                    };
+                    } = count;
                     let start = actions.len();
                     actions.push(ProgramAction::Loop {
                         site: site.clone(),
@@ -270,7 +260,6 @@ impl Admitted {
                     ProgramAction::ReturnIf { site: site.clone() }
                 }
                 Instruction::Return(_) => ProgramAction::Finish,
-                _ => return Err(refuse("program-layout-composition")),
             };
             actions.push(action);
         }

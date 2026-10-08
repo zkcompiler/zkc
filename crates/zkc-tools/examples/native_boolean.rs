@@ -1,9 +1,7 @@
 //! Execute compiler-generated Boolean recipes with the installed native backend.
 use std::path::Path;
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
-use zkc_runtime::interactive::{Action, ArtifactFormat, Runner, admit_supplied};
+use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
+use zkc_runtime::interactive::{Action, Runner, admit_supplied};
 
 fn main() {
     let directory = std::env::args()
@@ -17,16 +15,11 @@ fn main() {
                 for c in [false, true] {
                     let backend = NativeBackend::new(
                         Policy::default(),
-                        EntryPolicy::new(
-                            Domain::new("P", "boolean_test", "main", None),
-                            None,
-                            PublicInputs::LocalOnly,
-                        ),
-                        None,
+                        EntryPolicy::new(Domain::new("P", "boolean_test", "main", None), None),
+                        Default::default(),
                     )
                     .unwrap();
                     let admitted = admit_supplied(&bytes, &backend).unwrap();
-                    assert_eq!(admitted.format(), ArtifactFormat::Program);
                     let group =
                         |n: u64| Value::Curve(GroupPoint::generator().scale(Scalar::from(n)));
                     let mut runner = Runner::new(
@@ -88,12 +81,8 @@ fn main() {
         let bytes = std::fs::read(Path::new(&directory).join(format!("{name}.json"))).unwrap();
         let backend = NativeBackend::new(
             Policy::default(),
-            EntryPolicy::new(
-                Domain::new("P", "boolean_test", "main", None),
-                None,
-                PublicInputs::LocalOnly,
-            ),
-            None,
+            EntryPolicy::new(Domain::new("P", "boolean_test", "main", None), None),
+            Default::default(),
         )
         .unwrap();
         let admitted = admit_supplied(&bytes, &backend).unwrap();

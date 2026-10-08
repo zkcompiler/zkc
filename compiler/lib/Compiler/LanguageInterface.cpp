@@ -112,7 +112,7 @@ Error detail::withInterface(
   if (!json::isUTF8(original))
     return error("target.admission", "original is not UTF-8");
   mlir::DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
@@ -145,7 +145,7 @@ Error detail::withInterface(
                            return visit(module, view);
                          });
   mlir::DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);

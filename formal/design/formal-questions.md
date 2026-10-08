@@ -2,7 +2,7 @@
 
 This page identifies the laws needed for stronger formal claims and the scoped
 results available to reuse. [Support](../SUPPORT.md) records achieved theorem
-coverage; the [roadmap](../../docs/roadmap.md#3-research-triggers) decides when to
+coverage; the [roadmap](../../docs/roadmap.md#extend-on-demonstrated-demand) decides when to
 pursue an extension. A construction or wrapper does not strengthen a theorem's
 premises or conclusion.
 
@@ -13,7 +13,7 @@ a sound transfer theorem and an invalid-guard control.
 The complete-zkVM target needs a bounded machine execution contract, adequacy of
 distinct encodings of that same contract, and evaluation-claim, memory/lookup and
 AIR/FRI compositions. Protocol experiments and MLIR design inform each other
-before the relevant dialect APIs freeze.
+when a concrete correspondence project needs them.
 
 The [cubic example](../Examples/OpeningReduction/README.md) adds arbitrary-round
 virtual-product execution, explicit opening obligations and a same-experiment
@@ -116,10 +116,10 @@ or physical buffer proof is required at this stage.
 the actual security experiment and allowed adversarial behavior?
 
 Preserve existing joint initialization, persistent state, conditional mass and
-correlated setup results during migration. A sample's marginal distribution
+correlated setup results when extending the formal model. A sample's marginal distribution
 does not justify independent reuse. A stopped local attempt may leave consumed
 resources for its enclosing controller; an outer stop has no resumed suffix.
-Migration must retain the exact observer, event order and conditioning event.
+Any new connection must retain the exact observer, event order and conditioning event.
 
 For each security adapter, identify a map from every admitted target adversary
 to an admitted source adversary, respecting its information and query bounds.
@@ -144,7 +144,7 @@ Broader approximate composition is pursued only if this instance needs it.
 **Question.** Does the whole actual source prove the intended statement, and does
 its selected transformation preserve the relevant property?
 
-Retain the [selected scope](../../docs/roadmap.md#4-the-security-companion):
+Retain the [proved scope](../Zkc/Protocols/Sumcheck/Security.lean):
 a public round count, finite field, fixed polynomial of per-variable degree at
 most two, claimed Boolean sum, actual messages and terminal evaluation. Prove
 ordinary completeness and soundness against the specified arbitrary provers.
@@ -187,9 +187,9 @@ review evidence are recorded in [support](../SUPPORT.md).
 |---|---|---|
 | Dependent/indexed source | Scope, substitutions, actual captures, finite encodings, elaboration uniqueness | Preserve constructor laws and connect needed domain operations |
 | Specialization and disclosure | Public parameters versus private inputs; joint observation of selected code, evidence, publication and protocol history | Preserve the stated disclosure policy; separate observations cannot justify a joint privacy claim |
-| Modules and state | Allocation identity, aliases, read/write footprints, preparation validity versus current readiness | Existing laws migrate with actual consumers; missing concrete premises stay visible |
+| Modules and state | Allocation identity, aliases, read/write footprints, preparation validity versus current readiness | Existing laws retain their actual consumers; missing concrete premises stay visible |
 | Relations and continuation | Statement/witness relation, residual, terminal acceptance, source-bound authorization and consumed target | Preserve both successful and failed-arm behavior; do not infer completeness from soundness |
-| Realization | Heterogeneous logical values, final state, errors, observers and progress assumptions | Logical contracts established; differential validation with each native slice; optional Rust/backend proofs |
+| Realization | Heterogeneous logical values, final state, errors, observers and progress assumptions | Logical contracts established; future native correspondence needs a selected implementation and comparison relation; Rust/backend proofs are optional |
 | Evidence and checking | Actual source/candidate, context, law suppliers, declaration audit coverage | No unchecked caller assertion is promoted to a proof; optional namespaces get their own audits |
 | Packaging | Semantic dependency direction, meaningful names, external package isolation | No active Compat or numbered API; no build/test/doc dependency on retired scratch files |
 
@@ -297,10 +297,11 @@ under the present model. Generic placeholders are not evidence of coverage.
 
 ## 5. Evidence and reopening conditions
 
-Differential testing supplies practical Lean to MLIR and Rust correspondence, as
-the [assurance policy](../../docs/assurance.md#6-implementation-correspondence-policy)
-states. A missing native proof does not reopen the finite semantic foundation or
-block native delivery. A discovered mismatch requires identifying whether the
+Differential testing can support a future Lean/MLIR/Rust connection once its
+subjects and comparison relation are fixed, as the
+[assurance policy](../../docs/assurance.md#6-native-correspondence-policy) states.
+No such current connection follows from the independent formal checks. A missing
+native proof does not reopen the finite semantic foundation or block native delivery. A discovered mismatch requires identifying whether the
 source contract, logical reference, implementation or test relation needs repair.
 
 Select an extension by naming the affected capability, missing law, minimal

@@ -1,125 +1,69 @@
 # Shared operation contracts
 
-The compiler operation catalog connects admitted source contract keys to typed
-MLIR operations. It owns independently consumed structural facts. Mathematical
-meanings remain with the [domain specifications](../spec/README.md), and a
-physical binding still selects an implementation of a contract rather than
-changing its meaning.
+The installed catalog connects exact mathematical contract keys, typed MLIR
+operations and physical implementations. Mathematical meanings belong in the
+[domain specifications](../spec/README.md); selecting a kernel does not change
+the field, operation or resource contract.
 
-Neutral typed records in
-[`Contracts/Declarations`](../../compiler/include/zkc/Contracts/Declarations)
-generate the immutable descriptor inventory. They own logical signatures,
-requirements, parameter-schema selection, type permissions and installed facets.
-Curated source exports refer to those same contracts and add public names and
-argument labels; IR adapters add their representation mapping. Semantic validators,
-implementations and independent Rust/Lean interpretations retain their own work.
-The `zkc.contract-declarations/2` inventory distinguishes constructor application
-ports from an explicit complete-Type input port (`{"term": index}`). The latter
-is restricted to construction-only observation payloads, with exact static-type
-and representation checks. Common generic admission refuses it. The executable
-catalog includes both common and non-generic declarations, including generated
-resource-unit operations; this partition grants no additional source syntax.
-See the [structured observer](../spec/profiles/compiler/structured-proof-messages.md#transcript-observation).
+[Neutral declarations](../../compiler/include/zkc/Contracts/Declarations) own
+logical signatures, requirements, static parameter schemas, type permissions and
+installed facets. Language and IR adapters consume those records. Semantic
+validators and backend implementations retain their separate obligations.
 
-See the [extension procedure](../development/extensions.md#logical-contracts-and-source-exports).
+## Signatures, effects and observations
+
+The `zkc.contract-declarations/2` inventory distinguishes constructor-application
+ports from an explicit complete-Type port (`{"term": index}`). The latter is
+restricted to construction-only observation payloads, with exact static-type and
+representation checks. Source admission does not gain arbitrary operations from
+catalog presence; the [structured observer](../spec/profiles/compiler/structured-proof-messages.md#transcript-observation)
+owns that boundary.
+
+Operation facets identify actual sampling ports, provider successors, observation
+payloads, history transitions, accepted guards and supported algebraic maps.
+Analyses use only the installed facts they understand. An unknown operation has
+no positive dependency or purity facts. A known state successor does not prove
+sampling independence, and a transcript counterpart does not prove construction
+security.
+
+Replaying an operation adds an occurrence; common-subexpression elimination
+removes one. Neither is licensed by the other's mathematical determinism. No
+facet grants permission to discard failure, resource consumption, logical work
+or a transcript occurrence. Partial operations remain ordered local work.
 
 Polynomial interpretation conversions belong to `poly`: `point_to_vector`,
-`point_from_vector`, `table_to_vector` and `table_from_vector`. The logical
-catalog keys `vector.from_point`, `vector.to_point`, `vector.from_table` and
-`vector.to_table` retain their declared meanings. This is a catalog-to-MLIR
-mapping, like `field.add` to `algebra.exec.field_add`, without an alternative operation or fallback decoder. Coordinate order, dimension and Boolean-table shape are
-polynomial-domain obligations, even when a backend shares the sequence storage.
-
-`Contracts/Operations.h` attaches these facets to each registered `Kernel`:
-
-| Facet | Contents | Consumers |
-|---|---|---|
-| Sampling | Provider kind, sample domain, provider input, sample/successor outputs, optional bound input | Oracle dependency analysis; construction resource and availability analysis |
-| Derived counterpart | Registered transcript operation with matching sample and parameter ports, if construction supports it | Public-coin construction and emission |
-| Observation | Provider input, payload input and provider successor | Exact transcript-chain absorption and historical dependency analysis |
-| History transition | Explicit state input and successor output | Historical dependency and motion restrictions, including external schedule adapters |
-| Public replay | An explicitly installed construction recipe | Availability analysis and participant mirroring |
-| Acceptance guard | An operation whose completing execution requires its Boolean input | Execution view and oracle acceptance analysis |
-| Conjunction | An output whose truth entails its Boolean inputs | Acceptance-sink closure |
-| Diagonal map / linear contraction | Factor, coefficient, value and result roles under the domain's scalar-action law | MLIR opportunity analysis and independently checked target selection |
-| Ordered coset / exact domain value | Shift, size, vector-result and fold roles; a small vocabulary of exact value equations | Conditional nominal-domain congruence and compatibility inspection |
-
-These are compiler contracts for installed operations, not arbitrary source
-assertions. An unknown key has no positive facts. A registered provider-consuming
-operation without an analysis transfer contract remains unclassified. The
-catalog test checks sampler/observation port shapes, counterpart consistency and
-coverage of installed RNG/transcript operations. Nonce transitions have atomic
-runtime custody contracts but no sampling transfer summary; dependency analysis
-retains unknown coverage for them instead of classifying them as ordinary data.
-
-Replay eligibility is narrower than mathematical determinism. Replaying an
-operation adds an occurrence at another participant; common-subexpression
-elimination removes one. Neither operation is licensed by the other's facet.
-No facet implicitly grants MLIR purity, speculation, cryptographic security or
-permission to discard a failure, frame, logical charge or transcript occurrence.
-
-Algebraic map/contraction facts do not name a physical layout. MLIR's optional
-`DiagonalProducerInterface` and `DiagonalContractionInterface` expose logical
-operand/result roles after exact binding/type checks. They select neither a
-backend nor a layout. Target separately proposes installed alternatives and
-checks their full contracts, ports and every actual result use. Interface absence
-does not make an operation nonlinear; presence is not a new algebraic proof.
-The [physical decision boundary](representation.md#checked-physical-decisions)
-separates these responsibilities from current Arkworks/Dalek applicability.
-
-The current RNG type's nominal field parameter selects the installed sampling
-capability. Entropy, bounded-index sampling and field algebra remain independent
-contracts. A private vector sampler can have a known state successor without
-having a public-challenge construction counterpart.
+`point_from_vector`, `table_to_vector` and `table_from_vector`. Catalog keys such
+as `vector.from_point` retain their declared meanings independently of IR spelling.
+Coordinate order and Boolean-table shape remain domain obligations even when
+representations share storage.
 
 ## Custody is independent of transport
 
-`Contracts/TypeProperties.h` reads the neutral type owners' copy/drop/custody
-permissions and classifies admitted logical kinds as public-codec values,
-private immutable custody, affine resources or unknown. Checked source
-environments use these permissions rather than assuming every type is droppable.
-A public-codec classification describes representability, not permission to
-disclose a secret.
+Type properties distinguish copy/drop permissions, public codec values, private
+immutable custody and affine resources. Public representability is not permission
+to disclose a value. Unknown abstract kinds acquire no positive copy, drop or
+transport permission merely because they are not recognized as affine.
 
-- Serialization requires a registered public codec kind and all ordinary
-  domain, representation and ownership checks.
-- Local duplication and discard have independent positive queries. They agree
-  for the current installed immutable kinds, including keys and opening state.
-- Provider/capability tokens have affine use and generation rules. Generic
-  storage release does not discharge them.
-- Unknown abstract kinds acquire no positive duplication, discard or transport
-  permission. Absence of `affine` is not a proof of any of those permissions.
+Provider and capability tokens retain generation/use rules. Generic storage
+release cannot discharge them. A copyable external transcript snapshot may still
+participate in history-sensitive operations; copyability grants no motion across
+those dependencies. Immutable prepared key material can be reused while each
+invocation keeps its own setup authorization and runtime state.
 
-History and copyability are independent: an external schedule snapshot may be
-copyable while its operation still records a history transition. Neither fact
-licenses moving the operation across its history dependencies.
+Physical release uses discardability and the Runner's retained-value accounting.
+A resource successor or alias must remain the actual value selected by control;
+see [resource origins](resource-origins.md).
 
-Construction can preserve a whole immutable local computation without making
-its private inputs public or mirroring it to another participant. Operations
-that transform selected provider state retain their construction-specific
-interpretation. Physical local storage release uses discardability, not the
-availability of a wire encoding; its [accounting contract](interactive-execution.md#ordinary-local-storage-lifetime)
-continues to retain logical charges until frame exit.
+## Representation and assurance
 
-## Representation and assurance boundaries
+Logical contraction interfaces identify operand/result roles after exact type
+and contract checks. They select neither a backend nor storage layout.
+[Physical planning](representation.md#checked-physical-decisions) separately
+validates installed alternatives, conversions and all actual uses.
 
-Source occurrence analysis and MLIR verification share catalog facts. Source
-analysis does not require converting the protocol to physical kernels, and
-MLIR transformations do not substitute for the source-relative checker.
-Rust and Lean maintain independent interpretations. Their checks and
-differential tests can detect disagreement with the compiler; sharing a schema
-does not by itself prove conformance.
-
-The Lean sampling transfer module proves monotonicity and separation of direct
-reception from provider history. The locality module proves that fixing entry
-values and provider replies fixes a direct-reception-free local expression,
-including ordinary sampler arguments.
-These facts support the [oracle analysis](../spec/domains/oracles.md), while
-native extraction, codec injectivity, sampler laws and protocol-security
-reductions remain separate obligations.
-
-Construction uses `duplicable` to retain a producer-local immutable helper as a
-whole call, including helpers returning private commitment state. Its generated
-source therefore has the canonical whole-helper frame and charges. Artifacts are rebuilt
-and checked against the actual generated source. Private custody gains neither
-a public codec nor a cross-role replay rule through this choice.
+Compiler and runtime independently check their consumed contracts. Shared
+schema data and matching signatures do not prove kernel correctness. Independent
+Lean operation interpretations and sampling/locality laws apply to their named
+models; extraction, native realization and security reductions need their own
+connections. Use the [extension guide](../development/extensions.md#logical-contracts-and-source-exports)
+when changing this boundary.

@@ -1,6 +1,6 @@
 # Finite local control in the portable tools
 
-The portable ordinary and generic source adapters admit isolated local `if` and
+The independent formal tools' source adapters admit isolated local `if` and
 half-open unit-step `for` regions, ending in `yield`. Both branches and every loop
 body are formed before execution, including dormant branches and zero-trip loops.
 Helper specialization and expansion preserve those regions. The checker admits
@@ -47,9 +47,8 @@ Each entered region has a child frame, retains its explicit inputs, releases all
 its live and ghost charges on return or failure, and transfers yielded values to
 the enclosing region. Loop carries pass directly to the next iteration; zero-trip
 outputs are retained once in the parent. Instructions, retained values/bytes,
-cumulative bytes and active frame counts follow the scoped native accounting
-profile. Scalar indices retain the existing conservative **512-byte** backend
-charge. Supported vector and group-sequence charges use exact-length backing;
+cumulative bytes and active frame counts follow the reference accounting model.
+Scalar indices retain the conservative **512-byte** charge. Supported vector and group-sequence charges use exact-length backing;
 tables use supplied input capacity and exact-capacity successful fresh allocation.
 The physical command does not cover arbitrary participant graphs, external
 primitive caches, diagonal-view execution or allocation failure refinement.
@@ -66,7 +65,8 @@ zero/inverted bounds, reached failure paths, affine reuse and capture refusal,
 malformed dormant branches, candidate mutations and artifact reference arithmetic.
 The executable Python controls add generic specialization, nested helpers, both
 candidate stages, physical lifetimes/accounting and recursive artifact identity.
-Main and Rust own the joined native differential fixtures outside `formal/`.
+The former native differential fixtures have been retired; these controls cover
+the independent tools.
 
 ## Finite local variants
 
@@ -89,9 +89,7 @@ and only the active payload.
 
 `Tests.Variant` exercises formation, active payloads, ownership, stopped execution
 and logical/physical correspondence. `checks/variant_cli.py` exercises the actual
-executable independently. The joined native tests in
-[`local_variants.rs`](../../crates/zkc-tools/tests/local_variants.rs) compare actual
-source compilation, complete Rust/Lean outcomes, resource state, ordered requests,
-allocation steps and frame cleanup. Host Groth16/PCS ingress validation remains a
-native adapter boundary; these tests do not prove its codecs or cryptographic
-assumptions.
+executable independently. Earlier native variant comparisons covered source
+compilation, outcomes, resource state, requests, allocation and frame cleanup.
+They are historical, unmaintained evidence and provide no current correspondence
+test route.

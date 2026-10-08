@@ -5,12 +5,12 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use zkc_arkworks::{Keys, Table};
 use zkc_backends::{Policy, Scalar, Value as Native};
 use zkc_tools::{
-    artifact::native::{InputValue, NativeCapacity, ProverMaterial},
     entry::{
         AttemptOptions, BindingPolicy, NamedValues, Package, ProofEntry, ProofOptions,
         ProofRequest, RoleInputs, RunEntry, RunRequest, SetupAuthority, Value,
     },
-    protocol::run::HostLimits,
+    proof::{InputValue, NativeCapacity, ProverMaterial},
+    run::HostLimits,
 };
 fn package(directory: &Path, entry: &str) -> Package {
     let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.entry"))).unwrap();

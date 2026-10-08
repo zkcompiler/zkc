@@ -1,8 +1,9 @@
 # A relation target may be reached by several routes and declares its input boundary
 
 Both choices concern realizing a verifier's acceptance as a relation, under the
-[target design](../compiler/targets.md) and the
-[representation contracts](../spec/realization/representations.md).
+[acceptance/output contracts](../spec/realization/representations.md#acceptance-and-output-realization).
+This choice states realization obligations; it does not install a native relation
+target.
 
 ## More than one route to a relation target
 

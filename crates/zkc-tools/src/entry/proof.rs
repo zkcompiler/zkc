@@ -3,9 +3,8 @@ use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{
     Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments, setups, value,
 };
-use crate::artifact::{
-    hex,
-    native::{AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs},
+use crate::proof::{
+    AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs, hex,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -52,7 +51,7 @@ impl Default for AttemptOptions {
     fn default() -> Self {
         Self {
             count: 1,
-            proof_bytes: crate::artifact::MAX_PROOF_BYTES,
+            proof_bytes: crate::proof::MAX_PROOF_BYTES,
         }
     }
 }
@@ -128,7 +127,7 @@ impl ProofEntry {
             return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }
         arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
-        let native = NativeDeployment::admit_with_setups(
+        let native = NativeDeployment::admit(
             package.artifact().as_bytes(),
             &hex(&Sha256::digest(package.artifact().as_bytes())),
             setups::proof_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,

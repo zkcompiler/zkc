@@ -1,7 +1,7 @@
 //! Proof-entry admission over the executable program format.
 //! These checks establish executable shape and one complete transcript chain;
 //! they do not authenticate compilation or establish Fiat–Shamir soundness.
-use super::{Admitted, ArtifactFormat, EntryRole, PhysicalType, ProgramAction, Type, model::*};
+use super::{Admitted, EntryRole, PhysicalType, ProgramAction, Type, model::*};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,9 +44,7 @@ fn helper<'a>(
     transcript: Option<&PhysicalType>,
     entry: &str,
     validator: &str,
-    version: u8,
 ) -> Result<Option<Helper<'a>>> {
-    let iterated = version >= 2;
     let uses_state = function
         .inputs
         .iter()
@@ -60,7 +58,12 @@ fn helper<'a>(
         if let LocalInstruction::Op { binding, .. } = instruction {
             let name = binding.declaration().contract.as_str();
             if name.starts_with("transcript.") {
-                if !name.starts_with("transcript.native.") || native.is_some() {
+                if !matches!(
+                    name,
+                    "transcript.native.indexed.challenge"
+                        | "transcript.native.indexed.observe.data"
+                ) || native.is_some()
+                {
                     return Err(refuse("native-proof-transcript-operation"));
                 }
                 native = Some(instruction);
@@ -86,35 +89,11 @@ fn helper<'a>(
         unreachable!()
     };
     let contract = binding.declaration().contract.as_str();
-    let prefix = if iterated {
-        "transcript.native.indexed."
-    } else {
-        "transcript.native."
-    };
-    let tail = contract
-        .strip_prefix(prefix)
-        .ok_or_else(|| refuse("native-proof-transcript-operation"))?;
-    let challenge = tail == "challenge";
-    if version == 4 && !matches!(tail, "challenge" | "observe.data") {
-        return Err(refuse("native-proof-transcript-operation"));
-    }
-    if !matches!(
-        tail,
-        "challenge" | "observe.bool" | "observe.field" | "observe.group"
-    ) && !(iterated && matches!(tail, "observe.index" | "observe.field_array"))
-        && !(matches!(version, 3 | 4) && matches!(tail, "observe.commitment" | "observe.proof"))
-        && !(version == 4 && tail == "observe.data")
-    {
-        return Err(refuse("native-proof-transcript-operation"));
-    }
-    let encoded = if iterated {
-        crate::logical::native_origin_template(
-            attributes,
-            if challenge { "query" } else { "message" },
-        )
-    } else {
-        crate::logical::native_origin(attributes, if challenge { "query" } else { "message" })
-    }
+    let challenge = contract == "transcript.native.indexed.challenge";
+    let encoded = crate::logical::native_origin_template(
+        attributes,
+        if challenge { "query" } else { "message" },
+    )
     .map_err(|_| refuse("native-proof-origin"))?;
     let origin =
         crate::logical::decode_tree(&encoded).map_err(|_| refuse("native-proof-origin"))?;
@@ -123,7 +102,7 @@ fn helper<'a>(
     }
     let mut path = Vec::new();
     let mut loops = Vec::new();
-    if iterated {
+    {
         for step in origin[2]
             .as_array()
             .ok_or_else(|| refuse("native-proof-origin"))?
@@ -145,7 +124,7 @@ fn helper<'a>(
         || function.outputs.len() != if challenge { 2 } else { 1 }
         || function.inputs[0].1 != *state
         || function.outputs.last() != Some(state)
-        || inputs.len() != ordinary + usize::from(iterated)
+        || inputs.len() != ordinary + 1
         || outputs.len() != function.outputs.len()
         || !inputs[..ordinary]
             .iter()
@@ -167,10 +146,7 @@ fn helper<'a>(
     for operation in function.body.iter() {
         match operation {
             LocalInstruction::Op { .. } if std::ptr::eq(operation, instruction) && !transition => {
-                if iterated
-                    && (coordinates != inputs.last().map(String::as_str)
-                        || coordinate != loops.len())
-                {
+                if coordinates != inputs.last().map(String::as_str) || coordinate != loops.len() {
                     return Err(refuse("native-proof-helper-coordinates"));
                 }
                 transition = true;
@@ -180,7 +156,7 @@ fn helper<'a>(
                 inputs,
                 outputs,
                 ..
-            } if iterated && !transition => match binding.declaration().contract.as_str() {
+            } if !transition => match binding.declaration().contract.as_str() {
                 "indices.empty"
                     if coordinates.is_none() && inputs.is_empty() && outputs.len() == 1 =>
                 {
@@ -234,21 +210,15 @@ fn helper<'a>(
     }))
 }
 
-fn verifier_data(ty: &PhysicalType, keys: bool, structured: bool) -> bool {
+fn verifier_data(ty: &PhysicalType) -> bool {
     ty.is_serializable()
         || ty.has_native_array_frame()
-        || keys && verifier_key(ty)
-        || structured && ty.has_native_data_frame()
+        || verifier_key(ty)
+        || ty.has_native_data_frame()
 }
 fn verifier_key(ty: &PhysicalType) -> bool {
     ty.logical().spelling() == "verifier_key:multilinear.kzg.bls12-381/1"
         && PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty)
-}
-fn pcs_wire(ty: &PhysicalType) -> bool {
-    matches!(
-        ty.logical().spelling().as_str(),
-        "commitment:multilinear.kzg.bls12-381/1" | "proof:multilinear.kzg.bls12-381/1"
-    ) && PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty)
 }
 // General admission already checks SSA uniqueness, exact call/result arity,
 // affine use and loop-carried types, including nested regions. This walk adds
@@ -259,9 +229,6 @@ struct ProofWalk<'a> {
     producer: &'a str,
     validator: &'a str,
     validating: bool,
-    iterated: bool,
-    keys: bool,
-    structured: bool,
     transcript: bool,
     calls: BTreeSet<String>,
     reached: Vec<NativeTranscriptEvent>,
@@ -338,12 +305,8 @@ impl ProofWalk<'_> {
                         self.reached.push(checked.event.clone());
                     } else if self.validating {
                         let f = &self.admitted.program.functions[function];
-                        if f.inputs
-                            .iter()
-                            .any(|(_, t)| !verifier_data(t, self.keys, self.structured))
-                            || f.outputs
-                                .iter()
-                                .any(|t| !verifier_data(t, self.keys, self.structured))
+                        if f.inputs.iter().any(|(_, t)| !verifier_data(t))
+                            || f.outputs.iter().any(|t| !verifier_data(t))
                         {
                             return Err(refuse("native-proof-verifier-resource"));
                         }
@@ -354,7 +317,7 @@ impl ProofWalk<'_> {
                                     .inputs
                                     .iter()
                                     .chain(&signature.outputs)
-                                    .any(|t| !verifier_data(t, self.keys, self.structured))
+                                    .any(|t| !verifier_data(t))
                                 {
                                     return Err(refuse("native-proof-verifier-resource"));
                                 }
@@ -396,16 +359,13 @@ impl ProofWalk<'_> {
                     captures,
                     body,
                     outputs,
-                } if self.iterated => {
+                } => {
                     if pending_message.is_some() || pending_challenge.is_some() {
                         return Err(refuse("native-proof-observation-order"));
                     }
-                    let Count::Value {
+                    let LoopCount {
                         maximum, induction, ..
-                    } = count
-                    else {
-                        return Err(refuse("native-proof-loop-profile"));
-                    };
+                    } = count;
                     let state_positions: Vec<_> = carried
                         .iter()
                         .enumerate()
@@ -497,6 +457,8 @@ impl ProofWalk<'_> {
 }
 
 impl NativeProofEntry {
+    /// Admit the current structured proof rules, including configured PCS
+    /// values and authored or derived transcript boundaries.
     pub fn new(
         admitted: Admitted,
         entry: &str,
@@ -506,107 +468,11 @@ impl NativeProofEntry {
         suite: Option<&str>,
         events: &[NativeTranscriptEvent],
     ) -> Result<Self> {
-        Self::admit(
-            admitted,
-            entry,
-            (producer, validator),
-            acceptance,
-            suite,
-            events,
-            1,
-        )
-    }
-    pub fn new_iterated(
-        admitted: Admitted,
-        entry: &str,
-        producer: &str,
-        validator: &str,
-        acceptance: usize,
-        suite: Option<&str>,
-        events: &[NativeTranscriptEvent],
-    ) -> Result<Self> {
-        Self::admit(
-            admitted,
-            entry,
-            (producer, validator),
-            acceptance,
-            suite,
-            events,
-            2,
-        )
-    }
-    /// Configured PCS values and authored or derived proof boundaries. Keys
-    /// remain immutable local operands; proof messages cannot transport them.
-    pub fn new_committed(
-        admitted: Admitted,
-        entry: &str,
-        producer: &str,
-        validator: &str,
-        acceptance: usize,
-        suite: Option<&str>,
-        events: &[NativeTranscriptEvent],
-    ) -> Result<Self> {
-        Self::admit(
-            admitted,
-            entry,
-            (producer, validator),
-            acceptance,
-            suite,
-            events,
-            3,
-        )
-    }
-    pub fn new_structured(
-        admitted: Admitted,
-        entry: &str,
-        producer: &str,
-        validator: &str,
-        acceptance: usize,
-        suite: Option<&str>,
-        events: &[NativeTranscriptEvent],
-    ) -> Result<Self> {
-        Self::admit(
-            admitted,
-            entry,
-            (producer, validator),
-            acceptance,
-            suite,
-            events,
-            4,
-        )
-    }
-    fn admit(
-        admitted: Admitted,
-        entry: &str,
-        roles: (&str, &str),
-        acceptance: usize,
-        suite: Option<&str>,
-        events: &[NativeTranscriptEvent],
-        version: u8,
-    ) -> Result<Self> {
-        let iterated = version >= 2;
-        let keys = matches!(version, 3 | 4);
-        let (producer, validator) = roles;
-        if admitted.format() != ArtifactFormat::Program
-            || producer == validator
-            || (version == 2 && suite.is_none())
-        {
+        if producer == validator {
             return Err(refuse("native-proof-profile"));
         }
         let transcript = suite
             .map(|suite| {
-                if !matches!(
-                    suite,
-                    "merlin3.bls12-381.fr64be/1" | "spongefish0.7.4.keccak.bls12-381.fr64be/1"
-                ) && !(version == 4
-                    && matches!(
-                        suite,
-                        "merlin3.ristretto255.scalar64le/1"
-                            | "merlin3.koala-bear.ext8-binomial3.rejection31le/1"
-                    ))
-                {
-                    return Err(refuse("native-proof-suite"));
-                }
                 PhysicalType::default_for(
                     super::LogicalType::parse(&format!("transcript:{suite}"))
                         .map_err(|_| refuse("native-proof-suite"))?,
@@ -625,8 +491,7 @@ impl NativeProofEntry {
         }
         let mut helpers = BTreeMap::new();
         for (name, function) in &admitted.program.functions {
-            if let Some(checked) = helper(function, transcript.as_ref(), entry, validator, version)?
-            {
+            if let Some(checked) = helper(function, transcript.as_ref(), entry, validator)? {
                 helpers.insert(name.clone(), checked);
             }
         }
@@ -674,14 +539,8 @@ impl NativeProofEntry {
                     site, schema, ty, ..
                 } = action
                 {
-                    if !matches!(
-                        ty.logical().spelling().as_str(),
-                        "bool" | "field:bls12-381.fr" | "group:bls12-381.g1"
-                    ) && !(iterated && (ty.kind() == Type::Index || ty.has_native_array_frame()))
-                        && !(keys && pcs_wire(ty))
-                        && !(version == 4
-                            && ty.logical().is_native_message_data()
-                            && PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty))
+                    if !ty.logical().is_native_message_data()
+                        || PhysicalType::default_for(ty.logical()).ok().as_ref() != Some(ty)
                     {
                         return Err(refuse("native-proof-wire-type"));
                     }
@@ -697,9 +556,6 @@ impl NativeProofEntry {
         let mut previous_loops = None;
         for endpoint in [&producer, &validator] {
             let participant = &admitted.program.participants[&endpoint.participant];
-            if !participant.parameters.is_empty() || !participant.families.is_empty() {
-                return Err(refuse("native-proof-flat-profile"));
-            }
             let validating = endpoint.role == validator.role;
             let state_input = if let Some(state) = &transcript {
                 if participant.inputs.last().map(|(_, t)| t) != Some(state)
@@ -714,11 +570,13 @@ impl NativeProofEntry {
 
             let ordinary_inputs = participant.inputs.len() - usize::from(transcript.is_some());
             let ordinary_outputs = participant.outputs.len() - usize::from(transcript.is_some());
-            if participant.inputs[..ordinary_inputs].iter().any(|(_, t)| {
-                t.kind() == Type::Transcript || validating && !verifier_data(t, keys, version == 4)
-            }) || participant.outputs[..ordinary_outputs].iter().any(|t| {
-                t.kind() == Type::Transcript || validating && !verifier_data(t, keys, version == 4)
-            }) {
+            if participant.inputs[..ordinary_inputs]
+                .iter()
+                .any(|(_, t)| t.kind() == Type::Transcript || validating && !verifier_data(t))
+                || participant.outputs[..ordinary_outputs]
+                    .iter()
+                    .any(|t| t.kind() == Type::Transcript || validating && !verifier_data(t))
+            {
                 return Err(refuse("native-proof-state-ports"));
             }
             let mut walk = ProofWalk {
@@ -727,9 +585,6 @@ impl NativeProofEntry {
                 producer: &producer.role,
                 validator: &validator.role,
                 validating,
-                iterated,
-                keys,
-                structured: version == 4,
                 transcript: transcript.is_some(),
                 calls: BTreeSet::new(),
                 reached: Vec::new(),

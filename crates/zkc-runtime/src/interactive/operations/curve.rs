@@ -78,7 +78,6 @@ pub(super) const CONTRACTS: &[Contract] = &[
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: ALTERNATIVES,
-    logical_refusals: &[],
     physical_error: "uninstalled operation binding",
     physical_only: false,
 
@@ -173,11 +172,5 @@ const ALTERNATIVES: &[Alternative] = &[
             port: 1,
             representation: Representation::RistrettoDiagonal,
         },
-    },
-    Alternative {
-        implementation: "dalek-vartime/curve.msm",
-        contract: "curve.msm",
-        primary: Identity::Ristretto255Group,
-        ports: PortTransform::Default,
     },
 ];

@@ -6,10 +6,8 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/detail/Builders.h"
-#include "zkc/Protocol/Admission.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
@@ -17,7 +15,7 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
-Expected<std::string> algorithmSite(const source::Assignments &path,
+Expected<std::string> algorithmSite(const protocol::Assignments &path,
                                     StringRef site) {
   std::string result = "lc";
   auto append = [&](StringRef value) {
@@ -94,7 +92,7 @@ class Expander {
 
   LogicalResult body(zkc::local::FuncOp function, Block &block,
                      IRMapping &mapping, StringRef root,
-                     source::Assignments path, bool encode,
+                     protocol::Assignments path, bool encode,
                      SmallVector<Value> &returned) {
     if (path.size() > 64)
       return diagnostics::emit(function.emitOpError(),
@@ -254,33 +252,9 @@ LogicalResult expandAlgorithms(ModuleOp module,
       return success();
     }
   }
-  auto source = readExecutionModel(module);
-  if (!source)
-    return diagnostics::emit(module.emitError(), source.takeError());
-  auto *common = std::get_if<source::Module>(&*source);
-  if (!common)
-    return diagnostics::emit(module.emitError(), "algorithm-expansion-stage");
-  if (auto e = admit(*common, true))
-    return diagnostics::emit(module.emitError(), std::move(e));
-  bool calls = false;
-  for (const auto &fn : common->functions)
-    if (fn.body)
-      source::walk(*fn.body, [&](const source::Instruction &ins) {
-        calls |= ins.get<source::AlgorithmCall>() != nullptr;
-      });
-  if (!calls && !origins)
-    return success();
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
-  Expander expansion(module);
-  if (failed(expansion.run(*candidate)) || failed(verify(*candidate)) ||
-      failed(verifyAlgorithmExpansionPreserved(module, *candidate)))
-    return failure();
-  // Do not expose partial rewrites on failure.
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
-  if (origins)
-    *origins = expansion.takeOrigins();
-  return success();
+  return diagnostics::emit(module.emitError(), "algorithm-expansion-stage");
 }
+
 std::unique_ptr<Pass> createExpandAlgorithmsPass() {
   return std::make_unique<AlgorithmExpansionPass>();
 }

@@ -71,8 +71,8 @@ pub fn check(
     let codec = backend(keys);
     let bounds = Policy::default().ark_bounds();
     let authored = family == "authored";
-    // Even with an authorized setup, neither local opening state nor a variant
-    // wrapping a PCS value has an external input constructor in the /3 host.
+    // Local opening state has no external input constructor. A variant wrapping
+    // a PCS value is admitted only with explicit authority for that input.
     let nested = zkc_test_support::variants::logical(
         "PrivateCommitment",
         json!([["value", ["commitment:multilinear.kzg.bls12-381/1"]]]),
@@ -110,15 +110,22 @@ pub fn check(
         changed[4] = json!(String::from_utf8(bytes.clone()).unwrap());
         changed[5] = json!(digest(&bytes));
         let bytes = serde_json::to_vec(&changed).unwrap();
-        assert_eq!(
-            NativeDeployment::admit_with_key(
-                &bytes,
-                &digest(&bytes),
-                keys.verifier_key().metadata().key_id(),
-            )
-            .unwrap_err(),
-            "native-proof-role-input-type"
-        );
+        if logical == nested {
+            assert_eq!(
+                NativeDeployment::admit(&bytes, &digest(&bytes), authority(keys, authored))
+                    .unwrap_err(),
+                "native-proof-key-authority"
+            );
+            let mut authorized = authority(keys, authored);
+            authorized.inputs.insert(9, if authored { 2 } else { 6 });
+            NativeDeployment::admit(&bytes, &digest(&bytes), authorized).unwrap();
+        } else {
+            assert_eq!(
+                NativeDeployment::admit(&bytes, &digest(&bytes), authority(keys, authored))
+                    .unwrap_err(),
+                "native-proof-role-input-type"
+            );
+        }
     }
 
     let vk_port = if authored { 2 } else { 6 };

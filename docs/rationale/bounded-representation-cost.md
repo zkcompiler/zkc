@@ -10,7 +10,7 @@ analysis information merges no runtime state and moves no guard. The
 condition: asserted facts and readiness intersect, alternative phase covers
 unite. Specializing a continuation on an outcome is an explicit option under a
 global growth and work budget, stated in the
-[analysis design](../compiler/design.md#3-analysis-and-optimization-interfaces).
+[analysis design](../compiler/design.md#checking-and-invalidation).
 The budget is checked before any recursive duplication and covers production,
 the checker's reconstruction and the serialized result.
 

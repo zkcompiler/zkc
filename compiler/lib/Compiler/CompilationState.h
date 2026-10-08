@@ -7,9 +7,7 @@
 namespace zkc {
 struct Compilation::Storage {
   mlir::MLIRContext context;
-  std::optional<source::Document> source;
   mlir::OwningOpRef<mlir::ModuleOp> module;
-  std::vector<protocol::AlgorithmOrigin> origins;
   LinearContractionStats statistics;
   explicit Storage(const mlir::DialectRegistry &registry) : context(registry) {
     mlir::DialectRegistry builtins;

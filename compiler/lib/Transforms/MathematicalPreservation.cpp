@@ -31,7 +31,6 @@ bool supportedPreservationEdge(protocol_ir::Profile before,
     return after == Profile::Exec || after == Profile::Physical;
   case Profile::Physical:
     return after == Profile::Physical;
-  case Profile::ProtocolExec:
     return false;
   }
   return false;

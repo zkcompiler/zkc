@@ -1,55 +1,7 @@
-//! Where the tools a test drives are, and where it leaves what it did.
-//!
-//! A test that crosses a build runs tools from three separate builds as
-//! processes and compares what they do. It never receives an executable path
-//! from its caller and never reaches into another build's directory by hand: it
-//! names the tool it needs and this finds it.
-//!
-//! A tool that is not there is a failure naming the directory searched and the
-//! command that builds it. It is not a reason to skip the test. Fifty-one tests
-//! here used to carry `#[ignore]` for that reason, in three wordings, which
-//! meant a plain `cargo test` reported them as ignored and a reader counted
-//! them as fine. A skip reads as a pass, and these are the tests that compare
-//! the compiler against the runtime against the formal reference -- the ones
-//! whose silence is worth the least.
-//!
-//! Directory overrides have the same meaning as in the Python harness. Nix
-//! checks supply installed directories; native commands use checkout defaults.
-//! An invalid explicit directory never falls back to the checkout or PATH.
+//! Shared native-test fixtures, bounded probe transport, and retained evidence.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-
-/// The three builds, each with its own output directory and its own command.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Build {
-    /// CMake: the compiler and its tools.
-    Compiler,
-    /// Cargo: the runtime, the host tools and their examples.
-    Native,
-    /// Lake: the formal library and its executable checkers.
-    Formal,
-}
-
-impl Build {
-    /// The variable naming this build's output directory, and its default.
-    const fn directory(self) -> (&'static str, &'static str) {
-        match self {
-            Build::Compiler => ("ZKC_COMPILER_BIN", "build/compiler"),
-            Build::Native => ("ZKC_NATIVE_BIN", "target/release"),
-            Build::Formal => ("ZKC_LEAN_BIN", "formal/.lake/build/bin"),
-        }
-    }
-
-    /// What builds it, for a failure to name.
-    const fn command(self) -> &'static str {
-        match self {
-            Build::Compiler => "just build-compiler",
-            Build::Native => "just build-rust",
-            Build::Formal => "just build-lean",
-        }
-    }
-}
 
 /// The repository root, from this crate's place in it.
 pub fn root() -> PathBuf {
@@ -58,25 +10,6 @@ pub fn root() -> PathBuf {
         .canonicalize()
         .expect("the repository root is where this crate's manifest says it is")
 }
-
-/// Removed aliases cannot silently select a different compiler in another suite.
-const REMOVED: &[(&str, &str)] = &[
-    ("ZKC_COMPILER", "ZKC_COMPILER_BIN"),
-    ("ZKC_OPTIMIZER", "ZKC_COMPILER_BIN"),
-    ("ZKC_SOURCE_BENCH", "ZKC_COMPILER_BIN"),
-    ("ZKC_SERVICE_COMPILER", "ZKC_COMPILER_BIN"),
-    ("ZKC_SERVICE_OPTIMIZER", "ZKC_COMPILER_BIN"),
-    ("ZKC_REQUIREMENTS_TEST", "ZKC_COMPILER_BIN"),
-    ("ZKC_LEAN", "ZKC_LEAN_BIN"),
-    ("ZKC_PHYSICAL_CHECKER", "ZKC_LEAN_BIN"),
-    ("ZKC_TEST_RECORDS", "ZKC_REPORTS_DIR (without /tests)"),
-    ("ZKC_COMPILER_BUILD", "a CMake preset and ZKC_COMPILER_BIN"),
-    (
-        "ZKC_BUILD_PRESET",
-        "a profile argument, e.g. just build-compiler dev",
-    ),
-    ("ZKC_JOBS", "the native tool's parallelism setting"),
-];
 
 fn checkout_path(value: impl AsRef<Path>) -> PathBuf {
     let path = value.as_ref();
@@ -87,144 +20,9 @@ fn checkout_path(value: impl AsRef<Path>) -> PathBuf {
     }
 }
 
-fn validate_environment(
-    lookup: &impl Fn(&str) -> Option<std::ffi::OsString>,
-) -> Result<(), String> {
-    for (old, replacement) in REMOVED {
-        if lookup(old).is_some() {
-            return Err(format!("{old} was removed; use {replacement}"));
-        }
-    }
-    for name in [
-        "ZKC_COMPILER_BIN",
-        "ZKC_NATIVE_BIN",
-        "ZKC_LEAN_BIN",
-        "ZKC_REPORTS_DIR",
-    ] {
-        if let Some(value) = lookup(name)
-            && value.to_string_lossy().trim().is_empty()
-        {
-            return Err(format!(
-                "{name} must be a nonempty path; unset it to use the default"
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn resolve_tool(
-    build: Build,
-    name: &str,
-    lookup: impl Fn(&str) -> Option<std::ffi::OsString>,
-) -> Result<PathBuf, String> {
-    validate_environment(&lookup)?;
-    let (variable, fallback) = build.directory();
-    let directory = match lookup(variable) {
-        Some(value) => checkout_path(PathBuf::from(value)),
-        _ if build == Build::Native => match lookup("CARGO_TARGET_DIR") {
-            Some(target) if !target.is_empty() => {
-                let path = PathBuf::from(target);
-                let path = if path.is_absolute() {
-                    path
-                } else {
-                    std::env::current_dir()
-                        .map_err(|error| error.to_string())?
-                        .join(path)
-                };
-                path.join("release")
-            }
-            _ => root().join(fallback),
-        },
-        _ => root().join(fallback),
-    };
-    locate(build, name, &directory, variable)
-}
-
-/// Resolve by name within the selected build directory, never by legacy alias or PATH.
-pub fn tool(build: Build, name: &str) -> PathBuf {
-    resolve_tool(build, name, |key| std::env::var_os(key))
-        .unwrap_or_else(|reason| panic!("{reason}"))
-}
-
-fn executable(path: &Path) -> bool {
-    let Ok(metadata) = path.metadata() else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
-}
-
-/// The same, with the directory decided, so what a failure says can be tested
-/// without a test having to change the environment its neighbours read.
-fn locate(build: Build, name: &str, directory: &Path, variable: &str) -> Result<PathBuf, String> {
-    let path = directory.join(name);
-    if executable(&path) {
-        return Ok(path);
-    }
-    Err(format!(
-        "{name} is not in {}\n  \
-         {variable} names it or this build writes there, and it is neither\n  \
-         build it with: {}\n  \
-         present there: {}",
-        directory.display(),
-        build.command(),
-        present(directory).join(", ")
-    ))
-}
-
-/// The executables a build has actually produced, for a failure to name.
-///
-/// Lake writes a digest, a response file and a trace beside each binary; an
-/// extension is what separates those from the executable itself.
-fn present(directory: &Path) -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(directory) else {
-        return vec!["nothing".into()];
-    };
-    let mut names: Vec<String> = entries
-        .flatten()
-        .filter(|entry| entry.path().is_file() && entry.path().extension().is_none())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    if names.is_empty() {
-        names.push("nothing".into());
-    }
-    names
-}
-
-/// The compiler, which reads sources and writes plans.
-pub fn compiler() -> PathBuf {
-    tool(Build::Compiler, "zkc-compile")
-}
-
-/// The optimizer, which runs the compiler's passes over MLIR.
-pub fn optimizer() -> PathBuf {
-    tool(Build::Compiler, "zkc-opt")
-}
-
-/// A compiled Lean reference, by its executable name.
-///
-/// The references are not interchangeable: a source consumer refuses an
-/// artifact descriptor and an artifact reference refuses a table plan. Passing
-/// the wrong one produces a plausible refusal rather than an obvious error, so
-/// the name belongs to the test.
-pub fn checker(name: &str) -> PathBuf {
-    tool(Build::Formal, name)
-}
-
-/// The sources every build's tests read.
+/// Immutable conformance fixtures owned by this crate.
 pub fn corpus() -> PathBuf {
-    root().join("tests/fixtures")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures")
 }
 
 /// One source from that corpus, by name.
@@ -238,7 +36,7 @@ pub fn source(name: &str) -> PathBuf {
     path
 }
 
-/// The directory the running test writes its sources, plans and reports to.
+/// The directory the running test writes its inputs and reports to.
 ///
 /// The name is the test's own: the harness names each test's thread after it,
 /// which is also what keeps two tests in one binary -- they run in parallel --
@@ -293,7 +91,6 @@ impl AsRef<Path> for Evidence {
 
 /// The same, for a helper that has worked out a name of its own.
 pub fn records(test: &str) -> PathBuf {
-    validate_environment(&|key| std::env::var_os(key)).unwrap_or_else(|reason| panic!("{reason}"));
     let base = match std::env::var_os("ZKC_REPORTS_DIR") {
         Some(value) => checkout_path(PathBuf::from(value)),
         _ => root().join("build/reports"),
@@ -325,33 +122,10 @@ fn allocate_process_root(base: &Path, pid: u32) -> std::io::Result<PathBuf> {
     Err(std::io::Error::other("exhausted process report names"))
 }
 
-/// Run one compiler subcommand over one file and return what it printed.
-///
-/// Twelve places across two crates wrote this: spawn the compiler, assert the
-/// status, and show stderr when it is not what was wanted. A test that is
-/// judging the refusal rather than requiring the success wants `Command` and
-/// its own assertions; this is for the step that has to have worked before the
-/// test can begin.
-pub fn compile(subcommand: &str, input: impl AsRef<Path>) -> Vec<u8> {
-    let input = input.as_ref();
-    let result = std::process::Command::new(compiler())
-        .arg(subcommand)
-        .arg(input)
-        .output()
-        .unwrap_or_else(|error| panic!("could not run the compiler: {error}"));
-    assert!(
-        result.status.success(),
-        "{subcommand} {} failed: {}",
-        input.display(),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    result.stdout
-}
-
 /// Wire bytes as the lowercase hexadecimal these tests read and write.
 ///
 /// Four test files wrote this same function and four wrote its inverse. The
-/// product has its own, which is not this one: `zkc_tools::artifact::io::hex`
+/// product has its own, which is not this one: `zkc_tools::proof::hex`
 /// is what a tool prints, and a test that compared against it would be checking
 /// that one expression equals itself.
 pub fn hex(bytes: &[u8]) -> String {
@@ -382,74 +156,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_tool_this_build_produced_is_found_by_name() {
-        let directory =
-            std::env::temp_dir().join(format!("zkc-tool-resolution-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
-        let binary = directory.join("zkc-compile");
-        std::fs::write(&binary, "#!/bin/sh\nexit 0\n").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        let found = resolve_tool(Build::Compiler, "zkc-compile", |name| {
-            (name == "ZKC_COMPILER_BIN").then(|| directory.as_os_str().to_owned())
-        })
-        .unwrap();
-        assert_eq!(found, binary);
-        assert!(
-            resolve_tool(Build::Compiler, "absent", |name| {
-                (name == "ZKC_COMPILER_BIN").then(|| directory.as_os_str().to_owned())
-            })
-            .is_err()
-        );
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn old_aliases_and_empty_directories_are_rejected_before_lookup() {
-        for (old, replacement) in REMOVED {
-            let error = resolve_tool(Build::Compiler, "zkc-compile", |name| {
-                (name == *old).then(|| "/some/old/path".into())
-            })
-            .unwrap_err();
-            assert!(
-                error.contains(old) && error.contains(replacement),
-                "{error}"
-            );
-        }
-        let error = resolve_tool(Build::Formal, "checker", |name| {
-            (name == "ZKC_LEAN_BIN").then(|| "".into())
-        })
-        .unwrap_err();
-        assert!(error.contains("nonempty"));
-    }
-
-    #[test]
     fn relative_project_paths_are_rooted_in_the_checkout() {
         assert_eq!(checkout_path("build/custom"), root().join("build/custom"));
     }
 
     #[test]
     fn the_corpus_is_one_directory_and_holds_what_tests_ask_for() {
-        assert!(source("generic-operations.pir").exists());
-        assert!(source("air/lookup.json").exists());
-    }
-
-    #[test]
-    fn a_missing_tool_names_the_directory_searched_and_what_builds_it() {
-        let message = locate(
-            Build::Formal,
-            "no-such-reference",
-            Path::new("/nowhere-this-build-writes"),
-            "ZKC_LEAN_BIN",
-        )
-        .expect_err("a tool that is not there is a failure, not a skip");
-        assert!(message.contains("/nowhere-this-build-writes"), "{message}");
-        assert!(message.contains("just build-lean"), "{message}");
-        assert!(message.contains("ZKC_LEAN_BIN"), "{message}");
-        assert!(message.contains("present there: nothing"), "{message}");
+        assert!(source("variants/descriptors.json").exists());
+        assert!(source("external-transcript/monero-hash-vectors.json").exists());
     }
 
     #[test]

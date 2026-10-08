@@ -478,7 +478,7 @@ class Projector {
     auto target = zkc::protocol_ir::ParticipantOp::create(
         builder, program.getLoc(), fresh(),
         builder.getFunctionType(inputTypes, outputTypes), program.getSymName(),
-        roleName.getValue(), builder.getArrayAttr({}), ArrayAttr());
+        roleName.getValue());
     if (!servicePorts.empty())
       target->setAttr("service_ports", builder.getArrayAttr(servicePorts));
     auto *body = new Block();
@@ -527,8 +527,7 @@ public:
     auto root = zkc::protocol_ir::ProtocolModuleOp::create(
         builder, source.getLoc(),
         zkc::protocol_ir::ProfileAttr::get(
-            builder.getContext(), zkc::protocol_ir::Profile::Participant),
-        zkc::protocol_ir::ExecutionContractAttr());
+            builder.getContext(), zkc::protocol_ir::Profile::Participant));
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);

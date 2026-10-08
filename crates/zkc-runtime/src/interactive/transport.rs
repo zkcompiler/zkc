@@ -1,5 +1,5 @@
 //! Public role actions, exact message coordinates and execution budgets.
-use super::{ArtifactFormat, PhysicalType, backend::BackendError, model::*};
+use super::{PhysicalType, backend::BackendError, model::*};
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,22 +43,20 @@ pub enum PathElement {
     Match { site: String, alternative: String },
     Conditional { site: String, taken: bool },
     For { site: String, index: u64 },
-    Call { site: String, instance: String },
     Loop { site: String, iteration: u64 },
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Origin {
-    pub format: ArtifactFormat,
     /// Host-agreed unique execution ID. Reusing it defeats cross-session replay separation.
     pub session: String,
     pub entry: String,
     pub instance: String,
-    /// Ordered nesting, preserving interleaving of calls and loop iterations.
+    /// Ordered nesting, preserving interleaving of local regions and loop iterations.
     pub path: Vec<PathElement>,
 }
 impl Origin {
     /// Canonical structured origin, also used by `domain_bytes`. Exposing it
-    /// preserves complete call/iteration identity in host diagnostic records.
+    /// preserves complete region/iteration identity in host diagnostic records.
     pub fn json(&self) -> serde_json::Value {
         serde_json::json!([
             "zkc.origin/2",
@@ -74,8 +72,6 @@ impl Origin {
                         serde_json::json!(["if", site, if *taken { "then" } else { "else" }]),
                     PathElement::For { site, index } =>
                         serde_json::json!(["for", site, index.to_string()]),
-                    PathElement::Call { site, instance } =>
-                        serde_json::json!(["call", site, instance]),
                     PathElement::Loop { site, iteration } =>
                         serde_json::json!(["loop", site, iteration.to_string()]),
                 })
@@ -193,7 +189,6 @@ pub enum ReceiveCompletion {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StopKind {
     Decode(DecodeReason),
-    Incomplete,
     Explicit(String),
     Backend(BackendError),
     Limit,
@@ -201,11 +196,10 @@ pub enum StopKind {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalContext {
-    /// Participant local-call (or ingress) site containing the failure.
+    /// Participant local-call site containing the failure.
     pub site: String,
     pub function: String,
-    /// Inner instruction recorded by local control, when available. Ingress keeps its outer
-    /// `ingress.<parameter>` site in Stop and retains the inner site here.
+    /// Inner instruction recorded by local control, when available.
     pub instruction: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,7 +237,6 @@ impl<V> Action<V> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Usage {
     pub instructions: u64,
-    pub calls: u64,
     pub iterations: u64,
     pub live_values: usize,
     pub live_value_bytes: usize,
@@ -273,14 +266,12 @@ impl Default for ValueBudget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WorkBudget {
     pub instructions: u64,
-    pub calls: u64,
     pub iterations: u64,
 }
 impl Default for WorkBudget {
     fn default() -> Self {
         Self {
             instructions: Limits::INSTRUCTIONS,
-            calls: Limits::CALLS,
             iterations: Limits::ITERATIONS,
         }
     }

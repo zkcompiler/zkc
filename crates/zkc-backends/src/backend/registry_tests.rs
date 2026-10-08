@@ -1,17 +1,14 @@
 use super::*;
-use crate::{Domain, EntryPolicy, Policy, PublicInputs, PublicRolePolicy, Scalar, Value};
+use crate::{Domain, EntryPolicy, Policy, Scalar, Value};
 use serde_json::json;
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{Action, OperationBinding, Runner, StopKind, admit_supplied};
 
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "session", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "session", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -45,7 +42,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
     };
     let result_types = if returned.is_empty() { vec![] } else { outputs };
     let mut carrier = json!([
-        "zkc.participants/1",
+        "zkc.program/1",
         [[
             "b",
             binding.contract,
@@ -75,7 +72,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             [
                 ["local", "work", "f", names, returned],
                 ["return", returned]
-            ]
+            ],
+            []
         ]],
         [["entry", "main", [["P", "actor"]]]]
     ]);
@@ -156,13 +154,6 @@ fn run(
         }
     }
 }
-fn trap(
-    _: &mut NativeBackend,
-    _: &zkc_runtime::interactive::Invocation<'_>,
-    _: &[Value],
-) -> crate::Result<Vec<Value>> {
-    panic!("handler ran before the common public-operand gate")
-}
 #[test]
 fn duplicate_implementation_owners_refuse_before_execution() {
     let mut registry = installed().unwrap().clone();
@@ -188,173 +179,7 @@ fn duplicate_implementation_owners_refuse_before_execution() {
         "refused:duplicate-implementation-owner"
     );
 }
-#[test]
-fn every_handler_family_passes_the_common_security_gate() {
-    let cases = [
-        (
-            "bool.not",
-            vec![],
-            "arkworks/bool.not",
-            vec![],
-            vec![Value::Bool(true)],
-        ),
-        (
-            "field.constant",
-            vec!["bls12-381.fr"],
-            "arkworks/field.constant",
-            vec!["1"],
-            vec![],
-        ),
-        (
-            "vector.to_point",
-            vec!["bls12-381.fr"],
-            "arkworks/vector.to_point",
-            vec![],
-            vec![Value::Vector([].into())],
-        ),
-        (
-            "curve.generator",
-            vec!["bls12-381.g1"],
-            "arkworks/curve.generator",
-            vec![],
-            vec![],
-        ),
-        (
-            "random.draw",
-            vec!["bls12-381.fr"],
-            "arkworks/random.draw",
-            vec![],
-            vec![],
-        ),
-        (
-            "poly.domain_root",
-            vec!["koala-bear"],
-            "plonky3/poly.domain_root",
-            vec![],
-            vec![Value::Index(1)],
-        ),
-        (
-            "index.constant",
-            vec![],
-            "native/index.constant",
-            vec!["1"],
-            vec![],
-        ),
-        (
-            "external.openvm.init",
-            vec![],
-            "native/external.openvm.init",
-            vec![],
-            vec![],
-        ),
-        (
-            "commitments.empty",
-            vec!["rows.merkle-keccak256.koala-bear/1"],
-            "plonky3/commitments.empty",
-            vec![],
-            vec![],
-        ),
-        (
-            "fixed_vector.from_vector",
-            vec!["koala-bear", "0"],
-            "plonky3/fixed_vector.from_vector",
-            vec![],
-            vec![Value::KoalaBearVector([].into())],
-        ),
-        (
-            "resource_unit.create",
-            vec!["Slot.A"],
-            "logical/resource_unit.create",
-            vec![],
-            vec![],
-        ),
-        (
-            "vector.mul",
-            vec!["bls12-381.fr"],
-            "arkworks-diagonal/vector.mul",
-            vec![],
-            vec![Value::Vector([].into()), Value::Vector([].into())],
-        ),
-        (
-            "vector.dot",
-            vec!["bls12-381.fr"],
-            "arkworks-pairwise/vector.dot",
-            vec![],
-            vec![Value::Vector([].into()), Value::Vector([].into())],
-        ),
-        (
-            "curve.msm",
-            vec!["ristretto255.group"],
-            "dalek-vartime/curve.msm",
-            vec![],
-            vec![
-                Value::RistrettoVector([].into()),
-                Value::RistrettoGroups([].into()),
-            ],
-        ),
-    ];
-    for (contract, arguments, implementation, attributes, mut args) in cases {
-        let mut backend = backend();
-        let mut registry = installed().unwrap().clone();
-        let entry = registry.entries.get_mut(implementation).unwrap();
-        entry.public_operands = true;
-        entry.handler = trap;
-        backend.implementations = Box::leak(Box::new(registry));
-        if contract == "random.draw" {
-            args.push(
-                backend
-                    .issue_rng(Domain::new("P", "session", "main", None), 1)
-                    .unwrap(),
-            );
-        }
-        let b = binding(contract, &arguments, implementation);
-        let (result, backend) = run(backend, &b, &attributes, args);
-        assert_eq!(
-            result.unwrap_err(),
-            "refused:public-operands-required",
-            "{implementation}"
-        );
-        assert_eq!(backend.active_frames(), 0);
-        assert_eq!(backend.live_resource_units(), 0);
-        assert_eq!(backend.external_work_spent(), 0);
-    }
-}
-#[test]
-fn former_early_return_families_gate_their_actual_handlers() {
-    for (contract, args, implementation, values) in [
-        (
-            "fixed_vector.from_vector",
-            vec!["koala-bear", "0"],
-            "plonky3/fixed_vector.from_vector",
-            vec![Value::KoalaBearVector([].into())],
-        ),
-        (
-            "resource_unit.create",
-            vec!["Slot.A"],
-            "logical/resource_unit.create",
-            vec![],
-        ),
-    ] {
-        let mut registry = installed().unwrap().clone();
-        registry
-            .entries
-            .get_mut(implementation)
-            .unwrap()
-            .public_operands = true;
-        let registry = Box::leak(Box::new(registry));
-        let b = binding(contract, &args, implementation);
-        let mut denied = backend();
-        denied.implementations = registry;
-        assert_eq!(
-            run(denied, &b, &[], values.clone()).0.unwrap_err(),
-            "refused:public-operands-required"
-        );
-        let mut permitted =
-            backend().with_public_role_policy(PublicRolePolicy::new(["P".into()]).unwrap());
-        permitted.implementations = registry;
-        assert!(run(permitted, &b, &[], values).0.is_ok());
-    }
-}
+
 fn first_handler(
     _: &mut NativeBackend,
     i: &zkc_runtime::interactive::Invocation<'_>,
@@ -795,20 +620,29 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     let mut native = backend();
     let domain = Domain::new("P", "session", "main", None);
     check(
-        native.issue_rng(domain.clone(), 1).unwrap(),
+        native
+            .issue_rng_for(Identity::Bls12381Fr, domain.clone(), 1)
+            .unwrap(),
         Type::Rng,
         I::Bls12381Fr,
         512,
     );
     check(
-        native.issue_nonce(domain.clone(), 1).unwrap(),
+        native
+            .issue_nonce_for(Identity::Bls12381Fr, domain.clone(), 1)
+            .unwrap(),
         Type::Nonce,
         I::Bls12381Fr,
         512,
     );
     check(
         native
-            .issue_transcript(domain, 1, &[1, 0, 0, 0, 0, 0, 0, 0, 0])
+            .issue_transcript_for(
+                Identity::Merlin3Fr64Be,
+                domain,
+                1,
+                &[1, 0, 0, 0, 0, 0, 0, 0, 0],
+            )
             .unwrap(),
         Type::Transcript,
         I::Merlin3Fr64Be,
@@ -884,7 +718,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                 // A public wrong-kind wrapper must refuse there without panic.
                 let ty = value.physical_type().spelling();
                 let carrier = serde_json::to_vec(&json!([
-                    "zkc.participants/1",
+                    "zkc.program/1",
                     [],
                     "physical",
                     [],
@@ -896,7 +730,8 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                         [],
                         [["arg", ty]],
                         [ty],
-                        [["return", ["arg"]]]
+                        [["return", ["arg"]]],
+                        []
                     ]],
                     [["entry", "main", [["P", "actor"]]]]
                 ]))
@@ -927,7 +762,6 @@ fn independent_same_port_provider_and_missing_owner_are_checked() {
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Default,
         handler: Some(arithmetic),
-        public_operands: false,
     };
     registry.alternative(&row).unwrap();
     let entry = registry.get(row.identity).unwrap();
@@ -984,7 +818,7 @@ fn fixed_implementations_reject_alternative_registration() {
         "plonky3/vector.embed",
         "arkworks/bool.and",
         "arkworks/random.draw",
-        "arkworks/transcript.challenge",
+        "arkworks/transcript.native.indexed.challenge",
     ] {
         let mut registry = installed().unwrap().clone();
         assert_eq!(
@@ -995,7 +829,6 @@ fn fixed_implementations_reject_alternative_registration() {
                     primary: Identity::Bls12381Fr,
                     ports: crate::bindings::PortTransform::Default,
                     handler: None,
-                    public_operands: false,
                 })
                 .unwrap_err()
                 .code,
@@ -1011,56 +844,37 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
     registry
         .alternative(&Alternative {
             identity: "independent/observation",
-            original: "arkworks/transcript.observe.field",
+            original: "arkworks/transcript.native.indexed.observe.data",
             primary: Identity::Merlin3Fr64Be,
             ports: crate::bindings::PortTransform::Default,
             handler: None,
-            public_operands: false,
         })
         .unwrap();
     let entry = registry.get("independent/observation").unwrap();
-    for (suite, payload, codec, accepted) in [
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "zkcv.field.bls12-381.fr/1",
-            true,
-        ),
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "bn254.fr",
-            "zkcv.field.bn254.fr/1",
-            false,
-        ),
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "wrong-codec",
-            false,
-        ),
+    for (suite, payload, accepted) in [
+        ("merlin3.bls12-381.fr64be/1", "field:bls12-381.fr", true),
+        ("merlin3.bls12-381.fr64be/1", "field:bn254.fr", true),
+        ("merlin3.bls12-381.fr64be/1", "wrong-type", false),
         (
             "merlin3.ristretto255.scalar64le/1",
-            "ristretto255.scalar",
-            "zkcv.field.ristretto255.scalar/1",
+            "field:ristretto255.scalar",
             false,
         ),
         (
             "spongefish0.7.4.keccak.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "zkcv.field.bls12-381.fr/1",
+            "field:bls12-381.fr",
             false,
         ),
     ] {
         assert_eq!(
             entry
                 .signature(&binding(
-                    "transcript.observe.field",
-                    &[suite, payload, codec],
+                    "transcript.native.indexed.observe.data",
+                    &[suite, payload],
                     "independent/observation"
                 ))
                 .is_some(),
-            accepted,
-            "{suite} {payload} {codec}"
+            accepted
         );
     }
     assert_eq!(
@@ -1070,8 +884,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
                 original: "independent/observation",
                 primary: Identity::Merlin3Fr64Be,
                 ports: crate::bindings::PortTransform::Default,
-                handler: None,
-                public_operands: false,
+                handler: None
             })
             .unwrap_err()
             .code,
@@ -1089,7 +902,6 @@ fn curve_alternative_requires_the_exact_group() {
             primary: Identity::Bn254G1,
             ports: crate::bindings::PortTransform::Default,
             handler: None,
-            public_operands: false,
         })
         .unwrap();
     let entry = registry.get("independent/bn254-add").unwrap();
@@ -1123,46 +935,28 @@ fn curve_alternative_requires_the_exact_group() {
 }
 
 #[test]
-fn transcript_table_alternative_preserves_state_and_transforms_payload() {
+fn transcript_alternative_refuses_unsupported_table_payload() {
     let mut registry = installed().unwrap().clone();
     registry
         .alternative(&Alternative {
             identity: "independent/msb-observation",
-            original: "arkworks/transcript.observe.table",
+            original: "arkworks/transcript.native.indexed.observe.data",
             primary: Identity::Merlin3Fr64Be,
             ports: crate::bindings::PortTransform::Msb,
             handler: None,
-            public_operands: false,
         })
         .unwrap();
-    let arguments = &[
-        "merlin3.bls12-381.fr64be/1",
-        "bls12-381.fr",
-        "zkcv.table.bls12-381.fr/1",
-    ];
-    let entry = registry.get("independent/msb-observation").unwrap();
-    let actual = entry
-        .signature(&binding(
-            "transcript.observe.table",
-            arguments,
-            "independent/msb-observation",
-        ))
-        .unwrap();
-    let mut expected = registry
-        .get("arkworks/transcript.observe.table")
-        .unwrap()
-        .signature(&binding(
-            "transcript.observe.table",
-            arguments,
-            "arkworks/transcript.observe.table",
-        ))
-        .unwrap();
-    expected.inputs[1] = zkc_runtime::interactive::PhysicalType::new(
-        expected.inputs[1].logical(),
-        zkc_runtime::interactive::Representation::TableMsb,
-    )
-    .unwrap();
-    assert_eq!(actual, expected);
+    assert!(
+        registry
+            .get("independent/msb-observation")
+            .unwrap()
+            .signature(&binding(
+                "transcript.native.indexed.observe.data",
+                &["merlin3.bls12-381.fr64be/1", "table:bls12-381.fr"],
+                "independent/msb-observation"
+            ))
+            .is_none()
+    );
 }
 
 #[test]
@@ -1273,32 +1067,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "poly.round_evaluate",
         "poly.univariate_boundary",
         "poly.univariate_evaluate",
-        "transcript.native.indexed.observe.bool",
-        "transcript.native.indexed.observe.commitment",
-        "transcript.native.indexed.observe.field",
-        "transcript.native.indexed.observe.field_array",
         "transcript.native.indexed.observe.data",
-        "transcript.native.indexed.observe.group",
-        "transcript.native.indexed.observe.index",
-        "transcript.native.indexed.observe.proof",
-        "transcript.native.observe.bool",
-        "transcript.native.observe.field",
-        "transcript.native.observe.group",
-        "transcript.observe.bool",
-        "transcript.observe.commitment",
-        "transcript.observe.commitments",
-        "transcript.observe.field",
-        "transcript.observe.group",
-        "transcript.observe.groups",
-        "transcript.observe.index",
-        "transcript.observe.indices",
-        "transcript.observe.matrix",
-        "transcript.observe.point",
-        "transcript.observe.polynomial",
-        "transcript.observe.proof",
-        "transcript.observe.round",
-        "transcript.observe.table",
-        "transcript.observe.vector",
         "vector.add",
         "vector.append",
         "vector.at",
@@ -1409,8 +1178,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
                 ));
             }
         }
-        let native =
-            || backend().with_public_role_policy(PublicRolePolicy::new(["P".into()]).unwrap());
+        let native = || backend();
         // Diagonal views cannot cross entry boundaries. Exercise their consumers
         // through the producer in the same local frame, then compare its result.
         let (call, original, alternate) = match row.identity {
@@ -1439,9 +1207,11 @@ fn every_alternative_executes_and_preserves_the_original_result() {
             .unwrap_or_else(|e| panic!("{}: {e}", row.identity));
         let normalize = |v: Value| match v {
             Value::TableMsb(t) => Value::Table(Arc::new(t.to_lsb(&policy.ark_bounds()).unwrap())),
+            Value::Point(v) | Value::Polynomial(v) => Value::Vector(v),
+            Value::Round(v) => Value::Vector(Arc::from(v)),
             other => other,
         };
-        let encode = |v: Value| native().encode_value(&normalize(v)).unwrap();
+        let encode = |v: Value| native().encode_native_value(&normalize(v)).unwrap();
         assert_eq!(
             actual.into_iter().map(encode).collect::<Vec<_>>(),
             expected.into_iter().map(encode).collect::<Vec<_>>(),
@@ -1449,30 +1219,6 @@ fn every_alternative_executes_and_preserves_the_original_result() {
             row.identity
         );
     }
-}
-
-#[test]
-fn layout_aliases_inherit_security_requirements() {
-    let mut registry = installed().unwrap().clone();
-    registry
-        .entries
-        .get_mut("arkworks/field.mul")
-        .unwrap()
-        .public_operands = true;
-    registry
-        .alternative(&Alternative {
-            identity: "alias/field.mul",
-            original: "arkworks/field.mul",
-            primary: zkc_runtime::interactive::Identity::Bls12381Fr,
-            ports: crate::bindings::PortTransform::Default,
-            handler: None,
-            public_operands: false,
-        })
-        .unwrap();
-    let original = registry.get("arkworks/field.mul").unwrap();
-    let alias = registry.get("alias/field.mul").unwrap();
-    assert!(alias.public_operands);
-    assert!(std::ptr::fn_addr_eq(original.handler, alias.handler));
 }
 
 #[test]

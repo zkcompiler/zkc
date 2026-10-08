@@ -2,7 +2,7 @@
 #define ZKC_TARGET_PHYSICAL_PLAN_H
 
 #include "mlir/IR/BuiltinOps.h"
-#include "zkc/Source/Model.h"
+#include "zkc/Program/Model.h"
 #include "zkc/Target/Catalog.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include <memory>
@@ -13,7 +13,7 @@ using OperationIndex = size_t;
 using BindingIndex = size_t;
 enum class BindingPurpose { Original, Contraction, Conversion };
 struct BindingDecision {
-  source::OperationBinding binding;
+  protocol::OperationBinding binding;
   BindingPurpose purpose = BindingPurpose::Original;
   std::optional<OperationIndex> declaration;
   bool fixed = false;

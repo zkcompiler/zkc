@@ -1,6 +1,6 @@
 #include "Run.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Source/Codec.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 #include <map>
@@ -15,8 +15,8 @@ namespace {
 static_assert(32768 * 7 + 1024 + 11 <= 250000);
 using Coordinate = std::pair<std::string, std::string>;
 struct Role {
-  const source::Participant *program;
-  std::vector<const source::Instruction *> instructions;
+  const program::Participant *program;
+  std::vector<const program::Instruction *> instructions;
   size_t cursor = 0;
 };
 class Schedule {
@@ -28,7 +28,7 @@ class Schedule {
   json::Array *current = &steps;
   size_t stepCount = 0, nodes = 11, nextAnchor = 0;
 
-  const source::Instruction *next(size_t role) const {
+  const program::Instruction *next(size_t role) const {
     const auto &r = roles[role];
     return r.cursor < r.instructions.size() ? r.instructions[r.cursor]
                                             : nullptr;
@@ -52,7 +52,7 @@ class Schedule {
     auto calculation = calculations.find(key);
     if (calculation == calculations.end() || guards.count(key))
       return Error::success();
-    auto *call = instruction->get<source::LocalCall>();
+    auto *call = instruction->get<program::LocalCall>();
     if (!call || call->callee != calculation->second)
       return error("run-calculation");
     calculations.erase(calculation);
@@ -81,15 +81,15 @@ class Schedule {
       return error("run-occurrence");
     bool matches = false;
     if (kind == "protocol.finish_if")
-      matches = bool(instruction->get<source::ReturnIf>());
+      matches = bool(instruction->get<program::ReturnIf>());
     else if (kind == "protocol.send")
-      matches = bool(instruction->get<source::Send>());
+      matches = bool(instruction->get<program::Send>());
     else if (kind == "protocol.receive")
-      matches = bool(instruction->get<source::Receive>());
+      matches = bool(instruction->get<program::Receive>());
     else if (kind == "protocol.service_query")
-      matches = bool(instruction->get<source::ServiceQuery>());
+      matches = bool(instruction->get<program::ServiceQuery>());
     else if (kind == "local.call" || kind == "local.guard") {
-      auto *call = instruction->get<source::LocalCall>();
+      auto *call = instruction->get<program::LocalCall>();
       Coordinate key{roles[role].program->name, site.str()};
       if (kind == "local.guard") {
         auto calculation = calculations.find(key);
@@ -142,11 +142,10 @@ class Schedule {
           if (auto e = prefix(*index, anchor))
             return e;
           auto instruction = next(*index);
-          auto loop = instruction ? instruction->get<source::Loop>() : nullptr;
+          auto loop = instruction ? instruction->get<program::Loop>() : nullptr;
           auto bound = a.getAs<IntegerAttr>("maximum");
           if (!loop || !bound || !a.getAs<ArrayAttr>("body") ||
               instruction->site != a.getAs<StringAttr>("site").getValue() ||
-              loop->count.kind != source::LoopCount::Kind::Value ||
               loop->count.maximum != bound.getValue().getZExtValue())
             return error("run-loop");
           if (auto e = append(*index, anchor))
@@ -160,7 +159,7 @@ class Schedule {
           if (auto e = prefix(role, std::nullopt))
             return e;
           auto instruction = next(role);
-          if (!instruction || !instruction->get<source::Yield>())
+          if (!instruction || !instruction->get<program::Yield>())
             return error("run-yield");
           if (auto e = append(role, std::nullopt))
             return e;
@@ -197,7 +196,7 @@ class Schedule {
   }
 
 public:
-  Expected<json::Array> build(const source::Participants &candidate,
+  Expected<json::Array> build(const program::Participants &candidate,
                               DictionaryAttr interface, ArrayAttr origins) {
     auto roster = interface.getAs<ArrayAttr>("participants");
     if (roster.empty() || roster.size() > 1024)
@@ -221,7 +220,7 @@ public:
           !indices.emplace(symbol.str(), roles.size()).second)
         return error("run-role");
       Role projected{&*found, {}, 0};
-      source::walk(found->body, [&](const source::Instruction &instruction) {
+      program::walk(found->body, [&](const program::Instruction &instruction) {
         projected.instructions.push_back(&instruction);
       });
       roles.push_back(std::move(projected));
@@ -249,7 +248,7 @@ public:
       if (auto e = prefix(role, std::nullopt))
         return e;
       auto *instruction = next(role);
-      if (!instruction || !instruction->get<source::Return>())
+      if (!instruction || !instruction->get<program::Return>())
         return error("run-return");
       if (auto e = append(role, std::nullopt))
         return e;
@@ -280,20 +279,19 @@ Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
   }
   if (!selected)
     return error("run-entry");
-  auto content = protocol::exportSource(module);
+  auto content = protocol::exportProgram(module);
   if (!content)
     return content.takeError();
-  auto *candidate = std::get_if<source::Participants>(&*content);
-  if (!candidate || !source::isProgram(candidate->contract) ||
-      candidate->stage != source::Participants::Stage::Physical)
+  auto *candidate = &*content;
+  if (!candidate || candidate->stage != program::Participants::Stage::Physical)
     return error("run-profile");
-  if (auto e = source::checkStructure(*candidate))
+  if (auto e = program::checkStructure(*candidate))
     return e;
   auto steps =
       Schedule().build(*candidate, selected, projection.getCalculations());
   if (!steps)
     return steps.takeError();
-  auto encoded = printJson(source::encode(*candidate));
+  auto encoded = printJson(program::encode(*candidate));
   if (encoded.size() > 1024 * 1024)
     return error("run-limit");
   json::Array roles;

@@ -22,7 +22,7 @@ fn roundtrip(v: Value) {
     // Existing canonical leaf formats remain identical across codec owners.
     // Native BLS vector/group tags and recursive frames are intentionally distinct.
     if !matches!(bytes[5], 65..=69) {
-        let old = b.decode_typed_value(v.physical_type(), &bytes).unwrap();
+        let old = b.decode_native_value(&v.physical_type(), &bytes).unwrap();
         assert_eq!(b.encode_native_value(&old).unwrap(), bytes);
     }
     assert_eq!(b.encode_native_value(&got).unwrap(), bytes);

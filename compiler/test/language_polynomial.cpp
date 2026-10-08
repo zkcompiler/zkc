@@ -314,7 +314,7 @@ int main(int argc, char **argv) {
                       message);
             });
   mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
+  zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   for (bool valid : {false, true})
     cases.run(

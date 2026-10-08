@@ -188,10 +188,10 @@ fn random_sparse_products_and_bilinear_match_coordinate_oracle() {
                 &Value::Bool(false),
             );
             let b = backend(Policy::default());
-            let encoded = b.encode_value(&m).unwrap();
+            let encoded = b.encode_native_value(&m).unwrap();
             assert_eq!(encoded, wire(d, rows, columns, &entries));
             assert_value(
-                &b.decode_typed_value(m.physical_type(), &encoded).unwrap(),
+                &b.decode_native_value(&m.physical_type(), &encoded).unwrap(),
                 &m,
             );
             assert!(
@@ -218,67 +218,59 @@ fn wire_refuses_every_noncanonical_structure_before_backing_allocation() {
         let mut cases = vec![
             (
                 wire(d, 2, 3, &[(1, 0, 3), (0, 1, 4)]),
-                "refused:matrix-order",
+                "native-wire-invalid:header",
             ),
             (
                 wire(d, 2, 3, &[(0, 1, 3), (0, 1, 4)]),
-                "refused:matrix-order",
+                "native-wire-invalid:header",
             ),
-            (wire(d, 2, 3, &[(0, 1, 0)]), "refused:matrix-zero"),
-            (wire(d, 2, 3, &[(2, 0, 3)]), "refused:matrix-index"),
-            (wire(d, 2, 3, &[(0, 3, 3)]), "refused:matrix-index"),
-            (wire(d, 0, 3, &[(0, 0, 3)]), "refused:matrix-count"),
-            (wire(d, 65537, 3, &[]), "exhausted:matrix-dimension-limit"),
-            (
-                wire(d, u32::MAX, u32::MAX, &[]),
-                "exhausted:matrix-dimension-limit",
-            ),
+            (wire(d, 2, 3, &[(0, 1, 0)]), "native-wire-invalid:scalar"),
+            (wire(d, 2, 3, &[(2, 0, 3)]), "native-wire-invalid:header"),
+            (wire(d, 2, 3, &[(0, 3, 3)]), "native-wire-invalid:header"),
+            (wire(d, 0, 3, &[(0, 0, 3)]), "native-wire-invalid:length"),
+            (wire(d, 65537, 3, &[]), "native-wire-limit"),
+            (wire(d, u32::MAX, u32::MAX, &[]), "native-wire-limit"),
         ];
         for end in 0..valid.len() {
-            cases.push((
-                valid[..end].to_vec(),
-                if end < 6 {
-                    "refused:wire-header"
-                } else {
-                    "refused:wire-length"
-                },
-            ));
+            cases.push((valid[..end].to_vec(), "native-wire-invalid:length"));
         }
         let mut trailing = valid.clone();
         trailing.push(0);
-        cases.push((trailing, "refused:wire-length"));
+        cases.push((trailing, "native-wire-invalid:length"));
         let mut count = wire(d, 65536, 65536, &[]);
         count[14..18].copy_from_slice(&u32::MAX.to_le_bytes());
-        cases.push((count, "exhausted:matrix-nonzero-limit"));
+        cases.push((count, "native-wire-limit"));
         let mut count = valid.clone();
         count[14..18].copy_from_slice(&7u32.to_le_bytes());
-        cases.push((count, "refused:matrix-count"));
+        cases.push((count, "native-wire-invalid:length"));
         let mut count = wire(d, 65536, 65536, &[]);
         count[14..18].copy_from_slice(&1_048_576u32.to_le_bytes());
-        cases.push((count, "refused:wire-length"));
+        cases.push((count, "native-wire-limit"));
         let mut wrong = valid.clone();
         wrong[5] = 23 + ((d + 1) % 3) as u8;
-        cases.push((wrong, "refused:wire-header"));
+        cases.push((wrong, "native-wire-invalid:header"));
         for (bad, code) in cases {
             assert_eq!(
-                b.decode_typed_value(ty.clone(), &bad).unwrap_err().code,
+                b.decode_native_value(&ty.clone(), &bad)
+                    .unwrap_err()
+                    .to_string(),
                 code
             );
         }
         let mut bad = valid.clone();
         let width = if d == 2 { 4 } else { 32 };
         bad[26..26 + width].fill(255);
-        assert!(b.decode_typed_value(ty.clone(), &bad).is_err());
+        assert!(b.decode_native_value(&ty.clone(), &bad).is_err());
         let low_wire = backend(Policy {
             max_wire_bytes: valid.len() - 1,
             ..Policy::default()
         });
         assert_eq!(
             low_wire
-                .decode_typed_value(ty.clone(), &valid)
+                .decode_native_value(&ty.clone(), &valid)
                 .unwrap_err()
-                .code,
-            "exhausted:wire-bytes"
+                .to_string(),
+            "native-wire-limit"
         );
         let low_value = backend(Policy {
             max_value_bytes: 256,
@@ -286,10 +278,10 @@ fn wire_refuses_every_noncanonical_structure_before_backing_allocation() {
         });
         assert_eq!(
             low_value
-                .decode_typed_value(ty.clone(), &valid)
+                .decode_native_value(&ty.clone(), &valid)
                 .unwrap_err()
-                .code,
-            "exhausted:output-bytes"
+                .to_string(),
+            "native-wire-limit"
         );
     }
     for (rows, columns) in [(usize::MAX, 1), (1, usize::MAX), (65537, 0)] {
@@ -431,8 +423,7 @@ fn nonzeros_use_separate_cap_and_large_inputs_keep_constant_size_programs() {
             .collect::<Vec<_>>();
         let m = matrix(d, 257, 257, &entries);
         let b = backend(Policy::default());
-        let wire = b.encode_value(&m).unwrap();
-        let m = b.decode_typed_value(m.physical_type(), &wire).unwrap();
+        assert!(b.encode_native_value(&m).is_err());
         // 65537 entries: more than the default dense vector cap, which is what
         // makes the constant-size program below the thing worth checking.
         let expected = (0..257)
@@ -460,7 +451,7 @@ fn nonzeros_use_separate_cap_and_large_inputs_keep_constant_size_programs() {
             &["out".into()],
         );
         assert!(p.len() < 1500);
-        assert!(wire.len() > 700000);
+        assert!(entries.len() > 65536);
     }
 }
 
@@ -483,28 +474,35 @@ fn exact_nonzero_cap_and_dimension_cap_are_independent_of_dense_vector_policy() 
     };
     let b = backend(p);
     let ty = matrix(2, 0, 0, &[]).physical_type();
-    let m = b.decode_typed_value(ty.clone(), &bytes).unwrap();
-    assert_eq!(b.encode_value(&m).unwrap(), bytes);
+    assert!(b.decode_native_value(&ty, &bytes).is_err());
+    let entries = (0..n)
+        .map(|k| ((k / 1024) as u32, (k % 1024) as u32, 1))
+        .collect::<Vec<_>>();
+    let m = matrix(2, 1024, 1024, &entries);
+    assert!(b.encode_native_value(&m).is_err());
     assert_value(
         &call(2, "matrix.mul_vector", &[], vec![m, vector(2, &[1; 1024])]),
         &vector(2, &[1024; 1024]),
     );
-    // A final bad coefficient cannot be hidden behind a valid prefix.
-    let length = bytes.len();
-    bytes[length - 4..].fill(0);
-    assert_eq!(
-        b.decode_typed_value(ty.clone(), &bytes).unwrap_err().code,
-        "refused:matrix-zero"
-    );
-    bytes[14..18].copy_from_slice(&((n + 1) as u32).to_le_bytes());
-    assert_eq!(
-        b.decode_typed_value(ty.clone(), &bytes).unwrap_err().code,
-        "exhausted:matrix-nonzero-limit"
+    // Local sparse constructors still enforce their independent nonzero cap.
+    let mut too_many = entries;
+    too_many.push((1024, 0, 1));
+    assert!(
+        Value::koala_bear_matrix(
+            1025,
+            1024,
+            &too_many
+                .iter()
+                .map(|&(r, c, v)| (r, c, zkc_backends::KoalaBear::new(v as u32)))
+                .collect::<Vec<_>>(),
+            &Policy::default()
+        )
+        .is_err()
     );
     for (r, c) in [(65536, 0), (0, 65536), (65536, 65536)] {
         let m = matrix(2, r, c, &[]);
         assert_value(
-            &b.decode_typed_value(ty.clone(), &b.encode_value(&m).unwrap())
+            &b.decode_native_value(&ty.clone(), &b.encode_native_value(&m).unwrap())
                 .unwrap(),
             &m,
         );
@@ -534,14 +532,10 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                 .issue_transcript_for(suite, support::domain(), 2, &root)
                 .unwrap();
             let observe = OperationBinding {
-                contract: "transcript.observe.matrix".into(),
-                arguments: vec![
-                    suite.name().into(),
-                    field.name().into(),
-                    m.physical_type().logical().codec().unwrap(),
-                ],
+                contract: "transcript.native.indexed.observe.data".into(),
+                arguments: vec![suite.name().into(), m.physical_type().logical().spelling()],
                 implementation: format!(
-                    "{}/transcript.observe.matrix",
+                    "{}/transcript.native.indexed.observe.data",
                     if d == 0 { "arkworks" } else { "dalek" }
                 ),
             };
@@ -549,7 +543,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                 b.binding_signature(&observe),
                 Some(observe.signature().unwrap())
             );
-            let challenge = support::binding(d == 1, "transcript.challenge");
+            let challenge = support::binding(d == 1, "transcript.native.indexed.challenge");
             let outputs = challenge.signature().unwrap().outputs;
             let plan = program(
                 &[observe.clone(), challenge],
@@ -559,7 +553,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                         "op",
                         "observe",
                         "b0",
-                        ["Source", "message", "Schema", "P", "V"],
+                        support::native_attributes("message", "message"),
                         ["a0", "a1"],
                         ["t1"]
                     ]),
@@ -567,7 +561,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                         "op",
                         "challenge",
                         "b1",
-                        ["Source", "call", "Draw", "draw", "V"],
+                        support::native_attributes("query", "call"),
                         ["t1"],
                         ["c", "t2"]
                     ]),
@@ -577,29 +571,12 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
             );
             let mut direct = merlin::Transcript::new(b"zkc.artifact/1");
             direct.append_message(b"binding", &root);
-            for (kind, body) in [
-                (
-                    "message",
-                    json!(["message", "Source", "message", "Schema", "P", "V"]),
-                ),
-                (
-                    "challenge",
-                    json!(["challenge", "Source", "call", "Draw", "draw", "V"]),
-                ),
-            ] {
-                let origin = zkc_runtime::logical::encode_tree(&json!([
-                    "zkc.logical-origin/1",
-                    "main",
-                    "instance",
-                    [],
-                    body
-                ]))
-                .unwrap();
-                direct.append_message(b"origin", &origin);
-                if kind == "message" {
-                    direct.append_message(b"value", &b.encode_value(&m).unwrap());
-                }
-            }
+            direct.append_message(
+                b"origin",
+                &support::native_origin("message", "message", false),
+            );
+            direct.append_message(b"value", &b.encode_native_value(&m).unwrap());
+            direct.append_message(b"origin", &support::native_origin("query", "call", false));
             let mut wide = [0; 64];
             direct.challenge_bytes(b"challenge", &mut wide);
             let expected = if d == 0 {
@@ -610,10 +587,9 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
             let (result, b) = support::run_program(b, &plan, vec![t, m]);
             let result = result.unwrap();
             assert_value(&result[0], &expected);
-            challenges.push(b.encode_value(&result[0]).unwrap());
+            challenges.push(b.encode_native_value(&result[0]).unwrap());
             let mut incompatible = observe;
             incompatible.arguments[1] = "koala-bear".into();
-            incompatible.arguments[2] = "zkcv.matrix.koala-bear/1".into();
             assert!(incompatible.signature().is_err());
             assert!(b.binding_signature(&incompatible).is_none());
         }

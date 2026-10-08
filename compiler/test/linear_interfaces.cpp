@@ -170,7 +170,7 @@ void catalogAndCarriers(MLIRContext &ctx) {
         std::tuple{"curve.scale_each", "ristretto255.group",
                    "dalek-diagonal/curve.scale_each", "groups",
                    "dalek.ristretto-diagonal/1"}}) {
-    source::OperationBinding b{{}, "map", {contract, {nominal}, impl}};
+    protocol::OperationBinding b{"map", {contract, {nominal}, impl}};
     auto physical = accept(resolveBinding(b.application, true));
     require(physical.outputs[0].kind == kind &&
                 physical.outputs[0].representation == rep,
@@ -182,10 +182,8 @@ void catalogAndCarriers(MLIRContext &ctx) {
     require(logical.outputs[0].representation.empty(),
             "logical producer contract unchanged");
   }
-  source::OperationBinding msm{
-      {},
-      "msm",
-      {"curve.msm", {"ristretto255.group"}, "dalek-diagonal/curve.msm"}};
+  protocol::OperationBinding msm{
+      "msm", {"curve.msm", {"ristretto255.group"}, "dalek-diagonal/curve.msm"}};
   auto physical = accept(resolveBinding(msm.application, true));
   require(physical.inputs[0].identity == "ristretto255.scalar" &&
               physical.inputs[0].representation == "dalek.scalar-vector/1" &&
@@ -197,25 +195,20 @@ void catalogAndCarriers(MLIRContext &ctx) {
   refuse(resolveBinding(msm.application, true), "binding-implementation");
   msm.application.implementation = "arkworks-diagonal/curve.msm";
   refuse(resolveBinding(msm.application, true), "binding-implementation");
-  source::OperationBinding observe{
-      {},
+  protocol::OperationBinding observe{
       "observe",
-      {"transcript.observe.vector",
-       {"merlin3.ristretto255.scalar64le/1", "ristretto255.scalar",
-        "zkcv.vector.bls12-381.fr/1"},
+      {"transcript.native.indexed.observe.data",
+       {"merlin3.ristretto255.scalar64le/1", "rng:ristretto255.scalar"},
        ""}};
-  refuse(resolveBinding(observe.application, false), "binding-requirement");
-  observe.application.arguments[2] = "zkcv.polynomial.ristretto255.scalar/1";
-  refuse(resolveBinding(observe.application, false), "binding-requirement");
-  observe.application.arguments[2] = "zkcv.vector.ristretto255.scalar/1";
+  refuse(resolveBinding(observe.application, false), "native-proof-wire-type");
+  observe.application.arguments[1] = "vector:ristretto255.scalar";
   require(accept(defaultImplementation(observe.application)) ==
-              "dalek/transcript.observe.vector",
-          "matching Ristretto codec backend");
+              "dalek/transcript.native.indexed.observe.data",
+          "typed Ristretto observation backend");
   refuse(checkImplementation("poly.coefficients",
                              "arkworks-msb/poly.coefficients"),
          "binding-implementation");
-  source::OperationBinding unknown{
-      {},
+  protocol::OperationBinding unknown{
       "unknown",
       {"vector.unknown", {"bls12-381.fr"}, "arkworks/vector.unknown"}};
   refuse(resolveBinding(unknown.application, true), "binding-contract");

@@ -7,24 +7,15 @@ mod reference;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interactive::admit_supplied;
-use zkc_tools::artifact::{
-    hex,
-    native::{NativeDeployment, NativeProofReport},
-};
+use zkc_tools::proof::{NativeDeployment, NativeProofReport, hex};
 
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("Alice", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("Alice", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -173,7 +164,7 @@ fn admitted_mutation_refuses(envelope: &Json, candidate: &Json, reason: &str) {
     // never accept a pin supplied by this candidate or by its proof producer.
     let bytes = repin(envelope, candidate);
     assert_eq!(
-        NativeDeployment::admit(&bytes, &digest(&bytes)).unwrap_err(),
+        NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
         reason
     );
 }
@@ -200,7 +191,8 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     }
     admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &backend()).unwrap();
     let separate = repin(envelope, &candidate);
-    let separate = NativeDeployment::admit(&separate, &digest(&separate)).unwrap();
+    let separate =
+        NativeDeployment::admit(&separate, &digest(&separate), Default::default()).unwrap();
     let validated = separate.execute(input, Some(proof)).unwrap();
     cleaned(&validated);
     validated.outcome.unwrap();
@@ -233,7 +225,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     admitted_mutation_refuses(envelope, &candidate, "native-proof-observation-payload");
     let corrupted = repin(envelope, &candidate);
     assert_eq!(
-        NativeDeployment::admit(&corrupted, &digest(bytes)).unwrap_err(),
+        NativeDeployment::admit(&corrupted, &digest(bytes), Default::default()).unwrap_err(),
         "native-proof-deployment-binding"
     );
     let mut candidate = original.clone();
@@ -270,37 +262,28 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     helper[1] = json!("unreachable_transition");
     candidate[3].as_array_mut().unwrap().push(helper);
     admitted_mutation_refuses(envelope, &candidate, "native-proof-state-chain");
-    let mut candidate = original.clone();
-    let mut legacy_bindings = Vec::new();
-    for binding in candidate[1].as_array_mut().unwrap() {
-        if binding[1]
-            .as_str()
+    // Retired contracts are no longer well-typed operations. Refuse them at
+    // ordinary admission as well as at deployment admission, even after repinning.
+    for contract in [
+        "transcript.challenge",
+        "transcript.native.challenge",
+        "transcript.native.indexed.observe.group",
+    ] {
+        let mut candidate = original.clone();
+        let binding = candidate[1]
+            .as_array_mut()
             .unwrap()
-            .starts_with("transcript.native.")
-        {
-            legacy_bindings.push(binding[0].clone());
-            binding[1] = json!(
-                binding[1]
-                    .as_str()
-                    .unwrap()
-                    .replace("transcript.native.", "transcript.")
-            );
-            binding[3] = json!(
-                binding[3]
-                    .as_str()
-                    .unwrap()
-                    .replace("transcript.native.", "transcript.")
-            );
-        }
+            .iter_mut()
+            .find(|b| b[1] == "transcript.native.indexed.challenge")
+            .unwrap();
+        binding[1] = json!(contract);
+        binding[3] = json!(format!("arkworks/{contract}"));
+        let error =
+            admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &backend()).unwrap_err();
+        assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Signature);
+        let bytes = repin(envelope, &candidate);
+        assert!(NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).is_err());
     }
-    for function in candidate[3].as_array_mut().unwrap() {
-        for instruction in function[4].as_array_mut().unwrap() {
-            if instruction[0] == "op" && legacy_bindings.contains(&instruction[2]) {
-                instruction[3] = json!(["Source", "draw", "Origin", "site", "Bob"]);
-            }
-        }
-    }
-    admitted_mutation_refuses(envelope, &candidate, "native-proof-transcript-operation");
 }
 fn envelope_mutations(envelope: &Json) {
     let cases = [
@@ -338,7 +321,7 @@ fn envelope_mutations(envelope: &Json) {
         }
         let bytes = serde_json::to_vec(&changed).unwrap();
         assert_eq!(
-            NativeDeployment::admit(&bytes, &digest(&bytes)).unwrap_err(),
+            NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
             expected
         );
     }
@@ -350,13 +333,13 @@ fn envelope_mutations(envelope: &Json) {
     changed[6][0][4][0][0] = json!("5");
     let bytes = serde_json::to_vec(&changed).unwrap();
     assert_eq!(
-        NativeDeployment::admit(&bytes, &digest(&bytes)).unwrap_err(),
+        NativeDeployment::admit(&bytes, &digest(&bytes), Default::default()).unwrap_err(),
         "native-proof-shared-port-type"
     );
     // An unused private value is valid ordinary participant IR, but this proof
     // host has no input constructor for it. Refuse before reading input rows.
     // Keep all old inputs and transcript positions consistent with the map.
-    for logical in ["point:bls12-381.fr", "vector:bls12-381.fr"] {
+    for logical in ["point:bls12-381.fr", "polynomial:bls12-381.fr"] {
         let ty = zkc_runtime::interactive::PhysicalType::default_for(
             zkc_runtime::interactive::LogicalType::parse(logical).unwrap(),
         )
@@ -497,7 +480,7 @@ fn run(directory: &Path) {
         let name = case["name"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes))
+        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
             .unwrap_or_else(|e| panic!("{name}: {e}"));
         let (p, v) = (
             inputs(&envelope, case, true),

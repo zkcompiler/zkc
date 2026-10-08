@@ -6,8 +6,8 @@ signature. Interpretations compose, so successive lowering is a composition of
 meanings, and an intermediate signature need not be a compiler representation.
 The compiler builds an inspectable structured form only where an analysis or a
 transformation consumes it, as the
-[representation levels](../architecture.md#2-shared-meaning-and-representation-levels)
-and the [compilation architecture](../compiler/protocol-pipeline.md#1-representations-and-their-consumers)
+[representation levels](../architecture.md#representation-and-checking)
+and the [compilation architecture](../compiler/protocol-pipeline.md#representations-and-their-consumers)
 describe. Interaction legality, participant views, construction choice,
 analysis facts, observations, property experiments and trust premises are
 judgments and choices applied to those forms. They are not further forms.

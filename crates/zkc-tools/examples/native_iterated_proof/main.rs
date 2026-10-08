@@ -5,22 +5,15 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{
-    Domain, EntryPolicy, FieldArray, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
+    Domain, EntryPolicy, FieldArray, GroupPoint, NativeBackend, Policy, Scalar, Value,
 };
 use zkc_runtime::interactive::{Identity, LogicalType};
-use zkc_tools::artifact::{
-    hex,
-    native::{NativeDeployment, NativeProofReport},
-};
+use zkc_tools::proof::{NativeDeployment, NativeProofReport, hex};
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -163,7 +156,7 @@ fn main() {
         let family = case["family"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes))
+        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
             .unwrap_or_else(|e| panic!("{name}: {e}"));
         let counts = case["count"]
             .as_u64()

@@ -60,7 +60,6 @@ fn signature(
 }
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: &[],
-    logical_refusals: &[],
     physical_error: "binding-implementation",
     physical_only: false,
 

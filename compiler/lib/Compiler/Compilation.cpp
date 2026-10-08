@@ -10,12 +10,6 @@ Compilation::Compilation(Compilation &&) noexcept = default;
 Compilation &Compilation::operator=(Compilation &&) noexcept = default;
 Compilation::~Compilation() = default;
 ModuleOp Compilation::module() const { return *storage->module; }
-const source::Document *Compilation::source() const {
-  return storage->source ? &*storage->source : nullptr;
-}
-ArrayRef<protocol::AlgorithmOrigin> Compilation::origins() const {
-  return storage->origins;
-}
 const LinearContractionStats &Compilation::statistics() const {
   return storage->statistics;
 }
@@ -36,7 +30,6 @@ void collectError(const Error &error,
     } else if (info.isA<DialectRegistrationError>()) {
       preconditions.push_back(
           static_cast<const DialectRegistrationError &>(info).precondition);
-
     }
   });
 }

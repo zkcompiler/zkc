@@ -158,43 +158,11 @@
       "fixed_vector.to_vector"
     ],
     "transcript": [
-      "transcript.draw_index",
-      "transcript.challenge",
-      "transcript.native.challenge",
       "transcript.native.indexed.challenge"
-    ],
-    "observation": [
-      "transcript.observe.bool",
-      "transcript.observe.index",
-      "transcript.observe.indices",
-      "transcript.observe.field",
-      "transcript.observe.table",
-      "transcript.observe.point",
-      "transcript.observe.round",
-      "transcript.observe.matrix",
-      "transcript.observe.vector",
-      "transcript.observe.polynomial",
-      "transcript.observe.commitment",
-      "transcript.observe.proof",
-      "transcript.observe.commitments",
-      "transcript.observe.group",
-      "transcript.observe.groups",
-      "transcript.native.observe.bool",
-      "transcript.native.observe.field",
-      "transcript.native.observe.group",
-      "transcript.native.indexed.observe.bool",
-      "transcript.native.indexed.observe.field",
-      "transcript.native.indexed.observe.group",
-      "transcript.native.indexed.observe.index",
-      "transcript.native.indexed.observe.commitment",
-      "transcript.native.indexed.observe.proof"
     ],
     "array": [
       "field_array.from_vector",
       "field_array.at"
-    ],
-    "native_array_observation": [
-      "transcript.native.indexed.observe.field_array"
     ],
     "native_data_observation": [
       "transcript.native.indexed.observe.data"
@@ -245,36 +213,5 @@
       "field_array",
       "sequence"
     ]
-  },
-  "deferred_consumers": {
-    "lean": {
-      "operations": [
-        "field_array.from_vector",
-        "field_array.at",
-        "matrix.dimension",
-        "poly.table_arity",
-        "transcript.native.challenge",
-        "transcript.native.indexed.challenge",
-        "transcript.native.observe.bool",
-        "transcript.native.observe.field",
-        "transcript.native.observe.group",
-        "transcript.native.indexed.observe.bool",
-        "transcript.native.indexed.observe.field",
-        "transcript.native.indexed.observe.group",
-        "transcript.native.indexed.observe.index",
-        "transcript.native.indexed.observe.commitment",
-        "transcript.native.indexed.observe.proof",
-        "transcript.native.indexed.observe.field_array",
-        "transcript.native.indexed.observe.data",
-        "sequence.empty",
-        "sequence.append",
-        "sequence.length",
-        "sequence.at"
-      ],
-      "types": [
-        "field_array",
-        "sequence"
-      ]
-    }
   }
 }

@@ -1,67 +1,38 @@
 # Documentation
 
-zkc compiles proof protocols and connects their implementations to explicit
-semantic contracts. These documents explain the project, how to work on it,
-what the implementation supports, and the model used to judge it.
-
-## Start with your task
-
-| You want to… | Read |
-|---|---|
-| Understand the problem and approach | [Overview](overview.md), then [architecture](architecture.md) |
-| Compile and run a first protocol | [Walkthrough](getting-started.md), then [source language](language/mathematical.md) |
-| Author scalar mathematics and messages directly | [Mathematical source language](language/mathematical.md) |
-| Execute mathematical MLIR directly | [Native bundle walkthrough](runtime/bundles.md); native Lean checking remains open |
-| Author a reusable protocol library | [Mathematical source](language/mathematical.md) and [example clients](../examples/projects/README.md) |
-| Build or develop the repository | [Development guide](development/README.md), [configuration](development/configuration.md) and [repository layout](development/layout.md) |
-| Select and interpret checks | [Test guide](../tests/README.md) and [assurance](assurance.md) |
-| Assess current capabilities and limits | [Implementation status](status.md), then [remaining work](roadmap.md) |
-| Read the mathematical model | [Specification](spec/README.md), [PIR guide](guides/protocol-model.md) and [theory](theory.md) |
-| Use the Lean library independently | [Formal package](../formal/README.md) and its [support map](../formal/SUPPORT.md) |
-| Interpret a performance result | [Benchmarks](../bench/README.md) and the linked campaign's comparison conditions |
-| Extend dialects, passes or backends | [Implementation maintenance](development/extensions.md) |
-| Maintain dependencies or CI | [Maintenance guide](development/maintenance.md) |
-| Contribute code or documentation | [Contribution guide](../.github/CONTRIBUTING.md) and [documentation guide](development/documentation.md) |
+zkc has one supported implementation model: `.zkc` Language → mathematical MLIR
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/1` → the shared Rust
+Runner, installed kernels and Entry/proof/joint Hosts. Direct MLIR authoring uses
+that same pipeline. The independent Lean research library has its own semantic
+subjects and proof boundaries.
 
 ## Reading routes
 
-- **Protocol authors:** [walkthrough](getting-started.md) →
-  [language](language/README.md) → [library projects](../examples/projects/README.md) →
-  [Entry execution](language/entries.md).
-- **Compiler and backend contributors:** [architecture](architecture.md) →
-  [compiler pipeline](compiler/protocol-pipeline.md) →
-  [compiler reference](compiler/README.md) or [runtime reference](runtime/README.md) →
-  [extension guide](development/extensions.md).
-- **Formal and research readers:** [model guides](guides/README.md) →
-  [specification](spec/README.md) → [correspondence maps](spec/correspondence/core.md)
-  and the [Lean support map](../formal/SUPPORT.md).
-
-## Reference by subject
-
-| Area | Responsibility |
+| Task | Route |
 |---|---|
-| [Language](language/README.md) | Protocol authoring, types, static components, projects and compiled relations |
-| [Semantic guides](guides/README.md) | Execution, observations, contracts, composition, properties and contrasting protocol interpretations |
-| [Compiler](compiler/README.md) | Retained source, IR, analyses, construction, transformation and lowering |
-| [Runtime](runtime/README.md) | Execution, backend integration, artifact consumption and concrete formats |
-| [Specification](spec/README.md) | Normative definitions, judgments, failure behavior and implementation discretion |
-| [Theory](theory.md) | Mathematical methods, primary references and where their laws apply |
-| [Formal package](../formal/README.md) | Lean definitions, proofs, executable tools and independently resolved integrations |
-| [Rationale](rationale/README.md) | Consequential design choices, alternatives and reopening conditions |
+| Compile and run a protocol | [Walkthrough](getting-started.md) → [language](language/README.md) → [Entry execution](language/entries.md) |
+| Understand the system | [Overview](overview.md) → [architecture](architecture.md) → [status](status.md) |
+| Develop a component | [Development](development/README.md) → [compiler](compiler/README.md) or [runtime](runtime/README.md) |
+| Study semantics and proofs | [Model guides](guides/README.md) → [specification](spec/README.md) → [formal support](../formal/SUPPORT.md) |
+| Evaluate evidence or future work | [Assurance](assurance.md) → [roadmap](roadmap.md) |
 
-A theorem establishes its exact proposition under its hypotheses; an adapter
-identifies the actual source or implementation to which it applies. The
-[assurance map](assurance.md) separates proofs, checker results, implementation
-trust and bounded measurements. [Status](status.md) states what is implemented.
+The [maintained projects](../examples/projects/README.md) contain Schnorr and
+Sumcheck clients. [Relation data](language/relations.md) enters through explicit
+Assets or relation adapters. [Theory](theory.md) explains the mathematical tools
+behind the model; [rationale](rationale/README.md) records consequential choices.
 
 ## Which document decides
 
-`docs/` and root `formal/` define the model. Normative definitions live in
-`spec/`; the [specification index](spec/README.md#adopted-scope) lists their exact
-scope, and the domain chapters explain their use. The [status page](status.md)
-distinguishes model coverage from native support. The
-[organization decision](rationale/documentation-structure.md) explains the layout.
+`spec/` owns definitions, judgments and profile contracts. Its
+[scope map](spec/README.md#adopted-scope) distinguishes current native contracts
+from independently formalized models. [Status](status.md) owns implementation
+support, [architecture](architecture.md) assigns responsibilities, and
+[roadmap](roadmap.md) sequences remaining work. A theorem establishes its exact
+proposition under its hypotheses; a correspondence claim must identify the
+actual implementation to which it applies.
 
-Review, research and planning records are development notes and stay outside
-this reference. A finished study reaches it as the design it produced, with a
-[rationale record](rationale/README.md) where a choice needs one.
+Build commands and maintenance belong in [development](development/README.md).
+The [test guide](../tests/README.md) selects checks. Documentation changes follow
+[the writing and placement guide](development/documentation.md) and the
+[organization decision](rationale/documentation-structure.md). Review logs,
+private research records and superseded guides do not belong in this reference.

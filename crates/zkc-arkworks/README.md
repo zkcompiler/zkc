@@ -1,7 +1,7 @@
 # zkc-arkworks
 
 Rust kernels for BLS12-381 field tables, groups and multilinear PCS, plus
-BN254 arithmetic used by the Groth16 path, over arkworks **0.6.0**. This crate implements no participant runner, Sumcheck protocol,
+BN254 arithmetic and pairing kernels used by native mathematical programs, over arkworks **0.6.0**. This crate implements no participant runner, Sumcheck protocol,
 compiler trait, Fiat–Shamir transform, or provider registry. The caller performs
 ordinary Fr add/mul/equality and composes the kernels in its authored algorithm.
 
@@ -258,8 +258,8 @@ upstream PCS/MSM/setup internals, and some upstream scalar-parser internals rema
 ordinary infallible Rust allocations. Upstream setup has O(n 2^n) temporary field
 storage and O(2^n) basis storage in both groups. Open/commit allocate their own
 scratch. Out-of-memory abort and unexpected upstream panic recovery are outside
-this crate's Result contract. Runtime BufferStore reservation does not cover
-these allocations; do not advertise an allocation-free publication adapter.
+this crate's Result contract. Runtime per-value limits do not reserve these upstream allocations; do not
+advertise an allocation-free publication adapter.
 
 Tests cover exact scalar ingress, independent logical-half evaluation and
 restriction, all 60 rounds from 20 Lean cases, omitted-permutation negative
@@ -270,8 +270,7 @@ transfer, and OS randomness.
 Prover-key tests additionally compare independent upstream setup and manual wire/hash
 reconstruction, post-reload commitments/openings, all point slots, re-pinned hostile
 material, setup/VK mask associations and wrapper allocation requests on rejected
-dimensions. The fixture records actual `CoordinateLayout.lean` output, freshly reproduced in
-the delivery lane. Tests establish bounded implementation evidence, not a PCS
+dimensions. The fixture records actual `CoordinateLayout.lean` output, retained as an independent frozen reference. Tests establish bounded implementation evidence, not a PCS
 security theorem or complete compiler correspondence. `examples/kernels.rs`
 reports conversion/setup/commit/open/check separately as cost diagnostics.
 

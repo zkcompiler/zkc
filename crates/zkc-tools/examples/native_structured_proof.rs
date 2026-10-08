@@ -5,23 +5,19 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value, Variant,
+    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value, Variant,
 };
 use zkc_runtime::interactive::{LogicalType, Value as RuntimeValue, admit_supplied};
 use zkc_test_support::variants::logical;
-use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_tools::proof::{NativeDeployment, hex};
 fn digest(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
 fn backend() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("Alice", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("Alice", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -107,7 +103,7 @@ fn inputs(envelope: &Json, producing: bool, tag: usize, count: usize) -> Json {
         envelope[2][3].as_array().unwrap().len().to_string()
     ])
 }
-fn clean(report: &zkc_tools::artifact::native::NativeProofReport) {
+fn clean(report: &zkc_tools::proof::NativeProofReport) {
     assert!(!report.outcome.as_ref().err().is_some_and(
         |e| e.starts_with("native-proof-cleanup") || e == "native-proof-active-frames"
     ));
@@ -129,7 +125,7 @@ fn run(directory: &Path) {
             standalone(directory, name, kind, &envelope, &bytes);
             continue;
         }
-        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes))
+        let deployment = NativeDeployment::admit(&bytes, &digest(&bytes), Default::default())
             .unwrap_or_else(|e| panic!("{name}: {e}"));
         // Reverse challenge delivery is observed but absent from proof bytes.
         // Its descriptor origin and full payload type must still match the
@@ -151,7 +147,7 @@ fn run(directory: &Path) {
             }
             changed[3] = json!(digest(&reference::tree(&changed[2])));
             let encoded = serde_json::to_vec(&changed).unwrap();
-            let error = NativeDeployment::admit(&encoded, &digest(&encoded))
+            let error = NativeDeployment::admit(&encoded, &digest(&encoded), Default::default())
                 .expect_err("changed descriptor admitted");
             assert!(
                 error.contains(if missing {
@@ -178,7 +174,7 @@ fn run(directory: &Path) {
         renamed[3] = json!(digest(&reference::tree(&renamed[2])));
         let changed = serde_json::to_vec(&renamed).unwrap();
         assert_eq!(
-            NativeDeployment::admit(&changed, &digest(&changed)).unwrap_err(),
+            NativeDeployment::admit(&changed, &digest(&changed), Default::default()).unwrap_err(),
             "native-proof-wire-map"
         );
         let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
@@ -349,7 +345,7 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
 }
 
 fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: &[u8]) {
-    let deployment = NativeDeployment::admit(bytes, &digest(bytes)).unwrap();
+    let deployment = NativeDeployment::admit(bytes, &digest(bytes), Default::default()).unwrap();
     let (value, tag, body) = match kind {
         "vector" => (
             Value::Vector(vec![Scalar::from(7)].into()),
@@ -422,8 +418,8 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     );
     assert_eq!(&proof[40..48], &(expected.len() as u64).to_le_bytes());
     assert_eq!(&proof[48..], &expected);
-    // The shared program is executable, but the older proof policy still
-    // refuses its dynamic message type after independently recomputing pins.
+    // The current program remains executable. Retired deployment tags refuse
+    // before any message-type interpretation, even after recomputing pins.
     admit_supplied(envelope[4].as_str().unwrap().as_bytes(), &backend()).unwrap();
     let mut changed = envelope.clone();
     changed[0] = json!("zkc.native-proof/3");
@@ -432,8 +428,8 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     changed[3] = json!(digest(&reference::tree(&changed[2])));
     let changed = serde_json::to_vec(&changed).unwrap();
     assert_eq!(
-        NativeDeployment::admit(&changed, &digest(&changed)).unwrap_err(),
-        "native-proof-wire-type"
+        NativeDeployment::admit(&changed, &digest(&changed), Default::default()).unwrap_err(),
+        "native-proof-format"
     );
     for (suffix, data) in [
         ("producer.json", serde_json::to_vec(&p).unwrap()),

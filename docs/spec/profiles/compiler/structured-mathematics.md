@@ -126,11 +126,10 @@ Other fields can have mathematical formation without an installed native array
 provider.
 
 Arrays use immutable shared storage. Their generic custody declaration is
-`PrivateImmutable` (copy and drop), so the old common codec remains unavailable.
-That custody classification does not assert secrecy. The native mathematical
-profile explicitly permits role sharing and a separate native array wire codec.
-`fixed_vector` retains its previous custody and codec rules. The old
-`PublicInputs::Exact` common-codec pinning path does not accept field arrays.
+`PrivateImmutable` (copy and drop); codec support is an independent property.
+This classification does not assert secrecy. The mathematical profile permits
+role sharing through the native array wire codec. `fixed_vector` has its own
+custody and codec rules.
 
 One array exchange is one frame: the six bytes `ZKCV`, version `01`, tag `40`,
 followed by exactly `N` canonical 32-byte little-endian BLS scalar encodings.

@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -222,16 +223,16 @@ fn main() {
     let scalar = |n:u8| -> zkc_tools::entry::Value {
         let mut frame=b"ZKCV\x01\x01".to_vec();
         let mut bytes=[0u8;32]; bytes[0]=n; frame.extend_from_slice(&bytes);
-        zkc_tools::protocol::run::InputValue::Wire(frame).into()
+        zkc_tools::run::InputValue::Wire(frame).into()
     };
     // Public API construction, independent of private zkc-tools modules. The
     // actual setup-bearing calls are separately exercised across CLI processes.
-    let key=||zkc_tools::entry::Value::from(zkc_tools::protocol::run::InputValue::ProverKeyFile {
+    let key=||zkc_tools::entry::Value::from(zkc_tools::run::InputValue::ProverKeyFile {
         path:"prover.key".into(), fingerprint:[0;32],
     });
     let input=pcs::PInputs{pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0)};
     let input:zkc_tools::entry::NamedValues=input.into();
-    assert!(matches!(input.get("pk0").unwrap(),zkc_tools::entry::Value::Leaf(zkc_tools::protocol::run::InputValue::ProverKeyFile{..})));
+    assert!(matches!(input.get("pk0").unwrap(),zkc_tools::entry::Value::Leaf(zkc_tools::run::InputValue::ProverKeyFile{..})));
     let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
     let _verifier=pcs::VInputs{};
     assert_eq!(pcs::setups::first,"first");
@@ -289,7 +290,7 @@ fn main() {
     let received=run::VOutputs::take(report.outputs.as_mut().unwrap()).unwrap();
     assert!(received.received.marker);
     assert!(matches!(received.received.choice,run::SampleChoice::Data{..}));
-    let bytes=zkc_tools::entry::files::proof_outputs(&received.into(),Default::default()).unwrap();
+    let bytes=zkc_tools::entry::files::proof_outputs(&received.into(),Default::default(),Default::default()).unwrap();
     assert!(std::str::from_utf8(&bytes).unwrap().contains("5a4b4356010107000000"));
     let mut tampered=bytes;tampered.push(b' ');
     assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap().code(),"entry-package-identity");
@@ -378,7 +379,7 @@ def test_compilation_preserves_the_selected_executable(toolchain, journal, direc
 
 def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, directory):
     compiler = directory / 'compiler'
-    compiler.write_text('#!/usr/bin/env python3\nimport sys\nsys.stderr.write("X" * 70000)\nsys.exit(1)\n')
+    compiler.write_text(f'#!{sys.executable}\nimport sys\nsys.stderr.write("X" * 70000)\nsys.exit(1)\n')
     compiler.chmod(0o755)
     output = directory / 'existing.entry'
     output.write_bytes(b'unchanged')

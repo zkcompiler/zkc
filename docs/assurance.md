@@ -83,21 +83,10 @@ are not counts of new authored contributions or a percentage of model maturity.
 
 The [integration controls](../formal/Tests/Integration.lean) are kernel-checked
 discriminators alongside general laws. [Protocol interpretations](guides/protocols.md)
-explain the contrasting boundaries; [status](status.md) and maintained example
-and [benchmark guides](../bench/README.md) identify native evidence and comparison
-conditions. Reorganizing documentation does not rerun those measurements.
-
-The [domain-extension case](../tests/protocol/test_domain_extension.py) compares
-source specialization and participant lowering with native Plonky3 execution and
-an independently written [Lean fixed-vector reference](../formal/Tools/Interactive/FixedVectorReference.lean).
-Its checked data retains the exact length; its arithmetic does not call the native
-kernel. [Contract conformance](../tests/protocol/test_contract_conformance.py)
-compares three independently installed logical readers and four physical readers,
-including the executing backend's signature resolver. Separate native tests run
-each installed alternative against its original implementation. Generated declarations
-provide test cases, never executable authority for Rust or Lean. These checks
-cover the declared finite profile and supplied cases; they do not prove native
-elaboration, kernel refinement or cryptographic security for arbitrary extensions.
+explain the contrasting boundaries. [Status](status.md) and the native
+[validation map](compiler/foundation-validation.md) identify implementation
+evidence. No benchmark campaign is currently maintained; see the
+[measurement guidance](development/documentation.md). Reorganizing documentation does not rerun validation.
 
 ## 4. Trust and unmechanized boundaries
 
@@ -107,7 +96,7 @@ elaboration, kernel refinement or cryptographic security for arbitrary extension
 | Lean/Std toolchain | Pinned by `formal/lean-toolchain`; a build record must identify the actual source/cache scope and completed audits; no toolchain bootstrap claim |
 | Mathematical external libraries | Exact source pins; reached proof assumptions audited |
 | Native checker/parser and artifact bytes | Correspondence obligation for implementation; no universal decoder correctness theorem yet |
-| Structured MLIR source and lowering | Source route: Lean source/candidate checks at supported profiles. Native route: bounded [adjacent and emitted-artifact checks](compiler/preservation.md), with native Lean correspondence still open |
+| Structured MLIR source and lowering | Bounded [adjacent and emitted-artifact checks](compiler/preservation.md), with native Lean correspondence still open |
 | Rust runtime and backend | Explicit common contracts; native realization can be proved or declared trusted at its actual scope |
 | Concrete cryptography/providers | Scheme/model-specific assumptions and experiments; product-tape math does not prove native entropy/PRG/hash security |
 | Full protocol security | Only the exact existing scoped propositions; no blanket completeness, soundness, knowledge or zero-knowledge theorem |
@@ -142,76 +131,38 @@ These categories constrain assurance claims: explicit framing is not a full
 separation logic, and phase conformance is not a general session-type projection
 or progress result.
 
-The [research triggers](roadmap.md#3-research-triggers) record remaining candidates,
-including stronger concurrency/projection, computational provider models,
-aggregate attempts, richer reduction/custody interfaces, search completeness and
-native confidentiality. These are not omitted theories silently assumed by the
-current proofs. A new design task examines the theory needed by its exact
-obligation; an open topic gets a concrete research target before expanding scope.
+The [roadmap](roadmap.md) prioritizes native correspondence and transcript
+assurance. Richer concurrency, provider, custody and disclosure models require
+their own subjects and claims. They are not theories silently assumed by the
+current proofs; a new design task identifies its exact obligation before
+expanding scope.
 
-## 6. Implementation correspondence policy
+## 6. Native correspondence policy
 
-Differential testing against executable Lean meanings is the default practical
-validation of native correspondence. A proof of the Rust implementation is an
-optional strengthening. Mathematical compiler/checker and protocol-security
-theorems retain their own completion conditions.
+The supported native pipeline has bounded C++ preservation checks, independent
+Rust admission and execution tests. Its actual source semantics, artifact binding
+and runtime interpretation still need a native Lean connection. Existing Lean
+source, direct-plan and table theorems concern independent models; retiring their
+native consumers does not transfer those results to `zkc.program/1`.
 
-The mathematical MLIR/program route uses two explicit evidence milestones:
+An independent reference computes expectations from original inputs and the
+selected semantic contract. It must not use the producer's transformation as its
+oracle. Two interpreters agreeing on one exported program cannot by themselves
+detect a shared source-to-program mistake. The
+[validation map](compiler/foundation-validation.md) identifies current boundaries.
 
-| Milestone | Required evidence |
-|---|---|
-| Foundation stabilization | Source/candidate validation through the actual emitted artifact for the declared compiler route; independent execution references for its required capability compositions, inputs, failures, state and selected observations; mutation controls and recorded coverage/trust limits |
-| Native Lean connection and completed native migration | Executable Lean meaning for the actual supported carrier, source/artifact binding and Lean/native differential campaigns for each delivered slice, with its declared comparison relation |
+Each comparison fixes the source subset, actual executable, initial state,
+provider behavior, result relation and observer. Compare returned values or
+stops, related residual state and ordered observations. If exhaustion is in
+scope, specify the budget relation too. Shared random tapes test operational
+correspondence; they do not prove a sampling law or Fiat–Shamir security.
 
-These milestones permit tested foundation implementation before the native Lean
-connection; they do not count current C++/Rust tests as Lean evidence.
-The selected foundation milestone is met at the bounded scope recorded in the
-[validation map](compiler/foundation-validation.md#source-to-artifact-checks).
-[Compiler preservation](compiler/preservation.md) checks adjacent source/candidate
-subjects through physical SSA and the actual emitted program, schedule and
-source-port maps. Independent execution references and mutation controls cover
-the required compositions. Same-constructor reconstruction and encoder/decoder
-round trips alone are insufficient. This completion adds no native Lean meaning,
-universal refinement, cryptographic security or whole-process resource theorem.
+Use independent arithmetic/reference cases and mutations that demonstrate the
+comparator catches disagreement. A timeout or unsupported case is not agreement.
+A finite campaign is empirical evidence, not a universal theorem or a numerical
+bound on remaining bugs. Native formalization can reuse existing laws only after
+connecting their exact subjects and hypotheses to the implementation.
 
-An independent reference derives the expected result from the original inputs
-and selected operation/protocol contract without using the producer's rewrite
-or recipe-emission algorithm as its oracle. It may decode actual artifacts for
-comparison. Running two interpreters on the same exported plan alone cannot detect
-a shared source-to-plan mistake. A reference that checks only arithmetic at a
-proof-supplied challenge supplies only that narrower evidence, not independent
-challenge or transcript validation.
-
-Each slice records its source subset, carrier/policy, comparison scope, remaining
-implementation trust and open Lean differential obligation in status and campaign
-records. None may be described as Lean-corresponding until that obligation closes.
-Existing Lean-checked routes retain their evidence requirement and refuse
-unsupported native formats; they cannot be retired while a migrated consumer still
-requires their checking capability. No artifact flag can promote supplied code to
-a higher evidence class. Frontend migration alone cannot close native migration.
-
-Bring native Lean evidence forward if a consumer needs it before its migration
-slice, or if an independent reference cannot test a required contract. An
-unsupported comparison cannot count as agreement.
-
-Each campaign identifies the supported source subset, actual compiler route,
-executables, inputs, initial states/providers and comparison relation. Compare
-returned values or stops, related residual state and the selected ordered
-observations. Different representations or lawful optimizations may use an
-explicit projection/relation instead of equality of internal buffers or caches.
-The relation must come from the semantic contract before evaluating results.
-Shared explicit random tapes test operational correspondence; they do not prove
-the sampling law or security of a changed challenge construction.
-
-Use generated cases alongside boundary, failure and regression cases, independent
-reference checks where feasible, and controls that show the comparator detects
-disagreement. Record coverage gaps and retain reproducible failing artifacts.
-A timeout or unsupported case is not agreement. Passing a finite campaign is
-empirical evidence, not a universal equivalence theorem or a numerical bound on
-the chance of a remaining bug. Unproved implementation boundaries remain explicit.
-
-The [native design](../formal/design/native-correspondence.md#21-default-validation-route)
-specifies the working method. The [status page](status.md) and
-[test map](../tests/README.md) identify the maintained routes. A campaign
-establishes only its recorded input, execution
-and comparison scope; this policy does not expand that evidence.
+Lean research and its model-specific tools remain separate, with no migration
+requirement. The [roadmap](roadmap.md) sequences native correspondence and
+transcript assurance; [status](status.md) owns current tool support.

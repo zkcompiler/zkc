@@ -27,12 +27,10 @@ fn width(tag: u8, arity: usize) -> Result<usize, NativeWireError> {
             .ok_or(NativeWireError::Limit)
     }
 }
-// Structured producers must match the receiver's authorized setup before
-// allocating a complete frame. Registered backends also apply this check to
-// standalone leaves; direct InputKeys codecs retain key-independent encoding.
+// All producers resolve authorized setup material before allocating a frame.
 pub(super) fn encoded_width(
     value: &Value,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
 ) -> Result<usize, NativeWireError> {
     let (tag, metadata) = match value {
         Value::Commitment(c) => (6, c.metadata()),
@@ -103,28 +101,22 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWi
 }
 
 pub(super) fn preflight<'a>(
-    setups: &'a crate::setups::Setups,
+    setups: &'a crate::SetupRegistry,
     tag: u8,
     bytes: &[u8],
 ) -> Result<&'a zkc_arkworks::VerifierKey, NativeWireError> {
     use NativeWireError::Invalid;
-    // A singleton can reject length before reading metadata. Multiple setups
-    // inspect only a fixed-size header to locate already authorized material.
-    let key = if let Some(key) = setups.only() {
-        key
-    } else {
-        if setups.is_empty() {
-            return Err(NativeWireError::Backend(
-                zkc_runtime::interactive::BackendError::new("native-wire-setup-required"),
-            ));
-        }
-        if bytes.len() < 87 {
-            return Err(Invalid(DecodeReason::Length));
-        }
-        setups
-            .by_key_id(&bytes[55..87])
-            .ok_or(Invalid(DecodeReason::Header))?
-    };
+    if setups.is_empty() {
+        return Err(NativeWireError::Backend(
+            zkc_runtime::interactive::BackendError::new("native-wire-setup-required"),
+        ));
+    }
+    if bytes.len() < 87 {
+        return Err(Invalid(DecodeReason::Length));
+    }
+    let key = setups
+        .by_key_id(&bytes[55..87])
+        .ok_or(Invalid(DecodeReason::Header))?;
     let size = width(tag, key.metadata().arity())?;
     if bytes.len() != size {
         return Err(Invalid(DecodeReason::Length));

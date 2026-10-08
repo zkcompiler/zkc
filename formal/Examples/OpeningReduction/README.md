@@ -102,8 +102,8 @@ APIs should follow these distinctions, not erase them.
 | Message/check/draw order and failure state | Early rejection and exhaustion have different retained executions |
 | Public derived objects versus committed/private tables | Equality weights are computed from public points; they do not need an invented commitment |
 
-These are requirements on the forthcoming MLIR design. The table tree is an
-executable reference, not a buffer layout; the common `Proc` denotation is not
+These are obligations for a future MLIR correspondence claim using this example.
+The table tree is an executable reference, not a buffer layout; the common `Proc` denotation is not
 a mandate to flatten protocol or algebraic source. No native operation, pass,
 artifact format or Rust implementation is added by this example.
 

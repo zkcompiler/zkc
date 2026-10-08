@@ -1,14 +1,12 @@
 //! Driver policy controls. Generated mathematical clients live in native_joint.
 use serde_json::{Value as Json, json};
-use zkc_backends::{
-    Domain, EntryPolicy, NativeBackend, NativeWireError, Policy, PublicInputs, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, NativeWireError, Policy, Value};
 use zkc_runtime::interactive::Value as RuntimeValue;
 use zkc_runtime::interactive::{
     Action, Backend, BackendError, CutKind, DecodeReason, Frame, FrameExit, Invocation,
     PhysicalType, Runner, Stop, StopKind, ValueBudget,
 };
-use zkc_tools::protocol::run::*;
+use zkc_tools::run::*;
 const BOOL: &str = "bool@native.bool/1";
 #[derive(Clone, Copy, Debug, Default)]
 enum Decode {
@@ -34,12 +32,8 @@ impl Default for Host {
         Self {
             codec: NativeBackend::new(
                 Policy::default(),
-                EntryPolicy::new(
-                    Domain::new("Alice", "session", "main", None),
-                    None,
-                    PublicInputs::LocalOnly,
-                ),
-                None,
+                EntryPolicy::new(Domain::new("Alice", "session", "main", None), None),
+                Default::default(),
             )
             .unwrap(),
             enters: 0,
@@ -250,8 +244,7 @@ fn failed(report: &Report<Host>, kind: FailureKind) {
 }
 #[test]
 fn completed_false_is_an_output_and_roster_is_source_order() {
-    let bundle = admit(&raw()).unwrap();
-    assert!(bundle.admitted().checked_source().is_none());
+    admit(&raw()).unwrap();
     let report = execute(&mut NoHooks, inputs(), RunLimits::default());
     assert_eq!(report.outcome, Outcome::Completed);
     assert_eq!(report.reached.len(), 5);
@@ -440,7 +433,6 @@ fn coherent_cross_role_reordering_remains_supplied_only() {
             step(0, 1, None),
             step(1, 1, None)
         ]);
-        assert!(admit(&x).unwrap().admitted().checked_source().is_none());
     }
     x["steps"] = json!([
         step(0, 0, Some(0)),
@@ -1185,7 +1177,7 @@ fn current_formats_refuse_retired_and_unknown_tags() {
     }
     let mut raw = raw();
     raw["candidate"] = json!(candidate.to_string());
-    assert_eq!(admit(&raw).unwrap_err(), BundleError::Format);
+    assert!(matches!(admit(&raw), Err(BundleError::Candidate(_))));
 }
 
 #[test]
@@ -1200,15 +1192,19 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
     program[4][1][5] = json!([["accepted", BOOL]]);
     program[4][1][6] = json!([BOOL]);
     program[4][1][7][1] = json!(["return", ["accepted"]]);
-    let error =
-        NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap_err();
-    assert_eq!(error.to_string(), "native-proof-wire-type");
-    let error =
-        NativeProofEntry::new_committed(admit(&program), "main", "Alice", "Bob", 0, None, &[])
-            .unwrap_err();
-    assert_eq!(error.to_string(), "native-proof-wire-type");
-    NativeProofEntry::new_structured(admit(&program), "main", "Alice", "Bob", 0, None, &[])
-        .unwrap();
+    NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    let mut unsupported = program.clone();
+    let polynomial = Value::Polynomial(vec![].into()).physical_type().spelling();
+    unsupported[3][0][2][0][1] = json!(&polynomial);
+    unsupported[3][0][3][0] = json!(&polynomial);
+    unsupported[4][0][5][0][1] = json!(&polynomial);
+    unsupported[4][1][7][0][5] = json!(&polynomial);
+    assert_eq!(
+        NativeProofEntry::new(admit(&unsupported), "main", "Alice", "Bob", 0, None, &[])
+            .unwrap_err()
+            .to_string(),
+        "native-proof-wire-type"
+    );
 
     let mut program = carrier();
     for role in program[4].as_array_mut().unwrap() {
@@ -1229,10 +1225,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
             ]),
         );
     }
-    let error =
-        NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap_err();
-    assert_eq!(error.to_string(), "native-proof-state-chain");
-    NativeProofEntry::new_committed(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
+    NativeProofEntry::new(admit(&program), "main", "Alice", "Bob", 0, None, &[]).unwrap();
 }
 
 #[test]

@@ -68,7 +68,7 @@ pub fn binding(d: bool, name: &str) -> OperationBinding {
         } else {
             "bls12-381.g1"
         }
-    } else if name == "transcript.challenge" {
+    } else if name == "transcript.native.indexed.challenge" {
         if d {
             "merlin3.ristretto255.scalar64le/1"
         } else {
@@ -91,6 +91,35 @@ pub fn binding(d: bool, name: &str) -> OperationBinding {
         implementation: format!("{}/{name}", if d && !common { "dalek" } else { "arkworks" }),
     }
 }
+pub fn native_origin(kind: &str, site: &str, template: bool) -> Vec<u8> {
+    let event = if kind == "message" {
+        json!(["message", "Source", site, "Schema", "P", "V"])
+    } else {
+        json!([
+            "query",
+            "Source",
+            site,
+            "input_0",
+            "random.bls12-381.fr/1",
+            "draw",
+            "V"
+        ])
+    };
+    tree(&json!([
+        if template {
+            "zkc.native-origin-template/1"
+        } else {
+            "zkc.native-origin/2"
+        },
+        "main",
+        [],
+        [],
+        event
+    ]))
+}
+pub fn native_attributes(kind: &str, site: &str) -> Vec<String> {
+    vec![zkc_test_support::hex(&native_origin(kind, site, true))]
+}
 pub fn program(
     bindings: &[OperationBinding],
     inputs: &[PhysicalType],
@@ -110,15 +139,47 @@ pub fn program(
     let result_names = (0..outputs.len())
         .map(|i| format!("result{i}"))
         .collect::<Vec<_>>();
-    let rows = bindings
+    let mut rows = bindings
         .iter()
         .enumerate()
         .map(|(j, b)| json!([format!("b{j}"), b.contract, b.arguments, b.implementation]))
         .collect::<Vec<_>>();
     let mut body = operations;
+    let mut coordinates = false;
+    for op in &mut body {
+        if op[0] != "op" {
+            continue;
+        }
+        let Some(index) = op[2]
+            .as_str()
+            .and_then(|key| key.strip_prefix('b'))
+            .and_then(|n| n.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        let binding = &bindings[index];
+        if binding.contract.starts_with("transcript.native.indexed.")
+            && op[4].as_array().unwrap().len() + 1 == binding.signature().unwrap().inputs.len()
+        {
+            op[4].as_array_mut().unwrap().push(json!("coordinates"));
+            coordinates = true;
+        }
+    }
+    if coordinates {
+        rows.push(json!([
+            "indices",
+            "indices.empty",
+            [],
+            "native/indices.empty"
+        ]));
+        body.insert(
+            0,
+            json!(["op", "coordinates", "indices", [], [], ["coordinates"]]),
+        );
+    }
     body.push(json!(["return", returns]));
     serde_json::to_vec(&json!([
-        "zkc.participants/1",
+        "zkc.program/1",
         rows,
         "physical",
         [[
@@ -140,7 +201,8 @@ pub fn program(
             [
                 ["local", "local", "testfn", input_names, result_names],
                 ["return", result_names]
-            ]
+            ],
+            []
         ]],
         [["entry", "main", [["P", "actor"]]]]
     ]))
@@ -191,10 +253,18 @@ pub fn call(d: bool, name: &str, attrs: &[&str], args: Vec<Value>) -> Vec<Value>
 pub fn assert_value(a: &Value, b: &Value) {
     let backend = backend(Policy::default());
     assert_eq!(a.physical_type(), b.physical_type());
-    assert_eq!(
-        backend.encode_value(a).unwrap(),
-        backend.encode_value(b).unwrap()
-    );
+    match (a, b) {
+        (Value::Point(a), Value::Point(b)) | (Value::Polynomial(a), Value::Polynomial(b)) => {
+            assert_eq!(a, b)
+        }
+        (Value::Round(a), Value::Round(b)) => assert_eq!(a, b),
+        (Value::RistrettoPolynomial(a), Value::RistrettoPolynomial(b)) => assert_eq!(a, b),
+        (Value::RistrettoRound(a), Value::RistrettoRound(b)) => assert_eq!(a, b),
+        _ => assert_eq!(
+            backend.encode_native_value(a).unwrap(),
+            backend.encode_native_value(b).unwrap()
+        ),
+    }
 }
 pub fn assert_error(d: bool, name: &str, attrs: &[&str], args: Vec<Value>, code: &str) {
     assert_eq!(

@@ -3,9 +3,7 @@ mod common;
 use common::ark_backend;
 use serde_json::{Value as Json, json};
 use zkc_backends::Value;
-use zkc_runtime::interactive::{
-    Action, ArtifactFormat, Runner, StopKind, ValueBudget, admit_supplied,
-};
+use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supplied};
 
 fn candidate(value: bool) -> Json {
     json!([
@@ -49,8 +47,6 @@ fn literal_charges_a_step_and_returns_the_exact_boolean() {
     for value in [false, true] {
         let backend = ark_backend(None);
         let admitted = admit_supplied(&bytes(&candidate(value)), &backend).unwrap();
-        assert_eq!(admitted.format(), ArtifactFormat::Program);
-        assert!(admitted.checked_source().is_none());
         let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
             .unwrap_or_else(|_| panic!("entry"));
         let Action::Local(local) = runner.poll() else {
@@ -311,47 +307,6 @@ fn only_the_selected_nested_literal_executes() {
 }
 
 #[test]
-fn native_literals_never_reach_the_legacy_correspondence_checker() {
-    struct Forbidden;
-    impl zkc_runtime::interactive::Correspondence for Forbidden {
-        fn check_with_mapping(
-            &self,
-            _: &[u8],
-            _: &[u8],
-            _: ArtifactFormat,
-        ) -> Result<
-            Option<zkc_runtime::interactive::SourceMap>,
-            zkc_runtime::interactive::AdmissionError,
-        > {
-            panic!("legacy correspondence mapping callback must not run")
-        }
-        fn check(
-            &self,
-            _: &[u8],
-            _: &[u8],
-            _: ArtifactFormat,
-        ) -> Result<(), zkc_runtime::interactive::AdmissionError> {
-            panic!("legacy correspondence callback must not run")
-        }
-    }
-    let error = zkc_runtime::interactive::admit_physical(
-        b"original",
-        &bytes(&candidate(true)),
-        &ark_backend(None),
-        &Forbidden,
-    )
-    .expect_err("native correspondence is deferred");
-    assert_eq!(
-        error.code,
-        zkc_runtime::interactive::ErrorCode::Correspondence
-    );
-    assert_eq!(
-        error.detail,
-        "native-participant-correspondence-unsupported"
-    );
-}
-
-#[test]
 fn unused_literal_definitions_are_admitted_and_require_backend_support() {
     let mut value = candidate(true);
     // The endpoint never calls the retained literal function.
@@ -375,27 +330,6 @@ fn unused_literal_definitions_are_admitted_and_require_backend_support() {
 }
 
 #[test]
-fn legacy_identity_functions_admit_but_literals_do_not() {
-    let mut value = candidate(true);
-    value[0] = json!("zkc.participants/1");
-    value[4][0].as_array_mut().unwrap().pop();
-    value[3][0][2] = json!([["input", "bool@native.bool/1"]]);
-    value[3][0][4] = json!([["return", ["input"]]]);
-    value[4][0][5] = json!([["input", "bool@native.bool/1"]]);
-    value[4][0][7][0][3] = json!(["input"]);
-    assert!(admit_supplied(&bytes(&value), &ark_backend(None)).is_ok());
-    value[3][0][4]
-        .as_array_mut()
-        .unwrap()
-        .insert(0, json!(["bool_constant", "hidden", "unused", true]));
-    let error = admit_supplied(&bytes(&value), &ark_backend(None))
-        .err()
-        .unwrap();
-    assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Record);
-    assert_eq!(error.detail, "unknown local instruction");
-}
-
-#[test]
 fn native_endpoint_stops_are_not_local_stops() {
     for terminal in [
         json!(["stop", "end", "reject"]),
@@ -406,7 +340,7 @@ fn native_endpoint_stops_are_not_local_stops() {
         let error = admit_supplied(&bytes(&value), &ark_backend(None))
             .err()
             .unwrap();
-        assert_eq!(error.detail, "native-participant-terminal");
+        assert_eq!(error.detail, "unknown participant instruction");
     }
 }
 
@@ -414,7 +348,7 @@ fn native_endpoint_stops_are_not_local_stops() {
 #[test]
 fn program_service_query_executes_and_releases_its_lease() {
     use zkc_backends::{Scalar, services::ServiceRegistry};
-    use zkc_runtime::interactive::{Action, ArtifactFormat, Runner};
+    use zkc_runtime::interactive::{Action, Runner};
     let registry = ServiceRegistry::new(zkc_backends::Policy::default());
     let root = registry
         .issue_test_tape("P", 1, vec![Scalar::from(17)])
@@ -448,7 +382,6 @@ fn program_service_query_executes_and_releases_its_lease() {
         [["entry", "main", [["P", "p"]]]]
     ]);
     let admitted = admit_supplied(&bytes(&carrier), &backend).unwrap();
-    assert_eq!(admitted.format(), ArtifactFormat::Program);
     let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
         .unwrap_or_else(|e| panic!("{}", e.error));
     let Action::Query(query) = runner.poll() else {

@@ -262,7 +262,7 @@ consistency API also compares explicitly supplied units across MLIR contexts.
 This API does not perform linking. Unrelated invocations do not share a global
 registry. The identity names a supplied relation contract; it neither defines
 that predicate nor proves provider conformance or satisfaction. Existing
-`protocol_exec` R1CS/AIR assets keep their own interfaces without invented purpose
+R1CS/AIR assets retain their declared interfaces without inferred purpose
 mappings. The statement designates a Boolean common result as its acceptance
 port.
 That port has its own declared role set; each witness-binding role need not
@@ -427,5 +427,5 @@ Lean-backed source admission retains its existing contract.
 ## Conditional completion extension
 
 The native mathematical path also supports [conditional entry completion and
-bounded local termination](entry-completion.md). Its program-only records do
-not extend the legacy carrier or its formal checker.
+bounded local termination](entry-completion.md). Its records belong to the native executable; independent formal models require
+their own explicit interpretation.

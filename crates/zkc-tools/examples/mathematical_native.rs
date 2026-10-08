@@ -2,23 +2,17 @@
 //! Takes the directory of JSON candidates produced by compiler/test/mathematical.py.
 //! Supplied admission checks the carrier, without claiming source correspondence.
 use std::path::Path;
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::interactive::{
-    Action, ArtifactFormat, Origin, Packet, PathElement, Runner, Stop, StopKind,
-    Value as RuntimeValue, admit_supplied,
+    Action, Origin, Packet, PathElement, Runner, Stop, StopKind, Value as RuntimeValue,
+    admit_supplied,
 };
 
 fn backend(role: &str) -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new(role, "mathematical_test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new(role, "mathematical_test", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -34,7 +28,6 @@ fn group(value: u64) -> Value {
 fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
     let native = backend(role);
     let admitted = admit_supplied(bytes, &native).unwrap();
-    assert!(admitted.checked_source().is_none());
     Runner::new(&admitted, "main", role, "mathematical_test", native, inputs)
         .map_err(|failure| failure.error)
         .unwrap()
@@ -71,10 +64,10 @@ fn receive(runner: &mut Runner<NativeBackend>, value: Value) {
     };
     // The open endpoint receives a supplied value, including adversarial changes.
     // Encode/decode with the actual installed codec before delivering it.
-    let bytes = runner.backend().encode_value(&value).unwrap();
+    let bytes = runner.backend().encode_native_value(&value).unwrap();
     let decoded = runner
         .backend()
-        .decode_typed_value(expected.ty, &bytes)
+        .decode_native_value(&expected.ty, &bytes)
         .unwrap();
     runner
         .deliver(Packet {
@@ -115,12 +108,12 @@ fn main() {
     let codec = backend("Bob");
     assert!(
         codec
-            .decode_typed_value(field(0).physical_type(), &[255; 32])
+            .decode_native_value(&field(0).physical_type(), &[255; 32])
             .is_err()
     );
     assert!(
         codec
-            .decode_typed_value(group(1).physical_type(), &[255; 48])
+            .decode_native_value(&group(1).physical_type(), &[255; 48])
             .is_err()
     );
 
@@ -184,7 +177,6 @@ fn main() {
     assert!(!actual.local.as_ref().unwrap().function.is_empty());
     let expected = Stop {
         origin: Origin {
-            format: ArtifactFormat::Program,
             session: "mathematical_test".into(),
             entry: "main".into(),
             instance: "main".into(),

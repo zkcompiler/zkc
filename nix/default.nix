@@ -35,9 +35,7 @@ let
       "scripts"
       "compiler"
       "tests/support"
-      "tests/fixtures"
       "examples"
-      "bench/protocol_experiment.py"
     ];
     stdenv = llvm.stdenv;
     python3 = python;
@@ -105,9 +103,7 @@ let
       "crates"
       "tests/run.py"
       "tests/support"
-      "tests/groth16"
       "examples"
-      "tests/fixtures"
     ];
   };
   lakeSourcesFor = pkgs.callPackage ./lake-sources.nix { };
@@ -122,23 +118,6 @@ let
       "compiler/include/zkc/Support/MLIRInput.h"
     ];
   };
-  groth16 = pkgs.callPackage ./groth16.nix {
-    inherit fetchSource;
-    llvm = pkgs.llvmPackages_20;
-    llzk =
-      (llzk.override {
-        pin =
-          (builtins.fromJSON (builtins.readFile ../compiler/adapters/llzk/pins.json)).llzk-circom-locked;
-        withPcl = true;
-      }).upstream;
-    rustPlatform = pkgs.makeRustPlatform {
-      cargo = rust;
-      rustc = rust;
-    };
-    nodejs = pkgs.nodejs_26;
-    python3 = python;
-    source = sourceFor "groth16" [ "tests/groth16" ];
-  };
   lakeSources = lakeSourcesFor ../formal/lake-manifest.json;
   formal = pkgs.callPackage ./formal.nix {
     inherit lean lakeSources;
@@ -146,6 +125,7 @@ let
     source = sourceFor "formal" [
       "formal"
       "tests/fixtures/variants/history-contracts.txt"
+      "tests/fixtures/blocks"
     ];
   };
   arklib =
@@ -168,7 +148,6 @@ in
       formal
       arklib
       llzk
-      groth16
       ;
     lake-sources = lakeSources;
     default = compiler;
@@ -178,17 +157,12 @@ in
     compiler-sanitize = compilerSanitize;
     compiler-domain-checks = domainCheck false;
     compiler-domain-shared-checks = domainCheck true;
-    groth16-checks = pkgs.callPackage ./checks/groth16.nix {
-      inherit
-        compiler
-        tools
-        formal
-        groth16
-        environment
-        ;
-      nodejs = pkgs.nodejs_26;
+    formal-checks = pkgs.callPackage ./checks/formal.nix {
+      inherit formal lean environment;
+      source = checkSource;
       python3 = python;
     };
+    lean-toolchain-checks = pkgs.callPackage ./checks/lean-toolchain.nix { inherit lean; };
   };
   checks = {
     inherit compiler;
@@ -203,15 +177,12 @@ in
       inherit compiler llvm;
       stdenv = llvm.stdenv;
     };
-    lean-toolchain = pkgs.callPackage ./checks/lean-toolchain.nix { inherit lean; };
     project = pkgs.callPackage ./checks/project.nix {
       inherit
         pythonTools
         environment
-        lean
         compiler
         tools
-        formal
         ;
       source = checkSource;
       python3 = python;
@@ -220,7 +191,6 @@ in
       inherit
         compiler
         tools
-        formal
         environment
         ;
       python3 = python;
@@ -251,11 +221,19 @@ in
     UV_PYTHON = python.interpreter;
     UV_PYTHON_DOWNLOADS = "never";
   };
+  devShells.formal = pkgs.mkShellNoCC {
+    packages = [
+      lean
+      python
+      pkgs.git
+      pkgs.just
+    ];
+    LEAN_NUM_THREADS = "4";
+  };
   devShells.default = import ./shell.nix {
     inherit
       pkgs
       llvm
-      lean
       python
       environment
       ;

@@ -1,6 +1,6 @@
 //! Observe the executing backend's own registry and physical signatures.
 use serde_json::{Value, json};
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::interactive::{Backend, OperationBinding, PhysicalType};
 
 fn respond(native: &NativeBackend, line: &[u8]) -> Option<Value> {
@@ -40,12 +40,8 @@ fn main() -> std::io::Result<()> {
     }
     let native = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "session", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "session", "main", None), None),
+        Default::default(),
     )
     .map_err(|error| std::io::Error::other(error.code))?;
     zkc_test_support::json_lines::run(|line| respond(&native, line))

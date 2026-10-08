@@ -1,7 +1,7 @@
 //! Ordering controls use malformed setup material and absent key files so later
 //! import/I/O would produce a different failure from declaration/policy admission.
 use super::*;
-use zkc_tools::artifact::native::{AttemptPolicy, InputValue, ProofInputs};
+use zkc_tools::proof::{AttemptPolicy, InputValue, ProofInputs};
 
 fn request(input: &Json) -> ProofInputs {
     let bytes = |v: &Json| zkc_test_support::unhex(v.as_str().unwrap());
@@ -84,7 +84,7 @@ pub(super) fn policy_before_file(
 }
 
 pub(super) fn material_request(input: &Json, keys: &Keys) -> ProofInputs {
-    use zkc_tools::artifact::native::{NativeCapacity, ProverMaterial};
+    use zkc_tools::proof::{NativeCapacity, ProverMaterial};
     let capacity = NativeCapacity::default();
     let material = ProverMaterial::from_bytes(
         &keys

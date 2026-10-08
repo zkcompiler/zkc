@@ -134,7 +134,6 @@ pub(super) const CONTRACTS: &[Contract] = &[
 ];
 pub(super) const CONTRIBUTION: Contribution = Contribution {
     alternatives: ALTERNATIVES,
-    logical_refusals: &[],
     physical_error: "uninstalled operation binding",
     physical_only: false,
 

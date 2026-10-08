@@ -5,13 +5,9 @@
 #include "llvm/Support/JSON.h"
 #include <variant>
 namespace zkc {
-/// Closed versioned deployment policy. The source remains independently owned.
+/// Current /4 deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
   std::string entry, producer, validator, suite;
-  unsigned version = 1;
-  bool iterated() const { return version >= 2; }
-  bool committed() const { return version == 3 || version == 4; }
-  bool structured() const { return version == 4; }
   unsigned acceptance = 0;
   std::optional<unsigned> service;
   std::vector<unsigned> publicInputs;

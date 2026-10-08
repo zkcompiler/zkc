@@ -120,7 +120,7 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
   if (auto error = checkLimits(limits))
     return std::move(error);
   mlir::DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
@@ -155,7 +155,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   if (!parsedInterface)
     return parsedInterface.takeError();
   mlir::DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   context.printOpOnDiagnostic(false);
@@ -314,7 +314,6 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
   if (view.proof) {
     const auto &proof = *view.proof;
     NativeProofPolicy selection;
-    selection.version = 4;
     selection.entry = protocol.symbol;
     selection.producer = protocol.roles[proof.prover];
     selection.validator = protocol.roles[proof.verifier];

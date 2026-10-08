@@ -18,7 +18,6 @@ pub(crate) type Handler = fn(&mut NativeBackend, &Invocation<'_>, &[Value]) -> R
 pub(super) struct Implementation {
     contract: &'static str,
     signature: Signature,
-    pub(super) public_operands: bool,
     pub(super) handler: Handler,
 }
 impl Implementation {
@@ -70,7 +69,6 @@ impl Registry {
                         contract,
                         signature,
                         handler,
-                        public_operands: false,
                     },
                 )?;
             }
@@ -90,7 +88,6 @@ impl Registry {
                     Implementation {
                         contract: row.name,
                         signature: Signature::Shaped(row, crate::bindings::Selection::Default),
-                        public_operands: false,
                         handler,
                     },
                 )?;
@@ -116,7 +113,6 @@ impl Registry {
             },
         );
         entry.handler = row.handler.unwrap_or(entry.handler);
-        entry.public_operands |= row.public_operands;
         self.insert(row.identity.into(), entry)
     }
     pub(super) fn implementations(&self) -> Vec<(String, &'static str)> {
@@ -138,14 +134,12 @@ pub(crate) struct Alternative {
     pub(crate) ports: crate::bindings::PortTransform,
     /// Omit for a layout-only alternative to retain the original algorithm.
     pub(crate) handler: Option<Handler>,
-    pub(crate) public_operands: bool,
 }
 pub(super) fn alternatives() -> impl Iterator<Item = &'static Alternative> {
     [
         super::execute::ALTERNATIVES,
         crate::kernels::conversions::ALTERNATIVES,
         crate::diagonal::ALTERNATIVES,
-        crate::kernels::curve::ALTERNATIVES,
         crate::kernels::pairwise::ALTERNATIVES,
     ]
     .into_iter()
@@ -238,11 +232,6 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 arithmetic,
             )?;
             r.shaped(&["arkworks"], crate::kernels::curve::PAIRINGS, curve)?;
-            r.shaped(
-                providers,
-                crate::kernels::resources::OBSERVATIONS,
-                resources,
-            )?;
             for row in alternatives() {
                 r.alternative(row)?;
             }
@@ -303,23 +292,9 @@ fn curve(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Ve
         args,
         i,
         &b.core.policy,
-        false,
     ))
 }
-pub(crate) fn public_msm(
-    b: &mut NativeBackend,
-    i: &Invocation<'_>,
-    args: &[Value],
-) -> Result<Vec<Value>> {
-    required(crate::kernels::curve::apply(
-        &i.binding.declaration().contract,
-        field(i),
-        args,
-        i,
-        &b.core.policy,
-        true,
-    ))
-}
+
 fn resources(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     required(crate::kernels::resources::apply(
         &i.binding.declaration().contract,

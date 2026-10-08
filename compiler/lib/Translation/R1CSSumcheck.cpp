@@ -136,8 +136,7 @@ public:
   OwningOpRef<ModuleOp> run() {
     OwningOpRef<ModuleOp> module = ModuleOp::create(loc);
     b.setInsertionPointToStart(module->getBody());
-    unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol,
-                                         pir::ExecutionContractAttr{});
+    unit = pir::ProtocolModuleOp::create(b, loc, pir::Profile::Protocol);
     unit.getBody().push_back(new Block());
     b.setInsertionPointToEnd(&unit.getBody().front());
     Type assignment = RankedTensorType::get({relation.columns()}, field);

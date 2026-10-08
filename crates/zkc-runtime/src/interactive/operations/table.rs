@@ -41,7 +41,6 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     providers: &["arkworks"],
     select,
     alternatives: &[],
-    logical_refusals: &[],
     physical_error: "uninstalled operation binding",
     physical_only: true,
 };

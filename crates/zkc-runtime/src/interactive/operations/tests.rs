@@ -14,7 +14,6 @@ fn with_alternative(
     let aliases = Box::leak(Box::new(Contribution {
         contracts: &[],
         alternatives,
-        logical_refusals: &[],
         ..*owner
     }));
     Registry::assemble(&[aliases, owner])
@@ -33,7 +32,10 @@ fn fixed_owners_refuse_alternative_installation() {
         (&vector::CONTRIBUTION, "vector.embed"),
         (&control::CONTRIBUTION, "bool.and"),
         (&random::CONTRIBUTION, "random.draw"),
-        (&transcript::CONTRIBUTION, "transcript.challenge"),
+        (
+            &transcript::CONTRIBUTION,
+            "transcript.native.indexed.challenge",
+        ),
     ] {
         assert_eq!(
             with_alternative(owner, name, Identity::Bls12381Fr)
@@ -47,66 +49,43 @@ fn fixed_owners_refuse_alternative_installation() {
 }
 
 #[test]
-fn transcript_alternatives_keep_payload_codec_and_primary_checks() {
+fn transcript_alternatives_keep_payload_and_primary_checks() {
     let registry = with_alternative(
         &transcript::CONTRIBUTION,
-        "transcript.observe.field",
+        "transcript.native.indexed.observe.data",
         Identity::Merlin3Fr64Be,
     )
     .unwrap();
-    for (suite, field, codec, accepted) in [
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "zkcv.field.bls12-381.fr/1",
-            true,
-        ),
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "bn254.fr",
-            "zkcv.field.bn254.fr/1",
-            false,
-        ),
-        (
-            "merlin3.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "wrong-codec",
-            false,
-        ),
+    for (suite, payload, accepted) in [
+        ("merlin3.bls12-381.fr64be/1", "field:bls12-381.fr", true),
+        ("merlin3.bls12-381.fr64be/1", "field:bn254.fr", true),
+        ("merlin3.bls12-381.fr64be/1", "wrong-type", false),
         (
             "merlin3.ristretto255.scalar64le/1",
-            "ristretto255.scalar",
-            "zkcv.field.ristretto255.scalar/1",
+            "field:ristretto255.scalar",
             false,
         ),
         (
             "spongefish0.7.4.keccak.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "zkcv.field.bls12-381.fr/1",
+            "field:bls12-381.fr",
             false,
         ),
     ] {
         let binding = OperationBinding {
-            contract: "transcript.observe.field".into(),
+            contract: "transcript.native.indexed.observe.data".into(),
             implementation: "independent/test".into(),
-            arguments: [suite, field, codec]
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
+            arguments: vec![suite.into(), payload.into()],
         };
         let result =
             logical_signature(&binding).and_then(|logical| registry.select(&binding, &logical));
         assert_eq!(result.is_ok(), accepted, "{binding:?}");
     }
-    // Start with a valid logical signature: the registry, not the family, must
-    // enforce the alternative's primary identity before invoking its selector.
     let mut binding = OperationBinding {
-        contract: "transcript.observe.field".into(),
+        contract: "transcript.native.indexed.observe.data".into(),
         implementation: "independent/test".into(),
         arguments: vec![
             "merlin3.bls12-381.fr64be/1".into(),
-            "bls12-381.fr".into(),
-            "zkcv.field.bls12-381.fr/1".into(),
+            "field:bls12-381.fr".into(),
         ],
     };
     let logical = logical_signature(&binding).unwrap();
@@ -115,46 +94,19 @@ fn transcript_alternatives_keep_payload_codec_and_primary_checks() {
 }
 
 #[test]
-fn transcript_table_alternative_applies_the_payload_layout() {
-    static ROW: Alternative = Alternative {
-        implementation: "independent/msb-observation",
-        contract: "transcript.observe.table",
-        primary: Identity::Merlin3Fr64Be,
-        ports: super::super::domain_bindings::PortTransform::Msb,
-    };
-    let mut registry = Registry::assemble(&[&transcript::CONTRIBUTION]).unwrap();
-    registry
-        .install_physical(
-            ROW.implementation,
-            ROW.contract,
-            Selection::Alternative(&ROW),
-        )
-        .unwrap();
-    let binding = OperationBinding {
-        contract: ROW.contract.into(),
-        implementation: ROW.implementation.into(),
-        arguments: [
-            "merlin3.bls12-381.fr64be/1",
-            "bls12-381.fr",
-            "zkcv.table.bls12-381.fr/1",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect(),
-    };
-    let logical = logical_signature(&binding).unwrap();
-    let signature = registry.select(&binding, &logical).unwrap();
-    let mut expected = super::super::domain_bindings::physical_signature(
-        &logical,
-        super::super::domain_bindings::PortTransform::Default,
-    )
-    .unwrap();
-    expected.inputs[1] = super::super::PhysicalType::new(
-        logical.inputs[1].clone(),
-        super::super::Representation::TableMsb,
-    )
-    .unwrap();
-    assert_eq!(signature, expected);
+fn transcript_data_refuses_local_table_layouts() {
+    for payload in [
+        "table:bls12-381.fr",
+        "polynomial:bls12-381.fr",
+        "point:bls12-381.fr",
+    ] {
+        let binding = OperationBinding {
+            contract: "transcript.native.indexed.observe.data".into(),
+            implementation: "arkworks/transcript.native.indexed.observe.data".into(),
+            arguments: vec!["merlin3.bls12-381.fr64be/1".into(), payload.into()],
+        };
+        assert!(binding.signature().is_err());
+    }
 }
 
 #[test]
@@ -208,14 +160,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         curve.split curve.generator curve.add curve.scale curve.equal curve.empty curve.append curve.at
         curve.get curve.length curve.commit curve.response
         pcs.commit pcs.open pcs.check pcs.equal
-        transcript.native.indexed.observe.commitment transcript.native.indexed.observe.proof
-        transcript.native.indexed.observe.bool transcript.native.indexed.observe.field
-        transcript.native.indexed.observe.group transcript.native.indexed.observe.index transcript.native.indexed.observe.data transcript.native.indexed.observe.field_array
-        transcript.native.observe.bool transcript.native.observe.field transcript.native.observe.group
-        transcript.observe.bool transcript.observe.index transcript.observe.indices transcript.observe.field
-        transcript.observe.matrix transcript.observe.vector transcript.observe.polynomial transcript.observe.round
-        transcript.observe.table transcript.observe.point transcript.observe.group transcript.observe.groups
-        transcript.observe.commitment transcript.observe.proof transcript.observe.commitments
+        transcript.native.indexed.observe.data
     ".split_whitespace().collect::<BTreeSet<_>>();
     let actual = installed()
         .unwrap()
@@ -259,7 +204,6 @@ fn alternatives_require_a_logical_owner_after_complete_assembly() {
             primary: Identity::Bls12381Fr,
             ports: super::super::domain_bindings::PortTransform::Default,
         }],
-        logical_refusals: &[],
     };
     assert_eq!(
         Registry::assemble(&[&ALTERNATIVE]).err().unwrap().detail,
@@ -343,7 +287,7 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
         ("table.relayout", "binding-adapter-at-logical-stage"),
         (
             "transcript.observe.fixed_vector",
-            "fixed-vector-observation-uninstalled",
+            "uninstalled operation binding",
         ),
     ] {
         let binding = OperationBinding {
@@ -361,11 +305,13 @@ fn contribution_refusals_and_custom_shapes_keep_their_own_errors() {
 
 #[test]
 fn independent_history_classification_matches_installed_inventory() {
-    let fixture = include_str!("../../../../../tests/fixtures/variants/history-contracts.txt");
+    let fixture =
+        include_str!("../../../../zkc-test-support/fixtures/variants/history-contracts.txt");
     let mut seen = std::collections::BTreeSet::new();
     // Native-only contracts have no portable Lean source interpretation. Keep
     // the shared portable inventory unchanged and enumerate this extension.
-    let native = "transcript.native.indexed.observe.commitment 1\ntranscript.native.indexed.observe.proof 1\ntranscript.native.indexed.challenge 1\ntranscript.native.indexed.observe.bool 1\ntranscript.native.indexed.observe.field 1\ntranscript.native.indexed.observe.group 1\ntranscript.native.indexed.observe.index 1\ntranscript.native.indexed.observe.field_array 1\ntranscript.native.indexed.observe.data 1\ntranscript.native.challenge 1\ntranscript.native.observe.bool 1\ntranscript.native.observe.field 1\ntranscript.native.observe.group 1";
+    let native = "transcript.native.indexed.challenge 1
+transcript.native.indexed.observe.data 1";
     let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
     for line in fixture
         .lines()

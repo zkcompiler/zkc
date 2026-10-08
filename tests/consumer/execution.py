@@ -1,4 +1,4 @@
-"""Execute exact installed CompilerCore bytes in independent runtime processes."""
+"""Execute exact installed NativeCompiler bytes in independent runtime processes."""
 
 import argparse
 import hashlib

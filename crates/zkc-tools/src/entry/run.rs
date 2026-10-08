@@ -2,7 +2,7 @@
 //! evaluator here: the bound interface supplies names and product/sum layouts.
 use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{Interface, Package, SetupAuthority, Value, arguments, setups, value};
-use crate::protocol::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
+use crate::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 

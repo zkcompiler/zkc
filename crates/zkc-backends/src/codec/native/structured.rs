@@ -127,7 +127,7 @@ pub(super) fn peak(policy: &Policy, charge: usize, wire: usize) -> Result<()> {
     let bytes = mul(charge, 2)?.max(add(charge, mul(wire, 3)?)?);
     policy.output(bytes, usize::MAX).map_err(|_| Error::Limit)
 }
-fn width(value: &Value, policy: &Policy, key: &crate::setups::Setups) -> Result<usize> {
+fn width(value: &Value, policy: &Policy, key: &crate::SetupRegistry) -> Result<usize> {
     if let Value::Sequence(v) = value {
         if tag(&value.physical_type()) != Some(69) {
             return Err(unsupported());
@@ -169,7 +169,7 @@ fn width(value: &Value, policy: &Policy, key: &crate::setups::Setups) -> Result<
 fn write(
     value: &Value,
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
     out: &mut Vec<u8>,
 ) -> Result<()> {
     let Some(tag) = tag(&value.physical_type()) else {
@@ -217,7 +217,7 @@ fn write(
 pub(super) fn encode(
     value: &Value,
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
 ) -> Result<Vec<u8>> {
     let size = width(value, policy, key)?;
     policy.wire(size).map_err(|_| Error::Limit)?;
@@ -275,7 +275,7 @@ pub(super) fn scan(
     ty: &PhysicalType,
     bytes: &[u8],
     policy: &Policy,
-    key: &crate::setups::Setups,
+    key: &crate::SetupRegistry,
     counts: &mut Counts,
 ) -> Result<usize> {
     policy.wire(bytes.len()).map_err(|_| Error::Limit)?;

@@ -1,7 +1,7 @@
 # Contrasting protocol interpretations
 
 These six protocol contrasts exercise different semantic boundaries. They
-distinguish maintained formal clients and native examples from illustrative
+distinguish maintained formal clients and general native mechanisms from illustrative
 obligations; a family discussed here is not automatically implemented. The
 [specification](../spec/README.md) owns common requirements; [PIR](protocol-model.md),
 [Properties](security-properties.md) and [Realization](realization.md)
@@ -73,9 +73,9 @@ interpretation. An opening binds the actual root, query coordinate, ordered path
 and remaining input. Leaf and node operations consume their ordered inputs;
 a coordinate cache hit cannot substitute for the root/path predicate.
 
-The maintained [AIR/oracle examples](../../examples/protocols/air-oracle/README.md)
-use explicit extension-field traces, FRI and authenticated queries. Their native
-and reference evidence has the bounds stated there.
+General native oracle kernels and [composed mathematical clients](../compiler/mathematical-composition.md)
+exercise arithmetic, trace and authentication boundaries. They do not constitute
+a maintained AIR/FRI application or a security theorem for this protocol sketch.
 
 The local cache relation stores only results for exact ordered primitive
 inputs. It preserves logical requests and the selected result/event observation;
@@ -87,8 +87,9 @@ by the local cache proof.
 A useful cache benchmark compares the same verifier, wire language and query
 algorithm with and without reuse, using the same optimized hash primitives.
 It must report table storage as well as time. An upstream pruned-multiproof
-verifier is a different algorithmic baseline and must be identified separately;
-see the [benchmark guide](../../bench/README.md) for maintained campaigns.
+verifier is a different algorithmic baseline and must be identified separately.
+No benchmark campaign is currently maintained; see the
+[measurement guidance](../development/documentation.md).
 
 Lossless outer encoding and pruned-proof reconstruction are separate
 representation changes. Pruning can erase inconsistent redundant digests that
@@ -201,4 +202,4 @@ applies across these boundaries with different premises. The purpose is to
 test that abstraction, not to tailor the entire compiler to a small protocol.
 
 Another family is useful when it exposes an unsupported construct or law;
-the [research backlog](../roadmap.md#3-research-triggers) records those triggers.
+the [research backlog](../roadmap.md#extend-on-demonstrated-demand) records those triggers.

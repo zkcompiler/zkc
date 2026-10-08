@@ -114,8 +114,7 @@ int main(int argc, char **argv) {
     llvm::consumeError(native.takeError());
     return 6;
   }
-  if (native->compilation.source() ||
-      mlir::failed(mlir::verify(native->compilation.module())))
+  if (mlir::failed(mlir::verify(native->compilation.module())))
     return 7;
   auto bundle = llvm::json::parse(native->bundle);
   if (!bundle) {

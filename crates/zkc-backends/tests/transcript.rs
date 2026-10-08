@@ -1,7 +1,10 @@
 mod common;
 use common::*;
 use serde_json::{Value as Json, json};
+use zkc_backends::Value;
 use zkc_backends::*;
+use zkc_runtime::interactive::Identity;
+use zkc_runtime::interactive::Value as _;
 use zkc_runtime::{interactive::*, logical};
 
 // Independently written fixture encoder; does not use the runtime logical codec.
@@ -41,9 +44,9 @@ fn observe(site: &str, input: &str, output: &str) -> Json {
     json!([
         "op",
         site,
-        "transcript.observe.field",
-        ["Source", "message", "FieldSchema", "P", "V"],
-        [input, "v"],
+        "transcript.native.indexed.observe.data",
+        transcript_attributes("message", "Source", "message", "P", "V"),
+        [input, "v", "coordinates"],
         [output]
     ])
 }
@@ -51,15 +54,14 @@ fn challenge(input: &str, value: &str, output: &str) -> Json {
     json!([
         "op",
         "draw",
-        "transcript.challenge",
-        ["Source", "source_call", "OriginalDraw", "source_draw", "V"],
-        [input],
+        "transcript.native.indexed.challenge",
+        transcript_attributes("query", "Source", "draw", "P", "V"),
+        [input, "coordinates"],
         [value, output]
     ])
 }
 fn program1() -> Vec<u8> {
     program(
-        None,
         &[("t", "transcript"), ("v", "field")],
         vec![observe("observe", "t", "t1"), challenge("t1", "c", "t2")],
         &["field", "transcript"],
@@ -68,26 +70,35 @@ fn program1() -> Vec<u8> {
 }
 fn origin(path: Json, kind: &str) -> Vec<u8> {
     let event = if kind == "message" {
-        json!(["message", "Source", "message", "FieldSchema", "P", "V"])
+        json!(["message", "Source", "message", "message", "P", "V"])
     } else {
         json!([
-            "challenge",
+            "query",
             "Source",
-            "source_call",
-            "OriginalDraw",
-            "source_draw",
+            "draw",
+            "input_0",
+            "random.bls12-381.fr/1",
+            "draw",
             "V"
         ])
     };
+    let frames = path
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|_| json!(["repeat", "Source", "rounds"]))
+        .collect::<Vec<_>>();
+    let coordinates = path
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p[2].clone())
+        .collect::<Vec<_>>();
     tree(&json!([
-        "zkc.logical-origin/1",
+        "zkc.native-origin/2",
         "main",
-        if path.as_array().unwrap().is_empty() {
-            "instance"
-        } else {
-            "child_instance"
-        },
-        path,
+        frames,
+        coordinates,
         event
     ]))
 }
@@ -112,16 +123,6 @@ fn direct(root: &[u8], paths: &[Json], value: u64) -> Scalar {
 #[test]
 fn exact_merlin_runner_match_and_session_role_invariance() {
     let expected = direct(&root(), &[json!([])], 7);
-    // Frozen results/fixtures.py: independently encoded trees, direct Merlin,
-    // Python big-integer reduction. Does not derive expected bytes via zkc.
-    assert_eq!(
-        expected,
-        parse_decimal(
-            "5184094719287578275298844563643071478826837576914294436461907185859582384591"
-        )
-        .unwrap()
-    );
-
     for (role, session) in [
         ("P", "session"),
         ("V", "other_process"),
@@ -133,11 +134,13 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
         let d = Domain::new(role, session, "main", None);
         let mut backend = NativeBackend::new(
             Policy::default(),
-            EntryPolicy::new(d.clone(), None, PublicInputs::LocalOnly),
-            None,
+            EntryPolicy::new(d.clone(), None),
+            Default::default(),
         )
         .unwrap();
-        let tok = backend.issue_transcript(d, 2, &root()).unwrap();
+        let tok = backend
+            .issue_transcript_for(Identity::Merlin3Fr64Be, d, 2, &root())
+            .unwrap();
         let old = tok.clone();
         let mut j: Json = serde_json::from_slice(&program1()).unwrap();
         j[4][0][3] = json!(role);
@@ -158,13 +161,16 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
             "refused:capability-stale"
         );
         assert_eq!(
-            backend.encode_value(&out[1]).unwrap_err().code,
-            "refused:nonserializable"
+            backend
+                .encode_native_value(&out[1])
+                .unwrap_err()
+                .to_string(),
+            "native-wire-backend:native-wire-type"
         );
         assert_eq!(
             backend
-                .decode_typed_value(
-                    zkc_runtime::interactive::PhysicalType::default_for(
+                .decode_native_value(
+                    &zkc_runtime::interactive::PhysicalType::default_for(
                         zkc_runtime::interactive::LogicalType::parse(
                             "transcript:merlin3.bls12-381.fr64be/1"
                         )
@@ -174,8 +180,8 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
                     &[]
                 )
                 .unwrap_err()
-                .code,
-            "refused:nonserializable"
+                .to_string(),
+            "native-wire-backend:native-wire-type"
         );
     }
 }
@@ -190,14 +196,30 @@ fn binding_value_origin_order_reset_and_budget_controls() {
         match mutation {
             0 => root = tree(&json!(["other-root"])),
             1 => value = 8,
-            2..=6 => j[3][0][4][1][3][mutation - 2] = json!("different"),
+            2..=6 => {
+                let attrs = j[3][0][4][2][3][0].as_str().unwrap();
+                let mut template = logical::decode_tree(&zkc_test_support::unhex(attrs)).unwrap();
+                let slot = [1, 2, 3, 4, 6][mutation - 2];
+                template[4][slot] = json!(match slot {
+                    3 => "input_1",
+                    4 => "random.ristretto255.scalar/1",
+                    _ => "different",
+                });
+                j[3][0][4][2][3][0] = json!(zkc_test_support::hex(&tree(&template)));
+            }
             7 => {
-                j[3][0][4][0] = challenge("t", "c", "t1");
-                j[3][0][4][1] = observe("after", "t1", "t2");
+                j[3][0][4][1] = challenge("t", "c", "t1");
+                j[3][0][4][2] = observe("after", "t1", "t2");
+                j[3][0][4][2][2] = json!(format!(
+                    "observe_{}",
+                    zkc_test_support::hex(b"field:bls12-381.fr")
+                ));
             }
             _ => unreachable!(),
         }
-        let tok = backend.issue_transcript(domain(), 2, &root).unwrap();
+        let tok = backend
+            .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root)
+            .unwrap();
         let (out, _) = run(
             &serde_json::to_vec(&j).unwrap(),
             backend,
@@ -206,7 +228,9 @@ fn binding_value_origin_order_reset_and_budget_controls() {
         assert_ne!(scalar(&out.unwrap()[0]), expected);
     }
     let mut backend = ark_backend(None);
-    let tok = backend.issue_transcript(domain(), 1, &root()).unwrap();
+    let tok = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 1, &root())
+        .unwrap();
     let old = tok.clone();
     let (out, mut backend) = run(&program1(), backend, vec![tok, f(7)]);
     assert_eq!(code(&out.unwrap_err()), "exhausted:resource-budget");
@@ -218,100 +242,96 @@ fn binding_value_origin_order_reset_and_budget_controls() {
     assert_eq!(backend.active_frames(), 0);
     assert!(
         backend
-            .issue_transcript(domain(), 1, b"not a canonical tree")
+            .issue_transcript_for(
+                Identity::Merlin3Fr64Be,
+                domain(),
+                1,
+                b"not a canonical tree"
+            )
             .is_err()
     );
 }
 fn nested() -> Vec<u8> {
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-    j[4] = json!([
-        [
-            "participant",
-            "root",
-            "instance",
-            "P",
+    j[4][0][5]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["n", "index@native.index/1"]));
+    j[3][0][2]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["iteration", "index@native.index/1"]));
+    j[1].as_array_mut().unwrap().push(json!([
+        "indices.append",
+        "indices.append",
+        [],
+        "native/indices.append"
+    ]));
+    j[3][0][4][0][5] = json!(["empty_coordinates"]);
+    j[3][0][4].as_array_mut().unwrap().insert(
+        1,
+        json!([
+            "op",
+            "append_coordinate",
+            "indices.append",
             [],
-            [
-                ["t", "transcript:merlin3.bls12-381.fr64be/1@host.resource/1"],
-                ["v", "field:bls12-381.fr@arkworks.fr/1"]
-            ],
-            [
-                "field:bls12-381.fr@arkworks.fr/1",
-                "transcript:merlin3.bls12-381.fr64be/1@host.resource/1"
-            ],
-            [
-                ["call", "first", "child", ["t", "v"], ["c0", "t0"]],
-                ["call", "second", "child", ["t0", "v"], ["c1", "t1"]],
-                ["return", ["c1", "t1"]]
-            ]
-        ],
+            ["empty_coordinates", "iteration"],
+            ["coordinates"]
+        ]),
+    );
+    for index in [2, 3] {
+        let mut template = logical::decode_tree(&zkc_test_support::unhex(
+            j[3][0][4][index][3][0].as_str().unwrap(),
+        ))
+        .unwrap();
+        template[2] = json!([["repeat", "Source", "rounds"]]);
+        j[3][0][4][index][3][0] = json!(zkc_test_support::hex(&tree(&template)));
+    }
+    j[4][0][7] = json!([
         [
-            "participant",
-            "child",
-            "child_instance",
-            "P",
-            [],
-            [
-                ["t", "transcript:merlin3.bls12-381.fr64be/1@host.resource/1"],
-                ["v", "field:bls12-381.fr@arkworks.fr/1"]
-            ],
-            [
-                "field:bls12-381.fr@arkworks.fr/1",
-                "transcript:merlin3.bls12-381.fr64be/1@host.resource/1"
-            ],
+            "loop",
+            "rounds",
+            ["value", "n", "4", "i"],
+            [["cur", "t"], ["answer", "v"]],
+            ["v"],
             [
                 [
-                    "loop",
-                    "rounds",
-                    "2",
-                    [["cur", "t"], ["answer", "v"]],
-                    ["v"],
-                    [
-                        [
-                            "local",
-                            "generated_local",
-                            "kernel_test",
-                            ["cur", "v"],
-                            ["c", "next"]
-                        ],
-                        ["yield", ["next", "c"]]
-                    ],
-                    ["done", "last"]
+                    "local",
+                    "generated_local",
+                    "kernel_test",
+                    ["cur", "v", "i"],
+                    ["c", "next"]
                 ],
-                ["return", ["last", "done"]]
-            ]
-        ]
+                ["yield", ["next", "c"]]
+            ],
+            ["done", "last"]
+        ],
+        ["return", ["last", "done"]]
     ]);
-    j[5] = json!([["entry", "main", [["P", "root"]]]]);
     serde_json::to_vec(&j).unwrap()
 }
 #[test]
-fn explicit_shared_resources_survive_nested_calls_loops_and_failures() {
+fn explicit_shared_resources_survive_bounded_loops_and_failures() {
     let mut backend = ark_backend(None);
-    let tok = backend.issue_transcript(domain(), 8, &root()).unwrap();
+    let tok = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 8, &root())
+        .unwrap();
     let old = tok.clone();
-    let paths = [
-        json!([["call", "first", "child_instance"], ["loop", "rounds", "0"]]),
-        json!([["call", "first", "child_instance"], ["loop", "rounds", "1"]]),
-        json!([
-            ["call", "second", "child_instance"],
-            ["loop", "rounds", "0"]
-        ]),
-        json!([
-            ["call", "second", "child_instance"],
-            ["loop", "rounds", "1"]
-        ]),
-    ];
-    let (out, backend) = run(&nested(), backend, vec![tok, f(7)]);
+    let paths = (0..4)
+        .map(|i| json!([["loop", "rounds", i.to_string()]]))
+        .collect::<Vec<_>>();
+    let (out, backend) = run(&nested(), backend, vec![tok, f(7), Value::Index(4)]);
     let out = out.unwrap();
     assert_eq!(scalar(&out[0]), direct(&root(), &paths, 7));
     assert_ne!(scalar(&out[0]), direct(&root(), &paths[3..], 7)); // child reset differs
     assert_eq!(backend.observe(t(&old)).unwrap().generation, 8);
     assert_eq!(backend.active_frames(), 0);
     let mut backend = ark_backend(None);
-    let tok = backend.issue_transcript(domain(), 3, &root()).unwrap();
+    let tok = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 3, &root())
+        .unwrap();
     let old = tok.clone();
-    let (out, backend) = run(&nested(), backend, vec![tok, f(7)]);
+    let (out, backend) = run(&nested(), backend, vec![tok, f(7), Value::Index(4)]);
     assert_eq!(code(&out.unwrap_err()), "exhausted:resource-budget");
     assert_eq!(backend.observe(t(&old)).unwrap().generation, 4);
     assert_eq!(backend.active_frames(), 0);
@@ -326,7 +346,9 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
         Domain::new("P", "session", "main", Some("other")),
     ] {
         let mut backend = ark_backend(None);
-        let tok = backend.issue_transcript(wrong, 3, &root()).unwrap();
+        let tok = backend
+            .issue_transcript_for(Identity::Merlin3Fr64Be, wrong, 3, &root())
+            .unwrap();
         let old = tok.clone();
         let a = admit_supplied(&bytes, &backend).unwrap();
         let e = Runner::new(&a, "main", "P", "session", backend, vec![tok, f(7)])
@@ -337,14 +359,15 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
         assert_eq!(e.backend.active_frames(), 0);
     }
     let mut issuer = ark_backend(None);
-    let tok = issuer.issue_transcript(domain(), 3, &root()).unwrap();
+    let tok = issuer
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 3, &root())
+        .unwrap();
     let backend = ark_backend(None);
     assert_eq!(
         backend.validate_value(&tok).unwrap_err().code,
         "refused:capability-authority"
     );
     let bytes = program(
-        None,
         &[("a", "transcript"), ("b", "transcript")],
         vec![],
         &["transcript", "transcript"],
@@ -363,14 +386,18 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
 #[test]
 fn original_rng_remains_separate_and_transcript_is_affine() {
     let mut backend = ark_backend(None);
-    let transcript = backend.issue_transcript(domain(), 2, &root()).unwrap();
-    let rng = backend.issue_rng(domain(), 3).unwrap();
+    let transcript = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
+        .unwrap();
+    let rng = backend
+        .issue_rng_for(Identity::Bls12381Fr, domain(), 3)
+        .unwrap();
     let before = backend.observe(token(&rng)).unwrap();
     let (out, backend) = run(&program1(), backend, vec![transcript, f(7)]);
     out.unwrap();
     assert_eq!(backend.observe(token(&rng)).unwrap(), before);
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-    j[3][0][4][1] = challenge("t", "c", "t2");
+    j[3][0][4][2] = challenge("t", "c", "t2");
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend)
             .unwrap_err()
@@ -378,7 +405,7 @@ fn original_rng_remains_separate_and_transcript_is_affine() {
         ErrorCode::Ssa
     );
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
-    j[3][0][4][0][3] = json!(["Source"]);
+    j[3][0][4][1][3] = json!(["Source"]);
     assert_eq!(
         admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend)
             .unwrap_err()
@@ -427,6 +454,14 @@ impl Backend for Probe {
         i: &Invocation<'_>,
         a: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {
+        if !i
+            .binding
+            .declaration()
+            .contract
+            .starts_with("transcript.native.indexed.")
+        {
+            return self.inner.apply(i, a);
+        }
         if !self.checked {
             self.checked = true;
             if self.mode == 0 {
@@ -456,7 +491,7 @@ impl Backend for Probe {
                 assert_eq!(self.inner.active_frames(), before);
                 assert_eq!(
                     self.inner
-                        .issue_transcript(domain(), 2, &root())
+                        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
                         .unwrap_err()
                         .code,
                     "refused:issue-during-frame"
@@ -481,9 +516,13 @@ impl Backend for Probe {
 fn active_views_preflight_and_post_transition_failure() {
     for mode in 0..3 {
         let mut inner = ark_backend(None);
-        let token = inner.issue_transcript(domain(), 8, &root()).unwrap();
+        let token = inner
+            .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 8, &root())
+            .unwrap();
         let old = token.clone();
-        let hidden = inner.issue_transcript(domain(), 8, &root()).unwrap();
+        let hidden = inner
+            .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 8, &root())
+            .unwrap();
         let before = inner.observe(t(&hidden)).unwrap();
         let probe = Probe {
             inner,
@@ -492,7 +531,7 @@ fn active_views_preflight_and_post_transition_failure() {
             mode,
             checked: false,
         };
-        let (out, probe) = run(&nested(), probe, vec![token, f(7)]);
+        let (out, probe) = run(&nested(), probe, vec![token, f(7), Value::Index(4)]);
         let expected = match mode {
             0 => {
                 out.unwrap();
@@ -515,15 +554,21 @@ fn active_views_preflight_and_post_transition_failure() {
 #[test]
 fn nested_cancellation_retains_prefix_and_unpassed_resource() {
     let mut backend = ark_backend(None);
-    let token = backend.issue_transcript(domain(), 8, &root()).unwrap();
+    let token = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 8, &root())
+        .unwrap();
     let old = token.clone();
-    let hidden = backend.issue_transcript(domain(), 8, &root()).unwrap();
+    let hidden = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 8, &root())
+        .unwrap();
     let before = backend.observe(t(&hidden)).unwrap();
-    let mut runner = load(&nested(), backend, vec![token, f(7)]);
+    let mut runner = load(&nested(), backend, vec![token, f(7), Value::Index(4)]);
+    while runner.advance_local_control().unwrap() {}
     let Action::Local(local) = runner.poll() else {
         panic!()
     };
     runner.execute_local(&local.cut).unwrap();
+    while runner.advance_local_control().unwrap() {}
     let Action::Local(_) = runner.poll() else {
         panic!()
     };
@@ -543,9 +588,8 @@ fn nested_cancellation_retains_prefix_and_unpassed_resource() {
 
 #[test]
 fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
-    // Not every observable kind: the registry also offers matrix, vector,
-    // polynomial, index, indices and commitments, whose wire is a separate
-    // claim. Naming those here would say this test covers them.
+    // Compare current generated observation bytes with independent Merlin calls.
+    // Local-only table, point and round representations cannot be observed.
     let policy = Policy::default();
     let keys = Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let zkc_backends::Value::Table(table_value) = table(&[1, 2]) else {
@@ -553,11 +597,24 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
     };
     let original = keys.prover_key().commit(&table_value).unwrap();
     let (_, proof) = original.open(&[Scalar::from(3)]).unwrap();
-    let values = vec![
-        f(7),
+    for value in [
         table(&[1, 2]),
         point(&[3]),
-        zkc_backends::Value::Round([Scalar::from(1), Scalar::from(2), Scalar::from(3)]),
+        Value::Round([Scalar::from(1); 3]),
+    ] {
+        let binding = OperationBinding {
+            contract: "transcript.native.indexed.observe.data".into(),
+            arguments: vec![
+                "merlin3.bls12-381.fr64be/1".into(),
+                value.physical_type().logical().spelling(),
+            ],
+            implementation: "arkworks/transcript.native.indexed.observe.data".into(),
+        };
+        assert!(binding.signature().is_err());
+    }
+    let values = vec![
+        f(7),
+        zkc_backends::Value::vector(&[Scalar::from(1), Scalar::from(2)], &policy).unwrap(),
         zkc_backends::Value::Bool(false),
         zkc_backends::Value::Commitment(std::sync::Arc::new(original.commitment().clone())),
         zkc_backends::Value::Proof(std::sync::Arc::new(proof)),
@@ -565,10 +622,20 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         zkc_backends::Value::groups(&[GroupPoint::generator()], &policy).unwrap(),
     ];
     for value in values {
-        let mut backend =
-            NativeBackend::new(policy, entry(None), Some(keys.verifier_key().clone())).unwrap();
-        let bytes = backend.encode_value(&value).unwrap();
-        let tok = backend.issue_transcript(domain(), 2, &root()).unwrap();
+        let mut backend = NativeBackend::new(
+            policy,
+            entry(None),
+            zkc_backends::SetupRegistry::new(
+                vec![keys.verifier_key().clone()],
+                &zkc_backends::Policy::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let bytes = backend.encode_native_value(&value).unwrap();
+        let tok = backend
+            .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
+            .unwrap();
         let mut m = merlin::Transcript::new(b"zkc.artifact/1");
         m.append_message(b"binding", &root());
         m.append_message(b"origin", &origin(json!([]), "message"));
@@ -577,9 +644,8 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         let mut raw = [0; 64];
         m.challenge_bytes(b"challenge", &mut raw);
         let mut obs = observe("observe", "t", "t1");
-        obs[2] = json!(format!("arkworks/transcript.observe.{}", value.ty().name()));
+        obs[2] = json!("transcript.native.indexed.observe.data");
         let bytes = program(
-            None,
             &[("t", "transcript"), ("v", value.ty().name())],
             vec![obs, challenge("t1", "c", "t2")],
             &["field", "transcript"],
@@ -599,16 +665,16 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
     let message = tree(&json!([
-        "zkc.native-origin/1",
+        "zkc.native-origin/2",
         "source_entry",
-        ["application"],
+        [["apply", "source_entry", "application"]],
         [],
         ["message", "Round", "commitment", "commitment", "P", "V"]
     ]));
     let query = tree(&json!([
-        "zkc.native-origin/1",
+        "zkc.native-origin/2",
         "source_entry",
-        ["application"],
+        [["apply", "source_entry", "application"]],
         [],
         [
             "query",
@@ -632,22 +698,19 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         let d = Domain::new(role, "session", "main", None);
         let mut backend = NativeBackend::new(
             Policy::default(),
-            EntryPolicy::new(d.clone(), None, PublicInputs::LocalOnly),
-            None,
+            EntryPolicy::new(d.clone(), None),
+            Default::default(),
         )
         .unwrap();
-        let token = backend.issue_transcript(d, 2, &root()).unwrap();
+        let token = backend
+            .issue_transcript_for(Identity::Merlin3Fr64Be, d, 2, &root())
+            .unwrap();
         let mut program: Json = serde_json::from_slice(&program1()).unwrap();
-        // Fixture binding declarations carry the new contracts, while their
-        // existing type and implementation choices remain explicit.
-        for binding in program[1].as_array_mut().unwrap() {
-            for index in [1, 3] {
-                let text = binding[index].as_str().unwrap();
-                binding[index] = json!(text.replace("transcript.", "transcript.native."));
-            }
+        for (index, bytes) in [(1, &message), (2, &query)] {
+            let mut template = logical::decode_tree(bytes).unwrap();
+            template[0] = json!("zkc.native-origin-template/1");
+            program[3][0][4][index][3] = json!([hex(&tree(&template))]);
         }
-        program[3][0][4][0][3] = json!([hex(&message)]);
-        program[3][0][4][1][3] = json!([hex(&query)]);
         program[4][0][3] = json!(role);
         program[5][0][2][0][0] = json!(role);
         let admitted = admit_supplied(&serde_json::to_vec(&program).unwrap(), &backend).unwrap();

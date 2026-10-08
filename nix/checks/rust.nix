@@ -1,7 +1,6 @@
 {
   tools,
   compiler,
-  formal,
   environment,
   python3,
 }:
@@ -10,7 +9,6 @@ tools.overrideAttrs (
   (environment.outputs {
     compilerBin = "${compiler.testSupport}/bin";
     nativeBin = "${tools.testSupport}/bin";
-    leanBin = "${formal}/bin";
   })
   // {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ python3 ];

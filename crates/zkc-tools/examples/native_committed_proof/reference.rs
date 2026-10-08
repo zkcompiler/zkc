@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 pub use transcript::root;
 use transcript::*;
 use zkc_backends::Scalar;
-use zkc_tools::artifact::hex;
+use zkc_tools::proof::hex;
 
 struct Oracle<'a> {
     descriptor: &'a Json,

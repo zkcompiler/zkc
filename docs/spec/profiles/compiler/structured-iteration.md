@@ -119,8 +119,7 @@ operation/port work have independent bounds. Runtime work and retained storage
 remain separately bounded.
 
 The native carrier count is `['value', ssa_name, maximum_decimal, induction_name]`.
-It is admitted by `zkc.program/1`, selected with
-`#protocol.execution_contract<program>`. This contract requires
+It is admitted by `zkc.program/1`. This contract requires
 value counts and refuses participant calls, parameters, family selectors,
 participant `stop` and `incomplete` at **every nesting level**. Local stops
 inside local computations retain their existing behavior.

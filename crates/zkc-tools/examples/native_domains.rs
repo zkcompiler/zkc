@@ -7,19 +7,15 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc_backends::{
     Bn254G1, Bn254G2, Bn254Scalar, Domain, EntryPolicy, KoalaBear, KoalaBearExt8, NativeBackend,
-    Policy, PublicInputs, RistrettoScalar, Value,
+    Policy, RistrettoScalar, Value,
 };
-use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_tools::proof::{NativeDeployment, hex};
 
 fn codec() -> NativeBackend {
     NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "domains", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "domains", "main", None), None),
+        Default::default(),
     )
     .unwrap()
 }
@@ -84,7 +80,9 @@ fn main() {
         let name = case["name"].as_str().unwrap();
         let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+        let deployment =
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap();
         check_suite_mutations(&envelope);
         for size in [0u64, 1, 7, 127] {
             let values = if case["family"] == "domain-values" {
@@ -216,7 +214,7 @@ fn main() {
             }
             if case["retries"] == true && size == 7 {
                 use zkc_runtime::interactive::{ValueBudget, WorkBudget};
-                use zkc_tools::artifact::native::AttemptPolicy;
+                use zkc_tools::proof::AttemptPolicy;
                 let report = deployment
                     .execute_attempts(
                         &producer,
@@ -265,10 +263,7 @@ fn main() {
 }
 
 fn check_suite_mutations(envelope: &Json) {
-    use zkc_runtime::{
-        interactive::{NativeProofEntry, admit_supplied},
-        logical,
-    };
+    use zkc_runtime::logical;
     let mut changed = envelope.clone();
     let query = changed[2][3]
         .as_array_mut()
@@ -289,26 +284,20 @@ fn check_suite_mutations(envelope: &Json) {
     )));
     let bytes = serde_json::to_vec(&changed).unwrap();
     assert_eq!(
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap_err(),
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            .unwrap_err(),
         "native-proof-query-origin"
     );
-    // The wider structured suites must not leak into the committed profile.
-    let candidate = envelope[4].as_str().unwrap();
-    let admitted = admit_supplied(candidate.as_bytes(), &codec()).unwrap();
-    assert_eq!(
-        NativeProofEntry::new_committed(
-            admitted,
-            "main",
-            "P",
-            "V",
-            0,
-            Some(envelope[2][1][5].as_str().unwrap()),
-            &[]
-        )
-        .unwrap_err()
-        .to_string(),
-        "native-proof-suite"
-    );
+    for version in 1..=3 {
+        let mut old = envelope.clone();
+        old[0] = json!(format!("zkc.native-proof/{version}"));
+        let bytes = serde_json::to_vec(&old).unwrap();
+        assert_eq!(
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap_err(),
+            "native-proof-format"
+        );
+    }
 }
 
 // These equations consume a challenge derived from upstream Merlin, never a

@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
   const auto source = (*buffer)->getBuffer().str();
   zkc::test::Cases cases;
   mlir::DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   auto parse = [&](StringRef bytes) {

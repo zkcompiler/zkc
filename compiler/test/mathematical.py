@@ -340,7 +340,7 @@ for attribute in ['arg_attrs=[{test.assumption=true}, {}]', 'res_attrs=[{}, {}]'
         mixed.replace('func.call @helper(%a, %w) :', f'func.call @helper(%a, %w) {{{attribute}}} :'),
         "mathematical-formation"))
 negative += [
-    ("common function in wrong profile", mixed.replace('#protocol.profile<protocol>', '#protocol.profile<protocol_exec>'), "mathematical-formation"),
+    ("common function in wrong profile", mixed.replace('#protocol.profile<protocol>', '#protocol.profile<exec>'), "mathematical-formation"),
     ("common function argument annotations", mixed.replace('sym_name="main"', 'sym_name="main", arg_attrs=[]'), "mathematical-formation"),
 ]
 

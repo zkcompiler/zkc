@@ -245,7 +245,7 @@ fn input(schema: &Schema, value: Json) -> Result<Value> {
     })
 }
 mod output;
-pub use output::{proof_outputs, run_outputs};
+pub use output::{output_setups, proof_outputs, run_outputs};
 
 #[cfg(test)]
 mod tests {

@@ -60,7 +60,7 @@ specialized modulo the characteristic; closed `field.constant` and
 `p`. They do not encode arbitrary extension coordinates. The catalog's existing
 `modulus` member records this characteristic bound for natural casts, not the
 extension's cardinality. Public extension coordinates use the canonical
-[artifact codec](../../compiler/artifact-format.md#octic-koalabear-extension).
+[native structured codec](../profiles/compiler/structured-proof-messages.md).
 
 The native installation uses pinned Plonky3 0.5.1; the executable independent
 `Tools.Interactive.ExtensionReference` uses fixed coordinates, convolution and

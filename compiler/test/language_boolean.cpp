@@ -40,7 +40,7 @@ int main() {
   });
   cases.run("same-type Boolean identity mutation", [&] {
     mlir::DialectRegistry registry;
-    zkc::registerNativeDialects(registry);
+    zkc::registerDialects(registry);
     mlir::MLIRContext context(registry);
     auto module =
         mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), &context);

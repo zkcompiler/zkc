@@ -1,6 +1,9 @@
 # Understanding the model
 
-These guides explain the selected semantics through examples and failure cases.
+These guides explain independent semantic models through examples and failure
+cases. Their formal source, endpoint and direct-plan objects are research
+subjects, not additional supported compiler paths. Current `.zkc` execution is
+described in the [architecture](../architecture.md).
 The [specification](../spec/README.md) owns the definitions; the
 [theory map](../theory.md) connects them to their mathematical tools and primary
 references. [Language documentation](../language/README.md) covers authoring syntax.

@@ -2,7 +2,6 @@
 #include "Run.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Source/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
 #include <map>
@@ -18,8 +17,8 @@ using Coordinate = std::pair<std::string, std::string>;
 // correspondence; here we establish the published source order and coordinates.
 class RunCorrespondence {
   struct Role {
-    const source::Participant *program;
-    std::vector<const source::Instruction *> code;
+    const program::Participant *program;
+    std::vector<const program::Instruction *> code;
     size_t position = 0;
   };
   struct Cursor {
@@ -37,7 +36,7 @@ class RunCorrespondence {
   std::set<Coordinate> guards;
   size_t anchor = 0, remaining = 1000000;
   bool charge() { return remaining && (--remaining, true); }
-  const source::Instruction *next(unsigned role) const {
+  const program::Instruction *next(unsigned role) const {
     const auto &r = roles[role];
     return r.position < r.code.size() ? r.code[r.position] : nullptr;
   }
@@ -62,7 +61,7 @@ class RunCorrespondence {
     auto found = calculations.find(key);
     if (found == calculations.end() || guards.count(key))
       return true;
-    auto *call = instruction->get<source::LocalCall>();
+    auto *call = instruction->get<program::LocalCall>();
     if (!call || call->callee != found->second)
       return false;
     calculations.erase(found);
@@ -85,26 +84,26 @@ class RunCorrespondence {
     bool matches = false;
     if (auto exchange = dyn_cast<pir::ExchangeOp>(op)) {
       if (receive) {
-        auto *r = instruction->get<source::Receive>();
+        auto *r = instruction->get<program::Receive>();
         matches = r && r->peer == exchange.getSender() &&
                   r->schema == exchange.getSite();
       } else {
-        auto *r = instruction->get<source::Send>();
+        auto *r = instruction->get<program::Send>();
         matches = r && r->peer == exchange.getReceiver() &&
                   r->schema == exchange.getSite();
       }
     } else if (auto query = dyn_cast<pir::QueryOp>(op)) {
-      auto *r = instruction->get<source::ServiceQuery>();
+      auto *r = instruction->get<program::ServiceQuery>();
       matches = r && r->method == query.getMethod();
     } else if (auto call = dyn_cast<pir::LocalCallOp>(op)) {
-      auto *r = instruction->get<source::LocalCall>();
+      auto *r = instruction->get<program::LocalCall>();
       matches = r && r->callee == call.getCallee();
     } else if (isa<pir::FinishIfOp>(op)) {
-      matches = instruction->get<source::ReturnIf>();
+      matches = instruction->get<program::ReturnIf>();
     } else if (isa<pir::GuardOp>(op)) {
       Coordinate key{roles[*role].program->name, instruction->site};
       auto found = calculations.find(key);
-      auto *r = instruction->get<source::LocalCall>();
+      auto *r = instruction->get<program::LocalCall>();
       matches = r && found != calculations.end() && r->callee == found->second;
       if (matches)
         calculations.erase(found);
@@ -130,9 +129,9 @@ class RunCorrespondence {
           if (!role || !prefix(enter, *role, source))
             return false;
           auto *instruction = next(*role);
-          auto *loop = instruction ? instruction->get<source::Loop>() : nullptr;
+          auto *loop =
+              instruction ? instruction->get<program::Loop>() : nullptr;
           if (!loop || instruction->site != repeat.getSite() ||
-              loop->count.kind != source::LoopCount::Kind::Value ||
               loop->count.maximum != repeat.getMaximum() ||
               !step(enter, *role, source))
             return false;
@@ -147,7 +146,7 @@ class RunCorrespondence {
           if (!prefix(exit, role, std::nullopt))
             return false;
           auto *instruction = next(role);
-          if (!instruction || !instruction->get<source::Yield>() ||
+          if (!instruction || !instruction->get<program::Yield>() ||
               !step(exit, role, std::nullopt))
             return false;
         }
@@ -179,12 +178,12 @@ class RunCorrespondence {
 
 public:
   bool check(pir::MathematicalOp source, pir::ProjectionOp projection,
-             const source::Participants &program, const json::Object &bundle) {
+             const program::Participants &program, const json::Object &bundle) {
     auto *names = bundle.getArray("roles");
     auto *steps = bundle.getArray("steps");
     if (!names || !steps || names->size() != source.getRoles().size())
       return false;
-    const source::ParticipantEntry *entry = nullptr;
+    const program::ParticipantEntry *entry = nullptr;
     for (const auto &e : program.entries)
       if (e.name == source.getSymName())
         entry = &e;
@@ -195,7 +194,7 @@ public:
       if ((*names)[i].getAsString() != name ||
           !roleIndex.emplace(name.str(), i).second)
         return false;
-      const source::Participant *participant = nullptr;
+      const program::Participant *participant = nullptr;
       for (const auto &mapping : entry->participants)
         if (mapping.first == name)
           for (const auto &p : program.participants)
@@ -205,7 +204,7 @@ public:
           participant->instance != source.getSymName())
         return false;
       Role role{participant, {}, 0};
-      source::walk(participant->body, [&](const source::Instruction &op) {
+      program::walk(participant->body, [&](const program::Instruction &op) {
         role.code.push_back(&op);
       });
       roles.push_back(std::move(role));
@@ -234,7 +233,7 @@ public:
       if (!prefix(cursor, i, std::nullopt))
         return false;
       auto *instruction = next(i);
-      if (!instruction || !instruction->get<source::Return>() ||
+      if (!instruction || !instruction->get<program::Return>() ||
           !step(cursor, i, std::nullopt) ||
           roles[i].position != roles[i].code.size())
         return false;
@@ -258,15 +257,10 @@ Error verifyRunBundle(ModuleOp prepared, ModuleOp physical, StringRef bytes,
       bundle->getString("entry") != entry || !bundle->getString("candidate"))
     return error("run-correspondence");
   auto candidate = *bundle->getString("candidate");
-  if (auto e = protocol::verifyProgramArtifact(physical, candidate))
-    return e;
-  auto carrier = parseJson(candidate);
-  if (!carrier)
-    return carrier.takeError();
-  auto decoded = source::decode(*carrier);
+  auto decoded = protocol::verifyProgramArtifact(physical, candidate);
   if (!decoded)
     return decoded.takeError();
-  auto *program = std::get_if<source::Participants>(&*decoded);
+  auto *program = &*decoded;
   pir::MathematicalOp source;
   prepared.walk([&](pir::MathematicalOp op) {
     if (op.getSymName() == entry)

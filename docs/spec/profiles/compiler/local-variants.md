@@ -2,7 +2,7 @@
 
 This profile gives local algorithms nominal tagged alternatives without adding
 protocol branching. It refines the aggregate and ownership contract of
-[checked libraries](../source/checked-libraries.md) and uses
+[mathematical source](../source/mathematical-language.md) and uses
 [structured local control](local-control.md) for isolated execution.
 
 ## Type and value
@@ -20,16 +20,14 @@ drop permissions are independently the conjunction of those permissions over
 every payload in every alternative. A variant has no implicit wire codec or
 disclosure permission, even when each payload is otherwise serializable.
 
-The legacy executable boundary excludes variants recursively from protocol
-entry/result ports. The current [program format](program.md) admits recursively
+The [program format](program.md) admits recursively
 copyable variants at those ports; affine variants remain local. It also admits
 the closed [structured message grammar](structured-proof-messages.md).
 Port, representation and codec availability remain independent judgments.
 
 Local functions retain construction, ordered match, results and captures.
 An installed primitive must explicitly accept its complete payload type; local
-variant formation never supplies a wildcard signature. Family selection keeps
-its existing restrictions. Total native data operations include a tag test under
+variant formation never supplies a wildcard signature. Total native data operations include a tag test under
 the separate [structured-data contract](structured-iteration.md).
 This restriction does not prove that a protocol never discloses information
 computed from a private input; ordinary role and disclosure rules still apply.
@@ -37,7 +35,7 @@ An intermediate value can remain in one participant's environment between local
 calls, including across interaction rounds or as a protocol-loop carried value.
 Its ownership does not thereby permit another participant to use it.
 
-Checked-library source enforces its declared copy and drop permissions before
+Language enforces its declared copy and drop permissions before
 lowering. Portable executable admission retains the existing **affine** local
 control discipline: it rejects repeated use but permits an unused value to be
 abandoned at frame exit, whether wrapped in a variant or not. It does not certify
@@ -64,7 +62,7 @@ nested variant tree of the same shape. It cannot be an already-encoded variant
 string or a physical type. Alternative order is declaration order and matters.
 Labels obey the artifact-name grammar. Every ordinary leaf independently forms.
 
-The checked-library producer keeps the complete public semantic type structure
+The source producer keeps the complete public semantic type structure
 in the nominal: declaration identity, ordered static actuals, captured exact
 subjects and dependencies, fields and semantic payload types. It preserves
 opaque abstract members even when they have equal physical representations.
@@ -104,8 +102,8 @@ depth. Cache hits still charge all expanded logical nodes; they cannot bypass
 depth or node admission. An inline graph subtree can satisfy a later text lookup
 only after that spelling passes its own expansion bound; the containing graph's
 bound alone is insufficient. This loading policy is separate from portable formation
-and live-value accounting: C++/Lean formation can accept a carrier that the Rust
-host refuses for loading capacity. The executable value charges below remain
+and live-value accounting: C++ formation can accept a program that the Rust Host refuses for loading
+capacity; the independent Lean descriptor model has its own admission scope. The executable value charges below remain
 unchanged. Bounded unpack scratch is additional to installed metadata; concurrent
 loads and allocator overhead are not a process memory guarantee.
 
@@ -147,9 +145,10 @@ adds `256 + 512 * activePayloadCount` and each active value's retained-byte char
 These are conservative profile charges, not allocator measurements. The native
 representation retains canonical nominal bytes, not an additional expanded
 nominal tree, and uses bounded immutable descriptor storage and compile-time size
-checks; Lean uses the same declared charge. Descriptor sharing does not discount
+checks. The independent Lean model uses the same declared charge without
+establishing native execution correspondence. Descriptor sharing does not discount
 a live value's budget. Changing this accounting changes the executable profile
-and must move the independent consumers together.
+and requires corresponding updates to its actual consumers.
 
 The selected arm's local origin appends `["match", site, alternative]`. This
 origin participates in actual local observations and domain separation in the

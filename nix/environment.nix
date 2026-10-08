@@ -23,7 +23,6 @@
     export CTEST_PARALLEL_LEVEL="''${CTEST_PARALLEL_LEVEL:-4}"
     export CARGO_BUILD_JOBS="''${CARGO_BUILD_JOBS:-4}"
     export RUST_TEST_THREADS="''${RUST_TEST_THREADS:-4}"
-    export LEAN_NUM_THREADS="''${LEAN_NUM_THREADS:-4}"
     export PYTEST_XDIST_AUTO_NUM_WORKERS="''${PYTEST_XDIST_AUTO_NUM_WORKERS:-4}"
   '';
 
@@ -36,7 +35,6 @@
     export CTEST_PARALLEL_LEVEL="$zkc_check_cores"
     export CARGO_BUILD_JOBS="$zkc_check_cores"
     export RUST_TEST_THREADS="$zkc_check_cores"
-    export LEAN_NUM_THREADS="$zkc_check_cores"
     export PYTEST_XDIST_AUTO_NUM_WORKERS="$zkc_check_cores"
   '';
 
@@ -45,11 +43,9 @@
     {
       compilerBin,
       nativeBin,
-      leanBin,
     }:
     {
       ZKC_COMPILER_BIN = compilerBin;
       ZKC_NATIVE_BIN = nativeBin;
-      ZKC_LEAN_BIN = leanBin;
     };
 }

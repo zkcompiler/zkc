@@ -3,7 +3,7 @@
 The compiler validates adjacent transformations of the existing MLIR
 program. It keeps the four native mathematical profiles
 `protocol → participant → exec → physical`, ordinary SSA and
-regions, and the [dialect responsibilities](design.md#1-representation-and-dialects).
+regions, and the [dialect responsibilities](design.md#representation-and-dialects).
 A validator compares actual operands and control as well as retained metadata.
 It does not introduce another editable graph, runtime interpreter or certificate
 format. The [refinement specification](../spec/verification/refinement.md) owns
@@ -11,6 +11,9 @@ meaning; [status](../status.md#checking-and-evidence) distinguishes
 implemented checks from their remaining interpretation assumptions.
 
 ## Checking boundaries
+
+The [external-candidate decision](../rationale/external-candidate-checking.md)
+explains why acceptance must cover the actual artifact supplied to the consumer.
 
 A compilation retains its original input and checks the candidate of each step
 before publishing it. Adjacent checks compose only through the same actual
@@ -39,12 +42,6 @@ edge is checked by `protocol::lowerPhysical` and the SelectPhysical pass, which
 also invoke the internal whole-module materialization validator. Executable
 inputs without projection records receive the participant comparison too; it
 cannot establish their derivation from a common source.
-
-The live `protocol_exec → exec` route is outside the native mathematical
-route. It retains its own admission and the independent Lean participants checker
-when source correspondence is requested for `zkc.participants/1`. Its consumers
-remain migration obligations; the mathematical API refuses `protocol_exec` input.
-Its subsequent exec-to-physical participant comparison does not require metadata.
 
 Preparation and projection have separate postconditions, including when a single
 public pass performs both. The raw-source API first validates expansion; the
@@ -261,8 +258,8 @@ schedule admission alone cannot grant either correspondence claim.
 
 A split identity calculation control returns the same value and sends the same
 bytes with an extra dispatch, frame entry and executable return instruction.
-At a fixed dispatch cap one version can stop while the other completes. The
-runtime's `calls` counter counts protocol calls, not these local frame entries.
+At a fixed instruction budget one version can stop while the other completes.
+Local frame entries also remain subject to the runtime's frame limit.
 A mathematical equality therefore cannot justify unchanged finite-cost outcomes.
 Keep the existing outlining and schedule metadata until a measured overhead,
 required memory bound or provider requirement needs different partitioning. Then
@@ -274,7 +271,7 @@ work, and no additional IR is required by these controls.
 | Limit | Boundary and comparison |
 |---|---|
 | Parsing, formation, expansion and checker work | Pre-execution admission/refusal; exceeding implementation capacity is not evidence of an invalid protocol |
-| Bytes, dimensions and input loading | Host-authorized admission bounds; preserve exact domain and failure cause when claiming migration coverage |
+| Bytes, dimensions and input loading | Host-authorized admission bounds; preserve exact domain and failure cause when claiming execution coverage |
 | Retained buffers and interpreter work | Execution policy with observable exhaustion, residual state and consumed prefix; counts may depend on realization |
 | Program loop/condition bounds, provider consumption and attempt limits | Selected program/host contracts, including stops and persistent work across attempts |
 
@@ -296,15 +293,7 @@ rather than combining byte, heap, primitive-work and source-expansion counters.
 | Per-step checking with transient value maps | Same-typed sends, guards, yields or roots can change while metadata remains valid. Another persistent graph or provenance attribute cannot supply independent correspondence | A required transform splits/merges/removes action occurrences so sites and port positions no longer determine the map |
 | Nominal relation identity plus actual configuration and decision | Bound R1CS/AIR ports do not establish satisfaction; a constant-true validator is insufficient. A digest cannot replace the contract or its predicate; same-typed setup ports from different authorities must remain distinguished | An application requires content-addressed configuration; add it to that boundary without redefining all declarations |
 | Explicit custody, effects and observations | Two draws can share a root and differ in value/state. Flattening all limits or treating every valid schedule as equivalent loses reached-prefix behavior | A new observer, concurrency model or resource metric needs a different justified relation |
-| Stable consumers of the same mathematical subject | Frontend elaboration, analysis and Lean need operands, actual receives, draws, guards and disclosures. A separate editable analysis IR creates synchronization obligations | A consumer demonstrably needs a projection; define its retention relation before erasing information |
-
-The source-route Groth16 adapter's generated names locate relation helpers; reserved
-origins and selected descriptor identity supply its checked binding. Its project
-path excludes other declared rank-one views, while its authenticated-cache path
-has no view inventory. Neither proves data flow from residuals to acceptance.
-[Migration](migration.md) retains this consumer and its distinct guarantees;
-replacing it with native relation/configuration bindings requires an explicit
-cache contract and positive/refusal controls before removing the old reader.
+| Stable consumers of the same mathematical subject | Language, analysis and independent formal models need operands, actual receives, draws, guards and disclosures. A separate editable analysis IR creates synchronization obligations | A consumer demonstrably needs a projection; define its retention relation before erasing information |
 
 Future analyses stay attached to a frozen revision and their actual requirements.
 [MLIR analysis invalidation](https://mlir.llvm.org/docs/PassManagement/#preserving-analyses)
@@ -318,7 +307,7 @@ This design follows the translation-validation separation demonstrated by
 validator may conservatively reject transformations it cannot justify. Their
 proved register-allocation validator is a methodological reference, not a proof
 of zkc's validators. Native Lean connection follows the explicit
-[evidence milestones](../assurance.md#6-implementation-correspondence-policy).
+[evidence milestones](../assurance.md#6-native-correspondence-policy).
 
 ### Same-profile executable API checks
 

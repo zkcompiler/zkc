@@ -42,13 +42,15 @@ Keep exact tool and dependency versions in their manifests and lockfiles.
 Documentation explains their ownership and records versions only when they are
 part of a particular observation. A test count, elapsed time or memory figure
 needs its execution scope and environment; a historical run is not a current
-build result. Follow the [assurance policy](../assurance.md) and
-[measurement guide](../../bench/README.md#reading-and-recording-a-measurement).
+build result. Follow the [assurance policy](../assurance.md). Measurements must
+record the revision, dependency locks, tool versions, machine, inputs, repetitions
+and statistic. Identify the measured stages and report failures and resource
+ceilings alongside successful runs. No benchmark campaign is currently maintained.
 
 For executable instructions, state the working directory, prerequisites,
 required inputs and expected result. Distinguish a development command that
 builds prerequisites from a driver that requires existing outputs. Link to the
-[test scope map](../../tests/README.md#execution-owners) rather than maintaining a
+[test scope map](../../tests/README.md#coverage-and-ownership) rather than maintaining a
 second list. Optional external integrations must say what makes them optional.
 
 ## Consolidate without losing a contract
@@ -67,8 +69,9 @@ in the same change; a link dependency alone does not require a separate home.
 Similar subject matter is not necessarily duplication. A specification clause,
 a mathematical proof, an executable interface and a measurement have different
 responsibilities. Preserve source coordinates and exact theorem premises when
-shortening explanations. Changes to source-language or carrier contracts must
-move with their implementation and formal owners.
+shortening explanations. Changes to source-language or carrier contracts must move with their actual
+implementation consumers. Independently formalized models retain their own
+subjects; native changes create no automatic formal migration requirement.
 
 ## Validate a documentation change
 
@@ -79,7 +82,7 @@ just test-docs
 git diff --check
 ```
 
-`just test-docs` includes component, benchmark and fixture guides by calling
+`just test-docs` includes component and fixture guides by calling
 [the checker](../../tests/check_docs.py) with `--all`. A direct call without that
 option checks only the reference and root/formal guides. Both check local inline links, heading
 fragments and whitespace, plus reachability of the `docs/` reference from its

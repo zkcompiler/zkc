@@ -1,16 +1,16 @@
-# Configure independent requests, including the optional claim/IR bridge.
-foreach(mode required optional claimtranslation)
+# Configure independent requests, including the Program carrier component.
+foreach(mode required optional program)
   set(source "${TEST_ROOT}/${mode}")
   file(MAKE_DIRECTORY "${source}")
   if(mode STREQUAL "required")
     set(request "COMPONENTS MissingComponent")
     set(check "")
   elseif(mode STREQUAL "optional")
-    set(request "COMPONENTS Claims OPTIONAL_COMPONENTS MissingComponent")
+    set(request "COMPONENTS Program OPTIONAL_COMPONENTS MissingComponent")
     set(check "if(ZkcCompiler_MissingComponent_FOUND)\nmessage(FATAL_ERROR \"unknown component reported found\")\nendif()")
   else()
-    set(request "COMPONENTS ClaimTranslation")
-    set(check "if(NOT ZkcCompiler_ClaimTranslation_FOUND)\nmessage(FATAL_ERROR \"claim translation component missing\")\nendif()")
+    set(request "COMPONENTS Program")
+    set(check "if(NOT ZkcCompiler_Program_FOUND)\nmessage(FATAL_ERROR \"program component missing\")\nendif()")
   endif()
   file(WRITE "${source}/CMakeLists.txt"
     "cmake_minimum_required(VERSION 3.20)\nproject(ComponentControl LANGUAGES C CXX)\nfind_package(ZkcCompiler REQUIRED CONFIG ${request})\n${check}\n")

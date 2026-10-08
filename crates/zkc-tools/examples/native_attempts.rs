@@ -5,18 +5,14 @@ mod input_admission;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_backends::{
-    Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, PublicInputs, Scalar, Value,
-};
+use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     interactive::{ValueBudget, WorkBudget},
 };
-use zkc_tools::artifact::{
+use zkc_tools::proof::{
+    AttemptPolicy, InputValue, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs,
     hex,
-    native::{
-        AttemptPolicy, InputValue, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs,
-    },
 };
 
 fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
@@ -30,12 +26,8 @@ fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
         .unwrap();
     let codec = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap();
     let wire = |port: &Json, ty: &Json| {
@@ -127,7 +119,8 @@ fn run(directory: &Path, case: &Json) {
     }
     let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-    let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+    let deployment =
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
     let producer = inputs(&envelope, true, fold);
     let validator = inputs(&envelope, false, fold);
     let p = policy(fold);
@@ -223,12 +216,8 @@ fn run(directory: &Path, case: &Json) {
     // transcript as the positional transport, including RNG successor reuse.
     let codec = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap();
     let decode_hex = |v: &Json| -> Vec<u8> {
@@ -360,7 +349,9 @@ fn run(directory: &Path, case: &Json) {
             .or_else(|| name.strip_suffix("_release"))
             .unwrap();
         let bytes = std::fs::read(directory.join(format!("{base}.deployment"))).unwrap();
-        let other = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+        let other =
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap();
         assert!(
             other
                 .execute(&validator, Some(proof))
@@ -542,7 +533,9 @@ fn variable_proofs(directory: &Path) {
     for i in 0..2 {
         let bytes = std::fs::read(directory.join(format!("varying_{i}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+        let deployment =
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap();
         let input = inputs(&envelope, true, true);
         let p = policy(true);
         let tapes = |values: &[u64]| {
@@ -570,7 +563,8 @@ fn variable_proofs(directory: &Path) {
 fn custody_controls(directory: &Path) {
     let bytes = std::fs::read(directory.join("swapped.deployment")).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-    let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+    let deployment =
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
     let input = inputs(&envelope, true, true);
     let tapes = |values: &[u64]| {
         BTreeMap::from([
@@ -611,7 +605,8 @@ fn custody_controls(directory: &Path) {
             .is_ok()
     );
     let bytes = std::fs::read(directory.join("nonce.deployment")).unwrap();
-    let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+    let deployment =
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
     assert_eq!(
         deployment
             .execute_attempts_test(&Json::Null, &policy(false), BTreeMap::new())
@@ -622,15 +617,12 @@ fn custody_controls(directory: &Path) {
 }
 fn empty_attempts(directory: &Path) {
     let bytes = std::fs::read(directory.join("empty.deployment")).unwrap();
-    let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+    let deployment =
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
     let codec = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap();
     let input = |complete| {
@@ -652,7 +644,6 @@ fn empty_attempts(directory: &Path) {
     let mut policy = policy(false);
     policy.completion = 2; // The selected output is after another producer Boolean.
     policy.limits.proof_bytes = 40;
-    policy.work.calls = 0;
     policy.work.iterations = 0;
     let complete = deployment.execute_attempts(&input(true), &policy).unwrap();
     assert_eq!(complete.attempts.len(), 1);
@@ -703,7 +694,9 @@ fn mixed_custody(directory: &Path) {
     for suite in 0..2 {
         let bytes = std::fs::read(directory.join(format!("mixed_{suite}.deployment"))).unwrap();
         let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-        let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+        let deployment =
+            NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+                .unwrap();
         let producer = inputs(&envelope, true, true);
         let tapes = || {
             BTreeMap::from([
@@ -789,7 +782,8 @@ fn main() {
 fn abandonment(directory: &Path, name: &str, silent: bool) {
     let bytes = std::fs::read(directory.join(format!("{name}.deployment"))).unwrap();
     let envelope: Json = serde_json::from_slice(&bytes).unwrap();
-    let deployment = NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+    let deployment =
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default()).unwrap();
     if !silent {
         check_exit_mutations(&envelope);
     }
@@ -878,12 +872,8 @@ fn check_exit_mutations(envelope: &Json) {
     use zkc_runtime::interactive::admit_supplied;
     let codec = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(
-            Domain::new("P", "test", "main", None),
-            None,
-            PublicInputs::LocalOnly,
-        ),
-        None,
+        EntryPolicy::new(Domain::new("P", "test", "main", None), None),
+        Default::default(),
     )
     .unwrap();
     let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
@@ -893,7 +883,8 @@ fn check_exit_mutations(envelope: &Json) {
         e[5] = json!(hex(&Sha256::digest(c.as_bytes())));
         e[4] = json!(c);
         let bytes = serde_json::to_vec(&e).unwrap();
-        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap_err()
+        NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes)), Default::default())
+            .unwrap_err()
     };
     for missing in [false, true] {
         let mut candidate = original.clone();

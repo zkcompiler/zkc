@@ -31,10 +31,7 @@ def inspect(name, command, expected=None, directory=ROOT):
     match = re.search(r"\b\d+\.\d+(?:\.\d+)?\b", text)
     version = match[0] if match else None
     record.update(version=version, description=text.splitlines()[0] if text else "")
-    # Some distributions build GNU time without a numeric package version.
-    # Its tool identity is still explicit; pinned language versions stay strict.
-    identified_time = name == "gnu-time" and text.startswith("time (GNU Time)")
-    if run.returncode or (version is None and not identified_time):
+    if run.returncode or version is None:
         record.update(status="fail", error=text or f"exit {run.returncode}")
     elif expected and version != expected:
         record.update(status="fail", error=f"expected {expected}, found {version}")
@@ -154,6 +151,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--profile", default="release")
+    parser.add_argument("--formal", action="store_true", help="also inspect the optional Lean toolchain")
     args = parser.parse_args()
     try:
         validate_environment()
@@ -162,19 +160,19 @@ def main():
     except ValueError as error:
         parser.error(str(error))
     rust = tomllib.loads((ROOT / "rust-toolchain.toml").read_text())["toolchain"]["channel"]
-    lean = (ROOT / "formal/lean-toolchain").read_text().strip().split(":v")[-1]
     records = [
         inspect("cc", [selected["CMAKE_C_COMPILER"], "--version"]),
         inspect("cxx", [selected["CMAKE_CXX_COMPILER"], "--version"]),
         rust_version(rust),
-        inspect("lean", ["lean", "--version"], lean, ROOT / "formal"),
         inspect("cmake", ["cmake", "--version"]),
         inspect("ninja", ["ninja", "--version"]),
         inspect("python", [sys.executable, "--version"]),
         inspect("uv", ["uv", "--version"]),
         inspect("just", ["just", "--version"]),
-        inspect("gnu-time", ["time", "--version"]),
     ]
+    if args.formal:
+        lean = (ROOT / "formal/lean-toolchain").read_text().strip().split(":v")[-1]
+        records.append(inspect("lean", ["lean", "--version"], lean, ROOT / "formal"))
     tested = re.search(r'set\(ZKC_TESTED_LLVM_VERSION\s+"([^"]+)"',
                        (ROOT / "compiler/CMakeLists.txt").read_text())[1]
     records.insert(0, package_version("MLIR", selected["MLIR_DIR"], tested))
@@ -202,7 +200,7 @@ def main():
               "tools": records,
               "workspace": {"profile": args.profile, "selected_cmake": selected,
                             "cached_cmake": cached, "outputs": {kind: str(output_directory(kind))
-                                         for kind in ("compiler", "native", "lean")},
+                                         for kind in ("compiler", "native")},
                             "reports": str(reports_root())}}
     if args.json:
         print(json.dumps(result, indent=2))

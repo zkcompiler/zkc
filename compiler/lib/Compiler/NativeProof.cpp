@@ -39,28 +39,15 @@ std::optional<unsigned> number(const json::Value &v) {
     return {};
   return n;
 }
-Expected<protocol::BoundType> wire(Type type, bool iterated = false,
-                                   bool input = false, bool committed = false,
-                                   bool structured = false) {
+Expected<protocol::BoundType> wire(Type type, bool input = false) {
   auto logical = protocol::encodeBoundType(type, false);
   if (!logical)
     return logical.takeError();
-  if ((structured && protocol::nativeMessageData(*logical)) ||
-      (committed && logical->identity == "multilinear.kzg.bls12-381/1" &&
-       (logical->kind == "commitment" || logical->kind == "proof" ||
-        (input && logical->kind == "verifier_key"))) ||
-      logical->kind == "bool" ||
-      (logical->kind == "field" && logical->identity == "bls12-381.fr") ||
-      (logical->kind == "group" && logical->identity == "bls12-381.g1") ||
-      (iterated &&
-       (logical->kind == "index" ||
-        (input && logical->kind == "table" &&
-         logical->identity == "bls12-381.fr") ||
-        (logical->kind == "field_array" && logical->arguments.size() == 2 &&
-         logical->arguments[0].kind == protocol::TypeArgument::Kind::Domain &&
-         logical->arguments[1].kind == protocol::TypeArgument::Kind::Nat &&
-         logical->arguments[0].domain == "bls12-381.fr" &&
-         logical->arguments[1].natural <= 1048576))))
+  if (protocol::nativeMessageData(*logical) ||
+      (input && logical->kind == "table" &&
+       logical->identity == "bls12-381.fr") ||
+      (input && logical->kind == "verifier_key" &&
+       logical->identity == "multilinear.kzg.bls12-381/1"))
     return *logical;
   return error("native-proof-wire-type");
 }
@@ -80,7 +67,7 @@ pir::ProtocolModuleOp unit(ModuleOp module) {
     return {};
   return dyn_cast<pir::ProtocolModuleOp>(module.getBody()->front());
 }
-bool flatOperation(Operation &op, bool beforePreparation) {
+bool admittedOperation(Operation &op, bool beforePreparation) {
   return !op.getNumRegions() &&
          (isa<pir::QueryOp, pir::ExchangeOp, pir::StatementOp, pir::GuardOp,
               pir::LocalCallOp, pir::MathematicalReturnOp, pir::FinishIfOp,
@@ -93,7 +80,7 @@ bool flatOperation(Operation &op, bool beforePreparation) {
 }
 struct Origin {
   std::string protocol, site;
-  std::vector<std::string> path, event;
+  std::vector<std::string> event;
   std::vector<std::array<std::string, 3>> steps;
 };
 // Borrowed services pass through isolated repeat captures without acquiring a
@@ -110,23 +97,22 @@ BlockArgument sourcePort(Value value) {
   return {};
 }
 Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
-                                    SymbolTable &symbols, bool iterated) {
+                                    SymbolTable &symbols) {
   StringMap<Origin> out;
   unsigned remaining = 100000;
   auto collect = [&](auto &&self, pir::MathematicalOp function, Block &body,
-                     ArrayRef<std::string> path,
                      ArrayRef<std::array<std::string, 3>> steps,
                      StringRef expanded,
                      const StringMap<std::string> &roles) -> Error {
-    if (steps.size() > 64 || path.size() > 64)
+    if (steps.size() > 64)
       return error("native-proof-origin-limit");
     for (auto &op : body) {
       if (!remaining--)
         return error("native-proof-origin-limit");
       auto repeat = dyn_cast<pir::RepeatOp>(op);
-      if (!flatOperation(op, true) &&
-          !(iterated && (repeat || isa<pir::ProtocolYieldOp>(op))))
-        return error("native-proof-flat-profile");
+      if (!admittedOperation(op, true) && !repeat &&
+          !isa<pir::ProtocolYieldOp>(op))
+        return error("native-proof-operation");
       auto site = op.getAttrOfType<StringAttr>("site");
       if (!site)
         continue;
@@ -137,8 +123,6 @@ Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
         auto callee = symbols.lookup<pir::MathematicalOp>(apply.getCallee());
         if (!callee || !hasSingleElement(callee.getBody()))
           return error("native-proof-source");
-        std::vector<std::string> child(path.begin(), path.end());
-        child.push_back(site.str());
         std::vector<std::array<std::string, 3>> childSteps(steps.begin(),
                                                            steps.end());
         childSteps.push_back(
@@ -147,15 +131,14 @@ Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
         for (auto [source, target] : zip(callee.getRoles(), apply.getRoles()))
           childRoles[cast<StringAttr>(source).getValue()] =
               roles.lookup(cast<StringAttr>(target).getValue());
-        if (auto e = self(self, callee, callee.getBody().front(), child,
-                          childSteps, id, childRoles))
+        if (auto e = self(self, callee, callee.getBody().front(), childSteps,
+                          id, childRoles))
           return e;
         continue;
       }
       if (repeat || isa<pir::QueryOp, pir::ExchangeOp>(op)) {
         Origin origin{function.getSymName().str(),
                       site.str(),
-                      {path.begin(), path.end()},
                       {},
                       {steps.begin(), steps.end()}};
         if (auto query = dyn_cast<pir::QueryOp>(op)) {
@@ -187,8 +170,8 @@ Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
         if (repeat) {
           auto child = origin.steps;
           child.push_back({"repeat", origin.protocol, origin.site});
-          if (auto e = self(self, function, repeat.getBody().front(), path,
-                            child, expanded, roles))
+          if (auto e = self(self, function, repeat.getBody().front(), child,
+                            expanded, roles))
             return e;
         }
       }
@@ -200,8 +183,7 @@ Expected<StringMap<Origin>> origins(pir::MathematicalOp entry,
     auto name = cast<StringAttr>(role).getValue();
     roles[name] = name.str();
   }
-  if (auto e =
-          collect(collect, entry, entry.getBody().front(), {}, {}, {}, roles))
+  if (auto e = collect(collect, entry, entry.getBody().front(), {}, {}, roles))
     return std::move(e);
   return out;
 }
@@ -242,8 +224,7 @@ Expected<Admitted> admit(pir::MathematicalOp source,
         return error("native-proof-verifier-service");
       continue;
     }
-    auto logical = wire(type, policy.iterated(), true, policy.committed(),
-                        policy.structured());
+    auto logical = wire(type, true);
     if (!logical)
       return logical.takeError();
     required.push_back(i);
@@ -284,9 +265,7 @@ Expected<Admitted> admit(pir::MathematicalOp source,
         return logical.takeError();
       keys += logical->kind == "verifier_key";
     }
-    if (needsKey && !policy.committed())
-      return error("native-proof-wire-type");
-    if ((!policy.structured() && keys > 1) || keys > 64 || (needsKey && !keys))
+    if (keys > 64 || (needsKey && !keys))
       return error("native-proof-setup-coverage");
   }
   if (required != policy.publicInputs)
@@ -324,15 +303,11 @@ Expected<Admitted> admit(pir::MathematicalOp source,
           origin.event[5] != action.getReceiver())
         return error("native-proof-origin");
     }
-    auto encoded = policy.iterated()
-                       ? protocol::encodeNativeOriginTemplate(
-                             policy.entry, origin.steps, origin.event)
-                       : protocol::encodeNativeOrigin(policy.entry, origin.path,
-                                                      origin.event);
+    auto encoded = protocol::encodeNativeOriginTemplate(
+        policy.entry, origin.steps, origin.event);
     if (!encoded)
       return encoded.takeError();
-    auto type = wire(payload, policy.iterated(), false, policy.committed(),
-                     policy.structured());
+    auto type = wire(payload);
     if (!type)
       return type.takeError();
     admitted.events.push_back(
@@ -359,7 +334,7 @@ Expected<Admitted> admit(pir::MathematicalOp source,
       if (op.hasAttr("site") && ++actions > maxActions)
         return error("native-proof-action-limit");
       if (auto repeat = dyn_cast<pir::RepeatOp>(op)) {
-        if (!policy.iterated() || pending)
+        if (pending)
           return error("native-proof-loop-prefix");
         auto found = consume(repeat.getSite(), "repeat");
         if (!found)
@@ -375,9 +350,8 @@ Expected<Admitted> admit(pir::MathematicalOp source,
           sequence.push_back(std::move(child));
         continue;
       }
-      if (!flatOperation(op, false) &&
-          !(policy.iterated() && isa<pir::ProtocolYieldOp>(op)))
-        return error("native-proof-flat-profile");
+      if (!admittedOperation(op, false) && !isa<pir::ProtocolYieldOp>(op))
+        return error("native-proof-operation");
       if (auto statement = dyn_cast<pir::StatementOp>(op)) {
         auto declaration =
             symbols.lookup<relation::DeclareOp>(statement.getRelation());
@@ -407,10 +381,6 @@ Expected<Admitted> admit(pir::MathematicalOp source,
       }
       if (isa<pir::FinishIfOp>(op) && pending)
         return error("native-proof-prefix");
-      if (auto call = dyn_cast<pir::LocalCallOp>(op)) {
-        if (!policy.iterated() && call.getRole() == policy.validator)
-          return error("native-proof-verifier-local");
-      }
       if (auto query = dyn_cast<pir::QueryOp>(op)) {
         if (pending)
           return error("native-proof-prefix");
@@ -483,7 +453,7 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
     inputs.push_back(std::to_string(port));
   for (const auto &[query, delivery] : p.draws)
     draws.push_back(json::Array{query, delivery});
-  return json::Array{"zkc.native-proof-policy/" + std::to_string(p.version),
+  return json::Array{"zkc.native-proof-policy/4",
                      p.entry,
                      p.producer,
                      p.validator,
@@ -502,16 +472,9 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     return parsed.takeError();
   auto *a = parsed->getAsArray();
   if (!a || a->size() != 9 ||
-      ((*a)[0].getAsString() != "zkc.native-proof-policy/1" &&
-       (*a)[0].getAsString() != "zkc.native-proof-policy/2" &&
-       (*a)[0].getAsString() != "zkc.native-proof-policy/3" &&
-       (*a)[0].getAsString() != "zkc.native-proof-policy/4"))
+      (*a)[0].getAsString() != "zkc.native-proof-policy/4")
     return error("native-proof-policy");
   NativeProofPolicy p;
-  p.version = (*a)[0].getAsString() == "zkc.native-proof-policy/4"   ? 4
-              : (*a)[0].getAsString() == "zkc.native-proof-policy/3" ? 3
-              : (*a)[0].getAsString() == "zkc.native-proof-policy/2" ? 2
-                                                                     : 1;
   for (auto [i, target] : {std::pair{1u, &p.entry},
                            {2u, &p.producer},
                            {3u, &p.validator},
@@ -539,13 +502,9 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     if (!p.service)
       return error("native-proof-policy");
   }
-  if ((p.version == 2 && p.suite.empty()) ||
-      (p.suite.empty()
-           ? p.service.has_value() || !draws->empty()
-           : protocol::nativeChallengeField(p.suite).empty() ||
-                 (!p.structured() &&
-                  protocol::nativeChallengeField(p.suite) != "bls12-381.fr") ||
-                 !p.service || (!selectDraws && draws->empty())))
+  if (p.suite.empty() ? p.service.has_value() || !draws->empty()
+                      : protocol::nativeChallengeField(p.suite).empty() ||
+                            !p.service || (!selectDraws && draws->empty()))
     return error("native-proof-policy");
   for (const auto &input : *inputs) {
     auto port = number(input);
@@ -616,30 +575,15 @@ class Emitter {
     return builder.create(state);
   }
   Expected<FlatSymbolRefAttr> helper(const Event &event, Type state) {
-    auto type = wire(event.payload, policy.iterated(), false,
-                     policy.committed(), policy.structured());
+    auto type = wire(event.payload);
     if (!type)
       return type.takeError();
-    std::string prefix =
-        policy.iterated() ? "transcript.native.indexed." : "transcript.native.";
-    std::string contract =
-        prefix + (event.query           ? "challenge"
-                  : policy.structured() ? "observe.data"
-                                        : "observe." + type->kind);
+    std::string contract = event.query
+                               ? "transcript.native.indexed.challenge"
+                               : "transcript.native.indexed.observe.data";
     SmallVector<Attribute> args{builder.getStringAttr(policy.suite)};
-    if (!event.query) {
-      if (policy.structured()) {
-        args.push_back(builder.getStringAttr(type->spelling()));
-      } else if (type->kind == "field_array") {
-        args.push_back(builder.getStringAttr(type->arguments[0].domain));
-        args.push_back(
-            builder.getStringAttr(std::to_string(type->arguments[1].natural)));
-      } else {
-        if (!type->identity.empty())
-          args.push_back(builder.getStringAttr(type->identity));
-        args.push_back(builder.getStringAttr(wireCodec(*type)));
-      }
-    }
+    if (!event.query)
+      args.push_back(builder.getStringAttr(type->spelling()));
     auto selected = binding(contract, args);
     SmallVector<Type> inputs{state}, outputs;
     if (event.query)
@@ -647,8 +591,7 @@ class Emitter {
     else
       inputs.push_back(event.payload);
     auto dataInputs = inputs.size();
-    if (policy.iterated())
-      inputs.append(event.depth, builder.getIntegerType(64, false));
+    inputs.append(event.depth, builder.getIntegerType(64, false));
     outputs.push_back(state);
     builder.setInsertionPointToEnd(&module.getBody().front());
     auto function =
@@ -662,7 +605,7 @@ class Emitter {
     auto *body = function.addEntryBlock();
     builder.setInsertionPointToEnd(body);
     SmallVector<Value> operands(body->getArguments().take_front(dataInputs));
-    if (policy.iterated()) {
+    {
       auto indices = RankedTensorType::get({ShapedType::kDynamic},
                                            builder.getIntegerType(64, false));
       auto empty = binding("indices.empty", {});
@@ -740,8 +683,7 @@ public:
         SmallVector<Value> operands{state};
         if (payload)
           operands.push_back(payload);
-        if (policy.iterated())
-          append_range(operands, coordinates);
+        append_range(operands, coordinates);
         auto invocation = local::CallOp::create(
             builder, participant.getLoc(), function.getResultTypes(), operands,
             FlatSymbolRefAttr::get(function), builder.getStringAttr(fresh()));
@@ -772,7 +714,7 @@ public:
             });
             if (!observed)
               continue;
-            if (!policy.iterated() || !loop.getMaximum())
+            if (!loop.getMaximum())
               return error("native-proof-loop-profile");
             unsigned carried = loop.getCarried();
             SmallVector<Value> operands(loop.getInputs().begin(),
@@ -907,8 +849,7 @@ public:
     auto actions = rewrite(rewrite, original.getAs<ArrayAttr>("actions"));
     auto construction = builder.getDictionaryAttr(
         {builder.getNamedAttr(
-             "format", builder.getStringAttr("zkc.native-construction/" +
-                                             std::to_string(policy.version))),
+             "format", builder.getStringAttr("zkc.native-construction/4")),
          builder.getNamedAttr("transcript", TypeAttr::get(stateType)),
          builder.getNamedAttr("removed_services",
                               builder.getArrayAttr({builder.getI64IntegerAttr(
@@ -938,10 +879,10 @@ Expected<PreparedProof> prepareProof(ModuleOp source,
   auto entry = originalSymbols.lookup<pir::MathematicalOp>(policy.entry);
   if (!entry)
     return error("native-proof-entry");
-  auto occurrenceMap = origins(entry, originalSymbols, policy.iterated());
+  auto occurrenceMap = origins(entry, originalSymbols);
   if (!occurrenceMap)
     return occurrenceMap.takeError();
-  // No authored local can smuggle in an existing native/legacy transcript.
+  // No authored local can smuggle in an existing transcript.
   bool transcript = false;
   auto checkType = [&](Type type) {
     type.walk([&](Type nested) {
@@ -1036,11 +977,9 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
                                               admitted->events))
     return std::move(e);
   json::Value descriptor(json::Array{
-      "zkc.native-proof-descriptor/" + std::to_string(policy.version),
-      encodeNativeProofPolicy(policy),
-      policy.iterated() ? "zkc.native-origin/2" : "zkc.native-origin/1",
-      std::move(admitted->sequence), std::move(admitted->publicBindings),
-      std::move(admitted->messages)});
+      "zkc.native-proof-descriptor/4", encodeNativeProofPolicy(policy),
+      "zkc.native-origin/2", std::move(admitted->sequence),
+      std::move(admitted->publicBindings), std::move(admitted->messages)});
   return NativeProofConstruction{std::move(candidate), std::move(descriptor),
                                  std::move(admitted->wireSites)};
 }

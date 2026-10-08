@@ -1,7 +1,7 @@
 //! Logical application values. Layout and constructor authority come from the
 //! authenticated source interface, never from a caller-supplied type spelling.
 use super::interface::raw::{Field, Kind, Permission, Schema};
-use crate::protocol::run::InputValue;
+use crate::run::InputValue;
 use std::collections::BTreeMap;
 use zkc_backends::Value as NativeValue;
 

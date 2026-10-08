@@ -83,7 +83,7 @@ actual host values, scalar sums and adjacent-row checks independently of kernel
 dispatch. Mutations cover configuration, public values, witnesses, empty or
 malformed shapes, shared-input mismatch, truncated and trailing proofs.
 [Cross-build tests](../../tests/protocol/test_native_mathematical.py) run separate
-producer and validator CLI processes. The source-route Lean
+producer and validator CLI processes. The independent Lean
 `interactive-protocol --check-generic` checker explicitly refuses both the native
 deployment and its embedded program.
 
@@ -109,4 +109,4 @@ deployment and its embedded program.
   and relation-schema introspection at the runtime boundary remain later work.
   Broader domain/service and multiple authorized setup support are implemented
   at the scope of the [structured proof contract](../spec/profiles/compiler/structured-proof-messages.md).
-  The [roadmap](../roadmap.md) owns the remaining consumer migration.
+  The [roadmap](../roadmap.md) records further native work.

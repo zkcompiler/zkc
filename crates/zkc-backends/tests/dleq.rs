@@ -1,6 +1,7 @@
 //! Standalone local DLEQ equations through the ordinary generic Runner. Test
 //! entry material is host supplied; this is not an artifact producer CLI.
 #![cfg(feature = "test-utils")]
+use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::Value as RuntimeValue;
 mod common;
 use common::{backend as new_backend, *};
@@ -8,15 +9,15 @@ use serde_json::{Value as Json, json};
 use zkc_backends::*;
 use zkc_runtime::interactive::{Runner, admit_supplied};
 
-fn observed(site: &str, ty: &str, input: &str, value: &str, output: &str) -> Json {
+fn observed(site: &str, _ty: &str, input: &str, value: &str, output: &str) -> Json {
     json!([
         "op",
         site,
-        format!("arkworks/transcript.observe.{ty}"),
-        [
+        "transcript.native.indexed.observe.data",
+        transcript_attributes(
+            "message",
             "DLEQ",
             site,
-            format!("Schema_{ty}"),
             if site == "challenge_delivery" {
                 "V"
             } else {
@@ -27,8 +28,8 @@ fn observed(site: &str, ty: &str, input: &str, value: &str, output: &str) -> Jso
             } else {
                 "V"
             }
-        ],
-        [input, value],
+        ),
+        [input, value, "coordinates"],
         [output]
     ])
 }
@@ -36,15 +37,14 @@ fn draw() -> Json {
     json!([
         "op",
         "draw",
-        "arkworks/transcript.challenge",
-        ["DLEQ", "challenge_call", "DrawChallenge", "draw", "V"],
-        ["t1"],
+        "transcript.native.indexed.challenge",
+        transcript_attributes("query", "DLEQ", "draw", "P", "V"),
+        ["t1", "coordinates"],
         ["c", "t2"]
     ])
 }
 fn producer() -> Vec<u8> {
     program(
-        None,
         &[
             ("bases", "groups"),
             ("x", "field"),
@@ -121,7 +121,6 @@ fn validator() -> Vec<u8> {
     ops.push(op("both", "arkworks/bool.and", &["ok0", "ok1"], &["ok"]));
     ops.push(op("require", "arkworks/control.require", &["ok"], &[]));
     let mut j: Json = serde_json::from_slice(&program(
-        None,
         &[
             ("bases", "groups"),
             ("publics", "groups"),
@@ -147,8 +146,8 @@ fn root(bases: &Value, publics: &Value, context: &str, backend: &NativeBackend) 
         "source-fixture-v1",
         "descriptor-fixture-v1",
         context,
-        hex(&backend.encode_value(bases).unwrap()),
-        hex(&backend.encode_value(publics).unwrap()),
+        hex(&backend.encode_native_value(bases).unwrap()),
+        hex(&backend.encode_native_value(publics).unwrap()),
         "bls12-381.g1"
     ]))
     .unwrap()
@@ -164,23 +163,27 @@ fn run_validator(
     NativeBackend,
 ) {
     let domain = Domain::new("V", "independent_verifier", "main", None);
-    let pins = std::collections::BTreeMap::from([
-        ("bases".into(), bases.clone()),
-        ("publics".into(), publics.clone()),
-    ]);
     let mut backend = NativeBackend::new(
         Policy::default(),
-        EntryPolicy::new(domain.clone(), None, PublicInputs::Exact(pins)),
-        None,
+        EntryPolicy::new(domain.clone(), None),
+        Default::default(),
     )
     .unwrap();
-    let transcript = backend.issue_transcript(domain, 4, root).unwrap();
+    let transcript = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain, 4, root)
+        .unwrap();
     // Candidate values must cross ordinary canonical receiving-side codecs.
     let rs = backend
-        .decode_typed_value(rs.physical_type(), &backend.encode_value(&rs).unwrap())
+        .decode_native_value(
+            &rs.physical_type(),
+            &backend.encode_native_value(&rs).unwrap(),
+        )
         .unwrap();
     let z = backend
-        .decode_typed_value(z.physical_type(), &backend.encode_value(&z).unwrap())
+        .decode_native_value(
+            &z.physical_type(),
+            &backend.encode_native_value(&z).unwrap(),
+        )
         .unwrap();
     let admitted = admit_supplied(&validator(), &backend).unwrap();
     let runner = Runner::new(
@@ -209,7 +212,9 @@ fn standalone_runner_dleq_honest_false_statement_proof_and_context() {
         .issue_test_nonce(domain(), 2, Scalar::from(11))
         .unwrap();
     let old = nonce.clone();
-    let transcript = backend.issue_transcript(domain(), 4, &binding).unwrap();
+    let transcript = backend
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 4, &binding)
+        .unwrap();
     let (out, backend) = run(
         &producer(),
         backend,
@@ -270,7 +275,9 @@ fn standalone_runner_dleq_honest_false_statement_proof_and_context() {
     let binding = root(&bases, &false_publics, "application-A", &backend);
     let mut b = new_backend().build();
     let nonce = b.issue_test_nonce(domain(), 2, Scalar::from(11)).unwrap();
-    let transcript = b.issue_transcript(domain(), 4, &binding).unwrap();
+    let transcript = b
+        .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 4, &binding)
+        .unwrap();
     let (out, _) = run(&producer(), b, vec![bases.clone(), f(7), nonce, transcript]);
     let out = out.unwrap();
     let (bad, _) = run_validator(

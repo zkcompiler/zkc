@@ -187,7 +187,7 @@ Secure compilation also asks what happens after linking target code chosen by
 an adversary [13]. A common-continuation simulation does not answer that question
 without a model of those target contexts. The current boundary keeps the same
 reply-adaptive program and declared observer; arbitrary target linking is a
-separate [research trigger](roadmap.md#3-research-triggers).
+separate [research trigger](roadmap.md#extend-on-demonstrated-demand).
 
 Fresh-name theory [14] helps separate a newly allocated identity from a reusable
 immutable value. The current allocator proves freshness relative to its pool.
@@ -245,7 +245,7 @@ the source/participant correspondence still needs its own proof for zkc.
 | Triggered extensions | Full separation/resource logic, asynchronous choreography projection, higher-order logical relations, staged frontend metatheory, general abstract fixpoints, computational game logics, aggregate-attempt bounds and native side-channel semantics |
 
 The distinction is about application, not the maturity of those established
-theories. [Research triggers](roadmap.md#3-research-triggers) identify the concrete
+theories. [Research triggers](roadmap.md#extend-on-demonstrated-demand) identify the concrete
 capability that would require each extension. The
 [worked transformation](guides/adding-a-transformation.md) shows several of the
 current laws operating together on one actual source.

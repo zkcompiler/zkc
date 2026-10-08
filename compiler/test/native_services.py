@@ -6,7 +6,7 @@ from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
-from tools import records
+from tools import records, canonical_program
 
 OUT = records()
 commands = Commands(OUT)
@@ -39,8 +39,8 @@ with case("deferred boolean retains every query"):
     project(deferred, "services_deferred")
 
 with case("native carrier imports and exports without changing its profile"):
-    imported = commands.source("protocol-import", json.dumps(carrier))
-    again = json.loads(commands.source("protocol-export", imported))
+    imported = canonical_program(commands, json.dumps(carrier))
+    again = json.loads(imported)
     def alpha(value):
         names = {}
         def visit(item):
@@ -64,8 +64,8 @@ with case("common service indices map to role-local ingress indices"):
     bob = next(p for p in shifted_carrier[4] if p[3] == "Bob")
     assert bob[8] == [["service_0", "random.bls12-381.fr/1", "0"]]
     assert 'service_inputs = [1]' in shifted_ir
-    imported = commands.source("protocol-import", json.dumps(shifted_carrier))
-    roundtrip = json.loads(commands.source("protocol-export", imported))
+    imported = canonical_program(commands, json.dumps(shifted_carrier))
+    roundtrip = json.loads(imported)
     assert next(p for p in roundtrip[4] if p[3] == "Bob")[8] == bob[8]
 
 for name, old, new in [
@@ -87,7 +87,7 @@ for name, old, new in [
 with case("old carrier refuses service records"):
     old = copy.deepcopy(carrier)
     old[0] = "zkc.participants/1"
-    commands.source("protocol-import", json.dumps(old), refuses="interactive-record")
+    canonical_program(commands, json.dumps(old), refuses="interactive-format")
 
 for name, mutate, reason in [
     ("unknown port", lambda c: next(p for p in c[4] if p[3] == "Alice")[7][2].__setitem__(2, "missing"), "service-query-context"),
@@ -97,7 +97,7 @@ for name, mutate, reason in [
     with case(name):
         mutated = copy.deepcopy(carrier)
         mutate(mutated)
-        commands.source("protocol-import", json.dumps(mutated), refuses=reason)
+        canonical_program(commands, json.dumps(mutated), refuses=reason)
 
 
 
@@ -152,12 +152,12 @@ with case("old carrier refuses a query even without service records"):
     mutated[0] = "zkc.participants/1"
     for participant in mutated[4]:
         participant.pop()
-    commands.source("protocol-import", json.dumps(mutated), refuses="interactive-instruction")
+    canonical_program(commands, json.dumps(mutated), refuses="interactive-format")
 
 with case("native participants refuse parameters"):
     mutated = copy.deepcopy(carrier)
     next(p for p in mutated[4] if p[3] == "Alice")[4] = [["n", "1"]]
-    commands.source("protocol-import", json.dumps(mutated), refuses="service-profile-required")
+    canonical_program(commands, json.dumps(mutated), refuses="interactive-shape")
 
 with case("service index MLIR attribute must have the admitted integer type"):
     bad = logical.replace('fr/1", 0]', 'fr/1", 18446744073709551616 : i128]')
@@ -170,23 +170,23 @@ with case("service ports require their module profile even when unused"):
     port_only = source[source.index('module {'):]
     port_only = port_only[:port_only.index('    protocol.statement')] + '\n    "protocol.return"(%x, %accept) : (!algebra.field<"bls12-381.fr">, i1) -> ()\n  }) {sym_name="main", function_type=(!protocol.service_ref<"random.bls12-381.fr/1">, !algebra.field<"bls12-381.fr">, i1, !protocol.service_ref<"random.bls12-381.fr/1">, i1, i1) -> (!algebra.field<"bls12-381.fr">, i1), roles=["Alice", "Bob", "Observer"], input_roles=[["Alice"], ["Alice"], ["Alice"], ["Alice"], ["Bob"], ["Observer"]], output_roles=[["Alice"], ["Bob"]]} : () -> ()\n}) {profile=#protocol.profile<protocol>} : () -> ()\n}'
     _, port_ir = project(port_only, "services_unused")
-    assert '#protocol.execution_contract<program>' in port_ir
-    malformed = port_ir.replace('#protocol.execution_contract<program>', '#protocol.execution_contract<legacy_participants_v1>')
-    commands.source("protocol-export", malformed, refuses="service-profile-required")
+    assert '#protocol.profile<exec>' in port_ir
+    malformed = port_ir.replace('#protocol.profile<exec>', '#protocol.profile<protocol>')
+    commands.source("protocol-export", malformed, refuses="mathematical-module")
 
 for name, instruction, reason in [
-    ("participant conditional cannot hide a call", ["if", "branch", "condition", [], [["call", "hidden", "callee", [], []], ["yield", []]], [["yield", []]], []], "local-control-context"),
-    ("program loops require value counts", ["loop", "loop", "1", [], [], [["query", "hidden", "service_0", "draw", [], ["out"]], ["yield", []]], []], "interactive-loop-count"),
-    ("native participant calls are refused", ["call", "call", "callee", [], []], "service-participant-composition-unsupported"),
+    ("participant conditional cannot hide a call", ["if", "branch", "condition", [], [["call", "hidden", "callee", [], []], ["yield", []]], [["yield", []]], []], "interactive-instruction"),
+    ("program loops require value counts", ["loop", "loop", "1", [], [], [["query", "hidden", "service_0", "draw", [], ["out"]], ["yield", []]], []], "interactive-shape"),
+    ("native participant calls are refused", ["call", "call", "callee", [], []], "interactive-instruction"),
 ]:
     with case(name):
         mutated = copy.deepcopy(carrier)
         next(p for p in mutated[4] if p[3] == "Alice")[7].insert(0, instruction)
-        commands.source("protocol-import", json.dumps(mutated), refuses=reason)
+        canonical_program(commands, json.dumps(mutated), refuses=reason)
 
 with case("local functions cannot contain queries"):
     mutated = copy.deepcopy(carrier)
     mutated[3][0][4].insert(0, ["query", "hidden", "service_0", "draw", [], ["out"]])
-    commands.source("protocol-import", json.dumps(mutated), refuses="service-query-context")
+    canonical_program(commands, json.dumps(mutated), refuses="service-query-context")
 
 print(f"Native services: {counted()} cases; evidence: {OUT}")

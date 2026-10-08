@@ -51,9 +51,7 @@ impl<'a> Admission<'a> {
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
         match request {
-            InputValue::Native(value) => {
-                self.add(Input::native_value(ty, value, selected)?, backend.policy())
-            }
+            InputValue::Native(value) => self.add(Input::native_value(ty, value, selected)?),
             InputValue::Wire(bytes) => self.native_wire(backend, ty, bytes.as_slice(), selected),
             InputValue::Variant { .. } => self.native_variant(backend, ty, request, selected),
             _ => Err("native-input-private".into()),
@@ -73,7 +71,7 @@ impl<'a> Admission<'a> {
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
         let (input, _) = self.plan(backend, ty, request, selected)?;
-        self.add(input, backend.policy())
+        self.add(input)
     }
     fn plan(
         &mut self,

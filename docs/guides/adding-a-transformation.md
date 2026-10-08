@@ -113,7 +113,7 @@ this particular source and its adverse cases concrete.
 A native pass must bind the same source, ordered captures and call meanings;
 implement the selected plans and failure behavior; and relate native values,
 buffers and state to this execution. These are the [realization](realization.md)
-obligations in the [roadmap](../roadmap.md#completion-milestones).
+obligations in the [roadmap](../roadmap.md#establish-native-correspondence).
 
 Measure the generated route against both an equally capable library and the
 pinned upstream implementation, separating compilation/checking from execution

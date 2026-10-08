@@ -77,8 +77,8 @@ fn shared_diagonal_has_two_compatible_consumers_and_full_retained_charge() {
         assert_eq!(view.retained_bytes(), required);
         assert!(!view.physical_type().is_serializable());
         assert_eq!(
-            b.inner.encode_value(view).unwrap_err().code,
-            "refused:nonserializable"
+            b.inner.encode_native_value(view).unwrap_err().to_string(),
+            "native-wire-backend:native-wire-type"
         );
         // The immutable view remains fully charged after both consumers finish.
         b.inner.validate_value(view).unwrap();

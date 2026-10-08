@@ -301,7 +301,7 @@ fn binding_arguments_are_kinded_and_observation_is_explicitly_uninstalled() {
     observe.contract = "transcript.observe.fixed_vector".into();
     assert_eq!(
         observe.signature().unwrap_err().detail,
-        "fixed-vector-observation-uninstalled"
+        "uninstalled operation binding"
     );
     for name in [
         "fixed_vector.unknown",

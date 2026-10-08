@@ -64,9 +64,7 @@ options and participant artifact. It independently compares emitted MLIR with
 the checked source. The Rust Host authenticates this publication, binds its named
 interface to the native artifact, and admits the participant programs. This path
 has bounded tests and compiler checks; native Lean correspondence and a security
-theorem for this complete executable path remain separate work. The
-[retained committed-proof example](compiler/committed-example.md) exercises the
-older route's independent Lean checks.
+theorem for this complete executable path remain separate work.
 
 ## Write and run another Entry
 

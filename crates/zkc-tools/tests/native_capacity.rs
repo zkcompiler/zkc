@@ -1,6 +1,6 @@
 //! The application supplies ceilings; carriers cannot raise them.
 use serde_json::json;
-use zkc_tools::artifact::native::NativeCapacity;
+use zkc_tools::proof::NativeCapacity;
 fn parse(value: &serde_json::Value) -> Result<NativeCapacity, String> {
     NativeCapacity::parse(&serde_json::to_vec(value).unwrap())
 }
@@ -24,7 +24,7 @@ fn strict_capacity_record_and_hard_ceilings() {
             assert!(parse(&at).is_err());
         }
     }
-    for (field, index) in [(5, 0), (5, 1), (5, 2), (6, 0), (6, 1)] {
+    for (field, index) in [(5, 0), (5, 1), (6, 0), (6, 1)] {
         let mut at = default.clone();
         let limit: u64 = at[field][index].as_str().unwrap().parse().unwrap();
         at[field][index] = json!((limit + 1).to_string());
@@ -36,7 +36,10 @@ fn strict_capacity_record_and_hard_ceilings() {
     extra.as_array_mut().unwrap().push(json!("unknown"));
     assert!(parse(&extra).is_err());
     let mut version = default.clone();
-    version[0] = json!("zkc.native-capacity/2");
-    assert!(parse(&version).is_err());
+    version[0] = json!("zkc.native-capacity/1");
+    assert_eq!(parse(&version).unwrap_err(), "native-capacity-format");
+    let mut legacy_work = default.clone();
+    legacy_work[5].as_array_mut().unwrap().push(json!("0"));
+    assert!(parse(&legacy_work).is_err());
     assert!(NativeCapacity::parse(&vec![b' '; 4097]).is_err());
 }

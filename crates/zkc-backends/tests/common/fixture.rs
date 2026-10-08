@@ -10,7 +10,7 @@
 #![allow(dead_code)]
 
 use zkc_arkworks::VerifierKey;
-use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, PublicInputs, Value};
+use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::interactive::{Action, Backend, Runner, Stop, StopKind};
 
 /// The one execution identity these tests run under.
@@ -20,7 +20,7 @@ pub fn domain() -> Domain {
 
 /// The entry policy at a chosen homogeneous arity, local inputs only.
 pub fn entry(n: Option<usize>) -> EntryPolicy {
-    EntryPolicy::new(domain(), n, PublicInputs::LocalOnly)
+    EntryPolicy::new(domain(), n)
 }
 
 /// A backend, with the three things a test ever varies given in one place.
@@ -61,7 +61,16 @@ impl Fixture {
     }
 
     pub fn build(self) -> NativeBackend {
-        NativeBackend::new(self.policy, entry(self.arity), self.verifier).unwrap()
+        NativeBackend::new(
+            self.policy,
+            entry(self.arity),
+            zkc_backends::SetupRegistry::new(
+                (self.verifier).into_iter().collect(),
+                &zkc_backends::Policy::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
     }
 }
 
@@ -75,6 +84,7 @@ pub fn drive<B: Backend<Value = Value>>(
     mut runner: Runner<B>,
 ) -> (std::result::Result<Vec<Value>, Stop>, B) {
     for _ in 0..100 {
+        while runner.advance_local_control().unwrap() {}
         match runner.poll() {
             Action::Local(action) => runner.execute_local(&action.cut).unwrap(),
             Action::Returned(values) => return (Ok(values), runner.into_backend()),

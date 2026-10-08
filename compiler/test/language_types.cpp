@@ -68,7 +68,7 @@ mlir::Operation *first(mlir::ModuleOp module, StringRef name) {
 void mutation(const CheckedOriginal &source,
               const std::function<void(mlir::ModuleOp)> &edit) {
   mlir::DialectRegistry registry;
-  zkc::registerNativeDialects(registry);
+  zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   auto module =
       mlir::parseSourceString<mlir::ModuleOp>(source.bytes(), &context);

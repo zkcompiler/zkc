@@ -69,7 +69,7 @@ axiom cones and records input/build hashes. Its source manifest includes
 maintained files beyond the consumer's transitive imports; reported counts apply
 to the tested checkout.
 
-The [workflow](../../../.github/workflows/ci.yml)'s manual `main` scope runs this
+The [workflow](../../../.github/workflows/ci.yml)'s manual `optional` formal-checks scope runs this
 check and retains its JSON/log outputs.
 
 The `Examples/OpeningReduction` modules in the maintained source tree are not

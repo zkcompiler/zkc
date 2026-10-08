@@ -13,8 +13,8 @@ MLIR in the `protocol` profile. It owns the context, runs prepare, projection,
 optional participant simplification, math lowering and physical selection, then
 exports the typed physical participant carrier. Adjacent-stage preservation
 checks retain action order, calculation origins, statement interfaces and result
-maps. The API returns an owned final `Compilation` and a complete bundle. Its
-`source()` is null because its input is MLIR. Failures are owned
+maps. The API returns an owned final `Compilation` and a complete bundle. The
+compilation owns its MLIR context, module and statistics. Failures are owned
 `CompilationError` values; no partial bundle is returned.
 
 The command writes exactly the returned bundle bytes, without an added newline.
@@ -108,12 +108,7 @@ or a source-correspondence certificate.
 ## Message admission
 
 `zkc.run/1` embeds exactly `zkc.program/1` and uses the compact schedule
-contract below. The superseded `zkc.native-run/1`, `/2` and `/3` tags are refused,
-as are superseded embedded program tags. Unknown versions have no fallback.
-The older `run-protocol` command still consumes a `zkc.run/2` input array,
-defined in [runtime inputs](../../../runtime/inputs.md). That host configuration
-is a separate format and is not admitted as a joint bundle.
-
+contract below. Other bundle or embedded program tags refuse without fallback.
 The bundle admits each complete physical message type supported by the installed
 native codec, including the variable-size frames defined by
 [structured messages](structured-proof-messages.md). It retains exact width
@@ -186,7 +181,7 @@ Scalar/group wire types use the exact default representations of the
 BLS Fr/G1, BN254 Fr/G1/G2, KoalaBear base/ext8 and Ristretto scalar/group.
 They reuse the installed `ZKCV` version-1 frames, including recursively nested
 sequences and variants. This bundle follows installed native codec support;
-the older proof-policy versions keep their separate closed matrices.
+proof deployment adds its own admission and authority checks.
 Unsigned `index@native.index/1` is also supported: 14 bytes, with header
 `ZKCV`, version `01`, tag `31` (hex), then exactly eight little-endian bytes.
 The [structured extension](structured-mathematics.md#native-array-boundary)
@@ -255,7 +250,7 @@ Default driver caps are 32768 dispatches, 4096 bytes per wire payload or hook
 replacement, and 16 MiB accumulated original plus replacement bytes. Hosts may
 lower these caps. The existing `ValueBudget` separately controls runner retention;
 the joint driver caps its effective values at the installed runtime defaults.
-`RunLimits.work` separately selects instruction/call/iteration ceilings. The lower
+`RunLimits.work` separately selects instruction/iteration ceilings. The lower
 level `Runner` API retains its own host-budget contract. `Report.limits` records
 the effective joint policy, rather than the caller's uncapped request.
 The driver reserves reached-step and result-port capacity before any entry.
@@ -405,10 +400,10 @@ Invocation key-file paths, budgets and session names require host authorization;
 this API is not a filesystem sandbox. A prover material fingerprint selects bytes;
 the authorized verifier key supplies setup authority.
 Received PCS values select among the authorized registry keys using their native
-headers. This is not the older source host's per-receive-site setup selection.
-Never migrate that consumer by silently replacing its stronger selection policy.
+headers. The Host does not promise an independently pinned key at each receive
+site; applications must assess this registry-based authority contract.
 
-The capacity file uses `zkc.native-capacity/1`, shared with the native proof host.
+The capacity file uses `zkc.native-capacity/2`, shared with the native proof host.
 The dispatch/wire file is
 `["zkc.bundle-limits/1", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
 Defaults/hard ceilings are 32768 dispatched occurrences, 4096 bytes per message
@@ -416,7 +411,7 @@ and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work unit
 per role. The API caps dispatch/wire requests;
 the CLI refuses requests above those ceilings. Capacity requests above installed
 bounds are refused. Reports retain the effective admission, capacity and execution
-limits. Per-runner instruction, call, iteration and retained-value budgets are
+limits. Per-runner instruction, iteration and retained-value budgets are
 separate from structural schedule size and runtime dispatch occurrences.
 
 `zkc.bundle-result/1` retains the primary outcome, reached schedule, pending-wire
@@ -445,4 +440,4 @@ counters under `state`; service rows also record lease/poisoning state.
 The CLI succeeds only on completed execution without reporting/cleanup errors.
 A returned `false` is an ordinary output; application acceptance must select and
 interpret the intended result. See the [bundle walkthrough](../../../runtime/bundles.md)
-and the distinct [retained host contracts](../../../compiler/migration.md#retained-host-contracts).
+and [named Entry execution](../../../language/entries.md).

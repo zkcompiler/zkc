@@ -81,7 +81,7 @@ fn nominal_associations_and_native_advertisements_are_checked_independently() {
             "curve.length",
             "curve.commit",
             "curve.response",
-            "transcript.challenge",
+            "transcript.native.indexed.challenge",
             "field.constant",
             "field.add",
             "field.mul",
@@ -115,38 +115,27 @@ fn nominal_associations_and_native_advertisements_are_checked_independently() {
             let b = binding(d, name);
             assert_eq!(backend.binding_signature(&b), Some(b.signature().unwrap()));
         }
-        for kind in [
-            "field",
-            "vector",
-            "polynomial",
-            "round",
-            "group",
-            "groups",
-            "bool",
-        ] {
-            let mut b = binding(d, &format!("transcript.observe.{kind}"));
+        for kind in ["field", "vector", "group", "groups", "bool"] {
+            let mut b = binding(d, "transcript.native.indexed.observe.data");
             let nominal = if kind == "group" || kind == "groups" {
                 g
             } else {
                 f
             };
             b.arguments = vec![
-                (if f == Identity::Bls12381Fr {
-                    Identity::Merlin3Fr64Be
-                } else {
+                (if d {
                     Identity::Merlin3Ristretto64Le
+                } else {
+                    Identity::Merlin3Fr64Be
                 })
                 .name()
                 .into(),
+                if kind == "bool" {
+                    "bool".into()
+                } else {
+                    format!("{kind}:{}", nominal.name())
+                },
             ];
-            if kind != "bool" {
-                b.arguments.push(nominal.name().into());
-            }
-            b.arguments.push(if kind == "bool" {
-                "zkcv.bool/1".into()
-            } else {
-                format!("zkcv.{kind}.{}/1", nominal.name())
-            });
             assert_eq!(backend.binding_signature(&b), Some(b.signature().unwrap()));
             let mut bad = b.clone();
             *bad.arguments.last_mut().unwrap() = "zkcv.vector.uninstalled/1".into();

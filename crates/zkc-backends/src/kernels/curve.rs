@@ -1,6 +1,5 @@
 //! Checked module contractions. Default Ristretto MSM uses MultiscalarMul.
-//! The explicit public-operand implementation requires the backend role gate.
-//! Neither choice establishes a whole-runtime timing guarantee.
+//! Kernel choice does not establish a whole-runtime timing guarantee.
 use crate::kernels::arithmetic::{equal_len, natural, reserve, split_len};
 use crate::{
     GroupPoint, Policy, Result, RistrettoPoint, RistrettoScalar, Scalar, Value, exhausted, refused,
@@ -8,7 +7,7 @@ use crate::{
 };
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
-    traits::{Identity, MultiscalarMul, VartimeMultiscalarMul},
+    traits::{Identity, MultiscalarMul},
 };
 use std::sync::Arc;
 use zkc_runtime::interactive::Invocation;
@@ -19,7 +18,7 @@ trait Group: Copy + PartialEq {
     fn add(self, other: Self) -> Self;
     fn neg(self) -> Self;
     fn scale(self, scalar: Self::Scalar) -> Self;
-    fn msm(s: &[Self::Scalar], p: &[Self], public: bool) -> Result<Self>;
+    fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self>;
     fn point(v: &Value) -> Result<Self>;
     fn points(v: &Value) -> Result<&Arc<[Self]>>;
     fn scalar(v: &Value) -> Result<Self::Scalar>;
@@ -46,7 +45,7 @@ impl Group for GroupPoint {
     fn scale(self, scalar: Scalar) -> Self {
         Self::scale(&self, scalar)
     }
-    fn msm(s: &[Scalar], p: &[Self], _public: bool) -> Result<Self> {
+    fn msm(s: &[Scalar], p: &[Self]) -> Result<Self> {
         Self::msm(s, p).map_err(crate::ark)
     }
     fn point(v: &Value) -> Result<Self> {
@@ -107,13 +106,9 @@ impl Group for RistrettoPoint {
     fn scale(self, scalar: RistrettoScalar) -> Self {
         self * scalar
     }
-    fn msm(s: &[RistrettoScalar], p: &[Self], public: bool) -> Result<Self> {
+    fn msm(s: &[RistrettoScalar], p: &[Self]) -> Result<Self> {
         equal_len(s.len(), p.len())?;
-        Ok(if public {
-            Self::vartime_multiscalar_mul(s, p)
-        } else {
-            Self::multiscalar_mul(s, p)
-        })
+        Ok(Self::multiscalar_mul(s, p))
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::RistrettoGroup(v) = v {
@@ -175,7 +170,7 @@ macro_rules! bn_group {
             fn scale(self, s: Self::Scalar) -> Self {
                 Self::scale(&self, s)
             }
-            fn msm(s: &[Self::Scalar], p: &[Self], _: bool) -> Result<Self> {
+            fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self> {
                 Self::msm(s, p).map_err(crate::ark)
             }
             fn point(v: &Value) -> Result<Self> {
@@ -229,7 +224,6 @@ pub(crate) fn apply(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-    public: bool,
 ) -> Option<Result<Vec<Value>>> {
     if name == "pairing.apply" {
         return Some((|| {
@@ -271,17 +265,17 @@ pub(crate) fn apply(
                 .first()
                 .map(String::as_str)
             {
-                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p, public),
-                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p, public),
+                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p),
+                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p),
                 Some("bn254.gt") => target(name, args, i, p),
                 _ => Err(refused("kernel-operands")),
             }
         }
         Some(zkc_runtime::interactive::Identity::Ristretto255Scalar) => {
-            dense::<RistrettoPoint>(name, args, i, p, public)
+            dense::<RistrettoPoint>(name, args, i, p)
         }
         Some(zkc_runtime::interactive::Identity::Bls12381Fr) => {
-            dense::<GroupPoint>(name, args, i, p, public)
+            dense::<GroupPoint>(name, args, i, p)
         }
         _ => Err(refused("kernel-operands")),
     })
@@ -291,7 +285,6 @@ fn dense<G: Group>(
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
-    public: bool,
 ) -> Result<Vec<Value>> {
     let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
     let point = |j| G::point(arg(j)?);
@@ -362,7 +355,7 @@ fn dense<G: Group>(
                     usize::MAX,
                 )?;
             }
-            G::value(G::msm(s, b, public)?)
+            G::value(G::msm(s, b)?)
         }
         "curve.scale_each" => {
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
@@ -513,16 +506,6 @@ pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
         zkc_runtime::interactive::AttributeRule::None,
     ),
 ];
-
-pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
-    &[crate::backend::registry::Alternative {
-        identity: "dalek-vartime/curve.msm",
-        original: "dalek/curve.msm",
-        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
-        ports: crate::bindings::PortTransform::Default,
-        handler: Some(crate::backend::registry::public_msm),
-        public_operands: true,
-    }];
 
 fn target(name: &str, args: &[Value], i: &Invocation<'_>, p: &Policy) -> Result<Vec<Value>> {
     use crate::Bn254Gt as G;

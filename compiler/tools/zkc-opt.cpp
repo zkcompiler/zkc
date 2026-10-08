@@ -4,7 +4,6 @@
 #include "zkc/Compiler/Passes.h"
 #include "zkc/Compiler/Pipelines.h"
 #include "zkc/Dialect/Registry.h"
-#include "zkc/Dialect/TableLibrary.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/CommandLine.h"
 int main(int argc, char **argv) {
@@ -14,7 +13,6 @@ int main(int argc, char **argv) {
   });
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
-  zkc::registerTableLibrary(registry);
   zkc::registerCompilerPasses();
   zkc::registerCompilerPipelines();
   mlir::registerTransformsPasses();

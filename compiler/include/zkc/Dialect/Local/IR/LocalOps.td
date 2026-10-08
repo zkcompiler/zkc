@@ -137,8 +137,7 @@ def VariantInjectOp : Op<LocalDialect, "variant_inject"> {
 }
 
 // Executable functions deliberately have no inlining, speculation or purity
-// contract. Native profiles require bodies; protocol_exec can retain external
-// declarations from its source contract.
+// contract. Native profiles require bodies.
 def Local_FuncOp : Op<LocalDialect, "func",
     [FunctionOpInterface, IsolatedFromAbove, OpAsmOpInterface]> {
   let arguments = (ins SymbolNameAttr:$sym_name,

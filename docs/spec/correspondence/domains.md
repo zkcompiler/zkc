@@ -11,8 +11,8 @@ Root names and optional names are separated below.
 The [finite-vector contract](../domains/vectors.md) uses
 `Zkc.Algebra.linearCombination_rows`, `linearCombination_smul` and
 `linearCombination_product` over a semiring acting on a module. These laws
-connect to the selected diagonal implementation through scoped checks and
-differential execution, not a native refinement theorem. Companion results in
+describe the selected diagonal mathematics; current kernel validation is
+separate from these formal results. Companion results in
 `Zkc.Protocols.InnerProduct.{Folding,Weights}`,
 `Zkc.Protocols.RangeProof.{Relations,Bits}` and
 `Zkc.Protocols.Sumcheck.CubicRound` establish algebraic identities and conditional
@@ -57,8 +57,8 @@ The native LLZK adapter has not been supplied as a universally proved instance.
 
 The ordinary `FiniteVectors`/`FiniteMatrices` references consume checked runtime
 sequence carriers. The dependent sparse relation model instead exposes algebraic
-proofs over bounded coordinates. Their native connection is independent execution
-and differential evidence, not a theorem obtained by naming both matrices.
+proofs over bounded coordinates. A native connection requires an explicit correspondence for actual carriers,
+operations and failures; naming both objects matrices supplies no such theorem.
 
 ## Supplied endpoint join
 
@@ -164,5 +164,5 @@ expanded logical operation.
 
 The dimension grammar lives in [public dimensions](../profiles/source/public-dimensions.md).
 The degree-two coefficient/table compiler, scalar rounds and local code have
-separate [Sumcheck owners](../profiles/README.md#definition-inventory).
+separate [Sumcheck owners](../profiles/README.md#independent-semantic-models).
 Domain sorts, table meaning, axis order and factor multiplicity are common to them.

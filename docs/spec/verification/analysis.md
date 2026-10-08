@@ -75,3 +75,6 @@ specifies its concrete transfers, loop treatment and invariant premises.
 Proposal generation may be heuristic; accepted use requires the selected
 [checked transformation](refinement.md#checking-the-actual-candidate) or another
 sound judgment. Search failure does not prove semantic impossibility.
+
+The [bounded representation-cost decision](../../rationale/bounded-representation-cost.md)
+explains the conservative merge used by the independent factor-analysis model.

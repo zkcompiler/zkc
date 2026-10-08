@@ -18,18 +18,14 @@ template <typename... Dialects> struct DialectSet {
   }
 };
 using ProtocolDialects = DialectSet<mlir::func::FuncDialect
+#include "zkc/Dialect/BuiltinDialects.inc"
 #include "zkc/Dialect/ContributionDialects.inc"
-#include "zkc/Dialect/NativeDialects.inc"
                                     >;
 } // namespace
-void registerNativeDialects(mlir::DialectRegistry &registry) {
+void registerDialects(mlir::DialectRegistry &registry) {
   ProtocolDialects::registerIn(registry);
   registry.insert<mlir::arith::ArithDialect, mlir::tensor::TensorDialect>();
   registerMathematicalInterfaces(registry);
-}
-void registerDialects(mlir::DialectRegistry &registry) {
-  registerNativeDialects(registry);
-  registry.insert<zkc::table::TableDialect>();
 }
 bool hasProtocolDialects(mlir::MLIRContext &context) {
   return ProtocolDialects::loadedIn(context);

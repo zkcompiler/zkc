@@ -53,7 +53,7 @@ from trusted compilation/distribution, not from rehashing an unknown received fi
 ## Programmatic use
 
 ```rust,ignore
-use zkc_tools::protocol::run::{HostLimits, RunHost, SetupAuthority};
+use zkc_tools::run::{HostLimits, RunHost, SetupAuthority};
 
 let host = RunHost::admit(&bundle_bytes, &authorized_digest,
                          HostLimits::default(), SetupAuthority::default())?;
@@ -81,7 +81,7 @@ Preparation uses the shared host input diagnostics: `artifact-byte-limit` and
 entry occurrences. These stable error strings also serve other hosts; their
 prefixes do not identify an artifact-specific execution path.
 
-## Independent proofs and retained consumers
+## Independent proofs
 
 For noninteractive execution, use the compiler's selected transcript construction
 and the separate `produce-native-proof` and `validate-native-proof` processes,
@@ -90,11 +90,8 @@ bundle is an interactive scheduling artifact, not the proof format. The installe
 joint host currently refuses transcript-typed entry inputs because it has no
 application-authenticated transcript-root configuration.
 
-The [source host](inputs.md) remains for source/Lean correspondence, generic and
-parameterized protocols and per-receive setup selection. Its remaining migration
-gates are [explicit](../compiler/migration.md#retained-host-contracts). Both hosts
-use the general interpreter, while preserving their different authority and
-wire-failure contracts.
+Named source applications use the [Entry Host](../language/entries.md), which
+binds its source interface to these same execution and proof boundaries.
 
 ## Separate producer and validator
 

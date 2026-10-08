@@ -3,7 +3,8 @@
 This profile checks finite phase covers against a structured source. Its
 realization laws connect operation summaries to the common
 [interaction judgments](../../language/interaction.md#all-reply-conformance)
-for all typed replies.
+for all typed replies. It describes the independent Lean source and admission
+models; native program admission does not consume these certificates.
 
 ## Abstract phase policy
 
@@ -208,15 +209,13 @@ meaning and interaction, entry phases and allowed return phases.
 
 The maintained `checkRegion_sound` proves the common soundness judgment directly
 for compact regions; tree `check_sound` follows through the embedding.
-`Admitted`/`admit` currently package the tree-program result. A native compact
-consumer must bind the actual region, policy, initial coverage and allowed exits
-to its invocation; parsing a binding certificate is not that implementation.
-The maintained `RegionArtifact.Checked` admission theorems already join checked
-phase coverage to the actual decoded source and candidate region, establishing
-every instrumented call's permission and allowed returned phases. They remain
-conditional on consumer-selected laws and actual initial coverage. The table
-consumer below implements native certificate custody for one fixed policy;
-general native policy resolution remains implementation work.
+`Admitted`/`admit` package the tree-program result. The
+`RegionArtifact.Checked` admission theorems join checked phase coverage to the
+actual decoded source and candidate region, establishing every instrumented
+call's permission and allowed returned phases. They remain conditional on
+consumer-selected laws and actual initial coverage. Applying these results to
+another implementation requires correspondence for its decoder, checker and
+execution; parsing the same certificate is insufficient.
 
 With the realization laws and actual initial coverage, a phase admission record
 establishes conformance and `Returns P (fun _ ψ => Covered allowed ψ)` for the
@@ -248,9 +247,8 @@ operation summary to ignore a possible reply is not a sound repair.
 
 ## Table trace application
 
-The optional `table-round/1` consumer profile interprets `table-protocol/1` with
-local role `trace`. It admits both finite-source and compact-region artifacts.
-Its abstract and concrete phase types are `{ready, sent}`, related by equality.
+The independent [table model](../../../../formal/Examples/TableProtocol/README.md)
+instantiates this discipline with phases `{ready, sent}`, related by equality.
 Initial coverage is `[ready]`; allowed normal-return coverage is `[ready]`.
 
 | Logical operation | Abstract entry | Returning cover |
@@ -258,125 +256,67 @@ Initial coverage is `[ready]`; allowed normal-return coverage is `[ready]`.
 | `send` | `ready` | `[sent]` |
 | `draw` | `sent` | `[ready]` |
 | `send` at `sent`, or `draw` at `ready` | Either unsupported entry | Unsupported |
-| Other operations of this table profile | Any phase `p` | `[p]` |
+| Other operations of this table model | Any phase `p` | `[p]` |
 
-The interaction enables base write calls at either phase and preserves phase
-after any returned Boolean reply. It enables send calls only at `ready` and
-moves to `sent` for either returned Boolean. It enables draw calls only at
-`sent` and returns to `ready` for every field reply. Stopped calls supply no
-reply and retain their actual state/events; their instrumented entry phase
-does not advance. Pure table operations perform no interaction calls.
+Write calls are enabled at either phase and preserve it for every returned
+Boolean. Send calls advance to `sent` for either returned Boolean; draw calls
+advance to `ready` for every field reply. A stopped call supplies no reply and
+retains its entry phase and actual state/events. Pure table operations perform
+no interaction calls.
 
-The selected role, summary interpretation and coverage sets come from the
-consumer profile. The untrusted certificate carries only the grammar above.
-Admission checks the actual retained source and candidate under the selected
-artifact contract, then checks phase coverage for that same decoded source.
-The direct plan uses its direct preservation law; the physical application
-below supplies a separate correspondence law.
-A return with outstanding `sent` coverage is not admitted; a stop requires no
-normal-return phase. No required send count is imposed on pure computations.
+The consumer supplies the interpretation and coverage sets. The certificate
+contains only the structural grammar above. Admission checks the actual source
+and candidate, then checks phase coverage for that same decoded source. A
+normal return with outstanding `sent` coverage is refused. Stops require no
+normal-return phase, and pure computations need not send anything.
 
-This discipline describes one invocation starting at `ready`. It does not infer
-an initial phase from stored tape length or sent messages, reset an evolving
-provider, or authorize resuming a stopped protocol as a new invocation. A caller
-linking invocations must establish its own boundary-phase/resource relation.
-This application establishes neither endpoint projection nor a sampling law.
+This describes one invocation starting at `ready`. A caller linking invocations
+must establish its own boundary-phase and resource relation. Stored tape length
+or message count does not determine the phase. The result supplies neither
+participant projection nor a sampling law.
 
 ## Stateful table application
 
-The separate `table-endpoint/1` profile uses the same table interpretation,
-summary laws and `{ready, sent}` phases. Its local actor is `prover`; allowed
-normal-return coverage is `[ready]`. This is the phase part of local endpoint
-admission. It adds no participant projection, multi-role ownership theorem,
-public call-bound admission or cryptographic provider law. Its invocation's
-private inputs must belong to the selected actor.
+The model's endpoint admission selects actor `prover` and an independently
+supplied entry `[role, phase]`. The source role must agree, the phase must be
+`ready` or `sent`, and the initial cover is exactly `[phase]`. Private inputs
+must belong to the selected actor; normal returns remain covered by `[ready]`.
+An admitted entry must match the consumer's actual owned actor and phase.
+It is not a provider identity or complete-state equality test.
 
-The consumer supplies an entry record `[role, phase]` independently of source,
-candidate and certificate. Admission requires source-role agreement, role
-`prover`, and a decoded phase of `ready` or `sent`. The initial cover is exactly
-`[phase]`. The installed checker acknowledges the selected profile and decoded
-entry. The admitted object retains both with the checked source/candidate and
-certificate; acknowledgment still relies on the installed checker's execution.
+Instrumentation follows each actual interface call, including calls inside a
+composite source operation. If its second call stops, the residual phase
+includes the first call's completed transition. A final operation-result check
+cannot replace this call boundary. A stopped run supplies its actual residual
+phase, not permission to replay the source; a subsequent invocation requires
+admission from that phase.
 
-Before binding inputs, reserving resources and starting execution, a stateful
-consumer compares that entry to its actual owned actor and recorded phase.
-Missing evidence, another profile, a different entry or an unknown actual phase
-cannot bind that endpoint. A phase-less request does not downgrade an existing
-stateful binding to the trace application. Matching entries authorize reuse of
-code under the entry domain; they are not a provider identity or complete-state
-equality test.
-
-Native instrumentation follows **each actual interface call**. In this table
-interpretation those calls are write, send and challenge receive. A returned
-call advances according to the interaction; a stopped call retains its entry
-phase and actual effects. In a composite source operation, a stop at its second
-call retains the second call's entry phase, including the first call's completed
-transition. A final source-operation result check cannot replace this boundary.
-The local actor's identity is checked before these primitives; all belong to
-that same actor in this profile. This fixed-role check does not demonstrate
-ownership discrimination between participants.
-
-During a native call, `unknown` records that no accepted completion is yet known.
-An error, malformed reply or unwind before accepted completion leaves it unknown
-and blocks binding. A host failure between completed calls retains the last
-known phase. `unknown` is a host recovery marker, not a logical phase or stopped
-outcome; both the reference entry and invocation codecs reject it. No ordinary
-Lean execution is claimed for a native interruption.
-
-Initial phase/data consistency, exclusive provider access and truthful logical
-outcomes are deployment/adapter obligations. The in-process marker does not
-establish crash consistency, remote exactly-once execution, or authentic state
-restoration. Persistent deployments need a separate recovery contract; editing
-or reloading an invocation file is not checked recovery evidence. A record's
-message count and remaining tape do not determine its phase.
-
-A stopped run supplies its actual residual phase, not permission to replay its
-source. A subsequent source must be admitted from that phase. This profile does
-not offer a successful handoff at `sent`: its normal returns are at `ready`.
-Stops remain failures/terminal outcomes, not a newly invented yield convention.
-A controller needing another normal boundary must select a corresponding
-application of the existing general return-cover contract.
+This logical phase contract assumes exclusive provider access, phase/data
+consistency and truthful outcomes. Host interruptions that produce no logical
+completion need a separate recovery contract; the model does not establish
+crash consistency, remote exactly-once execution or authentic restoration.
 
 ## Physical scalar application
 
-The `table-physical-plan` realization may consume either table policy above.
-It retains the logical input context and original source certificate. Its
-independently decoded physical body's logical projection must denote the same
-procedure as that original source for every input environment under the installed
-interpretation. The admitted table folding rule replaces `linear(a, a, r)` with
-`a` only when its endpoints are the same variable; the field interpolation law
-justifies the replacement. Independent normalization compares the source and
-projected candidate through the existing control grammar. Other operations,
-operands, guards and control are retained. Successful checking acknowledges the
-physical realization as well as the selected policy and, for the stateful
-application, the exact entry. The certificate remains a certificate for the
-original source, even when its candidate has fewer operations. A direct or
-reference-only realization's acknowledgment cannot authorize this candidate.
+The independent [physical table model](../../../../formal/Examples/TablePhysical/README.md)
+retains the logical input context and original source certificate. Its decoded
+physical body's projection must denote the same procedure as the original
+source for every input under the selected interpretation. Its folding rule
+replaces `linear(a, a, r)` with `a` only when the endpoints are the same variable;
+the field interpolation law justifies that replacement. Checking compares the
+source and projected candidate through the existing control grammar. The
+certificate still applies to the original source.
 
-The physical correctness law is parameterized by the logical handler, state
-and events. Instantiate it with the interaction's call instrumentation. For
-related inputs and stores, the complete physical execution must correspond to
-the instrumented logical execution, including actual logical calls, final
-phase, residual provider state and stopped outcomes. Together with source
-admission and initial coverage, this implies enabled physical execution's
-logical calls and covered normal returns. Equal observations under a single
-uninstrumented handler do not supply this premise.
+Instantiate physical correspondence with the interaction's call instrumentation.
+For related inputs and stores, complete physical execution must correspond to
+logical execution, including actual calls, final phase, residual provider state
+and stops. Combined with source admission and initial coverage, this establishes
+permission of physical execution's logical calls and coverage of normal returns.
+Equality under one uninstrumented handler does not provide that premise.
 
-Preparation and scalar reads have no logical provider calls or phase changes.
-Immutable publication must preserve every previously represented value; final
-scalar values are interpreted in the actual completion store. An invalid shape
-still stops at its logical occurrence, even when the result is unused.
-
-The native stateful adapter retains the same logical endpoint owner across
-physical operations. It applies the existing actual-call completion discipline
-and entry checks. A failed operand read before a call keeps the last known
-phase. A host failure during the call leaves it unknown; a logical stopped
-completion retains its entry phase and effects. Output decoding cannot reset
-the endpoint or discard its completion state.
-
-The executable reference's instrumented simulation is formal evidence. The
-native realization consumes it through the checker contract and differential
-validation; this profile does not assert a native implementation proof or
-authorize other logical rewrites. The fold's total-procedure law does not justify
-deleting unused partial operations or replacing distinct variables using sampled
-values, equal types or an invariant not checked for the authored loop body.
+Preparation and scalar reads have no provider calls or phase changes. Immutable
+publication preserves every previously represented value, and final scalar
+values are interpreted in the completion store. Invalid shape stops at its
+logical occurrence even when the result is unused. The fold law does not justify
+deleting unused partial operations or identifying distinct variables from
+sampled values, equal types or an unchecked invariant.

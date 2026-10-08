@@ -1,3 +1,4 @@
+#include "Names.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -50,6 +51,41 @@ constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
     "protocol.return"(%reply) : (i1) -> ()
   }) {sym_name="main", function_type=(i1) -> i1, roles=["P", "V"], input_roles=[["P"]], output_roles=[["V"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> () })mlir";
+void unverifiedCompletion(MLIRContext &context) {
+  auto source = parseSourceString<ModuleOp>(R"mlir(module {
+    "protocol.module"() ({
+      local.func @identity(%x: i1) -> i1 attributes {logical_origin=["identity",[]]} {
+        local.return %x : i1
+      }
+      "protocol.participant"() ({ ^entry(%x: i1):
+        %ready = local.call @identity(%x) {site="ready"} : (i1) -> i1
+        "protocol.finish_if"(%ready,%x) {owner="P",site="done"} : (i1,i1) -> ()
+        "protocol.finish"(%x) : (i1) -> ()
+      }) {sym_name="p",function_type=(i1)->i1,instance="main",role="P"} : () -> ()
+      "protocol.entry"() {sym_name="main",targets=[["P",@p]]} : () -> ()
+    }) {profile=#protocol.profile<exec>} : () -> ()
+  })mlir",
+                                            &context);
+  require(bool(source), "completion reader fixture refused");
+  auto valid = protocol::readExecutionModel(source->getOperation());
+  require(bool(valid), "public reader refused ordered completion");
+  // Keep operation invariants valid while violating dominance. The public
+  // reader must refuse even when the caller has not verified the whole module.
+  for (unsigned operand : {0u, 1u}) {
+    auto malformed = copy(*source);
+    protocol_ir::FinishIfOp completion;
+    malformed->walk([&](protocol_ir::FinishIfOp op) { completion = op; });
+    auto *producer = completion.getOperand(0).getDefiningOp();
+    completion->setOperand(0, completion.getOperand(1));
+    completion->setOperand(operand, producer->getResult(0));
+    producer->moveAfter(completion);
+    require(succeeded(completion.verify()), "mutation lost local invariants");
+    auto result = protocol::readExecutionModel(malformed->getOperation());
+    require(!result, "public reader admitted forward-referenced completion");
+    auto refusal = llvm::toString(result.takeError());
+    require(namesIdentifier(refusal, "interactive-ssa"), refusal);
+  }
+}
 void profileEdges(MLIRContext &context) {
   // Without a guard, lowering needs no generated calculations. All four
   // modules are well formed, so these refusals discriminate phase policy.
@@ -69,13 +105,7 @@ void profileEdges(MLIRContext &context) {
   for (auto module : {participant.get(), executable.get(), physical.get()})
     require(succeeded(mathematical::verifyProjectionPreserved(module, module)),
             "same-profile postcondition refused unchanged input");
-  auto legacy = parseSourceString<ModuleOp>(R"mlir(module {
-    "protocol.module"() ({ ^entry: }) {profile=#protocol.profile<protocol_exec>} : () -> ()
-  })mlir",
-                                            &context);
-  require(bool(legacy), "legacy profile fixture refused");
   for (auto [before, after] : {std::pair{common.get(), common.get()},
-                               std::pair{legacy.get(), executable.get()},
                                std::pair{common.get(), executable.get()},
                                std::pair{common.get(), physical.get()},
                                std::pair{participant.get(), physical.get()},
@@ -325,7 +355,7 @@ void scheduling(MLIRContext &context) {
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
     require(failed(verify(*invalid)), "reordered participant mapping admitted");
-    auto exported = protocol::exportSource(invalid->getOperation());
+    auto exported = protocol::exportProgram(invalid->getOperation());
     require(!exported, "export bypassed positional roster verification");
     llvm::consumeError(exported.takeError());
   }
@@ -361,6 +391,7 @@ int main() {
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry);
+  unverifiedCompletion(context);
   profileEdges(context);
   suppliedMaterialization(context);
   scheduling(context);
@@ -469,7 +500,7 @@ int main() {
           "guard recipe lost its calculation origin");
   auto structural = protocol::readExecutionModel(malformed->getOperation());
   require(bool(structural), "mutation must retain the executable grammar");
-  auto exported = protocol::exportSource(malformed->getOperation());
+  auto exported = protocol::exportProgram(malformed->getOperation());
   require(!exported, "checked export bypassed projection metadata validation");
   llvm::consumeError(exported.takeError());
   auto serialized = protocol::exportModule(malformed->getOperation());

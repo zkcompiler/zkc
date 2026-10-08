@@ -4,7 +4,7 @@ mod support;
 use p3_field::{Field, PrimeCharacteristicRing, PrimeField32};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program, run_program};
-use zkc_backends::{InputBindings, KoalaBear, Policy, Value, domains::KOALA_BEAR, plonky3};
+use zkc_backends::{KoalaBear, Policy, Value, domains::KOALA_BEAR, plonky3};
 use zkc_runtime::interactive::{
     Backend, ErrorCode, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
     Type, Value as RuntimeValue, admit_supplied,
@@ -471,7 +471,6 @@ fn composed_product_dot_and_affine_fold_execute_without_setup() {
     assert_value(&result[0], &field(70));
     assert_value(&result[1], &vector(&[37, 52]));
     assert_eq!(b.active_frames(), 0);
-    assert!(b.verifier_key().is_none());
 }
 
 fn wire(tag: u8, count: Option<u32>, scalars: &[u32]) -> Vec<u8> {
@@ -508,8 +507,14 @@ fn independent_golden_bytes_roundtrip_and_canonical_rejections() {
             wire(22, None, &[0, 1, 2]),
         ),
     ] {
-        assert_eq!(b.encode_value(&value).unwrap(), bytes);
-        let decoded = b.decode_typed_value(value.physical_type(), &bytes).unwrap();
+        if !zkc_backends::has_native_wire(&value.physical_type()) {
+            assert!(b.encode_native_value(&value).is_err());
+            continue;
+        }
+        assert_eq!(b.encode_native_value(&value).unwrap(), bytes);
+        let decoded = b
+            .decode_native_value(&value.physical_type(), &bytes)
+            .unwrap();
         assert_value(&decoded, &value);
         assert!(
             Value::typed_wire_retained_bytes_bound(value.physical_type(), bytes.len(), b.policy())
@@ -518,25 +523,25 @@ fn independent_golden_bytes_roundtrip_and_canonical_rejections() {
         );
         for len in 0..bytes.len() {
             assert!(
-                b.decode_typed_value(value.physical_type(), &bytes[..len])
+                b.decode_native_value(&value.physical_type(), &bytes[..len])
                     .is_err()
             );
         }
         let mut trailing = bytes.clone();
         trailing.push(0);
         assert_eq!(
-            b.decode_typed_value(value.physical_type(), &trailing)
+            b.decode_native_value(&value.physical_type(), &trailing)
                 .unwrap_err()
-                .code,
-            "refused:wire-length"
+                .to_string(),
+            "native-wire-invalid:length"
         );
         let mut wrong = bytes.clone();
         wrong[5] ^= 1;
         assert_eq!(
-            b.decode_typed_value(value.physical_type(), &wrong)
+            b.decode_native_value(&value.physical_type(), &wrong)
                 .unwrap_err()
-                .code,
-            "refused:wire-header"
+                .to_string(),
+            "native-wire-invalid:header"
         );
     }
     for n in [plonky3::MODULUS, plonky3::MODULUS + 1, u32::MAX] {
@@ -547,43 +552,47 @@ fn independent_golden_bytes_roundtrip_and_canonical_rejections() {
             (Type::Round, wire(22, None, &[1, 2, n])),
         ] {
             assert_eq!(
-                b.decode_typed_value(KOALA_BEAR.physical(kind).unwrap(), &bytes)
+                b.decode_native_value(&KOALA_BEAR.physical(kind).unwrap(), &bytes)
                     .unwrap_err()
-                    .code,
-                "refused:noncanonical-scalar"
+                    .to_string(),
+                if matches!(kind, Type::Polynomial | Type::Round) {
+                    "native-wire-backend:native-wire-type"
+                } else {
+                    "native-wire-invalid:scalar"
+                }
             );
         }
     }
     assert_eq!(
-        b.decode_typed_value(
-            KOALA_BEAR.physical(Type::Polynomial).unwrap(),
+        b.decode_native_value(
+            &KOALA_BEAR.physical(Type::Polynomial).unwrap(),
             &wire(21, Some(1), &[0])
         )
         .unwrap_err()
-        .code,
-        "refused:polynomial-normalization"
+        .to_string(),
+        "native-wire-backend:native-wire-type"
     );
     assert_eq!(
-        b.encode_value(&Value::KoalaBearPolynomial([KoalaBear::ZERO].into()))
+        b.encode_native_value(&Value::KoalaBearPolynomial([KoalaBear::ZERO].into()))
             .unwrap_err()
-            .code,
-        "refused:polynomial-normalization"
+            .to_string(),
+        "native-wire-backend:native-wire-type"
     );
     assert_eq!(
-        b.decode_typed_value(
-            KOALA_BEAR.physical(Type::Vector).unwrap(),
+        b.decode_native_value(
+            &KOALA_BEAR.physical(Type::Vector).unwrap(),
             &wire(20, Some(u32::MAX), &[])
         )
         .unwrap_err()
-        .code,
-        "refused:wire-length"
+        .to_string(),
+        "native-wire-limit"
     );
     for d in [zkc_backends::domains::BLS, zkc_backends::domains::RISTRETTO] {
         assert_eq!(
-            b.decode_typed_value(d.physical(Type::Field).unwrap(), &wire(19, None, &[1]))
+            b.decode_native_value(&d.physical(Type::Field).unwrap(), &wire(19, None, &[1]))
                 .unwrap_err()
-                .code,
-            "refused:wire-header"
+                .to_string(),
+            "native-wire-invalid:length"
         );
     }
 }
@@ -654,34 +663,34 @@ fn bounds_are_checked_before_result_allocation_at_actual_element_width() {
     );
     let b = backend(p);
     assert_eq!(
-        b.decode_typed_value(
-            KOALA_BEAR.physical(Type::Vector).unwrap(),
+        b.decode_native_value(
+            &KOALA_BEAR.physical(Type::Vector).unwrap(),
             &wire(20, Some(4), &[1; 4])
         )
         .unwrap_err()
-        .code,
-        "exhausted:output-bytes"
+        .to_string(),
+        "native-wire-limit"
     );
     let b = backend(Policy {
         max_table_elements: 2,
         ..Policy::default()
     });
     assert_eq!(
-        b.decode_typed_value(
-            KOALA_BEAR.physical(Type::Vector).unwrap(),
+        b.decode_native_value(
+            &KOALA_BEAR.physical(Type::Vector).unwrap(),
             &wire(20, Some(3), &[1; 3])
         )
         .unwrap_err()
-        .code,
-        "exhausted:element-limit"
+        .to_string(),
+        "native-wire-limit"
     );
     let b = backend(Policy {
         max_wire_bytes: 9,
         ..Policy::default()
     });
     assert_eq!(
-        b.encode_value(&field(0)).unwrap_err().code,
-        "exhausted:wire-bytes"
+        b.encode_native_value(&field(0)).unwrap_err().to_string(),
+        "native-wire-limit"
     );
     // The largest size admission accepts exceeds the default element limit.
     failure(
@@ -729,180 +738,44 @@ fn wrong_domains_and_implementations_fail_before_arithmetic() {
 }
 
 #[test]
-fn host_decimal_wire_and_handle_inputs_use_exact_nominal_type() {
+fn native_wire_inputs_use_exact_nominal_type() {
     let b = backend(Policy::default());
     let v = KOALA_BEAR.physical(Type::Vector).unwrap();
     let f = KOALA_BEAR.physical(Type::Field).unwrap();
     let bytes = program(
         &[binding("vector.scale")],
-        &[v.clone(), f],
+        &[v.clone(), f.clone()],
         vec![json!(["op", "scale", "b0", [], ["a0", "a1"], ["out"]])],
-        &[v],
+        std::slice::from_ref(&v),
         &["out".into()],
     );
-    let admitted = admit_supplied(&bytes, &b).unwrap();
-    let role = admitted.entry("main").unwrap().remove(0);
-    let mut host = InputBindings::new();
-    host.insert("local", vector(&[2, 3])).unwrap();
-    host.insert("wrong", support::vector(false, &[2, 3]))
-        .unwrap();
-    for input in [
-        json!(["vector", ["2", "3"]]),
-        json!(["host", "local"]),
-        json!(["wire", "5a4b43560114020000000200000003000000"]),
-    ] {
-        let document = serde_json::to_vec(&json!([
-            "zkc.inputs/1",
-            [["a0", input], ["a1", ["field", "5"]]]
-        ]))
-        .unwrap();
-        let values = b.inputs_from_json(&role, &document, &host).unwrap();
-        assert_value(
-            &run_program(backend(Policy::default()), &bytes, values)
-                .0
-                .unwrap()[0],
-            &vector(&[10, 15]),
-        );
-    }
-    for (input, code) in [
-        (json!(["host", "wrong"]), "refused:input-type"),
-        (
-            json!(["vector", ["2130706433"]]),
-            "refused:noncanonical-scalar",
-        ),
-        (json!(["vector", [1]]), "refused:input-string"),
-    ] {
-        let document = serde_json::to_vec(&json!([
-            "zkc.inputs/1",
-            [["a0", input], ["a1", ["field", "5"]]]
-        ]))
-        .unwrap();
-        assert_eq!(
-            b.inputs_from_json(&role, &document, &host)
-                .unwrap_err()
-                .code,
-            code
-        );
-    }
-}
-
-#[test]
-fn independent_participants_exchange_only_canonical_numeric_bytes() {
-    use zkc_backends::{Domain, EntryPolicy, NativeBackend, PublicInputs};
-    use zkc_runtime::interactive::{Action, Packet, Runner};
-    let f = KOALA_BEAR.physical(Type::Field).unwrap();
-    let v = KOALA_BEAR.physical(Type::Vector).unwrap();
-    let b = binding("vector.dot");
-    let bytes = serde_json::to_vec(&json!([
-        "zkc.participants/1",
-        [["dot", b.contract, b.arguments, b.implementation]],
-        "physical",
-        [[
-            "function",
-            "calculate",
-            [["a", v.spelling()], ["b", v.spelling()]],
-            [f.spelling()],
-            [
-                ["op", "dot", "dot", [], ["a", "b"], ["result"]],
-                ["return", ["result"]]
-            ],
-            ["calculate", []]
-        ]],
-        [
-            [
-                "participant",
-                "sender",
-                "instance",
-                "P",
-                [],
-                [["a", v.spelling()], ["b", v.spelling()]],
-                [],
-                [
-                    ["local", "calculate", "calculate", ["a", "b"], ["result"]],
-                    ["send", "result_site", "result_schema", "V", "result"],
-                    ["return", []]
-                ]
-            ],
-            [
-                "participant",
-                "receiver",
-                "instance",
-                "V",
-                [],
-                [],
-                [f.spelling()],
-                [
-                    [
-                        "receive",
-                        "result_site",
-                        "result_schema",
-                        "P",
-                        "result",
-                        f.spelling()
-                    ],
-                    ["return", ["result"]]
-                ]
-            ]
-        ],
-        [["entry", "main", [["P", "sender"], ["V", "receiver"]]]]
-    ]))
-    .unwrap();
-    let admitted = admit_supplied(&bytes, &backend(Policy::default())).unwrap();
-    let make = |role| {
-        NativeBackend::new(
-            Policy::default(),
-            EntryPolicy::new(
-                Domain::new(role, "session", "main", None),
-                None,
-                PublicInputs::LocalOnly,
-            ),
-            None,
-        )
-        .unwrap()
-    };
-    let mut p = Runner::new(
-        &admitted,
-        "main",
-        "P",
-        "session",
-        make("P"),
-        vec![vector(&[1, 2, 3]), vector(&[4, 5, 6])],
-    )
-    .unwrap_or_else(|e| panic!("{}", e.error));
-    let mut v = Runner::new(&admitted, "main", "V", "session", make("V"), vec![])
-        .unwrap_or_else(|e| panic!("{}", e.error));
-    let Action::Local(local) = p.poll() else {
-        panic!()
-    };
-    p.execute_local(&local.cut).unwrap();
-    let Action::Receive(expected) = v.poll() else {
-        panic!()
-    };
-    let send = p.poll().cut().unwrap();
-    let packet = p.take_send(&send).unwrap();
-    let bytes = p.backend().encode_value(&packet.payload).unwrap();
-    assert_eq!(bytes, wire(19, None, &[32]));
-    assert!(
-        v.backend()
-            .decode_typed_value(expected.ty.clone(), &wire(19, None, &[plonky3::MODULUS]))
-            .is_err()
+    let wire = zkc_test_support::unhex("5a4b43560114020000000200000003000000");
+    let values = vec![
+        b.decode_native_value(&v, &wire).unwrap(),
+        b.decode_native_value(&f, &b.encode_native_value(&field(5)).unwrap())
+            .unwrap(),
+    ];
+    assert_value(
+        &run_program(backend(Policy::default()), &bytes, values)
+            .0
+            .unwrap()[0],
+        &vector(&[10, 15]),
     );
-    assert!(matches!(v.poll(), Action::Receive(ref still) if still == &expected));
-    let decoded = v
-        .backend()
-        .decode_typed_value(expected.ty.clone(), &bytes)
+    let wrong = b
+        .encode_native_value(&support::vector(false, &[2, 3]))
         .unwrap();
-    v.deliver(Packet {
-        envelope: packet.envelope,
-        ty: packet.ty.clone(),
-        payload: decoded,
-    })
-    .unwrap();
-    let Action::Returned(values) = v.poll() else {
-        panic!()
-    };
-    assert_value(&values[0], &field(32));
-    assert!(matches!(p.poll(), Action::Returned(_)));
-    assert_eq!(p.backend().active_frames(), 0);
-    assert_eq!(v.backend().active_frames(), 0);
+    assert!(matches!(
+        b.decode_native_value(&v, &wrong),
+        Err(zkc_backends::NativeWireError::Invalid(
+            zkc_runtime::interactive::DecodeReason::Header
+        ))
+    ));
+    let mut invalid = wire;
+    invalid[10..14].copy_from_slice(&2130706433u32.to_le_bytes());
+    assert!(matches!(
+        b.decode_native_value(&v, &invalid),
+        Err(zkc_backends::NativeWireError::Invalid(
+            zkc_runtime::interactive::DecodeReason::Scalar
+        ))
+    ));
 }

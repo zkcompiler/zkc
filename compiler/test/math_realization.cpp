@@ -5,7 +5,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Protocol/Admission.h"
+#include "zkc/Program/Admission.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -363,24 +363,24 @@ int main(int argc, char **argv) {
     binding->getBlock()->push_back(extra);
   });
   cases.run("internal signatures never enable ordinary source admission", [&] {
-    source::Module empty;
+    program::LocalDefinitions empty;
     protocol::LocalRealization one{
         "realized", {"field:bls12-381.fr"}, {"field:bls12-381.fr"}};
     require(!protocol::admitNativeLocalDefinitions(empty, {one}),
             "valid internal signature refused");
-    source::Function caller;
+    program::Function caller;
     caller.name = "caller";
     caller.arguments = {{"x", "field:bls12-381.fr"}};
     caller.results = {"field:bls12-381.fr"};
-    caller.origin = source::LogicalOrigin{"caller", {}};
-    caller.body = source::Body{
-        {{}, "invoke", source::AlgorithmCall{"realized", {"x"}, {"r"}}},
-        {{}, "", source::Return{{"r"}}}};
-    source::Module calls;
+    caller.origin = program::LogicalOrigin{"caller", {}};
+    caller.body =
+        program::Body{{"invoke", program::LocalApply{"realized", {"x"}, {"r"}}},
+                      {"", program::Return{{"r"}}}};
+    program::LocalDefinitions calls;
     calls.functions.push_back(std::move(caller));
     require(!protocol::admitNativeLocalDefinitions(calls, {one}),
             "explicit internal realization signature was not resolved");
-    auto ordinary = protocol::admit(calls, false);
+    auto ordinary = protocol::admitNativeLocalDefinitions(calls);
     require(bool(ordinary), "ordinary admission accepted an unresolved call");
     require(llvm::toString(std::move(ordinary)).find("algorithm-call-symbol") !=
                 std::string::npos,
@@ -399,7 +399,7 @@ int main(int argc, char **argv) {
             "wrong data-only refusal");
   });
   cases.run("realization signatures share a policy work limit", [&] {
-    source::Module empty;
+    program::LocalDefinitions empty;
     std::vector<protocol::LocalRealization> signatures;
     for (unsigned i = 0; i < 100; ++i)
       signatures.push_back(

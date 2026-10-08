@@ -113,79 +113,6 @@ pub(crate) fn apply(
     })())
 }
 
-pub(crate) fn encode(v: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
-    let (tag, count) = match v {
-        Value::Index(_) => (31, None),
-        Value::Indices(ns) => (32, Some(ns.len())),
-        _ => return None,
-    };
-    Some((|| {
-        if let Some(n) = count {
-            policy.vector_width(n, 8)?;
-        }
-        let bytes = count
-            .unwrap_or(1)
-            .checked_mul(8)
-            .and_then(|n| n.checked_add(if count.is_some() { 10 } else { 6 }))
-            .ok_or_else(|| exhausted("wire-bytes"))?;
-        policy.wire(bytes)?;
-        let mut output = crate::kernels::arithmetic::reserve(bytes)?;
-        output.extend_from_slice(b"ZKCV\x01");
-        output.push(tag);
-        match v {
-            Value::Index(n) => output.extend(n.to_le_bytes()),
-            Value::Indices(ns) => {
-                output.extend(
-                    u32::try_from(ns.len())
-                        .map_err(|_| exhausted("element-limit"))?
-                        .to_le_bytes(),
-                );
-                for n in ns.iter() {
-                    output.extend(n.to_le_bytes());
-                }
-            }
-            _ => unreachable!(),
-        }
-        Ok(output)
-    })())
-}
-
-pub(crate) fn decode(ty: PhysicalType, bytes: &[u8], policy: &Policy) -> Option<Result<Value>> {
-    let tag = match ty.kind() {
-        Type::Index => 31,
-        Type::Indices => 32,
-        _ => return None,
-    };
-    Some((|| {
-        policy.wire(bytes.len())?;
-        if bytes.get(..5) != Some(b"ZKCV\x01") || bytes.get(5) != Some(&tag) {
-            return Err(refused("wire-header"));
-        }
-        let read = |b: &[u8]| -> Result<u64> {
-            Ok(u64::from_le_bytes(
-                b.try_into().map_err(|_| refused("wire-length"))?,
-            ))
-        };
-        if tag == 31 {
-            return Ok(Value::Index(read(&bytes[6..])?));
-        }
-        let count = bytes.get(6..10).ok_or_else(|| refused("wire-length"))?;
-        let n = usize::try_from(u32::from_le_bytes(
-            count.try_into().map_err(|_| refused("wire-length"))?,
-        ))
-        .map_err(|_| exhausted("size-overflow"))?;
-        if n.checked_mul(8).and_then(|n| n.checked_add(10)) != Some(bytes.len()) {
-            return Err(refused("wire-length"));
-        }
-        policy.vector_width(n, 8)?;
-        let mut ns = crate::kernels::arithmetic::reserve(n)?;
-        for b in bytes[10..].as_chunks::<8>().0 {
-            ns.push(read(b)?);
-        }
-        Ok(Value::Indices(ns.into()))
-    })())
-}
-
 pub(crate) const OPERATIONS: &[&str] = &[
     "index.constant",
     "index.add",
@@ -235,21 +162,29 @@ mod tests {
             PhysicalType::default_for(LogicalType::new(Type::Indices, Identity::None).unwrap())
                 .unwrap();
         let ns = Value::Indices(vec![u64::MAX, 9, 9].into());
-        let wire = encode(&ns, &p).unwrap().unwrap();
-        let decoded = decode(ty.clone(), &wire, &p).unwrap().unwrap();
+        let backend = |policy| {
+            crate::NativeBackend::new(
+                policy,
+                crate::EntryPolicy::new(crate::Domain::new("P", "wire", "main", None), None),
+                Default::default(),
+            )
+            .unwrap()
+        };
+        let wire = backend(p).encode_native_value(&ns).unwrap();
+        let decoded = backend(p).decode_native_value(&ty, &wire).unwrap();
         assert!(matches!(decoded, Value::Indices(xs) if xs.as_ref()==[u64::MAX,9,9]));
         assert!(run("indices.at", &[ns.clone(), Value::Index(3)]).is_err());
         for n in 0..wire.len() {
-            assert!(decode(ty.clone(), &wire[..n], &p).unwrap().is_err());
+            assert!(backend(p).decode_native_value(&ty, &wire[..n]).is_err());
         }
         let mut extra = wire.clone();
         extra.push(0);
-        assert!(decode(ty.clone(), &extra, &p).unwrap().is_err());
+        assert!(backend(p).decode_native_value(&ty, &extra).is_err());
         let small = Policy {
             max_table_elements: 2,
             ..p
         };
-        assert!(decode(ty.clone(), &wire, &small).unwrap().is_err());
+        assert!(backend(small).decode_native_value(&ty, &wire).is_err());
         assert!(
             apply("indices.append", &[ns, Value::Index(1)], &[], &p, 256)
                 .unwrap()

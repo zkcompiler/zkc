@@ -128,7 +128,8 @@ interpretation/admission laws; a profile directory is not an additional semantic
 `interpret_approximate`, `approximate_admission`, `within_approximate` and
 `evaluate_related` transport their explicit per-body premises.
 `close_state` and `close_events` retain effects at a deployment cap.
-The Rust controller has differential evidence, not a native refinement proof.
+These results concern the independent finite-step controller; they do not
+validate native Runner control flow.
 
 `approximate_blocks` preserves the finite process under a multiplied horizon.
 `Boundary.within_bind_of_returns` and `within_approximate_of_invariant` use

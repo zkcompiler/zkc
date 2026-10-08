@@ -24,7 +24,6 @@ std::string bytes(ModuleOp module) {
 }
 NativeProofPolicy selection() {
   NativeProofPolicy policy;
-  policy.version = 4;
   policy.entry = "main";
   policy.producer = "Alice";
   policy.validator = "Bob";
@@ -38,7 +37,7 @@ int main(int argc, char **argv) {
   require(argc == 2, "fixture directory argument");
   zkc::test::Cases cases;
   DialectRegistry registry;
-  registerNativeDialects(registry);
+  registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   auto read = [&](StringRef name) {
@@ -179,7 +178,6 @@ int main(int argc, char **argv) {
           }) {profile=#protocol.profile<protocol>}:()->()
         })";
         NativeProofPolicy policy;
-        policy.version = 4;
         policy.entry = "main0";
         policy.producer = "P";
         policy.validator = "V";
@@ -215,7 +213,6 @@ int main(int argc, char **argv) {
           input_roles=[["V"]],output_roles=[["V"]]}:()->()
     }) {profile=#protocol.profile<protocol>}:()->() })");
     NativeProofPolicy policy;
-    policy.version = 4;
     policy.entry = "main";
     policy.producer = "P";
     policy.validator = "V";

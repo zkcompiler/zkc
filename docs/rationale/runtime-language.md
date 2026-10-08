@@ -1,6 +1,6 @@
 # Rust owns the runtime and its backend integration
 
-The [architecture](../architecture.md#5-rust-tools-execution-and-backend-adapters)
+The [architecture](../architecture.md#runtime-and-application-authority)
 uses Rust for execution, artifact tooling and backend adapters. C++ owns the
 compiler. Runtime language is independent of interpreter versus generated
 execution and of whether deployment installs the compiler or checker.

@@ -39,8 +39,8 @@ wire admission and setup authorization remain separate properties.
   Merlin/Spongefish calculations check the resulting proof bytes. This client
   checks observation semantics; it is not a cryptographic proof system.
 - A standalone matrix exchange checks independently supplied dimensions. It
-  exercises the same native frame outside a sequence and checks admission across
-  proof-policy versions.
+  exercises the same native frame outside a sequence under the single proof
+  policy.
 
 [Compiler controls](../../compiler/test/native_nested_data.py) generate compact
 programs and deployments in normal, unsimplified and storage-release modes.
@@ -79,13 +79,10 @@ wire admission and later analyses.
 
 The native proof host binds public sequence inputs using their exact canonical
 native frames; the ragged-matrix client's public row/column sequences exercise
-that path. The source-route generic backend `PublicInputs::Exact` comparison still uses
-its existing codec and does not admit sequence pins. Native proof deployment
-performs its public binding at the host boundary.
+that path. Native proof deployment performs public binding at the Host boundary.
 
 These are composed mechanism clients, not full BP+, Groth16 or zkVM libraries.
 Selected [authored transcript](authored-transcripts.md) entry boundaries
 compose with this data path. Other curves/providers, broad common-data admission
-and native Lean checking retain their own contracts. Frontend
-migration and retirement of the source-route consumers remain on the
-[roadmap](../roadmap.md).
+and native Lean checking require their own contracts. The
+[roadmap](../roadmap.md) records further native work.

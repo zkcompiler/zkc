@@ -16,7 +16,6 @@ p3-symmetric-043.workspace = true
 zkc-runtime.workspace = true
 zkc-arkworks.workspace = true
 serde_json.workspace = true
-serde.workspace = true
 sha2.workspace = true
 merlin.workspace = true
 spongefish = { workspace = true, features = ["keccak", "zeroize"] }
