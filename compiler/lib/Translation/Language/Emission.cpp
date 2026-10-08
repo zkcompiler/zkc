@@ -3,11 +3,15 @@
 #include "mlir/IR/Builders.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Dialect/Printing.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Relation/AIR.h"
+#include "zkc/Relation/R1CS.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
@@ -681,8 +685,12 @@ public:
         location(builder.getUnknownLoc()), layouts(project, limits),
         module(mlir::ModuleOp::create(location)), remaining(limits.work) {
     for (const auto &decl : project.declarations())
-      if (decl.body && decl.parameters.empty())
+      if ((decl.body || (decl.relation && decl.origin)) &&
+          decl.parameters.empty()) {
         symbols.insert(decl.symbol);
+        if (decl.relation && decl.body)
+          symbols.insert(formulaSymbol(decl));
+      }
     (void)!!failure;
   }
   Expected<std::string> run() {
@@ -719,7 +727,7 @@ public:
         inRoles.push_back(roles(decl, {port.owner}));
       }
       SmallVector<mlir::NamedAttribute> attrs{
-          text("sym_name", decl.symbol),
+          text("sym_name", decl.relation ? formulaSymbol(decl) : decl.symbol),
           attr("function_type",
                mlir::TypeAttr::get(builder.getFunctionType(ins, outs)))};
       bool protocol = decl.kind == Declaration::Kind::Protocol,
@@ -752,17 +760,65 @@ public:
       if (!body(decl, *decl.body, function->getRegion(0).front()))
         return std::move(failure);
     }
+    mlir::SymbolTable table(unit);
+    relation::FormulaIdentities formulas(remaining, limits.irBytes);
+    LayoutIdentities schemaIdentities(remaining);
+    for (const auto &decl : project.declarations()) {
+      if (!decl.relation || !decl.origin)
+        continue;
+      const auto &definition = *decl.relation;
+      declaration = decl.qualifiedName;
+      SmallVector<mlir::Type> inputs;
+      std::vector<std::string> purposes, logicalInputs, logicalPurposes;
+      for (unsigned i = 0; i < decl.inputs.size(); ++i) {
+        auto layout = take(layouts.get(decl.inputs[i].type));
+        if (!layout)
+          return std::move(failure);
+        auto native = types(**layout);
+        if (!native)
+          return std::move(failure);
+        llvm::append_range(inputs, *native);
+        auto purpose =
+            definition.purposes[i] == RelationPurpose::Parameter   ? "parameter"
+            : definition.purposes[i] == RelationPurpose::Statement ? "statement"
+                                                                   : "witness";
+        purposes.insert(purposes.end(), native->size(), purpose);
+        logicalPurposes.push_back(purpose);
+        auto schema = take(schemaIdentities.get(**layout));
+        if (!schema)
+          return std::move(failure);
+        logicalInputs.push_back(std::move(*schema));
+      }
+      std::string kind = definition.externalKind, key = definition.key,
+                  revision = definition.revision;
+      using K = RelationDefinition::Kind;
+      if (definition.kind == K::Formula) {
+        auto helper = table.lookup<mlir::func::FuncOp>(formulaSymbol(decl));
+        auto identity =
+            take(formulas.get(helper, logicalInputs, logicalPurposes));
+        if (!identity)
+          return std::move(failure);
+        kind = "zkc.language.formula/1";
+        key = decl.symbol;
+        revision = std::move(*identity);
+      } else if (definition.kind == K::R1CS || definition.kind == K::AIR) {
+        const auto &asset = project.project().assets()[*definition.asset];
+        kind = definition.kind == K::R1CS ? "zkc.relation.r1cs/1"
+                                          : "zkc.relation.air/1";
+        key = asset.identity().str();
+        revision = "1";
+      }
+      builder.setInsertionPointToEnd(definitions);
+      if (!make("relation.declare", {}, {},
+                {text("sym_name", decl.symbol), text("kind", kind),
+                 text("key", key), text("revision", revision),
+                 attr("signature", mlir::TypeAttr::get(builder.getFunctionType(
+                                       inputs, {builder.getI1Type()}))),
+                 attr("purposes", strings(purposes))}))
+        return std::move(failure);
+    }
     std::string result;
-    mlir::OpPrintingFlags flags;
-    flags.printGenericOpForm(true)
-        .enableDebugInfo(false)
-        .skipRegions(false)
-        .assumeVerified(false)
-        .useLocalScope(false)
-        .printValueUsers(false)
-        .printUniqueSSAIDs(false)
-        .printNameLocAsPrefix(false);
-    mlir::AsmState state(*module, flags);
+    mlir::AsmState state(*module, canonicalPrintingFlags());
     BoundedStream stream(result, limits.irBytes);
     module->print(stream, state);
     stream << '\n';

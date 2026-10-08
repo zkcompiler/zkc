@@ -525,9 +525,15 @@ bool Checker::assumptions(const Declaration &caller, const NaturalBound &bound,
            fail("source.bound", "natural requirement is false", span);
   if (l->dimension == r->dimension)
     return true;
-  for (auto &given : caller.bounds)
-    if (given.lhs == l->dimension && given.rhs == r->dimension)
+  for (auto &given : caller.bounds) {
+    if (!charge(1, span))
+      return false;
+    if (given.rhs == r->dimension &&
+        (given.lhs == l->dimension ||
+         (given.lhs.isClosed() && l->dimension.isClosed() &&
+          given.lhs.closedValue() >= l->dimension.closedValue())))
       return true;
+  }
   return fail("source.bound", "generic call needs an explicit natural bound",
               span);
 }

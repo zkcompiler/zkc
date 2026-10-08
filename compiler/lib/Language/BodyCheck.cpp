@@ -144,32 +144,7 @@ bool BodyChecker::restricted(const Type &type) {
 }
 std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {
-  for (auto index : path) {
-    if (type.kind == Type::Kind::Array) {
-      if (type.dimension.isClosed() && index >= type.dimension.closedValue()) {
-        fail("source.index", "static array index is out of range", span);
-        return {};
-      }
-      if (!type.dimension.isClosed()) {
-        NaturalBound required{Natural::constant(uint64_t(index) + 1),
-                              type.dimension, span};
-        if (!checker.assumptions(decl, required, {}, span))
-          return {};
-      }
-      auto element = type.arguments.front();
-      type = std::move(element);
-    } else {
-      auto fs = checker.fields(type, span);
-      if (!fs)
-        return {};
-      if (index >= fs->size()) {
-        fail("source.index", "product index is out of range", span);
-        return {};
-      }
-      type = (*fs)[index].type;
-    }
-  }
-  return type;
+  return checker.projectedType(decl, std::move(type), path, span);
 }
 bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
   if (!checker.charge(path.size() + 1, span))
@@ -266,36 +241,10 @@ BodyChecker::place(uint32_t id, unsigned depth) {
       projected(body.values[base->first.index].type, base->second, expr.span);
   if (!type)
     return {};
-  if (restricted(*type)) {
-    fail("source.private",
-         "restricted values require their module's unpack or consume operation",
-         expr.span);
+  auto index = checker.fieldIndex(decl, *type, expr.text, expr.span);
+  if (!index)
     return {};
-  }
-  unsigned index;
-  if (type->kind == Type::Kind::Array) {
-    if (StringRef(expr.text).getAsInteger(10, index)) {
-      fail("source.index", "fixed arrays require a static numeric index",
-           expr.span);
-      return {};
-    }
-  } else {
-    auto fs = checker.fields(*type, expr.span);
-    if (!fs)
-      return {};
-    auto found =
-        llvm::find_if(*fs, [&](auto &f) { return f.name == expr.text; });
-    if (found == fs->end()) {
-      fail("source.field", "unknown field: " + expr.text, expr.span);
-      return {};
-    }
-    if (!found->isPublic && !checker.constructorAllowed(decl, *type)) {
-      fail("source.private", "private record field", expr.span);
-      return {};
-    }
-    index = found - fs->begin();
-  }
-  base->second.push_back(index);
+  base->second.push_back(*index);
   if (!projected(body.values[base->first.index].type, base->second, expr.span))
     return {};
   return base;
@@ -582,7 +531,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   bodyState[id.index] = 1;
   bodyHeights[id.index] = 1;
   Body result;
-  result.mode = decl.kind == Declaration::Kind::Math    ? Body::Mode::Math
+  result.mode = (decl.kind == Declaration::Kind::Math ||
+                 decl.kind == Declaration::Kind::Relation)
+                    ? Body::Mode::Math
                 : decl.kind == Declaration::Kind::Local ? Body::Mode::Local
                                                         : Body::Mode::Protocol;
   BodyChecker check(*this, decl, *sources[id.index], result, depth);

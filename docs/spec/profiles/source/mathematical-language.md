@@ -47,7 +47,9 @@ protocol ports, runtime matrices or specification binding.
 Analysis checks every definition and Entry reference against declared static
 bounds. The resulting `CheckedProject` is immutable. Selecting an Entry creates
 an independent `ClosedEntry` containing the reachable specialized bodies and
-retained type declarations. Only those bodies enter its original MLIR. An
+retained type declarations. Only those bodies and selected relation declarations enter its original MLIR.
+Specification clauses make their relations and mathematical dependencies explicit
+closure roots, even when execution never calls them. An
 unselected Entry's target-admission failure does not invalidate another Entry;
 source errors in any definition still reject analysis.
 
@@ -108,7 +110,9 @@ concrete type. Closed permission requirements are evaluated immediately; a true
 requirement adds no generic assumption. Group permissions do not imply scalar permissions.
 Requirements follow a callable's result type or a nominal declaration's parameter
 list; an alias places them before `=`. Symbolic inequalities must match an explicit
-normalized assumption, or be reflexive. Closed inequalities are evaluated. There
+normalized assumption, or be reflexive. A stronger closed lower bound with the
+same right-hand side suffices: `2 <= N` establishes `1 <= N`. Closed inequalities
+are evaluated. There
 is no inequality solver or inference by solving equations such as `N + M = 8`.
 
 Fixed arrays have bounded closed lengths after selection. `[a, b]` constructs an
@@ -560,6 +564,96 @@ successor. Generic definitions retain their declared move discipline even when
 an instantiation selects a copyable type. Normal cleanup follows the existing
 [entry completion contract](../compiler/entry-completion.md).
 
+## Relations and specification clauses
+
+```text
+relation DLog<H: Group>(parameter base: H, statement point: H,
+                        witness scalar: H::Scalar) {
+  return point == base * scalar;
+}
+protocol Check<H: Group> roles(P, V)
+    (g: H @V, h: H @V, x: H::Scalar @P) -> (accepted: bool @V)
+    spec {
+      target knowledge = DLog<H>(in.g, in.h, in.x) accept out.accepted;
+    }
+{
+  // The authored protocol must compute its own decision.
+  let accepted @V = true;
+  return (accepted = accepted);
+}
+```
+
+A relation owns ordered formals with explicit `parameter`, `statement` or
+`witness` purposes. These labels describe the proposition; they do not introduce
+runtime ports, decide input authority or assert secrecy. Formula relations reuse
+the total mathematical body language and return one Boolean. They are not callable
+execution helpers. Formal polynomials may be reconstructed inside the predicate
+from immutable executable data. Generic arguments are explicit at relation
+applications. Selected formal layouts must be nonempty immutable logical data;
+zero-argument relations are allowed.
+
+A protocol's optional `spec { ... }` precedes its body, after bounds and effects.
+`spec` is reserved. Clause names are unique within that block:
+
+| Clause | Binding requirement |
+|---|---|
+| `target name = R(...) accept out.decision;` | Relation application and a required Boolean decision output |
+| `input name = R(...);` | Input selectors only; no decision |
+| `output name = R(...) [accept out.decision];` | At least one output selector; optional decision |
+| `continuation name = R(...) residual S(...) [accept out.decision];` | Input-only subject and a residual containing an actual output |
+
+Square brackets in the table denote optional syntax. A selector is `in.port` or
+`out.port`, followed by logical record/tuple/fixed-array projections and an optional
+`@Role`. An omitted role is inferred only from a singleton declared port role set.
+Shared roles may hold different values. Selectors preserve the chosen component,
+field privacy and static bounds. They cannot select internal SSA values, index
+inside a native container, or project an unchecked variant payload.
+
+An inline relation uses explicitly bound formals:
+
+```text
+target equality = relation(statement expected = in.expected,
+                           witness actual = out.actual) {
+  return expected == actual;
+} accept out.accepted;
+```
+
+Its types come from those bindings. It inherits the protocol's static parameters
+and bounds, and captures no other runtime values. The anonymous declaration is
+bound by ID and cannot be named through a generated source path.
+
+Clauses state authored intent. They neither assume satisfaction nor insert a guard,
+execute a predicate, prove soundness, or establish a reduction. Output conditions
+and residuals refer to the actual completed results; a non-completing path supplies
+no result proposition. A target decision is not a proof that its relation holds.
+
+Opaque and captured definitions have no mathematical body:
+
+```text
+relation External(statement x: bool, witness w: bool)
+  = opaque("vendor.predicate/1", "key", "revision");
+relation Circuit(statement public: builtin("field_array", Fr, 1),
+                 witness assignment: builtin("field_array", Fr, 3))
+  = r1cs(asset library::circuit);
+relation Trace(statement public: builtin("field_array", Fr, 1),
+               witness trace: builtin("matrix", Fr))
+  = air(asset trace_constraints);
+```
+
+Opaque identities must be nonempty and cannot use the `zkc.` namespace. They have
+fixed signatures without static parameters. Declarations sharing one
+(kind, key, revision) must have identical logical formal types and purposes;
+flattened native equality is insufficient. Formal names may differ.
+
+Captured definitions also have fixed signatures. R1CS uses the asset's exact field,
+public count and full assignment length, including ONE and the public prefix. The
+witness purpose does not make that entire assignment secret. AIR uses the exact
+public-input array and trace matrix field, retaining columns and row scopes in
+the immutable asset. Dynamic trace shape and work admission are separate from
+predicate truth. Asset paths refer only to explicitly captured bytes. Runtime
+matrix parameters remain ordinary protocol inputs when the author instead defines
+a formula over them.
+
 ## Translation and retained interface
 
 The source model has Math, Local and Protocol body modes, checked types, explicit
@@ -567,7 +661,12 @@ regions and static arguments. Closing an Entry substitutes already checked bodie
 it never reparses templates. Closed instances are memoized by declaration, mode
 and exact static type identity. Only closed definitions enter original MLIR.
 
-Math helpers become private `func.func` definitions. Ordered helpers become
+Math helpers become private `func.func` definitions. A selected formula relation
+adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
+link is retained in the interface. Opaque and captured relations emit declarations
+only. Predicate helpers have no executable symbol uses. Every selected predicate
+undergoes bounded helper expansion and polynomial observation checks on scratch
+copies before interface admission, including unused observations. Ordered helpers become
 `local.func`. A math helper called inside ordered code retains its mathematical
 body and receives a data-only `local.realize` declaration. The local call is an
 ordered `local.apply` occurrence; native preparation realizes the helper through
@@ -606,15 +705,61 @@ mutable original IR. The existing compiler receives those bytes and the selected
 protocol symbol, then emits ordinary `zkc.run/1` and `zkc.program/1` artifacts.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface/3` has exactly these JSON members: `format`, `capture`,
-`original`, `toolchain`, `entry`, `protocol`, `roles`, `inputs`, `outputs`, `services`.
-Each port has `name`, `type`, `roles`, logical `index`, ordered native leaf indices
-in `native`, and a recursive `schema`. The schema records `kind`, `identity`, display `type`, `custody`,
-`permissions`, `leaves`, `fields` and `alternatives`. Fields record `name`, leaf
-`offset` and child `schema`; alternatives record `name` and their payload `fields`.
-Zero-leaf ports retain empty native indices. Offsets are relative to their product
-or alternative payload. Versions 1, 2 and unknown versions refuse. No relation or
-clause placeholder is present.
+`zkc.language-interface/4` has exactly these JSON members: `format`, `capture`,
+`original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`. `protocol`
+selects one symbol from `protocols`. Every original protocol and relation appears
+exactly once. Versions 1–3 and unknown versions refuse.
+
+Each protocol record has `symbol`, `roles`, `inputs`, `outputs`, `services` and
+`clauses`. Each port has `name`, display `type`, `roles`, logical `index`, ordered
+native leaf indices in `native`, and recursive `schema`. A schema has `kind`,
+`identity`, display `type`, `custody`, `permissions`, `leaves`, `fields` and
+`alternatives`. Fields have `name`, leaf `offset` and child `schema`; alternatives
+have `name` and payload `fields`. Zero-leaf ports retain empty native indices.
+Offsets are relative to their product or alternative payload.
+
+A relation record has `symbol`, `inputs` and `definition`. Each formal has `name`,
+`purpose`, ordered `native` indices and `schema`. Definition records have exactly
+`{kind, function}` for a formula, `{kind}` for an opaque declaration, or
+`{kind, asset}` for R1CS/AIR. Their identity triple comes from the actual native
+declaration. Formula kind is `zkc.language.formula/1`, key is the closed relation
+symbol, and revision is a lowercase SHA-256 representation digest. Its material is
+length-framed in this order: kind, predicate helper symbol, decimal logical input
+count, each full logical schema digest and purpose, decimal transitive helper count,
+then each helper symbol and definition digest, sorted by symbol. A definition digest
+hashes framed `zkc.language.formula-helper/1` and canonical generic MLIR without
+locations. Frames use unsigned 64-bit little-endian lengths. The closure includes
+the root; shared helper definitions are hashed once per immutable checking phase.
+Printing pins every flag, disables hex output and uses elision thresholds above
+admitted payload sizes, independent of process-global MLIR flags.
+
+The schema digest hashes framed `zkc.language.schema/1`, textual kind, nominal
+`identity`, custody, Copy/Drop/Share/Wire (each `0` or `1`), leaf count and ordered
+leaf spellings, field count and ordered fields, then alternative count and ordered
+alternatives. Counts and offsets use unsigned decimal text. A field contributes
+its name, offset and child schema digest; an alternative contributes its name,
+field count and fields. Display type spelling is excluded. This binds member names
+and structure across captures even when nominal names and native leaves agree.
+These identities retain names and printing policy; they are not semantic equivalence.
+The formula helper name is `zkf_` followed by lowercase SHA-256 of the bytes
+`zkc.language.predicate/1:` concatenated with the native declaration key. Its JSON
+link must equal that derived name. Native formula admission requires a private,
+nonempty body with the declaration's signature and no executable references, then
+checks polynomial observations on bounded detached clones using the original
+helper table. The supplied original is unchanged; limits remain `source.limit`
+and invalid observations are `target.admission` with source attribution.
+Captured kinds are `zkc.relation.r1cs/1` and `zkc.relation.air/1`, with canonical
+asset identity as key and `1` as revision. The reader requires the matching
+immutable admitted `RelationAsset` handles, supplied outside this small JSON.
+
+Each clause has `name`, `kind`, `subject`, `residual` and `decision`; absent optional
+fields are JSON null. An application has a relation symbol and ordered `operands`.
+Selectors have `direction` (`input` or `output`), logical `port` index, field-index
+`path` and actual `role` name. Native slices are derived from the admitted logical
+schema, rather than supplied again. Relations compare exact logical identities.
+Clauses remain on closed component declarations; original `protocol.apply`
+occurrences own their operand/result and role mappings. There is no separate
+serialized application graph.
 
 The standalone `readInterface` API admits original MLIR and checks the interface
 against its exact byte hash, selected protocol, flattened types and participant
@@ -644,13 +789,42 @@ no selectable element field is invented for it. Promised Copy, Drop and
 Wire permissions cannot exceed native leaves; aggregate Share is checked through
 logical children while native admission checks actual placement.
 
-`CheckedOriginal::interface()` exposes the retained checked view.
+`compareInterface` checks the decoded view against the retained source layouts,
+ports, services, relations and clauses. It independently checks the clause inventory
+against immutable templates and captured `spec` block/clause spans and tokens.
+Omitting a clause and its predicate together cannot satisfy source correspondence.
+This check does not replace native admission or the source-to-original SSA check.
+`admitOriginal(entry, original, interface)` performs formation, formula admission,
+source-to-SSA comparison, structural interface decoding and source-interface
+comparison on one parsed original. It then requires byte agreement with canonical
+source emission for both original and interface, fixing declaration order, symbol
+spelling and diagnostic locations. It retains those exact bytes and returns
+`CheckedOriginal`. `prepareOriginal` emits and runs the same independent checks;
+its emitted bytes need no second canonicality comparison.
+`CheckedOriginal::interface()` exposes the checked view; `selectedProtocol()`
+selects its Entry's protocol record. Host authentication must bind the retained
+interface bytes, not arbitrary caller JSON that happens to compare semantically.
+`inspectApplications` admits the entire original and interface before calling a
+read-only visitor for each static `protocol.apply`. Each occurrence exposes its
+caller/callee records, actual MLIR operation, callee-to-caller role substitution,
+and clauses bound to actual operand/result SSA values. Its path indexes operations
+in the caller block and then enclosing `protocol.repeat` blocks. Repetition is one
+static occurrence; runtime iterations and transitive calls are not expanded. This
+keeps contracts on definitions and derives their uses from the original program,
+without serializing another call graph. The operation, values and referenced views
+are borrowed for the callback only. Visitor work is the caller's responsibility;
+traversal and binding use the source work and nesting limits. Structural inspection
+has the standalone reader's guarantees. The `CheckedOriginal` overload additionally
+uses its retained source authority and captured assets. Selector paths cannot
+project through associated representations, even when structurally copyable.
+
 `checkInterface` compares decoded JSON against the retained original's
 exact source interface. This binds source names, nominal schemas, permissions and
 capture/Entry selection. The standalone structural view does not establish source
 correspondence or constructor authority and cannot authorize private input decoding.
 Both readers reject duplicate/unknown keys, wrong versions and malformed metadata.
-Object member order is immaterial. The original identity hashes exact MLIR bytes
+Object member order is immaterial for semantic interface comparison; admission of
+a published checked original requires canonical bytes. The original identity hashes exact MLIR bytes
 without debug locations under a fixed printing policy. The toolchain identity binds
 the installed catalog, compiler source build identity and actual LLVM/MLIR release.
 These identify the checked environment; they are not an authenticity signature or
@@ -661,8 +835,9 @@ spans; diagnostic paths do not affect capture or original identity.
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
 work or recursive-depth budgets are exceeded; no truncated result is returned.
-Definition checking, specialization, layouts, emission, comparison and interface serialization each have a
-work budget. The interface writer bounds traversal even when repeated empty types
+Definition checking, specialization, layouts, emission, comparison, predicate admission
+and interface serialization each have a work budget. The capture-wide specification
+inventory has a separate phase budget from per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
 
 | Quantity | Ceiling |
@@ -684,8 +859,8 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Relation predicates and attachments, proof construction, source-facing Host inputs, dynamic arrays and
-member-generic conformance remain outside this profile. Reserved future syntax
+Native Entry statement export, proof construction, source-facing Host inputs,
+dynamic source arrays and member-generic conformance remain outside this profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor
 protocol security.

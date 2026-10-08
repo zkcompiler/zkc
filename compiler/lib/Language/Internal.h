@@ -66,12 +66,21 @@ struct SyntaxType {
   Span span;
   std::vector<SyntaxType> arguments;
 };
+struct SyntaxSelector {
+  bool output;
+  std::string port;
+  std::vector<std::string> path;
+  std::optional<std::string> role;
+  Span span;
+};
 struct SyntaxPort {
   std::string name;
   SyntaxType type;
   std::vector<std::string> roles;
   Span span;
   bool isPublic = true;
+  std::optional<RelationPurpose> purpose;
+  std::optional<SyntaxSelector> binding;
 };
 struct SyntaxParameter {
   std::string name;
@@ -150,6 +159,24 @@ struct SyntaxAlternative {
   std::vector<SyntaxPort> fields;
   Span span;
 };
+struct SyntaxSubject {
+  std::optional<unsigned> inlineMember;
+  SyntaxType relation;
+  std::vector<SyntaxSelector> operands;
+  Span span;
+};
+struct SyntaxClause {
+  SpecificationClause::Kind kind;
+  std::string name;
+  SyntaxSubject subject;
+  std::optional<SyntaxSubject> residual;
+  std::optional<SyntaxSelector> decision;
+  Span span;
+};
+struct SyntaxRelation {
+  RelationDefinition::Kind kind = RelationDefinition::Kind::Formula;
+  std::string externalKind, key, revision, asset;
+};
 struct SyntaxDeclaration {
   Declaration::Kind kind;
   std::string name, domain, target;
@@ -172,6 +199,10 @@ struct SyntaxDeclaration {
   std::vector<SyntaxDeclaration> members;
   bool abstract = false;
   std::string associatedSort;
+  std::optional<SyntaxRelation> relation;
+  bool anonymous = false;
+  std::optional<Span> specificationBlock;
+  std::vector<SyntaxClause> specifications;
 };
 struct Import {
   std::string module;

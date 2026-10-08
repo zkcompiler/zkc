@@ -1,0 +1,44 @@
+module sample;
+domain Fr=field("bls12-381.fr");
+type Poly<F:Field,N:nat>=formal("polynomial",F,N);
+math fn polynomial<F:Field,N:nat>(table:[F;pow2(N)])->Poly<F,N>{
+  return intrinsic<F,N>("poly.mle",intrinsic<F,pow2(N)>("array.pack",table));
+}
+math fn total<F:Field,N:nat>(table:[F;pow2(N)])->F{
+  let summed=intrinsic<F,0,N>("poly.sum_suffix",polynomial<F,N>(table));
+  return intrinsic<F,0>("poly.evaluate",summed,[]);
+}
+math fn at<F:Field,N:nat>(table:[F;pow2(N)],point:[F;N])->F{
+  return intrinsic<F,N>("poly.evaluate",polynomial<F,N>(table),point);
+}
+relation Sum<F:Field,N:nat>(statement claim:F,witness table:[F;pow2(N)]){
+  return claim==total<F,N>(table);
+}
+relation Evaluation<F:Field,N:nat>(statement point:[F;N],statement claim:F,
+                                 witness table:[F;pow2(N)]){
+  return claim==at<F,N>(table,point);
+}
+// This fixture checks goal/residual representation, not a sumcheck protocol.
+protocol Run roles(P,V)(table:[Fr;2]@P,claim:Fr@V,r:Fr@V)
+ ->(point:[Fr;1]@V,value:Fr@V,ok:bool@V)
+ spec {continuation reduction=Sum<Fr,1>(in.claim,in.table)
+       residual Evaluation<Fr,1>(out.point,out.value,in.table) accept out.ok;}
+ {
+  let challenge=send V->P(r);
+  let result=at<Fr,1>(table,[challenge]);
+  let value=send P->V(result);
+  let ok@V=true;
+  return(point=[r],value=value,ok=ok);
+ }
+entry Demo=Run;
+
+math fn products(a:[Fr;2],b:[Fr;2],x:Fr)->(Fr,Fr){
+  let p=intrinsic<Fr,1>("poly.multiply",polynomial<Fr,1>(a),polynomial<Fr,1>(b));
+  let q=polynomial<Fr,1>([a[0]*b[0],a[1]*b[1]]);
+  return(intrinsic<Fr,1>("poly.evaluate",p,[x]),
+         intrinsic<Fr,1>("poly.evaluate",q,[x]));
+}
+protocol Products roles(P)(x:Fr@P)->(values:(Fr,Fr)@P){
+  return(values=products([0,1],[0,1],x));
+}
+entry ProductControl=Products;

@@ -9,6 +9,7 @@
 #include "mlir/Transforms/CSE.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/Relation.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -16,9 +17,12 @@
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -29,26 +33,38 @@ namespace zkc::mathematical {
 // Only already-admitted acyclic helpers enter here. Expand on the candidate
 // copy, preserving the caller's snapshot and ordinary SSA use-def ownership.
 LogicalResult inlineHelpers(Operation *program, unsigned &remaining,
-                            uint64_t &indices, SymbolTableCollection &tables) {
+                            uint64_t &indices, SymbolTableCollection &tables,
+                            Operation *lookupRoot, uint64_t *work) {
   SmallVector<func::CallOp> pending;
   program->walk([&](func::CallOp call) { pending.push_back(call); });
   while (!pending.empty()) {
     auto call = pending.pop_back_val();
-    auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
-        call, call.getCalleeAttr());
+    auto helper = lookupRoot ? tables.lookupSymbolIn<func::FuncOp>(
+                                   lookupRoot, call.getCalleeAttr())
+                             : tables.lookupNearestSymbolFrom<func::FuncOp>(
+                                   call, call.getCalleeAttr());
+    if (!helper || helper.isExternal())
+      return diagnostics::emit(call.emitError(), "mathematical-helper",
+                               "expected a helper body");
     IRMapping mapping;
     for (auto [arg, input] : zip(helper.getArguments(), call.getOperands()))
       mapping.map(arg, input);
     OpBuilder builder(call);
     for (auto &op : helper.front().without_terminator()) {
-      if (!remaining--)
+      if (!remaining)
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
+      --remaining;
       uint64_t slots = op.getNumOperands() + op.getNumResults();
       if (slots > indices)
         return diagnostics::emit(call.emitError(),
                                  "mathematical-expansion-limit");
+      if (work && slots + 1 > *work)
+        return diagnostics::emit(call.emitError(),
+                                 "mathematical-expansion-limit");
       indices -= slots;
+      if (work)
+        *work -= slots + 1;
       auto *copy = builder.clone(op, mapping);
       copy->setLoc(CallSiteLoc::get(op.getLoc(), call.getLoc()));
       if (auto nested = dyn_cast<func::CallOp>(copy))
@@ -579,6 +595,133 @@ LogicalResult verifyNestedDegrees(Operation *root) {
   });
   return failure(result.wasInterrupted());
 }
+namespace {
+LogicalResult checkHelperObservations(protocol_ir::ProtocolModuleOp unit,
+                                      ArrayRef<StringRef> helpers,
+                                      uint64_t &work) {
+  SymbolTableCollection symbols;
+  auto &table = symbols.getSymbolTable(unit);
+  llvm::StringSet<> seen;
+  unsigned remaining = std::min<uint64_t>(realizedHelperOperationLimit, work);
+  uint64_t indices = std::min<uint64_t>(1000000, work);
+  for (auto name : helpers) {
+    if (!work)
+      return diagnostics::emit(unit.emitError(),
+                               "mathematical-expansion-limit");
+    --work;
+    auto helper = table.lookup<func::FuncOp>(name);
+    if (!helper || helper.isExternal() || !seen.insert(name).second)
+      return diagnostics::emit(unit.emitError(), "mathematical-helper",
+                               "expected distinct pure helper bodies");
+    auto traversal = helper.walk([&](Operation *op) {
+      uint64_t slots = op->getNumOperands() + op->getNumResults();
+      if (!remaining || slots > indices || slots + 1 > work) {
+        diagnostics::emit(op->emitError(), "mathematical-expansion-limit");
+        return WalkResult::interrupt();
+      }
+      --remaining;
+      indices -= slots;
+      work -= slots + 1;
+      return WalkResult::advance();
+    });
+    if (traversal.wasInterrupted())
+      return failure();
+    // Detached copies use the immutable source symbol table explicitly.
+    // Dependencies and unrelated protocol bodies are never cloned or edited.
+    OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(helper->clone()));
+    auto result =
+        inlineHelpers(*scratch, remaining, indices, symbols, unit, &work);
+    if (failed(result) || failed(verifyNestedDegrees(*scratch)))
+      return failure();
+  }
+  return success();
+}
+} // namespace
+LogicalResult verifyHelperObservations(ModuleOp original,
+                                       ArrayRef<StringRef> helpers) {
+  if (failed(verify(original)))
+    return failure();
+  if (!hasSingleElement(*original.getBody()))
+    return diagnostics::emit(original.emitError(), "mathematical-module");
+  auto unit =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());
+  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
+    return diagnostics::emit(original.emitError(), "mathematical-module");
+  uint64_t work = 1000000;
+  return checkHelperObservations(unit, helpers, work);
+}
+Error checkFormulaDefinitions(ModuleOp original, uint64_t &remaining) {
+  if (!hasSingleElement(*original.getBody()))
+    return error("target.admission", "expected one mathematical module");
+  auto unit =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());
+  if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
+    return error("target.admission", "expected mathematical protocol profile");
+  SymbolTable table(unit);
+  SmallVector<std::string> names;
+  llvm::StringSet<> roots;
+  for (auto &op : unit.getBody().front()) {
+    if (!remaining)
+      return error("source.limit", "formula admission work limit exceeded");
+    --remaining;
+    auto declaration = dyn_cast<relation::DeclareOp>(op);
+    if (!declaration || declaration.getKind() != "zkc.language.formula/1")
+      continue;
+    auto name = relation::formulaSymbol(declaration.getKey());
+    auto helper = table.lookup<func::FuncOp>(name);
+    if (declaration.getKey() != declaration.getSymName() || !helper ||
+        helper.isExternal() ||
+        helper.getFunctionType() != declaration.getSignature() ||
+        helper.getVisibility() != SymbolTable::Visibility::Private ||
+        !roots.insert(name).second) {
+      declaration.emitError("invalid formula helper binding");
+      return error("target.admission", "invalid formula helper binding");
+    }
+    names.push_back(std::move(name));
+  }
+  if (names.empty())
+    return Error::success();
+  auto walk = unit.walk([&](Operation *op) {
+    uint64_t work =
+        1 + op->getNumOperands() + op->getNumResults() + op->getAttrs().size();
+    if (work > remaining)
+      return WalkResult::interrupt();
+    remaining -= work;
+    return WalkResult::advance();
+  });
+  if (walk.wasInterrupted())
+    return error("source.limit", "formula symbol use work limit exceeded");
+  auto uses = SymbolTable::getSymbolUses(&unit.getBody());
+  if (!uses)
+    return error("target.admission", "formula symbol uses cannot be resolved");
+  for (const auto &use : *uses) {
+    if (!remaining)
+      return error("source.limit", "formula symbol use work limit exceeded");
+    --remaining;
+    if (roots.contains(use.getSymbolRef().getRootReference())) {
+      use.getUser()->emitError(
+          "specification predicate has executable references");
+      return error("target.admission",
+                   "specification predicate has executable references");
+    }
+  }
+  SmallVector<StringRef> helpers;
+  for (const auto &name : names)
+    helpers.push_back(name);
+  bool limited = false;
+  ScopedDiagnosticHandler limits(original.getContext(), [&](Diagnostic
+                                                                &diagnostic) {
+    for (const auto &refusal : diagnostics::refusals(diagnostic))
+      limited |= refusal.code == "mathematical-expansion-limit";
+    return failure(); // Keep the caller's diagnostic and source attribution.
+  });
+  if (failed(checkHelperObservations(unit, helpers, remaining)))
+    return error(limited ? "source.limit" : "target.admission",
+                 limited ? "predicate observation work limit exceeded"
+                         : "predicate polynomial observation check failed");
+  return Error::success();
+}
+
 LogicalResult simplifyCalculations(Operation *body) {
   // Required bounds must be checked before DCE can erase an invalid unused
   // observation. Helpers have been transparently expanded by preparation.
@@ -677,7 +820,7 @@ OwningOpRef<ModuleOp> prepare(ModuleOp source, bool simplify = true) {
   for (auto &op : unit.getBody().front())
     if (isa<zkc::local::FuncOp, zkc::local::OperationBindingOp>(op))
       snapshotBuilder.clone(op);
-  unsigned remainingHelpers = 100000;
+  unsigned remainingHelpers = realizedHelperOperationLimit;
   uint64_t helperIndices = 1000000;
   SymbolTableCollection helperSymbols;
   for (auto program :

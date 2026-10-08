@@ -255,6 +255,35 @@ struct Effects {
   bool mayStop = false;
   bool opaque = false;
 };
+enum class RelationPurpose { Parameter, Statement, Witness };
+struct RelationDefinition {
+  enum class Kind { Formula, Opaque, R1CS, AIR } kind = Kind::Formula;
+  std::vector<RelationPurpose> purposes;
+  std::string externalKind, key, revision;
+  std::optional<unsigned> asset;
+};
+/// A logical port component. Paths select product fields, never native
+/// container elements, variant payloads or internal execution values.
+struct SpecificationSelector {
+  bool output;
+  unsigned port, role;
+  std::vector<unsigned> path;
+  Span span;
+};
+struct RelationApplication {
+  DeclarationId relation;
+  std::vector<Type> arguments;
+  std::vector<SpecificationSelector> operands;
+  Span span;
+};
+struct SpecificationClause {
+  enum class Kind { Target, Input, Output, Continuation } kind;
+  std::string name;
+  RelationApplication subject;
+  std::optional<RelationApplication> residual;
+  std::optional<SpecificationSelector> decision;
+  Span span;
+};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -267,7 +296,8 @@ struct Declaration {
     Variant,
     Interface,
     Component,
-    Associated
+    Associated,
+    Relation
   } kind;
   DeclarationId id;
   ModuleId module;
@@ -297,6 +327,10 @@ struct Declaration {
   std::vector<Port> inputs, outputs;
   std::vector<ServicePort> services;
   std::shared_ptr<const Body> body;
+  bool anonymous = false;
+  std::optional<Span> specificationBlock;
+  std::optional<RelationDefinition> relation;
+  std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
 };
 
@@ -384,6 +418,8 @@ private:
 };
 llvm::Expected<std::string> encodeSymbol(llvm::StringRef qualifiedName,
                                          const Limits & = {});
+/// Deterministic private predicate symbol for a closed relation declaration.
+std::string formulaSymbol(const Declaration &);
 std::string spelling(const Type &);
 /// Canonical identity of the installed Contracts data, not caller-supplied
 /// data.

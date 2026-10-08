@@ -6,7 +6,9 @@ namespace zkc::mathematical {
 // admission. Work budgets are shared across every selected definition.
 mlir::LogicalResult inlineHelpers(mlir::Operation *body, unsigned &remaining,
                                   uint64_t &indices,
-                                  mlir::SymbolTableCollection &symbols);
+                                  mlir::SymbolTableCollection &symbols,
+                                  mlir::Operation *lookupRoot = nullptr,
+                                  uint64_t *work = nullptr);
 // Closed execution vocabulary of the mathematical recipes. Admission of a
 // data signature alone does not establish that an operation is total.
 bool isCalculationContract(llvm::StringRef contract);

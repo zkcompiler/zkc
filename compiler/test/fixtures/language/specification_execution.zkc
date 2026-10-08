@@ -1,0 +1,20 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+
+protocol Draw<F: Field + Share + Wire> roles(P, V)()
+    using(first: Random<F> @V, second: Random<F> @V) -> (p: F @P, v: F @V) {
+  let unused = first.draw();
+  let v = second.draw();
+  let p = send V -> P(v);
+  return (p = p, v = v);
+}
+relation Never(statement p:Fr,witness v:Fr){return false;}
+protocol Run roles(P, V)(go: bool @V) using(coins: Random<Fr> @V)
+    -> (p: Fr @P, v: Fr @V)
+    spec{output documented=Never(out.p,out.v);} {
+  guard @V go;
+  using alias = coins;
+  let (p, v) = apply Draw<Fr>() using(alias, coins);
+  return (p = p, v = v);
+}
+entry Demo = Run;

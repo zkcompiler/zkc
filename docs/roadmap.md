@@ -40,10 +40,11 @@ foundation completion alone does not retire them.
 Use the native mathematical pipeline as the target for migrated capabilities.
 The fresh `.zkc` source path covers mathematical helpers, nominal products/variants,
 static components/generics, permissions, bounded naturals, ordered local control,
-messages and selected Entries with independently checked MLIR emission. The next
-package, **Protocols and specifications**, has implemented services, composition,
-distributed control and formal polynomial authorship against the existing IR.
-Typed predicates and attachments with an independent reader remain next. Follow it with **Entries and Host** for
+messages and selected Entries with independently checked MLIR emission.
+**Protocols and specifications** adds services, composition, distributed control,
+formal polynomial authorship, typed predicates and attachments. Independent
+native/interface admission, source inventory comparison, composition queries and
+contrasting execution controls are implemented. Continue with **Entries and Host** for
 construction selection, trusted inputs and typed CLI jobs. Finish with integrated
 stabilization, consumer migration and removal of superseded paths.
 
@@ -98,34 +99,32 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Next package: protocols and specifications
+### Next package: Entries and Host
 
-The `.zkc` compiler path and types/local computation are implemented.
-Managed services, static protocol composition, distributed repetition and
-conditional participant completion now connect to their existing IR contracts.
-Catalog-backed data/kernel bindings now cover vector, matrix, sequence and
-iterative folding clients. Mathematical helpers now retain one mathematical body
-when called from local code, using checked realization and existing execution
-recipes. Bounded power-of-two shapes support generic multilinear library types.
-Formal polynomial authoring and explicit R1CS/AIR asset capture are implemented.
-Next, complete typed predicates and attachments. Preserve actual receives,
-service roots and aliases, draw occurrences, ordered guards/stops and resource
-flow through nested applications and control.
+Protocols and specifications are implemented and reviewed. The checked original
+retains canonical mathematical MLIR, source correspondence, logical schemas,
+relations and clauses. Composition queries bind those clauses to actual call
+operands/results and participant substitutions. Clauses remain distinct from
+runtime guards and carry no satisfaction or security claim.
 
-Before enabling syntax, check source-to-IR mappings with contrasting protocol
-clients. Resolve conditional service queries and the data access needed by those
-clients under their owning contracts. Fixed source arrays currently offer static
-numeric indexing; dynamic data uses installed native containers. General source
-records in runtime-length collections still need layout-preserving packing. Add member-specific generics only if a concrete library requires them.
-Private input validation and setup authority must connect to the later Host
-boundary before those inputs are admitted.
+Next, let an Entry select run or proof jobs, participants, public inputs,
+acceptance, an optional target and explicit transcript construction. Resolve
+challenge occurrences through the existing native proof compiler; source authors
+should not need generated site names. Keep relation purpose separate from public
+input authorization. Export only targets supported by the native statement ABI.
 
-Then define typed predicates and a versioned attachment schema with an independent
-reader. Keep relation targets separate from input/output conditions and runtime
-guards. Check both runtime-parameter and captured-definition relations, plus
-continuation targets bound to exact component results. Unsupported mappings must
-remain explicit. Entries and Host follows with construction selection and typed
-jobs; integrated stabilization then moves consumers and removes superseded paths.
+Bind the checked source interface, exact original, toolchain, compilation options
+and resulting deployment into one package. Common CLI and SDK paths must use the
+existing runtimes with authenticated packages, named logical inputs/outputs,
+trusted setup/provider configuration, bounded execution and structured results.
+Private ingress needs an admitted validator or explicit setup initialization route.
+Thin Rust bindings should delegate to this common Host.
+
+Validate two installed transcript suites, authored noninteractive jobs, repeated
+challenges, nested components, setup-bearing inputs, aggregates, rejection/stops
+and cleanup. These are general boundary checks rather than whole-protocol
+compatibility claims. Detail each substep against its actual native contract.
+Then stabilize together, migrate required consumers and remove superseded paths.
 Native Lean correspondence remains required before full migration closes.
 
 ### Foundation completion and later migration

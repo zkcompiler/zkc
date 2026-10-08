@@ -9,6 +9,14 @@ namespace zkc::language {
 class CheckedOriginal;
 llvm::Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &,
                                                 const Limits & = {});
+/// Admit canonical original and interface bytes against the checked source.
+/// Parses once, verifies formation, predicates, source/SSA correspondence and
+/// logical interface correspondence. The retained bytes, not caller JSON
+/// equivalence, are the artifact that a Host must authenticate.
+llvm::Expected<CheckedOriginal> admitOriginal(const ClosedEntry &,
+                                              llvm::StringRef original,
+                                              llvm::StringRef interface,
+                                              const Limits & = {});
 /// Retains immutable source, exact unsimplified MLIR, correspondence and public
 /// interface data. There is deliberately no mutable ModuleOp success handle.
 class CheckedOriginal {
@@ -24,12 +32,20 @@ public:
   const Correspondence &correspondence() const;
 
 private:
+  static llvm::Expected<CheckedOriginal> admit(const ClosedEntry &,
+                                               llvm::StringRef, llvm::StringRef,
+                                               const Limits &,
+                                               bool requireCanonical);
+  friend llvm::Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &,
+                                                         const Limits &);
   struct Storage;
   std::shared_ptr<const Storage> storage;
   explicit CheckedOriginal(std::shared_ptr<const Storage> storage)
       : storage(std::move(storage)) {}
-  friend llvm::Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &,
-                                                         const Limits &);
+  friend llvm::Expected<CheckedOriginal> admitOriginal(const ClosedEntry &,
+                                                       llvm::StringRef,
+                                                       llvm::StringRef,
+                                                       const Limits &);
 };
 /// Strict comparison with the independently retained interface. Unknown fields,
 /// duplicate keys, another Entry, another environment, and dangling port edits

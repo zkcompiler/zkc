@@ -17,5 +17,11 @@ std::optional<NativeTypeConstructorPolicy>
 std::optional<NativeTypePolicy>
 nativeTypePolicy(const BoundType &, unsigned &remaining, bool &limited);
 std::optional<NativeTypePolicy> nativeTypePolicy(const BoundType &);
+/// Immutable logical relation inputs. The caller supplies an admitted type;
+/// this rule excludes physical representations, keys, services and custody.
+/// Recursive work shares the supplied native type budget.
+enum class RelationData { Supported, Unsupported, Limit };
+RelationData logicalRelationData(const BoundType &, TypeParseBudget &,
+                                 unsigned depth = 0);
 } // namespace zkc::protocol
 #endif

@@ -262,7 +262,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                 decl.span);
   if (decl.kind == Declaration::Kind::Math ||
       decl.kind == Declaration::Kind::Local ||
-      decl.kind == Declaration::Kind::Protocol) {
+      decl.kind == Declaration::Kind::Protocol ||
+      decl.kind == Declaration::Kind::Relation) {
     decl.roles = source.roles;
     std::set<std::string> roster(decl.roles.begin(), decl.roles.end());
     if (roster.size() != decl.roles.size())
@@ -278,7 +279,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         if (input && visible[decl.module.index].count(src.name))
           return fail("source.shadow", "input shadows a visible declaration",
                       src.span);
-        auto t = type(decl, src.type, depth + 1);
+        std::optional<Type> t;
+        if (input && src.binding) {
+          const auto &owner = output.declarations[decl.parent->index];
+          auto selected = selector(owner, *src.binding);
+          if (!selected)
+            return false;
+          t = selectedType(owner, *selected);
+          inlineBindings[decl.id.index].push_back(std::move(*selected));
+        } else
+          t = type(decl, src.type, depth + 1);
         if (!t)
           return false;
         if (!valueType(*t))
@@ -326,6 +336,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       return fail("source.effect", "math callable cannot allow ordered effects",
                   decl.span);
   }
+  if (decl.kind == Declaration::Kind::Relation && !relation(decl))
+    return false;
   signatureState[id.index] = 2;
   return true;
 }

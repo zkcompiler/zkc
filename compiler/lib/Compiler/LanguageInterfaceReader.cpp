@@ -1,9 +1,15 @@
 #include "LanguageInterface.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Relation/Formula.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Relation/AIR.h"
+#include "zkc/Relation/R1CS.h"
+#include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -30,6 +36,16 @@ class Reader {
   protocol::TypeParseBudget typeBudget;
   Error failure = Error::success();
   LanguageInterface view;
+  InterfaceProtocol *current = nullptr;
+  ArrayRef<RelationAsset> assets;
+  StringMap<unsigned> relationIndices;
+  std::map<std::tuple<std::string, std::string, std::string>, unsigned>
+      relationIdentities;
+  std::map<std::string, protocol_ir::MathematicalOp> nativeProtocols;
+  std::map<std::string, relation::DeclareOp> nativeRelations;
+  std::map<std::string, mlir::func::FuncOp> helpers;
+  relation::FormulaIdentities formulas;
+  std::map<const InterfaceSchema *, std::string> schemaIdentities;
   std::map<std::string, std::shared_ptr<const InterfaceSchema>> schemas;
   StringMap<unsigned> roleIndices;
   std::map<std::string, Permissions> nativePermissions;
@@ -119,7 +135,7 @@ class Reader {
       return fail("native role arity differs");
     for (unsigned i = 0; i < roles.size(); ++i) {
       auto name = mlir::dyn_cast<mlir::StringAttr>(array[i]);
-      if (!name || name.getValue() != view.roles[roles[i]])
+      if (!name || name.getValue() != current->roles[roles[i]])
         return fail("native participant mapping differs");
     }
     return true;
@@ -506,39 +522,428 @@ class Reader {
     }
     return true;
   }
-  bool read(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
-    auto *obj =
-        object(value, {"format", "capture", "original", "toolchain", "entry",
-                       "protocol", "roles", "inputs", "outputs", "services"});
+  Expected<std::string> schemaIdentity(const InterfaceSchema &schema) {
+    if (auto found = schemaIdentities.find(&schema);
+        found != schemaIdentities.end())
+      return found->second;
+    FramedHash hash(remaining);
+    hash.frame("zkc.language.schema/1");
+    hash.frame(typeKindName(schema.kind));
+    hash.frame(schema.identity);
+    hash.frame(schema.custody ? "1" : "0");
+    for (bool allowed : {schema.permissions.copy, schema.permissions.drop,
+                         schema.permissions.share, schema.permissions.wire})
+      hash.frame(allowed ? "1" : "0");
+    hash.frame(std::to_string(schema.leaves.size()));
+    for (const auto &leaf : schema.leaves)
+      hash.frame(leaf);
+    auto fields = [&](ArrayRef<InterfaceField> fields) -> Error {
+      hash.frame(std::to_string(fields.size()));
+      for (const auto &field : fields) {
+        hash.frame(field.name);
+        hash.frame(std::to_string(field.offset));
+        auto child = schemaIdentity(*field.schema);
+        if (!child)
+          return child.takeError();
+        hash.frame(*child);
+      }
+      return Error::success();
+    };
+    if (auto error = fields(schema.fields))
+      return std::move(error);
+    hash.frame(std::to_string(schema.alternatives.size()));
+    for (const auto &alternative : schema.alternatives) {
+      hash.frame(alternative.name);
+      if (auto error = fields(alternative.fields))
+        return std::move(error);
+    }
+    auto digest = hash.finish();
+    if (!digest)
+      return digest.takeError();
+    schemaIdentities.emplace(&schema, *digest);
+    return digest;
+  }
+  bool relationRecord(const json::Value &value) {
+    if (!charge(1))
+      return false;
+    auto *obj = object(value, {"symbol", "inputs", "definition"});
     if (!obj)
       return false;
-    auto format = text(*obj, "format");
-    auto capture = text(*obj, "capture"), original = text(*obj, "original"),
-         toolchain = text(*obj, "toolchain"),
-         entry = text(*obj, "entry",
-                      limits.moduleBytes + 2 + limits.identifierBytes),
-         symbol = text(*obj, "protocol", limits.symbolBytes);
-    auto *rs = array(*obj, "roles"), *ins = array(*obj, "inputs"),
-         *outs = array(*obj, "outputs"), *services = array(*obj, "services");
-    if (!format || !capture || !original || !toolchain || !entry || !symbol ||
-        !rs || !ins || !outs || !services)
+    auto symbol = text(*obj, "symbol", limits.symbolBytes);
+    auto *inputs = array(*obj, "inputs");
+    auto *definitionValue = obj->get("definition");
+    if (!symbol || !inputs || !definitionValue)
       return false;
-    if (*format != "zkc.language-interface/3" || !hash(*capture) ||
-        *original != digest || *toolchain != compilerToolchainIdentity())
-      return fail("interface format, original or toolchain identity differs");
-    SmallVector<StringRef> entryParts;
-    entry->split(entryParts, "::");
-    if (entryParts.size() < 2 ||
-        entry->rsplit("::").first.size() > limits.moduleBytes ||
-        !all_of(entryParts, [&](StringRef part) {
-          return part.size() <= limits.identifierBytes && identifier(part);
-        }))
-      return fail("invalid qualified Entry name");
-    view.capture = capture->str();
-    view.original = original->str();
-    view.toolchain = toolchain->str();
-    view.entry = entry->str();
-    view.protocol = symbol->str();
+    auto found = nativeRelations.find(symbol->str());
+    if (found == nativeRelations.end())
+      return fail("unknown or repeated relation definition");
+    auto native = found->second;
+    nativeRelations.erase(found);
+    InterfaceRelation result;
+    result.symbol = symbol->str();
+    result.externalKind = native.getKind().str();
+    result.key = native.getKey().str();
+    result.revision = native.getRevision().str();
+    unsigned flat = 0;
+    std::set<std::string> names;
+    std::vector<std::string> logicalTypes, logicalPurposes;
+    auto types = native.getSignature().getInputs();
+    for (const auto &item : *inputs) {
+      if (!charge(1))
+        return false;
+      auto *input = object(item, {"name", "purpose", "native", "schema"});
+      if (!input)
+        return false;
+      auto name = text(*input, "name", limits.identifierBytes),
+           purpose = text(*input, "purpose");
+      auto *indices = array(*input, "native");
+      if (!name || !purpose || !indices)
+        return false;
+      if (!identifier(*name) || !names.insert(name->str()).second ||
+          indices->empty() || flat > types.size() ||
+          indices->size() > types.size() - flat)
+        return fail("invalid relation formal name or native slice");
+      InterfaceRelationInput port;
+      port.name = name->str();
+      if (*purpose == "parameter")
+        port.purpose = RelationPurpose::Parameter;
+      else if (*purpose == "statement")
+        port.purpose = RelationPurpose::Statement;
+      else if (*purpose == "witness")
+        port.purpose = RelationPurpose::Witness;
+      else
+        return fail("unknown relation purpose");
+      std::vector<std::string> expected;
+      for (const auto &index : *indices) {
+        if (!charge(1))
+          return false;
+        auto at = index.getAsInteger();
+        if (!at || *at != flat ||
+            mlir::cast<mlir::StringAttr>(native.getPurposes()[flat])
+                    .getValue() != *purpose)
+          return fail("relation native index or purpose differs");
+        auto type = protocol::encodeBoundType(types[flat], false);
+        if (!type) {
+          consumeError(type.takeError());
+          return fail("invalid relation input type");
+        }
+        expected.push_back(type->spelling());
+        port.native.push_back(flat++);
+      }
+      port.schema = schema(*input->get("schema"), 1, expected);
+      if (!port.schema)
+        return false;
+      if (!port.schema->permissions.copy || !port.schema->permissions.drop)
+        return fail("relation formals require immutable data");
+      auto schemaDigest = schemaIdentity(*port.schema);
+      if (!schemaDigest) {
+        failure = schemaDigest.takeError();
+        return false;
+      }
+      logicalTypes.push_back(std::move(*schemaDigest));
+      logicalPurposes.push_back(purpose->str());
+      result.inputs.push_back(std::move(port));
+    }
+    if (flat != types.size())
+      return fail("relation formals omit native inputs");
+    auto *definition = definitionValue->getAsObject();
+    auto kind = definition ? text(*definition, "kind") : std::nullopt;
+    if (!kind)
+      return fail("missing relation definition kind");
+    if (*kind == "formula") {
+      if (!object(*definitionValue, {"kind", "function"}))
+        return false;
+      auto function = text(*definition, "function", limits.symbolBytes);
+      if (!function)
+        return false;
+      auto found = helpers.find(function->str());
+      if (found == helpers.end() ||
+          result.externalKind != "zkc.language.formula/1" ||
+          result.key != result.symbol ||
+          *function != relation::formulaSymbol(result.key))
+        return fail("invalid formula identity or helper");
+      auto helper = found->second;
+      if (helper.getFunctionType() != native.getSignature() ||
+          helper.getVisibility() != mlir::SymbolTable::Visibility::Private)
+        return fail("formula helper signature or visibility differs");
+      auto identity = formulas.get(helper, logicalTypes, logicalPurposes);
+      if (!identity) {
+        failure = identity.takeError();
+        return false;
+      }
+      if (*identity != result.revision)
+        return fail("formula revision differs from mathematical definition");
+      result.kind = RelationDefinition::Kind::Formula;
+      result.formula = function->str();
+    } else if (*kind == "opaque") {
+      if (!object(*definitionValue, {"kind"}))
+        return false;
+      if (StringRef(result.externalKind).starts_with("zkc."))
+        return fail("opaque declaration uses a source-owned identity");
+      result.kind = RelationDefinition::Kind::Opaque;
+    } else if (*kind == "r1cs" || *kind == "air") {
+      if (!object(*definitionValue, {"kind", "asset"}))
+        return false;
+      auto identity = text(*definition, "asset");
+      if (!identity)
+        return false;
+      if (!hash(*identity) || result.key != *identity ||
+          result.revision != "1" ||
+          result.externalKind !=
+              (*kind == "r1cs" ? "zkc.relation.r1cs/1" : "zkc.relation.air/1"))
+        return fail("captured relation identity differs");
+      if (!charge(assets.size() + 1))
+        return false;
+      auto found = llvm::find_if(assets, [&](const auto &asset) {
+        return asset.identity() == *identity;
+      });
+      if (found == assets.end() ||
+          (*kind == "r1cs" ? !found->r1cs() : !found->air()))
+        return fail("captured relation requires its admitted immutable asset");
+      if (result.inputs.size() != 2 ||
+          result.inputs[0].schema->kind != Type::Kind::Builtin ||
+          result.inputs[1].schema->kind != Type::Kind::Builtin ||
+          result.inputs[0].purpose != RelationPurpose::Statement ||
+          result.inputs[1].purpose != RelationPurpose::Witness ||
+          types.size() != 2)
+        return fail("captured relation formal ABI differs");
+      auto field =
+          found->r1cs() ? found->r1cs()->field() : found->air()->field();
+      auto count = found->r1cs() ? found->r1cs()->publicCount()
+                                 : found->air()->publicInputs();
+      auto statement = protocol::applyBoundType(
+          "field_array", {field.str(), std::to_string(count)});
+      auto witness =
+          found->r1cs()
+              ? protocol::applyBoundType(
+                    "field_array",
+                    {field.str(), std::to_string(found->r1cs()->columns())})
+              : protocol::applyBoundType("matrix", {field.str()});
+      if (!statement || !witness) {
+        if (!statement)
+          consumeError(statement.takeError());
+        if (!witness)
+          consumeError(witness.takeError());
+        return fail("captured asset domain is not installed");
+      }
+      if (result.inputs[0].schema->leaves !=
+              std::vector<std::string>{statement->spelling()} ||
+          result.inputs[1].schema->leaves !=
+              std::vector<std::string>{witness->spelling()})
+        return fail("captured relation data shape differs from its asset");
+      result.kind = *kind == "r1cs" ? RelationDefinition::Kind::R1CS
+                                    : RelationDefinition::Kind::AIR;
+      result.asset = *found;
+    } else
+      return fail("unknown relation definition kind");
+    auto [identity, added] = relationIdentities.emplace(
+        std::make_tuple(result.externalKind, result.key, result.revision),
+        view.relations.size());
+    if (!added) {
+      const auto &previous = view.relations[identity->second];
+      if (!charge(result.inputs.size() + 1))
+        return false;
+      if (result.inputs.size() != previous.inputs.size())
+        return fail("one relation identity has conflicting logical signatures");
+      for (unsigned i = 0; i < result.inputs.size(); ++i)
+        if (result.inputs[i].schema != previous.inputs[i].schema ||
+            result.inputs[i].purpose != previous.inputs[i].purpose)
+          return fail(
+              "one relation identity has conflicting logical signatures");
+    }
+    relationIndices.try_emplace(result.symbol, view.relations.size());
+    view.relations.push_back(std::move(result));
+    return true;
+  }
+  std::optional<InterfaceSelector>
+  selector(const json::Value &value,
+           std::shared_ptr<const InterfaceSchema> *selected = nullptr) {
+    if (!charge(1))
+      return {};
+    auto *obj = object(value, {"direction", "port", "path", "role"});
+    if (!obj)
+      return {};
+    auto direction = text(*obj, "direction"),
+         role = text(*obj, "role", limits.identifierBytes);
+    auto port = natural(*obj, "port");
+    auto *path = array(*obj, "path");
+    if (!direction || !role || !port || !path)
+      return {};
+    if (*direction != "input" && *direction != "output") {
+      fail("invalid selector direction");
+      return {};
+    }
+    auto found = roleIndices.find(*role);
+    const auto &ports =
+        *direction == "input" ? current->inputs : current->outputs;
+    if (*port >= ports.size() || found == roleIndices.end() ||
+        !is_contained(ports[*port].roles, found->second)) {
+      fail("selector does not name an actual participant component");
+      return {};
+    }
+    InterfaceSelector result{
+        *direction == "output", *port, found->second, {}, {}};
+    auto schema = ports[*port].schema;
+    unsigned offset = 0;
+    for (const auto &item : *path) {
+      if (!charge(1))
+        return {};
+      auto at = item.getAsInteger();
+      if (!at || *at < 0 || uint64_t(*at) >= schema->fields.size() ||
+          schema->custody || schema->kind == Type::Kind::Variant ||
+          schema->kind == Type::Kind::Associated) {
+        fail("selector path is not a logical product projection");
+        return {};
+      }
+      result.path.push_back(*at);
+      offset += schema->fields[*at].offset;
+      schema = schema->fields[*at].schema;
+    }
+    if (offset > ports[*port].native.size() ||
+        schema->leaves.size() > ports[*port].native.size() - offset) {
+      fail("selector native slice is out of bounds");
+      return {};
+    }
+    for (unsigned i = 0; i < schema->leaves.size(); ++i)
+      result.native.push_back(ports[*port].native[offset + i]);
+    if (selected)
+      *selected = schema;
+    return result;
+  }
+  std::optional<InterfaceApplication> application(const json::Value &value) {
+    if (!charge(1))
+      return {};
+    auto *obj = object(value, {"relation", "operands"});
+    if (!obj)
+      return {};
+    auto name = text(*obj, "relation", limits.symbolBytes);
+    auto *operands = array(*obj, "operands");
+    if (!name || !operands)
+      return {};
+    auto found = relationIndices.find(*name);
+    if (found == relationIndices.end()) {
+      fail("unknown relation application");
+      return {};
+    }
+    const auto &relation = view.relations[found->second];
+    if (operands->size() != relation.inputs.size()) {
+      fail("relation operand arity differs");
+      return {};
+    }
+    InterfaceApplication result{found->second, {}};
+    for (unsigned i = 0; i < operands->size(); ++i) {
+      std::shared_ptr<const InterfaceSchema> logical;
+      auto operand = selector((*operands)[i], &logical);
+      if (!operand)
+        return {};
+      if (logical != relation.inputs[i].schema) {
+        fail("relation operand logical identity or schema differs");
+        return {};
+      }
+      result.operands.push_back(std::move(*operand));
+    }
+    return result;
+  }
+  std::optional<InterfaceClause> clauseRecord(const json::Value &value) {
+    if (!charge(1))
+      return {};
+    auto *obj =
+        object(value, {"name", "kind", "subject", "residual", "decision"});
+    if (!obj)
+      return {};
+    auto name = text(*obj, "name", limits.identifierBytes),
+         kind = text(*obj, "kind");
+    if (!name || !kind)
+      return {};
+    if (!identifier(*name)) {
+      fail("invalid clause name");
+      return {};
+    }
+    InterfaceClause result;
+    result.name = name->str();
+    using K = SpecificationClause::Kind;
+    if (*kind == "target")
+      result.kind = K::Target;
+    else if (*kind == "input")
+      result.kind = K::Input;
+    else if (*kind == "output")
+      result.kind = K::Output;
+    else if (*kind == "continuation")
+      result.kind = K::Continuation;
+    else {
+      fail("unknown clause kind");
+      return {};
+    }
+    auto subject = application(*obj->get("subject"));
+    if (!subject)
+      return {};
+    result.subject = std::move(*subject);
+    auto output = [](const auto &application) {
+      return any_of(application.operands,
+                    [](const auto &selector) { return selector.output; });
+    };
+    if (((result.kind == K::Input || result.kind == K::Continuation) &&
+         output(result.subject)) ||
+        (result.kind == K::Output && !output(result.subject))) {
+      fail("clause input/output direction differs");
+      return {};
+    }
+    if (obj->get("residual")->kind() != json::Value::Null) {
+      if (result.kind != K::Continuation) {
+        fail("unexpected residual");
+        return {};
+      }
+      auto residual = application(*obj->get("residual"));
+      if (!residual)
+        return {};
+      if (!output(*residual)) {
+        fail("residual must bind an actual output");
+        return {};
+      }
+      result.residual = std::move(*residual);
+    } else if (result.kind == K::Continuation) {
+      fail("continuation has no residual");
+      return {};
+    }
+    if (obj->get("decision")->kind() != json::Value::Null) {
+      std::shared_ptr<const InterfaceSchema> logical;
+      auto decision = selector(*obj->get("decision"), &logical);
+      if (!decision)
+        return {};
+      if (result.kind == K::Input || !decision->output ||
+          logical->kind != Type::Kind::Boolean ||
+          decision->native.size() != 1) {
+        fail("decision must be one Boolean output");
+        return {};
+      }
+      result.decision = std::move(*decision);
+    } else if (result.kind == K::Target) {
+      fail("target has no decision");
+      return {};
+    }
+    return result;
+  }
+
+  bool protocolRecord(const json::Value &value) {
+    auto *obj = object(
+        value, {"symbol", "roles", "inputs", "outputs", "services", "clauses"});
+    if (!obj)
+      return false;
+    auto symbol = text(*obj, "symbol", limits.symbolBytes);
+    auto *rs = array(*obj, "roles"), *ins = array(*obj, "inputs"),
+         *outs = array(*obj, "outputs"), *services = array(*obj, "services"),
+         *clauses = array(*obj, "clauses");
+    if (!symbol || !rs || !ins || !outs || !services || !clauses)
+      return false;
+    auto found = nativeProtocols.find(symbol->str());
+    if (found == nativeProtocols.end())
+      return fail("unknown or repeated protocol definition");
+    auto function = found->second;
+    nativeProtocols.erase(found);
+    view.protocols.push_back({});
+    current = &view.protocols.back();
+    current->symbol = symbol->str();
+    roleIndices.clear();
     std::set<std::string> usedRoles;
     if (rs->empty() || rs->size() > 1024)
       return fail("invalid role roster size");
@@ -547,41 +952,25 @@ class Reader {
       if (!name || name->size() > limits.identifierBytes ||
           !identifier(*name) || !usedRoles.insert(name->str()).second)
         return fail("invalid or duplicate role");
-      roleIndices.try_emplace(*name, view.roles.size());
-      view.roles.push_back(name->str());
+      roleIndices.try_emplace(*name, current->roles.size());
+      current->roles.push_back(name->str());
     }
-    if (!module || !module->getAttrs().empty() ||
-        !hasSingleElement(*module.getBody()))
-      return fail("expected one unadorned protocol module");
-    auto native = mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(
-        module.getBody()->front());
-    if (!native || native.getProfile() != protocol_ir::Profile::Protocol ||
-        !hasSingleElement(native.getBody()))
-      return fail("expected mathematical protocol profile");
-    protocol_ir::MathematicalOp function;
-    for (auto &op : native.getBody().front()) {
-      if (!charge(1))
-        return false;
-      auto candidate = mlir::dyn_cast<protocol_ir::MathematicalOp>(op);
-      if (candidate && candidate.getSymName() == *symbol)
-        function = candidate;
-    }
-    if (!function || function.getRoles().size() != view.roles.size())
+    if (!function || function.getRoles().size() != current->roles.size())
       return fail("protocol symbol or role roster differs");
     std::vector<unsigned> roster;
-    for (unsigned i = 0; i < view.roles.size(); ++i)
+    for (unsigned i = 0; i < current->roles.size(); ++i)
       roster.push_back(i);
     if (!matchesRoles(function.getRoles(), roster))
       return false;
     auto type = function.getFunctionType();
     unsigned input = 0, output = 0;
-    if (!ports(*ins, type.getInputs(), function.getInputRoles(), view.inputs,
-               input) ||
+    if (!ports(*ins, type.getInputs(), function.getInputRoles(),
+               current->inputs, input) ||
         !ports(*outs, type.getResults(), function.getOutputRoles(),
-               view.outputs, output))
+               current->outputs, output))
       return false;
     std::set<std::string> names;
-    for (const auto &port : view.inputs)
+    for (const auto &port : current->inputs)
       names.insert(port.name);
     for (const auto &item : *services) {
       if (!charge(1))
@@ -607,15 +996,95 @@ class Reader {
       unsigned role = found->second;
       if (!matchesRoles(function.getInputRoles()[input], {role}))
         return false;
-      view.services.push_back({name->str(), contract->str(), role, input++});
+      current->services.push_back(
+          {name->str(), contract->str(), role, input++});
     }
-    return (input == type.getNumInputs() && output == type.getNumResults()) ||
-           fail("interface omits native ports");
+    if (input != type.getNumInputs() || output != type.getNumResults())
+      return fail("interface omits native ports");
+    std::set<std::string> clauseNames;
+    for (const auto &item : *clauses) {
+      auto clause = clauseRecord(item);
+      if (!clause)
+        return false;
+      if (!clauseNames.insert(clause->name).second)
+        return fail("repeated clause name");
+      current->clauses.push_back(std::move(*clause));
+    }
+    return true;
+  }
+
+  bool read(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
+    auto *obj = object(value, {"format", "capture", "original", "toolchain",
+                               "entry", "protocol", "protocols", "relations"});
+    if (!obj)
+      return false;
+    auto format = text(*obj, "format"), capture = text(*obj, "capture"),
+         original = text(*obj, "original"), toolchain = text(*obj, "toolchain"),
+         entry = text(*obj, "entry",
+                      limits.moduleBytes + 2 + limits.identifierBytes),
+         symbol = text(*obj, "protocol", limits.symbolBytes);
+    auto *protocols = array(*obj, "protocols"),
+         *relations = array(*obj, "relations");
+    if (!format || !capture || !original || !toolchain || !entry || !symbol ||
+        !protocols || !relations)
+      return false;
+    if (*format != "zkc.language-interface/4" || !hash(*capture) ||
+        *original != digest || *toolchain != compilerToolchainIdentity())
+      return fail("interface format, original or toolchain identity differs");
+    SmallVector<StringRef> entryParts;
+    entry->split(entryParts, "::");
+    if (entryParts.size() < 2 ||
+        entry->rsplit("::").first.size() > limits.moduleBytes ||
+        !all_of(entryParts, [&](StringRef part) {
+          return part.size() <= limits.identifierBytes && identifier(part);
+        }))
+      return fail("invalid qualified Entry name");
+    view.capture = capture->str();
+    view.original = original->str();
+    view.toolchain = toolchain->str();
+    view.entry = entry->str();
+    if (!module || !module->getAttrs().empty() ||
+        !hasSingleElement(*module.getBody()))
+      return fail("expected one unadorned protocol module");
+    auto native = mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(
+        module.getBody()->front());
+    if (!native || native.getProfile() != protocol_ir::Profile::Protocol ||
+        !hasSingleElement(native.getBody()))
+      return fail("expected mathematical protocol profile");
+    for (auto &op : native.getBody().front()) {
+      if (!charge(1))
+        return false;
+      if (auto function = mlir::dyn_cast<protocol_ir::MathematicalOp>(op))
+        nativeProtocols.emplace(function.getSymName().str(), function);
+      else if (auto relation = mlir::dyn_cast<relation::DeclareOp>(op))
+        nativeRelations.emplace(relation.getSymName().str(), relation);
+      else if (auto helper = mlir::dyn_cast<mlir::func::FuncOp>(op))
+        helpers.emplace(helper.getSymName().str(), helper);
+    }
+    if (nativeProtocols.size() != protocols->size() ||
+        nativeRelations.size() != relations->size())
+      return fail("interface definition inventory differs");
+    for (const auto &item : *relations)
+      if (!relationRecord(item))
+        return false;
+    bool selected = false;
+    for (const auto &item : *protocols) {
+      if (!protocolRecord(item))
+        return false;
+      if (current->symbol == *symbol) {
+        view.selected = view.protocols.size() - 1;
+        selected = true;
+      }
+    }
+    if (!selected)
+      return fail("selected protocol is absent");
+    return true;
   }
 
 public:
-  explicit Reader(const Limits &limits)
-      : limits(limits), remaining(limits.work) {
+  explicit Reader(const Limits &limits, ArrayRef<RelationAsset> assets)
+      : limits(limits), remaining(limits.work), assets(assets),
+        formulas(remaining, limits.irBytes) {
     (void)!!failure;
   }
   Expected<LanguageInterface> run(const json::Value &value,
@@ -626,18 +1095,11 @@ public:
   }
 };
 } // namespace
-Expected<LanguageInterface> readInterface(mlir::ModuleOp module,
-                                          StringRef digest, StringRef bytes,
-                                          const Limits &limits) {
-  auto value = parseInterface(bytes, limits);
-  if (!value)
-    return value.takeError();
-  return decodeInterface(module, digest, *value, limits);
-}
 Expected<LanguageInterface> decodeInterface(mlir::ModuleOp module,
                                             StringRef digest,
                                             const json::Value &value,
-                                            const Limits &limits) {
-  return Reader(limits).run(value, module, digest);
+                                            const Limits &limits,
+                                            ArrayRef<RelationAsset> assets) {
+  return Reader(limits, assets).run(value, module, digest);
 }
 } // namespace zkc::language::detail

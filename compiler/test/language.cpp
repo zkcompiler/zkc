@@ -257,7 +257,7 @@ void depthAndAggregateBounds() {
           "source.limit");
 }
 void reviewControls() {
-  for (StringRef feature : {"service", "predicate", "relation", "construct"})
+  for (StringRef feature : {"service", "predicate", "requires", "construct"})
     sourceRefuses("module m; " + feature.str() + " X;", "source.unsupported");
   sourceRefuses("module m; math fn f<F>() -> bool {return true;}",
                 "source.syntax");
@@ -460,8 +460,13 @@ void reviewedSourceBoundaries() {
   });
   for (auto key : {"owner", "contract", "native", "name"}) {
     auto forged = must(json::parse(distinctServices.interfaceJson()));
-    auto *service =
-        forged.getAsObject()->getArray("services")->front().getAsObject();
+    auto *service = forged.getAsObject()
+                        ->getArray("protocols")
+                        ->front()
+                        .getAsObject()
+                        ->getArray("services")
+                        ->front()
+                        .getAsObject();
     (*service)[key] = "forged";
     std::string bytes;
     raw_string_ostream(bytes) << forged;
@@ -879,8 +884,13 @@ int main(int argc, char **argv) {
   }
   for (StringRef key : {"name", "type", "roles", "index"}) {
     auto altered = must(json::parse(full.interfaceJson()));
-    auto &port =
-        *altered.getAsObject()->getArray("outputs")->front().getAsObject();
+    auto &port = *altered.getAsObject()
+                      ->getArray("protocols")
+                      ->front()
+                      .getAsObject()
+                      ->getArray("outputs")
+                      ->front()
+                      .getAsObject();
     port[key] = "wrong";
     std::string bytes;
     raw_string_ostream(bytes) << altered;

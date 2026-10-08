@@ -8,6 +8,7 @@
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -77,196 +78,13 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
     }
   });
   for (const auto &decl : entry.declarations())
-    if (declarations.erase(decl.symbol)) {
+    if (declarations.erase(decl.relation ? formulaSymbol(decl) : decl.symbol) ||
+        declarations.erase(decl.symbol)) {
       diagnostics += "related source declaration: " + decl.qualifiedName + "\n";
       locations.push_back(source.location(decl.span));
     }
 }
-Error writeInterface(json::OStream &out, BoundedStream &stream,
-                     const ClosedEntry &entry, StringRef original,
-                     StringRef toolchain, const Limits &limits) {
-  const auto &protocol = entry.protocol();
-  Layouts layouts(entry, limits);
-  std::vector<std::shared_ptr<const Layout>> inputs, outputs;
-  for (bool input : {true, false})
-    for (auto &port : input ? protocol.inputs : protocol.outputs) {
-      auto layout = layouts.get(port.type);
-      if (!layout)
-        return layout.takeError();
-      if ((*layout)->formal)
-        return error("source.formal",
-                     "interface ports cannot contain formal values");
-      (input ? inputs : outputs).push_back(*layout);
-    }
-  uint64_t remaining = limits.work;
-  bool limited = false, formal = false;
-  auto charge = [&](uint64_t work) {
-    if (limited || stream.overflow() || work > remaining) {
-      limited = true;
-      return false;
-    }
-    remaining -= work;
-    return true;
-  };
-  std::map<const Layout *, std::string> identities;
-  auto kind = [](Type::Kind value) -> StringRef {
-    using K = Type::Kind;
-    switch (value) {
-    case K::Boolean:
-      return "boolean";
-    case K::Index:
-      return "index";
-    case K::Field:
-      return "field";
-    case K::Group:
-      return "group";
-    case K::Unit:
-      return "unit";
-    case K::Tuple:
-      return "tuple";
-    case K::Array:
-      return "array";
-    case K::Record:
-      return "record";
-    case K::Variant:
-      return "variant";
-    case K::Associated:
-      return "associated";
-    case K::Builtin:
-      return "builtin";
-    default:
-      llvm_unreachable("layout has no executable interface kind");
-    }
-  };
-  std::function<void(const Layout &)> schema;
-  schema = [&](const Layout &layout) {
-    if (!charge(1)) {
-      out.value(nullptr);
-      return;
-    }
-    auto found = identities.find(&layout);
-    if (found == identities.end()) {
-      auto key = typeIdentity(layout.type);
-      if (!charge(key.size())) {
-        out.value(nullptr);
-        return;
-      }
-      found = identities.emplace(&layout, digest(key)).first;
-    }
-    out.object([&] {
-      out.attribute("kind", kind(layout.type.kind));
-      out.attribute("identity", found->second);
-      out.attribute("type", spelling(layout.type));
-      out.attribute("custody", layout.custody);
-      out.attributeArray("permissions", [&] {
-        if (layout.permissions.copy)
-          out.value("Copy");
-        if (layout.permissions.drop)
-          out.value("Drop");
-        if (layout.permissions.share)
-          out.value("Share");
-        if (layout.permissions.wire)
-          out.value("Wire");
-      });
-      auto fields = [&](ArrayRef<LayoutField> fields) {
-        for (auto &field : fields) {
-          if (!charge(field.name.size() + 1))
-            break;
-          out.object([&] {
-            out.attribute("name", field.name);
-            out.attribute("offset", field.offset);
-            out.attributeBegin("schema");
-            schema(*field.layout);
-            out.attributeEnd();
-          });
-        }
-      };
-      out.attributeArray("fields", [&] { fields(layout.fields); });
-      out.attributeArray("alternatives", [&] {
-        for (auto &alternative : layout.alternatives) {
-          if (!charge(alternative.name.size() + 1))
-            break;
-          out.object([&] {
-            out.attribute("name", alternative.name);
-            out.attributeArray("fields", [&] { fields(alternative.fields); });
-          });
-        }
-      });
-      out.attributeArray("leaves", [&] {
-        for (auto &leaf : layout.leaves) {
-          if (!charge(leaf.cost()))
-            break;
-          const auto *data = leaf.data();
-          if (!data) {
-            formal = true;
-            break;
-          }
-          out.value(*data);
-        }
-      });
-    });
-  };
-  auto ports = [&](StringRef name, ArrayRef<Port> source,
-                   ArrayRef<std::shared_ptr<const Layout>> layouts) {
-    unsigned flat = 0;
-    out.attributeArray(name, [&] {
-      for (unsigned i = 0; i < source.size(); ++i) {
-        if (!charge(source[i].name.size() + 1))
-          break;
-        out.object([&] {
-          out.attribute("name", source[i].name);
-          out.attribute("type", spelling(source[i].type));
-          out.attributeArray("roles", [&] {
-            for (unsigned role : source[i].roles)
-              out.value(protocol.roles[role]);
-          });
-          out.attribute("index", i);
-          out.attributeArray("native", [&] {
-            for (unsigned j = 0; j < layouts[i]->leaves.size(); ++j)
-              out.value(flat++);
-          });
-          out.attributeBegin("schema");
-          schema(*layouts[i]);
-          out.attributeEnd();
-        });
-      }
-    });
-  };
-  out.object([&] {
-    out.attribute("format", "zkc.language-interface/3");
-    out.attribute("capture", entry.project().capture().identity());
-    out.attribute("original", original);
-    out.attribute("toolchain", toolchain);
-    out.attribute("entry", entry.entry().qualifiedName);
-    out.attribute("protocol", protocol.symbol);
-    out.attributeArray("roles", [&] {
-      for (const auto &role : protocol.roles)
-        out.value(role);
-    });
-    ports("inputs", protocol.inputs, inputs);
-    ports("outputs", protocol.outputs, outputs);
-    out.attributeArray("services", [&] {
-      unsigned native = 0;
-      for (const auto &layout : inputs)
-        native += layout->leaves.size();
-      for (const auto &service : protocol.services) {
-        if (!charge(service.name.size() + service.contract.size() + 1))
-          break;
-        out.object([&] {
-          out.attribute("name", service.name);
-          out.attribute("contract", service.contract);
-          out.attribute("owner", protocol.roles[service.owner]);
-          out.attribute("native", native++);
-        });
-      }
-    });
-  });
-  if (formal)
-    return error("source.formal", "interface schema contains formal leaves");
-  if (limited || stream.overflow())
-    return error("source.limit", "interface traversal or byte limit exceeded");
-  return Error::success();
-}
+
 } // namespace
 struct CheckedOriginal::Storage {
   explicit Storage(ClosedEntry entry) : selected(std::move(entry)) {}
@@ -277,17 +95,20 @@ struct CheckedOriginal::Storage {
   LanguageInterface interfaceView;
 };
 std::string compilerToolchainIdentity() {
-  std::string material;
-  frame(material, "zkc.language-toolchain/1");
-  frame(material, installedCatalogIdentity());
-  frame(material, ZKC_BUILD_ID);
-  frame(material, ZKC_LLVM_VERSION);
+  static const std::string identity = [] {
+    std::string material;
+    frame(material, "zkc.language-toolchain/1");
+    frame(material, installedCatalogIdentity());
+    frame(material, ZKC_BUILD_ID);
+    frame(material, ZKC_LLVM_VERSION);
 #ifdef LLVM_REVISION
-  frame(material, LLVM_REVISION);
+    frame(material, LLVM_REVISION);
 #else
-  frame(material, "revision-unavailable");
+    frame(material, "revision-unavailable");
 #endif
-  return digest(material);
+    return digest(material);
+  }();
+  return identity;
 }
 Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
                                           const Limits &limits) {
@@ -301,8 +122,38 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
   auto emitted = emitOriginal(entry, context, limits);
   if (!emitted)
     return emitted.takeError();
-  if (!mlirNestingWithinLimit(*emitted))
-    return error("source.limit", "original exceeds MLIR nesting limit");
+  auto encoded = detail::emitInterface(entry, digest(*emitted),
+                                       compilerToolchainIdentity(), limits);
+  if (!encoded)
+    return encoded.takeError();
+  return CheckedOriginal::admit(entry, *emitted, *encoded, limits, false);
+}
+Expected<CheckedOriginal> admitOriginal(const ClosedEntry &entry,
+                                        StringRef original, StringRef interface,
+                                        const Limits &limits) {
+  return CheckedOriginal::admit(entry, original, interface, limits, true);
+}
+Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
+                                                 StringRef original,
+                                                 StringRef interface,
+                                                 const Limits &limits,
+                                                 bool requireCanonical) {
+  if (auto error = checkLimits(limits))
+    return std::move(error);
+  if (original.size() > limits.irBytes ||
+      interface.size() > limits.interfaceBytes ||
+      !mlirNestingWithinLimit(original))
+    return error("source.limit", "original or interface limit exceeded");
+  if (!json::isUTF8(original))
+    return error("target.admission", "original is not UTF-8");
+  auto parsedInterface = detail::parseInterface(interface, limits);
+  if (!parsedInterface)
+    return parsedInterface.takeError();
+  mlir::DialectRegistry registry;
+  registerNativeDialects(registry);
+  mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
+  context.loadAllAvailableDialects();
+  context.printOpOnDiagnostic(false);
   std::string diagnostics;
   std::vector<DiagnosticLocation> locations;
   mlir::ScopedDiagnosticHandler handler(
@@ -310,14 +161,16 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
         raw_string_ostream stream(diagnostics);
         diagnostic.print(stream);
         stream << '\n';
-        if (auto loc = mlir::dyn_cast<mlir::FileLineColLoc>(
-                diagnostic.getLocation())) {
-          locations.push_back({filename.str(), loc.getLine(), loc.getColumn()});
-        }
+        diagnostic.getLocation()->walk([&](mlir::Location location) {
+          if (auto loc = mlir::dyn_cast<mlir::FileLineColLoc>(location))
+            locations.push_back(
+                {loc.getFilename().str(), loc.getLine(), loc.getColumn()});
+          return mlir::WalkResult::advance();
+        });
         return mlir::success();
       });
   SourceMgr manager;
-  manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(*emitted, filename),
+  manager.AddNewSourceBuffer(MemoryBuffer::getMemBufferCopy(original, filename),
                              SMLoc());
   // Parsing verifies syntax only; whole-module admission runs once below.
   mlir::ParserConfig config(&context, false);
@@ -326,35 +179,35 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
     return make_error<CompilationError>(
         diagnostics,
         std::vector<diagnostics::RefusalInfo>{
-            {"target.parse", "emitted original failed target parsing"}},
+            {"target.parse", "original failed target parsing"}},
         std::move(locations));
-  auto compared = compareOriginal(entry, *module, limits);
-  if (!compared) {
-    auto failure = compared.takeError();
+  auto located = [&](Error failure) -> Error {
     return handleErrors(
         std::move(failure), [&](const Refusal &refusal) -> Error {
-          if (refusal.code != "target.admission")
+          if (refusal.code != "target.admission" &&
+              refusal.code != "source.limit")
             return error(refusal.code, refusal.detail);
           attachDeclaration(entry, *module, locations, diagnostics);
+          diagnostics += refusal.code + ": " + refusal.detail + "\n";
           return make_error<CompilationError>(
               diagnostics,
               std::vector<diagnostics::RefusalInfo>{
                   {refusal.code, refusal.detail}},
               std::move(locations));
         });
-  }
+  };
+  auto compared = compareOriginal(entry, *module, limits);
+  if (!compared)
+    return located(compared.takeError());
+  uint64_t remaining = limits.work;
+  if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
+    return located(std::move(error));
   auto storage = std::make_shared<CheckedOriginal::Storage>(entry);
-  storage->original = std::move(*emitted);
+  storage->original = original.str();
   storage->report = std::move(*compared);
   storage->identity = digest(storage->original);
   storage->toolchain = compilerToolchainIdentity();
-  BoundedStream stream(storage->interface, limits.interfaceBytes);
-  json::OStream interface(stream);
-  if (auto error = writeInterface(interface, stream, entry, storage->identity,
-                                  storage->toolchain, limits))
-    return std::move(error);
-  if (stream.overflow())
-    return error("source.limit", "source interface byte limit exceeded");
+  storage->interface = interface.str();
   std::string mapIdentity;
   frame(mapIdentity, "zkc.language-locations/1");
   frame(mapIdentity, entry.project().capture().identity());
@@ -369,10 +222,30 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
     }
   }
   storage->locationsIdentity = digest(mapIdentity);
-  auto interfaceView = detail::readInterface(*module, storage->identity,
-                                             storage->interface, limits);
+  auto interfaceView =
+      detail::decodeInterface(*module, storage->identity, *parsedInterface,
+                              limits, entry.project().assets());
   if (!interfaceView)
     return interfaceView.takeError();
+  if (auto error = compareInterface(entry, *interfaceView, limits))
+    return std::move(error);
+  if (requireCanonical) {
+    // Independent formation and correspondence above establish meaning. This
+    // final filter fixes binding names, declaration order and source locations
+    // as well as spelling; reprinting the candidate alone would not do so.
+    auto canonical = emitOriginal(entry, context, limits);
+    if (!canonical)
+      return canonical.takeError();
+    if (original != *canonical)
+      return error("source.correspondence",
+                   "original encoding is not canonical");
+    auto encoded = detail::emitInterface(entry, storage->identity,
+                                         storage->toolchain, limits);
+    if (!encoded)
+      return encoded.takeError();
+    if (interface != *encoded)
+      return error("source.interface", "interface encoding is not canonical");
+  }
   storage->interfaceView = std::move(*interfaceView);
   return CheckedOriginal(std::move(storage));
 }

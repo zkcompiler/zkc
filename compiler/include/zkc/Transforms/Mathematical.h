@@ -1,7 +1,26 @@
 #ifndef ZKC_TRANSFORMS_MATHEMATICAL_H
 #define ZKC_TRANSFORMS_MATHEMATICAL_H
 #include "mlir/IR/BuiltinOps.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Error.h"
 namespace zkc::mathematical {
+/// Admit the whole mathematical module, then check polynomial observations in
+/// selected pure helpers even when no execution path calls them. Expansion and
+/// degree checks use bounded scratch copies without simplification or
+/// execution; the supplied original is unchanged. Names must be distinct
+/// existing helpers.
+mlir::LogicalResult
+verifyHelperObservations(mlir::ModuleOp original,
+                         llvm::ArrayRef<llvm::StringRef> helpers);
+
+/// Source-formula linkage and observation admission on an already verified
+/// immutable mathematical original. Roots derive from native declaration keys;
+/// one shared work budget covers inventory, uses, clones and expansion. Full
+/// logical schema/revision agreement is checked at the source interface
+/// boundary.
+llvm::Error checkFormulaDefinitions(mlir::ModuleOp, uint64_t &remaining);
+
 /// Check the six selected realization rules against actual generated bodies.
 /// Preserves ordered checks under the declared primitive contracts and
 /// sufficient capacity. Does not prove native kernel implementations.

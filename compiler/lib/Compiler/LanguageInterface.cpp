@@ -6,6 +6,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/SHA256.h"
@@ -90,10 +91,12 @@ Expected<json::Value> detail::parseInterface(StringRef bytes,
   }
   return actual;
 }
-Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,
-                                          const Limits &limits) {
+Error detail::withInterface(
+    StringRef original, StringRef bytes, const Limits &limits,
+    ArrayRef<RelationAsset> assets,
+    function_ref<Error(mlir::ModuleOp, LanguageInterface &&)> visit) {
   if (auto error = checkLimits(limits))
-    return std::move(error);
+    return error;
   if (original.size() > limits.irBytes ||
       bytes.size() > limits.interfaceBytes || !mlirNestingWithinLimit(original))
     return error("source.limit", "original or interface limit exceeded");
@@ -114,8 +117,28 @@ Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,
   if (!module)
     return error("target.admission",
                  "original failed mathematical IR admission");
+  uint64_t remaining = limits.work;
+  if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
+    return error;
   auto identity = toHex(SHA256::hash(arrayRefFromStringRef(original)), true);
-  return detail::decodeInterface(*module, identity, *parsed, limits);
+  auto decoded =
+      detail::decodeInterface(*module, identity, *parsed, limits, assets);
+  if (!decoded)
+    return decoded.takeError();
+  return visit(*module, std::move(*decoded));
+}
+Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,
+                                          const Limits &limits,
+                                          ArrayRef<RelationAsset> assets) {
+  std::optional<LanguageInterface> result;
+  if (auto error =
+          detail::withInterface(original, bytes, limits, assets,
+                                [&](mlir::ModuleOp, LanguageInterface &&view) {
+                                  result = std::move(view);
+                                  return Error::success();
+                                }))
+    return std::move(error);
+  return std::move(*result);
 }
 Error checkInterface(const CheckedOriginal &original, StringRef bytes,
                      const Limits &limits) {

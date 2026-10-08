@@ -190,7 +190,8 @@ bool Checker::specialize(DeclarationId selected) {
   instantiate = [&](DeclarationId origin, ArrayRef<Type> args,
                     Body::Mode mode) -> std::optional<DeclarationId> {
     const auto &source = output.declarations[origin.index];
-    if (!source.body || source.abstract) {
+    if ((!source.body && source.kind != Declaration::Kind::Relation) ||
+        source.abstract) {
       fail("source.call", "cannot specialize an abstract callable",
            source.span);
       return {};
@@ -254,14 +255,39 @@ bool Checker::specialize(DeclarationId selected) {
     for (const auto &service : source.services)
       if (!chargeType(service.field, service.span))
         return {};
-    if (!chargeBody(*source.body))
+    if (source.body && !chargeBody(*source.body))
       return {};
+    if (source.relation && !charge(source.relation->purposes.size() +
+                                       source.relation->externalKind.size() +
+                                       source.relation->key.size() +
+                                       source.relation->revision.size() + 1,
+                                   source.span))
+      return {};
+    for (const auto &clause : source.specifications) {
+      if (!charge(clause.name.size() + 1, clause.span))
+        return {};
+      for (const auto *subject :
+           {&clause.subject, clause.residual ? &*clause.residual : nullptr}) {
+        if (!subject)
+          continue;
+        for (const auto &argument : subject->arguments)
+          if (!chargeType(argument, subject->span))
+            return {};
+        for (const auto &operand : subject->operands)
+          if (!charge(operand.path.size() + 1, operand.span))
+            return {};
+      }
+      if (clause.decision &&
+          !charge(clause.decision->path.size() + 1, clause.decision->span))
+        return {};
+    }
     Declaration result = source;
     DeclarationId id{uint32_t(output.declarations.size())};
     result.id = id;
     result.origin = origin;
+    result.members.clear();
     result.staticArguments.assign(args.begin(), args.end());
-    if (!args.empty() || result.body->mode != mode)
+    if (!args.empty() || (result.body && result.body->mode != mode))
       result.symbol = "zkl_" + detail::digest(key);
     if (result.symbol.size() > work.limits.symbolBytes) {
       fail("source.limit", "specialized symbol exceeds byte limit",
@@ -292,14 +318,44 @@ bool Checker::specialize(DeclarationId selected) {
     for (auto &service : result.services)
       if (!closeService(service, bindings))
         return {};
-    auto body = std::make_shared<Body>(*result.body);
-    if (!closeBody(*body, bindings, mode))
-      return {};
-    if (result.kind == Declaration::Kind::Math)
-      for (const auto &value : body->values)
-        if (!mathematicalData(value.type, value.span))
-          return {};
-    result.body = std::move(body);
+    auto closeSubject = [&](RelationApplication &subject) {
+      for (auto &argument : subject.arguments)
+        if (!closeType(argument, bindings, subject.span))
+          return false;
+      auto selected =
+          instantiate(subject.relation, subject.arguments, Body::Mode::Math);
+      if (!selected)
+        return false;
+      subject.relation = *selected;
+      const auto &relation = output.declarations[selected->index];
+      for (unsigned i = 0; i < subject.operands.size(); ++i) {
+        auto type = selectedType(result, subject.operands[i]);
+        if (!type)
+          return false;
+        if (*type != relation.inputs[i].type)
+          return fail("source.specification",
+                      "closed relation operand type differs", subject.span);
+      }
+      return true;
+    };
+    for (auto &clause : result.specifications) {
+      if (!closeSubject(clause.subject) ||
+          (clause.residual && !closeSubject(*clause.residual)))
+        return {};
+      if (clause.decision && !selectedType(result, *clause.decision))
+        return {};
+    }
+    if (result.body) {
+      auto body = std::make_shared<Body>(*result.body);
+      if (!closeBody(*body, bindings, mode))
+        return {};
+      if (result.kind == Declaration::Kind::Math ||
+          result.kind == Declaration::Kind::Relation)
+        for (const auto &value : body->values)
+          if (!mathematicalData(value.type, value.span))
+            return {};
+      result.body = std::move(body);
+    }
     result.parameters.clear();
     result.bounds.clear();
     result.permissionBounds.clear();

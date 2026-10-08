@@ -32,8 +32,26 @@ receive, joint-host, aggregate, static dispatch, distributed application results
 The source fragment does not yet expose the full native IR vocabulary or proof
 construction. Fixed arrays use static numeric indexing; private ingress without a
 validator, member-generic conformance and zero-leaf messages refuse. Source schema
-`zkc.language-interface/3` retains logical ports, native layouts and separate managed-service bindings. Existing
-frontend consumers have not migrated.
+`zkc.language-interface/4` retains all closed protocol interfaces, managed services,
+formula/opaque/captured relation definitions, and target/input/output/continuation
+clauses with exact logical port and participant selectors. Source-only relation
+checks and inline-binding/privacy controls are in
+[language_specifications.cpp](../compiler/test/language_specifications.cpp);
+native identity, clause omission/mutation, captured asset interpretation, observation,
+reused generic components, role swaps, nested applications and compilation controls are in
+[language_specification_ir.cpp](../compiler/test/language_specification_ir.cpp).
+The standalone reader admits bindings; a separate source/template/token comparison
+authenticates the authored inventory. Clauses insert no execution guards and make
+no satisfaction or soundness claim. The bounded application inspector derives actual
+SSA and participant bindings from admitted original calls, with a retained
+`CheckedOriginal` overload. Standalone checked admission requires canonical original
+and interface bytes after independent semantic checks, preventing alternate
+encodings and explicit locations from changing the checked publication identity.
+Executed source fixtures
+cover group predicates, runtime R1CS matrices, Sumcheck goal/residual bindings and
+product-of-MLE semantics, including a false specification that leaves service
+execution unchanged. Native Entry statement export and proof construction remain
+work in progress. Existing frontend consumers have not migrated.
 
 ## Foundation capability map
 

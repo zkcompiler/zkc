@@ -2,6 +2,7 @@
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/LanguageInspection.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/PublicCoin.h"
@@ -35,7 +36,10 @@ static llvm::Expected<zkc::Compilation> compile() {
 }
 int main(int argc, char **argv) {
   auto captured = zkc::language::capture({{"m", R"(module m;
-    protocol Run roles(P)(x:bool@P)->(r:bool@P){return(r=x);}
+    relation Same(statement x:bool,witness y:bool){return x==y;}
+    protocol Step roles(P)(x:bool@P)->(r:bool@P)
+      spec {output contract=Same(in.x,out.r);}{return(r=x);}
+    protocol Run roles(P)(x:bool@P)->(r:bool@P){let r=apply Step(x);return(r=r);}
     entry Demo=Run;)",
                                            "consumer.zkc"}});
   if (!captured) {
@@ -57,7 +61,16 @@ int main(int argc, char **argv) {
     llvm::errs() << llvm::toString(original.takeError());
     return 33;
   }
-  auto execution = zkc::language::compileEntry(*original);
+  auto admitted = zkc::language::admitOriginal(*entry, original->bytes(),
+                                               original->interfaceJson());
+  if (!admitted) {
+    llvm::errs() << llvm::toString(admitted.takeError());
+    return 40;
+  }
+  if (admitted->identity() != original->identity() ||
+      admitted->interfaceJson() != original->interfaceJson())
+    return 41;
+  auto execution = zkc::language::compileEntry(*admitted);
   if (!execution) {
     llvm::errs() << llvm::toString(execution.takeError());
     return 34;
@@ -73,11 +86,29 @@ int main(int argc, char **argv) {
     llvm::errs() << llvm::toString(interface.takeError());
     return 36;
   }
-  if (interface->protocol != entry->protocol().symbol ||
-      interface->inputs.size() != 1 ||
-      original->interface().protocol != interface->protocol ||
-      original->interface().inputs.size() != 1)
+  if (interface->selectedProtocol().symbol != entry->protocol().symbol ||
+      interface->selectedProtocol().inputs.size() != 1 ||
+      original->interface().selectedProtocol().symbol !=
+          interface->selectedProtocol().symbol ||
+      original->interface().selectedProtocol().inputs.size() != 1)
     return 37;
+  unsigned applications = 0;
+  if (auto error = zkc::language::inspectApplications(
+          original->bytes(), original->interfaceJson(),
+          [&](const zkc::language::ApplicationOccurrence &call) -> llvm::Error {
+            ++applications;
+            if (call.clauses.size() != 1 ||
+                call.clauses[0].subject[1].values[0] !=
+                    call.operation->getResult(0))
+              return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                             "application binding differs");
+            return llvm::Error::success();
+          })) {
+    llvm::errs() << llvm::toString(std::move(error));
+    return 38;
+  }
+  if (applications != 1)
+    return 39;
   if (argc > 2)
     return 15;
   auto result = compile();

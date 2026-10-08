@@ -1,5 +1,5 @@
 #include "zkc/Dialect/Relation/IR/Declarations.h"
-#include "zkc/Contracts/Variant.h"
+#include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
@@ -38,38 +38,6 @@ bool sameSchema(DeclareOp a, DeclareOp b) {
       return false;
   return true;
 }
-bool logicalData(const protocol::BoundType &type, unsigned depth,
-                 protocol::TypeParseBudget &budget) {
-  if (depth > 64 || !budget.consume() || !type.representation.empty())
-    return false;
-  if (type.kind == "variant") {
-    auto descriptor = protocol::decodeVariant(type.spelling(), depth, &budget);
-    if (!descriptor)
-      return false;
-    for (const auto &arm : descriptor->alternatives)
-      for (const auto &leaf : arm.payload) {
-        auto child = protocol::parseBoundType(leaf, false, depth + 1, &budget);
-        if (!child) {
-          consumeError(child.takeError());
-          return false;
-        }
-        if (!logicalData(*child, depth + 1, budget))
-          return false;
-      }
-    return true;
-  }
-  if (type.kind == "sequence")
-    return llvm::all_of(type.arguments, [&](const auto &argument) {
-      return argument.kind != protocol::TypeArgument::Kind::Type ||
-             logicalData(*argument.type, depth + 1, budget);
-    });
-  // Data permission is independent of copyability, total arithmetic and wire
-  // support. In particular copyable keys and private resources are not data.
-  return type.kind == "bool" || type.kind == "index" || type.kind == "field" ||
-         type.kind == "group" || type.kind == "field_array" ||
-         type.kind == "vector" || type.kind == "matrix" ||
-         type.kind == "groups" || type.kind == "indices";
-}
 bool logicalInputs(TypeRange inputs) {
   protocol::TypeParseBudget budget;
   size_t remainingBytes = 1024 * 1024;
@@ -82,7 +50,9 @@ bool logicalInputs(TypeRange inputs) {
       return false;
     }
     size_t bytes = logical->spelling().size();
-    if (bytes > remainingBytes || !logicalData(*logical, 0, budget))
+    if (bytes > remainingBytes ||
+        protocol::logicalRelationData(*logical, budget) !=
+            protocol::RelationData::Supported)
       return false;
     remainingBytes -= bytes;
   }

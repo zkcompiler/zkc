@@ -409,6 +409,180 @@ private:
     } while (parens && take(",") && !at(")"));
     return !parens || expect(")");
   }
+  bool string(std::string &value) {
+    if (current().kind != TokenKind::String)
+      return fail("source.syntax", "expected an explicit string");
+    value = text().drop_front().drop_back().str();
+    advance();
+    return true;
+  }
+  bool selector(SyntaxSelector &value) {
+    value.span = current().span;
+    if (take("out"))
+      value.output = true;
+    else if (take("in"))
+      value.output = false;
+    else
+      return fail("source.specification", "selector must start with in or out");
+    if (!expect(".") || !name(value.port))
+      return false;
+    while (take(".")) {
+      if (current().kind == TokenKind::Decimal) {
+        value.path.push_back(text().str());
+        advance();
+      } else {
+        std::string field;
+        if (!name(field))
+          return false;
+        value.path.push_back(std::move(field));
+      }
+      if (value.path.size() > work.limits.typeDepth)
+        return fail("source.limit", "selector path depth exceeded");
+    }
+    if (take("@")) {
+      std::string role;
+      if (!name(role))
+        return false;
+      value.role = std::move(role);
+    }
+    value.span.end = previousEnd;
+    return true;
+  }
+  bool purpose(RelationPurpose &value) {
+    if (take("parameter"))
+      value = RelationPurpose::Parameter;
+    else if (take("statement"))
+      value = RelationPurpose::Statement;
+    else if (take("witness"))
+      value = RelationPurpose::Witness;
+    else
+      return fail("source.relation",
+                  "relation formals need an explicit purpose");
+    return true;
+  }
+  void booleanResult(SyntaxDeclaration &d) {
+    SyntaxPort result;
+    result.name = "result";
+    result.span = d.span;
+    result.type.name = "bool";
+    result.type.span = d.span;
+    d.outputs.push_back(std::move(result));
+  }
+  bool subject(SyntaxSubject &value, SyntaxDeclaration &owner) {
+    value.span = current().span;
+    if (take("relation")) {
+      SyntaxDeclaration definition;
+      definition.kind = Declaration::Kind::Relation;
+      definition.name = "clause_" + std::to_string(owner.members.size());
+      definition.anonymous = true;
+      definition.span = value.span;
+      definition.relation.emplace();
+      if (!expect("("))
+        return false;
+      if (!at(")"))
+        do {
+          SyntaxPort port;
+          port.span = current().span;
+          RelationPurpose role;
+          SyntaxSelector operand;
+          if (!purpose(role) || !this->name(port.name) || !expect("=") ||
+              !selector(operand))
+            return false;
+          port.span.end = previousEnd;
+          port.purpose = role;
+          port.binding = std::move(operand);
+          definition.inputs.push_back(std::move(port));
+        } while (take(",") && !at(")"));
+      if (!expect(")"))
+        return false;
+      booleanResult(definition);
+      if (!body(definition, false, false, 1))
+        return false;
+      definition.span.end = previousEnd;
+      if (!accept(work.count(work.declarations, work.limits.declarations,
+                             "relation count", definition.span)))
+        return false;
+      value.inlineMember = owner.members.size();
+      value.relation.span = value.span;
+      for (const auto &parameter : owner.parameters) {
+        SyntaxType argument;
+        argument.name = parameter.name;
+        argument.span = parameter.span;
+        value.relation.arguments.push_back(std::move(argument));
+      }
+      owner.members.push_back(std::move(definition));
+      value.span.end = previousEnd;
+      return true;
+    }
+    if (!type(value.relation) ||
+        value.relation.kind != SyntaxType::Kind::Name || !expect("("))
+      return fail("source.specification", "expected a relation application");
+    if (!at(")"))
+      do {
+        SyntaxSelector operand;
+        if (!selector(operand))
+          return false;
+        value.operands.push_back(std::move(operand));
+      } while (take(",") && !at(")"));
+    if (!expect(")"))
+      return false;
+    value.span.end = previousEnd;
+    return true;
+  }
+  bool specifications(SyntaxDeclaration &d) {
+    if (!at("spec"))
+      return true;
+    d.specificationBlock = current().span;
+    advance();
+    if (!expect("{"))
+      return false;
+    std::set<std::string> clauseNames;
+    while (!at("}") && !atEnd()) {
+      SyntaxClause clause;
+      clause.span = current().span;
+      using K = SpecificationClause::Kind;
+      if (take("target"))
+        clause.kind = K::Target;
+      else if (take("input"))
+        clause.kind = K::Input;
+      else if (take("output"))
+        clause.kind = K::Output;
+      else if (take("continuation"))
+        clause.kind = K::Continuation;
+      else
+        return fail("source.specification",
+                    "expected target, input, output or continuation");
+      if (!name(clause.name))
+        return false;
+      if (!clauseNames.insert(clause.name).second)
+        return fail("source.duplicate", "duplicate specification clause");
+      if (!expect("=") || !subject(clause.subject, d))
+        return false;
+      if (take("residual")) {
+        SyntaxSubject value;
+        if (!subject(value, d))
+          return false;
+        clause.residual = std::move(value);
+      }
+      if (take("accept")) {
+        SyntaxSelector decision;
+        if (!selector(decision))
+          return false;
+        clause.decision = std::move(decision);
+      }
+      if (!expect(";"))
+        return false;
+      clause.span.end = previousEnd;
+      if (!accept(work.count(work.operations, work.limits.operations,
+                             "specification count", clause.span)))
+        return false;
+      d.specifications.push_back(std::move(clause));
+    }
+    if (!expect("}"))
+      return false;
+    d.specificationBlock->end = previousEnd;
+    return true;
+  }
   bool ports(std::vector<SyntaxPort> &ports, bool roles) {
     if (!expect("("))
       return false;
@@ -455,6 +629,55 @@ private:
       d.domain = text().drop_front().drop_back().str();
       advance();
       if (!expect(")") || !expect(";"))
+        return {};
+    } else if (take("relation")) {
+      if (member) {
+        fail("source.syntax", "relations belong at module scope");
+        return {};
+      }
+      d.kind = Declaration::Kind::Relation;
+      d.relation.emplace();
+      if (!name(d.name) || !parameters(d.parameters) || !expect("("))
+        return {};
+      if (!at(")"))
+        do {
+          SyntaxPort port;
+          port.span = current().span;
+          RelationPurpose purpose;
+          if (!this->purpose(purpose))
+            return {};
+          if (!name(port.name) || !expect(":") || !type(port.type))
+            return {};
+          port.span.end = previousEnd;
+          port.purpose = purpose;
+          d.inputs.push_back(std::move(port));
+        } while (take(",") && !at(")"));
+      if (!expect(")") || !requirements(d))
+        return {};
+      booleanResult(d);
+      if (take("=")) {
+        if (take("opaque")) {
+          d.relation->kind = RelationDefinition::Kind::Opaque;
+          if (!expect("(") || !string(d.relation->externalKind) ||
+              !expect(",") || !string(d.relation->key) || !expect(",") ||
+              !string(d.relation->revision) || !expect(")"))
+            return {};
+        } else {
+          if (take("r1cs"))
+            d.relation->kind = RelationDefinition::Kind::R1CS;
+          else if (take("air"))
+            d.relation->kind = RelationDefinition::Kind::AIR;
+          else {
+            fail("source.relation", "expected opaque, r1cs or air definition");
+            return {};
+          }
+          if (!expect("(") || !expect("asset") || !path(d.relation->asset) ||
+              !expect(")"))
+            return {};
+        }
+        if (!expect(";"))
+          return {};
+      } else if (!body(d, false, false, 1))
         return {};
     } else if (take("entry")) {
       d.kind = Declaration::Kind::Entry;
@@ -630,6 +853,8 @@ private:
         d.completes = true;
       }
       if (!requirements(d) || !effects(d))
+        return {};
+      if (protocol && !specifications(d))
         return {};
       d.abstract = abstract;
       if (abstract) {

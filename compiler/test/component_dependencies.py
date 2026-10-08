@@ -27,7 +27,7 @@ HEADER_ROOTS = {
     "ZkcLanguage": ["Language"],
     "ZkcFrontend": ["Frontend"],
     "ZkcFrontendLoading": ["Frontend/Loading.h"],
-    "ZkcSupport": ["Support/BoundedStream.h", "Support/Refusal.h", "Support/Json.h", "Support/LogicalTree.h", "Support/MLIRInput.h"],
+    "ZkcSupport": ["Support/BoundedStream.h", "Support/FramedHash.h", "Support/Refusal.h", "Support/Json.h", "Support/LogicalTree.h", "Support/MLIRInput.h"],
     "ZkcContracts": ["Contracts"],
     "ZkcRelation": [f"Relation/{name}.h" for name in ("R1CS", "AIR", "AIRPolynomial", "Matrices")],
     "ZkcProtocol": ["Source", "Analysis", "Protocol/Admission.h", "Protocol/Instantiation.h", "Protocol/PhysicalOptions.h"],

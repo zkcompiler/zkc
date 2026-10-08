@@ -6,11 +6,15 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Relation/Formula.h"
+#include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Language.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
 #include <set>
 using namespace llvm;
 namespace zkc::language {
@@ -739,9 +743,14 @@ public:
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
     SmallVector<mlir::Operation *> functions;
+    std::map<std::string, relation::DeclareOp> relations;
     std::set<std::string> realizedHelpers;
     for (auto &op : native.getBody().front()) {
-      if (op.getName().getStringRef() == "local.binding") {
+      if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
+        if (!relations.emplace(declaration.getSymName().str(), declaration)
+                 .second)
+          return error("source.correspondence", "duplicate relation symbol");
+      } else if (op.getName().getStringRef() == "local.binding") {
         auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
         if (!attributes(
                 op, {"sym_name", "contract", "arguments", "implementation"}) ||
@@ -762,6 +771,8 @@ public:
     }
     unsigned index = 0;
     mlir::SymbolTableCollection symbols;
+    relation::FormulaIdentities formulas(remaining, limits.irBytes);
+    LayoutIdentities schemaIdentities(remaining);
     for (auto &decl : project.declarations()) {
       if (!decl.body || !decl.parameters.empty())
         continue;
@@ -775,7 +786,8 @@ public:
       if (function.getName().getStringRef() != (protocol ? "protocol.func"
                                                 : local  ? "local.func"
                                                          : "func.func") ||
-          !string(function, "sym_name", decl.symbol) ||
+          !string(function, "sym_name",
+                  decl.relation ? formulaSymbol(decl) : decl.symbol) ||
           function.getNumRegions() != 1 ||
           !llvm::hasSingleElement(function.getRegion(0)))
         return error("source.correspondence",
@@ -861,6 +873,89 @@ public:
                 protocol ? &availability : nullptr))
         return std::move(failure);
     }
+    for (const auto &decl : project.declarations()) {
+      if (!decl.relation || !decl.origin)
+        continue;
+      if (++report.declarations > limits.declarations)
+        return error("source.limit", "comparison declaration limit");
+      auto found = relations.find(decl.symbol);
+      if (found == relations.end())
+        return error("source.correspondence", "omitted relation declaration");
+      auto declaration = found->second;
+      relations.erase(found);
+      if (!attributes(*declaration, {"sym_name", "kind", "key", "revision",
+                                     "signature", "purposes"}) ||
+          declaration->getNumRegions() || declaration->getNumOperands() ||
+          declaration->getNumResults())
+        return error("source.correspondence",
+                     "relation declaration structure differs");
+      const auto &definition = *decl.relation;
+      std::vector<LayoutLeaf> leaves;
+      std::vector<std::string> purposes, logicalTypes, logicalPurposes;
+      for (unsigned i = 0; i < decl.inputs.size(); ++i) {
+        auto layout = take(layouts.get(decl.inputs[i].type));
+        if (!layout)
+          return std::move(failure);
+        llvm::append_range(leaves, (**layout).leaves);
+        std::string purpose;
+        switch (definition.purposes[i]) {
+        case RelationPurpose::Parameter:
+          purpose = "parameter";
+          break;
+        case RelationPurpose::Statement:
+          purpose = "statement";
+          break;
+        case RelationPurpose::Witness:
+          purpose = "witness";
+          break;
+        }
+        purposes.insert(purposes.end(), (**layout).leaves.size(), purpose);
+        logicalPurposes.push_back(purpose);
+        auto schema = take(schemaIdentities.get(**layout));
+        if (!schema)
+          return std::move(failure);
+        logicalTypes.push_back(std::move(*schema));
+      }
+      if (!types(declaration.getSignature().getInputs(), leaves))
+        return std::move(failure);
+      if (!strings(declaration.getPurposes(), purposes))
+        return error("source.correspondence", "relation input purposes differ");
+      std::string kind, key, revision;
+      switch (definition.kind) {
+      case RelationDefinition::Kind::Formula: {
+        kind = "zkc.language.formula/1";
+        key = decl.symbol;
+        auto helper = symbols.getSymbolTable(native).lookup<mlir::func::FuncOp>(
+            formulaSymbol(decl));
+        auto identity =
+            take(formulas.get(helper, logicalTypes, logicalPurposes));
+        if (!identity)
+          return std::move(failure);
+        revision = std::move(*identity);
+        break;
+      }
+      case RelationDefinition::Kind::Opaque:
+        kind = definition.externalKind;
+        key = definition.key;
+        revision = definition.revision;
+        break;
+      case RelationDefinition::Kind::R1CS:
+      case RelationDefinition::Kind::AIR:
+        kind = definition.kind == RelationDefinition::Kind::R1CS
+                   ? "zkc.relation.r1cs/1"
+                   : "zkc.relation.air/1";
+        key = project.project().assets()[*definition.asset].identity().str();
+        revision = "1";
+        break;
+      }
+      if (!string(*declaration, "kind", kind) ||
+          !string(*declaration, "key", key) ||
+          !string(*declaration, "revision", revision) ||
+          !record(*declaration, decl.span))
+        return error("source.correspondence", "relation identity differs");
+    }
+    if (!relations.empty())
+      return error("source.correspondence", "extra relation declaration");
     if (index != functions.size() || usedBindings.size() != bindings.size() ||
         usedRealizations.size() != realizations.size())
       return error("source.correspondence",

@@ -1,0 +1,9 @@
+module sample;
+domain G=group("bls12-381.g1");
+relation DLog<H:Group>(parameter base:H,statement point:H,witness scalar:H::Scalar){
+  return point==base*scalar;
+}
+protocol Run<H:Group+Share+Wire> roles(P,V)(base:H@P,scalar:H::Scalar@P)->(point:H@V,ok:bool@V)
+ spec{target knowledge=DLog<H>(in.base,out.point,in.scalar) accept out.ok;}
+ {let point=send P->V(base*scalar);let ok@V=true;return(point=point,ok=ok);}
+entry Demo=Run<G>;

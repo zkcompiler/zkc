@@ -55,6 +55,19 @@ public:
                         unsigned = 1);
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   bool body(DeclarationId, unsigned);
+  bool relation(Declaration &);
+  bool relationData(const Declaration &, const Type &, Span, unsigned = 1);
+  std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
+  bool relationIdentities();
+  bool specifications(Declaration &);
+  std::optional<Type> projectedType(const Declaration &, Type,
+                                    llvm::ArrayRef<unsigned>, Span);
+  std::optional<unsigned> fieldIndex(const Declaration &, const Type &,
+                                     llvm::StringRef, Span);
+  std::optional<Type> selectedType(const Declaration &,
+                                   const SpecificationSelector &);
+  std::optional<SpecificationSelector> selector(const Declaration &,
+                                                const SyntaxSelector &);
   bool specialize(DeclarationId);
   struct CallSignature {
     std::vector<Type> inputs, outputs;

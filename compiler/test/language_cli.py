@@ -16,11 +16,12 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface/3'
+    assert interface['format'] == 'zkc.language-interface/4'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
-    assert 'clauses' not in interface
-    assert [p['name'] for p in interface['outputs']] == ['first', 'second', 'delta', 'ok']
+    protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
+    assert protocol['clauses'] == []
+    assert [p['name'] for p in protocol['outputs']] == ['first', 'second', 'delta', 'ok']
     assert original.count('"protocol.exchange"') == 2
     assert original.count('"protocol.restrict_roles"') == 3
     (OUT / 'transfer.mlir').write_text(original)
@@ -112,6 +113,7 @@ for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
             bundle = commands.run([compiler, 'language-bundle', *args, *flags])
             (OUT / f'typed-{name}-{optimized}.bundle').write_text(bundle)
         schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+        schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
         for direction in ('inputs', 'outputs'):
             native = [index for port in schema[direction] for index in port['native']]
             assert native == list(range(len(native)))
@@ -148,6 +150,7 @@ with case('managed aliases retain ordered queries and owner guards'):
     assert original.count('"protocol.query"') == 2
     assert original.count('"protocol.guard"') == 1
     schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+    schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
     assert schema['services'] == [{'name': 'coins', 'owner': 'V',
                                    'contract': 'random.bls12-381.fr/1', 'native': 1}]
     for optimized in (0, 1):
@@ -187,5 +190,21 @@ for fixture in ('dispatch', 'service_order'):
             flags = [] if optimized else ['--no-simplify']
             bundle = commands.run([compiler, 'language-bundle', *args, *flags])
             (OUT / f'{fixture}-{optimized}.bundle').write_text(bundle)
+
+for fixture, entry in [('relation_sumcheck', 'Demo'), ('relation_sumcheck', 'ProductControl'),
+                       ('relation_r1cs', 'Demo'), ('relation_group', 'Demo'),
+                       ('specification_execution', 'Demo')]:
+    with case(f'source relation execution boundary: {fixture}::{entry}'):
+        args = ['--source-format=zkc', f'--entry=sample::{entry}',
+                f'--module=sample={FIXTURES / (fixture + ".zkc")}']
+        schema = json.loads(commands.run([compiler, 'language-interface', *args]))
+        selected = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
+        assert len(selected['clauses']) == (0 if entry == 'ProductControl' else 1)
+        if selected['clauses']:
+            assert schema['relations']
+        for optimized in (0, 1):
+            flags = [] if optimized else ['--no-simplify']
+            bundle = commands.run([compiler, 'language-bundle', *args, *flags])
+            (OUT / f'{fixture}-{entry}-{optimized}.bundle').write_text(bundle)
 
 counted()

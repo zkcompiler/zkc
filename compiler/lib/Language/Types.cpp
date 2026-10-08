@@ -3,6 +3,42 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 namespace zkc::language {
+StringRef typeKindName(Type::Kind kind) {
+  switch (kind) {
+  case Type::Kind::Boolean:
+    return "boolean";
+  case Type::Kind::Field:
+    return "field";
+  case Type::Kind::Group:
+    return "group";
+  case Type::Kind::Index:
+    return "index";
+  case Type::Kind::Unit:
+    return "unit";
+  case Type::Kind::Tuple:
+    return "tuple";
+  case Type::Kind::Array:
+    return "array";
+  case Type::Kind::Record:
+    return "record";
+  case Type::Kind::Variant:
+    return "variant";
+  case Type::Kind::Parameter:
+    return "parameter";
+  case Type::Kind::Associated:
+    return "associated";
+  case Type::Kind::Natural:
+    return "natural";
+  case Type::Kind::Component:
+    return "component";
+  case Type::Kind::Builtin:
+    return "builtin";
+  case Type::Kind::Formal:
+    return "formal";
+  }
+  llvm_unreachable("unknown source type kind");
+}
+
 std::string spelling(const Type &type) {
   using K = Type::Kind;
   switch (type.kind) {

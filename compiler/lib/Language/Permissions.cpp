@@ -331,4 +331,71 @@ bool Checker::ingress(const Type &type, Span span) {
                span));
 }
 
+std::optional<Type> Checker::projectedType(const Declaration &decl, Type type,
+                                           ArrayRef<unsigned> path, Span span) {
+  if (!charge(path.size() + 1, span))
+    return {};
+  for (auto index : path) {
+    if (!chargeType(type, span))
+      return {};
+    if (type.kind == Type::Kind::Array) {
+      if (type.dimension.isClosed() && index >= type.dimension.closedValue()) {
+        fail("source.index", "static array index is out of range", span);
+        return {};
+      }
+      if (!type.dimension.isClosed()) {
+        NaturalBound required{Natural::constant(uint64_t(index) + 1),
+                              type.dimension, span};
+        if (!assumptions(decl, required, {}, span))
+          return {};
+      }
+      auto element = type.arguments.front();
+      type = std::move(element);
+    } else {
+      auto fs = fields(type, span);
+      if (!fs)
+        return {};
+      if (index >= fs->size()) {
+        fail("source.index", "product index is out of range", span);
+        return {};
+      }
+      type = (*fs)[index].type;
+    }
+  }
+  return type;
+}
+std::optional<unsigned> Checker::fieldIndex(const Declaration &decl,
+                                            const Type &type, StringRef name,
+                                            Span span) {
+  auto *nominal = typeDeclaration(type);
+  if (type.kind == Type::Kind::Associated ||
+      type.kind == Type::Kind::Parameter || (nominal && nominal->permissions)) {
+    fail("source.private",
+         "restricted values require their module's unpack or consume operation",
+         span);
+    return {};
+  }
+  unsigned index;
+  if (type.kind == Type::Kind::Array) {
+    if (name.getAsInteger(10, index)) {
+      fail("source.index", "fixed arrays require a static numeric index", span);
+      return {};
+    }
+    return index;
+  }
+  auto product = fields(type, span);
+  if (!product)
+    return {};
+  auto found = llvm::find_if(
+      *product, [&](const auto &field) { return field.name == name; });
+  if (found == product->end()) {
+    fail("source.field", "unknown field: " + name, span);
+    return {};
+  }
+  if (!found->isPublic && !constructorAllowed(decl, type)) {
+    fail("source.private", "private record field", span);
+    return {};
+  }
+  return unsigned(found - product->begin());
+}
 } // namespace zkc::language::detail

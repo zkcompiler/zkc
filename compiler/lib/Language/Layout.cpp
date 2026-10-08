@@ -5,10 +5,58 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace llvm;
 namespace zkc::language {
+Expected<std::string> LayoutIdentities::get(const Layout &layout) {
+  if (auto found = cache.find(&layout); found != cache.end())
+    return found->second;
+  auto key = typeIdentity(layout.type);
+  if (key.size() > remaining)
+    return error("source.limit", "schema type identity limit exceeded");
+  remaining -= key.size();
+  FramedHash hash(remaining);
+  hash.frame("zkc.language.schema/1");
+  hash.frame(typeKindName(layout.type.kind));
+  hash.frame(toHex(SHA256::hash(arrayRefFromStringRef(key)), true));
+  hash.frame(layout.custody ? "1" : "0");
+  for (bool allowed : {layout.permissions.copy, layout.permissions.drop,
+                       layout.permissions.share, layout.permissions.wire})
+    hash.frame(allowed ? "1" : "0");
+  hash.frame(std::to_string(layout.leaves.size()));
+  for (const auto &leaf : layout.leaves) {
+    if (!leaf.data())
+      return error("source.formal", "relation schema contains a formal leaf");
+    hash.frame(*leaf.data());
+  }
+  auto fields = [&](ArrayRef<LayoutField> fields) -> Error {
+    hash.frame(std::to_string(fields.size()));
+    for (const auto &field : fields) {
+      hash.frame(field.name);
+      hash.frame(std::to_string(field.offset));
+      auto child = get(*field.layout);
+      if (!child)
+        return child.takeError();
+      hash.frame(*child);
+    }
+    return Error::success();
+  };
+  if (auto error = fields(layout.fields))
+    return std::move(error);
+  hash.frame(std::to_string(layout.alternatives.size()));
+  for (const auto &alternative : layout.alternatives) {
+    hash.frame(alternative.name);
+    if (auto error = fields(alternative.fields))
+      return std::move(error);
+  }
+  auto digest = hash.finish();
+  if (!digest)
+    return digest.takeError();
+  cache.emplace(&layout, *digest);
+  return digest;
+}
 Layouts::Layouts(const CheckedProject &project, const Limits &limits)
     : definitions(project.declarations()), limits(limits),
       remaining(limits.work) {}

@@ -4,15 +4,19 @@
 #include "zkc/Compiler/LanguageInterface.h"
 #include "llvm/Support/JSON.h"
 namespace zkc::language::detail {
+llvm::Expected<std::string> emitInterface(const ClosedEntry &,
+                                          llvm::StringRef original,
+                                          llvm::StringRef toolchain,
+                                          const Limits &);
 /// The caller has verified this exact original module and computed its digest.
-llvm::Expected<LanguageInterface> readInterface(mlir::ModuleOp,
-                                                llvm::StringRef digest,
-                                                llvm::StringRef interface,
-                                                const Limits &);
-llvm::Expected<LanguageInterface> decodeInterface(mlir::ModuleOp,
-                                                  llvm::StringRef digest,
-                                                  const llvm::json::Value &,
-                                                  const Limits &);
+llvm::Expected<LanguageInterface>
+decodeInterface(mlir::ModuleOp, llvm::StringRef digest,
+                const llvm::json::Value &, const Limits &,
+                llvm::ArrayRef<RelationAsset> = {});
+llvm::Error withInterface(
+    llvm::StringRef original, llvm::StringRef interface, const Limits &,
+    llvm::ArrayRef<RelationAsset>,
+    llvm::function_ref<llvm::Error(mlir::ModuleOp, LanguageInterface &&)>);
 llvm::Expected<llvm::json::Value> parseInterface(llvm::StringRef,
                                                  const Limits &);
 } // namespace zkc::language::detail

@@ -49,6 +49,16 @@ struct Layout {
   /// Includes formal element meaning even when an array has zero leaves.
   bool formal = false;
 };
+/// Full logical schemas, including nominal identity and member names, are
+/// significant across captures. Cache only within an immutable layout phase.
+class LayoutIdentities {
+  uint64_t &remaining;
+  std::map<const Layout *, std::string> cache;
+
+public:
+  explicit LayoutIdentities(uint64_t &remaining) : remaining(remaining) {}
+  llvm::Expected<std::string> get(const Layout &);
+};
 class Layouts {
 public:
   explicit Layouts(const CheckedProject &, const Limits & = {});

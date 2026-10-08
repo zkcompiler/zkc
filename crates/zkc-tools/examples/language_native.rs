@@ -597,6 +597,66 @@ fn main() {
         expect_field(&p[0], 6);
         expect_field(&v[0], 12);
     }
+    for optimized in [0, 1] {
+        // Metadata does not insert guards, queries or automatic relation checks.
+        // The output predicate in this fixture is deliberately always false.
+        managed_queries(&load(&format!(
+            "specification_execution-Demo-{optimized}.bundle"
+        )));
+        let group = load(&format!("relation_group-Demo-{optimized}.bundle"));
+        let mut prover = runner(
+            &group,
+            "P",
+            vec![Value::Curve(GroupPoint::generator()), field(3)],
+        );
+        let mut verifier = runner(&group, "V", vec![]);
+        let point = send(&mut prover);
+        receive(&mut verifier, point);
+        assert!(returned(&mut prover).is_empty());
+        let result = returned(&mut verifier);
+        assert!(matches!(&result[0], Value::Curve(point)
+            if *point == GroupPoint::generator().scale(Scalar::from(3u64))));
+        assert!(matches!(result[1], Value::Bool(true)));
+
+        let sumcheck = load(&format!("relation_sumcheck-Demo-{optimized}.bundle"));
+        for claim in [5, 99] {
+            let mut prover = runner(&sumcheck, "P", vec![field(2), field(3)]);
+            let mut verifier = runner(&sumcheck, "V", vec![field(claim), field(7)]);
+            let challenge = send(&mut verifier);
+            receive(&mut prover, challenge);
+            let evaluation = send(&mut prover);
+            receive(&mut verifier, evaluation);
+            assert!(returned(&mut prover).is_empty());
+            let result = returned(&mut verifier);
+            expect_field(&result[0], 7);
+            expect_field(&result[1], 9);
+            assert!(matches!(result[2], Value::Bool(true)));
+        }
+        let products = load(&format!(
+            "relation_sumcheck-ProductControl-{optimized}.bundle"
+        ));
+        let result = returned(&mut runner(&products, "P", vec![field(2)]));
+        // Product of MLEs is x*x; MLE of the pointwise product is x.
+        expect_field(&result[0], 4);
+        expect_field(&result[1], 2);
+
+        let r1cs = load(&format!("relation_r1cs-Demo-{optimized}.bundle"));
+        for (statement, one, public, witness, expected) in [
+            (9, 1, 9, 3, true),
+            (8, 1, 8, 3, false),
+            (9, 0, 9, 3, false),
+            (8, 1, 9, 3, false),
+        ] {
+            let matrices = [0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0];
+            let inputs = matrices
+                .into_iter()
+                .chain([statement, one, public, witness])
+                .map(field)
+                .collect();
+            let result = returned(&mut runner(&r1cs, "P", inputs));
+            assert!(matches!(result[0], Value::Bool(actual) if actual == expected));
+        }
+    }
     for (name, expected) in [("One", 4), ("Two", 6), ("Alias", 4)] {
         let bundle = load(&format!("{name}.bundle"));
         let mut participant = runner(&bundle, "P", vec![field(3)]);

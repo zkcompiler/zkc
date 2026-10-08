@@ -109,4 +109,48 @@ std::optional<NativeTypePolicy> nativeTypePolicy(const BoundType &type) {
   bool limited = false;
   return nativeTypePolicy(type, remaining, limited);
 }
+RelationData logicalRelationData(const BoundType &type, TypeParseBudget &budget,
+                                 unsigned depth) {
+  using R = RelationData;
+  if (depth > 64 || !budget.consume())
+    return R::Limit;
+  if (!type.representation.empty())
+    return R::Unsupported;
+  if (type.kind == "variant") {
+    auto descriptor = decodeVariant(type.spelling(), depth, &budget);
+    if (!descriptor)
+      return budget.remaining ? R::Unsupported : R::Limit;
+    for (const auto &arm : descriptor->alternatives)
+      for (const auto &leaf : arm.payload) {
+        if (depth == 64)
+          return R::Limit;
+        auto child = parseBoundType(leaf, false, depth + 1, &budget);
+        if (!child) {
+          consumeError(child.takeError());
+          return budget.remaining ? R::Unsupported : R::Limit;
+        }
+        auto result = logicalRelationData(*child, budget, depth + 1);
+        if (result != R::Supported)
+          return result;
+      }
+    return R::Supported;
+  }
+  if (type.kind == "sequence") {
+    for (const auto &argument : type.arguments)
+      if (argument.kind == TypeArgument::Kind::Type) {
+        auto result = logicalRelationData(*argument.type, budget, depth + 1);
+        if (result != R::Supported)
+          return result;
+      }
+    return R::Supported;
+  }
+  // Copyable keys and private resources are not immutable relation data.
+  return type.kind == "bool" || type.kind == "index" || type.kind == "field" ||
+                 type.kind == "group" || type.kind == "field_array" ||
+                 type.kind == "vector" || type.kind == "matrix" ||
+                 type.kind == "groups" || type.kind == "indices"
+             ? R::Supported
+             : R::Unsupported;
+}
+
 } // namespace zkc::protocol

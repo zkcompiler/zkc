@@ -56,6 +56,7 @@ struct Type {
   }
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
+llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
 /// Injective internal key; source-facing spelling is deliberately separate.
 std::string typeIdentity(const Type &);

@@ -55,8 +55,8 @@ json::Value pair() {
 json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
-  return json::Object{
-      {"format", "zkc.language-interface/3"},
+  json::Object root{
+      {"format", "zkc.language-interface/4"},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},
       {"toolchain", compilerToolchainIdentity()},
@@ -80,9 +80,20 @@ json::Value document() {
                                 {"contract", "random.bls12-381.fr/1"},
                                 {"owner", "V"},
                                 {"native", 2}}}}};
+  json::Object protocol{{"symbol", "Transfer"}, {"clauses", json::Array{}}};
+  for (StringRef key : {"roles", "inputs", "outputs", "services"}) {
+    protocol[key] = std::move(*root.get(key));
+    root.erase(key);
+  }
+  root["protocols"] = json::Array{json::Value(std::move(protocol))};
+  root["relations"] = json::Array{};
+  return root;
+}
+json::Object &protocol(json::Value &value) {
+  return *value.getAsObject()->getArray("protocols")->front().getAsObject();
 }
 json::Object &input(json::Value &value) {
-  return *value.getAsObject()->getArray("inputs")->front().getAsObject();
+  return *protocol(value).getArray("inputs")->front().getAsObject();
 }
 json::Object &shape(json::Value &value) {
   return *input(value).getObject("schema");
@@ -100,14 +111,135 @@ CheckedOriginal compile(StringRef code) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("expanded display types refuse with their source span", [] {
+    std::string module;
+    for (unsigned i = 0; i < 15; ++i) {
+      if (i)
+        module += "::";
+      module += std::string(128, char('a' + i));
+    }
+    std::string name(128, 'Z');
+    std::string text = "module " + module + ";struct " + name +
+                       "{pub b:bool}"
+                       "protocol Run roles(P)(x:(";
+    for (unsigned i = 0; i < 130; ++i) {
+      if (i)
+        text += ',';
+      text += name;
+    }
+    text += ")@P)->(){return ();}entry Demo=Run;";
+    auto project = analyze(take(capture({{module, text, "long-type.zkc"}})))
+                       .checkedProject();
+    // The source work bound currently refuses this before interface writing.
+    // Keep the source location even if a later implementation reaches the
+    // writer.
+    Error failure = Error::success();
+    if (!project)
+      failure = project.takeError();
+    else {
+      auto selected = closeEntry(*project, module + "::Demo");
+      if (!selected)
+        failure = selected.takeError();
+      else {
+        auto result = prepareOriginal(*selected);
+        require(!result, "oversized display type accepted");
+        failure = result.takeError();
+      }
+    }
+    require(bool(failure), "oversized type accepted");
+    bool located = false;
+    handleAllErrors(
+        std::move(failure),
+        [&](const DiagnosticError &error) {
+          located = error.diagnostic().code == "source.limit" &&
+                    error.diagnostic().primary.has_value();
+        },
+        [&](const ErrorInfoBase &) {});
+    require(located, "oversized source display type lost its diagnostic span");
+  });
   cases.run("hand-authored logical layout binds exact native ports", [] {
     auto view = take(readInterface(original, zkc::printJson(document())));
-    require(view.inputs[0].native == std::vector<unsigned>({0, 1}) &&
-                view.inputs[0].schema->fields[1].offset == 1 &&
-                view.outputs[0].roles == std::vector<unsigned>{1} &&
-                view.services[0].owner == 1 && view.services[0].native == 2,
+    require(view.selectedProtocol().inputs[0].native ==
+                    std::vector<unsigned>({0, 1}) &&
+                view.selectedProtocol().inputs[0].schema->fields[1].offset ==
+                    1 &&
+                view.selectedProtocol().outputs[0].roles ==
+                    std::vector<unsigned>{1} &&
+                view.selectedProtocol().services[0].owner == 1 &&
+                view.selectedProtocol().services[0].native == 2,
             "read view lost native binding");
   });
+  cases.run(
+      "hand-authored clauses bind product fields and actual participants", [] {
+        auto native = original.str();
+        native.insert(native.find("    \"protocol.func\""), R"(
+      "relation.declare"() <{sym_name="Claim", kind="vendor.claim/1", key="key", revision="1",
+        signature=(i1,i1)->i1, purposes=["statement","witness"]}> : ()->()
+    )");
+        auto value = document();
+        (*value.getAsObject())["original"] =
+            toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
+        *value.getAsObject()->getArray("relations") = json::Array{json::Object{
+            {"symbol", "Claim"},
+            {"definition", json::Object{{"kind", "opaque"}}},
+            {"inputs", json::Array{json::Object{{"name", "expected"},
+                                                {"purpose", "statement"},
+                                                {"native", json::Array{0}},
+                                                {"schema", scalar()}},
+                                   json::Object{{"name", "actual"},
+                                                {"purpose", "witness"},
+                                                {"native", json::Array{1}},
+                                                {"schema", scalar()}}}}}};
+        auto in = json::Object{{"direction", "input"},
+                               {"port", 0},
+                               {"path", json::Array{1}},
+                               {"role", "P"}};
+        json::Value out = json::Object{{"direction", "output"},
+                                       {"port", 0},
+                                       {"path", json::Array{}},
+                                       {"role", "V"}};
+        *protocol(value).getArray("clauses") = json::Array{json::Object{
+            {"kind", "target"},
+            {"name", "proof"},
+            {"subject",
+             json::Object{{"relation", "Claim"},
+                          {"operands", json::Array{std::move(in), out}}}},
+            {"residual", nullptr},
+            {"decision", std::move(out)}}};
+        auto view = take(readInterface(native, zkc::printJson(value)));
+        const auto &clause = view.selectedProtocol().clauses[0];
+        require(clause.subject.operands[0].native == std::vector<unsigned>{1} &&
+                    clause.subject.operands[0].role == 0 &&
+                    clause.subject.operands[1].role == 1 &&
+                    clause.decision->native == std::vector<unsigned>{0},
+                "hand-authored selector mapping differs");
+        auto sealed = scalar();
+        auto &representation = *sealed.getAsObject();
+        representation["kind"] = "associated";
+        representation["identity"] = std::string(64, '3');
+        representation["type"] = "sample::C::State";
+        representation["fields"] = json::Array{json::Object{
+            {"name", "value"}, {"offset", 0}, {"schema", scalar()}}};
+        auto &right = *(*shape(value).getArray("fields"))[1].getAsObject();
+        right["schema"] = std::move(sealed);
+        auto clauses = std::move(*protocol(value).getArray("clauses"));
+        protocol(value)["clauses"] = json::Array{};
+        take(readInterface(native, zkc::printJson(value)));
+        auto *operand = clauses.front()
+                            .getAsObject()
+                            ->getObject("subject")
+                            ->getArray("operands")
+                            ->front()
+                            .getAsObject();
+        (*operand)["path"] = json::Array{1, 0};
+        protocol(value)["clauses"] = std::move(clauses);
+        refuses(readInterface(native, zkc::printJson(value)),
+                "source.interface");
+        auto limited = Limits{};
+        limited.work = 10;
+        refuses(readInterface(native, zkc::printJson(value), limited),
+                "source.limit");
+      });
   cases.run("string limits count decoded bytes and allow JSON escapes", [] {
     auto v = document();
     std::string label(zkc::protocol::VariantSpellingBytes, 'a');
@@ -142,12 +274,12 @@ int main() {
     mutate([](auto &v) { shape(v).erase("identity"); });
     for (StringRef kind : {"record", "array", "tuple", "group", "builtin"})
       mutate([&](auto &v) {
-        auto &out =
-            *v.getAsObject()->getArray("outputs")->front().getAsObject();
+        auto &out = *protocol(v).getArray("outputs")->front().getAsObject();
         (*out.getObject("schema"))["kind"] = kind.str();
       });
     for (StringRef version :
-         {"zkc.language-interface/1", "zkc.language-interface/2"})
+         {"zkc.language-interface/1", "zkc.language-interface/2",
+          "zkc.language-interface/3"})
       mutate([&](auto &v) { (*v.getAsObject())["format"] = version.str(); });
   });
   cases.run("type identities distinguish phantom and empty element types", [] {
@@ -158,7 +290,7 @@ protocol Run roles(P)(a:Box<bool>@P,b:Box<index>@P,c:[bool;0]@P,d:[index;0]@P)
   return(x=a,y=b,u=c,v=d);
 }
 entry Demo=Run;)zkc");
-    const auto &v = source.interface();
+    const auto &v = source.interface().selectedProtocol();
     require(v.inputs[0].schema->identity != v.inputs[1].schema->identity &&
                 v.inputs[2].schema->identity != v.inputs[3].schema->identity &&
                 v.inputs[0].schema == v.outputs[0].schema &&
@@ -167,14 +299,15 @@ entry Demo=Run;)zkc");
   });
   cases.run("display labels are not type identity", [] {
     auto v = document();
-    auto &out = *v.getAsObject()->getArray("outputs")->front().getAsObject();
+    auto &out = *protocol(v).getArray("outputs")->front().getAsObject();
     out["type"] = "sample::Pair";
     (*out.getObject("schema"))["type"] = "sample::Pair";
     (*out.getObject("schema"))["identity"] = std::string(64, '3');
     auto view = take(readInterface(original, zkc::printJson(v)));
-    require(view.inputs[0].schema->type == view.outputs[0].schema->type &&
-                view.inputs[0].schema->identity !=
-                    view.outputs[0].schema->identity,
+    require(view.selectedProtocol().inputs[0].schema->type ==
+                    view.selectedProtocol().outputs[0].schema->type &&
+                view.selectedProtocol().inputs[0].schema->identity !=
+                    view.selectedProtocol().outputs[0].schema->identity,
             "structural view treated labels as equality authority");
     (*out.getObject("schema"))["identity"] = std::string(64, '2');
     refuses(readInterface(original, zkc::printJson(v)), "source.interface");
@@ -199,7 +332,7 @@ entry Demo=Run;)zkc");
       protocol Run roles(P)(x:Choice@P)->(y:Choice@P){return(y=x);}entry Demo=Run;)zkc"}) {
       auto source = compile(code);
       auto v = take(json::parse(source.interfaceJson()));
-      auto &out = *v.getAsObject()->getArray("outputs")->front().getAsObject();
+      auto &out = *protocol(v).getArray("outputs")->front().getAsObject();
       (*out.getObject("schema"))["identity"] = std::string(64, '0');
       refuses(readInterface(source.bytes(), zkc::printJson(v)),
               "source.interface");
@@ -222,7 +355,7 @@ entry Demo=Run;)zkc");
       auto &o = *v.getAsObject();
       o["format"] = false;
       o["entry"] = false;
-      o["inputs"] = false;
+      protocol(v)["inputs"] = false;
     });
     mutate([](auto &v) {
       shape(v)["type"] = false;
@@ -243,8 +376,7 @@ entry Demo=Run;)zkc");
           a.push_back(i);
         input(v)["native"] = std::move(a);
       });
-    mutate(
-        [](auto &v) { *v.getAsObject()->getArray("outputs") = json::Array{}; });
+    mutate([](auto &v) { *protocol(v).getArray("outputs") = json::Array{}; });
   });
   cases.run("field offsets and payload coverage refuse coherent overlaps", [] {
     mutate([](auto &v) {
@@ -261,13 +393,12 @@ entry Demo=Run;)zkc");
     for (auto roles : {json::Array{"V"}, json::Array{"P", "P"}, json::Array{},
                        json::Array{"unknown"}})
       mutate([&](auto &v) { input(v)["roles"] = json::Array(roles); });
-    mutate(
-        [](auto &v) { (*v.getAsObject())["roles"] = json::Array{"V", "P"}; });
+    mutate([](auto &v) { protocol(v)["roles"] = json::Array{"V", "P"}; });
   });
   cases.run("service types owners and flat positions are checked", [] {
     for (StringRef field : {"owner", "contract", "native", "name"})
       mutate([&](auto &v) {
-        auto &s = *v.getAsObject()->getArray("services")->front().getAsObject();
+        auto &s = *protocol(v).getArray("services")->front().getAsObject();
         if (field == "owner")
           s[field] = "P";
         if (field == "contract")
@@ -277,7 +408,7 @@ entry Demo=Run;)zkc");
         if (field == "name")
           s[field] = "p";
       });
-    mutate([](auto &v) { (*v.getAsObject())["services"] = json::Array{}; });
+    mutate([](auto &v) { protocol(v)["services"] = json::Array{}; });
   });
   cases.run("permissions cannot exceed their children", [] {
     mutate([](auto &v) {
@@ -330,12 +461,15 @@ protocol Run roles(P)(choice:Choice@P, empty:[Fr;0]@P, x:Fr@P)
 }
 entry Demo=Run;)zkc");
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
-        require(view.inputs[0].schema->alternatives.size() == 2 &&
-                    view.inputs[1].native.empty() &&
-                    view.outputs[1].native.empty() &&
-                    view.outputs[2].schema->custody &&
-                    view.outputs[2].schema->fields[0].offset == 1,
-                "rich schema lost structure");
+        require(
+            view.selectedProtocol().inputs[0].schema->alternatives.size() ==
+                    2 &&
+                view.selectedProtocol().inputs[1].native.empty() &&
+                view.selectedProtocol().outputs[1].native.empty() &&
+                view.selectedProtocol().outputs[2].schema->custody &&
+                view.selectedProtocol().outputs[2].schema->fields[0].offset ==
+                    1,
+            "rich schema lost structure");
         for (unsigned mode = 0; mode < 6; ++mode) {
           auto value = take(json::parse(source.interfaceJson()));
           auto &s = *input(value).getObject("schema");
@@ -357,7 +491,7 @@ entry Demo=Run;)zkc");
           if (mode == 4)
             s["alternatives"] = json::Array{};
           if (mode == 5)
-            (*value.getAsObject()->getArray("outputs"))[2]
+            (*protocol(value).getArray("outputs"))[2]
                 .getAsObject()
                 ->getObject("schema")
                 ->operator[]("fields") = json::Array{};
@@ -374,9 +508,10 @@ fn make()->Wrapper {return Wrapper{ticket:Ticket{}};}
 protocol Run roles(P)()->(result:Wrapper@P) {local P let value=make(); return(result=value);}
 entry Demo=Run;)zkc");
         auto view = take(readInterface(source.bytes(), source.interfaceJson()));
-        require(view.outputs[0].schema->permissions.share &&
-                    !view.outputs[0].schema->permissions.copy,
-                "independent nominal permissions were collapsed");
+        require(
+            view.selectedProtocol().outputs[0].schema->permissions.share &&
+                !view.selectedProtocol().outputs[0].schema->permissions.copy,
+            "independent nominal permissions were collapsed");
       });
   cases.run("field names are identifiers or contiguous positional indices", [] {
     for (StringRef name : {"a.b", "x::y", "01", "1", "0"})
@@ -401,11 +536,12 @@ entry Demo=Run;)zkc");
 protocol Run roles(P,V)()->(empty:()@(V,P)) {return(empty=());}
 entry Demo=Run;)zkc");
     auto view = take(readInterface(source.bytes(), source.interfaceJson()));
-    require(view.outputs[0].native.empty() && view.outputs[0].roles.size() == 2,
+    require(view.selectedProtocol().outputs[0].native.empty() &&
+                view.selectedProtocol().outputs[0].roles.size() == 2,
             "shared unit lost");
     auto v = take(json::parse(source.interfaceJson()));
-    v.getAsObject()
-        ->getArray("outputs")
+    protocol(v)
+        .getArray("outputs")
         ->front()
         .getAsObject()
         ->getObject("schema")
@@ -420,7 +556,7 @@ fn mint()->Token {return Token{};}
 protocol Run roles(P,V)()->(t:Token@P) {local P let t=mint();return(t=t);}
 entry Demo=Run;)zkc");
     auto v = take(json::parse(source.interfaceJson()));
-    auto &port = *v.getAsObject()->getArray("outputs")->front().getAsObject();
+    auto &port = *protocol(v).getArray("outputs")->front().getAsObject();
     port.getObject("schema")->operator[]("custody") = false;
     refuses(readInterface(source.bytes(), zkc::printJson(v)),
             "source.interface");
@@ -432,7 +568,7 @@ entry Demo=Run;)zkc");
     bytes.replace(at, old.size(), "output_roles = [[\"P\", \"V\"]]");
     (*v.getAsObject())["original"] =
         toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
-    v.getAsObject()->getArray("outputs")->front().getAsObject()->operator[](
+    protocol(v).getArray("outputs")->front().getAsObject()->operator[](
         "roles") = json::Array{"P", "V"};
     refuses(readInterface(bytes, zkc::printJson(v)), "target.admission");
   });
@@ -447,8 +583,7 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
 entry Demo=Run;)zkc");
     for (unsigned index : {1u, 3u}) {
       auto v = take(json::parse(source.interfaceJson()));
-      auto &port =
-          *(*v.getAsObject()->getArray("outputs"))[index].getAsObject();
+      auto &port = *(*protocol(v).getArray("outputs"))[index].getAsObject();
       port["type"] = "sample::Other";
       port.getObject("schema")->operator[]("type") = "sample::Other";
       refuses(readInterface(source.bytes(), zkc::printJson(v)),
@@ -468,8 +603,9 @@ entry Demo=Run;)zkc");
                   "protocol Run roles(P,V)(x:D@(V,P))->(result:D@(V,P)) "
                   "{return(result=x);}entry Demo=Run;");
       auto view = take(readInterface(source.bytes(), source.interfaceJson()));
-      require(view.inputs[0].schema->permissions.wire &&
-                  view.inputs[0].roles == std::vector<unsigned>({0, 1}),
+      require(view.selectedProtocol().inputs[0].schema->permissions.wire &&
+                  view.selectedProtocol().inputs[0].roles ==
+                      std::vector<unsigned>({0, 1}),
               "installed scalar permissions or role order differ");
       ++checked;
     }

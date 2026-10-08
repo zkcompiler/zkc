@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/Support/MemoryBuffer.h"
 using namespace llvm;
 using namespace zkc::language;
@@ -313,6 +314,60 @@ int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
   zkc::registerNativeDialects(registry);
   mlir::MLIRContext context(registry);
+  for (bool valid : {false, true})
+    cases.run(
+        "unexecuted helper observations are checked without mutation", [&] {
+          auto text = source(R"(
+        math fn observe(x:F)->F {
+          let p=intrinsic<F,1>("poly.constant",x);
+          let q=intrinsic<F,2>("poly.from_coefficients",intrinsic<F,2>("array.pack",[x,x]));
+          let product=intrinsic<F,1>("poly.multiply",p,q);
+          let coefficients=intrinsic<F,2>("poly.coefficients",product);
+          return x;
+        }
+        protocol Run roles(P)(x:F@P)->(r:F@P){return(r=x);}
+        entry Demo=Run;
+      )");
+          // Close the helper through an ordinary call, then remove that call
+          // from the admitted original. The helper remains available only for
+          // analysis.
+          text = replaceText(text, "return(r=x);", "return(r=observe(x));");
+          if (!valid)
+            text = replaceText(text, "intrinsic<F,2>(\"poly.coefficients\"",
+                               "intrinsic<F,1>(\"poly.coefficients\"");
+          auto original = take(prepareOriginal(
+              take(closeEntry(take(check(text)), "sample::Demo"))));
+          auto module = mlir::parseSourceString<mlir::ModuleOp>(
+              original.bytes(), &context);
+          require(bool(module), "cannot parse observation original");
+          auto *call = first(*module, "func.call");
+          auto target = call->getAttrOfType<mlir::FlatSymbolRefAttr>("callee")
+                            .getValue()
+                            .str();
+          call->getResult(0).replaceAllUsesWith(call->getOperand(0));
+          call->erase();
+          require(succeeded(mlir::verify(*module)),
+                  "uncalled helper original invalid");
+          auto print = [&] {
+            std::string result;
+            raw_string_ostream stream(result);
+            module->print(stream, mlir::OpPrintingFlags().printGenericOpForm());
+            return result;
+          };
+          auto before = print();
+          mlir::ScopedDiagnosticHandler quiet(
+              &context, [](mlir::Diagnostic &) { return mlir::success(); });
+          require(succeeded(zkc::mathematical::verifyHelperObservations(
+                      *module, {target})) == valid,
+                  "uncalled helper observation validity differs");
+          require(print() == before, "observation analysis mutated its input");
+          require(failed(zkc::mathematical::verifyHelperObservations(
+                      *module, {"missing"})),
+                  "missing helper accepted");
+          require(failed(zkc::mathematical::verifyHelperObservations(
+                      *module, {target, target})),
+                  "duplicate roots accepted");
+        });
   auto mutate = [&](StringRef name,
                     function_ref<void(mlir::ModuleOp)> mutation) {
     cases.run(name, [&] {

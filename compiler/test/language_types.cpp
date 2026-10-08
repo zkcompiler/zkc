@@ -121,6 +121,9 @@ entry Demo=Run;
 )");
   auto schema = must(json::parse(emitted.interfaceJson()));
   auto *permissions = schema.getAsObject()
+                          ->getArray("protocols")
+                          ->front()
+                          .getAsObject()
                           ->getArray("outputs")
                           ->front()
                           .getAsObject()
@@ -475,8 +478,13 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar where Wire(G::Scalar){return need(x.x)
                         "[];}protocol Run roles(P)()->(r:[Token;0]@P){local P "
                         "let r=empty();return(r=r);}entry Demo=Run;");
   auto emptySchema = must(json::parse(emptyArray.interfaceJson()));
-  auto *emptyPort =
-      emptySchema.getAsObject()->getArray("outputs")->front().getAsObject();
+  auto *emptyPort = emptySchema.getAsObject()
+                        ->getArray("protocols")
+                        ->front()
+                        .getAsObject()
+                        ->getArray("outputs")
+                        ->front()
+                        .getAsObject();
   require(emptyPort->getArray("native")->empty(),
           "zero array has physical storage");
   require(*emptyPort->getObject("schema")->getArray("permissions") ==
@@ -528,12 +536,20 @@ struct Pair<T:Type+Copy+Drop>{pub left:T,pub right:T}
 protocol Run roles(P)(p:Pair<Fr>@P,u:()@P)->(q:Pair<Fr>@P,u:()@P){return(q=Pair<Fr>{right:p.left,left:p.right},u=u);}
 entry Demo=Run;)");
   auto schema = must(json::parse(aggregate.interfaceJson()));
-  auto &ports = *schema.getAsObject()->getArray("inputs");
+  auto &ports = *schema.getAsObject()
+                     ->getArray("protocols")
+                     ->front()
+                     .getAsObject()
+                     ->getArray("inputs");
   require(ports[0].getAsObject()->getArray("native")->size() == 2 &&
               ports[1].getAsObject()->getArray("native")->empty(),
           "aggregate and empty port layout differs");
   auto wrong = must(json::parse(aggregate.interfaceJson()));
-  (*wrong.getAsObject()->getArray("inputs"))[0]
+  (*wrong.getAsObject()
+        ->getArray("protocols")
+        ->front()
+        .getAsObject()
+        ->getArray("inputs"))[0]
       .getAsObject()
       ->getObject("schema")
       ->getArray("fields")

@@ -2,6 +2,8 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Layout.h"
 #include "llvm/ADT/StringExtras.h"
@@ -63,8 +65,8 @@ Error failure(StringRef code, const Twine &message, std::optional<Span> span,
 }
 bool isUnsupported(StringRef name) {
   static const std::set<StringRef> words = {
-      "service",   "predicate",    "relation", "requires",
-      "construct", "construction", "while",    "extern"};
+      "service",      "predicate", "requires", "construct",
+      "construction", "while",     "extern"};
   return words.count(name);
 }
 bool isReserved(StringRef name) {
@@ -78,7 +80,7 @@ bool isReserved(StringRef name) {
       "yield",  "drop",      "consume",   "require",   "stop",      "opaque",
       "Type",   "Field",     "Group",     "Copy",      "Drop",      "Share",
       "Wire",   "completes", "finish_if", "builtin",   "kernel",    "pow2",
-      "formal", "intrinsic"};
+      "formal", "intrinsic", "relation",  "spec"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {
@@ -344,6 +346,7 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
       // are shared; specialization starts with its own phase budget.
       auto storage = std::make_shared<detail::ClosedStorage>();
       detail::CheckedStorage candidate(project.capture());
+      candidate.assets.assign(project.assets().begin(), project.assets().end());
       candidate.declarations.assign(project.declarations().begin(),
                                     project.declarations().end());
       detail::Checker closer(candidate, work);
@@ -378,10 +381,56 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
         }
         return Error::success();
       };
-      for (const auto &definition : entry.declarations())
+      for (const auto &definition : entry.declarations()) {
         if (definition.body)
           if (auto e = checkMessages(*definition.body))
             return std::move(e);
+        if (definition.relation && definition.origin)
+          for (const auto &port : definition.inputs) {
+            auto layout = layouts.get(port.type);
+            if (!layout)
+              return layout.takeError();
+            if (!(*layout)->permissions.copy || !(*layout)->permissions.drop)
+              return detail::failure("source.relation",
+                                     "relation inputs require immutable data",
+                                     port.span);
+            if ((*layout)->leaves.empty())
+              return detail::failure(
+                  "source.relation",
+                  "relation formal requires a nonempty data layout", port.span);
+            for (const auto &leaf : (*layout)->leaves) {
+              if (!leaf.data())
+                return detail::failure(
+                    "source.relation",
+                    "relation formal cannot contain formal mathematics",
+                    port.span);
+              protocol::TypeParseBudget budget;
+              budget.remaining =
+                  std::min<uint64_t>(budget.remaining, limits.work - work.used);
+              auto before = budget.remaining;
+              auto native =
+                  protocol::parseBoundType(*leaf.data(), false, 0, &budget);
+              if (!native) {
+                consumeError(native.takeError());
+                return detail::failure(
+                    budget.remaining ? "source.relation" : "source.limit",
+                    "relation native type admission failed", port.span);
+              }
+              auto result = protocol::logicalRelationData(*native, budget);
+              if (auto error = work.charge(
+                      before - budget.remaining + leaf.cost(), port.span))
+                return error;
+              if (result == protocol::RelationData::Limit)
+                return detail::failure(
+                    "source.limit",
+                    "relation data work or depth limit exceeded", port.span);
+              if (result != protocol::RelationData::Supported)
+                return detail::failure(
+                    "source.relation",
+                    "relation formal is not immutable logical data", port.span);
+            }
+          }
+      }
       return entry;
     }
   return detail::failure("source.entry", "unknown qualified Entry: " + name);
@@ -464,5 +513,8 @@ std::string installedCatalogIdentity() {
   for (const auto &row : rows)
     detail::frame(bytes, row);
   return detail::digest(bytes);
+}
+std::string formulaSymbol(const Declaration &decl) {
+  return relation::formulaSymbol(decl.symbol);
 }
 } // namespace zkc::language

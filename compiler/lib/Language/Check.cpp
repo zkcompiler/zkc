@@ -14,7 +14,8 @@ Checker::Checker(CheckedStorage &output, Work &work)
     : Checker({}, output, work) {
   signatureState.assign(output.declarations.size(), 2);
   for (const auto &decl : output.declarations) {
-    qualified.emplace(decl.qualifiedName, decl.id);
+    if (!decl.anonymous)
+      qualified.emplace(decl.qualifiedName, decl.id);
     for (unsigned i = 0; i < decl.parameters.size(); ++i)
       parameters.emplace(decl.parameters[i].atom, std::make_pair(decl.id, i));
   }
@@ -55,6 +56,8 @@ Error Checker::run() {
   for (unsigned i = 0; i < output.declarations.size(); ++i)
     if (!signature(DeclarationId{i}))
       return takeError();
+  if (!relationIdentities())
+    return takeError();
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Component && !conformance(decl.id))
       return takeError();
@@ -95,10 +98,15 @@ Error Checker::run() {
     auto &decl = output.declarations[i];
     if ((decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
-         decl.kind == Declaration::Kind::Protocol) &&
+         decl.kind == Declaration::Kind::Protocol ||
+         (decl.kind == Declaration::Kind::Relation &&
+          decl.relation->kind == RelationDefinition::Kind::Formula)) &&
         !decl.abstract && !body(decl.id, 1))
       return takeError();
   }
+  for (auto &decl : output.declarations)
+    if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
+      return takeError();
   if (!entries())
     return takeError();
   return Error::success();
@@ -157,13 +165,30 @@ bool Checker::collect() {
     decl.permissions = source.permissions;
     decl.effectAllowance = source.effects;
     decl.associatedSort = source.associatedSort;
-    if (!qualified.emplace(decl.qualifiedName, decl.id).second)
+    decl.anonymous = source.anonymous;
+    decl.specificationBlock = source.specificationBlock;
+    if (source.relation) {
+      const auto &definition = *source.relation;
+      decl.relation = RelationDefinition{
+          definition.kind,     {}, definition.externalKind, definition.key,
+          definition.revision, {}};
+      for (const auto &port : source.inputs)
+        decl.relation->purposes.push_back(*port.purpose);
+    }
+    if (decl.anonymous)
+      decl.qualifiedName = output.declarations[parent->index].qualifiedName +
+                           "::<" + source.name + ">";
+    if (!decl.anonymous &&
+        !qualified.emplace(decl.qualifiedName, decl.id).second)
       return fail("source.duplicate", "duplicate declaration: " + decl.name,
                   decl.span);
     if (!parent && !visible[module.index].emplace(decl.name, decl.id).second)
       return fail("source.duplicate", "duplicate declaration: " + decl.name,
                   decl.span);
-    auto symbol = encodeSymbol(decl.qualifiedName, work.limits);
+    auto symbol =
+        decl.anonymous
+            ? Expected<std::string>("zki_" + digest(decl.qualifiedName))
+            : encodeSymbol(decl.qualifiedName, work.limits);
     if (!symbol)
       return accept(symbol.takeError());
     decl.symbol = std::move(*symbol);
