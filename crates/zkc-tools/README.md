@@ -9,6 +9,7 @@ The binaries are command-line adapters over these host APIs:
 
 | Surface | Home |
 |---|---|
+| Named source Entries, CLI files and optional Rust data bindings | `entry/`; [guide](../../docs/language/entries.md) |
 | Artifact construction, preparation and execution | `artifact/`, `noninteractive.rs` |
 | Interactive participants and transport | `protocol/` |
 | Finite closed-source table execution | `table.rs` |

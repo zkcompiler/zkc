@@ -18,91 +18,51 @@ is realized, and no entry is a cryptographic security theorem.
 | Native mathematical | Direct MLIR → `zkc.program/1`; `zkc.run/1` bundles or proof deployments | Bounded compiler preservation and runtime admission; foundation complete, native Lean connection open |
 | Finite tables | Table source → direct/physical plans → table session | Independent Lean references and scoped transformation proofs; executable consumers remain |
 
-The mathematical source path has source/admitted-IR mutation and limit controls
-in [language.cpp](../compiler/test/language.cpp) and
-[language_types.cpp](../compiler/test/language_types.cpp), bounded normalization in
-[language_natural.cpp](../compiler/test/language_natural.cpp) and generic
-power-of-two shapes in [language_power.cpp](../compiler/test/language_power.cpp),
-formal type, shape, degree and correspondence controls in
-[language_polynomial.cpp](../compiler/test/language_polynomial.cpp),
-helper realization and independent recipe controls in
-[math_realization.cpp](../compiler/test/math_realization.cpp), command controls in
-[language_cli.py](../compiler/test/language_cli.py), and actual per-role input and
-receive, joint-host, aggregate, static dispatch, distributed application results, shared service aliases, pre-query stops, nested/per-role repetition, conditional draws, nested early completion, returned affine custody, native vector/matrix/sequence data, iterative folding rounds, formal polynomial evaluation/interpolation/sums through protocol and local paths, and affine control/cleanup controls in [language_native.rs](../crates/zkc-tools/examples/language_native.rs).
-The source fragment does not yet expose the full native IR vocabulary. Fixed arrays use static numeric indexing; private ingress without a
-validator, member-generic conformance and zero-leaf messages refuse. Source schema
-`zkc.language-interface/7` retains all closed protocol interfaces, managed services,
-formula/opaque/captured relation definitions, and target/input/output/continuation
-clauses with exact logical port and participant selectors. Source-only relation
-checks and inline-binding/privacy controls are in
-[language_specifications.cpp](../compiler/test/language_specifications.cpp);
-native identity, clause omission/mutation, captured asset interpretation, observation,
-reused generic components, role swaps, nested applications and compilation controls are in
-[language_specification_ir.cpp](../compiler/test/language_specification_ir.cpp).
-The standalone reader admits bindings; a separate source/template/token comparison
-authenticates the authored inventory. Clauses insert no execution guards and make
-no satisfaction or soundness claim. The bounded application inspector derives actual
-SSA and participant bindings from admitted original calls, with a retained
-`CheckedOriginal` overload. Standalone checked admission requires canonical original
-and interface bytes after independent semantic checks, preventing alternate
-encodings and explicit locations from changing the checked publication identity.
-Executed source fixtures
-cover group predicates, runtime R1CS matrices, Sumcheck goal/residual bindings and
-product-of-MLE semantics, including a false specification that leaves service
-execution unchanged. Explicit proof Entries select participants, complete public
-inputs, structural Boolean acceptance, optional target export and authored or
-installed Fiat–Shamir construction. Whole Entry aliases preserve those choices.
-Native service occurrence selection handles composition and repeats; source
-compilation emits run/proof variants through the existing compiler. Controls are
-in [language_entries.cpp](../compiler/test/language_entries.cpp),
-[language_entry_ir.cpp](../compiler/test/language_entry_ir.cpp) and
-[native_proof_selection.cpp](../compiler/test/native_proof_selection.cpp).
-The compiler exports exact `zkc.entry/1` packages; Rust `entry::Package::capture`
-authenticates their outer bytes and strict framing. The bounded Rust `Interface`
-reader validates recursive schemas, selectors and job choices, then checks the
-exact admitted run/proof artifact and original port mappings. Proof binding also
-checks source identity, construction, acceptance, compile options and services.
-Unit and compiler-generated package controls cover malformed metadata, changed
-publication pins and mismatched native choices. The existing run Host now accepts
-in-process immutable values and wire requests through one typed preparation path,
-with shared setup/entry checks and pre-issuance capacity accounting. Controls cover
-native/wire execution parity, foreign capability refusal and nested PCS setup
-selection. `entry::RunEntry` now accepts named logical inputs and service budgets,
-uses shared admission for mixed native/wire variant payloads, and returns named
-copyable results after successful execution and cleanup. Compiler-generated tests
-cover nested sums/products, unit inputs/results, constructor permission and affine
-export refusal. `entry::ProofEntry` provides independent named prove/verify calls,
-explicit authored binding acknowledgement, and final copyable results through
-the existing native proof/attempt lifecycle. Typed public inputs are canonically
-bound and checked against shared role inputs; private native data avoids encoding.
-Controls cover exact typed/encoded proof parity, both installed source transcript
-suites, named service selection, rejection, nested authored values and unit ports.
-Native run/proof callers can also reuse authenticated immutable `ProverMaterial`;
-each invocation retains its setup association and input/runtime charges. Controls
-cover file removal, wrong setup, lowered quotas and independent concurrent calls.
-Source Entries now associate setup slots with logical inputs and product fields.
-Interface readers independently check coverage and proof-key selection; source
-comparison binds the exact choices. Named Hosts derive native authority maps from
-application-owned slot pins, initialize verifier-key ports, and admit explicit
-prover material. The [PCS fixture](../compiler/test/fixtures/language/pcs_setup.zkc)
-composes two generic openings with distinct setups through the common run and
-proof Hosts; controls cover wrong material, missing/extra names and lowered quotas.
-Proof Entries can select a producer Boolean completion result for explicitly
-requested attempts. Named calls derive the native selection and reuse the native
-controller, preserving providers, cumulative work and failed-attempt cleanup.
-Omitted service budgets and selected transcript budgets use a bounded operational
-allowance; explicit zero and unknown-name refusals are preserved. Source-authored
-controls cover both transcript suites, authored proofs, retry exhaustion, provider
-exhaustion and lowered limits. Receive-only slots and finer per-receive setup
-pinning remain migration work.
-The package CLI compiles source and supports named run/prove/verify calls through
-the same Host. File adapters reject duplicate names and bound recursive data;
-opt-in result files preserve diagnostics without exposing returned values on
-standard output. Generated Rust data bindings pin the package and delegate to
-common admission. Separate-process controls cover both transcript suites,
-authored proofs, attempts and publication failure; an independent Rust consumer
-executes generated run/proof bindings. The Host/CLI review is complete; final
-frontend stabilization and remaining consumer migration are in progress.
+## Mathematical source and Host
+
+The fresh `.zkc` path resolves explicit modules/assets, checks generic libraries,
+closes an Entry, emits mathematical MLIR and independently compares the admitted
+SSA with the checked source. Its immutable original and interface retain logical
+schemas, participant availability, services, relation definitions and exact clause
+bindings. Standalone admission requires canonical original/interface bytes.
+
+Run/proof Entries select participants, public inputs, acceptance, optional target,
+setup associations and explicit construction. `zkc.entry/1` packages retain the
+original, interface, artifact, toolchain and compilation choices. Rust authenticates
+the package against an application-supplied digest and binds the named interface
+to the independently admitted native artifact. It trusts the compiler publication
+for source correspondence; it does not interpret the retained MLIR.
+
+The [common Host](language/entries.md) supports named logical inputs/results,
+independent prove/verify calls, immutable reusable prover material, setup slots,
+explicit attempts and bounded defaults. CLI files and optional Rust data bindings
+use these same Hosts. Public values bind shared proof operands; setup material
+never supplies its own authority. Results publish after successful cleanup, and
+reports retain reached execution and publication state on failure.
+
+| Boundary | Maintained evidence |
+|---|---|
+| Syntax, types, naturals, permissions and static contracts | [Source checks](../compiler/test/language.cpp), [types](../compiler/test/language_types.cpp), [normalization](../compiler/test/language_natural.cpp), [power-of-two shapes](../compiler/test/language_power.cpp), [capabilities](../compiler/test/language_capabilities.cpp) |
+| Formal polynomials and helper realization | [Polynomial controls](../compiler/test/language_polynomial.cpp), [independent recipes](../compiler/test/math_realization.cpp) |
+| Relations, exact attachments and actual composition bindings | [Source predicates](../compiler/test/language_specifications.cpp), [admitted-IR mutations](../compiler/test/language_specification_ir.cpp) |
+| Entry selection, interface and source correspondence | [Entries](../compiler/test/language_entries.cpp), [Entry IR](../compiler/test/language_entry_ir.cpp), [interface admission](../compiler/test/language_interface.cpp), [command controls](../compiler/test/language_cli.py) |
+| Actual receives, distributed control, services, resources and native data | [Runtime source corpus](../crates/zkc-tools/examples/language_native.rs): role substitutions, service aliases, conditional draws, nested repeats/completion, affine cleanup, vector/matrix/sequence kernels and formal polynomial realization |
+| Named Host, setup authority and attempts | [Host clients](../crates/zkc-tools/examples/language_native/host.rs), [proofs](../crates/zkc-tools/examples/language_native/proof.rs), [setups](../crates/zkc-tools/examples/language_native/setups.rs), [attempts](../crates/zkc-tools/examples/language_native/attempts.rs) |
+| Files and generated Rust data bindings | [CLI and independent Rust consumer](../tests/protocol/test_language_host.py): both transcript suites, authored proofs, malformed inputs, changed public/context values, retries, private-file protection and partial publication |
+| Maintained authoring and installed consumers | [Schnorr/Sumcheck projects](../tests/protocol/test_source_projects.py), [installed C++ API](../tests/consumer/compilercore.cpp) and [separate runtime execution](../tests/consumer/execution.py) |
+
+The source profile does not expose every native operation as concise syntax.
+Fixed source arrays use static numeric indexing. Private ingress without an
+admitted validator, member-generic conformance and zero-leaf messages refuse.
+Receive-only setup declarations and finer per-receive pinning remain explicit
+[migration obligations](compiler/migration.md#frontend-consumer-transition).
+Formula/opaque/captured relations and target/input/output/continuation clauses
+state intent; they add no guard, satisfaction fact or security theorem.
+Source no-Drop rules and native affine custody retain their separate checks.
+
+Entries/Host implementation and review are complete. Integrated frontend
+stabilization is in progress. Native Lean correspondence, full existing library
+and external compatibility, and the remaining table/checker consumers stay open.
 
 ## Foundation capability map
 

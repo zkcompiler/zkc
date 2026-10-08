@@ -19,7 +19,7 @@ own milestones; they are not foundation completion conditions.
 
 The existing `protocol → participant → exec → physical` profiles remain the
 architecture. Direct MLIR and small generators provide the test programs. Frontend and native
-Lean consumers follow the [frontend roadmap](../roadmap.md#next-package-entries-and-host).
+Lean consumers follow the [frontend roadmap](../roadmap.md#current-package-frontend-stabilization-and-migration).
 The long-term migration still preserves existing features, libraries and checking
 obligations; changing this milestone does not remove those obligations.
 

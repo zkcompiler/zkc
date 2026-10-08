@@ -9,10 +9,10 @@ what the implementation supports, and the model used to judge it.
 | You want to… | Read |
 |---|---|
 | Understand the problem and approach | [Overview](overview.md), then [architecture](architecture.md) |
-| Compile and run a first protocol | [Walkthrough](getting-started.md), then [source notation](language/reference.md) |
+| Compile and run a first protocol | [Walkthrough](getting-started.md), then [source language](language/mathematical.md) |
 | Author scalar mathematics and messages directly | [Mathematical source language](language/mathematical.md) |
 | Execute mathematical MLIR directly | [Native bundle walkthrough](runtime/bundles.md); native Lean checking remains open |
-| Author a reusable protocol library | [Source projects](language/projects.md), [checked interfaces](language/components.md#checked-interfaces-and-static-components) and [example clients](../examples/projects/README.md) |
+| Author a reusable protocol library | [Mathematical source](language/mathematical.md) and [example clients](../examples/projects/README.md) |
 | Build or develop the repository | [Development guide](development/README.md), [configuration](development/configuration.md) and [repository layout](development/layout.md) |
 | Select and interpret checks | [Test guide](../tests/README.md) and [assurance](assurance.md) |
 | Assess current capabilities and limits | [Implementation status](status.md), then [remaining work](roadmap.md) |
@@ -26,8 +26,8 @@ what the implementation supports, and the model used to judge it.
 ## Reading routes
 
 - **Protocol authors:** [walkthrough](getting-started.md) →
-  [language](language/README.md) → [library projects](language/projects.md) →
-  [runtime inputs](runtime/inputs.md).
+  [language](language/README.md) → [library projects](../examples/projects/README.md) →
+  [Entry execution](language/entries.md).
 - **Compiler and backend contributors:** [architecture](architecture.md) →
   [compiler pipeline](compiler/protocol-pipeline.md) →
   [compiler reference](compiler/README.md) or [runtime reference](runtime/README.md) →

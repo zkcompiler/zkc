@@ -1,5 +1,11 @@
 # Reusable implementation libraries
 
+The mathematical source libraries [Schnorr](schnorr/lib.zkc) and
+[Sumcheck](sumcheck/lib.zkc) define reusable generic protocols. Their `.zkc`
+clients choose domains and Entries; explicit module maps resolve imports.
+
+The retained `.pir` libraries below keep their independent checker and external
+interoperability obligations during [migration](../../docs/compiler/migration.md).
 The matching clients live in [`../projects`](../projects/README.md). Each root
 has an exact source identity; aliases change lookup spelling, not declaration
 identity. `views/layouts.pir` illustrates a conventional child module with a

@@ -158,8 +158,8 @@ logical type identity and kind separately from their display label. A logical po
 indices and recursive `schema` describe its flattened fields, variant payloads and
 custody. These indices refer to the original mathematical signature, not a promise
 that downstream physical storage uses the same positions. Host adapters must also
-consult the selected bundle. This package supplies the schema and existing runtime
-path; typed source job construction belongs to the Host package.
+consult the selected bundle. The named Host binds that schema to the selected deployment and handles typed
+source jobs through the [Entry API](entries.md).
 
 ## Setup-bound inputs
 

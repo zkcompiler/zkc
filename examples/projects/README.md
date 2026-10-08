@@ -1,5 +1,20 @@
 # Separately authored protocol projects
 
+## Mathematical source projects
+
+| Project | Library and Entry | Executed boundary |
+|---|---|---|
+| [Schnorr](schnorr/README.md) | Generic group protocol, discrete-log relation and concrete Entry | Interactive exchange or independent transcript-derived proofs |
+| [Sumcheck](sumcheck/README.md) | Generic public-table protocol and bounded-round Entry | Actual receives, repeated state and direct terminal evaluation |
+
+The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Compile
+explicit `--module=NAME=FILE` mappings, then invoke the selected package through
+the [common Host](../../docs/language/entries.md). These projects require no
+protocol-specific application executor. `tests/protocol/test_source_projects.py`
+checks their actual commands and invalid inputs/proofs.
+
+## Retained source and interoperability clients
+
 Each `main.pir` consumes its matching library under `../libraries/`. A library's
 identity is declared in source; `--library` maps that identity to a root file.
 For example, from the repository root:

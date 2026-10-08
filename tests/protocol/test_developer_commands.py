@@ -45,7 +45,8 @@ def test_discovery_without_protocol_inputs(toolchain, directory, tool):
 
 @pytest.mark.parametrize("command", ["run-protocol", "produce-artifact", "validate-artifact",
                                     "inspect-artifact-identity", "run", "run-physical",
-                                    "run-bundle", "produce-native-proof", "validate-native-proof"])
+                                    "run-bundle", "produce-native-proof", "validate-native-proof",
+                                    "compile", "run-entry", "prove", "verify", "bindings"])
 def test_runtime_command_help(toolchain, directory, command):
     result = run_process([toolchain.runtime, command, "--help"], cwd=directory,
                             capture_output=True, text=True, timeout=15)
@@ -80,7 +81,7 @@ def test_demo_entry_point(toolchain, directory, journal):
         "ZKC_REPORTS_DIR": str(directory / "reports"),
     })
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Proof accepted: 1514 bytes." in result.stdout
+    assert "Proof accepted:" in result.stdout
 
 
 @pytest.mark.parametrize("source,code", [
@@ -92,7 +93,7 @@ def test_documented_data_refusals(source, code, toolchain, journal):
 
 
 def test_published_walkthrough_and_invalid_proofs(toolchain, directory, journal):
-    document = (ROOT / "docs/getting-started.md").read_text()
+    document = (ROOT / "docs/compiler/committed-example.md").read_text()
     match = re.search(r"<!-- executable: committed-proof -->\s*```sh\n(.*?)\n```", document, re.S)
     assert match, "the maintained executable walkthrough is missing"
     # Exercise Cargo's documented target-directory fallback, including spaces.

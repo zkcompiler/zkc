@@ -57,7 +57,29 @@ def main():
             run("validate-native-proof", deployment, pin, validator, malformed, refusal=code)
         run("validate-native-proof", deployment, "00" * 32, validator, proof,
             refusal="native-proof-deployment-binding")
-    print("Installed bundle and independent proof execution passed")
+        package = work / "run.entry"
+        pin = hashlib.sha256(package.read_bytes()).hexdigest()
+        inputs = write("named-run.json", {"format": "zkc.entry-run/1", "session": "installed",
+            "roles": {"P": {"inputs": {"x": True}}}})
+        outputs = work / "named-results.json"
+        result = run("run-entry", package, pin, inputs, f"--results={outputs}")
+        assert result["status"] == "executed"
+        assert json.loads(outputs.read_text())["roles"]["P"] == {"r": True}
+        run("run-entry", package, "00" * 32, inputs, refusal="entry-package-identity")
+
+        package = work / "proof.entry"
+        pin = hashlib.sha256(package.read_bytes()).hexdigest()
+        producer = write("named-producer.json", {"format": "zkc.entry-proof/1",
+            "public": {}, "inputs": {"x": True}})
+        verifier = write("named-verifier.json", {"format": "zkc.entry-proof/1", "public": {}})
+        proof = work / "named-proof.bin"
+        run("prove", package, pin, producer, proof, refusal="entry-proof-binding-policy")
+        assert run("prove", package, pin, producer, proof, "--allow-header-only")["status"] == "produced"
+        assert run("verify", package, pin, verifier, proof, "--allow-header-only")["status"] == "accepted"
+        producer.write_text(json.dumps({"format": "zkc.entry-proof/1", "public": {}, "inputs": {"x": False}}))
+        run("prove", package, pin, producer, proof, "--allow-header-only")
+        run("verify", package, pin, verifier, proof, "--allow-header-only", refusal="artifact-rejected")
+    print("Installed source Entries, bundle and independent proof execution passed")
 
 
 if __name__ == "__main__":

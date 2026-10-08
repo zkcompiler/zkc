@@ -5,14 +5,22 @@ For `.zkc` authoring, use the [mathematical source guide](mathematical.md) and
 and execute through the common Host. The older `.pir` route below retains its
 source/checker consumers during [migration](../compiler/migration.md).
 
+Start with the [first-run walkthrough](../getting-started.md), then the
+[reusable Schnorr and Sumcheck projects](../../examples/projects/README.md).
+The [source profile](../spec/profiles/source/mathematical-language.md) defines
+precise typing, effects, availability, resources and Entry semantics.
+
+## Retained source route
+
 The `.pir` language describes local algorithms, participant interactions and
 reusable protocol libraries. It elaborates into common PIR, where interaction,
 resource and operation checks apply independently. Source conveniences such as
 nominal records and static components are checked before that boundary.
 
-Start with the [first-run walkthrough](../getting-started.md). Then read the
-[source reference](reference.md) beside a maintained
-[protocol example](../../examples/protocols/README.md).
+For these consumers, read the [retained source reference](reference.md) beside a
+[protocol example](../../examples/protocols/README.md). The
+[committed-proof workflow](../compiler/committed-example.md) retains independent
+Lean source and participant checks.
 
 | Task | Read |
 |---|---|

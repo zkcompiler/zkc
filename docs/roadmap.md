@@ -44,9 +44,10 @@ messages and selected Entries with independently checked MLIR emission.
 **Protocols and specifications** adds services, composition, distributed control,
 formal polynomial authorship, typed predicates and attachments. Independent
 native/interface admission, source inventory comparison, composition queries and
-contrasting execution controls are implemented. Continue with **Entries and Host** for
-construction selection, trusted inputs and typed CLI jobs. Finish with integrated
-stabilization, consumer migration and removal of superseded paths.
+contrasting execution controls are implemented. **Entries and Host** implements
+construction selection, trusted inputs and typed CLI jobs. The current package
+is integrated frontend stabilization, consumer migration and removal of
+superseded paths whose checking obligations have moved.
 
 Detail each package before implementation. Relation targets remain distinct from
 input/output conditions. Dynamic data access, additional native primitives and
@@ -99,41 +100,29 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Next package: Entries and Host
+### Current package: frontend stabilization and migration
 
-Protocols and specifications are implemented and reviewed. The checked original
-retains canonical mathematical MLIR, source correspondence, logical schemas,
-relations and clauses. Composition queries bind those clauses to actual call
-operands/results and participant substitutions. Clauses remain distinct from
-runtime guards and carry no satisfaction or security claim.
+Protocols/specifications and Entries/Host are implemented and reviewed. Finish
+the joined implementation across the maintained source libraries, published CLI
+walkthrough, generated Rust data bindings and installed C++/runtime consumers.
+Check architecture and simplicity, actual mathematical/role/resource behavior,
+independent source/interface admission, failure reporting and operational bounds.
+Resolve integrated review findings before closing this package.
 
-Entries now select run or proof jobs, participants, public inputs, acceptance,
-an optional target and explicit transcript construction. Challenge occurrences
-resolve through the native proof compiler without authored site names. Relation
-purpose remains separate from public authorization; target export respects the
-native statement ABI. Package authentication, interface/native binding, typed run
-preparation, named run inputs/results, and independent typed/named proof calls
-are implemented. Native requests also support immutable authenticated prover
-material. Explicit source setup associations now drive named authority and checked
-key initialization through both Hosts. Named attempt completion and bounded
-operational defaults delegate to the existing controller. The common CLI and
-optional Rust data bindings use those same Hosts. Their review and affected
-validation are complete. Continue with frontend stabilization and consumer migration. Account separately for receive-only
-setup authority and legacy per-receive pinning before retiring their consumers.
+The authoring defaults now use `.zkc`. Preserve the older committed-proof
+walkthrough's independent Lean checks and the remaining
+[consumer gates](compiler/migration.md#frontend-consumer-transition). Delete an
+old implementation only when its last required consumer has moved with its
+checking and comparison evidence. A new frontend's completion is distinct from
+full native migration.
 
-Bind the checked source interface, exact original, toolchain, compilation options
-and resulting deployment into one package. Common CLI and SDK paths must use the
-existing runtimes with authenticated packages, named logical inputs/outputs,
-trusted setup/provider configuration, bounded execution and structured results.
-Private ingress needs an admitted validator or explicit setup initialization route.
-Thin Rust bindings should delegate to this common Host.
-
-Validate two installed transcript suites, authored noninteractive jobs, repeated
-challenges, nested components, setup-bearing inputs, aggregates, rejection/stops
-and cleanup. These are general boundary checks rather than whole-protocol
-compatibility claims. Detail each substep against its actual native contract.
-Then stabilize together, migrate required consumers and remove superseded paths.
-Native Lean correspondence remains required before full migration closes.
+After stabilization, connect native source/artifacts to Lean, then migrate the
+remaining library, checker, identity/setup and table consumers at their declared
+boundaries. Receive-only source slots and per-receive selectors belong to the
+setup-consumer migration; explicit source input slots already use common native
+authority. Rust algorithm generation, network transports and richer language
+inference remain later extensions. The interpreter stays the common execution
+backend.
 
 ### Foundation completion and later migration
 

@@ -84,36 +84,27 @@ def formal_checks():
 
 
 def demo(output):
-    """Compile the authored committed argument and run separate proof processes."""
+    """Compile a source Entry and execute independent common-Host proof calls."""
     tools = Toolchain()
-    compiler, runtime = tools.compiler, tools.runtime
-    lean, fixture = tools.checker("interactive-protocol"), tools.example("artifact_fixture")
     output.mkdir(parents=True, exist_ok=False)
-    inputs = output / "inputs"
-    run([fixture, inputs])  # Explicit development setup, never an implicit host action.
-    source = ROOT / "examples/protocols/committed-two-factor.pir"
-    descriptor = ROOT / "examples/protocols/committed-two-factor.construction.pir"
 
     def emit(name, arguments):
         path = output / name
         with path.open("w") as stream:
             run(arguments, stdout=stream)
-        return path
+        return json.loads(path.read_text())
 
-    original = emit("source.json", [compiler, "protocol-source", source])
-    selection = emit("descriptor.json", [compiler, "protocol-source", descriptor])
-    construction = emit("construction.json", [compiler, "protocol-construct", source, descriptor])
-    common = output / "common.json"
-    common.write_text(json.dumps(json.loads(construction.read_text())[2]) + "\n")
-    participants = emit("participants.json", [compiler, "protocol-compile", common])
-    proof = output / "proof.bin"
-    for command, role, expected in [("produce-artifact", "producer", "produced"),
-                                    ("validate-artifact", "validator", "accepted")]:
-        report = emit(f"{role}.json", [runtime, command, original, selection, construction,
-                      participants, inputs / f"committed-two-factor.{role}.json",
-                      compiler, lean, proof, "10000", "--trace=none"])
-        if json.loads(report.read_text())["status"] != expected:
-            raise RuntimeError(f"{command} did not report {expected}; see {report}")
+    package, proof = output / "proof.entry", output / "proof.bin"
+    built = emit("build.json", [tools.runtime, "compile", f"--compiler={tools.compiler}",
+        "--module=schnorr=examples/libraries/schnorr/lib.zkc",
+        "--module=example=examples/projects/schnorr/main.zkc",
+        "--entry=example::Proof", f"--output={package}"])
+    for command, request, role, expected in [("prove", "prover", "producer", "produced"),
+                                              ("verify", "verifier", "validator", "accepted")]:
+        report = emit(f"{role}.json", [tools.runtime, command, package, built["package_sha256"],
+            ROOT / f"examples/projects/schnorr/{request}.json", proof])
+        if report["status"] != expected:
+            raise RuntimeError(f"{command} did not report {expected}; see {output}")
     print(f"Proof accepted: {proof.stat().st_size} bytes. Files: {output}", flush=True)
 
 

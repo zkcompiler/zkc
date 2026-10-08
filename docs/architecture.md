@@ -101,7 +101,7 @@ can use a precompiled artifact without installing Lean or the MLIR toolchain,
 subject to the artifact-admission policy in section 6. Library applications can
 also consume checked plans; code generation is not the only product interface.
 
-The initial `.zkc` authoring path uses a pure `Language` component, direct
+The `.zkc` authoring path uses a pure `Language` component, direct
 mathematical MLIR emission and independent structural comparison in Translation.
 CompilerCore retains immutable originals and Entry interfaces before running the
 existing participant pipeline. The [source guide](language/mathematical.md)
@@ -333,6 +333,14 @@ directly to existing dialects and independently compares the admitted result.
 CompilerCore retains the versioned source interface; it does not introduce a new
 runtime carrier. Products flatten, variants retain tags, and source no-Drop checks
 remain separate from native affine custody.
+
+The Rust `entry` module consumes authenticated compiler packages. It checks the
+logical interface against native deployment ports and maps named values, setup
+slots and service budgets into the existing run/proof Hosts. File transport and
+optional generated Rust data structures sit above that admission. They introduce
+no protocol evaluator and no algorithm-emitting backend. Applications provide
+trusted package/setup identities and invocation data; the common Host creates
+fresh resources and retains execution, cleanup and publication outcomes.
 
 The maintained `.pir` parser and [common typed source model](compiler/source-model.md)
 retain their existing library, table and formal consumers. Their capture,
