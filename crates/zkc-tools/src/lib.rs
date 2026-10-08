@@ -1,5 +1,6 @@
 //! Consumer-installed checker integration. The runtime never launches tools.
 pub mod artifact;
+pub mod entry;
 mod checker;
 pub mod groth16;
 pub mod ingress;

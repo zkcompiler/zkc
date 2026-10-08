@@ -1,0 +1,145 @@
+#include "support/NativeCases.h"
+#include "zkc/Language/Project.h"
+using namespace llvm;
+using namespace zkc::language;
+using zkc::test::refuses;
+using zkc::test::require;
+using zkc::test::take;
+namespace {
+constexpr StringLiteral base = R"(module sample;
+ domain F=field("bls12-381.fr");
+ relation Equal(statement x:F,witness y:F){return x==y;}
+ protocol Round roles(P,V)(x:F@(P,V),y:F@P)
+ using(coins:Random<F>@V)->(ok:bool@V)
+ spec{target claim=Equal(in.x@V,in.y) accept out.ok;}
+ {let ok@V=true;return(ok=ok);}
+)";
+constexpr StringLiteral choices = R"({prover P;verifier V;public{x};accept ok;
+ target claim;construction fiat_shamir("merlin3.bls12-381.fr64be/1"){derive coins;}})";
+Expected<ClosedEntry> close(StringRef text, const Limits &limits = {}) {
+  auto captured = capture({{"sample", text.str(), {}}});
+  if (!captured)
+    return captured.takeError();
+  auto checked = analyze(*captured, limits).checkedProject();
+  if (!checked)
+    return checked.takeError();
+  return closeEntry(*checked, "sample::Demo", limits);
+}
+std::string source(StringRef body = choices) {
+  return (base + "entry Demo=Round" + body).str();
+}
+std::string replaceText(std::string text, StringRef before, StringRef after) {
+  auto position = text.find(before.str());
+  require(position != std::string::npos, "test substitution missing");
+  text.replace(position, before.size(), after.str());
+  return text;
+}
+} // namespace
+int main() {
+  zkc::test::Cases cases;
+  cases.run("proof choices resolve logical indices and complete aliases", [] {
+    auto selected = take(close(source()));
+    const auto &proof = *selected.entry().proof;
+    require(proof.prover == 0 && proof.verifier == 1 &&
+                proof.publicInputs == std::vector<unsigned>{0} &&
+                proof.service == 0 && proof.target == 0 &&
+                proof.acceptance.port == 0 && proof.acceptance.role == 1 &&
+                proof.acceptance.path.empty(),
+            "logical Entry choices differ");
+    auto alias = take(close(
+        (base + "entry Demo=Next;entry Next=Concrete;entry Concrete=Round" +
+         choices)
+            .str()));
+    require(alias.entry().proof->suite == proof.suite &&
+                alias.entry().proof->target == proof.target &&
+                alias.protocol().symbol == selected.protocol().symbol,
+            "complete alias omitted policy choices");
+    auto run =
+        take(close((base + "entry Demo=Alias;entry Alias=Round;").str()));
+    require(!run.entry().proof, "run alias became a proof job");
+  });
+  cases.run("authored construction and absent relation target are explicit",
+            [] {
+              auto selected = take(close(R"(module sample;
+      protocol Verify roles(P,V)(ok:bool@V)->(accepted:bool@V){return(accepted=ok);}
+      entry Demo=Verify{prover P;verifier V;public{ok};accept accepted;construction authored;})"));
+              require(selected.entry().proof->construction ==
+                              ProofEntry::Construction::Authored &&
+                          !selected.entry().proof->service &&
+                          !selected.entry().proof->target,
+                      "authored choices changed");
+            });
+  cases.run(
+      "acceptance projects a Boolean field with concrete generic arguments",
+      [] {
+        auto selected = take(close(R"(module sample;
+      struct Result<T:Type>{pub accepted:T,pub extra:index}
+      protocol Verify<T:Type+Copy+Drop+Share+Wire> roles(P,V)(r:Result<T>@V)->(r:Result<T>@V){return(r=r);}
+      entry Demo=Verify<bool>{prover P;verifier V;public{r};accept r.accepted;construction authored;})"));
+        require(selected.entry().proof->acceptance.path ==
+                    std::vector<unsigned>{0},
+                "acceptance product projection lost");
+      });
+  for (auto change : std::initializer_list<std::pair<StringRef, StringRef>>{
+           {"prover P;", ""},
+           {"public{x};", ""},
+           {"accept ok;", ""},
+           {"prover P;", "prover P;prover P;"},
+           {"public{x}", "public{x,x}"},
+           {"public{x}", "public{}"},
+           {"public{x}", "public{x,y}"},
+           {"verifier V", "verifier P"},
+           {"accept ok", "accept absent"},
+           {"target claim", "target absent"},
+           {"derive coins", "derive absent"},
+           {"merlin3.bls12-381.fr64be/1", "uninstalled"},
+           {"construction fiat_shamir(\"merlin3.bls12-381.fr64be/1\"){derive "
+            "coins;}",
+            "construction authored;"}})
+    cases.run(
+        "invalid explicit choice: " + change.first + " -> " + change.second,
+        [&] {
+          refuses(close(replaceText(source(), change.first, change.second)),
+                  "source.entry");
+        });
+  cases.run("public input lists permit a trailing comma", [] {
+    take(close(replaceText(source(), "public{x}", "public{x,}")));
+  });
+  cases.run("aliases cannot override or specialize a complete Entry", [] {
+    refuses(close((base + "entry Original=Round" + choices +
+                   "entry Demo=Original" + choices)
+                      .str()),
+            "source.entry");
+    refuses(
+        close((base + "entry Original=Round;entry Demo=Original<bool>;").str()),
+        "source.entry");
+    refuses(close((base + "entry Demo=Later;entry Later=Demo;").str()),
+            "source.entry");
+    Limits limited;
+    limited.callDepth = 1;
+    take(close((base + "entry Demo=Round;").str(), limited));
+    refuses(
+        close((base + "entry Demo=Later;entry Later=Round;").str(), limited),
+        "source.limit");
+    refuses(
+        close((base + "entry Later=Round;entry Demo=Later;").str(), limited),
+        "source.limit");
+    limited.callDepth = 2;
+    take(close((base + "entry Demo=Later;entry Later=Round;").str(), limited));
+    take(close((base + "entry Later=Round;entry Demo=Later;").str(), limited));
+  });
+  cases.run("output-bound targets cannot be exported as native statements", [] {
+    auto text = source();
+    text = replaceText(text, "target claim=Equal(in.x@V,in.y)",
+                       "target claim=Equal(out.value,in.y)");
+    text = replaceText(text, "->(ok:bool@V)", "->(ok:bool@V,value:F@V)");
+    text = replaceText(text, "return(ok=ok)", "return(ok=ok,value=x)");
+    refuses(close(text), "source.entry");
+  });
+  cases.run("target purposes do not authorize public inputs", [] {
+    refuses(close(replaceText(source(), "statement x:F,witness y:F",
+                              "witness x:F,witness y:F")),
+            "source.entry");
+  });
+  return cases.result();
+}

@@ -56,11 +56,12 @@ json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
   json::Object root{
-      {"format", "zkc.language-interface/4"},
+      {"format", "zkc.language-interface/5"},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},
       {"toolchain", compilerToolchainIdentity()},
       {"entry", "sample::Demo"},
+      {"job", json::Object{{"kind", "run"}}},
       {"protocol", "Transfer"},
       {"roles", json::Array{"P", "V"}},
       {"inputs", json::Array{json::Object{{"name", "p"},

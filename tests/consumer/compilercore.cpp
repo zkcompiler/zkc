@@ -4,6 +4,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInspection.h"
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
@@ -75,6 +76,13 @@ int main(int argc, char **argv) {
     llvm::errs() << llvm::toString(execution.takeError());
     return 34;
   }
+  auto package = zkc::language::packageEntry(*execution);
+  if (!package) {
+    llvm::errs() << llvm::toString(package.takeError());
+    return 42;
+  }
+  if (package->bytes().empty() || package->identity().size() != 64)
+    return 43;
   if (auto error =
           zkc::language::checkInterface(*original, original->interfaceJson())) {
     llvm::errs() << llvm::toString(std::move(error));

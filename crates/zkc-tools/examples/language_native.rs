@@ -13,6 +13,9 @@ use zkc_runtime::interactive::{
 };
 use zkc_tools::protocol::run::{Bundle, BundleLimits, HostLimits, RunHost, SetupAuthority};
 
+#[path = "language_native/proof.rs"]
+mod proof;
+
 struct Participant {
     runner: Runner<NativeBackend>,
     loops: Vec<(String, u64, u64)>,
@@ -510,6 +513,7 @@ fn main() {
     let load = |name: &str| -> serde_json::Value {
         serde_json::from_slice(&std::fs::read(Path::new(&directory).join(name)).unwrap()).unwrap()
     };
+    proof::run(Path::new(&directory));
     for optimized in [0, 1] {
         for released in [0, 1] {
             let bundle = load(&format!("transfer-{optimized}-{released}.bundle"));

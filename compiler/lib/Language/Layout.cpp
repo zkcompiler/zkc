@@ -8,6 +8,7 @@
 #include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
+#include <limits>
 using namespace llvm;
 namespace zkc::language {
 Expected<std::string> LayoutIdentities::get(const Layout &layout) {
@@ -68,6 +69,40 @@ Error Layouts::charge(uint64_t n) {
     return error("source.limit", "layout work limit exceeded");
   remaining -= n;
   return Error::success();
+}
+Expected<LayoutSlice> Layouts::select(const Declaration &decl,
+                                      const SpecificationSelector &selector) {
+  const auto &ports = selector.output ? decl.outputs : decl.inputs;
+  if (selector.port >= ports.size() || selector.path.size() > limits.typeDepth)
+    return error("source.layout", "logical selector is out of bounds");
+  uint64_t offset = 0;
+  std::shared_ptr<const Layout> selected;
+  for (unsigned i = 0; i <= selector.port; ++i) {
+    if (auto error = charge(1))
+      return std::move(error);
+    auto layout = get(ports[i].type);
+    if (!layout)
+      return layout.takeError();
+    if (i == selector.port)
+      selected = *layout;
+    else
+      offset += (*layout)->leaves.size();
+  }
+  for (auto field : selector.path) {
+    if (auto error = charge(1))
+      return std::move(error);
+    if (selected->custody || selected->type.kind == Type::Kind::Associated ||
+        selected->type.kind == Type::Kind::Variant ||
+        field >= selected->fields.size())
+      return error("source.layout",
+                   "logical selector is not a product projection");
+    offset += selected->fields[field].offset;
+    selected = selected->fields[field].layout;
+  }
+  if (offset > std::numeric_limits<unsigned>::max())
+    return error("source.limit",
+                 "logical selector offset exceeds native bounds");
+  return LayoutSlice{static_cast<unsigned>(offset), std::move(selected)};
 }
 const Declaration *Layouts::declaration(StringRef name) const {
   auto found = declarations.find(name.str());

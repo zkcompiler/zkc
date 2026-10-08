@@ -45,7 +45,7 @@ int zkc::runCompiler(int argc, char **argv,
         << "usage: zkc-compile COMMAND FILE\n\n"
            "Fresh source language (.zkc; explicit captured module map):\n"
            "  language-check | language-emit | language-interface | "
-           "language-bundle\n"
+           "language-bundle | language-package\n"
            "    --source-format=zkc --entry=MODULE::ENTRY\n"
            "    --module=MODULE=FILE.zkc [--module=MODULE=FILE.zkc ...]\n"
            "    [--asset=NAME=FORMAT=FILE ...]\n"

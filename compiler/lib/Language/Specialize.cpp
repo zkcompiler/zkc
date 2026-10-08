@@ -287,7 +287,11 @@ bool Checker::specialize(DeclarationId selected) {
     result.origin = origin;
     result.members.clear();
     result.staticArguments.assign(args.begin(), args.end());
-    if (!args.empty() || (result.body && result.body->mode != mode))
+    // Native participant carriers bound identifiers to 128 bytes. Reuse the
+    // instance key for long declaration paths instead of narrowing source
+    // names.
+    if (!args.empty() || (result.body && result.body->mode != mode) ||
+        result.symbol.size() > 128)
       result.symbol = "zkl_" + detail::digest(key);
     if (result.symbol.size() > work.limits.symbolBytes) {
       fail("source.limit", "specialized symbol exceeds byte limit",
@@ -371,6 +375,9 @@ bool Checker::specialize(DeclarationId selected) {
                 output.declarations[selected.index].span);
   auto instance = instantiate(*target, args, Body::Mode::Protocol);
   if (!instance)
+    return false;
+  if (!checkProofEntry(output.declarations[selected.index],
+                       output.declarations[instance->index]))
     return false;
   for (const auto &port : output.declarations[instance->index].inputs)
     if (!ingress(port.type, port.span))

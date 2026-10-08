@@ -260,6 +260,34 @@ class Emitter {
                              : block.addArgument(type, location));
       ++cursor;
     }
+    const auto &proof = project.entry().proof;
+    if (!region && decl.id.index == project.protocol().id.index && proof &&
+        proof->target) {
+      const auto &clause = decl.specifications[*proof->target];
+      const auto &relation =
+          project.declarations()[clause.subject.relation.index];
+      Values operands;
+      std::vector<std::string> selectors;
+      for (const auto &operand : clause.subject.operands) {
+        auto slice = take(layouts.select(decl, operand));
+        if (!slice)
+          return false;
+        for (unsigned i = 0; i < slice->layout->leaves.size(); ++i) {
+          operands.push_back(block.getArgument(slice->offset + i));
+          selectors.push_back(decl.roles[operand.role]);
+        }
+      }
+      auto acceptance = take(layouts.select(decl, proof->acceptance));
+      if (!acceptance)
+        return false;
+      if (!make("protocol.statement", {}, operands,
+                {attr("relation",
+                      mlir::FlatSymbolRefAttr::get(&context, relation.symbol)),
+                 attr("selectors", strings(selectors)),
+                 attr("acceptance",
+                      builder.getI64IntegerAttr(acceptance->offset))}))
+        return false;
+    }
     auto flatten = [&](ArrayRef<ValueId> ids) {
       Values result;
       for (auto id : ids)
@@ -740,14 +768,11 @@ public:
         if (!local)
           attrs.push_back(text("sym_visibility", "private"));
         if (local)
-          attrs.push_back(attr(
-              "logical_origin",
-              builder.getArrayAttr(
-                  {builder.getStringAttr(
-                       decl.origin
-                           ? project.declarations()[decl.origin->index].symbol
-                           : decl.symbol),
-                   builder.getArrayAttr({})})));
+          attrs.push_back(
+              attr("logical_origin",
+                   builder.getArrayAttr(
+                       {builder.getStringAttr(logicalOrigin(project, decl)),
+                        builder.getArrayAttr({})})));
       }
       builder.setInsertionPointToEnd(definitions);
       auto *function = make(protocol ? "protocol.func"

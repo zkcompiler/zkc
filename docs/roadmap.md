@@ -107,11 +107,11 @@ relations and clauses. Composition queries bind those clauses to actual call
 operands/results and participant substitutions. Clauses remain distinct from
 runtime guards and carry no satisfaction or security claim.
 
-Next, let an Entry select run or proof jobs, participants, public inputs,
-acceptance, an optional target and explicit transcript construction. Resolve
-challenge occurrences through the existing native proof compiler; source authors
-should not need generated site names. Keep relation purpose separate from public
-input authorization. Export only targets supported by the native statement ABI.
+Entries now select run or proof jobs, participants, public inputs, acceptance,
+an optional target and explicit transcript construction. Challenge occurrences
+resolve through the native proof compiler without authored site names. Relation
+purpose remains separate from public authorization; target export respects the
+native statement ABI. Continue with package authentication and Host integration.
 
 Bind the checked source interface, exact original, toolchain, compilation options
 and resulting deployment into one package. Common CLI and SDK paths must use the

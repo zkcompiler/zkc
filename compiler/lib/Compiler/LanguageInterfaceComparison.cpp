@@ -331,6 +331,26 @@ class Comparison {
     }
     return true;
   }
+  bool job() {
+    const auto &source = entry.entry().proof;
+    if (bool(source) != bool(view.proof))
+      return fail("source Entry job kind differs");
+    if (!source)
+      return true;
+    const auto &actual = *view.proof;
+    if (!charge(source->publicInputs.size() + actual.publicInputs.size() + 1))
+      return false;
+    return (source->construction == actual.construction &&
+            source->prover == actual.prover &&
+            source->verifier == actual.verifier &&
+            source->publicInputs == actual.publicInputs &&
+            source->target == actual.target &&
+            source->service == actual.service &&
+            text(source->suite, actual.suite) &&
+            selector(entry.protocol(), source->acceptance,
+                     actual.acceptance)) ||
+           fail("source Entry choices differ");
+  }
   bool relation(const Declaration &decl, const InterfaceRelation &actual) {
     const auto &definition = *decl.relation;
     const auto &source =
@@ -430,6 +450,8 @@ public:
         relations.erase(found);
       }
     }
+    if (!job())
+      return std::move(failure);
     if (!protocols.empty() || !relations.empty())
       return error("source.correspondence",
                    "extra source interface definitions");

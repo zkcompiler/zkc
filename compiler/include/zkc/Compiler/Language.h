@@ -1,9 +1,11 @@
 #ifndef ZKC_COMPILER_LANGUAGE_H
 #define ZKC_COMPILER_LANGUAGE_H
 #include "zkc/Compiler/LanguageInterface.h"
+#include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Translation/Language.h"
 #include <memory>
+#include <variant>
 
 namespace zkc::language {
 class CheckedOriginal;
@@ -53,27 +55,35 @@ private:
 llvm::Error checkInterface(const CheckedOriginal &, llvm::StringRef,
                            const Limits & = {});
 std::string compilerToolchainIdentity();
-struct EntryRunOptions {
+struct EntryOptions {
   bool simplify = true;
   bool releaseStorage = false;
 };
+using EntryArtifact = std::variant<CompiledRun, CompiledNativeProof>;
 class CompiledEntry {
 public:
   const CheckedOriginal &original() const { return source; }
-  const CompiledRun &run() const { return compiled; }
+  const EntryArtifact &artifact() const { return compiled; }
+  const EntryOptions &options() const { return configuration; }
+  /// Exact selected run bundle or proof deployment, as identified by
+  /// artifact().
+  llvm::StringRef bytes() const;
 
 private:
-  CompiledEntry(CheckedOriginal source, CompiledRun compiled)
-      : source(std::move(source)), compiled(std::move(compiled)) {}
+  CompiledEntry(CheckedOriginal source, EntryArtifact compiled,
+                EntryOptions options)
+      : source(std::move(source)), compiled(std::move(compiled)),
+        configuration(options) {}
   CheckedOriginal source;
-  CompiledRun compiled;
+  EntryArtifact compiled;
+  EntryOptions configuration;
   friend llvm::Expected<CompiledEntry> compileEntry(const CheckedOriginal &,
-                                                    const EntryRunOptions &);
+                                                    const EntryOptions &);
 };
-/// Selects the checked Entry's protocol symbol. Source aliases and the legacy
-/// default 'main' are never interpreted as run symbols. Uses the same built-in
-/// registry as original checking; caller extensions cannot replace its models.
+/// Compile the explicitly selected run or proof job. Derived challenge
+/// occurrences are resolved through native construction admission. Uses the
+/// built-in registry; caller extensions cannot replace its models.
 llvm::Expected<CompiledEntry> compileEntry(const CheckedOriginal &,
-                                           const EntryRunOptions & = {});
+                                           const EntryOptions & = {});
 } // namespace zkc::language
 #endif

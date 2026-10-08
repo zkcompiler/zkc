@@ -111,28 +111,6 @@ Error Checker::run() {
     return takeError();
   return Error::success();
 }
-bool Checker::entries() {
-  for (unsigned i = 0; i < sources.size(); ++i) {
-    auto &entry = output.declarations[i];
-    if (entry.kind != Declaration::Kind::Entry)
-      continue;
-    const auto &source = *sources[i];
-    auto target = resolve(entry, source.target, source.span);
-    if (!target)
-      return false;
-    const auto &protocol = output.declarations[target->index];
-    if (protocol.kind != Declaration::Kind::Protocol)
-      return fail("source.entry", "entry target must be a protocol",
-                  source.span);
-    auto selected =
-        arguments(entry, protocol, source.targetArguments, source.span);
-    if (!selected)
-      return false;
-    entry.target = *target;
-    entry.staticArguments = std::move(*selected);
-  }
-  return true;
-}
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (visible[decl.module.index].count(name.str()) ||
       llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))

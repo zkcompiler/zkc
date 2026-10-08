@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Support/BoundedStream.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -266,42 +267,102 @@ ArrayRef<SourceLocation> CheckedOriginal::locations() const {
 const Correspondence &CheckedOriginal::correspondence() const {
   return storage->report;
 }
+StringRef CompiledEntry::bytes() const {
+  if (auto *run = std::get_if<CompiledRun>(&compiled))
+    return run->bundle;
+  return std::get<CompiledNativeProof>(compiled).deployment;
+}
 Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
-                                     const EntryRunOptions &options) {
-  RunOptions run;
-  run.entry = original.entry().protocol().symbol;
-  run.simplify = options.simplify;
-  run.releaseStorage = options.releaseStorage;
-  auto compiled =
-      compileRun(original.bytes(), filename, run, mlir::DialectRegistry());
-  if (!compiled) {
-    auto error = compiled.takeError();
+                                     const EntryOptions &options) {
+  auto located = [&](Error error) -> Error {
     return handleErrors(
-        std::move(error), [&](const CompilationError &failure) -> Error {
+        std::move(error),
+        [&](const CompilationError &failure) -> Error {
           auto locations = failure.locations;
           SourceCoordinates source(original.entry());
           std::map<std::pair<unsigned, unsigned>, Span> mapping;
           for (const auto &record : original.locations())
             mapping.emplace(std::make_pair(record.line, record.column),
                             record.source);
+          bool mapped = false;
           for (auto &location : locations)
             if (location.filename == filename) {
               auto found = mapping.find({location.line, location.column});
-              if (found != mapping.end())
+              if (found != mapping.end()) {
                 location = source.location(found->second);
+                mapped = true;
+              }
             }
+          if (!mapped)
+            locations.push_back(source.location(original.entry().entry().span));
           return make_error<CompilationError>(failure.message, failure.refusals,
                                               std::move(locations),
                                               failure.invocationPreconditions);
+        },
+        [&](const Refusal &failure) -> Error {
+          return make_error<DiagnosticError>(Diagnostic{
+              failure.code, failure.detail, original.entry().entry().span, {}});
         });
+  };
+  const auto &view = original.interface();
+  const auto &protocol = view.selectedProtocol();
+  if (view.proof) {
+    const auto &proof = *view.proof;
+    NativeProofPolicy selection;
+    selection.version = 4;
+    selection.entry = protocol.symbol;
+    selection.producer = protocol.roles[proof.prover];
+    selection.validator = protocol.roles[proof.verifier];
+    selection.acceptance = proof.acceptance.native.front();
+    selection.suite = proof.suite;
+    if (proof.service)
+      selection.service = protocol.services[*proof.service].native;
+    for (auto index : proof.publicInputs)
+      append_range(selection.publicInputs, protocol.inputs[index].native);
+    NativeProofOptions native;
+    native.policy = NativeProofSelection{selection};
+    native.simplify = options.simplify;
+    native.releaseStorage = options.releaseStorage;
+    auto compiled = compileNativeProof(original.bytes(), filename, native,
+                                       mlir::DialectRegistry());
+    if (!compiled)
+      return located(compiled.takeError());
+    // Native compilation independently checks the full deployment. Pin its
+    // source and policy again at the source-language ownership boundary.
+    auto parsed = json::parse(compiled->deployment);
+    if (!parsed)
+      return parsed.takeError();
+    auto *deployment = parsed->getAsArray();
+    const json::Array *descriptor = deployment && deployment->size() == 9
+                                        ? (*deployment)[2].getAsArray()
+                                        : nullptr;
+    auto selected = compiled->policy;
+    selected.draws.clear();
+    if (!descriptor || descriptor->size() != 6 ||
+        (*deployment)[0].getAsString() != "zkc.native-proof/4" ||
+        (*deployment)[1].getAsString() != original.identity() ||
+        encodeNativeProofPolicy(selected) !=
+            encodeNativeProofPolicy(selection) ||
+        (*descriptor)[1] != encodeNativeProofPolicy(compiled->policy))
+      return error("source.entry",
+                   "compiled proof selected another source or policy");
+    return CompiledEntry(original, EntryArtifact(std::move(*compiled)),
+                         options);
   }
+  RunOptions run;
+  run.entry = protocol.symbol;
+  run.simplify = options.simplify;
+  run.releaseStorage = options.releaseStorage;
+  auto compiled =
+      compileRun(original.bytes(), filename, run, mlir::DialectRegistry());
+  if (!compiled)
+    return located(compiled.takeError());
   auto bundle = json::parse(compiled->bundle);
   if (!bundle)
     return bundle.takeError();
   auto *object = bundle->getAsObject();
-  if (!object ||
-      object->getString("entry") != original.entry().protocol().symbol)
+  if (!object || object->getString("entry") != protocol.symbol)
     return error("source.entry", "compiled bundle selected another protocol");
-  return CompiledEntry(original, std::move(*compiled));
+  return CompiledEntry(original, EntryArtifact(std::move(*compiled)), options);
 }
 } // namespace zkc::language

@@ -65,22 +65,21 @@ Error failure(StringRef code, const Twine &message, std::optional<Span> span,
 }
 bool isUnsupported(StringRef name) {
   static const std::set<StringRef> words = {
-      "service",      "predicate", "requires", "construct",
-      "construction", "while",     "extern"};
+      "service", "predicate", "requires", "construct", "while", "extern"};
   return words.count(name);
 }
 bool isReserved(StringRef name) {
   static const std::set<StringRef> words = {
-      "module", "use",       "pub",       "domain",    "field",     "group",
-      "math",   "fn",        "protocol",  "roles",     "entry",     "let",
-      "return", "send",      "bool",      "true",      "false",     "index",
-      "type",   "struct",    "enum",      "interface", "component", "where",
-      "nat",    "local",     "if",        "else",      "using",     "guard",
-      "repeat", "match",     "for",       "in",        "capture",   "carry",
-      "yield",  "drop",      "consume",   "require",   "stop",      "opaque",
-      "Type",   "Field",     "Group",     "Copy",      "Drop",      "Share",
-      "Wire",   "completes", "finish_if", "builtin",   "kernel",    "pow2",
-      "formal", "intrinsic", "relation",  "spec"};
+      "module", "use",       "pub",       "domain",    "field",       "group",
+      "math",   "fn",        "protocol",  "roles",     "entry",       "let",
+      "return", "send",      "bool",      "true",      "false",       "index",
+      "type",   "struct",    "enum",      "interface", "component",   "where",
+      "nat",    "local",     "if",        "else",      "using",       "guard",
+      "repeat", "match",     "for",       "in",        "capture",     "carry",
+      "yield",  "drop",      "consume",   "require",   "stop",        "opaque",
+      "Type",   "Field",     "Group",     "Copy",      "Drop",        "Share",
+      "Wire",   "completes", "finish_if", "builtin",   "kernel",      "pow2",
+      "formal", "intrinsic", "relation",  "spec",      "construction"};
   return words.count(name) || isUnsupported(name);
 }
 bool isIdentifier(StringRef name) {
@@ -513,6 +512,12 @@ std::string installedCatalogIdentity() {
   for (const auto &row : rows)
     detail::frame(bytes, row);
   return detail::digest(bytes);
+}
+std::string logicalOrigin(const ClosedEntry &entry, const Declaration &decl) {
+  const auto &symbol = decl.origin
+                           ? entry.declarations()[decl.origin->index].symbol
+                           : decl.symbol;
+  return symbol.size() <= 128 ? symbol : "zkl_origin_" + detail::digest(symbol);
 }
 std::string formulaSymbol(const Declaration &decl) {
   return relation::formulaSymbol(decl.symbol);

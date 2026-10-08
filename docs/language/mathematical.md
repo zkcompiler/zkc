@@ -6,7 +6,8 @@ for the existing participant compiler and runtime. The
 [source profile](../spec/profiles/source/mathematical-language.md) defines syntax,
 permissions, role semantics and bounds. Static protocol composition, managed
 randomness, bounded repetition and conditional participant completion are supported.
-Relation attachments and source-facing Host jobs remain under
+Relations, specification clauses and explicit run/proof Entries are supported.
+Source-facing Host packaging and named invocation remain under
 [frontend migration](../roadmap.md).
 
 For a complete small example, read [algebra.zkc](../../compiler/test/fixtures/language/algebra.zkc)
@@ -24,7 +25,9 @@ zkc-compile language-check --source-format=zkc --entry=transfer::Demo \
 
 Use the same options with `language-emit` to print checked original MLIR,
 `language-interface` for the selected Entry's named port layout, or
-`language-bundle` for an executable bundle. Every command checks source, target
+`language-bundle` for the selected run bundle or proof deployment, or
+`language-package` for the immutable package containing original, interface,
+artifact and compilation options. Every command checks source, target
 admission and source correspondence. There is no implicit import discovery or
 fallback to the `.pir` parser. `--no-simplify` and `--release-storage` select
 existing downstream compiler options for bundle production.
@@ -42,6 +45,43 @@ P supplies x and c; V supplies its own c. The
 also demonstrates direct independent runners, changed receive values and the
 existing joint host with independently supplied role inputs.
 There is no protocol-specific runtime or source-facing Host generator here.
+
+## Select a proof job
+
+[Schnorr source](../../compiler/test/fixtures/language/schnorr.zkc) defines the
+participant equations, a discrete-log relation and a target clause. Its Entry
+chooses P and V, public inputs, the acceptance result and a transcript suite:
+
+```text
+entry Proof = Schnorr<G> {
+  prover P;
+  verifier V;
+  public { base, point };
+  accept accepted;
+  target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/1") {
+    derive challenges;
+  }
+}
+```
+
+The compiler finds the actual draws of `challenges` through composition and
+repetition. It checks each delivery before constructing participant transcripts.
+Use `construction authored;` for an authored noninteractive job. `target` is
+optional and adds no execution guard. An Entry alias such as `entry Release = Proof;`
+inherits the whole configuration. The [Entry contract](../spec/profiles/source/mathematical-language.md#entry-jobs)
+defines exact selection and refusal rules.
+
+`language-package` wraps the original, source interface and compiled artifact in
+one exact publication. Rust `zkc_tools::entry::Package::capture` authenticates the
+outer package against an application-supplied digest; native interface binding
+and named execution are still being implemented.
+
+`language-bundle` emits the existing native proof deployment for a proof Entry;
+its producer and validator use the [shared proof host](../compiler/native-proofs.md).
+At this stage invocation still uses native port maps and explicit deployment
+pins. Named source inputs and authenticated source packages belong to the ongoing
+Host implementation.
 
 ## Local code and reusable types
 
@@ -95,7 +135,7 @@ Fixed arrays currently use static numeric indices. Private ingress requires a
 validator that this source profile does not yet expose. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
-`language-interface` emits `zkc.language-interface/3`. Schemas retain an exact
+`language-interface` emits `zkc.language-interface/5`. Schemas retain an exact
 logical type identity and kind separately from their display label. A logical port's `native`
 indices and recursive `schema` describe its flattened fields, variant payloads and
 custody. These indices refer to the original mathematical signature, not a promise
@@ -112,7 +152,9 @@ path; typed source job construction belongs to the Host package.
   admit and compare actual SSA with the checked source.
 - `Zkc::CompilerCore`: `prepareOriginal` retains immutable bytes, interface,
   comparison and diagnostic mappings; `compileEntry` returns that retained
-  original and the existing `CompiledRun` candidate through const accessors.
+  original and a tagged `CompiledRun` or `CompiledNativeProof` candidate through
+  const accessors. `artifact()` exposes the variant; `bytes()` returns the exact
+  selected deployment and `options()` retains compilation choices.
   Only successful compilation can construct `CompiledEntry`; downstream MLIR
   remains caller-accessible and is separate from the immutable original.
   `readInterface` independently checks a supplied interface against original

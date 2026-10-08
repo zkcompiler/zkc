@@ -209,10 +209,13 @@ using Event = detail::NativeTranscriptEvent;
 struct Admitted {
   std::vector<Event> events;
   json::Array publicBindings, messages, wireSites, sequence;
+  std::vector<std::pair<std::string, std::string>> draws;
 };
+enum class DrawSelection { Explicit, Service };
 Expected<Admitted> admit(pir::MathematicalOp source,
                          const NativeProofPolicy &policy,
-                         const StringMap<Origin> &sourceOrigins) {
+                         const StringMap<Origin> &sourceOrigins,
+                         DrawSelection selection = DrawSelection::Explicit) {
   if (!source)
     return error("native-proof-entry");
   auto signature = source.getFunctionType();
@@ -429,8 +432,10 @@ Expected<Admitted> admit(pir::MathematicalOp source,
                 algebra::FieldType::get(
                     source.getContext(),
                     protocol::nativeChallengeField(policy.suite)) ||
-            query.getMethod() != "draw" || draw >= policy.draws.size() ||
-            query.getSite() != policy.draws[draw].first)
+            query.getMethod() != "draw" || draw >= 64 ||
+            (selection == DrawSelection::Explicit &&
+             (draw >= policy.draws.size() ||
+              query.getSite() != policy.draws[draw].first)))
           return error("native-proof-draw-selection");
         if (auto e =
                 append(query, true, query.getResult(0).getType(), sequence))
@@ -445,9 +450,12 @@ Expected<Admitted> admit(pir::MathematicalOp source,
             return error("native-proof-prefix");
         } else {
           if (!pending || message.getInput() != pending.getResult(0) ||
-              message.getSite() != policy.draws[draw].second ||
+              (selection == DrawSelection::Explicit &&
+               message.getSite() != policy.draws[draw].second) ||
               message.getReceiver() != policy.producer)
             return error("native-proof-reverse-message");
+          admitted.draws.emplace_back(pending.getSite().str(),
+                                      message.getSite().str());
           pending = {};
           ++draw;
         }
@@ -462,7 +470,7 @@ Expected<Admitted> admit(pir::MathematicalOp source,
   };
   if (auto e = block(block, source.getBody().front(), admitted.sequence, 0))
     return std::move(e);
-  if (draw != policy.draws.size())
+  if (selection == DrawSelection::Explicit && draw != policy.draws.size())
     return error("native-proof-draw-selection");
   if (consumedOrigins.size() != sourceOrigins.size())
     return error("native-proof-origin-coverage");
@@ -485,7 +493,8 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
                      std::move(inputs),
                      std::move(draws)};
 }
-Expected<NativeProofPolicy> parseNativeProofPolicy(StringRef text) {
+namespace {
+Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
   if (text.size() > 1024 * 1024 || !mlirNestingWithinLimit(text))
     return error("native-proof-policy-limit");
   auto parsed = parseJson(text);
@@ -521,7 +530,8 @@ Expected<NativeProofPolicy> parseNativeProofPolicy(StringRef text) {
   auto service = (*a)[6].getAsString();
   auto *inputs = (*a)[7].getAsArray(), *draws = (*a)[8].getAsArray();
   if (!acceptance || !service || !inputs || inputs->size() > maxPorts ||
-      !draws || draws->size() > 64 || p.producer == p.validator)
+      !draws || draws->size() > 64 || (selectDraws && !draws->empty()) ||
+      p.producer == p.validator)
     return error("native-proof-policy");
   p.acceptance = *acceptance;
   if (!service->empty()) {
@@ -535,7 +545,7 @@ Expected<NativeProofPolicy> parseNativeProofPolicy(StringRef text) {
            : protocol::nativeChallengeField(p.suite).empty() ||
                  (!p.structured() &&
                   protocol::nativeChallengeField(p.suite) != "bls12-381.fr") ||
-                 !p.service || draws->empty()))
+                 !p.service || (!selectDraws && draws->empty())))
     return error("native-proof-policy");
   for (const auto &input : *inputs) {
     auto port = number(input);
@@ -556,6 +566,10 @@ Expected<NativeProofPolicy> parseNativeProofPolicy(StringRef text) {
     p.draws.emplace_back(query->str(), delivery->str());
   }
   return p;
+}
+} // namespace
+Expected<NativeProofPolicy> parseNativeProofPolicy(StringRef text) {
+  return readProofPolicy(text, false);
 }
 namespace {
 class Emitter {
@@ -908,13 +922,13 @@ public:
   }
 };
 } // namespace
-Expected<NativeProofConstruction>
-constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
-  // Validate public API callers too; policy structs are not admission tokens.
-  auto checked =
-      parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
-  if (!checked)
-    return checked.takeError();
+namespace {
+struct PreparedProof {
+  OwningOpRef<ModuleOp> module;
+  StringMap<Origin> origins;
+};
+Expected<PreparedProof> prepareProof(ModuleOp source,
+                                     const NativeProofPolicy &policy) {
   if (!source || failed(verify(source)))
     return error("native-proof-source");
   auto original = unit(source);
@@ -956,12 +970,44 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
   passes.addPass(protocol::createPrepareProtocolPass(false));
   if (failed(passes.run(*candidate)))
     return error("native-proof-preparation");
-  auto prepared = unit(*candidate);
-  if (!prepared)
+  if (!unit(*candidate))
     return error("native-proof-preparation");
+  return PreparedProof{std::move(candidate), std::move(*occurrenceMap)};
+}
+} // namespace
+Expected<NativeProofPolicy>
+selectNativeProofDraws(ModuleOp source, const NativeProofPolicy &selection) {
+  auto policy =
+      readProofPolicy(printJson(encodeNativeProofPolicy(selection)), true);
+  if (!policy)
+    return policy.takeError();
+  auto prepared = prepareProof(source, *policy);
+  if (!prepared)
+    return prepared.takeError();
+  SymbolTable symbols(unit(*prepared->module));
+  auto program = symbols.lookup<pir::MathematicalOp>(policy->entry);
+  auto admitted =
+      admit(program, *policy, prepared->origins, DrawSelection::Service);
+  if (!admitted)
+    return admitted.takeError();
+  policy->draws = std::move(admitted->draws);
+  return parseNativeProofPolicy(printJson(encodeNativeProofPolicy(*policy)));
+}
+Expected<NativeProofConstruction>
+constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
+  // Validate public API callers too; policy structs are not admission tokens.
+  auto checked =
+      parseNativeProofPolicy(printJson(encodeNativeProofPolicy(policy)));
+  if (!checked)
+    return checked.takeError();
+  auto preparedSource = prepareProof(source, policy);
+  if (!preparedSource)
+    return preparedSource.takeError();
+  auto candidate = std::move(preparedSource->module);
+  auto prepared = unit(*candidate);
   SymbolTable preparedSymbols(prepared);
   auto program = preparedSymbols.lookup<pir::MathematicalOp>(policy.entry);
-  auto admitted = admit(program, policy, *occurrenceMap);
+  auto admitted = admit(program, policy, preparedSource->origins);
   if (!admitted)
     return admitted.takeError();
   auto allDefinitions =
@@ -976,7 +1022,7 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
                                                   policy.entry))
     return std::move(e);
   allDefinitions = {};
-  passes.clear();
+  PassManager passes(source.getContext());
   passes.addPass(protocol::createProjectProtocolPass(false));
   if (failed(passes.run(*candidate)))
     return error("native-proof-projection");

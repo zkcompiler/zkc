@@ -2,6 +2,7 @@
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -1013,9 +1014,178 @@ class Reader {
     return true;
   }
 
+  bool job(const json::Value &value) {
+    auto *header = value.getAsObject();
+    if (!header)
+      return fail("Entry job must be an object");
+    auto kind = text(*header, "kind");
+    if (!kind)
+      return false;
+    if (*kind == "run")
+      return bool(object(value, {"kind"}));
+    auto *obj = object(value, {"kind", "prover", "verifier", "public",
+                               "acceptance", "target", "construction"});
+    if (!obj || *kind != "proof")
+      return fail("unknown Entry job");
+    current = &view.protocols[view.selected];
+    roleIndices.clear();
+    for (unsigned i = 0; i < current->roles.size(); ++i)
+      roleIndices.try_emplace(current->roles[i], i);
+    auto prover = text(*obj, "prover"), verifier = text(*obj, "verifier");
+    auto *publicInputs = array(*obj, "public");
+    if (!prover || !verifier || !publicInputs)
+      return false;
+    auto p = roleIndices.find(*prover), v = roleIndices.find(*verifier);
+    if (current->roles.size() != 2 || p == roleIndices.end() ||
+        v == roleIndices.end() || p == v)
+      return fail("proof Entry requires two distinct participants");
+    InterfaceProofEntry proof;
+    proof.prover = p->second;
+    proof.verifier = v->second;
+    for (const auto &input : *publicInputs) {
+      if (!charge(1))
+        return false;
+      auto index = input.getAsInteger();
+      if (!index || *index < 0 || uint64_t(*index) >= current->inputs.size() ||
+          (!proof.publicInputs.empty() &&
+           uint64_t(*index) <= proof.publicInputs.back()))
+        return fail("invalid public logical input index");
+      proof.publicInputs.push_back(*index);
+    }
+    std::vector<unsigned> required;
+    for (unsigned i = 0; i < current->inputs.size(); ++i) {
+      if (!charge(current->inputs[i].roles.size() + 1))
+        return false;
+      if (is_contained(current->inputs[i].roles, proof.verifier))
+        required.push_back(i);
+    }
+    if (required != proof.publicInputs)
+      return fail("public policy differs from verifier data ports");
+    std::shared_ptr<const InterfaceSchema> logical;
+    auto acceptance = selector(*obj->get("acceptance"), &logical);
+    if (!acceptance)
+      return false;
+    if (!acceptance->output || acceptance->role != proof.verifier ||
+        logical->kind != Type::Kind::Boolean || acceptance->native.size() != 1)
+      return fail("Entry acceptance must be one verifier Boolean output");
+    proof.acceptance = std::move(*acceptance);
+    const auto &construction = *obj->get("construction");
+    auto *constructionObject = construction.getAsObject();
+    if (!constructionObject)
+      return fail("Entry construction must be an object");
+    auto constructionKind = text(*constructionObject, "kind");
+    if (!constructionKind)
+      return false;
+    if (*constructionKind == "authored") {
+      if (!object(construction, {"kind"}))
+        return false;
+    } else if (*constructionKind == "fiat_shamir") {
+      if (!object(construction, {"kind", "suite", "service"}))
+        return false;
+      auto suite = text(*constructionObject, "suite");
+      auto service = natural(*constructionObject, "service");
+      if (!suite || !service)
+        return false;
+      if (*service >= current->services.size() ||
+          current->services[*service].owner != proof.verifier ||
+          protocol::nativeChallengeField(*suite).empty() ||
+          protocol::nativeChallengeField(*suite) !=
+              protocol::randomServiceField(
+                  current->services[*service].contract))
+        return fail("construction suite or verifier service differs");
+      proof.construction = ProofEntry::Construction::FiatShamir;
+      proof.suite = suite->str();
+      proof.service = *service;
+    } else
+      return fail("unknown Entry construction");
+    for (unsigned i = 0; i < current->services.size(); ++i) {
+      if (!charge(1))
+        return false;
+      if (current->services[i].owner == proof.verifier && proof.service != i)
+        return fail("verifier service is outside the selected construction");
+    }
+    if (obj->get("target")->kind() != json::Value::Null) {
+      auto target = text(*obj, "target", limits.identifierBytes);
+      if (!target)
+        return false;
+      for (unsigned i = 0; i < current->clauses.size(); ++i) {
+        if (!charge(1))
+          return false;
+        if (current->clauses[i].name == *target)
+          proof.target = i;
+      }
+      if (!proof.target)
+        return fail("selected target is absent");
+      const auto &clause = current->clauses[*proof.target];
+      if (clause.kind != SpecificationClause::Kind::Target ||
+          !clause.decision || clause.decision->role != proof.verifier ||
+          clause.decision->port != proof.acceptance.port ||
+          clause.decision->path != proof.acceptance.path)
+        return fail("selected target decision differs from Entry acceptance");
+      const auto &relation = view.relations[clause.subject.relation];
+      for (auto [operand, input] :
+           zip(clause.subject.operands, relation.inputs)) {
+        if (!charge(current->inputs.size() + 1))
+          return false;
+        if (operand.output)
+          return fail("exported target requires Entry input operands");
+        bool visible =
+            is_contained(current->inputs[operand.port].roles, proof.verifier);
+        if ((input.purpose == RelationPurpose::Witness) == visible)
+          return fail(
+              "target purpose differs from verifier input availability");
+      }
+    }
+    view.proof = std::move(proof);
+    return true;
+  }
+  bool statements(protocol_ir::ProtocolModuleOp module) {
+    const auto *proof = view.proof ? &*view.proof : nullptr;
+    const auto &selected = view.protocols[view.selected];
+    unsigned count = 0;
+    for (auto function :
+         module.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+      for (auto &op : function.getBody().front()) {
+        if (!charge(1 + op.getNumOperands()))
+          return false;
+        auto statement = mlir::dyn_cast<protocol_ir::StatementOp>(op);
+        if (!statement)
+          continue;
+        if (!proof || !proof->target ||
+            function.getSymName() != selected.symbol || ++count != 1)
+          return fail("unexpected native Entry statement");
+        const auto &clause = selected.clauses[*proof->target];
+        const auto &relation = view.relations[clause.subject.relation];
+        if (statement.getRelation() != relation.symbol ||
+            statement.getAcceptance() != proof->acceptance.native.front())
+          return fail("native statement relation or acceptance differs");
+        unsigned i = 0;
+        for (const auto &operand : clause.subject.operands)
+          for (unsigned index : operand.native) {
+            if (!charge(1))
+              return false;
+            if (i >= statement.getInputs().size() ||
+                i >= statement.getSelectors().size() ||
+                statement.getInputs()[i] !=
+                    function.getBody().front().getArgument(index) ||
+                statement.getSelectors()[i] !=
+                    mlir::StringAttr::get(function.getContext(),
+                                          selected.roles[operand.role]))
+              return fail("native statement operands or participants differ");
+            ++i;
+          }
+        if (i != statement.getInputs().size() ||
+            i != statement.getSelectors().size())
+          return fail("native statement has extra operands or selectors");
+      }
+    }
+    return count == unsigned(proof && proof->target) ||
+           fail("native Entry statement omitted");
+  }
   bool read(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
-    auto *obj = object(value, {"format", "capture", "original", "toolchain",
-                               "entry", "protocol", "protocols", "relations"});
+    auto *obj =
+        object(value, {"format", "capture", "original", "toolchain", "entry",
+                       "protocol", "protocols", "relations", "job"});
     if (!obj)
       return false;
     auto format = text(*obj, "format"), capture = text(*obj, "capture"),
@@ -1028,7 +1198,7 @@ class Reader {
     if (!format || !capture || !original || !toolchain || !entry || !symbol ||
         !protocols || !relations)
       return false;
-    if (*format != "zkc.language-interface/4" || !hash(*capture) ||
+    if (*format != "zkc.language-interface/5" || !hash(*capture) ||
         *original != digest || *toolchain != compilerToolchainIdentity())
       return fail("interface format, original or toolchain identity differs");
     SmallVector<StringRef> entryParts;
@@ -1078,7 +1248,7 @@ class Reader {
     }
     if (!selected)
       return fail("selected protocol is absent");
-    return true;
+    return job(*obj->get("job")) && statements(native);
   }
 
 public:

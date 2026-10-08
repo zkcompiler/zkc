@@ -55,6 +55,7 @@ add_zkc_component(Language
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
+  lib/Language/Entries.cpp
   lib/Language/Permissions.cpp
   lib/Language/Conformance.cpp
   lib/Language/BodyCheck.cpp
@@ -258,6 +259,7 @@ add_zkc_component(Transforms
 )
 add_zkc_component(CompilerCore
   lib/Compiler/Language.cpp
+  lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
   lib/Compiler/LanguageInterfaceReader.cpp
   lib/Compiler/LanguageInterfaceWriter.cpp

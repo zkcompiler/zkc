@@ -3,6 +3,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
 #include "llvm/Support/JSON.h"
+#include <variant>
 namespace zkc {
 /// Closed versioned deployment policy. The source remains independently owned.
 struct NativeProofPolicy {
@@ -18,6 +19,14 @@ struct NativeProofPolicy {
 };
 llvm::Expected<NativeProofPolicy> parseNativeProofPolicy(llvm::StringRef text);
 llvm::json::Value encodeNativeProofPolicy(const NativeProofPolicy &policy);
+/// Resolve the ordered query/delivery occurrences of the explicitly selected
+/// verifier service. All other policy choices remain explicit; input draws must
+/// be empty. Uses the same source preparation and event admission as
+/// construction, including roles, public inputs, exact delivered values and
+/// ordering. Returns a complete strict policy without mutating the source.
+llvm::Expected<NativeProofPolicy>
+selectNativeProofDraws(mlir::ModuleOp source,
+                       const NativeProofPolicy &selection);
 struct NativeProofConstruction {
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::json::Value descriptor;
@@ -35,13 +44,20 @@ constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy);
 /// ignoring locations. Source policy/occurrence admission remains a premise.
 llvm::Error checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                              const NativeProofPolicy &policy);
+/// Request service-based occurrence selection inside the owned compiler
+/// context. The policy fixes every choice except draws, which must be empty.
+struct NativeProofSelection {
+  NativeProofPolicy policy;
+};
 struct NativeProofOptions {
-  std::string policy;
+  std::variant<std::string, NativeProofSelection> policy;
   bool simplify = true, releaseStorage = false;
 };
 struct CompiledNativeProof {
   Compilation compilation;
   std::string deployment;
+  /// Complete policy after occurrence selection and strict admission.
+  NativeProofPolicy policy;
 };
 /// Owned, source-checked compilation. A host must authenticate the resulting
 /// deployment independently; hashes inside a supplied artifact are not

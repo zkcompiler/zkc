@@ -29,10 +29,9 @@ helper realization and independent recipe controls in
 [math_realization.cpp](../compiler/test/math_realization.cpp), command controls in
 [language_cli.py](../compiler/test/language_cli.py), and actual per-role input and
 receive, joint-host, aggregate, static dispatch, distributed application results, shared service aliases, pre-query stops, nested/per-role repetition, conditional draws, nested early completion, returned affine custody, native vector/matrix/sequence data, iterative folding rounds, formal polynomial evaluation/interpolation/sums through protocol and local paths, and affine control/cleanup controls in [language_native.rs](../crates/zkc-tools/examples/language_native.rs).
-The source fragment does not yet expose the full native IR vocabulary or proof
-construction. Fixed arrays use static numeric indexing; private ingress without a
+The source fragment does not yet expose the full native IR vocabulary. Fixed arrays use static numeric indexing; private ingress without a
 validator, member-generic conformance and zero-leaf messages refuse. Source schema
-`zkc.language-interface/4` retains all closed protocol interfaces, managed services,
+`zkc.language-interface/5` retains all closed protocol interfaces, managed services,
 formula/opaque/captured relation definitions, and target/input/output/continuation
 clauses with exact logical port and participant selectors. Source-only relation
 checks and inline-binding/privacy controls are in
@@ -50,8 +49,17 @@ encodings and explicit locations from changing the checked publication identity.
 Executed source fixtures
 cover group predicates, runtime R1CS matrices, Sumcheck goal/residual bindings and
 product-of-MLE semantics, including a false specification that leaves service
-execution unchanged. Native Entry statement export and proof construction remain
-work in progress. Existing frontend consumers have not migrated.
+execution unchanged. Explicit proof Entries select participants, complete public
+inputs, structural Boolean acceptance, optional target export and authored or
+installed Fiat–Shamir construction. Whole Entry aliases preserve those choices.
+Native service occurrence selection handles composition and repeats; source
+compilation emits run/proof variants through the existing compiler. Controls are
+in [language_entries.cpp](../compiler/test/language_entries.cpp),
+[language_entry_ir.cpp](../compiler/test/language_entry_ir.cpp) and
+[native_proof_selection.cpp](../compiler/test/native_proof_selection.cpp).
+The compiler exports exact `zkc.entry/1` packages; Rust `entry::Package::capture`
+authenticates their outer bytes and strict framing. Native interface binding,
+named Host inputs/results and thin Rust bindings remain in progress. Existing frontend consumers have not migrated.
 
 ## Foundation capability map
 

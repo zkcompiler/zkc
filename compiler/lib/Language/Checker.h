@@ -69,6 +69,9 @@ public:
   std::optional<SpecificationSelector> selector(const Declaration &,
                                                 const SyntaxSelector &);
   bool specialize(DeclarationId);
+  bool checkProofEntry(const Declaration &, const Declaration &);
+  bool configureEntry(Declaration &, const Declaration &,
+                      const SyntaxProofEntry &);
   struct CallSignature {
     std::vector<Type> inputs, outputs;
     Type resultType() const;

@@ -177,6 +177,19 @@ struct SyntaxRelation {
   RelationDefinition::Kind kind = RelationDefinition::Kind::Formula;
   std::string externalKind, key, revision, asset;
 };
+struct SyntaxName {
+  std::string name;
+  Span span;
+};
+struct SyntaxProofEntry {
+  SyntaxName prover, verifier;
+  std::vector<SyntaxName> publicInputs;
+  SyntaxSelector acceptance;
+  std::optional<SyntaxName> target, service;
+  ProofEntry::Construction construction = ProofEntry::Construction::Authored;
+  std::string suite;
+  Span span;
+};
 struct SyntaxDeclaration {
   Declaration::Kind kind;
   std::string name, domain, target;
@@ -203,6 +216,7 @@ struct SyntaxDeclaration {
   bool anonymous = false;
   std::optional<Span> specificationBlock;
   std::vector<SyntaxClause> specifications;
+  std::optional<SyntaxProofEntry> proof;
 };
 struct Import {
   std::string module;

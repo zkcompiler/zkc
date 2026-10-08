@@ -42,10 +42,9 @@ Error lex(const SourceBuffer &source, ModuleId module, Work &work,
       while (offset < text.size() && text[offset] != '"') {
         unsigned char byte = text[offset++];
         if (byte < 32 || byte > 126 || byte == '\\')
-          return failure(
-              "source.string",
-              "expected unescaped printable ASCII in a domain identity",
-              Span{module, uint32_t(begin), uint32_t(offset)});
+          return failure("source.string",
+                         "expected an unescaped printable ASCII string",
+                         Span{module, uint32_t(begin), uint32_t(offset)});
       }
       if (offset == text.size())
         return failure("source.string", "unterminated string",
@@ -416,16 +415,7 @@ private:
     advance();
     return true;
   }
-  bool selector(SyntaxSelector &value) {
-    value.span = current().span;
-    if (take("out"))
-      value.output = true;
-    else if (take("in"))
-      value.output = false;
-    else
-      return fail("source.specification", "selector must start with in or out");
-    if (!expect(".") || !name(value.port))
-      return false;
+  bool selectorPath(SyntaxSelector &value) {
     while (take(".")) {
       if (current().kind == TokenKind::Decimal) {
         value.path.push_back(text().str());
@@ -439,6 +429,20 @@ private:
       if (value.path.size() > work.limits.typeDepth)
         return fail("source.limit", "selector path depth exceeded");
     }
+    return true;
+  }
+  bool selector(SyntaxSelector &value) {
+    value.span = current().span;
+    if (take("out"))
+      value.output = true;
+    else if (take("in"))
+      value.output = false;
+    else
+      return fail("source.specification", "selector must start with in or out");
+    if (!expect(".") || !name(value.port))
+      return false;
+    if (!selectorPath(value))
+      return false;
     if (take("@")) {
       std::string role;
       if (!name(role))
@@ -446,6 +450,80 @@ private:
       value.role = std::move(role);
     }
     value.span.end = previousEnd;
+    return true;
+  }
+  bool named(SyntaxName &value) {
+    value.span = current().span;
+    if (!name(value.name))
+      return false;
+    value.span.end = previousEnd;
+    return true;
+  }
+  bool proofEntry(SyntaxDeclaration &decl) {
+    SyntaxProofEntry value;
+    value.span = current().span;
+    if (!expect("{"))
+      return false;
+    std::set<std::string> choices;
+    while (!at("}") && !atEnd()) {
+      auto key = text().str();
+      if (!choices.insert(key).second)
+        return fail("source.entry", "duplicate Entry choice");
+      advance();
+      if (key == "prover" || key == "verifier") {
+        if (!named(key == "prover" ? value.prover : value.verifier) ||
+            !expect(";"))
+          return false;
+      } else if (key == "public") {
+        if (!expect("{"))
+          return false;
+        if (!at("}"))
+          do {
+            SyntaxName port;
+            if (!named(port))
+              return false;
+            value.publicInputs.push_back(std::move(port));
+          } while (take(",") && !at("}"));
+        if (!expect("}") || !expect(";"))
+          return false;
+      } else if (key == "accept") {
+        value.acceptance.output = true;
+        value.acceptance.span = current().span;
+        if (!name(value.acceptance.port) || !selectorPath(value.acceptance))
+          return false;
+        value.acceptance.span.end = previousEnd;
+        if (!expect(";"))
+          return false;
+      } else if (key == "target") {
+        value.target.emplace();
+        if (!named(*value.target) || !expect(";"))
+          return false;
+      } else if (key == "construction") {
+        if (take("authored")) {
+          value.construction = ProofEntry::Construction::Authored;
+          if (!expect(";"))
+            return false;
+        } else if (take("fiat_shamir")) {
+          value.construction = ProofEntry::Construction::FiatShamir;
+          value.service.emplace();
+          if (!expect("(") || !string(value.suite) || !expect(")") ||
+              !expect("{") || !expect("derive") || !named(*value.service) ||
+              !expect(";") || !expect("}"))
+            return false;
+        } else
+          return fail("source.entry",
+                      "expected authored or fiat_shamir construction");
+      } else
+        return fail("source.entry", "unknown Entry choice");
+    }
+    for (StringRef key :
+         {"prover", "verifier", "public", "accept", "construction"})
+      if (!choices.count(key.str()))
+        return fail("source.entry", "missing Entry choice: " + key);
+    if (!expect("}"))
+      return false;
+    value.span.end = previousEnd;
+    decl.proof = std::move(value);
     return true;
   }
   bool purpose(RelationPurpose &value) {
@@ -688,10 +766,17 @@ private:
       if (!name(d.name) || !expect("="))
         return {};
       SyntaxType target;
-      if (!type(target) || !expect(";"))
+      if (!type(target) || target.kind != SyntaxType::Kind::Name) {
+        fail("source.entry", "expected a protocol or complete Entry name");
         return {};
+      }
       d.target = target.name;
       d.targetArguments = std::move(target.arguments);
+      if (at("{")) {
+        if (!proofEntry(d))
+          return {};
+      } else if (!expect(";"))
+        return {};
     } else if (take("type")) {
       d.kind =
           member ? Declaration::Kind::Associated : Declaration::Kind::Alias;

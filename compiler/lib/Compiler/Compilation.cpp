@@ -421,13 +421,24 @@ compileNativeProof(StringRef text, StringRef filename,
                    const DialectRegistry &registry) {
   auto result = std::make_unique<Compilation::Storage>(registry);
   Diagnostics diagnostics(result->context);
-  auto policy = parseNativeProofPolicy(options.policy);
-  if (!policy)
-    return diagnostics.failure(policy.takeError());
+  std::optional<NativeProofPolicy> policy;
+  if (const auto *explicitPolicy = std::get_if<std::string>(&options.policy)) {
+    auto parsed = parseNativeProofPolicy(*explicitPolicy);
+    if (!parsed)
+      return diagnostics.failure(parsed.takeError());
+    policy = std::move(*parsed);
+  }
   auto parsed = parseNativeSource(text, filename, result->context, diagnostics);
   if (!parsed)
     return parsed.takeError();
   auto original = std::move(*parsed);
+  if (!policy) {
+    auto selected = selectNativeProofDraws(
+        *original, std::get<NativeProofSelection>(options.policy).policy);
+    if (!selected)
+      return diagnostics.failure(selected.takeError());
+    policy = std::move(*selected);
+  }
   auto constructed = constructNativeProof(*original, *policy);
   if (!constructed)
     return diagnostics.failure(constructed.takeError());
@@ -516,8 +527,8 @@ compileNativeProof(StringRef text, StringRef filename,
           *original, *result->module, text, *policy, options,
           constructed->descriptor, constructed->wireSites, encoded))
     return diagnostics.failure(std::move(e));
-  return CompiledNativeProof{Compilation(std::move(result)),
-                             std::move(encoded)};
+  return CompiledNativeProof{Compilation(std::move(result)), std::move(encoded),
+                             std::move(*policy)};
 }
 Expected<Compilation> compileTable(const json::Value &source,
                                    const TableOptions &options,

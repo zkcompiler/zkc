@@ -66,8 +66,15 @@ class Comparator {
     }
     return std::move(*value);
   }
+  Error takeFailure() {
+    if (failure)
+      return std::move(failure);
+    return error("source.correspondence",
+                 "comparison refused without a diagnostic");
+  }
   bool fail(StringRef message) {
-    failure = error("source.correspondence", message);
+    if (!failure)
+      failure = error("source.correspondence", message);
     return false;
   }
   bool charge(uint64_t n) {
@@ -306,6 +313,41 @@ class Comparator {
     }
     if (argument != block.getNumArguments())
       return fail("block has extra arguments");
+    const auto &proof = project.entry().proof;
+    if (!region && decl.id.index == project.protocol().id.index && proof &&
+        proof->target) {
+      const auto &clause = decl.specifications[*proof->target];
+      const auto &relation =
+          project.declarations()[clause.subject.relation.index];
+      Values operands;
+      std::vector<std::string> selectors;
+      for (const auto &operand : clause.subject.operands) {
+        auto slice = take(layouts.select(decl, operand));
+        if (!slice)
+          return false;
+        for (unsigned i = 0; i < slice->layout->leaves.size(); ++i) {
+          if (slice->offset + i >= block.getNumArguments())
+            return fail("statement operand is outside the entry signature");
+          operands.push_back(block.getArgument(slice->offset + i));
+          selectors.push_back(decl.roles[operand.role]);
+        }
+      }
+      auto acceptance = take(layouts.select(decl, proof->acceptance));
+      if (!acceptance)
+        return false;
+      auto *actual =
+          next(block, cursor, clause.span, "protocol.statement", operands, 0);
+      if (!actual)
+        return false;
+      if (!attributes(*actual, {"relation", "selectors", "acceptance"}))
+        return fail("selected Entry statement attributes differ");
+      auto symbol = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("relation");
+      auto output = actual->getAttrOfType<mlir::IntegerAttr>("acceptance");
+      if (!symbol || symbol.getValue() != relation.symbol || !output ||
+          output.getInt() != acceptance->offset ||
+          !strings(actual->getAttr("selectors"), selectors))
+        return fail("selected Entry statement differs");
+    }
     auto flatten = [&](ArrayRef<ValueId> ids) {
       Values result;
       for (auto id : ids)
@@ -811,8 +853,7 @@ public:
         if (!origin || origin.size() != 2 || !strings(origin[1], {}) ||
             !mlir::isa<mlir::StringAttr>(origin[0]) ||
             mlir::cast<mlir::StringAttr>(origin[0]).getValue() !=
-                (decl.origin ? project.declarations()[decl.origin->index].symbol
-                             : decl.symbol))
+                logicalOrigin(project, decl))
           return error("source.correspondence", "local origin differs");
       }
       auto type = function.getAttrOfType<mlir::TypeAttr>("function_type");
@@ -829,7 +870,7 @@ public:
         for (auto &port : input ? decl.inputs : decl.outputs) {
           auto layout = take(layouts.get(port.type));
           if (!layout)
-            return std::move(failure);
+            return takeFailure();
           llvm::append_range(leaves, (**layout).leaves);
           for (unsigned i = 0; i < (**layout).leaves.size(); ++i)
             if (protocol && (!roles || flat >= roles.size() ||
@@ -844,7 +885,7 @@ public:
           return error("source.correspondence",
                        "signature argument count differs");
         if (!types(nativeTypes.take_front(leaves.size()), leaves))
-          return std::move(failure);
+          return takeFailure();
         for (unsigned i = 0; i < serviceCount; ++i) {
           const auto &port = decl.services[i];
           auto type = mlir::dyn_cast<protocol_ir::ServiceReferenceType>(
@@ -871,7 +912,7 @@ public:
       if (!record(function, decl.span) ||
           !body(decl, *decl.body, function.getRegion(0).front(),
                 protocol ? &availability : nullptr))
-        return std::move(failure);
+        return takeFailure();
     }
     for (const auto &decl : project.declarations()) {
       if (!decl.relation || !decl.origin)
@@ -895,7 +936,7 @@ public:
       for (unsigned i = 0; i < decl.inputs.size(); ++i) {
         auto layout = take(layouts.get(decl.inputs[i].type));
         if (!layout)
-          return std::move(failure);
+          return takeFailure();
         llvm::append_range(leaves, (**layout).leaves);
         std::string purpose;
         switch (definition.purposes[i]) {
@@ -913,11 +954,11 @@ public:
         logicalPurposes.push_back(purpose);
         auto schema = take(schemaIdentities.get(**layout));
         if (!schema)
-          return std::move(failure);
+          return takeFailure();
         logicalTypes.push_back(std::move(*schema));
       }
       if (!types(declaration.getSignature().getInputs(), leaves))
-        return std::move(failure);
+        return takeFailure();
       if (!strings(declaration.getPurposes(), purposes))
         return error("source.correspondence", "relation input purposes differ");
       std::string kind, key, revision;
@@ -930,7 +971,7 @@ public:
         auto identity =
             take(formulas.get(helper, logicalTypes, logicalPurposes));
         if (!identity)
-          return std::move(failure);
+          return takeFailure();
         revision = std::move(*identity);
         break;
       }
@@ -950,9 +991,10 @@ public:
       }
       if (!string(*declaration, "kind", kind) ||
           !string(*declaration, "key", key) ||
-          !string(*declaration, "revision", revision) ||
-          !record(*declaration, decl.span))
+          !string(*declaration, "revision", revision))
         return error("source.correspondence", "relation identity differs");
+      if (!record(*declaration, decl.span))
+        return takeFailure();
     }
     if (!relations.empty())
       return error("source.correspondence", "extra relation declaration");

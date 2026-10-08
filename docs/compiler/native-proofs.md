@@ -140,6 +140,17 @@ records; their correspondence evidence does not transfer through format naming.
    the witness or a running producer. Framing, cleanup and atomic publication use
    the common host mechanisms.
 
+For callers with an explicit verifier service but no source site list,
+`selectNativeProofDraws` resolves ordered query/delivery occurrences through the
+same preparation and admission as construction. Input `draws` must be empty;
+entry, participants, public inputs, acceptance, suite and service remain explicit.
+It returns a complete strict policy and preserves original IR. Existing explicit
+policy callers still have to supply exact occurrence names. The fresh source
+Entry compiler requests it through `NativeProofSelection` in
+`NativeProofOptions::policy`. `compileNativeProof` selects occurrences inside its
+owned diagnostic context and returns the complete policy with the deployment.
+A string policy retains the explicit-occurrence API.
+
 Internal hashes do not authenticate a supplied program. The host hashes and
 parses one captured buffer against an application-supplied expectation. Generic
 supplied-program admission establishes structure and installation, not source

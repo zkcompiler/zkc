@@ -55,10 +55,13 @@ source errors in any definition still reject analysis.
 
 An instance key contains the qualified declaration name, checked body mode and
 canonical static arguments, with each component length framed. Concrete
-instances in their declared body mode retain the encoded declaration symbol. Specializations use `zkl_`
+instances in their declared body mode retain the encoded declaration symbol when
+it fits the native 128-byte identifier limit. Longer paths and specializations use `zkl_`
 followed by the complete SHA-256 key digest; distinct keys that produce the same
 symbol are refused. No declaration-table index enters the symbol. Local logical
-origins name the source definition, allowing a selector to denote its instances;
+origins name the source definition, allowing a selector to denote its instances.
+An origin exceeding 128 bytes uses `zkl_origin_` followed by the SHA-256 digest
+of that encoded definition symbol. This origin is shared across specializations;
 the exact generated symbol and retained closure identify one specialization.
 Adding an unreachable definition changes capture identity but does not rename
 reachable instances. Template bodies are shared immutably. Specialization has its own work and instance budgets; retained templates do not consume the emitted-declaration allowance. Only reachable body copies are specialized before original emission.
@@ -426,6 +429,58 @@ by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because er
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.
 
+## Entry jobs
+
+The short form `entry Session = Protocol<Args>;` selects a joint run. A proof Entry
+uses an explicit block:
+
+```text
+entry Proof = Schnorr<G> {
+  prover P;
+  verifier V;
+  public { base, point };
+  accept accepted;
+  target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/1") {
+    derive challenges;
+  }
+}
+entry Release = Proof;
+```
+
+`prover`, `verifier`, `public`, `accept` and `construction` are required exactly
+once, in any order. Proof jobs require two distinct protocol participants. Public
+ports are named whole logical inputs and must cover exactly the data ports
+available at the verifier, including empty logical ports. Their order is
+canonicalized to declaration order. Relation purposes do not authorize inputs.
+`accept` names a Boolean output or product field available at the verifier;
+its native result index follows the complete flattened output signature.
+
+`construction authored;` selects the existing no-derived-transcript profile.
+A `fiat_shamir` construction names an installed suite and exactly one verifier
+random service with the corresponding field. Other verifier services refuse.
+The native compiler resolves the service's actual ordered query/delivery pairs,
+including static applications and repeated occurrences. It checks exact delivered
+values and order through the same admission as an explicit native policy. An
+unused selected service, omitted delivery or transformed challenge refuses; source
+authors do not supply generated site names. These checks establish supported
+construction, not a security theorem. Native proof admission and its limits still
+apply to the resulting program.
+
+`target` is optional. It names an existing target clause with the same acceptance
+selector. Export requires entry-input operands, with witness ports unavailable at
+the verifier and other purposes available there. The original gains one
+`protocol.statement` at the selected protocol's start, retaining exact argument
+components, participant selectors, relation and Boolean result index. Ordinary
+clauses remain metadata; selecting no target emits no statement. Output-bound or
+more general clauses remain valid attachments but cannot be selected for this
+native statement ABI.
+
+An Entry may name another complete Entry, including one declared later. Aliases
+inherit the protocol, closed arguments and every job choice. Cycles, partial
+overrides and static re-specialization of an Entry refuse. Alias resolution uses
+the source call-depth and work bounds.
+
 ## Managed services and guards
 
 ```text
@@ -702,13 +757,23 @@ operation and operand graph.
 `CheckedOriginal` owns immutable source, original bytes, comparison counts,
 interface, toolchain identity and a bound diagnostic location map. It exposes no
 mutable original IR. The existing compiler receives those bytes and the selected
-protocol symbol, then emits ordinary `zkc.run/1` and `zkc.program/1` artifacts.
+protocol symbol. Run jobs emit `zkc.run/1`; proof jobs use native policy/deployment
+version 4. Both contain ordinary `zkc.program/1` participant programs.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface/4` has exactly these JSON members: `format`, `capture`,
-`original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`. `protocol`
+`zkc.language-interface/5` has exactly these JSON members: `format`, `capture`,
+`original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`, `job`. `protocol`
 selects one symbol from `protocols`. Every original protocol and relation appears
-exactly once. Versions 1–3 and unknown versions refuse.
+exactly once. Versions 1–4 and unknown versions refuse.
+
+A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
+`prover`, `verifier`, `public`, `acceptance`, `target` and `construction`. Roles
+are roster names; `public` is a sorted array of logical input indices; acceptance
+uses the selector format below. Target is a clause name or JSON null. An authored
+construction has only `kind: "authored"`; a derived construction has exactly
+`kind: "fiat_shamir"`, `suite` and logical `service` index. Independent reading
+checks these choices against the original signature and the exact native statement.
+Source comparison separately checks that they match the selected checked Entry.
 
 Each protocol record has `symbol`, `roles`, `inputs`, `outputs`, `services` and
 `clauses`. Each port has `name`, display `type`, `roles`, logical `index`, ordered
@@ -831,6 +896,26 @@ These identify the checked environment; they are not an authenticity signature o
 security claim. The independent comparison binds generated coordinates to source
 spans; diagnostic paths do not affect capture or original identity.
 
+### Published Entry package
+
+`packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/1`
+with exactly `format`, `original`, `interface`, `artifact`, and `options`.
+Original MLIR, interface JSON and native run bundle or proof deployment are exact
+strings. Options contain Boolean `simplify` and `release_storage`. The job kind
+and complete source interface remain in the retained interface, avoiding a second
+name or participant table. Package SHA-256 covers the exact emitted bytes,
+including source capture, selected Entry, toolchain and compilation options.
+Complete Entry aliases can share executable bytes while naming different packages.
+
+The whole escaped package is bounded to 64 MiB; callers may lower this limit.
+The original, interface and artifact retain their own component limits. The
+`language-package` command writes exact package bytes without a trailing newline.
+Package identity is distinct from the original identity used by native proof
+binding. A consumer must obtain its expected package identity independently;
+internal hashes do not authenticate a supplied package. Retaining MLIR does not
+require the Host to recompile it or establish a security theorem.
+
+
 ## Bounds and scope
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
@@ -859,8 +944,8 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Native Entry statement export, proof construction, source-facing Host inputs,
-dynamic source arrays and member-generic conformance remain outside this profile. Reserved future syntax
+Source-facing Host inputs, dynamic source arrays and member-generic conformance
+remain outside the implemented profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor
 protocol security.

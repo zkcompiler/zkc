@@ -913,8 +913,8 @@ int main(int argc, char **argv) {
               full.interfaceJson() == repeated.interfaceJson() &&
               full.locationsIdentity() == repeated.locationsIdentity(),
           "repeated compilation identity differs");
-  require(must(compileEntry(full)).run().bundle ==
-              must(compileEntry(repeated)).run().bundle,
+  require(must(compileEntry(full)).bytes() ==
+              must(compileEntry(repeated)).bytes(),
           "repeated bundle differs");
   auto saved = full.bytes().str();
   mutation(full, "return replaced with local shared input", [](auto module) {
@@ -1002,8 +1002,10 @@ int main(int argc, char **argv) {
       auto run = must(compileEntry(full, {simplify, release}));
       require(run.original().identity() == full.identity(),
               "compile changed original");
-      require(mlir::succeeded(mlir::verify(run.run().compilation.module())),
-              "invalid final IR");
+      require(
+          mlir::succeeded(mlir::verify(
+              std::get<zkc::CompiledRun>(run.artifact()).compilation.module())),
+          "invalid final IR");
     }
   mlir::registerAsmPrinterCLOptions();
   const char *arguments[] = {"language-test", "--mlir-print-debuginfo",

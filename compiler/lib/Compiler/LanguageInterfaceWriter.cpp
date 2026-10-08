@@ -196,12 +196,45 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     });
   };
   out.object([&] {
-    out.attribute("format", "zkc.language-interface/4");
+    out.attribute("format", "zkc.language-interface/5");
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);
     out.attribute("entry", entry.entry().qualifiedName);
     out.attribute("protocol", entry.protocol().symbol);
+    out.attributeObject("job", [&] {
+      const auto &proof = entry.entry().proof;
+      out.attribute("kind", proof ? "proof" : "run");
+      if (!proof)
+        return;
+      const auto &protocol = entry.protocol();
+      if (!charge(proof->publicInputs.size() + proof->suite.size() + 1))
+        return;
+      out.attribute("prover", protocol.roles[proof->prover]);
+      out.attribute("verifier", protocol.roles[proof->verifier]);
+      out.attributeArray("public", [&] {
+        for (unsigned index : proof->publicInputs)
+          out.value(index);
+      });
+      out.attributeBegin("acceptance");
+      selector(protocol, proof->acceptance);
+      out.attributeEnd();
+      out.attributeBegin("target");
+      if (proof->target)
+        out.value(protocol.specifications[*proof->target].name);
+      else
+        out.value(nullptr);
+      out.attributeEnd();
+      out.attributeObject("construction", [&] {
+        bool derived =
+            proof->construction == ProofEntry::Construction::FiatShamir;
+        out.attribute("kind", derived ? "fiat_shamir" : "authored");
+        if (derived) {
+          out.attribute("suite", proof->suite);
+          out.attribute("service", *proof->service);
+        }
+      });
+    });
     out.attributeArray("protocols", [&] {
       for (const auto &protocol : entry.declarations()) {
         if (!protocol.body || protocol.kind != Declaration::Kind::Protocol)

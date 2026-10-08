@@ -284,6 +284,21 @@ struct SpecificationClause {
   std::optional<SpecificationSelector> decision;
   Span span;
 };
+/// Explicit two-participant proof job choices. Public inputs name whole logical
+/// ports; acceptance can select a Boolean product component. Service indices
+/// refer to managed ports, independently of native data flattening.
+struct ProofEntry {
+  enum class Construction {
+    Authored,
+    FiatShamir
+  } construction = Construction::Authored;
+  unsigned prover = 0, verifier = 0;
+  std::vector<unsigned> publicInputs;
+  SpecificationSelector acceptance;
+  std::optional<unsigned> target, service;
+  std::string suite;
+  Span span;
+};
 struct Declaration {
   enum class Kind {
     Domain,
@@ -332,6 +347,7 @@ struct Declaration {
   std::optional<RelationDefinition> relation;
   std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
+  std::optional<ProofEntry> proof;
 };
 
 namespace detail {
@@ -420,6 +436,8 @@ llvm::Expected<std::string> encodeSymbol(llvm::StringRef qualifiedName,
                                          const Limits & = {});
 /// Deterministic private predicate symbol for a closed relation declaration.
 std::string formulaSymbol(const Declaration &);
+/// Bounded native origin shared by all instances of one local declaration.
+std::string logicalOrigin(const ClosedEntry &, const Declaration &);
 std::string spelling(const Type &);
 /// Canonical identity of the installed Contracts data, not caller-supplied
 /// data.

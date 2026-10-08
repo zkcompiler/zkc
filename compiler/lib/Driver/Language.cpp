@@ -2,6 +2,7 @@
 #include "../Support/Input.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -13,7 +14,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::vector<AssetBuffer> assets;
   std::optional<CapturedProject> captured;
   std::string entry, format;
-  EntryRunOptions options;
+  EntryOptions options;
   Limits limits;
   auto refuse = [&](Error error) {
     handleAllErrors(
@@ -53,7 +54,8 @@ int runLanguageCompiler(int argc, char **argv) {
   };
   StringRef command(argv[1]);
   if (command != "language-check" && command != "language-emit" &&
-      command != "language-interface" && command != "language-bundle")
+      command != "language-interface" && command != "language-bundle" &&
+      command != "language-package")
     return refuse(error("source.command", "unknown language command"));
   if (argc > int(limits.files + 8))
     return refuse(error("source.limit", "too many source command arguments"));
@@ -137,7 +139,14 @@ int runLanguageCompiler(int argc, char **argv) {
   auto compiled = compileEntry(*original, options);
   if (!compiled)
     return refuse(compiled.takeError());
-  outs() << compiled->run().bundle << '\n';
+  if (command == "language-package") {
+    auto package = packageEntry(*compiled);
+    if (!package)
+      return refuse(package.takeError());
+    outs() << package->bytes();
+    return 0;
+  }
+  outs() << compiled->bytes() << '\n';
   return 0;
 }
 } // namespace zkc

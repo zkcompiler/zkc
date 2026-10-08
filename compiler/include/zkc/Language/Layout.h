@@ -59,11 +59,19 @@ public:
   explicit LayoutIdentities(uint64_t &remaining) : remaining(remaining) {}
   llvm::Expected<std::string> get(const Layout &);
 };
+struct LayoutSlice {
+  unsigned offset;
+  std::shared_ptr<const Layout> layout;
+};
 class Layouts {
 public:
   explicit Layouts(const CheckedProject &, const Limits & = {});
   explicit Layouts(const ClosedEntry &, const Limits & = {});
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
+  /// Select a checked logical product component in the flattened signature.
+  /// This computes representation only, not source field-access authority.
+  llvm::Expected<LayoutSlice> select(const Declaration &,
+                                     const SpecificationSelector &);
 
 private:
   llvm::ArrayRef<Declaration> definitions;
