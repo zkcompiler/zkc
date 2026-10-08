@@ -12,3 +12,5 @@ pub(crate) mod json;
 pub(crate) mod material;
 pub(crate) mod request;
 pub(crate) mod setups;
+
+pub(crate) mod document;

@@ -87,6 +87,13 @@ impl HostReport {
         }
     }
     pub fn json(&self) -> Json {
+        self.json_with_outputs(true)
+    }
+    /// Resource and control observations without encoding returned values.
+    pub fn diagnostics(&self) -> Json {
+        self.json_with_outputs(false)
+    }
+    fn json_with_outputs(&self, include_outputs: bool) -> Json {
         let mut diagnostics = self.cleanup_errors.clone();
         let mut result = json!({"format":"zkc.bundle-result/1","status":if self.phase=="execution"{"executed"}else{"setup-failed"},"phase":self.phase,"acceptance":null,
             "bundle_sha256":self.identity,"session":self.session,"limits":self.limits,"layout":self.layout,
@@ -116,7 +123,7 @@ impl HostReport {
                 "receive_step":p.receive_step,"original_bytes":p.original_bytes,"bytes":p.bytes.len()})));
             result["roles"] = json!(execution.roles.iter().map(|role| {
                 let backend = &execution.backends.iter().find(|(name,_)|name==&role.role).expect("role custody").1;
-                let outputs = role.outputs.iter().enumerate().map(|(i,value)| {
+                let outputs = role.outputs.iter().enumerate().filter(|_|include_outputs).map(|(i,value)| {
                     if !zkc_backends::has_native_wire(&value.physical_type()) {
                         return json!(["private",value.physical_type().spelling()]);
                     }
@@ -132,7 +139,7 @@ impl HostReport {
                     "usage":role.usage.map(|u|json!({"instructions":u.instructions,"calls":u.calls,"iterations":u.iterations,
                         "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes})),
                     "external_work":backend.external_work_spent(),"active_frames":backend.active_frames(),
-                    "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&role.outputs),"outputs":outputs,
+                    "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&role.outputs),"outputs":if include_outputs {Some(outputs)} else {None},
                     "return_at":role.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s}))})
             }).collect::<Vec<_>>());
         } else {

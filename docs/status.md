@@ -95,8 +95,14 @@ allowance; explicit zero and unknown-name refusals are preserved. Source-authore
 controls cover both transcript suites, authored proofs, retry exhaustion, provider
 exhaustion and lowered limits. Receive-only slots and finer per-receive setup
 pinning remain migration work.
-Package CLI and thin Rust bindings remain in progress. Existing frontend consumers
-have not migrated.
+The package CLI compiles source and supports named run/prove/verify calls through
+the same Host. File adapters reject duplicate names and bound recursive data;
+opt-in result files preserve diagnostics without exposing returned values on
+standard output. Generated Rust data bindings pin the package and delegate to
+common admission. Separate-process controls cover both transcript suites,
+authored proofs, attempts and publication failure; an independent Rust consumer
+executes generated run/proof bindings. The Host/CLI review is complete; final
+frontend stabilization and remaining consumer migration are in progress.
 
 ## Foundation capability map
 

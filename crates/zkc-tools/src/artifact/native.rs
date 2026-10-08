@@ -1125,6 +1125,42 @@ fn stop_json(s: &zkc_runtime::interactive::Stop) -> Json {
         "kind":format!("{:?}",s.kind),
         "cleanup_errors":s.cleanup_errors.iter().map(ToString::to_string).collect::<Vec<_>>()})
 }
+impl NativeProofReport {
+    /// Payload-free execution diagnostics, including failed attempts and cleanup.
+    pub fn diagnostics(&self) -> Json {
+        let mut report = json!({});
+        report["binding_sha256"] = json!(self.binding);
+        report["messages"] = json!(self.messages);
+        report["bytes"] = json!(self.bytes);
+        report["cancelled"] = json!(self.cancelled);
+        report["instructions"] = json!(self.instructions);
+        report["resources"] = json!(self.resources);
+        report["attempt_policy_sha256"] = json!(self.attempt_policy);
+        report["return_at"] = json!(
+            self.return_at
+                .as_ref()
+                .map(|(o, s)| json!({"origin":o.json(), "site":s}))
+        );
+        report["stop"] = json!(self.stop.as_ref().map(stop_json));
+        report["cleanup_errors"] = json!(self.cleanup_errors);
+        report["external_work"] = json!(self.external_work);
+        report["external_work_limit"] = json!(self.external_work_limit);
+        report["calls"] = json!(self.usage.calls);
+        report["iterations"] = json!(self.usage.iterations);
+        report["total_value_bytes"] = json!(self.usage.total_value_bytes);
+        report["attempts"] = json!(self.attempts.iter().map(|r| json!({
+            "attempt":r.attempt, "decision":match &r.decision {
+                Ok(true)=>"complete", Ok(false)=>"retry", Err(_)=>"stopped"},
+            "error":r.decision.as_ref().err(), "messages":r.messages,"bytes":r.bytes,
+            "instructions":r.usage.instructions,"calls":r.usage.calls,"iterations":r.usage.iterations,
+            "total_value_bytes":r.usage.total_value_bytes,"transcript":r.transcript,
+            "external_work":r.external_work,
+            "return_at":r.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s})),
+            "stop":r.stop.as_ref().map(stop_json)
+        })).collect::<Vec<_>>());
+        report
+    }
+}
 pub fn run(produce: bool, args: &[String]) -> Json {
     let mut report =
         json!({"format":"zkc.native-proof-run/1", "status":"refused", "phase":"admission"});
@@ -1198,42 +1234,16 @@ pub fn run(produce: bool, args: &[String]) -> Json {
             None => deployment.execute(&inputs, proof.as_deref())?,
         };
         report["phase"] = json!("execution");
-        report["binding_sha256"] = json!(result.binding);
-        report["messages"] = json!(result.messages);
-        report["bytes"] = json!(result.bytes);
+        report
+            .as_object_mut()
+            .unwrap()
+            .extend(result.diagnostics().as_object().unwrap().clone());
         if produce {
             report["proof_bytes"] = json!(result.outcome.as_ref().map_or(0, Vec::len));
         }
-        report["cancelled"] = json!(result.cancelled);
-        report["instructions"] = json!(result.instructions);
-        report["resources"] = json!(result.resources);
-        report["attempt_policy_sha256"] = json!(result.attempt_policy);
-        report["return_at"] = json!(
-            result
-                .return_at
-                .as_ref()
-                .map(|(o, s)| json!({"origin":o.json(), "site":s}))
-        );
-        report["stop"] = json!(result.stop.as_ref().map(stop_json));
-        report["cleanup_errors"] = json!(result.cleanup_errors);
-        report["external_work"] = json!(result.external_work);
-        report["external_work_limit"] = json!(result.external_work_limit);
-        report["calls"] = json!(result.usage.calls);
-        report["iterations"] = json!(result.usage.iterations);
-        report["total_value_bytes"] = json!(result.usage.total_value_bytes);
-        report["attempts"] = json!(result.attempts.iter().map(|r| json!({
-            "attempt":r.attempt, "decision":match &r.decision {
-                Ok(true)=>"complete", Ok(false)=>"retry", Err(_)=>"stopped"},
-            "error":r.decision.as_ref().err(), "messages":r.messages,"bytes":r.bytes,
-            "instructions":r.usage.instructions,"calls":r.usage.calls,"iterations":r.usage.iterations,
-            "total_value_bytes":r.usage.total_value_bytes,"transcript":r.transcript,
-            "external_work":r.external_work,
-            "return_at":r.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s})),
-            "stop":r.stop.as_ref().map(stop_json)
-        })).collect::<Vec<_>>());
         let bytes = result.outcome?;
         if produce {
-            host::publish(proof_path, &bytes)?;
+            crate::host::io::publish(proof_path, &bytes)?;
         }
         report["phase"] = json!("complete");
         report["status"] = json!(if produce { "produced" } else { "accepted" });

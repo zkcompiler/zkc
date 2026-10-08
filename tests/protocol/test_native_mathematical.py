@@ -52,6 +52,8 @@ def test_generated_native_execution(toolchain, directory, monkeypatch, generator
     artifacts = list((reports / 'tests/compiler-test').iterdir())
     assert len(artifacts) == 1, artifacts
     journal.run([toolchain.example(example), artifacts[0]])
+    if example == 'language_native':
+        check_source_setup_commands(toolchain, journal, artifacts[0])
     if example == 'native_joint':
         check_bundle_commands(toolchain, journal, artifacts[0])
     if example == 'native_composition':
@@ -573,3 +575,26 @@ def check_bundle_commands(toolchain, journal, directory):
     # Exact compiler bytes are reusable as the host artifact, without newline repair.
     regenerated = journal.run([toolchain.compiler, 'protocol-bundle', directory / 'foreign.mlir'])
     assert regenerated.encode() == (directory / 'foreign.bundle').read_bytes()
+
+
+def check_source_setup_commands(toolchain, journal, directory):
+    import hashlib
+    import json
+    package = directory / 'pcs-setup-Prove.entry'
+    pin = hashlib.sha256(package.read_bytes()).hexdigest()
+    authority = f'--setups={directory / "cli-authority.json"}'
+    proof = directory / 'separate-cli-pcs-proof.bin'
+    journal.run([toolchain.runtime, 'prove', package, pin, directory / 'cli-producer.json', proof, authority, '--allow-header-only'])
+    journal.run([toolchain.runtime, 'verify', package, pin, directory / 'cli-verifier.json', proof, authority, '--allow-header-only'])
+    key = directory / 'cli-pk-0.bin'
+    unchanged = key.read_bytes()
+    for output in ([key], [proof, f'--results={key}']):
+        report = json.loads(journal.run([toolchain.runtime, 'prove', package, pin,
+            directory / 'cli-producer.json', *output, authority, '--allow-header-only'], refuses='entry-output-path'))
+        assert 'execution' not in report and key.read_bytes() == unchanged
+    package = directory / 'pcs-setup-Run.entry'
+    pin = hashlib.sha256(package.read_bytes()).hexdigest()
+    command = [toolchain.runtime, 'run-entry', package, pin, directory / 'cli-run.json', authority]
+    journal.run(command)
+    report = json.loads(journal.run([*command, f'--results={key}'], refuses='entry-output-path'))
+    assert 'execution' not in report and key.read_bytes() == unchanged

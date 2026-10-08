@@ -12,7 +12,7 @@ pub(crate) enum ReadError {
 pub(crate) fn read_bounded(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
     read_from(std::fs::File::open(path).map_err(ReadError::Io)?, limit)
 }
-/// Key material is a regular file. Nonblocking open prevents a FIFO swap from
+/// File-based adapters use regular files. Nonblocking open prevents a FIFO swap from
 /// hanging before descriptor validation. Symlinks resolve normally; the opened
 /// descriptor is checked and read once, so path changes cannot replace it.
 pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
@@ -27,7 +27,7 @@ pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u
     if !file.metadata().map_err(ReadError::Io)?.is_file() {
         return Err(ReadError::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "expected a regular key file",
+            "expected a regular file",
         )));
     }
     read_from(file, limit)
@@ -42,6 +42,23 @@ fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
         return Err(ReadError::Limit);
     }
     Ok(bytes)
+}
+
+/// Atomically replace one output file; execution itself is never retried here.
+pub(crate) fn publish(path: &str, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let path = Path::new(path);
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|_| "artifact-publish-io")?;
+    file.write_all(bytes).map_err(|_| "artifact-publish-io")?;
+    file.as_file()
+        .sync_all()
+        .map_err(|_| "artifact-publish-io")?;
+    file.persist(path).map_err(|_| "artifact-publish-io")?;
+    Ok(())
 }
 
 #[cfg(test)]

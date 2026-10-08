@@ -12,7 +12,7 @@ pub(crate) fn read(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {
         crate::host::io::ReadError::Limit => "artifact-byte-limit".into(),
     })
 }
-pub(crate) fn read_key(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {
+pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {
     crate::host::io::read_regular(path, limit).map_err(|error| match error {
         crate::host::io::ReadError::Io(_) => "artifact-io".into(),
         crate::host::io::ReadError::Limit => "artifact-byte-limit".into(),

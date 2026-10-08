@@ -26,3 +26,9 @@ pub use proof::{
     AttemptOptions, BindingPolicy, BindingScope, ProofEntry, ProofOptions, ProofReport,
     ProofRequest,
 };
+
+pub mod files;
+
+pub mod cli;
+
+pub mod bindings;

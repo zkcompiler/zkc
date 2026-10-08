@@ -161,3 +161,74 @@ fn collect_fields(
         .map(|field| Ok((field.name.clone(), collect(&field.schema, leaves)?)))
         .collect()
 }
+
+// Standard conversions keep generated bindings thin. They construct descriptions;
+// the admitted Host still checks source permissions and concrete native types.
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        NativeValue::Bool(value).into()
+    }
+}
+impl TryFrom<Value> for bool {
+    type Error = String;
+    fn try_from(value: Value) -> Result<Self> {
+        if let Value::Leaf(InputValue::Native(value)) = value
+            && let NativeValue::Bool(value) = *value
+        {
+            return Ok(value);
+        }
+        Err("entry-binding-value".into())
+    }
+}
+impl From<u64> for Value {
+    fn from(value: u64) -> Self {
+        NativeValue::Index(value).into()
+    }
+}
+impl TryFrom<Value> for u64 {
+    type Error = String;
+    fn try_from(value: Value) -> Result<Self> {
+        if let Value::Leaf(InputValue::Native(value)) = value
+            && let NativeValue::Index(value) = *value
+        {
+            return Ok(value);
+        }
+        Err("entry-binding-value".into())
+    }
+}
+impl From<()> for Value {
+    fn from(_: ()) -> Self {
+        Self::Unit
+    }
+}
+impl TryFrom<Value> for () {
+    type Error = String;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Unit => Ok(()),
+            _ => Err("entry-binding-value".into()),
+        }
+    }
+}
+impl<T: Into<Value>, const N: usize> From<[T; N]> for Value {
+    fn from(values: [T; N]) -> Self {
+        Self::Array(values.into_iter().map(Into::into).collect())
+    }
+}
+impl<T: TryFrom<Value>, const N: usize> TryFrom<Value> for [T; N] {
+    type Error = String;
+    fn try_from(value: Value) -> Result<Self> {
+        let Value::Array(values) = value else {
+            return Err("entry-binding-value".into());
+        };
+        if values.len() != N {
+            return Err("entry-binding-value".into());
+        }
+        values
+            .into_iter()
+            .map(|v| T::try_from(v).map_err(|_| "entry-binding-value".into()))
+            .collect::<Result<Vec<T>>>()?
+            .try_into()
+            .map_err(|_| "entry-binding-value".into())
+    }
+}

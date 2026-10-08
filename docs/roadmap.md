@@ -116,8 +116,9 @@ preparation, named run inputs/results, and independent typed/named proof calls
 are implemented. Native requests also support immutable authenticated prover
 material. Explicit source setup associations now drive named authority and checked
 key initialization through both Hosts. Named attempt completion and bounded
-operational defaults delegate to the existing controller. Continue with the common
-CLI and thin bindings. Account separately for receive-only
+operational defaults delegate to the existing controller. The common CLI and
+optional Rust data bindings use those same Hosts. Their review and affected
+validation are complete. Continue with frontend stabilization and consumer migration. Account separately for receive-only
 setup authority and legacy per-receive pinning before retiring their consumers.
 
 Bind the checked source interface, exact original, toolchain, compilation options

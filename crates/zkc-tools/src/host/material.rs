@@ -55,7 +55,7 @@ impl ProverMaterial {
         capacity: super::capacity::NativeCapacity,
     ) -> Result<Self> {
         capacity.check()?;
-        let bytes = super::inputs::read_key(path, capacity.wire_bytes).map_err(|e| {
+        let bytes = super::inputs::read_regular(path, capacity.wire_bytes).map_err(|e| {
             if e == "artifact-byte-limit" {
                 "native-capacity-wire".into()
             } else {

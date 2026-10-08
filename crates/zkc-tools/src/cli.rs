@@ -5,6 +5,11 @@ const HELP: &str = "zkc — execute checked protocol participants and proof arti
 Usage: zkc COMMAND [ARGUMENTS]
 
 Commands:
+  compile                   Compile .zkc source to an authenticated Entry package
+  run-entry                 Run a source Entry package with named inputs
+  prove                     Produce a proof from a source Entry package
+  verify                    Verify a proof using independent named public inputs
+  bindings                  Generate Rust data bindings pinned to an Entry package
   run-bundle                Execute an authenticated native run bundle
   run-protocol              Execute an interactive participant plan
   produce-artifact          Write a proof artifact from producer inputs
@@ -19,12 +24,32 @@ Options:
   -h, --help                Show this help
   --version                 Show the package version
 
-Use 'zkc COMMAND --help' for arguments. Compile .pir sources with zkc-compile.
+Use 'zkc COMMAND --help' for arguments. Compile .zkc sources with zkc compile; use zkc-compile for direct IR.
 Start in a prepared checkout with 'just demo'; see docs/getting-started.md.
 ";
 
 fn command_help(command: &str) -> Option<&'static str> {
     match command {
+        "compile" => Some(
+            "Usage: zkc compile --entry=MODULE::ENTRY --module=MODULE=FILE.zkc --output=PACKAGE [--compiler=PATH] [--asset=NAME=FORMAT=FILE] [--no-simplify] [--release-storage]\n\n\
+             Modules/assets may repeat. Compilation trusts the selected compiler and source.\n\
+             The result reports the exact package SHA-256 for deployment configuration.\n",
+        ),
+        "bindings" => Some(
+            "Usage: zkc bindings PACKAGE EXPECTED_SHA256 OUTPUT.rs\n\n\
+             Generate named Rust data structures and an admission helper.\n\
+             Execution uses the common Entry Host; protocol algorithms are not emitted.\n",
+        ),
+        "run-entry" => Some(
+            "Usage: zkc run-entry PACKAGE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--results=FILE]\n\n\
+             INPUTS is a named zkc.entry-run/1 request. Results are opt-in file output.\n",
+        ),
+        "prove" | "verify" => Some(
+            "Usage: zkc prove|verify PACKAGE EXPECTED_SHA256 INPUTS PROOF [--setups=AUTHORITY] [--capacity=LIMITS] [--allow-header-only] [--attempts=COUNT] [--results=FILE]\n\n\
+             INPUTS is a named zkc.entry-proof/1 request. Verification supplies no prover witness.\n\
+             Attempts are explicit and producer-only. One-shot proving honors Entry completion.\n\
+             Authored jobs require --allow-header-only. Diagnostic reports omit returned values.\n",
+        ),
         "run-bundle" => Some(
             "Usage: zkc run-bundle BUNDLE EXPECTED_SHA256 INPUTS [--setups=AUTHORITY] [--capacity=LIMITS] [--limits=LIMITS]\n\n\
              BUNDLE is protocol-bundle output; INPUTS is a zkc.bundle-inputs/1 array.\n\

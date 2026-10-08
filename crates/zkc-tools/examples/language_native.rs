@@ -17,6 +17,8 @@ use zkc_tools::protocol::run::{
 
 #[path = "language_native/attempts.rs"]
 mod attempts;
+#[path = "language_native/files.rs"]
+mod files;
 #[path = "language_native/host.rs"]
 mod host;
 #[path = "language_native/interface.rs"]

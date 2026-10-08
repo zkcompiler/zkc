@@ -27,12 +27,12 @@ pub(super) fn object<'de, D: Deserializer<'de>, T: Object<'de>>(decoder: D) -> R
 macro_rules! objects {
     ($($ty:ty),* $(,)?) => {$(
         impl<'de> $crate::entry::decode::Object<'de> for $ty {
-            fn fields<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self,D::Error> {
+            fn fields<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self,D::Error> {
                 Self::deserialize(decoder)
             }
         }
         impl<'de> serde::Deserialize<'de> for $ty {
-            fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self,D::Error> {
+            fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self,D::Error> {
                 $crate::entry::decode::object(decoder)
             }
         }
@@ -41,7 +41,7 @@ macro_rules! objects {
 macro_rules! names {
     ($($ty:ty),* $(,)?) => {$(
         impl<'de> serde::Deserialize<'de> for $ty {
-            fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self,D::Error> {
+            fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self,D::Error> {
                 let name = <String as serde::Deserialize>::deserialize(decoder)?;
                 Self::deserialize(serde::de::value::StringDeserializer::<D::Error>::new(name))
             }

@@ -7,8 +7,8 @@ for the existing participant compiler and runtime. The
 permissions, role semantics and bounds. Static protocol composition, managed
 randomness, bounded repetition and conditional participant completion are supported.
 Relations, specification clauses and explicit run/proof Entries are supported.
-Source-facing Host packaging and named invocation remain under
-[frontend migration](../roadmap.md).
+The common Host supports authenticated packages, named inputs/results and
+independent proof calls through the [CLI and Rust API](entries.md).
 
 For a complete small example, read [algebra.zkc](../../compiler/test/fixtures/language/algebra.zkc)
 and [transfer.zkc](../../compiler/test/fixtures/language/transfer.zkc). The two
@@ -44,7 +44,8 @@ P supplies x and c; V supplies its own c. The
 [participant execution control](../../crates/zkc-tools/examples/language_native.rs)
 also demonstrates direct independent runners, changed receive values and the
 existing joint host with independently supplied role inputs.
-There is no protocol-specific runtime or source-facing Host generator here.
+Use the named Entry Host for application code. The lower-level bundle interface
+remains available for direct runtime consumers.
 
 ## Select a proof job
 
@@ -91,8 +92,9 @@ without a prover witness or live peer. Products, variants and unit values follow
 the checked interface. Successful reports return named copyable outputs after
 cleanup. Authored jobs require explicit `BindingPolicy::AllowHeaderOnly`;
 derived transcript jobs use the default policy. Named setup slots bind checked
-key initialization to application-owned identities. The package CLI and generated
-thin bindings remain in progress. A proof Entry may select `complete result.ready;`
+key initialization to application-owned identities. The [Entry guide](entries.md)
+shows package compilation, independent CLI calls and thin Rust bindings.
+A proof Entry may select `complete result.ready;`
 to withhold incomplete proofs, including in one-shot proving. Repeated attempts
 require an explicit application request. The common controller retains managed
 providers and cumulative work. Omitted service and derived transcript budgets use

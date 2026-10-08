@@ -1184,6 +1184,73 @@ allowances. Provider budgets persist for the whole invocation; each derived
 attempt transcript starts its separately bounded allowance. Callers can lower
 budgets and native hard limits still apply.
 
+### File adapters and Rust bindings
+
+The CLI and generated bindings use the same named Hosts. `zkc compile` invokes
+a compiler selected by an explicit path or absolute directories in the caller's
+trusted `PATH` (default
+`zkc-compile`), reports its resolved path and toolchain, captures its
+bounded package output and publishes exact bytes with their SHA-256. Existing
+packages require a caller-supplied expected digest for `run-entry`, `prove`,
+`verify` and `bindings`. No digest derived from candidate bytes authorizes them.
+
+A `zkc.entry-run/1` request has required `format`, `session` and `roles`, plus
+optional `setups` (default empty). Every role record has required `inputs` and
+optional `services` (default no overrides). A `zkc.entry-proof/1` request has
+required `format` and `public`, plus optional `inputs` (private value map,
+default empty), `services` (default no overrides), `context` (default empty hex), `transcript_budget` (default absent) and `setups`
+(default empty). Public and input maps use exact logical port names. The file
+adapter fills shared role operands from `public`; `inputs` cannot repeat or
+override public names. Independent callers still provide their own public maps. Setup
+material maps slot names to canonical verifier-key bytes in hex. Whole VK ports
+are omitted from value maps. A whole prover-key port supplies exactly `path`
+and `sha256`; key paths resolve from the invoking process working directory.
+
+Values use Boolean JSON for Boolean source values, unsigned 64-bit integers for
+indices, null for unit, arrays for tuples/fixed arrays, and exact named objects
+for records. A variant has exactly `case` (the alternative name) and `fields`
+(a named object, including numeric field names for positional payloads).
+Associated representations are transparent. Installed mathematical leaves use
+hex of their complete canonical native wire frame. Native decoding retains its
+exact type, canonicality, setup and quota checks. Typed Rust ingress avoids this
+file encoding and retains its independent immutable-value validation.
+
+CLI inputs and authority use bounded regular-file descriptors; nonregular files
+refuse before execution. File requests have a 16 MiB byte limit, depth at most 72 and a 200,000-node
+allowance including object keys. Decoding rejects duplicate keys, unknown record
+fields, trailing documents and numeric values outside unsigned 64-bit naturals.
+The optional application authority file is bounded by 64 KiB and contains exactly
+`format: "zkc.entry-setups/1"` and `keys`, mapping source slots to expected 32-byte
+key identities in hex. Authority is separate from invocation material.
+
+Diagnostics omit returned values and proof payloads. Explicit `--results` output
+uses `zkc.entry-outputs/1`, with `roles` for a run or `values` for a proof call.
+Serialization uses admitted native capacity, a 16 MiB whole-file limit and only
+installed Wire encodings for native leaves. A successful proof is published before
+optional result encoding and publication. Output destinations must differ from
+each other and all input/configuration paths, including referenced prover-key
+files and existing parent directory aliases. This configuration check does not
+isolate filesystem races. Each file is atomically replaced; a failure after one
+successful publication retains that fact and the execution report. No automatic retry
+follows a publication error. Success exit status requires complete execution,
+cleanup and requested publication.
+
+Generated Rust modules pin the exact package digest and delegate admission to the
+common Host. They provide named participant/public input and output structures,
+structural value conversions, and Rust representations of Boolean/index/unit,
+array and nominal data. Mathematical leaves remain `entry::Value`, with concrete
+domain and authority validation at invocation. Identifier conversion avoids Rust
+keywords and collisions while retaining original source keys in conversions.
+Field and variant names retain exact source spelling. Reserved path names, `_`
+and names beginning `__zkc_` use that prefix followed by hex of the full source
+identifier. Generated naming-lint allowances cover these intentional spellings;
+they do not disable general warnings. Fixed public-interface names are allocated
+before source-derived names. Role conversion helpers and name constants delegate
+to the same request/result maps.
+Bindings emit no protocol algorithm or new execution/authority implementation.
+Generated source is bounded by 16 MiB. Reauthorizing a different package requires
+regenerating or deliberately replacing its pin.
+
 ## Bounds and scope
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged

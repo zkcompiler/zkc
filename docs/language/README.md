@@ -1,8 +1,9 @@
 # Writing protocols
 
-For direct mathematical authoring with the initial `.zkc` fragment, use the
-[mathematical source guide](mathematical.md). The routes have explicit format
-selection and separate support scopes.
+For `.zkc` authoring, use the [mathematical source guide](mathematical.md) and
+[Entry execution guide](entries.md). These compile directly to mathematical MLIR
+and execute through the common Host. The older `.pir` route below retains its
+source/checker consumers during [migration](../compiler/migration.md).
 
 The `.pir` language describes local algorithms, participant interactions and
 reusable protocol libraries. It elaborates into common PIR, where interaction,

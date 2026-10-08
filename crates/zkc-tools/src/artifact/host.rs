@@ -4,8 +4,9 @@ use super::{
     ArtifactFailure, ArtifactPaths, CacheLimits, CheckerInstallation, InvocationInputs,
     InvocationOptions, io::*,
 };
+use crate::host::io::publish;
 use serde_json::{Value as Json, json};
-use std::{io::Write, path::Path, time::Instant};
+use std::time::Instant;
 use zkc_runtime::interactive::StopKind;
 
 pub(super) fn failure(error: &ArtifactFailure) -> String {
@@ -26,20 +27,6 @@ pub(super) fn failure(error: &ArtifactFailure) -> String {
         ArtifactFailure::AcceptanceType => "artifact-acceptance-type".into(),
         ArtifactFailure::Rejected => "artifact-rejected".into(),
     }
-}
-pub(super) fn publish(path: &str, bytes: &[u8]) -> Result<()> {
-    let path = Path::new(path);
-    let parent = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|_| "artifact-publish-io")?;
-    file.write_all(bytes).map_err(|_| "artifact-publish-io")?;
-    file.as_file()
-        .sync_all()
-        .map_err(|_| "artifact-publish-io")?;
-    file.persist(path).map_err(|_| "artifact-publish-io")?;
-    Ok(())
 }
 /// Always returns a structured report, including the last reached phase on
 /// admission/binding failures. Exit policy belongs to the CLI.

@@ -1,7 +1,7 @@
 //! Per-bind admission and authenticated immutable import reuse. No global cache.
 mod native;
 use super::{
-    inputs::{Result, read_key, text, unhex},
+    inputs::{Result, read_regular, text, unhex},
     material::{KeyIdentity, MaterialCache},
 };
 pub(crate) use native::check_native_data;
@@ -377,7 +377,7 @@ impl<'a> Admission<'a> {
                     // Freeze precisely this named file into bounded owned bytes.
                     // Never reopen between SHA and import. Even a cache hit must
                     // satisfy this path's current captured bytes and declared pin.
-                    let bytes = read_key(path, limit).map_err(|e| {
+                    let bytes = read_regular(path, limit).map_err(|e| {
                         if e == "artifact-byte-limit" && remaining < policy.max_wire_bytes {
                             "artifact-input-work-limit".into()
                         } else {

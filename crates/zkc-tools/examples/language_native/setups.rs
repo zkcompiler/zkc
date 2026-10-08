@@ -180,6 +180,20 @@ pub(super) fn run(directory: &Path) {
         transcript_budget: Some(0),
         setups: setups(),
     };
+    super::files::setups(
+        directory,
+        request(true),
+        request(false),
+        pins(),
+        keys.iter()
+            .map(|k| {
+                (
+                    k.prover_key().to_bytes(&bounds).unwrap(),
+                    k.prover_key().material_fingerprint(),
+                )
+            })
+            .collect(),
+    );
     // Reuse immutable material across independent complete invocations.
     let mut unloaded = request(true);
     unloaded.inputs.inputs.insert(
