@@ -102,7 +102,7 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Next package: native Lean connection
+### Next package: frontend and Host refinement
 
 The fresh frontend is complete at its [declared source profile](spec/profiles/source/mathematical-language.md).
 Authoring defaults, maintained Schnorr/Sumcheck projects, named CLI jobs, generated
@@ -110,13 +110,20 @@ Rust data bindings and installed C++/runtime consumers use the mathematical path
 Integrated review and bounded execution checks cover source meaning, admission,
 failure reporting, resource bounds and interface consistency.
 
-Next, define and implement native Lean semantics and the source/artifact checking
-boundary. Preserve the older committed-proof workflow's independent checks until
-their actual replacement is connected. The
-[consumer inventory](compiler/migration.md#frontend-consumer-transition) owns
-remaining requirements; detail this next package before changing its readers.
+Review the implemented frontend and Host before adding another consumer. Fix
+local defects, and decide structural changes together: name resolution and type
+queries, closed layouts and their budgets, named Host input preparation,
+diagnostics, and native component dependencies. Keep source correspondence,
+independent readers and setup authority explicit while simplifying their owners.
+Larger changes remain proposals until their contracts and validation are settled.
 
-Then migrate the remaining library, checker, identity/setup and table consumers
+Lean remains a separate research and design effort. Do not migrate its readers as
+part of frontend or Host refinement. Preserve the older committed-proof workflow's
+independent checks until their actual replacement is connected. The
+[consumer inventory](compiler/migration.md#frontend-consumer-transition) owns
+remaining requirements.
+
+Later, migrate the remaining library, checker, identity/setup and table consumers
 at their declared boundaries. Receive-only source slots and per-receive selectors
 belong to setup-consumer migration; explicit source input slots already use
 common native authority. Delete each older implementation with its last migrated
@@ -133,7 +140,7 @@ The [validation map](compiler/foundation-validation.md) maps these criteria to
 compiler/runtime support, composed execution checks and explicit limits. Writing
 a complete library from supported mechanisms has its own migration milestone.
 
-With stabilization and cleanup complete:
+After frontend and Host refinement:
 
 1. Connect native Lean/checking to the completed frontend exchange and native
    contracts. Detail the semantic and reader boundaries when the package starts;

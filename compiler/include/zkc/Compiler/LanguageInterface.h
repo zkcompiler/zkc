@@ -103,8 +103,8 @@ llvm::Error compareInterface(const ClosedEntry &, const LanguageInterface &,
 /// Independently admit the original MLIR and check interface structure, native
 /// leaf types, logical offsets, role mappings, services and exact byte
 /// identity. Does not authenticate source names, permissions or nominal
-/// schemas; source correspondence and checkInterface bind those to the retained
-/// source project through admitOriginal. This is a read-only view, not
+/// schemas; source correspondence and compareInterface bind those to the
+/// retained source project through admitOriginal. This is a read-only view, not
 /// authority to compile, decode private inputs or introduce an implementation.
 /// No source checker or emitter is called.
 llvm::Expected<LanguageInterface>

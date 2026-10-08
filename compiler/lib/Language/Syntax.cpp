@@ -250,6 +250,13 @@ private:
     } while (take("+"));
     return true;
   }
+  bool typeTreeBound(SyntaxType &type) {
+    type.height = 1;
+    for (const auto &argument : type.arguments)
+      type.height = std::max(type.height, argument.height + 1);
+    return type.height <= work.limits.parseDepth ||
+           fail("source.limit", "type syntax depth limit exceeded");
+  }
   bool type(SyntaxType &out, unsigned depth = 1, unsigned minimum = 0) {
     if (!bounded(depth))
       return false;
@@ -325,6 +332,8 @@ private:
       }
     }
     out.span.end = previousEnd;
+    if (!typeTreeBound(out))
+      return false;
     while (!diagnostic) {
       unsigned precedence = at("+") ? 1 : at("*") ? 2 : 0;
       if (!precedence || precedence < minimum)
@@ -340,6 +349,8 @@ private:
       combined.span.end = previousEnd;
       combined.arguments.push_back(std::move(out));
       combined.arguments.push_back(std::move(rhs));
+      if (!typeTreeBound(combined))
+        return false;
       out = std::move(combined);
     }
     return true;

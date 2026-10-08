@@ -20,7 +20,7 @@ own milestones; they are not foundation completion conditions.
 The existing `protocol → participant → exec → physical` profiles remain the
 architecture. Direct MLIR and source programs exercise the foundation. The fresh
 frontend is implemented; native Lean and remaining consumers follow the
-[migration roadmap](../roadmap.md#next-package-native-lean-connection).
+[migration roadmap](../roadmap.md#foundation-completion-and-later-migration).
 The long-term migration still preserves existing features, libraries and checking
 obligations; changing this milestone does not remove those obligations.
 

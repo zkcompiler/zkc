@@ -198,6 +198,22 @@ entry Demo=Run;)";
   must(compileEntry(must(prepareOriginal(must(
       closeEntry(must(analyze(qualified).checkedProject()), "m::Demo"))))));
 }
+void syntaxTreeBounds() {
+  Limits limits;
+  limits.parseDepth = 4;
+  for (StringRef expression : {"1+1+1", "1+1*1", "1*1*1"})
+    check("module m;type A=[bool;" + expression.str() + "];", limits);
+  for (StringRef expression : {"1+1+1+1", "1*1*1*1"})
+    sourceRefuses("module m;type A=[bool;" + expression.str() + "];",
+                  "source.limit", limits);
+  // Recursive-descent depth stays small for a flat operator chain. Refuse
+  // before it forms a syntax tree whose destruction can overflow the stack.
+  std::string flat = "module m;type A=[bool;1";
+  for (unsigned i = 1; i < 150000; ++i)
+    flat += "+1";
+  flat += "];";
+  sourceRefuses(flat, "source.limit");
+}
 void depthAndAggregateBounds() {
   auto modules = must(
       capture({{"a",
@@ -852,6 +868,8 @@ int main(int argc, char **argv) {
   sourceControls();
   stage = "bounds";
   bounds();
+  stage = "syntaxTreeBounds";
+  syntaxTreeBounds();
   stage = "depthAndAggregateBounds";
   depthAndAggregateBounds();
   stage = "reviewControls";

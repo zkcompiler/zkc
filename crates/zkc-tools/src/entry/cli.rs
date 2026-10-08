@@ -319,7 +319,16 @@ fn compile(args: &[String]) -> Json {
         }
         let output = output.ok_or("entry-usage")?;
         protect_destinations(&[output], &sources)?;
-        let compiler = resolve_compiler(compiler)?;
+        let selected_compiler = resolve_compiler(compiler)?;
+        let compiler_path = std::path::Path::new(compiler);
+        if compiler_path.is_absolute() || compiler_path.components().count() > 1 {
+            protect_destinations(&[output], &[compiler])?;
+        }
+        protect_destinations(
+            &[output],
+            &[selected_compiler.to_str().ok_or("entry-compiler-io")?],
+        )?;
+        let compiler = selected_compiler;
         report["compiler"] = json!(compiler);
         report["phase"] = json!("compilation");
         let directory = tempfile::tempdir().map_err(|_| "entry-compiler-io")?;

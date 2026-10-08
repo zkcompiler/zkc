@@ -308,6 +308,7 @@ impl Generator {
 /// this is not protocol algorithm generation or a new authority source.
 pub fn rust(package: &Package) -> Result<String> {
     let interface = Interface::read(package).map_err(|e| e.to_string())?;
+    super::arguments::check_ports(&interface)?;
     let protocol = interface.selected_protocol();
     let mut generator = Generator {
         names: Names::default(),

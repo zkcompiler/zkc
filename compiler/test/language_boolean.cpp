@@ -84,6 +84,29 @@ int main() {
     require(StringRef(toString(result.takeError())).contains("source.type"),
             "wrong operand diagnostic");
   });
+  for (StringRef expression : {"intrinsic(\"bool.and\",a,b)", "a==b"})
+    for (bool wrapped : {false, true})
+      cases.run("unused mathematics retains participant requirements", [&] {
+        auto helper =
+            ("math fn keep(a:bool,b:bool)->bool{let unused=" + expression +
+             ";return a;}")
+                .str();
+        if (wrapped)
+          helper += "math fn relay(a:bool,b:bool)->bool{return keep(a,b);}";
+        auto callee = wrapped ? "relay" : "keep";
+        auto protocol = [&](StringRef roles) {
+          return helper + "protocol Run roles(P,V)(a:bool@P,b:bool@" +
+                 roles.str() + ")->(r:bool@P){return(r=" + callee +
+                 "(a,b));}entry Demo=Run;";
+        };
+        take(prepareOriginal(
+            take(closeEntry(take(check(protocol("(P,V)"))), "sample::Demo"))));
+        auto refused = check(protocol("V"));
+        require(!refused, "unavailable helper intermediate admitted");
+        require(
+            StringRef(toString(refused.takeError())).contains("source.roles"),
+            "participant requirement must fail during source analysis");
+      });
   cases.run("Boolean hook requires math mode", [&] {
     auto result = check(
         "fn bad(a:bool,b:bool)->bool{return intrinsic(\"bool.and\",a,b);}");

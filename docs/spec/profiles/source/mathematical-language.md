@@ -1283,6 +1283,9 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Encoded symbol; diagnostic path bytes | 4096 each |
 | Location records, five 64-bit coordinates each | 16 MiB |
 
+Parse depth bounds both recursive parsing and constructed type/natural syntax
+trees, including operator chains.
+
 The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.

@@ -235,7 +235,7 @@ class Emitter {
             bool region = false) {
     builder.setInsertionPointToEnd(&block);
     std::vector<Values> values(source.values.size());
-    unsigned cursor = 0;
+    assert(block.getNumArguments() == 0 && "body requires a fresh block");
     for (unsigned i = 0; i < source.inputs; ++i) {
       auto layout = take(layouts.get(source.values[i].type));
       if (!layout)
@@ -243,22 +243,14 @@ class Emitter {
       auto ts = types(**layout);
       if (!ts)
         return false;
-      for (auto type : *ts) {
-        if (cursor < block.getNumArguments())
-          values[i].push_back(block.getArgument(cursor));
-        else
-          values[i].push_back(block.addArgument(type, location));
-        ++cursor;
-      }
+      for (auto type : *ts)
+        values[i].push_back(block.addArgument(type, location));
     }
     Values services;
     for (const auto &port : source.services) {
       auto type =
           protocol_ir::ServiceReferenceType::get(&context, port.contract);
-      services.push_back(cursor < block.getNumArguments()
-                             ? block.getArgument(cursor)
-                             : block.addArgument(type, location));
-      ++cursor;
+      services.push_back(block.addArgument(type, location));
     }
     const auto &proof = project.entry().proof;
     if (!region && decl.id.index == project.protocol().id.index && proof &&

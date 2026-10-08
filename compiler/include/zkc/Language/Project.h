@@ -54,6 +54,7 @@ struct Limits {
   uint64_t assetBytes = 67108864, assetTotalBytes = 67108864;
   uint64_t tokens = 1000000, tokenBytes = 4096;
   uint64_t identifierBytes = 128, moduleBytes = 2048;
+  // Parse depth also bounds constructed type/natural operator trees.
   uint64_t parseDepth = 64, expressionDepth = 64;
   uint64_t importDepth = 64, callDepth = 64;
   uint64_t declarations = 10000, operations = 100000, work = 1000000;
@@ -272,8 +273,8 @@ struct RelationDefinition {
 /// A logical port component. Paths select product fields, never native
 /// container elements, variant payloads or internal execution values.
 struct SpecificationSelector {
-  bool output;
-  unsigned port, role;
+  bool output = false;
+  unsigned port = 0, role = 0;
   std::vector<unsigned> path;
   Span span;
 };

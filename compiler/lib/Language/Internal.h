@@ -67,10 +67,13 @@ struct SyntaxType {
   } kind = Kind::Name;
   std::string name;
   Span span;
+  // Parser-maintained height also bounds left-associated syntax and its
+  // cleanup.
+  unsigned height = 1;
   std::vector<SyntaxType> arguments;
 };
 struct SyntaxSelector {
-  bool output;
+  bool output = false;
   std::string port;
   std::vector<std::string> path;
   std::optional<std::string> role;

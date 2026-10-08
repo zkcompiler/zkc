@@ -342,6 +342,40 @@ def test_file_jobs_refuse_unconnected_streams(toolchain, journal, directory):
     journal.run([toolchain.runtime, 'run-entry', fifo, pin, fifo], refuses='artifact-io', timeout=10)
 
 
+def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directory):
+    source = directory / 'restricted.zkc'
+    source.write_text('module sample; struct Restricted:Drop{pub b:bool}'
+                      'fn make()->Restricted{return Restricted{b:true};}'
+                      'protocol Run roles(P)()->(r:Restricted@P){'
+                      'local P let r=make();return(r=r);}entry Demo=Run;')
+    package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
+    bindings = directory / 'bindings.rs'
+    bindings.write_bytes(b'unchanged')
+    journal.run([toolchain.runtime, 'bindings', package, pin, bindings],
+                refuses='entry-output-custody')
+    assert bindings.read_bytes() == b'unchanged'
+    journal.run([toolchain.runtime, 'run-entry', package, pin, directory / 'unused'],
+                refuses='entry-output-custody')
+
+
+def test_compilation_preserves_the_selected_executable(toolchain, journal, directory):
+    compiler = directory / 'compiler'
+    # Refusal must precede spawning, so this intentionally failing child is a
+    # discriminator even without a successful package on stdout.
+    compiler.write_text('#!/bin/sh\nexit 7\n')
+    compiler.chmod(0o755)
+    alias = directory / 'compiler-link'
+    alias.symlink_to(compiler)
+    original = compiler.read_bytes()
+    for selected, output in [(compiler, compiler), (alias, compiler), (alias, alias)]:
+        journal.run([toolchain.runtime, 'compile', f'--compiler={selected}',
+                     f'--output={output}'], refuses='entry-output-path')
+        assert compiler.read_bytes() == original and alias.is_symlink()
+    # Replacing an unselected final symlink would not overwrite the executable.
+    journal.run([toolchain.runtime, 'compile', f'--compiler={compiler}',
+                 f'--output={alias}'], refuses='entry-compilation')
+
+
 def test_compiler_failures_are_bounded_and_do_not_publish(toolchain, journal, directory):
     compiler = directory / 'compiler'
     compiler.write_text('#!/usr/bin/env python3\nimport sys\nsys.stderr.write("X" * 70000)\nsys.exit(1)\n')
@@ -388,6 +422,12 @@ def test_compiler_lookup_and_positional_arguments(toolchain, journal, directory)
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
     assert report['status'] == 'compiled'
+    # A bare compiler name refers to trusted PATH, not this same-named output.
+    local_output = directory / 'zkc-compile'
+    same_name = journal.attempt([*args[:-1], '--output=zkc-compile'], cwd=directory, env=env)
+    assert same_name.returncode == 0, same_name.stdout + same_name.stderr
+    assert json.loads(local_output.read_text())['format'] == 'zkc.entry/1'
+    local_output.unlink()
     (directory / 'zkc-compile').symlink_to(toolchain.compiler)
     for path in (None, '', '.'):
         env = dict(os.environ)
