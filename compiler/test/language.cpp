@@ -240,7 +240,7 @@ component C: I { type State: Copy + Drop = bool; }
           "private projection lost source location");
 
   // Repeated lookups in a wide component must account for the member scans.
-  constexpr unsigned width = 128, uses = 64;
+  constexpr unsigned width = 512, uses = 32;
   std::string wide = "module m;interface I{";
   for (unsigned i = 0; i < width; ++i)
     wide += "type T" + std::to_string(i) + ": Copy + Drop;";
@@ -249,14 +249,61 @@ component C: I { type State: Copy + Drop = bool; }
     wide += "type T" + std::to_string(i) + ": Copy + Drop=bool;";
   wide += "}";
   auto baseWork = check(wide).checkedWork();
+  auto projected = wide, unprojected = wide;
+  for (unsigned i = 0; i < uses; ++i) {
+    projected +=
+        "fn p" + std::to_string(i) + "<T:I>(x:T::T511)->T::T511{return x;}";
+    unprojected +=
+        "fn p" + std::to_string(i) + "<T:I>(x:bool)->bool{return x;}";
+  }
+  require(check(projected).checkedWork() >=
+              check(unprojected).checkedWork() + 2 * width * uses,
+          "associated projection scans escaped the work budget");
   for (unsigned i = 0; i < uses; ++i)
-    wide += "fn f" + std::to_string(i) + "(x:C::T127)->C::T127{return x;}";
+    wide += "fn f" + std::to_string(i) + "(x:C::T511)->C::T511{return x;}";
   auto full = check(wide);
   require(full.checkedWork() >= baseWork + 2 * width * uses,
           "component lookup scans escaped the work budget");
   Limits limit;
   limit.work = full.checkedWork() - 1;
   sourceRefuses(wide, "source.limit", limit);
+}
+void specializationSnapshotBounds() {
+  // Many static instances copy the same nested literal payload. Closure must
+  // refuse a budget smaller than that payload, even if checking fit it.
+  constexpr unsigned instances = 64, literals = 64, digits = 76;
+  std::string source = "module m;domain Fr=field(\"bls12-381.fr\");"
+                       "fn f<N:nat>(go:bool)->Fr{return if go capture(){";
+  for (unsigned i = 0; i < literals; ++i)
+    source +=
+        "let x" + std::to_string(i) + ":Fr=" + std::string(digits, '1') + ";";
+  source += "yield x63;}else{yield 0;};}"
+            "protocol Run roles(P)(go:bool@P)->(){";
+  for (unsigned i = 0; i < instances; ++i)
+    source += "local P let v" + std::to_string(i) + "=f<" + std::to_string(i) +
+              ">(go);";
+  source += "return();}entry Demo=Run;";
+  auto project = check(source);
+  must(closeEntry(project, "m::Demo"));
+  Limits limit;
+  limit.work = instances * literals * digits - 1;
+  require(project.checkedWork() < limit.work,
+          "snapshot fixture exceeds the checking budget");
+  refuses(closeEntry(project, "m::Demo", limit), "source.limit");
+}
+void semanticDiagnosticLocations() {
+  for (StringRef expression : {"18446744073709551615+1", "pow2(64)"}) {
+    std::string source = "module m;type A=[bool;" + expression.str() + "];";
+    auto analysis = analyze(must(capture({{"m", source, {}}})));
+    require(analysis.diagnostics().size() == 1, "missing arithmetic refusal");
+    const auto &diagnostic = analysis.diagnostics().front();
+    require(diagnostic.code == "source.natural", "arithmetic code changed");
+    require(diagnostic.primary.has_value(), "arithmetic source span lost");
+    auto span = *diagnostic.primary;
+    require(span.module.index == 0 &&
+                StringRef(source).slice(span.begin, span.end) == expression,
+            "arithmetic span does not select the failing expression");
+  }
 }
 void syntaxTreeBounds() {
   Limits limits;
@@ -930,6 +977,10 @@ int main(int argc, char **argv) {
   bounds();
   stage = "nameResolution";
   nameResolution();
+  stage = "specializationSnapshotBounds";
+  specializationSnapshotBounds();
+  stage = "semanticDiagnosticLocations";
+  semanticDiagnosticLocations();
   stage = "syntaxTreeBounds";
   syntaxTreeBounds();
   stage = "depthAndAggregateBounds";

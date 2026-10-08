@@ -92,7 +92,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
     auto before = types.naturals.remainingWork();
     auto value = types.naturals.powerOfTwo(exponent->dimension);
     if (!value) {
-      types.accept(value.takeError());
+      types.accept(value.takeError(), s.span);
       return {};
     }
     if (!types.charge(before - types.naturals.remainingWork(), s.span))
@@ -117,7 +117,7 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
                  ? types.naturals.add(a->dimension, b->dimension)
                  : types.naturals.multiply(a->dimension, b->dimension);
     if (!n) {
-      types.accept(n.takeError());
+      types.accept(n.takeError(), s.span);
       return {};
     }
     if (!types.charge(before - types.naturals.remainingWork(), s.span))

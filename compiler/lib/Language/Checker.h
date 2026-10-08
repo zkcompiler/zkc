@@ -6,6 +6,9 @@ namespace zkc::language::detail {
 class Checker {
 public:
   Checker(std::vector<SyntaxModule>, CheckedStorage &, Work &);
+  // Lazy signature completion captures this driver; keep its address stable.
+  Checker(const Checker &) = delete;
+  Checker &operator=(const Checker &) = delete;
   llvm::Error run();
   CheckedStorage &output;
   Work &work;

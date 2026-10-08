@@ -63,7 +63,7 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
   auto normalize = [&](Expected<Natural> n,
                        uint64_t before) -> std::optional<Type> {
     if (!n) {
-      accept(n.takeError());
+      accept(n.takeError(), span);
       return {};
     }
     if (!charge(before - naturals.remainingWork(), span))

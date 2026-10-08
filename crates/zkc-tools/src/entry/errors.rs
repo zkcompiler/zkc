@@ -1,6 +1,8 @@
 //! Stable ownership of failures before an invocation produces an execution report.
 use std::fmt;
 
+/// The boundary that rejected an input, not the category of the defect.
+/// Consult `EntryError::code` for the underlying reason.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EntryPhase {
     Package,
@@ -8,7 +10,10 @@ pub enum EntryPhase {
     Authority,
     Admission,
     Binding,
+    /// The source adapter could not assemble the named request.
     Request,
+    /// The native Host refused the assembled invocation, including invalid
+    /// values, context or budgets that it checks independently.
     Preparation,
 }
 /// A preparation failure with its owning boundary. Execution and cleanup

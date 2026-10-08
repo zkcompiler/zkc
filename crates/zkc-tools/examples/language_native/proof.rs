@@ -433,10 +433,9 @@ fn authored(directory: &Path) {
         );
         bad = request();
         bad.transcript_budget = Some(1);
-        assert_eq!(
-            prover.prove(bad).err().unwrap().to_string(),
-            "native-proof-unselected-transcript"
-        );
+        let error = prover.prove(bad).err().unwrap();
+        assert_eq!(error.phase, zkc_tools::entry::EntryPhase::Preparation);
+        assert_eq!(error.code(), "native-proof-unselected-transcript");
         bad = request();
         bad.context.push(4);
         let rejected = verifier.verify(bad, &proof).unwrap();

@@ -4,6 +4,76 @@
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
+namespace {
+// Charge nested payloads before specialization copies immutable template
+// bodies.
+bool chargeBodySnapshot(Semantics &types, const Body &body, Span span) {
+  if (!types.charge(body.operations.size() + body.values.size() +
+                        body.results.size() + body.stopReason.size() + 1,
+                    span))
+    return false;
+  for (const auto &value : body.values)
+    if (!types.charge(value.components.size(), value.span) ||
+        !types.chargeType(value.type, value.span))
+      return false;
+  for (const auto &requirement : body.formationRequirements)
+    if (!types.charge(requirement.size() + 1, span))
+      return false;
+  for (const auto &service : body.services)
+    if (!types.charge(service.name.size() + service.contract.size() + 1,
+                      service.span) ||
+        !types.chargeType(service.field, service.span))
+      return false;
+  for (const auto &op : body.operations) {
+    if (!types.charge(op.results.size(), op.span))
+      return false;
+    if (const auto *math = std::get_if<MathValue>(&op.action)) {
+      if (!types.charge(math->operands.size() + math->literal.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &arg : math->staticArguments)
+        if (!types.chargeType(arg, op.span))
+          return false;
+      for (const auto &parameter : math->parameters)
+        if (!types.charge(parameter.size() + 1, op.span))
+          return false;
+    } else if (const auto *primitive =
+                   std::get_if<LocalPrimitive>(&op.action)) {
+      if (!types.charge(primitive->contract.size() +
+                            primitive->operands.size() + 1,
+                        op.span))
+        return false;
+      for (const auto &parameter : primitive->parameters)
+        if (!types.charge(parameter.size() + 1, op.span))
+          return false;
+      for (const auto &arg : primitive->staticArguments)
+        if (!types.chargeType(arg, op.span))
+          return false;
+      if (primitive->bindingArguments)
+        for (const auto &arg : *primitive->bindingArguments)
+          if (!types.chargeType(arg, op.span))
+            return false;
+    } else if (const auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
+      if (!types.charge(repeat->roles.size() + repeat->carried.size() +
+                            repeat->captures.size() + repeat->services.size(),
+                        op.span) ||
+          !chargeBodySnapshot(types, *repeat->region, op.span))
+        return false;
+    } else if (const auto *control = std::get_if<LocalControl>(&op.action)) {
+      if (!types.charge(control->operands.size() + control->regions.size(),
+                        op.span))
+        return false;
+      for (const auto &alternative : control->alternatives)
+        if (!types.charge(alternative.size() + 1, op.span))
+          return false;
+      for (const auto &region : control->regions)
+        if (!chargeBodySnapshot(types, *region, op.span))
+          return false;
+    }
+  }
+  return true;
+}
+} // namespace
 llvm::Error specialize(std::vector<Declaration> &declarations, Work &work,
                        DeclarationId selected) {
   Semantics types(declarations, work);
@@ -156,6 +226,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations, Work &work,
               return types.fail("source.conformance",
                                 "static dispatch did not select a component",
                                 op.span);
+            if (!types.charge(component->members.size(), op.span))
+              return false;
             const auto name = declarations[target.index].name;
             auto found = llvm::find_if(component->members, [&](auto id) {
               return declarations[id.index].name == name;
@@ -257,35 +329,19 @@ llvm::Error specialize(std::vector<Declaration> &declarations, Work &work,
       // Charge the snapshot before allocating it. Recursive instances can grow
       // the declaration vector, so no reference into that vector crosses
       // closeBody.
-      std::function<bool(const Body &)> chargeBody = [&](const Body &body) {
-        if (!types.charge(body.operations.size() + body.values.size() + 1,
-                          source.span))
-          return false;
-        for (const auto &value : body.values)
-          if (!types.chargeType(value.type, value.span))
-            return false;
-        for (const auto &op : body.operations)
-          if (const auto *math = std::get_if<MathValue>(&op.action)) {
-            if (!types.charge(math->operands.size() + math->literal.size() + 1,
-                              op.span))
-              return false;
-            for (const auto &arg : math->staticArguments)
-              if (!types.chargeType(arg, op.span))
-                return false;
-            for (const auto &parameter : math->parameters)
-              if (!types.charge(parameter.size() + 1, op.span))
-                return false;
-          }
-        return true;
-      };
+      for (const auto &role : source.roles)
+        if (!types.charge(role.size() + 1, source.span))
+          return {};
       for (auto *ports : {&source.inputs, &source.outputs})
         for (const auto &port : *ports)
-          if (!types.chargeType(port.type, port.span))
+          if (!types.charge(port.name.size() + port.roles.size() + 1,
+                            port.span) ||
+              !types.chargeType(port.type, port.span))
             return {};
       for (const auto &service : source.services)
         if (!types.chargeType(service.field, service.span))
           return {};
-      if (source.body && !chargeBody(*source.body))
+      if (source.body && !chargeBodySnapshot(types, *source.body, source.span))
         return {};
       if (source.relation &&
           !types.charge(source.relation->purposes.size() +

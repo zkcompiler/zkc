@@ -173,7 +173,7 @@ bool Semantics::entails(const Declaration *context, const CapabilityBound &goal,
   auto proof = requirements::derive(
       terms, assumptions, protocol::boundCapabilityRules(), {*required});
   if (!proof)
-    return accept(proof.takeError());
+    return accept(proof.takeError(), goal.span);
   return proof->goals.front().has_value() ||
          fail(code,
               "declared bounds do not establish catalog capability: " +

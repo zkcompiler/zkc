@@ -166,7 +166,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
     if (!symbolic(type)) {
       auto native = builtinLayout(type);
       if (!native) {
-        accept(native.takeError());
+        accept(native.takeError(), span);
         return {};
       }
       auto policy = protocol::nativeTypePolicy(*native);

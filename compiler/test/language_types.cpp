@@ -651,6 +651,24 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){local P let v=make(x);local P let y=get(
                   mlir::StringAttr::get(module.getContext(), "B"));
   });
   check(prefix + "fn singleton(x:Fr)->(Fr,){return(x,);}");
+  // Representation checking owns nominal permission promises, even for an
+  // otherwise unused component. Semantic queries may trust checked metadata.
+  refuses(prefix + R"(
+struct Token:Drop{}
+interface I{type Out:Copy+Drop;}
+component C:I{type Out:Copy+Drop=Token;}
+)",
+          "source.permission");
+  auto nestedRepresentation = check(prefix + R"(
+interface I{type In:Copy+Drop;type Out:Copy+Drop;}
+component C:I{type In:Copy+Drop=bool;type Out:Copy+Drop=(In,bool);}
+fn identity(x:C::Out)->C::Out{return x;}
+)");
+  Layouts nestedLayouts(nestedRepresentation);
+  auto nested = must(nestedLayouts.get(
+      nestedRepresentation.declarations().back().outputs.front().type));
+  require(nested->permissions.copy && nested->leaves.size() == 2,
+          "component representation retained an unresolved self projection");
   auto associatedLayout = original(prefix + R"(
 interface Algebra {type Scalar:Field;}
 component BLS:Algebra {type Scalar:Field=Fr;}

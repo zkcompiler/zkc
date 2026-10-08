@@ -1190,6 +1190,12 @@ external work keeps its existing Host ceiling. Native policy admission checks al
 limits before loading resources. No raw native port policy is needed in the
 source API; direct IR callers retain the native API.
 
+The authenticated Entry interface and independent source comparison own the
+completion selection. It is an application policy, so the native artifact does
+not repeat that selection. Native attempt-policy admission checks that the
+selected original output maps to a prover Boolean output; the controller uses
+its actual result to decide whether to publish a proof.
+
 Managed providers persist across attempts with their actual remaining allowances.
 A false completion discards its proof buffer; fatal stops and cleanup failures do
 not become retries. Only final successful outputs are published. The source

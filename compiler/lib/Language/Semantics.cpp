@@ -47,8 +47,8 @@ bool Semantics::fail(StringRef code, const Twine &message, Span span,
         Diagnostic{code.str(), message.str(), span, std::move(related)};
   return false;
 }
-bool Semantics::accept(Error error) {
-  auto found = diagnose(std::move(error));
+bool Semantics::accept(Error error, std::optional<Span> fallback) {
+  auto found = diagnose(std::move(error), fallback);
   if (!found)
     return true;
   if (!diagnostic)
@@ -69,7 +69,7 @@ bool Semantics::chargeType(const Type &type, Span span) {
   auto cost =
       typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
   if (!cost)
-    return accept(cost.takeError());
+    return accept(cost.takeError(), span);
   return charge(*cost, span);
 }
 const Parameter *Semantics::parameter(StringRef atom) const {
@@ -142,7 +142,7 @@ std::optional<Type> Semantics::substitute(const Type &input,
                      : nullptr;
         });
     if (!n) {
-      accept(n.takeError());
+      accept(n.takeError(), span);
       return {};
     }
     if (!charge(before - naturals.remainingWork(), span))
@@ -218,6 +218,8 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
     fail("source.type", "unknown associated component", span);
     return {};
   }
+  if (!charge(owner->members.size(), span))
+    return {};
   for (auto id : owner->members) {
     auto &decl = declarations[id.index];
     if (decl.name != member)

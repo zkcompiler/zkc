@@ -148,7 +148,10 @@ it requires a complete proof and returned outputs. Both retain cleanup failures.
 
 Calls that fail before execution return `EntryError`, whose `phase` identifies
 package authentication, interface reading, setup authority, native admission,
-interface binding, request conversion or native preparation. `code()` retains the underlying diagnostic.
+interface binding, request conversion or native preparation. Phases identify
+where rejection occurred; `code()` identifies the reason. For example, an unknown
+input name fails at `Request`, while an invalid native context or resource budget
+fails at `Preparation`. Native preparation can also reject malformed input values.
 Execution failures and cleanup remain in the report.
 
 Generate optional convenience bindings from a trusted package:

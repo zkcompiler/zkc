@@ -19,6 +19,8 @@ bool Checker::conformance(DeclarationId id) {
   for (auto requiredId : interface->members) {
     auto &required = output.declarations[requiredId.index];
     const Declaration *provided = nullptr;
+    if (!types.charge(component.members.size(), required.span))
+      return false;
     for (auto providedId : component.members)
       if (output.declarations[providedId.index].name == required.name)
         provided = &output.declarations[providedId.index];

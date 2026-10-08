@@ -70,7 +70,7 @@ public:
   bool checkProofEntry(const Declaration &, const Declaration &);
   bool relationData(const Declaration &, const Type &, Span, unsigned = 0);
   bool fail(llvm::StringRef, const llvm::Twine &, Span, std::vector<Span> = {});
-  bool accept(llvm::Error);
+  bool accept(llvm::Error, std::optional<Span> fallback = {});
   bool charge(uint64_t, Span);
   llvm::Error takeError();
 

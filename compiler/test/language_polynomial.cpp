@@ -112,6 +112,8 @@ int main(int argc, char **argv) {
             "source.formal");
   }
   refuses("formal variant", "enum Bad{P(Poly<1>)}", "source.formal");
+  refuses("forward formal record in variant",
+          "enum Bad{P(Later)}struct Later{pub p:Poly<1>}", "source.formal");
   refuses("formal nominal runtime argument",
           "struct Box<T:Type>{value:T}type Bad=Box<Poly<1>>;", "source.formal");
   refuses("formal builtin argument", "type Bad=builtin(\"sequence\",Poly<1>);",

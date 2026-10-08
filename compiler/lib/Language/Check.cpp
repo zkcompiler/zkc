@@ -128,7 +128,7 @@ bool Checker::collect() {
             ? Expected<std::string>("zki_" + digest(decl.qualifiedName))
             : encodeSymbol(decl.qualifiedName, work.limits);
     if (!symbol)
-      return types.accept(symbol.takeError());
+      return types.accept(symbol.takeError(), decl.span);
     decl.symbol = std::move(*symbol);
     types.indexDeclaration(decl);
     if (source.kind == Declaration::Kind::Domain) {

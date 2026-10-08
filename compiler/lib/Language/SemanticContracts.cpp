@@ -27,7 +27,7 @@ bool Semantics::relationData(const Declaration &scope, const Type &type,
   if (isNativeData(type)) {
     auto native = builtinLayout(type);
     if (!native)
-      return accept(native.takeError());
+      return accept(native.takeError(), span);
     protocol::TypeParseBudget budget;
     budget.remaining =
         std::min<uint64_t>(budget.remaining, work.limits.work - work.used);
