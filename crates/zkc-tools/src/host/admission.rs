@@ -5,7 +5,7 @@ use super::{
 };
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 use zkc_arkworks::{Metadata, ProverKey, VerifierKey};
 use zkc_backends::{NativeBackend, Policy, Value};
 use zkc_runtime::interactive::{Limits, LogicalType, PhysicalType, Type, Value as RuntimeValue};
@@ -61,9 +61,14 @@ pub(crate) enum Input<'a> {
         setup: Option<Metadata>,
         hex: &'a Json,
     },
+    Native {
+        ty: PhysicalType,
+        value: &'a Value,
+        selected: Option<Arc<VerifierKey>>,
+    },
     NativeWire {
         ty: PhysicalType,
-        bytes: Vec<u8>,
+        bytes: Cow<'a, [u8]>,
         estimate: usize,
         selected: Option<Arc<VerifierKey>>,
     },
@@ -75,19 +80,25 @@ pub(crate) enum Input<'a> {
     Ready(Value),
 }
 impl<'a> Input<'a> {
-    pub fn native_wire(
-        backend: &NativeBackend,
+    /// Borrow immutable application data until loading has reserved its full
+    /// charge. Foreign capabilities and setup keys require separate host paths.
+    pub fn native_value(
         ty: PhysicalType,
-        bytes: Vec<u8>,
+        value: &'a Value,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<Self> {
-        let estimate = backend
-            .native_input_retained_bytes(&ty, &bytes)
-            .map_err(|e| e.to_string())?;
-        Ok(Self::NativeWire {
+        if value.physical_type() != ty {
+            return Err("native-input-type".into());
+        }
+        if matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
+            || !ty.is_duplicable()
+            || !zkc_backends::has_native_wire(&ty)
+        {
+            return Err("native-input-private".into());
+        }
+        Ok(Self::Native {
             ty,
-            bytes,
-            estimate,
+            value,
             selected,
         })
     }
@@ -106,7 +117,7 @@ impl<'a> Input<'a> {
     fn ty(&self) -> Type {
         match self {
             Self::Wire { ty, .. } => ty.kind(),
-            Self::NativeWire { ty, .. } => ty.kind(),
+            Self::NativeWire { ty, .. } | Self::Native { ty, .. } => ty.kind(),
             Self::Key { .. } => Type::ProverKey,
             Self::Ready(value) => value.ty(),
         }
@@ -123,9 +134,24 @@ impl<'a> Input<'a> {
                 Value::key_retained_bytes(Type::ProverKey, verifier).map_err(|e| e.to_string())
             }
             Self::Ready(value) => Ok(value.retained_bytes()),
+            Self::Native { value, .. } => Ok(value.retained_bytes()),
             Self::NativeWire { estimate, .. } => Ok(*estimate),
         }
     }
+}
+
+fn check_native(
+    backend: &NativeBackend,
+    value: &Value,
+    selected: Option<&VerifierKey>,
+) -> Result<()> {
+    backend
+        .validate_native_input(value)
+        .map_err(|e| e.to_string())?;
+    if let Some(key) = selected {
+        super::setups::check_input(value, key)?;
+    }
+    Ok(())
 }
 
 fn add(total: &mut usize, amount: usize, limit: usize, error: &str) -> Result<()> {
@@ -169,6 +195,29 @@ impl<'a> Admission<'a> {
             amount,
             self.limits.work,
             "artifact-input-work-limit",
+        )
+    }
+    /// Charge the scan before traversing framing, then reserve its retention.
+    pub fn native_wire(
+        &mut self,
+        backend: &NativeBackend,
+        ty: PhysicalType,
+        bytes: impl Into<Cow<'a, [u8]>>,
+        selected: Option<Arc<VerifierKey>>,
+    ) -> Result<usize> {
+        let bytes = bytes.into();
+        self.work(bytes.len())?;
+        let estimate = backend
+            .native_input_retained_bytes(&ty, &bytes)
+            .map_err(|e| e.to_string())?;
+        self.add(
+            Input::NativeWire {
+                ty,
+                bytes,
+                estimate,
+                selected,
+            },
+            backend.policy(),
         )
     }
     pub fn add(&mut self, input: Input<'a>, policy: &Policy) -> Result<usize> {
@@ -261,13 +310,22 @@ impl<'a> Admission<'a> {
         let wire_bytes = self.inputs.iter().try_fold(0usize, |sum, (input, _)| {
             let len = match input {
                 Input::Wire { hex, .. } => text(hex)?.len() / 2,
-                Input::NativeWire { bytes, .. } => bytes.len(),
                 _ => 0,
             };
             sum.checked_add(len)
                 .ok_or_else(|| "artifact-input-work-limit".to_string())
         })?;
         self.work(wire_bytes)?;
+        // Refuse already constructed data before decoding earlier wires or
+        // opening key files. The complete invocation charge is reserved first.
+        for (input, _) in &self.inputs {
+            if let Input::Native {
+                value, selected, ..
+            } = input
+            {
+                check_native(backend, value, selected.as_deref())?;
+            }
+        }
         let mut values = Vec::new();
         let mut actual_bytes = 0;
         let mut wire_cache = BTreeMap::new();
@@ -275,6 +333,7 @@ impl<'a> Admission<'a> {
         for (input, estimate) in std::mem::take(&mut self.inputs) {
             let value = match input {
                 Input::Ready(value) => value,
+                Input::Native { value, .. } => value.clone(),
                 Input::NativeWire {
                     ty,
                     bytes,
@@ -289,9 +348,7 @@ impl<'a> Admission<'a> {
                     if value.physical_type() != ty {
                         return Err("native-input-type".into());
                     }
-                    if let Some(key) = selected {
-                        super::setups::check_input(&value, &key)?;
-                    }
+                    check_native(backend, &value, selected.as_deref())?;
                     value
                 }
                 Input::Wire { ty, setup, hex } => {

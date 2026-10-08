@@ -17,7 +17,8 @@ use zkc_backends::{
 use zkc_runtime::interactive::{EntryRole, Type, Value as RuntimeValue};
 mod inputs;
 mod report;
-pub use inputs::SetupAuthority;
+pub use crate::host::request::InputValue;
+pub use inputs::{RoleInputs, RunInputs, SetupAuthority};
 pub use report::HostReport;
 
 /// Bundle structure, native value/kernel capacity and joint dispatch are separate
@@ -131,7 +132,16 @@ impl RunHost {
     /// Decode all roles and authenticated key files before any execution entropy
     /// is issued. The returned plan is single-use and bound to this host.
     pub fn prepare(&self, bytes: &[u8]) -> Result<PreparedRun<'_>> {
-        inputs::prepare(self, bytes)
+        let request = inputs::decode(self, bytes)?;
+        self.prepare_typed(&request)
+    }
+    /// Prepare already constructed data through the same admission and entry
+    /// checks as the byte adapter. No input or service is issued during this call.
+    /// The resulting plan owns its loaded values and does not borrow the request.
+    /// Native elements must satisfy the upstream cryptographic library invariants;
+    /// unchecked scalar constructors are not an alternative to canonical decoding.
+    pub fn prepare_typed(&self, request: &RunInputs) -> Result<PreparedRun<'_>> {
+        inputs::prepare(self, request)
     }
 }
 struct PreparedRole {

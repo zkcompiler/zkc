@@ -873,10 +873,7 @@ impl NativeDeployment {
                     .inputs
                     .get(&port.original)
                     .map(|key| keys[key].clone());
-                let id = admission.add(
-                    Input::native_wire(&backend, ty.clone(), bytes.clone(), selected)?,
-                    &policy,
-                )?;
+                let id = admission.native_wire(&backend, ty.clone(), bytes.clone(), selected)?;
                 // Every public declaration is validated, including values not
                 // passed to this role. Reuse only the exact matching role type.
                 if role_types
@@ -951,10 +948,7 @@ impl NativeDeployment {
                             .inputs
                             .get(&port.original)
                             .map(|key| keys[key].clone());
-                        admission.add(
-                            Input::native_wire(&backend, ty.clone(), bytes, selected)?,
-                            &policy,
-                        )?
+                        admission.native_wire(&backend, ty.clone(), bytes, selected)?
                     };
                     admission.data(id, ty.kind())?
                 }

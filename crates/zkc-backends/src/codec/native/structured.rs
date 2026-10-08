@@ -53,6 +53,76 @@ impl Counts {
         policy.groups(self.groups).map_err(|_| Error::Limit)
     }
 }
+// Typed ingress follows the same whole-value collection accounting as wire
+// scans. It does not reserve encoded buffers or charge decoding peak memory.
+pub(super) fn check_value_counts(value: &Value, policy: &Policy) -> Result<()> {
+    fn visit(ty: &PhysicalType, value: &Value, policy: &Policy, counts: &mut Counts) -> Result<()> {
+        if value.physical_type() != *ty {
+            return Err(unsupported());
+        }
+        counts.nodes = add(counts.nodes, 1)?;
+        counts.admit(policy)?;
+        if let Some(tag) = tag(ty) {
+            match (tag, value) {
+                (69, Value::Sequence(v)) => {
+                    let logical = ty.logical();
+                    let element = physical(logical.sequence_element().ok_or_else(unsupported)?)?;
+                    for child in v.elements() {
+                        visit(&element, child, policy, counts)?;
+                    }
+                }
+                (65, Value::Variant(v)) => {
+                    let logical = ty.logical();
+                    let descriptor = logical.variant_descriptor().ok_or_else(unsupported)?;
+                    let arm = descriptor
+                        .alternatives()
+                        .get(v.alternative())
+                        .ok_or_else(unsupported)?;
+                    if arm.payload().len() != v.payload().len() {
+                        return Err(unsupported());
+                    }
+                    for (leaf, child) in arm.payload().iter().zip(v.payload()) {
+                        visit(&physical(leaf)?, child, policy, counts)?;
+                    }
+                }
+                (68, Value::Indices(v)) => counts.add(v.len(), 0)?,
+                _ => return Err(unsupported()),
+            }
+        } else if super::bulk::format(ty).is_some() {
+            let (elements, groups) = super::bulk::value_counts(value, policy)?;
+            counts.add(elements, groups)?;
+        } else if let Some((_, width)) = super::frame(ty) {
+            let (elements, groups) = fixed_counts(ty, width);
+            counts.add(elements, groups)?;
+        } else if super::pcs::tag(ty).is_some() {
+            match value {
+                Value::Commitment(_) => counts.add(0, 1)?,
+                Value::Proof(p) => counts.add(0, p.metadata().arity())?,
+                _ => return Err(unsupported()),
+            }
+        } else {
+            return Err(unsupported());
+        }
+        counts.admit(policy)
+    }
+    visit(
+        &value.physical_type(),
+        value,
+        policy,
+        &mut Counts::default(),
+    )
+}
+
+fn fixed_counts(ty: &PhysicalType, width: usize) -> (usize, usize) {
+    (
+        match ty.kind() {
+            Type::Field | Type::Index => 1,
+            Type::FieldArray => (width - 6) / 32,
+            _ => 0,
+        },
+        usize::from(ty.kind() == Type::Group),
+    )
+}
 pub(super) fn peak(policy: &Policy, charge: usize, wire: usize) -> Result<()> {
     // Decoding can temporarily retain Vec and Arc; observation retains the
     // decoded value, output frame and two temporary PCS leaf buffers. Both directions
@@ -281,14 +351,8 @@ fn scan(
         if &bytes[..5] != super::super::MAGIC || bytes[5] != tag {
             return Err(invalid(DecodeReason::Header));
         }
-        counts.add(
-            match ty.kind() {
-                Type::Field | Type::Index => 1,
-                Type::FieldArray => (width - 6) / 32,
-                _ => 0,
-            },
-            usize::from(ty.kind() == Type::Group),
-        )?;
+        let (elements, groups) = fixed_counts(ty, width);
+        counts.add(elements, groups)?;
     } else if let Some(tag) = super::pcs::tag(ty) {
         // Both production/observation and receive check active setup identity.
         // Receive performs this check before group decoding or payload allocation.

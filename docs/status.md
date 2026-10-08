@@ -63,8 +63,12 @@ reader validates recursive schemas, selectors and job choices, then checks the
 exact admitted run/proof artifact and original port mappings. Proof binding also
 checks source identity, construction, acceptance, compile options and services.
 Unit and compiler-generated package controls cover malformed metadata, changed
-publication pins and mismatched native choices. Named Host inputs/results and
-thin Rust bindings remain in progress. Existing frontend consumers have not migrated.
+publication pins and mismatched native choices. The existing run Host now accepts
+in-process immutable values and wire requests through one typed preparation path,
+with shared setup/entry checks and pre-issuance capacity accounting. Controls cover
+native/wire execution parity, foreign capability refusal and nested PCS setup
+selection. Named source inputs/results, typed proof calls and thin Rust bindings
+remain in progress. Existing frontend consumers have not migrated.
 
 ## Foundation capability map
 

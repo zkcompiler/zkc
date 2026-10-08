@@ -600,3 +600,5 @@ fn native_construction_failure_keeps_load_usage_and_retires_all_roles() {
     );
     assert!(report.cleanup_errors.is_empty());
 }
+
+mod typed;

@@ -180,7 +180,11 @@ setup authority, capacity and failure reports are documented in the
 [bundle walkthrough](../../docs/runtime/bundles.md) and
 [bundle contract](../../docs/spec/profiles/compiler/run.md#installed-host-and-authority).
 The library exports `RunHost`, single-use `PreparedRun` and `HostReport` under
-`protocol::run`. Custom joint-driver callers pass `RunLimits` and receive effective
-limits in `Report`. Retained source-driver callers pass `DriverLimits` to `drive`
+`protocol::run`. Byte requests use `prepare`; in-process callers use
+`prepare_typed(&RunInputs)` with ordered `RoleInputs` and `InputValue` operands.
+`InputValue::from(value)` passes supported immutable native data without a wire
+roundtrip. Both forms check input types, setup associations, capacity and entry
+constraints before execution. The prepared call owns its loaded inputs.
+Custom joint-driver callers pass `RunLimits` and receive effective limits in `Report`. Retained source-driver callers pass `DriverLimits` to `drive`
 or `drive_with_decoder`; `Schedule::new_with_work_limit` selects source traversal
 capacity. These schedules and byte counters retain distinct contracts.

@@ -112,9 +112,13 @@ impl NativeCapacity {
     }
     pub(crate) fn wire(&self, value: &Json) -> Result<Vec<u8>> {
         // Check the knowable binary length before allocating its hex decoding.
-        if text(value)?.len() / 2 > self.wire_bytes {
+        self.check_wire(text(value)?.len() / 2)?;
+        unhex(value)
+    }
+    pub(crate) fn check_wire(&self, bytes: usize) -> Result<()> {
+        if bytes > self.wire_bytes {
             return Err("native-capacity-wire".into());
         }
-        unhex(value)
+        Ok(())
     }
 }

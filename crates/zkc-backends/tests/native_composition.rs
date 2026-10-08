@@ -16,6 +16,7 @@ fn backend(policy: Policy) -> NativeBackend {
 fn roundtrip(v: Value) {
     let b = backend(Policy::default());
     assert!(v.physical_type().logical().is_native_message_data());
+    b.validate_native_input(&v).unwrap();
     let bytes = b.encode_native_value(&v).unwrap();
     let got = b.decode_native_value(&v.physical_type(), &bytes).unwrap();
     // Existing canonical leaf formats remain identical across codec owners.
@@ -50,6 +51,7 @@ fn roundtrip(v: Value) {
     let seq = zkc_backends::Sequence::new(v.physical_type().logical(), vec![v], &Policy::default())
         .unwrap();
     let value = Value::Sequence(seq);
+    b.validate_native_input(&value).unwrap();
     let bytes = b.encode_native_value(&value).unwrap();
     assert_eq!(
         b.encode_native_value(
@@ -155,6 +157,18 @@ fn typed_errors_and_aggregate_limits_precede_bulk_allocation() {
         backend(p).encode_native_value(&nested).unwrap_err(),
         Error::Limit
     );
+    assert_eq!(
+        backend(p).validate_native_input(&nested).unwrap_err(),
+        Error::Limit
+    );
+    backend(Policy {
+        max_table_elements: 8,
+        max_wire_bytes: 0,
+        ..Policy::default()
+    })
+    .validate_native_input(&nested)
+    .unwrap();
+
     let point = Value::Bn254Gt(Bn254Gt::identity());
     let mut bytes = b.encode_native_value(&point).unwrap();
     bytes[6..].fill(0);
@@ -362,4 +376,37 @@ fn equality_compares_every_element_and_length() {
             assert!(matches!(&result[..], [Value::Bool(v)] if *v==want));
         }
     }
+}
+
+#[test]
+fn native_bulk_inputs_keep_wire_count_limits() {
+    let value = Value::bn254_matrix(
+        2,
+        2,
+        &[(0, 0, F::from(1)), (0, 1, F::from(2)), (1, 0, F::from(3))],
+        &Policy::default(),
+    )
+    .unwrap();
+    let encoder = backend(Policy::default());
+    let bytes = encoder.encode_native_value(&value).unwrap();
+    let low = backend(Policy {
+        max_table_elements: 2,
+        ..Policy::default()
+    });
+    assert_eq!(low.validate_native_input(&value).unwrap_err(), Error::Limit);
+    assert_eq!(
+        low.native_input_retained_bytes(&value.physical_type(), &bytes)
+            .unwrap_err(),
+        Error::Limit
+    );
+    // The hard group cap applies even when the configured limit is higher.
+    let groups = Value::Bn254G1Vector(vec![Bn254G1::identity(); 32769].into());
+    let high = backend(Policy {
+        max_groups: usize::MAX,
+        ..Policy::default()
+    });
+    assert_eq!(
+        high.validate_native_input(&groups).unwrap_err(),
+        Error::Limit
+    );
 }

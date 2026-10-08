@@ -73,6 +73,19 @@ fn count(value: &Value) -> Result<usize> {
         _ => return Err(unsupported()),
     })
 }
+fn quantities(kind: Type, count: usize) -> (usize, usize) {
+    if kind == Type::Groups {
+        (0, count)
+    } else {
+        (count, 0)
+    }
+}
+pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
+    let (_, _, memory) = format(&value.physical_type()).ok_or_else(unsupported)?;
+    let count = count(value)?;
+    limit(value.ty(), count, memory, policy)?;
+    Ok(quantities(value.ty(), count))
+}
 fn prefix(kind: Type) -> usize {
     match kind {
         Type::Matrix => 18,
@@ -130,14 +143,15 @@ pub(super) fn scan(
     if bytes.len() != add(prefix(kind), mul(n, wire)?)? {
         return Err(invalid(DecodeReason::Length));
     }
+    let (elements, groups) = quantities(kind, n);
     Ok((
         if kind == Type::Commitment {
             512
         } else {
             add(256, mul(n, memory)?)?
         },
-        if kind == Type::Groups { 0 } else { n },
-        if kind == Type::Groups { n } else { 0 },
+        elements,
+        groups,
     ))
 }
 pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {

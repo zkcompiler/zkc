@@ -582,5 +582,11 @@ the plan and validates the actual issued handles. The same pure entry checks run
 again at real frame entry. Missing host names give `input-host-handle`, wrong
 nominal types give `input-type`, and repeated affine references are refused early
 with `input-host-alias`. Preparation does not acquire a frame or issue entropy.
+Native typed hosts use `validate_native_input` to check the installed data profile,
+backend invariants and whole-value collection counts without encoding. Application
+setup associations and entry constraints remain separate checks. Encoded-buffer
+and decode-peak limits apply only when those buffers are used. Native elements
+must satisfy their upstream library invariants, including canonical internal
+scalar representations; unchecked constructors do not establish those invariants.
 Native wire hosts can call `native_input_retained_bytes` before payload decoding;
 this framing/retention bound does not replace canonical value decoding.

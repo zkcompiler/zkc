@@ -16,6 +16,7 @@ fn bounded(policy: Policy) -> NativeBackend {
 fn roundtrip(value: &Value) -> Vec<u8> {
     let backend = common::ark_backend(None);
     let ty = value.physical_type();
+    backend.validate_native_input(value).unwrap();
     let bytes = backend.encode_native_value(value).unwrap();
     let loaded = backend.decode_native_value(&ty, &bytes).unwrap();
     assert_eq!(backend.encode_native_value(&loaded).unwrap(), bytes);
@@ -592,5 +593,82 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             u64::from(configured)
         );
         assert_eq!(backend.active_frames(), 0);
+    }
+}
+
+#[test]
+fn typed_variant_payloads_preserve_aggregate_group_limits() {
+    let ty = logical(
+        "Groups",
+        json!([["pair", ["groups:bls12-381.g1", "groups:bls12-381.g1"]]]),
+    );
+    let value = variant(
+        &ty,
+        0,
+        vec![Value::Groups(vec![GroupPoint::generator(); 3].into()); 2],
+    );
+    let bytes = bounded(Policy::default())
+        .encode_native_value(&value)
+        .unwrap();
+    let low = bounded(Policy {
+        max_groups: 4,
+        ..Policy::default()
+    });
+    assert_eq!(low.validate_native_input(&value).unwrap_err(), Error::Limit);
+    assert_eq!(
+        low.decode_native_value(&value.physical_type(), &bytes)
+            .unwrap_err(),
+        Error::Limit
+    );
+    let exact = bounded(Policy {
+        max_groups: 6,
+        max_wire_bytes: 0,
+        ..Policy::default()
+    });
+    exact.validate_native_input(&value).unwrap();
+}
+
+#[test]
+fn native_and_wire_collection_admission_agree_across_nested_shapes() {
+    fn sequence(values: Vec<Value>) -> Value {
+        Value::Sequence(
+            zkc_backends::Sequence::new(
+                values[0].physical_type().logical(),
+                values,
+                &Policy::default(),
+            )
+            .unwrap(),
+        )
+    }
+    let vector = Value::Vector(vec![Scalar::from(3); 3].into());
+    let groups = Value::Groups(vec![GroupPoint::generator(); 2].into());
+    let mixed = logical(
+        "Mixed",
+        json!([["payload", ["indices", "vector:bls12-381.fr"]]]),
+    );
+    let corpus = [
+        sequence(vec![sequence(vec![vector.clone(), vector.clone()]); 2]),
+        sequence(vec![groups.clone(), groups]),
+        variant(&mixed, 0, vec![Value::Indices(vec![1, 2].into()), vector]),
+    ];
+    let encoder = bounded(Policy::default());
+    for value in corpus {
+        let ty = value.physical_type();
+        let bytes = encoder.encode_native_value(&value).unwrap();
+        for elements in 0..=14 {
+            for groups in 0..=6 {
+                let backend = bounded(Policy {
+                    max_table_elements: elements,
+                    max_groups: groups,
+                    ..Policy::default()
+                });
+                assert_eq!(
+                    backend.validate_native_input(&value).is_ok(),
+                    backend.native_input_retained_bytes(&ty, &bytes).is_ok(),
+                    "{}: elements={elements}, groups={groups}",
+                    ty.spelling(),
+                );
+            }
+        }
     }
 }

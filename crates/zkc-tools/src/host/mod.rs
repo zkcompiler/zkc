@@ -10,4 +10,5 @@ pub(crate) mod capacity;
 pub(crate) mod inputs;
 pub(crate) mod json;
 pub(crate) mod material;
+pub(crate) mod request;
 pub(crate) mod setups;

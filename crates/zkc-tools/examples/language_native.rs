@@ -11,7 +11,9 @@ use zkc_runtime::interactive::{
     Action, LogicalType, Packet, PathElement, ProgramState, Runner, StopKind,
     Value as RuntimeValue, admit_supplied,
 };
-use zkc_tools::protocol::run::{Bundle, BundleLimits, HostLimits, RunHost, SetupAuthority};
+use zkc_tools::protocol::run::{
+    Bundle, BundleLimits, HostLimits, InputValue, RoleInputs, RunHost, RunInputs, SetupAuthority,
+};
 
 #[path = "language_native/interface.rs"]
 mod interface;
@@ -200,6 +202,23 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
     expect_field(&verifier.outputs[1], 9);
     expect_field(&verifier.outputs[2], 7 - verifier_c);
     assert!(matches!(verifier.outputs[3], Value::Bool(true)));
+    let typed = RunInputs {
+        session: "joint-language-test".into(),
+        roles: vec![
+            RoleInputs {
+                role: "P".into(),
+                inputs: vec![InputValue::from(field(2)), InputValue::from(field(3))],
+                services: vec![],
+            },
+            RoleInputs {
+                role: "V".into(),
+                inputs: vec![InputValue::from(field(verifier_c))],
+                services: vec![],
+            },
+        ],
+        setups: Default::default(),
+    };
+    assert_eq!(host.prepare_typed(&typed).unwrap().execute().json(), result);
 }
 fn service_backend(
     bundle: &serde_json::Value,

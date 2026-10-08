@@ -322,6 +322,28 @@ invocation creates fresh backends and roots. Session freshness is the caller's
 responsibility. The host delegates execution to the same general joint driver;
 there is no protocol-specific dispatch.
 
+`prepare_typed(&RunInputs)` uses the same preparation and execution path. Its
+request contains the session, exact ordered `RoleInputs` (role name, data inputs,
+service budgets), and named verifier-key bytes. `InputValue` accepts bounded native
+wire bytes, supported immutable native values, RNG/nonce budget declarations,
+authorized verifier-key names or authenticated prover-key files. `From<Value>`
+constructs the immutable-value case. Native values must match the complete
+physical type, be duplicable, and belong to the installed native wire profile;
+private capabilities and key handles cannot enter through that case. No encoding
+roundtrip is required for an in-process value. Native elements must satisfy their
+upstream cryptographic library invariants; unchecked scalar constructors cannot
+be used to import invalid field representations. Untrusted bytes use `Wire`,
+whose decoder checks canonical encoding and element validity.
+
+Both adapters check selected setup associations recursively, backend value
+validity, entry constraints and invocation-wide retained/work limits before
+issuance. Native data incurs its retained charge even when immutable backing is
+shared; wire data also incurs scan/decode work. Wire-byte limits apply to encoded
+data, while value/collection limits apply to both forms. A native value need not
+fit an unused wire buffer. All authorized setup material, including receive-only
+keys, incurs scan work before import and a retained charge. Prepared calls own
+the loaded data and remain valid after the input request is dropped or changed.
+
 The installed command is:
 
 ```text
