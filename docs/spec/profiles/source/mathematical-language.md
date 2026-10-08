@@ -506,6 +506,12 @@ canonicalized to declaration order. Relation purposes do not authorize inputs.
 `accept` names a Boolean output or product field available at the verifier;
 its native result index follows the complete flattened output signature.
 
+Optional `complete port.field;` selects a producer Boolean output or product
+field, for example `complete result.ready;`. True permits completion; false
+withholds that attempt's proof. This does not change the protocol body or add a
+guard. Ordinary `prove` uses one attempt and refuses an incomplete result; the
+application must call `prove_attempts` with a larger count to authorize retries. Run Entries cannot carry a completion selection.
+
 `construction authored;` selects the existing no-derived-transcript profile.
 A `fiat_shamir` construction names an installed suite and exactly one verifier
 random service with the corresponding field. Other verifier services refuse.
@@ -858,16 +864,17 @@ protocol symbol. Run jobs emit `zkc.run/1`; proof jobs use native policy/deploym
 version 4. Both contain ordinary `zkc.program/1` participant programs.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface/6` has exactly these JSON members: `format`, `capture`,
+`zkc.language-interface/7` has exactly these JSON members: `format`, `capture`,
 `original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`, `job`,
 `setups`. `protocol`
 selects one symbol from `protocols`. Every original protocol and relation appears
-exactly once. Versions 1–5 and unknown versions refuse.
+exactly once. Versions 1–6 and unknown versions refuse.
 
 A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
-`prover`, `verifier`, `public`, `acceptance`, `target` and `construction`. Roles
-are roster names; `public` is a sorted array of logical input indices; acceptance
-uses the selector format below. Target is a clause name or JSON null. An authored
+`prover`, `verifier`, `public`, `acceptance`, `completion`, `target` and
+`construction`. Roles are roster names; `public` is a sorted array of logical
+input indices. Acceptance uses the selector format below. Completion is either
+a producer Boolean output selector or JSON null. Target is a clause name or JSON null. An authored
 construction has only `kind: "authored"`; a derived construction has exactly
 `kind: "fiat_shamir"`, `suite` and logical `service` index. Independent reading
 checks these choices against the original signature and the exact native statement.
@@ -1022,7 +1029,7 @@ require the Host to recompile it or establish a security theorem.
 
 ### Rust interface admission
 
-The native Host reads only interface version 6. It checks strict object members,
+The native Host reads only interface version 7. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
 validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
@@ -1081,8 +1088,9 @@ Every ordinary input must have source `Wire` constructor permission or admission
 returns `entry-input-constructor`. Whole builtin key ports instead use the explicit
 setup route above. These checks precede native bundle admission.
 
-`RunRequest` names every participant, its ordinary/prover-key input ports and service budgets exactly.
-Each role remains required even when it has no inputs. Unit values and empty
+`RunRequest` names every participant and its ordinary/prover-key input ports
+exactly. Its service map supplies optional budget overrides for declared services;
+unknown names refuse. Each role remains required even when it has no inputs. Unit values and empty
 products also remain explicit. Records use exact field names, tuples and arrays
 use ordered elements, variants name an active alternative and its payload fields,
 and associated values wrap their checked representation. Numeric alternative
@@ -1117,7 +1125,7 @@ constructor requirement and outputs must be copyable without affine custody.
 only its own inputs and the candidate proof. Neither method needs a live peer.
 
 Each request supplies exact named public values, the selected role's input and
-service maps, application context bytes and the derived transcript budget.
+service budget overrides, application context bytes and an optional transcript budget.
 Public values remain independently authorized by the application. Shared role
 inputs must canonically agree with them. Zero-leaf public values and role inputs
 remain required. The selected derived verifier service is compiler-owned and
@@ -1138,10 +1146,43 @@ Unexpected reconstruction failure is recorded in `output_error`. An outer `Ok`
 means preparation succeeded, not proof acceptance. The report is `must_use`;
 `is_success()` checks execution, cleanup and output reconstruction together.
 `into_result()` returns the entire report on either branch, preserving rejection
-and cleanup details. Bounded
-`prove_attempts` delegates to the existing native attempt policy/controller and
-returns only final successful outputs. That policy currently selects original
-protocol ports; it never restarts provider state for a retry.
+and cleanup details.
+
+### Attempts and operational defaults
+
+When completion is selected, `prove(request)` delegates to the native attempt
+controller with a one-attempt limit. A false completion withholds proof bytes and
+returns `native-attempt-limit`; it does not authorize another attempt.
+`prove_attempts(request, AttemptOptions)` requires the Entry's `complete` choice,
+otherwise it refuses with `entry-attempt-completion`. The adapter resolves that
+logical selector to its checked original native output and delegates to the
+existing attempt controller. `AttemptOptions` supplies count (default one) and
+per-attempt proof-byte ceiling (default the native proof limit). The admitted
+`ProofOptions::capacity` supplies cumulative interpreter work and payload limits;
+external work keeps its existing Host ceiling. Native policy admission checks all
+limits before loading resources. No raw native port policy is needed in the
+source API; direct IR callers retain the native API.
+
+Managed providers persist across attempts with their actual remaining allowances.
+A false completion discards its proof buffer; fatal stops and cleanup failures do
+not become retries. Only final successful outputs are published. The source
+profile has no affine RNG input constructors; the native policy therefore has no
+RNG input/successor pairs. Extending that ingress needs its own custody mapping.
+Neither the final proof nor the policy digest establishes the retry distribution.
+
+An omitted declared service budget uses `entry::DEFAULT_DRAW_BUDGET` (1,000,000),
+the current native admission ceiling. `ProofRequest::transcript_budget` is optional:
+omission uses that allowance for derived construction and zero for authored jobs.
+Explicit values, including zero, override defaults. A nonzero explicit transcript
+budget for an authored job still refuses. Unknown service names and attempts to
+supply the compiler-owned derived service still refuse.
+
+These are operational allowances, not inferred draw counts. They allocate no
+random tape and confer no independence or honest-provider claim. Existing native
+resource/transcript observations report consumed transitions and remaining
+allowances. Provider budgets persist for the whole invocation; each derived
+attempt transcript starts its separately bounded allowance. Callers can lower
+budgets and native hard limits still apply.
 
 ## Bounds and scope
 

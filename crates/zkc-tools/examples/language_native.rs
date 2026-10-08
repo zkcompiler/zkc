@@ -15,6 +15,8 @@ use zkc_tools::protocol::run::{
     Bundle, BundleLimits, HostLimits, InputValue, RoleInputs, RunHost, RunInputs, SetupAuthority,
 };
 
+#[path = "language_native/attempts.rs"]
+mod attempts;
 #[path = "language_native/host.rs"]
 mod host;
 #[path = "language_native/interface.rs"]
@@ -572,6 +574,7 @@ fn main() {
     host::run(Path::new(&directory));
     proof::run(Path::new(&directory));
     setups::run(Path::new(&directory));
+    attempts::run(Path::new(&directory));
     for optimized in [0, 1] {
         for released in [0, 1] {
             let bundle = load(&format!("transfer-{optimized}-{released}.bundle"));

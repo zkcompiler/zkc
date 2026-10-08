@@ -50,6 +50,8 @@ pub(in crate::entry) enum Job {
         public: Vec<u32>,
         acceptance: Selector,
         #[serde(deserialize_with = "present_optional")]
+        completion: Option<Box<Selector>>,
+        #[serde(deserialize_with = "present_optional")]
         target: Option<String>,
         construction: Construction,
     },

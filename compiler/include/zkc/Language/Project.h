@@ -313,6 +313,7 @@ struct ProofEntry {
   unsigned prover = 0, verifier = 0;
   std::vector<unsigned> publicInputs;
   SpecificationSelector acceptance;
+  std::optional<SpecificationSelector> completion;
   std::optional<unsigned> target, service;
   std::string suite;
   Span span;

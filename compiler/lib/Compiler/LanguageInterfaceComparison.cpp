@@ -375,6 +375,10 @@ class Comparison {
             source->publicInputs == actual.publicInputs &&
             source->target == actual.target &&
             source->service == actual.service &&
+            bool(source->completion) == bool(actual.completion) &&
+            (!source->completion ||
+             selector(entry.protocol(), *source->completion,
+                      *actual.completion)) &&
             text(source->suite, actual.suite) &&
             selector(entry.protocol(), source->acceptance,
                      actual.acceptance)) ||

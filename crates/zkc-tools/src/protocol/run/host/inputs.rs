@@ -106,7 +106,7 @@ fn budget(value: &Json) -> Result<u64> {
     checked_budget(natural(value)?)
 }
 fn checked_budget(budget: u64) -> Result<u64> {
-    if budget > 1_000_000 {
+    if budget > crate::host::inputs::RESOURCE_BUDGET_LIMIT {
         return Err("bundle-resource-budget".into());
     }
     Ok(budget)

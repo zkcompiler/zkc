@@ -33,14 +33,14 @@ struct Claim{pub c:Commit<Kzg>,pub tag:bool}
 protocol Pair roles(P,V)
   (claim:Claim@(P,V),vk0:VK<Kzg>@V,pk0:PK<Kzg>@P,data0:Vector<Kzg::ValueField>@P,
    vk1:VK<Kzg>@V,pk1:PK<Kzg>@P,data1:Vector<Kzg::ValueField>@P,
-   point:Vector<Kzg::PointField>@(P,V),vk_alias:VK<Kzg>@V)->(accepted:bool@V) {
+   point:Vector<Kzg::PointField>@(P,V),vk_alias:VK<Kzg>@V)->(accepted:bool@V,ready:bool@P) {
   let first=apply Opening<Kzg> roles(P,V)(vk0,pk0,data0,point);
   let second=apply Opening<Kzg> roles(P,V)(vk1,pk1,data1,point);
   let ok=both(first,second);
-  return(accepted=ok);
+  return(accepted=ok,ready=claim.tag);
 }
 entry Run=Pair{setup first{vk_alias,claim.c,vk0,pk0};setup second{vk1,pk1};}
 entry Prove=Pair{
   setup first{vk_alias,claim.c,vk0,pk0};setup second{vk1,pk1};
-  prover P;verifier V;public{claim,vk0,vk1,point,vk_alias};accept accepted;construction authored;
+  prover P;verifier V;public{claim,vk0,vk1,point,vk_alias};accept accepted;complete ready;construction authored;
 }

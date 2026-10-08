@@ -28,13 +28,16 @@ bool Checker::entries() {
             "source.entry",
             "complete Entry aliases cannot override or specialize choices",
             source.span);
-      if (!self(self, *target, depth + 1) ||
-          !charge(definition.staticArguments.size() +
-                      (definition.proof
-                           ? definition.proof->publicInputs.size() +
-                                 definition.proof->acceptance.path.size()
-                           : 0),
-                  source.span))
+      if (!self(self, *target, depth + 1))
+        return false;
+      uint64_t copied = definition.staticArguments.size();
+      if (definition.proof) {
+        copied += definition.proof->publicInputs.size() +
+                  definition.proof->acceptance.path.size();
+        if (definition.proof->completion)
+          copied += definition.proof->completion->path.size() + 1;
+      }
+      if (!charge(copied, source.span))
         return false;
       for (const auto &argument : definition.staticArguments)
         if (!chargeType(argument, source.span))
@@ -131,15 +134,12 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
   auto verifier = roles(protocol, {source.verifier.name}, source.verifier.span);
   if (!prover || !verifier)
     return false;
-  ProofEntry value{source.construction,
-                   prover->front(),
-                   verifier->front(),
-                   {},
-                   {true, 0, verifier->front(), {}, source.acceptance.span},
-                   {},
-                   {},
-                   source.suite,
-                   source.span};
+  ProofEntry value;
+  value.construction = source.construction;
+  value.prover = prover->front();
+  value.verifier = verifier->front();
+  value.suite = source.suite;
+  value.span = source.span;
   auto portIndex = [&](const auto &ports,
                        const SyntaxName &name) -> std::optional<unsigned> {
     if (!charge(ports.size() + 1, name.span))
@@ -163,25 +163,37 @@ bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,
   if (std::adjacent_find(value.publicInputs.begin(),
                          value.publicInputs.end()) != value.publicInputs.end())
     return fail("source.entry", "duplicate public logical input", source.span);
-  auto index = portIndex(protocol.outputs,
-                         {source.acceptance.port, source.acceptance.span});
-  if (!index)
-    return false;
-  value.acceptance.port = *index;
   auto bindings = substitution(protocol, entry.staticArguments);
-  auto current = substitute(protocol.outputs[*index].type, bindings,
-                            source.acceptance.span);
-  if (!current)
-    return false;
-  for (const auto &name : source.acceptance.path) {
-    auto field = fieldIndex(entry, *current, name, source.acceptance.span);
-    if (!field)
-      return false;
-    current = projectedType(entry, std::move(*current), {*field},
-                            source.acceptance.span);
+  auto output = [&](const SyntaxSelector &source,
+                    unsigned role) -> std::optional<SpecificationSelector> {
+    auto index = portIndex(protocol.outputs, {source.port, source.span});
+    if (!index)
+      return {};
+    SpecificationSelector selected{true, *index, role, {}, source.span};
+    auto current =
+        substitute(protocol.outputs[*index].type, bindings, source.span);
     if (!current)
+      return {};
+    for (const auto &name : source.path) {
+      auto field = fieldIndex(entry, *current, name, source.span);
+      if (!field)
+        return {};
+      current =
+          projectedType(entry, std::move(*current), {*field}, source.span);
+      if (!current)
+        return {};
+      selected.path.push_back(*field);
+    }
+    return selected;
+  };
+  auto acceptance = output(source.acceptance, value.verifier);
+  if (!acceptance)
+    return false;
+  value.acceptance = std::move(*acceptance);
+  if (source.completion) {
+    value.completion = output(*source.completion, value.prover);
+    if (!value.completion)
       return false;
-    value.acceptance.path.push_back(*field);
   }
   if (source.target) {
     value.target = portIndex(protocol.specifications, *source.target);
@@ -217,24 +229,34 @@ bool Checker::checkProofEntry(const Declaration &entry,
     return fail("source.entry",
                 "public inputs must exactly authorize verifier data ports",
                 value.span);
-  const auto &acceptance = value.acceptance;
-  if (!acceptance.output || acceptance.role != value.verifier ||
-      acceptance.port >= protocol.outputs.size() ||
-      !is_contained(protocol.outputs[acceptance.port].roles, value.verifier))
-    return fail("source.entry", "acceptance is unavailable at the verifier",
-                acceptance.span);
   auto bindings = substitution(protocol, entry.staticArguments);
-  auto type = substitute(protocol.outputs[acceptance.port].type, bindings,
-                         acceptance.span);
-  if (!type)
+  auto booleanOutput = [&](const SpecificationSelector &selected, unsigned role,
+                           StringRef keyword) {
+    if (!charge(selected.path.size() + 1, selected.span))
+      return false;
+    if (!selected.output || selected.role != role ||
+        selected.port >= protocol.outputs.size() ||
+        !is_contained(protocol.outputs[selected.port].roles, role))
+      return fail("source.entry",
+                  (keyword + " result is unavailable at its participant").str(),
+                  selected.span);
+    auto type = substitute(protocol.outputs[selected.port].type, bindings,
+                           selected.span);
+    if (!type)
+      return false;
+    type = projectedType(entry, std::move(*type), selected.path, selected.span);
+    if (!type)
+      return false;
+    return type->kind == Type::Kind::Boolean ||
+           fail("source.entry",
+                (keyword + " must select a Boolean output").str(),
+                selected.span);
+  };
+  const auto &acceptance = value.acceptance;
+  if (!booleanOutput(acceptance, value.verifier, "accept") ||
+      (value.completion &&
+       !booleanOutput(*value.completion, value.prover, "complete")))
     return false;
-  type =
-      projectedType(entry, std::move(*type), acceptance.path, acceptance.span);
-  if (!type)
-    return false;
-  if (type->kind != Type::Kind::Boolean)
-    return fail("source.entry", "acceptance must select a Boolean output",
-                acceptance.span);
   if (value.construction == ProofEntry::Construction::Authored) {
     if (!value.suite.empty() || value.service)
       return fail("source.entry",

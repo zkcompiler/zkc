@@ -236,7 +236,7 @@ pub(super) fn run(directory: &Path) {
                             },
                         },
                         context: Vec::new(),
-                        transcript_budget: typed(prover, witness).transcript_budget,
+                        transcript_budget: Some(typed(prover, witness).transcript_budget),
                     }
                 };
                 let native_named = named.prove(named_request(true, 3)).unwrap();
@@ -378,7 +378,7 @@ fn authored(directory: &Path) {
                 services: BTreeMap::new(),
             },
             context: vec![1, 2, 3],
-            transcript_budget: 0,
+            transcript_budget: Some(0),
         };
         let produced = prover.prove(request()).unwrap();
         assert!(produced.output_error.is_none());
@@ -410,7 +410,7 @@ fn authored(directory: &Path) {
             "entry-input-names"
         );
         bad = request();
-        bad.transcript_budget = 1;
+        bad.transcript_budget = Some(1);
         assert_eq!(
             prover.prove(bad).err().unwrap(),
             "native-proof-unselected-transcript"

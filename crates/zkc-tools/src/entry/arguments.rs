@@ -61,7 +61,11 @@ pub(super) fn services<'a>(
 ) -> Result<Vec<u64>, String> {
     let mut budgets = Vec::new();
     for port in ports {
-        budgets.push(values.remove(&port.name).ok_or("entry-service-names")?);
+        budgets.push(
+            values
+                .remove(&port.name)
+                .unwrap_or(super::DEFAULT_DRAW_BUDGET),
+        );
     }
     if !values.is_empty() {
         return Err("entry-service-names".into());

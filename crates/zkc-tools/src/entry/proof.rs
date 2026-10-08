@@ -42,15 +42,31 @@ impl Default for ProofOptions {
         }
     }
 }
+/// Explicit retry authorization. Count defaults to one; all cumulative work
+/// and payload ceilings remain those of the admitted ProofOptions.capacity.
+#[derive(Clone, Copy, Debug)]
+pub struct AttemptOptions {
+    pub count: u64,
+    pub proof_bytes: usize,
+}
+impl Default for AttemptOptions {
+    fn default() -> Self {
+        Self {
+            count: 1,
+            proof_bytes: crate::artifact::MAX_PROOF_BYTES,
+        }
+    }
+}
 /// Public values are the application's independently authorized statement. The
 /// role input map also supplies any shared operands; native admission checks
 /// their canonical agreement. A verifier request carries no prover inputs.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ProofRequest {
     pub public: NamedValues,
     pub inputs: RoleInputs,
     pub context: Vec<u8>,
-    pub transcript_budget: u64,
+    /// None uses the operational default for derivation and zero for authored jobs.
+    pub transcript_budget: Option<u64>,
     pub setups: BTreeMap<String, Vec<u8>>,
 }
 pub struct ProofEntry {
@@ -58,6 +74,7 @@ pub struct ProofEntry {
     interface: Interface,
     native: NativeDeployment,
     scope: BindingScope,
+    completion: Option<usize>,
 }
 /// The outer call result distinguishes preparation refusal. This report must
 /// still be checked for execution success, including rejection and cleanup.
@@ -117,7 +134,9 @@ impl ProofEntry {
         .with_capacity(options.capacity)?
         .with_external_work_limit(options.external_work)?;
         interface.check_proof(&native).map_err(|e| e.to_string())?;
+        let completion = interface.completion().map_err(|e| e.to_string())?;
         Ok(Self {
+            completion,
             package,
             interface,
             native,
@@ -134,6 +153,9 @@ impl ProofEntry {
         self.scope
     }
     pub fn prove(&self, request: ProofRequest) -> Result<ProofReport> {
+        if self.completion.is_some() {
+            return self.prove_attempts(request, AttemptOptions::default());
+        }
         let inputs = self.inputs(request, true)?;
         Ok(self.report(self.native.execute_typed(&inputs, None)?, true))
     }
@@ -141,15 +163,29 @@ impl ProofEntry {
         let inputs = self.inputs(request, false)?;
         Ok(self.report(self.native.execute_typed(&inputs, Some(proof))?, false))
     }
-    /// The admitted native policy uses original protocol ports and retains the
-    /// actual providers and cumulative work across attempts.
+    /// Use the Entry's completion result with explicit application authorization.
+    /// The native controller retains actual providers and cumulative work.
     pub fn prove_attempts(
         &self,
         request: ProofRequest,
-        policy: &AttemptPolicy,
+        options: AttemptOptions,
     ) -> Result<ProofReport> {
+        let completion = self.completion.ok_or("entry-attempt-completion")?;
+        let capacity = self.native.capacity();
+        let policy = AttemptPolicy {
+            completion,
+            // Source randomness enters through managed services; this source
+            // profile admits no affine RNG input/output constructors.
+            rng: Vec::new(),
+            limits: zkc_runtime::attempt::Limits {
+                attempts: options.count,
+                proof_bytes: options.proof_bytes,
+            },
+            work: capacity.work,
+            values: capacity.values,
+        };
         let inputs = self.inputs(request, true)?;
-        Ok(self.report(self.native.execute_attempts_typed(&inputs, policy)?, true))
+        Ok(self.report(self.native.execute_attempts_typed(&inputs, &policy)?, true))
     }
     fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {
         let protocol = self.interface.selected_protocol();
@@ -195,7 +231,11 @@ impl ProofEntry {
                 request.inputs.services,
             )?,
             context: request.context,
-            transcript_budget: request.transcript_budget,
+            transcript_budget: request.transcript_budget.unwrap_or(if derived.is_some() {
+                super::DEFAULT_DRAW_BUDGET
+            } else {
+                0
+            }),
         })
     }
     fn report(&self, native: NativeProofReport, producer: bool) -> ProofReport {

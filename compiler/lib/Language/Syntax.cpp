@@ -531,12 +531,14 @@ private:
           } while (take(",") && !at("}"));
         if (!expect("}") || !expect(";"))
           return false;
-      } else if (key == "accept") {
-        value.acceptance.output = true;
-        value.acceptance.span = current().span;
-        if (!name(value.acceptance.port) || !selectorPath(value.acceptance))
+      } else if (key == "accept" || key == "complete") {
+        auto &selected =
+            key == "accept" ? value.acceptance : value.completion.emplace();
+        selected.output = true;
+        selected.span = current().span;
+        if (!name(selected.port) || !selectorPath(selected))
           return false;
-        value.acceptance.span.end = previousEnd;
+        selected.span.end = previousEnd;
         if (!expect(";"))
           return false;
       } else if (key == "target") {

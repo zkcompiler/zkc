@@ -7,8 +7,8 @@ use zkc_backends::{Policy, Scalar, Value as Native};
 use zkc_tools::{
     artifact::native::{InputValue, NativeCapacity, ProverMaterial},
     entry::{
-        BindingPolicy, NamedValues, Package, ProofEntry, ProofOptions, ProofRequest, RoleInputs,
-        RunEntry, RunRequest, SetupAuthority, Value,
+        AttemptOptions, BindingPolicy, NamedValues, Package, ProofEntry, ProofOptions,
+        ProofRequest, RoleInputs, RunEntry, RunRequest, SetupAuthority, Value,
     },
     protocol::run::HostLimits,
 };
@@ -177,10 +177,32 @@ pub(super) fn run(directory: &Path) {
         public: [("point".into(), point()), ("claim".into(), claim(0))].into(),
         inputs: role(&material, claim(0), producing),
         context: vec![1, 2, 3],
-        transcript_budget: 0,
+        transcript_budget: Some(0),
         setups: setups(),
     };
     // Reuse immutable material across independent complete invocations.
+    let mut unloaded = request(true);
+    unloaded.inputs.inputs.insert(
+        "pk0".into(),
+        InputValue::ProverKeyFile {
+            path: "/nonexistent/zkc-attempt-key".into(),
+            fingerprint: [0; 32],
+        }
+        .into(),
+    );
+    assert_eq!(
+        prover
+            .prove_attempts(
+                unloaded,
+                AttemptOptions {
+                    count: 0,
+                    ..Default::default()
+                }
+            )
+            .err()
+            .unwrap(),
+        "native-attempt-limits"
+    );
     for _ in 0..2 {
         let produced = prover.prove(request(true)).unwrap();
         assert!(produced.is_success(), "{:?}", produced.native.outcome);
@@ -226,6 +248,15 @@ pub(super) fn run(directory: &Path) {
     assert_eq!(
         prover.prove(wrong).err().unwrap(),
         "native-proof-input-setup"
+    );
+    let mut wrong_key = request(false);
+    wrong_key.setups.insert(
+        "first".into(),
+        keys[1].verifier_key().to_bytes(&bounds).unwrap(),
+    );
+    assert_eq!(
+        verifier.verify(wrong_key, &[]).err().unwrap(),
+        "key-mismatch"
     );
     let mut extra = request(false);
     extra

@@ -2,7 +2,7 @@
 use super::*;
 
 const CONTEXT_LIMIT: usize = 4096;
-const RESOURCE_BUDGET_LIMIT: u64 = 1_000_000;
+use crate::host::inputs::RESOURCE_BUDGET_LIMIT;
 
 /// Values follow the admitted public, role-input and service order. Public
 /// verifier keys use canonical wire bytes; other public data may also use native

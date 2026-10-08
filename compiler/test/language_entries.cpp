@@ -216,5 +216,46 @@ int main() {
                                           ("pk:" + type + "@P").str())),
                         "source.ingress");
             });
+
+  cases.run(
+      "proof completion selects a prover Boolean and survives aliases", [] {
+        const std::string source = R"(module sample;
+      struct Result{pub ready:bool,pub count:index}
+      protocol Run roles(P,V)(r:Result@P,ok:bool@V)->(result:Result@P,accepted:bool@V){return(result=r,accepted=ok);}
+      entry Job=Run{prover P;verifier V;public{ok};accept accepted;complete result.ready;construction authored;}
+      entry Demo=Job;
+    )";
+        auto entry = take(close(source));
+        const auto &selected = *entry.entry().proof->completion;
+        require(selected.output && selected.port == 0 && selected.role == 0 &&
+                    selected.path == std::vector<unsigned>{0},
+                "completion selector changed through alias");
+        for (StringRef name : {"accepted", "result.count", "missing", "r"})
+          refuses(close(replaceText(source, "complete result.ready",
+                                    ("complete " + name).str())),
+                  "source.entry");
+        refuses(
+            close(replaceText(source, "complete result.ready;",
+                              "complete result.ready;complete result.ready;")),
+            "source.entry");
+        refuses(close(replaceText(
+                    source,
+                    "entry Job=Run{prover P;verifier V;public{ok};accept "
+                    "accepted;complete result.ready;construction authored;}",
+                    "entry Job=Run{complete result.ready;}")),
+                "source.entry");
+      });
+
+  cases.run("completion respects private field visibility", [] {
+    auto captured = take(capture(
+        {{"lib", "module lib;pub struct Result{pub ok:bool,ready:bool}", {}},
+         {"sample",
+          R"(module sample;
+        protocol Run roles(P,V)(r:lib::Result@P,ok:bool@V)->(result:lib::Result@P,accepted:bool@V){return(result=r,accepted=ok);}
+        entry Demo=Run{prover P;verifier V;public{ok};accept accepted;complete result.ready;construction authored;})",
+          {}}}));
+    refuses(analyze(captured).checkedProject(), "source.private");
+  });
+
   return cases.result();
 }

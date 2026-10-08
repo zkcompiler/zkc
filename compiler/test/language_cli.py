@@ -16,7 +16,7 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface/6'
+    assert interface['format'] == 'zkc.language-interface/7'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
     protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
@@ -285,5 +285,21 @@ for entry in ('Run', 'Prove'):
         assert [slot['name'] for slot in interface['setups']] == ['first', 'second']
         assert interface['setups'][1]['inputs'] == [{'port': 4, 'path': []}, {'port': 5, 'path': []}]
         (OUT / f'pcs-setup-{entry}.entry').write_text(package)
+
+for entry in ('Derived', 'Plain', 'Once', 'Run'):
+    with case(f'named attempt selection and operational budgets: {entry}'):
+        source = OUT / f'attempt-{entry}.zkc'
+        source.write_text((FIXTURES / 'attempts.zkc').read_text())
+        suites = ('merlin3.bls12-381.fr64be/1', 'spongefish0.7.4.keccak.bls12-381.fr64be/1') if entry == 'Derived' else ('merlin3.bls12-381.fr64be/1',)
+        for suite, identity in enumerate(suites):
+            source.write_text((FIXTURES / 'attempts.zkc').read_text().replace(suites[0], identity))
+            args = ['--source-format=zkc', f'--entry=sample::{entry}', f'--module=sample={source}']
+            package = commands.run([compiler, 'language-package', *args])
+            view = json.loads(json.loads(package)['interface'])
+            if entry in ('Derived', 'Plain'):
+                assert view['job']['completion'] == {'direction':'output', 'port':1, 'role':'P', 'path':[0]}
+            elif entry == 'Once':
+                assert view['job']['completion'] is None
+            (OUT / f'attempt-{entry}-{suite}.entry').write_text(package)
 
 counted()

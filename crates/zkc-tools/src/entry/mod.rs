@@ -15,8 +15,14 @@ pub use value::Value;
 mod run;
 pub use run::{NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport, RunRequest};
 
+/// Operational allowance for an omitted service or selected transcript budget.
+/// Explicit budgets, including zero, override it; native hard limits still apply.
+pub const DEFAULT_DRAW_BUDGET: u64 = crate::host::inputs::RESOURCE_BUDGET_LIMIT;
 mod arguments;
 mod setups;
 pub use setups::SetupAuthority;
 mod proof;
-pub use proof::{BindingPolicy, BindingScope, ProofEntry, ProofOptions, ProofReport, ProofRequest};
+pub use proof::{
+    AttemptOptions, BindingPolicy, BindingScope, ProofEntry, ProofOptions, ProofReport,
+    ProofRequest,
+};

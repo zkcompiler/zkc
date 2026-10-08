@@ -9,9 +9,10 @@ type Result<T> = std::result::Result<T, String>;
 pub type NamedValues = BTreeMap<String, Value>;
 pub type RoleValues = BTreeMap<String, NamedValues>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RoleInputs {
     pub inputs: NamedValues,
+    /// Optional budget overrides for declared services; unknown names refuse.
     pub services: BTreeMap<String, u64>,
 }
 #[derive(Debug)]
@@ -62,7 +63,8 @@ impl RunEntry {
         self.native.limits()
     }
 
-    /// Names must cover every role, input and service exactly. Empty logical
+    /// Names cover every role and input exactly. Missing service allowances use
+    /// DEFAULT_DRAW_BUDGET; explicit zero is preserved. Empty logical
     /// products are required even though they have no native operand. The plan
     /// owns all prepared input data and may outlive the consumed request.
     pub fn prepare(&self, mut request: RunRequest) -> Result<PreparedRun<'_>> {

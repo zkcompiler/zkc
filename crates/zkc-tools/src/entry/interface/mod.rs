@@ -90,6 +90,18 @@ impl Interface {
     pub fn setup_names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.setups.iter().map(|slot| slot.name.as_str())
     }
+    pub(in crate::entry) fn completion(&self) -> Result<Option<usize>> {
+        let raw::Job::Proof { completion, .. } = &self.document.job else {
+            return Ok(None);
+        };
+        completion
+            .as_ref()
+            .map(|selected| {
+                let (_, native) = validate::select(self.selected_protocol(), selected)?;
+                Ok(native[0] as usize)
+            })
+            .transpose()
+    }
     pub fn is_proof(&self) -> bool {
         matches!(self.document.job, raw::Job::Proof { .. })
     }

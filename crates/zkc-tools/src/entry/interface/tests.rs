@@ -15,7 +15,7 @@ fn selector(direction: &str, port: u32, role: &str) -> Value {
 }
 fn document() -> Value {
     let boolean = schema("boolean", "bool", json!(["bool"]));
-    json!({"format":"zkc.language-interface/6","setups":[],"capture":digest("capture"),"original":digest("original"),
+    json!({"format":"zkc.language-interface/7","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"sample::Proof","protocol":"sample_Protocol",
         "protocols":[{"symbol":"sample_Protocol","roles":["P","V"],
             "inputs":[port("statement",0,json!([0]),json!(["P","V"]),boolean.clone()),
@@ -28,7 +28,7 @@ fn document() -> Value {
             {"name":"s","purpose":"statement","native":[0],"schema":boolean.clone()},
             {"name":"w","purpose":"witness","native":[1],"schema":boolean}],"definition":{"kind":"opaque"}}],
         "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],
-            "acceptance":selector("output",0,"V"),"target":"knowledge","construction":{"kind":"authored"}}})
+            "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","construction":{"kind":"authored"}}})
 }
 fn read_text(interface: &str) -> Result<Interface> {
     let frame = json!({"format":"zkc.entry/1","original":"original","interface":interface,
@@ -85,6 +85,7 @@ fn exact_objects_reject_extra_duplicate_missing_and_old_fields() {
     }
     for path in [
         "/job/target",
+        "/job/completion",
         "/protocols/0/clauses/0/residual",
         "/protocols/0/clauses/0/decision",
     ] {
@@ -110,7 +111,7 @@ fn exact_objects_reject_extra_duplicate_missing_and_old_fields() {
             "\"kind\":\"authored\",\"kind\":\"authored\"",
         ),
         s.clone() + "{}",
-        s.replace("language-interface/6", "language-interface/5"),
+        s.replace("language-interface/7", "language-interface/6"),
     ] {
         assert_eq!(read_text(&bad).unwrap_err(), InterfaceError::Format);
     }
@@ -597,4 +598,35 @@ fn proof_setup_bounds_total_verifier_keys_separately_from_slots() {
     doc["job"]["public"].as_array_mut().unwrap().pop();
     doc["setups"][0]["inputs"].as_array_mut().unwrap().pop();
     assert_eq!(read(&doc).unwrap().setups[0].verifier_keys.len(), 64);
+}
+
+#[test]
+fn completion_selects_a_prover_boolean_native_output() {
+    let mut doc = document();
+    let boolean = schema("boolean", "bool", json!(["bool"]));
+    let index = schema("index", "index", json!(["index"]));
+    let mut product = schema("tuple", "(bool,index)", json!(["bool", "index"]));
+    product["fields"] = json!([
+        {"name":"0","offset":0,"schema":boolean},
+        {"name":"1","offset":1,"schema":index}
+    ]);
+    doc["protocols"][0]["outputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(port("state", 1, json!([1, 2]), json!(["P", "V"]), product));
+    doc["job"]["completion"] = json!({"direction":"output","port":1,"role":"P","path":[0]});
+    assert_eq!(read(&doc).unwrap().completion().unwrap(), Some(1));
+    for (field, value) in [
+        ("direction", json!("input")),
+        ("port", json!(99)),
+        ("role", json!("V")),
+        ("path", json!([1])),
+    ] {
+        let mut bad = doc.clone();
+        bad["job"]["completion"][field] = value;
+        assert_eq!(read(&bad).unwrap_err(), InterfaceError::Selection);
+    }
+    let mut old = doc;
+    old["format"] = json!("zkc.language-interface/6");
+    assert_eq!(read(&old).unwrap_err(), InterfaceError::Format);
 }

@@ -194,6 +194,7 @@ struct SyntaxProofEntry {
   SyntaxName prover, verifier;
   std::vector<SyntaxName> publicInputs;
   SyntaxSelector acceptance;
+  std::optional<SyntaxSelector> completion;
   std::optional<SyntaxName> target, service;
   ProofEntry::Construction construction = ProofEntry::Construction::Authored;
   std::string suite;

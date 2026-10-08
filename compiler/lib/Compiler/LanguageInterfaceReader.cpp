@@ -1128,8 +1128,9 @@ class Reader {
       return false;
     if (*kind == "run")
       return bool(object(value, {"kind"}));
-    auto *obj = object(value, {"kind", "prover", "verifier", "public",
-                               "acceptance", "target", "construction"});
+    auto *obj =
+        object(value, {"kind", "prover", "verifier", "public", "acceptance",
+                       "completion", "target", "construction"});
     if (!obj || *kind != "proof")
       return fail("unknown Entry job");
     current = &view.protocols[view.selected];
@@ -1174,6 +1175,16 @@ class Reader {
         logical->kind != Type::Kind::Boolean || acceptance->native.size() != 1)
       return fail("Entry acceptance must be one verifier Boolean output");
     proof.acceptance = std::move(*acceptance);
+    if (obj->get("completion")->kind() != json::Value::Null) {
+      auto completion = selector(*obj->get("completion"), &logical);
+      if (!completion)
+        return false;
+      if (!completion->output || completion->role != proof.prover ||
+          logical->kind != Type::Kind::Boolean ||
+          completion->native.size() != 1)
+        return fail("Entry completion must be one prover Boolean output");
+      proof.completion = std::move(*completion);
+    }
     const auto &construction = *obj->get("construction");
     auto *constructionObject = construction.getAsObject();
     if (!constructionObject)
@@ -1303,7 +1314,7 @@ class Reader {
     if (!format || !capture || !original || !toolchain || !entry || !symbol ||
         !protocols || !relations)
       return false;
-    if (*format != "zkc.language-interface/6" || !hash(*capture) ||
+    if (*format != "zkc.language-interface/7" || !hash(*capture) ||
         *original != digest || *toolchain != compilerToolchainIdentity())
       return fail("interface format, original or toolchain identity differs");
     SmallVector<StringRef> entryParts;

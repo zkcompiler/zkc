@@ -10,7 +10,7 @@ pub(super) struct Checked {
     pub setups: Vec<super::Setup>,
 }
 pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
-    require(document.format == "zkc.language-interface/6", E::Format)?;
+    require(document.format == "zkc.language-interface/7", E::Format)?;
     require(
         hash(&document.capture) && document.original == original,
         E::Identity,
@@ -129,14 +129,9 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
                 _ => return Err(E::Selection),
             }
             if let Some(decision) = &clause.decision {
-                let (schema, native) = select(protocol, decision)?;
-                require(
-                    clause.kind != ClauseKind::Input
-                        && decision.direction == Direction::Output
-                        && schema.kind == Kind::Boolean
-                        && native.len() == 1,
-                    E::Selection,
-                )?;
+                require(clause.kind != ClauseKind::Input, E::Selection)?;
+                schemas.charge(1 + decision.path.len())?;
+                check_decision(protocol, decision, &decision.role)?;
             } else {
                 require(clause.kind != ClauseKind::Target, E::Selection)?;
             }
@@ -263,6 +258,16 @@ fn application(
     }
     Ok(())
 }
+fn check_decision(protocol: &Protocol, selected: &Selector, role: &str) -> Result<()> {
+    let (schema, native) = select(protocol, selected)?;
+    require(
+        selected.direction == Direction::Output
+            && selected.role == role
+            && schema.kind == Kind::Boolean
+            && native.len() == 1,
+        E::Selection,
+    )
+}
 fn job(
     job: &Job,
     protocol: &Protocol,
@@ -274,6 +279,7 @@ fn job(
         verifier,
         public,
         acceptance,
+        completion,
         target,
         construction,
     } = job
@@ -295,14 +301,12 @@ fn job(
         .map(|p| p.index)
         .collect();
     require(public == &required, E::Selection)?;
-    let (schema, native) = select(protocol, acceptance)?;
-    require(
-        acceptance.direction == Direction::Output
-            && &acceptance.role == verifier
-            && schema.kind == Kind::Boolean
-            && native.len() == 1,
-        E::Selection,
-    )?;
+    schemas.charge(1 + acceptance.path.len())?;
+    check_decision(protocol, acceptance, verifier)?;
+    if let Some(completion) = completion {
+        schemas.charge(1 + completion.path.len())?;
+        check_decision(protocol, completion, prover)?;
+    }
     let derived = match construction {
         Construction::Authored {} => None,
         Construction::FiatShamir { suite, service } => {

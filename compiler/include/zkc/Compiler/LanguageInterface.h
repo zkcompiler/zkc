@@ -80,6 +80,7 @@ struct InterfaceProofEntry {
   unsigned prover = 0, verifier = 0;
   std::vector<unsigned> publicInputs;
   InterfaceSelector acceptance;
+  std::optional<InterfaceSelector> completion;
   std::optional<unsigned> target, service;
   std::string suite;
 };

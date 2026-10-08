@@ -92,7 +92,12 @@ the checked interface. Successful reports return named copyable outputs after
 cleanup. Authored jobs require explicit `BindingPolicy::AllowHeaderOnly`;
 derived transcript jobs use the default policy. Named setup slots bind checked
 key initialization to application-owned identities. The package CLI and generated
-thin bindings remain in progress.
+thin bindings remain in progress. A proof Entry may select `complete result.ready;`
+to withhold incomplete proofs, including in one-shot proving. Repeated attempts
+require an explicit application request. The common controller retains managed
+providers and cumulative work. Omitted service and derived transcript budgets use
+the documented operational default; explicit budgets, including zero, take precedence.
+See [attempts and defaults](../spec/profiles/source/mathematical-language.md#attempts-and-operational-defaults).
 
 ## Local code and reusable types
 
@@ -146,7 +151,7 @@ Fixed arrays currently use static numeric indices. Private ingress requires a
 validator that this source profile does not yet expose. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
-`language-interface` emits `zkc.language-interface/6`. Schemas retain an exact
+`language-interface` emits `zkc.language-interface/7`. Schemas retain an exact
 logical type identity and kind separately from their display label. A logical port's `native`
 indices and recursive `schema` describe its flattened fields, variant payloads and
 custody. These indices refer to the original mathematical signature, not a promise

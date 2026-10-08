@@ -3,6 +3,9 @@ use serde_json::Value as Json;
 use std::path::Path;
 pub(crate) type Result<T> = std::result::Result<T, String>;
 pub(crate) const INPUT_LIMIT: usize = 16 * 1024 * 1024;
+/// Installed maximum allowance for a managed provider or transcript invocation.
+pub(crate) const RESOURCE_BUDGET_LIMIT: u64 = 1_000_000;
+
 pub(crate) fn read(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {
     crate::host::io::read_bounded(path, limit).map_err(|error| match error {
         crate::host::io::ReadError::Io(_) => "artifact-io".into(),

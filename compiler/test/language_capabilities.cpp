@@ -307,5 +307,22 @@ int main() {
                             .str()),
                   "source.mode");
       });
+
+  cases.run("each finite capability search charges its pair work", [] {
+    std::string header = "fn bounded<";
+    for (unsigned i = 0; i < 128; ++i)
+      header +=
+          (i ? "," : "") + std::string("F") + std::to_string(i) + ":Field";
+    header += ">(n:index)->F0 where ";
+    for (unsigned i = 0; i < 128; ++i)
+      header += (i ? "," : "") + std::string("zkc::algebra::TwoAdicField(F") +
+                std::to_string(i) + ")";
+    auto once = take(check(root.str() + header + "{return root<F0>(n);}"));
+    auto twice = take(check(root.str() + header +
+                            "{let unused=root<F0>(n);return root<F0>(n);}"));
+    require(twice.checkedWork() >= once.checkedWork() + 2 * 128 * 128,
+            "another finite search omitted its quadratic work charge");
+  });
+
   return cases.result();
 }

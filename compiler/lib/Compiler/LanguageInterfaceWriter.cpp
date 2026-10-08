@@ -196,7 +196,7 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     });
   };
   out.object([&] {
-    out.attribute("format", "zkc.language-interface/6");
+    out.attribute("format", "zkc.language-interface/7");
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);
@@ -240,6 +240,12 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
       });
       out.attributeBegin("acceptance");
       selector(protocol, proof->acceptance);
+      out.attributeEnd();
+      out.attributeBegin("completion");
+      if (proof->completion)
+        selector(protocol, *proof->completion);
+      else
+        out.value(nullptr);
       out.attributeEnd();
       out.attributeBegin("target");
       if (proof->target)

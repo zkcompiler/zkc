@@ -31,7 +31,7 @@ helper realization and independent recipe controls in
 receive, joint-host, aggregate, static dispatch, distributed application results, shared service aliases, pre-query stops, nested/per-role repetition, conditional draws, nested early completion, returned affine custody, native vector/matrix/sequence data, iterative folding rounds, formal polynomial evaluation/interpolation/sums through protocol and local paths, and affine control/cleanup controls in [language_native.rs](../crates/zkc-tools/examples/language_native.rs).
 The source fragment does not yet expose the full native IR vocabulary. Fixed arrays use static numeric indexing; private ingress without a
 validator, member-generic conformance and zero-leaf messages refuse. Source schema
-`zkc.language-interface/6` retains all closed protocol interfaces, managed services,
+`zkc.language-interface/7` retains all closed protocol interfaces, managed services,
 formula/opaque/captured relation definitions, and target/input/output/continuation
 clauses with exact logical port and participant selectors. Source-only relation
 checks and inline-binding/privacy controls are in
@@ -87,7 +87,14 @@ application-owned slot pins, initialize verifier-key ports, and admit explicit
 prover material. The [PCS fixture](../compiler/test/fixtures/language/pcs_setup.zkc)
 composes two generic openings with distinct setups through the common run and
 proof Hosts; controls cover wrong material, missing/extra names and lowered quotas.
-Receive-only slots and finer per-receive setup pinning remain migration work.
+Proof Entries can select a producer Boolean completion result for explicitly
+requested attempts. Named calls derive the native selection and reuse the native
+controller, preserving providers, cumulative work and failed-attempt cleanup.
+Omitted service budgets and selected transcript budgets use a bounded operational
+allowance; explicit zero and unknown-name refusals are preserved. Source-authored
+controls cover both transcript suites, authored proofs, retry exhaustion, provider
+exhaustion and lowered limits. Receive-only slots and finer per-receive setup
+pinning remain migration work.
 Package CLI and thin Rust bindings remain in progress. Existing frontend consumers
 have not migrated.
 

@@ -353,5 +353,41 @@ int main(int argc, char **argv) {
             namesIdentifier(toString(std::move(changed)), "source.interface"),
             "changed job refused with another code");
       });
+
+  cases.run(
+      "completion metadata retains the source choice and exact native leaf",
+      [] {
+        auto checked = original(R"(module sample;
+      struct Result{pub first:bool,pub second:bool,pub count:index}
+      protocol Run roles(P,V)(n:index@P,r:Result@(P,V),ok:bool@V)->(padding:index@P,result:Result@(P,V),accepted:bool@V){return(padding=n,result=r,accepted=ok);}
+      entry Demo=Run{prover P;verifier V;public{r,ok};accept accepted;complete result.second;construction authored;}
+    )");
+        require(checked.interface().proof->completion->native ==
+                    std::vector<unsigned>{2},
+                "completion used its logical port as a native leaf");
+        take(compileEntry(checked));
+        auto value = take(json::parse(checked.interfaceJson()));
+        auto &job = *value.getAsObject()->getObject("job");
+        auto &completion = *job.getObject("completion");
+        completion["path"] = json::Array{0};
+        auto view = take(readInterface(checked.bytes(), printJson(value)));
+        auto mismatch = compareInterface(checked.entry(), view);
+        require(bool(mismatch),
+                "another same-typed completion gained source authority");
+        require(namesIdentifier(toString(std::move(mismatch)),
+                                "source.correspondence"),
+                "unexpected completion refusal");
+        completion["path"] = json::Array{2};
+        refuses(readInterface(checked.bytes(), printJson(value)),
+                "source.interface");
+        completion["path"] = json::Array{1};
+        completion["role"] = "V";
+        refuses(readInterface(checked.bytes(), printJson(value)),
+                "source.interface");
+        job.erase("completion");
+        refuses(readInterface(checked.bytes(), printJson(value)),
+                "source.interface");
+      });
+
   return cases.result();
 }
