@@ -614,6 +614,31 @@ mod tests {
             }
         }
         let (inner, inline) = witness.expect("bounded expansion counterexample");
+        let outer = LogicalType::parse(&encode_tree(json!([
+            "padding".repeat(512),
+            [["m", [&inline]]]
+        ])))
+        .unwrap();
+        let nested = outer.variant_descriptor().unwrap().alternatives()[0].payload()[0]
+            .variant_descriptor()
+            .unwrap()
+            .alternatives()[0]
+            .payload()[0]
+            .variant_descriptor()
+            .unwrap();
+        assert_eq!(
+            nested.nominal_identity().unwrap_err().detail,
+            "variant:graph-limit"
+        );
+        assert_eq!(
+            outer
+                .variant_descriptor()
+                .unwrap()
+                .nominal_identity()
+                .unwrap(),
+            json!("padding".repeat(512))
+        );
+
         let leaf = format!("sequence<{inner}>");
         let error = LogicalType::parse(&leaf).unwrap_err();
         assert_eq!(error.detail, "variant:graph-limit");

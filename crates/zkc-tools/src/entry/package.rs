@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 const PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const ORIGINAL_BYTES: usize = 16 * 1024 * 1024;
-const INTERFACE_BYTES: usize = 4 * 1024 * 1024;
+pub(super) const INTERFACE_BYTES: usize = 4 * 1024 * 1024;
 const ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, remote = "Self")]
 pub struct CompileOptions {
     pub simplify: bool,
     pub release_storage: bool,
@@ -32,7 +32,7 @@ impl std::fmt::Display for PackageError {
 impl std::error::Error for PackageError {}
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, remote = "Self")]
 struct Frame {
     format: String,
     original: String,
@@ -40,6 +40,8 @@ struct Frame {
     artifact: String,
     options: CompileOptions,
 }
+
+super::decode::objects!(CompileOptions, Frame);
 
 /// Immutable authenticated container. This is not native program admission or
 /// a check of the compiler's source correspondence. The application must trust
@@ -184,6 +186,22 @@ mod tests {
                 "accepted {bytes}"
             );
         }
+    }
+    #[test]
+    fn carrier_records_require_objects() {
+        assert!(matches!(
+            capture(br#"["zkc.entry/1","o","i","a",[true,false]]"#),
+            Err(PackageError::Format)
+        ));
+        let value = frame().replace(
+            r#"{"release_storage":false,"simplify":true}"#,
+            "[true,false]",
+        );
+        assert_ne!(value, frame());
+        assert!(matches!(
+            capture(value.as_bytes()),
+            Err(PackageError::Format)
+        ));
     }
     #[test]
     fn component_limits_apply_to_decoded_bytes() {

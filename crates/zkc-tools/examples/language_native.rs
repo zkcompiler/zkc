@@ -13,6 +13,8 @@ use zkc_runtime::interactive::{
 };
 use zkc_tools::protocol::run::{Bundle, BundleLimits, HostLimits, RunHost, SetupAuthority};
 
+#[path = "language_native/interface.rs"]
+mod interface;
 #[path = "language_native/proof.rs"]
 mod proof;
 
@@ -256,11 +258,10 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
             values,
             service_backend(bundle, &registry, &root),
         );
-        let expected_draws;
-        if conditional {
+        let expected_draws = if conditional {
             let values = returned(&mut verifier);
             expect_field(&values[0], if go { 1 } else { 0 });
-            expected_draws = u64::from(go);
+            u64::from(go)
         } else if n > 4 || (n > 0 && !go) {
             let Action::Stopped(stop) = next(&mut verifier) else {
                 panic!("repeat bound or guard did not stop")
@@ -273,7 +274,7 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
             } else {
                 assert!(matches!(stop.kind, StopKind::Explicit(ref reason) if reason == "reject"));
             }
-            expected_draws = 0;
+            0
         } else {
             let mut prover = runner(bundle, "P", vec![Value::Index(n), field(2)]);
             for i in 0..n {
@@ -284,8 +285,8 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
             let sum = n * (n + 1) / 2;
             expect_field(&returned(&mut prover)[0], 2 + sum);
             expect_field(&returned(&mut verifier)[0], 3 + sum);
-            expected_draws = n;
-        }
+            n
+        };
         assert_eq!(verifier.backend().active_frames(), 0);
         let observed = registry.observe(&root).unwrap();
         assert!(!observed.leased && !observed.poisoned);
@@ -513,6 +514,38 @@ fn main() {
     let load = |name: &str| -> serde_json::Value {
         serde_json::from_slice(&std::fs::read(Path::new(&directory).join(name)).unwrap()).unwrap()
     };
+    for file in std::fs::read_dir(&directory).unwrap() {
+        let path = file.unwrap().path();
+        if path.extension().and_then(|s| s.to_str()) != Some("entry") {
+            continue;
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        let package = zkc_tools::entry::Package::capture(
+            &bytes,
+            &Sha256::digest(&bytes).into(),
+            zkc_tools::entry::Package::MAX_BYTES,
+        )
+        .unwrap();
+        let interface = zkc_tools::entry::Interface::read(&package)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        if !interface.is_proof() {
+            let artifact = package.artifact().as_bytes();
+            let host = RunHost::admit(
+                artifact,
+                &Sha256::digest(artifact).into(),
+                HostLimits::default(),
+                SetupAuthority::default(),
+            )
+            .unwrap();
+            interface
+                .check_run(&host)
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            interface::controls(&package, |view| view.check_run(&host));
+            if package.interface().contains("transfer::Demo") {
+                interface::changed_publication_cannot_reuse_pin(&package);
+            }
+        }
+    }
     proof::run(Path::new(&directory));
     for optimized in [0, 1] {
         for released in [0, 1] {

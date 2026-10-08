@@ -915,6 +915,30 @@ binding. A consumer must obtain its expected package identity independently;
 internal hashes do not authenticate a supplied package. Retaining MLIR does not
 require the Host to recompile it or establish a security theorem.
 
+### Rust interface admission
+
+The native Host reads only interface version 5. It checks strict object members,
+including required nullable fields, before using source names. Recursive schema
+validation preserves kind, exact logical identity, permissions, custody, field
+slices and nominal alternatives. Every logical port remains present, including
+zero-leaf values. Selectors and Entry choices must agree with those schemas.
+
+The reader bounds interface bytes at 4 MiB, JSON nesting at 256 and lexical nodes
+at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
+string tokens have at most six times 256 KiB. Decoded strings retain their owning
+name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
+leaves, and validation has a cumulative work allowance of 1,000,000. Native leaf
+parsing retains its own structural bounds; cached descriptors have an additional
+16 MiB total retained charge. Unknown and duplicate fields refuse.
+
+Native binding checks the exact artifact bytes from the authenticated package,
+selected entry, participant roster, logical data types, services and output
+mappings. Proof binding additionally checks the original digest, original
+acceptance port, public inputs, construction and compile options against the
+admitted deployment. Run bundles carry no independent original/options record;
+those choices are authenticated package metadata. The compiler/checker publication
+path owns source correspondence and relation meaning. Reading metadata or binding
+its ports does not interpret MLIR or establish a protocol security judgment.
 
 ## Bounds and scope
 

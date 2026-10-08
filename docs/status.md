@@ -58,8 +58,13 @@ in [language_entries.cpp](../compiler/test/language_entries.cpp),
 [language_entry_ir.cpp](../compiler/test/language_entry_ir.cpp) and
 [native_proof_selection.cpp](../compiler/test/native_proof_selection.cpp).
 The compiler exports exact `zkc.entry/1` packages; Rust `entry::Package::capture`
-authenticates their outer bytes and strict framing. Native interface binding,
-named Host inputs/results and thin Rust bindings remain in progress. Existing frontend consumers have not migrated.
+authenticates their outer bytes and strict framing. The bounded Rust `Interface`
+reader validates recursive schemas, selectors and job choices, then checks the
+exact admitted run/proof artifact and original port mappings. Proof binding also
+checks source identity, construction, acceptance, compile options and services.
+Unit and compiler-generated package controls cover malformed metadata, changed
+publication pins and mismatched native choices. Named Host inputs/results and
+thin Rust bindings remain in progress. Existing frontend consumers have not migrated.
 
 ## Foundation capability map
 

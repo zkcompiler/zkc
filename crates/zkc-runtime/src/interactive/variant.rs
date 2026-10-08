@@ -207,6 +207,19 @@ impl VariantDescriptor {
     pub fn alternatives(&self) -> &[VariantAlternative] {
         &self.alternatives
     }
+    /// Decode the opaque nominal identity for a metadata consumer. This uses the
+    /// same bounded graph decoder as admission and allocates a temporary view;
+    /// callers inspecting many types should cache the result. It grants no
+    /// permissions beyond this descriptor's already checked payload types.
+    /// An inline payload may fit its containing descriptor's expansion bound but
+    /// exceed its own spelling's bound. Independent inspection then refuses.
+    pub fn nominal_identity(&self) -> Result<Value> {
+        match unpack(&self.spelling)? {
+            Value::Array(mut root) if root.len() == 2 => Ok(root.swap_remove(0)),
+            _ => Err(invalid("descriptor")),
+        }
+    }
+
     /// Stable conservative storage charge, including shared nested descriptors.
     /// This profile deliberately does not expose allocator capacities to the
     /// portable reference machine. Closed arrays use exact-length backing; each node reserves its metadata.

@@ -33,14 +33,57 @@ pub(super) fn run(directory: &Path) {
                 );
                 assert_eq!(package.options().simplify, simplified == 1);
                 assert_eq!(package.options().release_storage, released == 1);
+                let checked = zkc_tools::entry::Interface::read(&package).unwrap();
+                assert!(checked.is_proof());
+                assert_eq!(checked.entry(), "sample::Demo");
                 let interface: Json = serde_json::from_str(package.interface()).unwrap();
                 assert_eq!(
                     interface["original"],
                     hex(&Sha256::digest(package.original().as_bytes()))
                 );
-                let envelope: Json = serde_json::from_slice(&bytes).unwrap();
+                // Bind the exact packaged publication, without the standalone
+                // language-bundle command's presentation newline.
+                let bytes = package.artifact().as_bytes();
+                let envelope: Json = serde_json::from_slice(bytes).unwrap();
                 let deployment =
-                    NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+                    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes))).unwrap();
+                checked.check_proof(&deployment).unwrap();
+                interface::controls(&package, |view| view.check_proof(&deployment));
+                interface::changed_publication_cannot_reuse_pin(&package);
+                for change in 0..3 {
+                    let altered = interface::alter(&package, |frame, view| {
+                        if change == 0 {
+                            frame["options"]["simplify"] = json!(simplified == 0);
+                        } else if change == 1 {
+                            frame["original"] = json!(package.original().to_owned() + "\n");
+                            view["original"] = json!(hex(&Sha256::digest(
+                                frame["original"].as_str().unwrap().as_bytes()
+                            )));
+                        } else {
+                            let symbol = view["protocol"].as_str().unwrap().to_owned();
+                            let protocol = view["protocols"]
+                                .as_array_mut()
+                                .unwrap()
+                                .iter_mut()
+                                .find(|p| p["symbol"] == symbol)
+                                .unwrap();
+                            let service = protocol["services"]
+                                .as_array_mut()
+                                .unwrap()
+                                .iter_mut()
+                                .find(|s| s["owner"] == "P")
+                                .unwrap();
+                            service["contract"] = json!("random.bn254.fr/1");
+                        }
+                    });
+                    assert_eq!(
+                        zkc_tools::entry::Interface::read(&altered)
+                            .unwrap()
+                            .check_proof(&deployment),
+                        Err(zkc_tools::entry::InterfaceError::NativeBinding)
+                    );
+                }
+
                 let codec = backend(&json!({"entry":envelope[2][1][1]}), "P");
                 let wire = |value: Value| hex(&codec.encode_native_value(&value).unwrap());
                 let base = wire(Value::Curve(GroupPoint::generator()));
@@ -78,7 +121,7 @@ pub(super) fn run(directory: &Path) {
                 // Separately admitted handle and verifier inputs; no witness or
                 // producer runtime state is available to this invocation.
                 let verifier =
-                    NativeDeployment::admit(&bytes, &hex(&Sha256::digest(&bytes))).unwrap();
+                    NativeDeployment::admit(bytes, &hex(&Sha256::digest(bytes))).unwrap();
                 let validated = verifier.execute(&input(false, 0), Some(&proof)).unwrap();
                 assert!(validated.cleanup_errors.is_empty());
                 validated.outcome.unwrap();

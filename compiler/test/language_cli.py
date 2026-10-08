@@ -124,6 +124,9 @@ for name in ('record', 'array', 'loop', 'variant', 'resource', 'component',
             flags = [] if optimized else ['--no-simplify']
             bundle = commands.run([compiler, 'language-bundle', *args, *flags])
             (OUT / f'typed-{name}-{optimized}.bundle').write_text(bundle)
+            if optimized:
+                package = commands.run([compiler, 'language-package', *args, *flags])
+                (OUT / f'typed-{name}.entry').write_text(package)
         schema = json.loads(commands.run([compiler, 'language-interface', *args]))
         schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
         for direction in ('inputs', 'outputs'):
@@ -218,6 +221,27 @@ for fixture, entry in [('relation_sumcheck', 'Demo'), ('relation_sumcheck', 'Pro
             flags = [] if optimized else ['--no-simplify']
             bundle = commands.run([compiler, 'language-bundle', *args, *flags])
             (OUT / f'{fixture}-{entry}-{optimized}.bundle').write_text(bundle)
+
+with case('maximum source schema depth binds in the native Host'):
+    nested = 'bool'
+    for _ in range(30):
+        nested = f'({nested},)'
+    source = OUT / 'deep-schema.zkc'
+    source.write_text(f"""module deep;
+type Inner = {nested};
+type Deep = (Inner,);
+protocol Identity roles(P)(value:Deep@P)->(result:Deep@P){{return(result=value);}}
+entry Demo=Identity;
+""")
+    args = ['--source-format=zkc', '--entry=deep::Demo', f'--module=deep={source}']
+    package = commands.run([compiler, 'language-package', *args])
+    schema = json.loads(json.loads(package)['interface'])['protocols'][0]['inputs'][0]['schema']
+    depth = 1
+    while schema['fields']:
+        schema = schema['fields'][0]['schema']
+        depth += 1
+    assert depth == 32
+    (OUT / 'deep-schema.entry').write_text(package)
 
 for suite, identity in enumerate(('merlin3.bls12-381.fr64be/1',
                                    'spongefish0.7.4.keccak.bls12-381.fr64be/1')):

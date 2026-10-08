@@ -74,14 +74,18 @@ defines exact selection and refusal rules.
 
 `language-package` wraps the original, source interface and compiled artifact in
 one exact publication. Rust `zkc_tools::entry::Package::capture` authenticates the
-outer package against an application-supplied digest; native interface binding
-and named execution are still being implemented.
+outer package against an application-supplied digest. `Interface::read` checks
+its bounded schema, logical names, selectors and Entry choices. `check_run` and
+`check_proof` bind that view to the exact admitted native artifact and its ports.
+Proof binding also checks the original digest, compile options and construction.
+These checks rely on the authenticated compiler publication for source
+correspondence; the Rust Host does not interpret the retained MLIR. Named
+execution is still being implemented.
 
 `language-bundle` emits the existing native proof deployment for a proof Entry;
 its producer and validator use the [shared proof host](../compiler/native-proofs.md).
 At this stage invocation still uses native port maps and explicit deployment
-pins. Named source inputs and authenticated source packages belong to the ongoing
-Host implementation.
+pins. Named source inputs belong to the ongoing Host implementation.
 
 ## Local code and reusable types
 

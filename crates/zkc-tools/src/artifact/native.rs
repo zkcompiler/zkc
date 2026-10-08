@@ -22,20 +22,22 @@ use zkc_runtime::{
 };
 
 #[derive(Clone, Debug)]
-struct Port {
-    original: usize,
-    logical: LogicalType,
+pub(crate) struct Port {
+    pub(crate) original: usize,
+    pub(crate) logical: LogicalType,
 }
 #[derive(Clone, Debug)]
-struct RoleMap {
-    data: Vec<Port>,
-    services: Vec<usize>,
-    outputs: Vec<Port>,
+pub(crate) struct RoleMap {
+    pub(crate) data: Vec<Port>,
+    pub(crate) services: Vec<usize>,
+    pub(crate) outputs: Vec<Port>,
 }
 /// Immutable deployment admitted against an independently supplied digest.
 #[derive(Clone, Debug)]
 pub struct NativeDeployment {
     version: u8,
+    publication: String,
+    choices: [bool; 2],
     external_work_limit: u64,
     capacity: NativeCapacity,
     setups: SetupAuthority,
@@ -44,6 +46,17 @@ pub struct NativeDeployment {
     descriptor: Json,
     public: Vec<Port>,
     maps: BTreeMap<String, RoleMap>,
+}
+pub(crate) struct SourceInterface<'a> {
+    pub version: u8,
+    pub publication: &'a str,
+    pub source: &'a str,
+    pub choices: [bool; 2],
+    pub acceptance: usize,
+    pub suite: Option<&'a str>,
+    pub service: Option<usize>,
+    pub public: &'a [Port],
+    pub roles: &'a BTreeMap<String, RoleMap>,
 }
 fn index(value: &Json) -> Result<usize> {
     let n = logical::natural_index(text(value)?).map_err(|e| e.to_string())?;
@@ -628,6 +641,8 @@ impl NativeDeployment {
         .map_err(|e| e.to_string())?;
         Ok(Self {
             version,
+            publication: expected_sha256.to_owned(),
+            choices: [choices[0] == "true", choices[1] == "true"],
             external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             capacity: NativeCapacity::default(),
             setups,
@@ -649,6 +664,24 @@ impl NativeDeployment {
     }
     pub fn entry(&self) -> &NativeProofEntry {
         &self.entry
+    }
+    // The source Host consumes this admitted view rather than decoding the
+    // deployment carrier again or keeping a second interpretation of its ABI.
+    pub(crate) fn source_interface(&self) -> SourceInterface<'_> {
+        let policy = &self.descriptor[1];
+        let suite = policy[5].as_str().expect("admitted policy suite");
+        let service = policy[6].as_str().expect("admitted policy service");
+        SourceInterface {
+            version: self.version,
+            publication: &self.publication,
+            source: &self.source,
+            choices: self.choices,
+            acceptance: index(&policy[4]).expect("admitted acceptance"),
+            suite: (!suite.is_empty()).then_some(suite),
+            service: (!service.is_empty()).then(|| index(&policy[6]).expect("admitted service")),
+            public: &self.public,
+            roles: &self.maps,
+        }
     }
 
     /// Configure each invocation's external primitive-work cap, up to the
