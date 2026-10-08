@@ -270,4 +270,10 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/1',
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.entry').write_text(package)
 
+with case('publish authored proof with logical products and empty public inputs'):
+    args = ['--source-format=zkc', '--entry=sample::Demo',
+            f'--module=sample={FIXTURES / "host_proof.zkc"}']
+    package = commands.run([compiler, 'language-package', *args])
+    (OUT / 'host-proof.entry').write_text(package)
+
 counted()

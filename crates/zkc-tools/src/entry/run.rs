@@ -1,6 +1,6 @@
 //! Named source calls adapt to the common native Host. There is no source
 //! evaluator here: the bound interface supplies names and product/sum layouts.
-use super::{Interface, Package, Value, value};
+use super::{Interface, Package, Value, arguments, value};
 use crate::protocol::run::{
     self as native, HostLimits, HostReport, Outcome, RunHost, SetupAuthority,
 };
@@ -74,40 +74,18 @@ impl RunEntry {
         }
         let mut roles = Vec::new();
         for role in &protocol.roles {
-            let mut values = request.roles.remove(role).ok_or("entry-input-roles")?;
-            let ports: Vec<_> = protocol
-                .inputs
-                .iter()
-                .filter(|port| port.roles.contains(role))
-                .collect();
-            if values.inputs.len() != ports.len() {
-                return Err("entry-input-names".into());
-            }
-            let mut inputs = Vec::new();
-            for port in ports {
-                let value = values
+            let values = request.roles.remove(role).ok_or("entry-input-roles")?;
+            let inputs = arguments::values(
+                protocol
                     .inputs
-                    .remove(&port.name)
-                    .ok_or("entry-input-names")?;
-                value::flatten(&port.schema, value, &mut inputs)?;
-            }
-            let declarations: Vec<_> = protocol
-                .services
-                .iter()
-                .filter(|s| &s.owner == role)
-                .collect();
-            if values.services.len() != declarations.len() {
-                return Err("entry-service-names".into());
-            }
-            let mut services = Vec::new();
-            for declaration in declarations {
-                services.push(
-                    values
-                        .services
-                        .remove(&declaration.name)
-                        .ok_or("entry-service-names")?,
-                );
-            }
+                    .iter()
+                    .filter(|port| port.roles.contains(role)),
+                values.inputs,
+            )?;
+            let services = arguments::services(
+                protocol.services.iter().filter(|s| &s.owner == role),
+                values.services,
+            )?;
             roles.push(native::RoleInputs {
                 role: role.clone(),
                 inputs,
@@ -132,6 +110,7 @@ pub struct PreparedRun<'a> {
 }
 /// Native outcomes and cleanup remain observable even when no complete logical
 /// result exists. Outputs are published only on completion with successful cleanup.
+#[must_use = "inspect the execution outcome and cleanup report"]
 pub struct RunReport {
     pub native: HostReport,
     pub outputs: Option<RoleValues>,

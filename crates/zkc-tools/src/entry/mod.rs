@@ -14,3 +14,7 @@ mod value;
 pub use value::Value;
 mod run;
 pub use run::{NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport, RunRequest};
+
+mod arguments;
+mod proof;
+pub use proof::{BindingPolicy, BindingScope, ProofEntry, ProofOptions, ProofReport, ProofRequest};

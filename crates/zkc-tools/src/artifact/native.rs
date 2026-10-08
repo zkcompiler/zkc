@@ -1,6 +1,9 @@
 //! Independent proof execution with an application-pinned deployment.
 mod attempts;
+mod inputs;
 pub use crate::host::capacity::NativeCapacity;
+pub use crate::host::request::InputValue;
+pub use inputs::ProofInputs;
 mod setups;
 use super::{driver, entropy::Entropy, host, io::*, material::MaterialCache};
 use crate::host::admission::{Admission, Input, Operand, ResourceInput, entry_values};
@@ -16,7 +19,7 @@ use zkc_backends::{
 use zkc_runtime::{
     interactive::{
         EntryRole, Identity, LogicalType, NativeProofEntry, NativeTranscriptEvent, PhysicalType,
-        ProgramAction, Runner, Type, Value as RuntimeValue, admit_supplied,
+        ProgramAction, Runner, Type, admit_supplied,
     },
     logical,
 };
@@ -57,6 +60,23 @@ pub(crate) struct SourceInterface<'a> {
     pub service: Option<usize>,
     pub public: &'a [Port],
     pub roles: &'a BTreeMap<String, RoleMap>,
+}
+enum Mode<'a> {
+    Prove,
+    Verify(&'a [u8]),
+    Attempts(attempts::Plan),
+}
+impl<'a> Mode<'a> {
+    fn one_shot(proof: Option<&'a [u8]>) -> Self {
+        proof.map_or(Self::Prove, Self::Verify)
+    }
+}
+#[cfg(feature = "test-utils")]
+fn test_entropy(tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>) -> Result<Entropy> {
+    if tapes.len() > 1024 || tapes.values().any(|t| t.len() > 1_000_000) {
+        return Err("native-proof-test-entropy-limit".into());
+    }
+    Ok(Entropy::Tapes(tapes))
 }
 fn index(value: &Json) -> Result<usize> {
     let n = logical::natural_index(text(value)?).map_err(|e| e.to_string())?;
@@ -698,17 +718,18 @@ impl NativeDeployment {
         Ok(self)
     }
 
-    /// Execute one independently admitted role. The input record contains actual
-    /// public bindings and role inputs; it cannot authorize a different program.
-    /// The application authenticates these public values, including complete
-    /// verifier key bytes, independently of the candidate proof. This method
-    /// checks canonicality and consistency, not the application's authorization.
+    /// Execute one independently admitted role. Public values, including complete
+    /// verifier key bytes, must be authorized independently of the proof. This
+    /// checks canonicality and consistency, not application authorization.
     pub fn execute(&self, input: &Json, proof: Option<&[u8]>) -> Result<NativeProofReport> {
-        self.execute_with_entropy(input, proof, &Entropy::System, None)
+        self.execute_with_entropy(
+            inputs::Request::Encoded(input),
+            Mode::one_shot(proof),
+            &Entropy::System,
+        )
     }
-
-    /// Deterministic provider controls keyed by original producer input/service
-    /// port. No file format or production command selects this test-only path.
+    /// Deterministic provider controls keyed by original input/service port.
+    /// No file format or production command selects this test-only path.
     #[cfg(feature = "test-utils")]
     pub fn execute_test(
         &self,
@@ -716,12 +737,12 @@ impl NativeDeployment {
         proof: Option<&[u8]>,
         tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
     ) -> Result<NativeProofReport> {
-        if tapes.len() > 1024 || tapes.values().any(|t| t.len() > 1_000_000) {
-            return Err("native-proof-test-entropy-limit".into());
-        }
-        self.execute_with_entropy(input, proof, &Entropy::Tapes(tapes), None)
+        self.execute_with_entropy(
+            inputs::Request::Encoded(input),
+            Mode::one_shot(proof),
+            &test_entropy(tapes)?,
+        )
     }
-
     /// Run bounded attempts. Policy ports use original common-program indices.
     /// Only a returned Boolean permits retry. The resulting bytes are unpublished.
     pub fn execute_attempts(
@@ -729,9 +750,12 @@ impl NativeDeployment {
         input: &Json,
         policy: &AttemptPolicy,
     ) -> Result<NativeProofReport> {
-        self.execute_with_entropy(input, None, &Entropy::System, Some(policy))
+        self.execute_with_entropy(
+            inputs::Request::Encoded(input),
+            Mode::Attempts(policy.check(self)?),
+            &Entropy::System,
+        )
     }
-
     #[cfg(feature = "test-utils")]
     pub fn execute_attempts_test(
         &self,
@@ -739,309 +763,108 @@ impl NativeDeployment {
         policy: &AttemptPolicy,
         tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
     ) -> Result<NativeProofReport> {
-        if tapes.len() > 1024 || tapes.values().any(|t| t.len() > 1_000_000) {
-            return Err("native-proof-test-entropy-limit".into());
-        }
-        self.execute_with_entropy(input, None, &Entropy::Tapes(tapes), Some(policy))
+        let entropy = test_entropy(tapes)?;
+        self.execute_with_entropy(
+            inputs::Request::Encoded(input),
+            Mode::Attempts(policy.check(self)?),
+            &entropy,
+        )
     }
-
+    /// Execute immutable in-process data and explicit provider declarations.
+    /// Public values are authorized independently of the candidate proof.
+    pub fn execute_typed(
+        &self,
+        input: &ProofInputs,
+        proof: Option<&[u8]>,
+    ) -> Result<NativeProofReport> {
+        self.execute_with_entropy(
+            inputs::Request::Typed(input),
+            Mode::one_shot(proof),
+            &Entropy::System,
+        )
+    }
+    pub fn execute_attempts_typed(
+        &self,
+        input: &ProofInputs,
+        policy: &AttemptPolicy,
+    ) -> Result<NativeProofReport> {
+        self.execute_with_entropy(
+            inputs::Request::Typed(input),
+            Mode::Attempts(policy.check(self)?),
+            &Entropy::System,
+        )
+    }
+    #[cfg(feature = "test-utils")]
+    pub fn execute_typed_test(
+        &self,
+        input: &ProofInputs,
+        proof: Option<&[u8]>,
+        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
+    ) -> Result<NativeProofReport> {
+        self.execute_with_entropy(
+            inputs::Request::Typed(input),
+            Mode::one_shot(proof),
+            &test_entropy(tapes)?,
+        )
+    }
+    #[cfg(feature = "test-utils")]
+    pub fn execute_attempts_typed_test(
+        &self,
+        input: &ProofInputs,
+        policy: &AttemptPolicy,
+        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
+    ) -> Result<NativeProofReport> {
+        let entropy = test_entropy(tapes)?;
+        self.execute_with_entropy(
+            inputs::Request::Typed(input),
+            Mode::Attempts(policy.check(self)?),
+            &entropy,
+        )
+    }
     fn execute_with_entropy(
         &self,
-        input: &Json,
-        proof: Option<&[u8]>,
+        request: inputs::Request<'_>,
+        mode: Mode<'_>,
         entropy: &Entropy,
-        attempts: Option<&AttemptPolicy>,
     ) -> Result<NativeProofReport> {
-        let attempt_plan = attempts.map(|p| p.check(self)).transpose()?;
-        logical::tree_size(input).map_err(|e| e.to_string())?;
+        let (proof, attempts) = match mode {
+            Mode::Prove => (None, None),
+            Mode::Verify(proof) => (Some(proof), None),
+            Mode::Attempts(plan) => (None, Some(plan)),
+        };
         if proof.is_some_and(|p| p.len() > super::MAX_PROOF_BYTES) {
             return Err("native-proof-proof-limit".into());
         }
-        let input = array(input, 6)?;
-        if text(&input[0])? != "zkc.native-proof-inputs/1" {
-            return Err("native-proof-inputs".into());
-        }
+        let decoded;
+        let input = match request {
+            inputs::Request::Encoded(input) => {
+                decoded = inputs::decode(self, input, proof.is_none())?;
+                &decoded
+            }
+            inputs::Request::Typed(input) => input,
+        };
         let role = if proof.is_none() {
             self.entry.producer()
         } else {
             self.entry.validator()
         };
         let mapping = &self.maps[&role.role];
-
-        if text(&input[3])?.len() > 8192 {
-            return Err("native-proof-context-limit".into());
-        }
-        let context = unhex(&input[3])?;
-        let public_rows = list(&input[1])?;
-        if public_rows.len() != self.public.len() {
-            return Err("native-proof-public-inputs".into());
-        }
-        // Import the canonical VK under the separately authorized pin before
-        // any PCS message. Candidate headers cannot extend configuration.
-        // Old profiles cannot declare this host-only public port.
-        let mut cache = MaterialCache::disabled();
+        let inputs::Prepared {
+            mut backend,
+            loaded,
+            planned,
+            root,
+            binding,
+        } = inputs::prepare(self, input, role, proof.is_none())?;
         let policy = self.capacity.backend();
-        let mut keys = BTreeMap::new();
-        let mut material = BTreeMap::new();
-        for (row, port) in public_rows.iter().zip(&self.public) {
-            if port.logical.kind() == Type::VerifierKey {
-                let row = array(row, 3)?;
-                if text(&row[0])? != self.entry.validator().role || index(&row[1])? != port.original
-                {
-                    return Err("native-proof-public-inputs".into());
-                }
-                let bytes = self.capacity.wire(&row[2])?;
-                let vk = zkc_arkworks::VerifierKey::from_bytes(
-                    &bytes,
-                    *self
-                        .setups
-                        .keys
-                        .get(&port.original)
-                        .ok_or("native-proof-key-authority")?,
-                    &policy.ark_bounds(),
-                )
-                .map_err(|e| e.to_string())?;
-                if vk
-                    .to_bytes(&policy.ark_bounds())
-                    .map_err(|e| e.to_string())?
-                    != bytes
-                {
-                    return Err("native-proof-canonical-key".into());
-                }
-                let key = std::sync::Arc::new(vk);
-                material.entry(bytes).or_insert_with(|| key.clone());
-                keys.insert(port.original, key);
-            }
-        }
-        // Only byte-identical material is deduplicated. A metadata collision
-        // between distinct encodings is rejected by SetupRegistry.
-        let registry = zkc_backends::SetupRegistry::new(
-            material.values().map(|k| k.as_ref().clone()).collect(),
-            &policy,
-        )
-        .map_err(|e| e.to_string())?;
-        let mut constraints = BTreeMap::new();
-        for (port, (name, _)) in mapping.data.iter().zip(&role.inputs) {
-            // Aggregate leaves are checked recursively by the host below;
-            // direct operands also carry the backend's entry constraint.
-            let key = if port.logical.kind() == Type::VerifierKey {
-                keys.get(&port.original)
-            } else if matches!(
-                port.logical.kind(),
-                Type::ProverKey | Type::Commitment | Type::Proof
-            ) {
-                self.setups
-                    .inputs
-                    .get(&port.original)
-                    .and_then(|key| keys.get(key))
-            } else {
-                None
-            };
-            if let Some(key) = key {
-                constraints.insert(
-                    name.clone(),
-                    zkc_backends::PortConstraint {
-                        arity: None,
-                        setup: Some(key.metadata()),
-                    },
-                );
-            }
-        }
-        let mut backend = backend(policy, role, self.entry.entry(), registry, constraints)?
-            .with_external_work_limit(self.external_work_limit);
-        let mut admission = Admission::new(self.capacity.loading());
-        let mut public_bytes = BTreeMap::new();
-        let mut admitted_public = BTreeMap::new();
-        let role_types: BTreeMap<_, _> = mapping
-            .data
-            .iter()
-            .zip(&role.inputs)
-            .map(|(port, (_, ty))| (port.original, ty))
-            .collect();
-        let mut bound_public = Vec::new();
-        for (row, port) in public_rows.iter().zip(&self.public) {
-            let row = array(row, 3)?;
-            if text(&row[0])? != self.entry.validator().role || index(&row[1])? != port.original {
-                return Err("native-proof-public-inputs".into());
-            }
-            let bytes = self.capacity.wire(&row[2])?;
-            let ty = PhysicalType::default_for(port.logical.clone()).map_err(|e| e.to_string())?;
-            // The admitted native codecs accept only canonical encodings.
-            if port.logical.kind() != Type::VerifierKey {
-                let selected = self
-                    .setups
-                    .inputs
-                    .get(&port.original)
-                    .map(|key| keys[key].clone());
-                let id = admission.native_wire(&backend, ty.clone(), bytes.clone(), selected)?;
-                // Every public declaration is validated, including values not
-                // passed to this role. Reuse only the exact matching role type.
-                if role_types
-                    .get(&port.original)
-                    .is_some_and(|expected| **expected == ty)
-                {
-                    admitted_public.insert(port.original, id);
-                }
-            }
-            bound_public.push(json!([
-                self.entry.validator().role,
-                port.original.to_string(),
-                port.logical.spelling(),
-                hex(&bytes)
-            ]));
-            public_bytes.insert(port.original, bytes);
-        }
-        let root = json!([
-            format!("zkc.native-proof-binding/{}", self.version),
-            "sha256",
-            self.descriptor[2],
-            self.source,
-            self.entry.entry(),
-            self.entry.producer().role,
-            self.entry.validator().role,
-            self.descriptor,
-            bound_public,
-            hex(&context),
-            [],
-            [],
-            []
-        ]);
-        let root = logical::encode_tree(&root).map_err(|e| e.to_string())?;
-        let binding: [u8; 32] = Sha256::digest(&root).into();
+        let transcript_budget = input.transcript_budget;
+        let service_budgets = input.services.iter().copied();
         let domain = Domain::new(
             &role.role,
             "native-proof",
             self.entry.entry(),
             Some(&role.instance),
         );
-        let data = list(&input[2])?;
-        if data.len() != mapping.data.len() {
-            return Err("native-proof-role-inputs".into());
-        }
-        // Parse every row and decode public/data values before issuing entropy
-        // or transcript resources. Setup and execution then share one retirement path.
-        let mut planned = Vec::new();
-        for ((row, port), (_, ty)) in data.iter().zip(&mapping.data).zip(&role.inputs) {
-            let row = array(row, 2)?;
-            if index(&row[0])? != port.original {
-                return Err("native-proof-role-inputs".into());
-            }
-            let spec = array(&row[1], 2)?;
-            let kind = text(&spec[0])?;
-            if kind != input_kind(ty, self.version)? {
-                return Err("native-proof-role-input-kind".into());
-            }
-            let item = match kind {
-                "wire" => {
-                    let bytes = self.capacity.wire(&spec[1])?;
-                    if public_bytes
-                        .get(&port.original)
-                        .is_some_and(|public| *public != bytes)
-                    {
-                        return Err("native-proof-shared-public-input".into());
-                    }
-                    let id = if let Some(&id) = admitted_public.get(&port.original) {
-                        id
-                    } else {
-                        let selected = self
-                            .setups
-                            .inputs
-                            .get(&port.original)
-                            .map(|key| keys[key].clone());
-                        admission.native_wire(&backend, ty.clone(), bytes, selected)?
-                    };
-                    admission.data(id, ty.kind())?
-                }
-                "verifier_key" => {
-                    if index(&spec[1])? != port.original
-                        || !public_bytes.contains_key(&port.original)
-                    {
-                        return Err("native-proof-key-port".into());
-                    }
-                    let value = Value::VerifierKey(
-                        keys.get(&port.original)
-                            .cloned()
-                            .ok_or("native-proof-setup-required")?,
-                    );
-                    if value.physical_type() != *ty {
-                        return Err("native-proof-role-input-type".into());
-                    }
-                    let id = admission.add(Input::Ready(value), &policy)?;
-                    admission.data(id, ty.kind())?
-                }
-                "prover_key_file" if proof.is_none() => {
-                    let material = array(&spec[1], 2)?;
-                    let fingerprint = unhex(&material[1])?
-                        .try_into()
-                        .map_err(|_| "native-proof-material-pin")?;
-                    let id = admission.add(
-                        Input::Key {
-                            path: text(&material[0])?,
-                            fingerprint,
-                            verifier: keys
-                                .get(
-                                    self.setups
-                                        .inputs
-                                        .get(&port.original)
-                                        .ok_or("native-proof-key-authority")?,
-                                )
-                                .cloned()
-                                .ok_or("native-proof-setup-required")?,
-                        },
-                        &policy,
-                    )?;
-                    admission.data(id, ty.kind())?
-                }
-                "nonce" | "rng" => admission.resource(ResourceInput {
-                    kind: ty.kind(),
-                    field: ty.logical().identity(),
-                    budget: budget(&spec[1])?,
-                })?,
-                _ => return Err("native-proof-role-input-kind".into()),
-            };
-            planned.push(item);
-        }
-        let transcript_budget = budget(&input[5])?;
-        if self.entry.transcript().is_none() && transcript_budget != 0 {
-            return Err("native-proof-unselected-transcript".into());
-        }
-        let service_rows = list(&input[4])?;
-        if service_rows.len() != mapping.services.len() {
-            return Err("native-proof-service-inputs".into());
-        }
-        let service_budgets = service_rows
-            .iter()
-            .zip(&mapping.services)
-            .map(|(row, port)| {
-                let row = array(row, 2)?;
-                if index(&row[0])? != *port {
-                    return Err("native-proof-service-inputs".into());
-                }
-                budget(&row[1])
-            })
-            .collect::<Result<Vec<_>>>()?;
-        if let Some(ty) = self.entry.transcript() {
-            if root.len() > policy.max_wire_bytes || root.len() > isize::MAX as usize {
-                return Err("native-capacity-wire".into());
-            }
-            // One entry slot is live at a time, including when the attempt
-            // controller issues a fresh transcript for each sequential try.
-            admission.resource(ResourceInput {
-                kind: Type::Transcript,
-                field: ty.logical().identity(),
-                budget: transcript_budget,
-            })?;
-        }
-        // All records and cumulative key/value/capability budgets precede PK
-        // file reads and entropy issuance.
-        let loaded = admission.load_cached(&backend, &policy, &mut cache)?;
-        let mut values = entry_values(&planned, &loaded);
-        if self.entry.transcript().is_some() {
-            values.push(None);
-        }
-        backend
-            .check_entry_values(role, &values)
-            .map_err(|e| e.to_string())?;
         let registry = ServiceRegistry::new(policy);
         let mut resources: Vec<Capability> = Vec::new();
         let mut services: Vec<ServiceReference> = Vec::new();
@@ -1113,7 +936,7 @@ impl NativeDeployment {
             attempts: Vec::new(),
             return_at: None,
             stop: None,
-            attempt_policy: attempts.map(AttemptPolicy::identity),
+            attempt_policy: attempts.as_ref().map(|plan| plan.policy.identity()),
             usage: Default::default(),
             external_work: 0,
             external_work_limit: self.external_work_limit,
@@ -1121,8 +944,8 @@ impl NativeDeployment {
         };
         match setup {
             Err(error) => report.outcome = Err(error),
-            Ok(values) if attempt_plan.is_some() => {
-                let plan = attempt_plan.as_ref().expect("checked attempt policy");
+            Ok(values) if attempts.is_some() => {
+                let plan = attempts.as_ref().expect("checked attempt policy");
                 backend = attempts::execute(
                     self,
                     backend,
@@ -1268,9 +1091,7 @@ fn retire_resources(
 }
 fn budget(value: &Json) -> Result<u64> {
     let n = logical::natural_index(text(value)?).map_err(|e| e.to_string())?;
-    if n > 1_000_000 {
-        return Err("native-proof-budget".into());
-    }
+    inputs::check_budget(n)?;
     Ok(n)
 }
 pub struct NativeProofReport {

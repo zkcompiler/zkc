@@ -402,6 +402,42 @@ proof value and checked by the validator; a joint driver's agreement check is
 unavailable in independent proof execution. Zero trips execute no body draws or
 absorptions. Program and metadata size remain independent of runtime trip count.
 
+### Typed invocation inputs
+
+`NativeDeployment::execute_typed(&ProofInputs, proof)` and
+`execute_attempts_typed(&ProofInputs, policy)` share preparation, issuance,
+execution and cleanup with positional invocation records. The adapter checks
+explicit original port selectors before constructing the typed request. Typed
+vectors follow the admitted public, role-input and service order exactly.
+Context is a byte vector of at most 4096 bytes; provider/transcript budgets retain
+the one-million-transition ceiling. Attempt policy admission precedes request
+parsing, material loading and entropy issuance.
+
+Public values are independently authorized by the caller. Ordinary public and
+private data use shared `InputValue::Native`, `Wire` or `Variant` constructors.
+Native values retain upstream library invariants and undergo the same complete
+physical type, installed profile, setup and entry checks as decoded data.
+Public verifier keys require canonical wire bytes and independently installed
+pins. A role's unit `VerifierKey` declaration selects its admitted public key;
+a prover key uses its separate authenticated material constructor. Foreign
+capabilities or key handles cannot enter through ordinary native data.
+
+Constructor shapes, complete native types, wire lengths and the statically known
+binding-root size are checked before importing verifier keys. The whole
+invocation reserves loading capacity before data decoding, key-file
+reads or entropy issuance. Public verifier-key import scans consume cumulative
+work and registry material consumes retention, including receive-only keys.
+Immutable values are validated before loading other wire/file inputs. Public
+native values are canonically encoded for the binding; private native values
+need no serialization unless they also occupy a public port. Every shared role
+operand must have the same canonical bytes as its independently supplied public
+value. Mismatch returns `native-proof-shared-public-input` before execution.
+Wire requests retain exact-byte agreement and reuse the matching admitted public
+value. Additional native encoding work is reserved before loading, and binding
+hex expansion is bounded before allocating its strings. Invocation loading
+capacity and per-attempt execution budgets are distinct: a valid request may
+load successfully and then report an execution limit at its first attempt.
+
 ### Typed participant results
 
 `NativeProofReport::outputs` contains successful copyable results keyed by their

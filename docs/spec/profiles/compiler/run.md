@@ -326,7 +326,9 @@ there is no protocol-specific dispatch.
 request contains the session, exact ordered `RoleInputs` (role name, data inputs,
 service budgets), and named verifier-key bytes. `InputValue` accepts bounded native
 wire bytes, supported immutable native values, RNG/nonce budget declarations,
-authorized verifier-key names or authenticated prover-key files. `From<Value>`
+the verifier key assigned by admitted setup authority, or authenticated
+prover-key files. The typed `VerifierKey` declaration carries no repeated selector;
+the positional adapter checks its named selector against that assignment. `From<Value>`
 constructs the immutable-value case. Native values must match the complete
 physical type, be duplicable, and belong to the installed native wire profile;
 private capabilities and key handles cannot enter through that case. No encoding

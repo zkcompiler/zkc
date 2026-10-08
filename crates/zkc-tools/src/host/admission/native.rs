@@ -4,7 +4,67 @@ use super::*;
 use crate::host::request::InputValue;
 use zkc_backends::{NativeInputSize, Variant};
 
+/// Check constructor shape and byte bounds before setup imports. The admitted
+/// type bounds recursion; backend validation/loading remains a later phase.
+pub(crate) fn check_native_data(
+    ty: &PhysicalType,
+    request: &InputValue,
+    capacity: crate::host::capacity::NativeCapacity,
+) -> Result<()> {
+    match request {
+        InputValue::Wire(bytes) => capacity.check_wire(bytes.len()),
+        InputValue::Native(value) => Input::native_value(ty.clone(), value, None).map(|_| ()),
+        InputValue::Variant {
+            alternative,
+            payload,
+        } => {
+            let logical = ty.logical();
+            let descriptor = logical.variant_descriptor().ok_or("native-input-type")?;
+            let arm = descriptor
+                .alternatives()
+                .get(*alternative)
+                .ok_or("native-input-alternative")?;
+            if !ty.is_duplicable() {
+                return Err("native-input-private".into());
+            }
+            if arm.payload().len() != payload.len() {
+                return Err("native-input-payload".into());
+            }
+            for (expected, child) in arm.payload().iter().zip(payload) {
+                let physical =
+                    PhysicalType::default_for(expected.clone()).map_err(|e| e.to_string())?;
+                check_native_data(&physical, child, capacity)?;
+            }
+            Ok(())
+        }
+        _ => Err("native-input-private".into()),
+    }
+}
+
 impl<'a> Admission<'a> {
+    /// Plan immutable native data using the same complete invocation budget.
+    pub fn native_data(
+        &mut self,
+        backend: &NativeBackend,
+        ty: PhysicalType,
+        request: &'a InputValue,
+        selected: Option<Arc<VerifierKey>>,
+    ) -> Result<usize> {
+        match request {
+            InputValue::Native(value) => {
+                self.add(Input::native_value(ty, value, selected)?, backend.policy())
+            }
+            InputValue::Wire(bytes) => self.native_wire(backend, ty, bytes.as_slice(), selected),
+            InputValue::Variant { .. } => self.native_variant(backend, ty, request, selected),
+            _ => Err("native-input-private".into()),
+        }
+    }
+    /// Canonical public binding and shared-input comparison traverse a loaded
+    /// value once more. Reserve that work before loading any invocation data.
+    pub fn charge_encoding(&mut self, id: usize) -> Result<()> {
+        self.work(self.inputs[id].1)
+    }
+
     pub fn native_variant(
         &mut self,
         backend: &NativeBackend,

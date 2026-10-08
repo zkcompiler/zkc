@@ -14,7 +14,9 @@ use zkc_runtime::{
 };
 use zkc_tools::artifact::{
     hex,
-    native::{AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport},
+    native::{
+        AttemptPolicy, InputValue, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs,
+    },
 };
 
 fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
@@ -217,6 +219,74 @@ fn run(directory: &Path, case: &Json) {
         assert!(!outputs.contains_key(&2));
     }
     assert_eq!(draws(&result, fold), 2);
+    // The in-process path keeps the same actual provider advances and final
+    // transcript as the positional transport, including RNG successor reuse.
+    let codec = NativeBackend::new(
+        Policy::default(),
+        EntryPolicy::new(
+            Domain::new("P", "test", "main", None),
+            None,
+            PublicInputs::LocalOnly,
+        ),
+        None,
+    )
+    .unwrap();
+    let decode_hex = |v: &Json| -> Vec<u8> {
+        v.as_str()
+            .unwrap()
+            .as_bytes()
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+            .collect()
+    };
+    let typed = ProofInputs {
+        public: producer[1]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| InputValue::Wire(decode_hex(&row[2])))
+            .collect(),
+        inputs: producer[2]
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip(&deployment.entry().producer().inputs)
+            .map(|(row, (_, ty))| {
+                if row[1][0] == "rng" {
+                    InputValue::Resource {
+                        budget: row[1][1].as_str().unwrap().parse().unwrap(),
+                    }
+                } else {
+                    codec
+                        .decode_native_value(ty, &decode_hex(&row[1][1]))
+                        .unwrap()
+                        .into()
+                }
+            })
+            .collect(),
+        context: Vec::new(),
+        services: producer[4]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row[1].as_str().unwrap().parse().unwrap())
+            .collect(),
+        transcript_budget: 64,
+    };
+    let in_process = deployment
+        .execute_attempts_typed_test(&typed, &p, tapes(&[0, 3]))
+        .unwrap();
+    assert_eq!(in_process.outcome, result.outcome);
+    assert_eq!(in_process.binding, result.binding);
+    assert_eq!(in_process.resources, result.resources);
+    assert_eq!(in_process.attempts.len(), result.attempts.len());
+    assert_eq!(in_process.instructions, result.instructions);
+    assert!(matches!(
+        in_process.outputs.as_ref().unwrap().get(&1),
+        Some(Value::Bool(true))
+    ));
     let proof = result.outcome.as_ref().unwrap();
     assert!(
         deployment

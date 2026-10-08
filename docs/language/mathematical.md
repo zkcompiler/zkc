@@ -79,13 +79,19 @@ its bounded schema, logical names, selectors and Entry choices. `check_run` and
 `check_proof` bind that view to the exact admitted native artifact and its ports.
 Proof binding also checks the original digest, compile options and construction.
 These checks rely on the authenticated compiler publication for source
-correspondence; the Rust Host does not interpret the retained MLIR. Named
-execution is still being implemented.
+correspondence; the Rust Host does not interpret the retained MLIR. `RunEntry`
+and `ProofEntry` perform this admission and accept named logical values through
+the same common runtimes.
 
 `language-bundle` emits the existing native proof deployment for a proof Entry;
 its producer and validator use the [shared proof host](../compiler/native-proofs.md).
-At this stage invocation still uses native port maps and explicit deployment
-pins. Named source inputs belong to the ongoing Host implementation.
+The package SDK supplies named `RunRequest` and `ProofRequest` calls. Prove and
+verify are independent; the verifier needs its public values and role inputs,
+without a prover witness or live peer. Products, variants and unit values follow
+the checked interface. Successful reports return named copyable outputs after
+cleanup. Authored jobs require explicit `BindingPolicy::AllowHeaderOnly`;
+derived transcript jobs use the default policy. Explicit source setup
+initialization, package CLI and generated thin bindings remain in progress.
 
 ## Local code and reusable types
 

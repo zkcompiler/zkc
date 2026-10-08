@@ -409,7 +409,7 @@ fn typed_key_imports_use_explicit_authorized_constructors() {
                     fingerprint: keys.prover_key().material_fingerprint(),
                 }
             } else {
-                InputValue::VerifierKey("setup".into())
+                InputValue::VerifierKey
             }
         });
         inputs.setups.insert(

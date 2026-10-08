@@ -4,6 +4,7 @@ use super::{
     inputs::{Result, read_key, text, unhex},
     material::{KeyIdentity, MaterialCache},
 };
+pub(crate) use native::check_native_data;
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};

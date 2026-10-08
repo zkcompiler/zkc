@@ -17,7 +17,8 @@ pub enum InputValue {
     Resource {
         budget: u64,
     },
-    VerifierKey(String),
+    /// Use the verifier key selected by the admitted input association.
+    VerifierKey,
     ProverKeyFile {
         path: String,
         fingerprint: [u8; 32],

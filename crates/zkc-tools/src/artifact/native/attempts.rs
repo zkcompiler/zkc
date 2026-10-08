@@ -42,7 +42,7 @@ pub struct AttemptRecord {
 pub(super) struct Plan {
     completion: usize,
     rng: Vec<(usize, usize)>,
-    policy: AttemptPolicy,
+    pub(super) policy: AttemptPolicy,
 }
 impl AttemptPolicy {
     /// Bounded array/string invocation format; parsing grants no deployment authority.

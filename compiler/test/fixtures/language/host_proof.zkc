@@ -1,0 +1,17 @@
+module sample;
+domain Fr=field("bls12-381.fr");
+enum Choice {Empty(),Pair(Fr,Fr)}
+struct Payload {pub choice:Choice,pub marker:bool}
+protocol Echo roles(P,V)(payload:Payload@(P,V),empty:()@(P,V))
+  ->(accepted:bool@V,received:Payload@V,empty:()@(P,V)) {
+  let received=send P->V(payload);
+  let accepted@V=true;
+  return(accepted=accepted,received=received,empty=empty);
+}
+entry Demo=Echo {
+  prover P;
+  verifier V;
+  public{payload,empty};
+  accept accepted;
+  construction authored;
+}

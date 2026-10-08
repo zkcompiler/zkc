@@ -51,6 +51,13 @@ The typed `NativeProofReport` retains successful copyable original results for
 both participants, indexed by their original output ports. Rejection and cleanup
 failure suppress those results. Generated transcript and private successors are
 retired by the same Host; CLI diagnostics do not publish application outputs.
+`execute_typed` and `execute_attempts_typed` accept in-process immutable data and
+explicit provider/key declarations through the same preparation. Public data
+is canonically bound; private data avoids a serialization roundtrip. Source
+`entry::ProofEntry` adds named inputs/results and explicit authored binding
+acknowledgement over these methods. An outer `Ok` reports successful preparation;
+check `ProofReport::is_success()` for acceptance and complete cleanup, or use
+`into_result()` to branch while retaining the full report on failure.
 For a complete executable CLI example, see
 [separate producer and validator](../runtime/bundles.md#separate-producer-and-validator).
 

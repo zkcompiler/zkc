@@ -1,5 +1,6 @@
 mod mutations;
 mod reference;
+mod typed;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
@@ -175,6 +176,7 @@ fn key_attempts(directory: &Path, keys: &Keys) {
             work: Default::default(),
             values: Default::default(),
         };
+        typed::policy_before_file(&deployment, &producer, &policy);
         let first = deployment.execute_attempts(&producer, &policy).unwrap();
         assert_eq!(first.attempts.len(), 1);
         assert_eq!(first.attempts[0].decision, Ok(complete));
@@ -268,6 +270,9 @@ fn main() {
             let path = directory.join(format!("{n}.pk"));
             let p = inputs(&envelope, family, key, &path, true);
             let v = inputs(&envelope, family, key, &path, false);
+            if n == 1 {
+                typed::preflight(&deployment, &envelope, &p);
+            }
             let proof = accepted(&deployment, &p, None);
             let instance = (
                 family.to_owned(),

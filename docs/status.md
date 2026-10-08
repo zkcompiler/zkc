@@ -71,9 +71,14 @@ selection. `entry::RunEntry` now accepts named logical inputs and service budget
 uses shared admission for mixed native/wire variant payloads, and returns named
 copyable results after successful execution and cleanup. Compiler-generated tests
 cover nested sums/products, unit inputs/results, constructor permission and affine
-export refusal. Typed proof calls, explicit source setup associations, package CLI
-and thin Rust bindings remain in progress. Existing frontend consumers have not
-migrated.
+export refusal. `entry::ProofEntry` provides independent named prove/verify calls,
+explicit authored binding acknowledgement, and final copyable results through
+the existing native proof/attempt lifecycle. Typed public inputs are canonically
+bound and checked against shared role inputs; private native data avoids encoding.
+Controls cover exact typed/encoded proof parity, both installed source transcript
+suites, named service selection, rejection, nested authored values and unit ports.
+Explicit source setup associations, package CLI and thin Rust bindings remain in
+progress. Existing frontend consumers have not migrated.
 
 ## Foundation capability map
 

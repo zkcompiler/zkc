@@ -182,7 +182,18 @@ pub(super) fn decode(host: &RunHost, bytes: &[u8]) -> Result<RunInputs> {
                     budget: budget(&spec[1])?,
                 },
                 "wire" => InputValue::Wire(host.limits.capacity.wire(&spec[1])?),
-                "verifier_key" => InputValue::VerifierKey(text(&spec[1])?.to_owned()),
+                "verifier_key" => {
+                    if host
+                        .authority
+                        .inputs
+                        .get(&(role.entry.role.clone(), i))
+                        .map(String::as_str)
+                        != Some(text(&spec[1])?)
+                    {
+                        return Err("bundle-setup-input".into());
+                    }
+                    InputValue::VerifierKey
+                }
                 "prover_key_file" => {
                     let spec = array(&spec[1], 2)?;
                     InputValue::ProverKeyFile {
@@ -229,52 +240,15 @@ fn check_declaration(
     match (kind(ty), value) {
         ("unsupported-transcript", _) => Err("bundle-transcript-input-unsupported".into()),
         ("rng" | "nonce", InputValue::Resource { budget }) => checked_budget(*budget).map(|_| ()),
-        ("wire", InputValue::Wire(bytes)) => host.limits.capacity.check_wire(bytes.len()),
         (
             "wire",
-            InputValue::Variant {
-                alternative,
-                payload,
-            },
-        ) => {
-            let logical = ty.logical();
-            let descriptor = logical.variant_descriptor().ok_or("native-input-type")?;
-            let arm = descriptor
-                .alternatives()
-                .get(*alternative)
-                .ok_or("native-input-alternative")?;
-            if !ty.is_duplicable() {
-                return Err("native-input-private".into());
-            }
-            if arm.payload().len() != payload.len() {
-                return Err("native-input-payload".into());
-            }
-            for (expected, child) in arm.payload().iter().zip(payload) {
-                if !matches!(
-                    child,
-                    InputValue::Native(_) | InputValue::Wire(_) | InputValue::Variant { .. }
-                ) {
-                    return Err("native-input-private".into());
-                }
-                let physical =
-                    PhysicalType::default_for(expected.clone()).map_err(|e| e.to_string())?;
-                check_declaration(host, role, index, &physical, child)?;
-            }
-            Ok(())
-        }
-        ("wire", InputValue::Native(value)) => {
-            Input::native_value(ty.clone(), value, None).map(|_| ())
-        }
+            value @ (InputValue::Wire(_) | InputValue::Native(_) | InputValue::Variant { .. }),
+        ) => crate::host::admission::check_native_data(ty, value, host.limits.capacity),
         ("rng" | "nonce" | "verifier_key" | "prover_key_file", InputValue::Native(_)) => {
             Err("native-input-private".into())
         }
-        ("verifier_key", InputValue::VerifierKey(name)) => {
-            if host.authority.inputs.get(&(role.to_owned(), index)) != Some(name) {
-                return Err("bundle-setup-input".into());
-            }
-            Ok(())
-        }
-        ("prover_key_file", InputValue::ProverKeyFile { .. }) => {
+        ("verifier_key", InputValue::VerifierKey)
+        | ("prover_key_file", InputValue::ProverKeyFile { .. }) => {
             if !host
                 .authority
                 .inputs
@@ -407,21 +381,11 @@ pub(super) fn prepare<'a>(host: &'a RunHost, request: &RunInputs) -> Result<Prep
                     })?);
                     continue;
                 }
-                InputValue::Variant { .. } => {
-                    admission.native_variant(&backend, ty.clone(), value, selected.cloned())?
+                InputValue::Variant { .. } | InputValue::Wire(_) | InputValue::Native(_) => {
+                    admission.native_data(&backend, ty.clone(), value, selected.cloned())?
                 }
-                InputValue::Wire(bytes) => admission.native_wire(
-                    &backend,
-                    ty.clone(),
-                    bytes.as_slice(),
-                    selected.cloned(),
-                )?,
-                InputValue::Native(value) => admission.add(
-                    Input::native_value(ty.clone(), value, selected.cloned())?,
-                    &policy,
-                )?,
-                InputValue::VerifierKey(name) => {
-                    let value = Value::VerifierKey(keys[name].clone());
+                InputValue::VerifierKey => {
+                    let value = Value::VerifierKey(selected.ok_or("bundle-setup-input")?.clone());
                     if value.physical_type() != *ty {
                         return Err("bundle-input-type".into());
                     }

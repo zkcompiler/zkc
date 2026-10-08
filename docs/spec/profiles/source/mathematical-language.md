@@ -975,6 +975,41 @@ result; they remain visible in the native report. An unexpected reconstruction
 failure has its own `output_error` and cannot become successful named output.
 No source evaluation or protocol-specific execution loop is added.
 
+### Named proof calls
+
+`entry::ProofEntry::admit` authenticates the same package/interface boundary and
+binds the exact deployment through `NativeDeployment`. Inputs retain the source
+constructor requirement and outputs must be copyable without affine custody.
+`prove` and `verify` take separate `ProofRequest` values; the verifier receives
+only its own inputs and the candidate proof. Neither method needs a live peer.
+
+Each request supplies exact named public values, the selected role's input and
+service maps, application context bytes and the derived transcript budget.
+Public values remain independently authorized by the application. Shared role
+inputs must canonically agree with them. Zero-leaf public values and role inputs
+remain required. The selected derived verifier service is compiler-owned and
+cannot also appear in the caller's service map. Products and nominal alternatives
+use the same logical schema and common admission as run calls.
+
+`ProofOptions::binding` defaults to `TranscriptRequired`. Authored construction
+requires explicit `AllowHeaderOnly`; otherwise admission returns
+`entry-proof-binding-policy`. `binding_scope()` and each `ProofReport` distinguish
+`Transcript` from `HeaderOnly`. This identifies the selected binding mechanism,
+not a cryptographic security judgment. The authored header checks consistency;
+it does not by itself prevent rewrapping a proof under another context.
+
+A successful `ProofReport` reconstructs that participant's named original
+outputs, including empty products. Rejection, stop, refusal or cleanup failure
+publishes no named outputs; the native outcome, usage and cleanup remain visible.
+Unexpected reconstruction failure is recorded in `output_error`. An outer `Ok`
+means preparation succeeded, not proof acceptance. The report is `must_use`;
+`is_success()` checks execution, cleanup and output reconstruction together.
+`into_result()` returns the entire report on either branch, preserving rejection
+and cleanup details. Bounded
+`prove_attempts` delegates to the existing native attempt policy/controller and
+returns only final successful outputs. That policy currently selects original
+protocol ports; it never restarts provider state for a retry.
+
 ## Bounds and scope
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
@@ -1003,7 +1038,7 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Named proof calls, source setup initialization, dynamic source arrays and
+Source setup initialization, dynamic source arrays and
 member-generic conformance remain outside the implemented profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor
