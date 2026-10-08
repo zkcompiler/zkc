@@ -4,11 +4,13 @@ use super::{
 use std::collections::{BTreeMap, BTreeSet};
 use zkc_runtime::interactive::{LogicalType, ServiceContract};
 
-pub(super) fn check(
-    document: &Interface,
-    original: &str,
-) -> Result<(usize, BTreeMap<String, LogicalType>)> {
-    require(document.format == "zkc.language-interface/5", E::Format)?;
+pub(super) struct Checked {
+    pub selected: usize,
+    pub types: BTreeMap<String, LogicalType>,
+    pub setups: Vec<super::Setup>,
+}
+pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
+    require(document.format == "zkc.language-interface/6", E::Format)?;
     require(
         hash(&document.capture) && document.original == original,
         E::Identity,
@@ -147,7 +149,12 @@ pub(super) fn check(
         &relations,
         &mut schemas,
     )?;
-    Ok((selected, schemas.finish()))
+    let setups = super::setups::check(document, &document.protocols[selected], &mut schemas)?;
+    Ok(Checked {
+        selected,
+        types: schemas.finish(),
+        setups,
+    })
 }
 fn schema_port<'a>(
     schema: &'a Schema,
@@ -214,10 +221,13 @@ pub(super) fn select<'a>(
     };
     let port = ports.get(selector.port as usize).ok_or(E::Selection)?;
     require(port.roles.contains(&selector.role), E::Selection)?;
+    project(port, &selector.path)
+}
+pub(super) fn project<'a>(port: &'a Port, path: &[u32]) -> Result<(&'a Schema, &'a [u32])> {
     let mut schema = &port.schema;
     let mut offset = 0usize;
-    require(selector.path.len() <= 32, E::Limit)?;
-    for &index in &selector.path {
+    require(path.len() <= 32, E::Limit)?;
+    for &index in path {
         require(
             !schema.custody && !matches!(schema.kind, Kind::Variant | Kind::Associated),
             E::Selection,

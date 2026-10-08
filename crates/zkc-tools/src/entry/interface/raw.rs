@@ -25,6 +25,19 @@ pub(in crate::entry) struct Interface {
     pub protocols: Vec<Protocol>,
     pub relations: Vec<Relation>,
     pub job: Job,
+    pub setups: Vec<Setup>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+pub(in crate::entry) struct Setup {
+    pub name: String,
+    pub inputs: Vec<EntryInput>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+pub(in crate::entry) struct EntryInput {
+    pub port: u32,
+    pub path: Vec<u32>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(remote = "Self")]
@@ -214,6 +227,8 @@ pub(in crate::entry) enum Definition {
 
 crate::entry::decode::objects!(
     Interface,
+    Setup,
+    EntryInput,
     Job,
     Construction,
     Protocol,

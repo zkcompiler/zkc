@@ -120,20 +120,21 @@ inline bool nativeDataFrame(const BoundType &type) {
          nativeMessageData(type);
 }
 inline bool nativeSetupType(const BoundType &type) {
-  if (type.identity == "multilinear.kzg.bls12-381/1")
+  if (type.kind == "prover_key" || type.kind == "verifier_key" ||
+      type.identity == "multilinear.kzg.bls12-381/1")
     return true;
   if (type.kind == "variant") {
     auto logical = type;
     logical.representation.clear();
     auto descriptor = decodeVariant(logical.spelling());
     if (!descriptor)
-      return false;
+      return true;
     for (const auto &arm : descriptor->alternatives)
       for (const auto &leaf : arm.payload) {
         auto child = parseBoundType(leaf, false);
         if (!child) {
           llvm::consumeError(child.takeError());
-          continue;
+          return true;
         }
         if (nativeSetupType(*child))
           return true;

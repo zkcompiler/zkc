@@ -21,6 +21,8 @@ mod host;
 mod interface;
 #[path = "language_native/proof.rs"]
 mod proof;
+#[path = "language_native/setups.rs"]
+mod setups;
 
 struct Participant {
     runner: Runner<NativeBackend>,
@@ -549,7 +551,7 @@ fn main() {
         .unwrap();
         let interface = zkc_tools::entry::Interface::read(&package)
             .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        if !interface.is_proof() {
+        if !interface.is_proof() && interface.setup_names().len() == 0 {
             let artifact = package.artifact().as_bytes();
             let host = RunHost::admit(
                 artifact,
@@ -569,6 +571,7 @@ fn main() {
     }
     host::run(Path::new(&directory));
     proof::run(Path::new(&directory));
+    setups::run(Path::new(&directory));
     for optimized in [0, 1] {
         for released in [0, 1] {
             let bundle = load(&format!("transfer-{optimized}-{released}.bundle"));

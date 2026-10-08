@@ -4,6 +4,8 @@ mod binding;
 mod preflight;
 pub(in crate::entry) mod raw;
 mod schemas;
+mod setups;
+pub(in crate::entry) use setups::Setup;
 mod validate;
 use super::Package;
 use sha2::{Digest, Sha256};
@@ -41,6 +43,7 @@ pub struct Interface {
     pub(in crate::entry) document: raw::Interface,
     pub(in crate::entry) selected: usize,
     types: BTreeMap<String, LogicalType>,
+    pub(in crate::entry) setups: Vec<Setup>,
     artifact: String,
     options: super::CompileOptions,
 }
@@ -55,11 +58,12 @@ impl Interface {
             serde::Deserialize::deserialize(&mut decoder).map_err(|_| InterfaceError::Format)?;
         decoder.end().map_err(|_| InterfaceError::Format)?;
         let original = format!("{:x}", Sha256::digest(package.original().as_bytes()));
-        let (selected, types) = validate::check(&document, &original)?;
+        let checked = validate::check(&document, &original)?;
         Ok(Self {
             document,
-            selected,
-            types,
+            selected: checked.selected,
+            types: checked.types,
+            setups: checked.setups,
             artifact: format!("{:x}", Sha256::digest(package.artifact().as_bytes())),
             options: package.options(),
         })
@@ -81,6 +85,10 @@ impl Interface {
     }
     pub fn toolchain(&self) -> &str {
         &self.document.toolchain
+    }
+    /// Setup names required by the application's independent authority and each invocation.
+    pub fn setup_names(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.setups.iter().map(|slot| slot.name.as_str())
     }
     pub fn is_proof(&self) -> bool {
         matches!(self.document.job, raw::Job::Proof { .. })

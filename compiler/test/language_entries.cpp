@@ -14,6 +14,20 @@ constexpr StringLiteral base = R"(module sample;
  spec{target claim=Equal(in.x@V,in.y) accept out.ok;}
  {let ok@V=true;return(ok=ok);}
 )";
+constexpr StringLiteral setupBase = R"(module sample;
+ domain C=commitment("multilinear.kzg.bls12-381/1");
+ type PK=builtin("prover_key",C);type VK=builtin("verifier_key",C);
+ type Commit=builtin("commitment",C);type Proof=builtin("proof",C);
+ struct Statement{pub left:Commit,pub right:Proof,pub ordinary:bool}
+ protocol Run roles(P,V)(vk:VK@V,pk:PK@P,statement:Statement@(P,V))->(ok:bool@V){
+   let ok@V=true;return(ok=ok);
+ }
+)";
+constexpr StringLiteral setupChoices = R"({setup pcs{vk,pk,statement};
+ prover P;verifier V;public{vk,statement};accept ok;construction authored;})";
+std::string setupSource(StringRef choices = setupChoices) {
+  return (setupBase + "entry Demo=Run" + choices).str();
+}
 constexpr StringLiteral choices = R"({prover P;verifier V;public{x};accept ok;
  target claim;construction fiat_shamir("merlin3.bls12-381.fr64be/1"){derive coins;}})";
 Expected<ClosedEntry> close(StringRef text, const Limits &limits = {}) {
@@ -141,5 +155,66 @@ int main() {
                               "witness x:F,witness y:F")),
             "source.entry");
   });
+  cases.run("setup choices bind closed inputs and complete aliases", [] {
+    auto source = setupSource();
+    auto entry = take(close(source));
+    const auto &setup = entry.entry().setups.front();
+    require(setup.name == "pcs" && setup.inputs.size() == 3 &&
+                setup.inputs[2].port == 2,
+            "setup logical input choices lost");
+    auto alias = take(close(
+        (setupBase + "entry Demo=Alias;entry Alias=Run" + setupChoices).str()));
+    require(alias.entry().setups.front().inputs.size() == 3,
+            "Entry alias lost setup choices");
+    take(close(setupSource("{setup first{pk};setup "
+                           "second{vk,statement.left,statement.right,};}")));
+    refuses(close((setupBase + "entry Alias=Run" + setupChoices +
+                   "entry Demo=Alias{setup pcs{vk};}")
+                      .str()),
+            "source.entry");
+  });
+  cases.run("setup coverage is exact nonoverlapping and nonvacuous", [] {
+    for (StringRef choices :
+         {";", "{}", "{setup pcs{};}", "{setup pcs{vk,statement};}",
+          "{setup pcs{vk,pk,statement.left};}",
+          "{setup pcs{vk,pk,statement,statement.left};}",
+          "{setup pcs{vk,pk,statement};setup pcs{statement};}",
+          "{setup pcs{vk,pk,statement,statement.ordinary};}",
+          "{setup pcs{vk,pk,statement,absent};}"}) {
+      // Missing key ingress is refused before the coverage check when no slot
+      // exists.
+      refuses(close(setupSource(choices)),
+              choices == ";" || choices == "{setup pcs{vk,statement};}"
+                  ? "source.ingress"
+                  : "source.entry");
+    }
+  });
+  cases.run("proof keys stay with their declared initializer", [] {
+    auto source = replaceText(setupSource(), "pk:PK@P", "pk:PK@V");
+    source =
+        replaceText(source, "public{vk,statement}", "public{vk,pk,statement}");
+    refuses(close(source), "source.entry");
+    refuses(close(replaceText(setupSource(), "setup pcs{vk,pk,statement}",
+                              "setup pcs{vk,pk@P,statement}")),
+            "source.syntax");
+  });
+  cases.run("each proof setup needs its own public verifier key", [] {
+    refuses(close(setupSource(
+                "{setup one{vk};setup two{pk,statement};prover P;verifier "
+                "V;public{vk,statement};accept ok;construction authored;}")),
+            "source.entry");
+    refuses(close(replaceText(setupSource(), "vk:VK@V", "vk:VK@P")),
+            "source.entry");
+    refuses(close(replaceText(setupSource(), "public{vk,statement}",
+                              "public{statement}")),
+            "source.entry");
+  });
+  cases.run("setup initialization does not grant nested or state constructors",
+            [] {
+              for (StringRef type : {"(PK,)", "builtin(\"opening_state\",C)"})
+                refuses(close(replaceText(setupSource(), "pk:PK@P",
+                                          ("pk:" + type + "@P").str())),
+                        "source.ingress");
+            });
   return cases.result();
 }

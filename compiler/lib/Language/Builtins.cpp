@@ -53,7 +53,7 @@ bool isNativeData(const Type &type) {
          type.kind == K::Boolean || type.kind == K::Index ||
          type.kind == K::Builtin;
 }
-bool matchesKernelSort(const Type &type, StringRef sort) {
+bool matchesStaticSort(const Type &type, StringRef sort) {
   return sort == "Nat"    ? type.kind == K::Natural
          : sort == "Type" ? isNativeData(type)
                           : isDomainSort(sort) && domainSort(type) == sort;
@@ -108,7 +108,7 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
     const auto &argument = arguments[i];
     const auto &parameter = constructor->parameters[i];
     using S = protocol::StaticKind;
-    bool formed = matchesKernelSort(argument, parameter.kind == S::Type ? "Type"
+    bool formed = matchesStaticSort(argument, parameter.kind == S::Type ? "Type"
                                               : parameter.kind == S::Nat
                                                   ? "Nat"
                                                   : parameter.sort);

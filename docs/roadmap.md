@@ -114,8 +114,10 @@ purpose remains separate from public authorization; target export respects the
 native statement ABI. Package authentication, interface/native binding, typed run
 preparation, named run inputs/results, and independent typed/named proof calls
 are implemented. Native requests also support immutable authenticated prover
-material. Continue with explicit source setup associations and initialization,
-then common CLI and thin bindings.
+material. Explicit source setup associations now drive named authority and checked
+key initialization through both Hosts. Continue with named attempt selections and
+budgets, then common CLI and thin bindings. Account separately for receive-only
+setup authority and legacy per-receive pinning before retiring their consumers.
 
 Bind the checked source interface, exact original, toolchain, compilation options
 and resulting deployment into one package. Common CLI and SDK paths must use the

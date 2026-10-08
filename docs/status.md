@@ -31,7 +31,7 @@ helper realization and independent recipe controls in
 receive, joint-host, aggregate, static dispatch, distributed application results, shared service aliases, pre-query stops, nested/per-role repetition, conditional draws, nested early completion, returned affine custody, native vector/matrix/sequence data, iterative folding rounds, formal polynomial evaluation/interpolation/sums through protocol and local paths, and affine control/cleanup controls in [language_native.rs](../crates/zkc-tools/examples/language_native.rs).
 The source fragment does not yet expose the full native IR vocabulary. Fixed arrays use static numeric indexing; private ingress without a
 validator, member-generic conformance and zero-leaf messages refuse. Source schema
-`zkc.language-interface/5` retains all closed protocol interfaces, managed services,
+`zkc.language-interface/6` retains all closed protocol interfaces, managed services,
 formula/opaque/captured relation definitions, and target/input/output/continuation
 clauses with exact logical port and participant selectors. Source-only relation
 checks and inline-binding/privacy controls are in
@@ -80,8 +80,16 @@ suites, named service selection, rejection, nested authored values and unit port
 Native run/proof callers can also reuse authenticated immutable `ProverMaterial`;
 each invocation retains its setup association and input/runtime charges. Controls
 cover file removal, wrong setup, lowered quotas and independent concurrent calls.
-Explicit source setup associations, package CLI and thin Rust bindings remain in
-progress. Existing frontend consumers have not migrated.
+Source Entries now associate setup slots with logical inputs and product fields.
+Interface readers independently check coverage and proof-key selection; source
+comparison binds the exact choices. Named Hosts derive native authority maps from
+application-owned slot pins, initialize verifier-key ports, and admit explicit
+prover material. The [PCS fixture](../compiler/test/fixtures/language/pcs_setup.zkc)
+composes two generic openings with distinct setups through the common run and
+proof Hosts; controls cover wrong material, missing/extra names and lowered quotas.
+Receive-only slots and finer per-receive setup pinning remain migration work.
+Package CLI and thin Rust bindings remain in progress. Existing frontend consumers
+have not migrated.
 
 ## Foundation capability map
 

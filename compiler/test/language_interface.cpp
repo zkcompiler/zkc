@@ -56,7 +56,8 @@ json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
   json::Object root{
-      {"format", "zkc.language-interface/5"},
+      {"format", "zkc.language-interface/6"},
+      {"setups", json::Array{}},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},
       {"toolchain", compilerToolchainIdentity()},
@@ -643,6 +644,102 @@ entry Demo=Run;)zkc");
       refuses(readInterface(original, bytes), "source.interface");
     }
     refuses(readInterface(original, R"({"\q":1})"), "source.interface");
+  });
+
+  cases.run(
+      "setup metadata binds source choices and derived product slices", [] {
+        auto original = compile(R"(module sample;
+      domain C=commitment("multilinear.kzg.bls12-381/1");
+      type PK=builtin("prover_key",C);type VK=builtin("verifier_key",C);
+      type Commit=builtin("commitment",C);type Proof=builtin("proof",C);
+      struct Statement{pub left:Commit,pub right:Proof,pub ordinary:bool}
+      protocol Run roles(P,V)(vk:VK@V,pk:PK@P,statement:Statement@(P,V))->(ok:bool@V){let ok@V=true;return(ok=ok);}
+      entry Demo=Run{setup pcs{vk,pk,statement};prover P;verifier V;public{vk,statement};accept ok;construction authored;}
+    )");
+        const auto &view = original.interface();
+        require(view.setups.size() == 1 && view.setups[0].inputs[2].native ==
+                                               std::vector<unsigned>({2, 3, 4}),
+                "setup product slice differs");
+        auto changed = take(json::parse(original.interfaceJson()));
+        auto &slot =
+            *changed.getAsObject()->getArray("setups")->front().getAsObject();
+        slot["name"] = "renamed";
+        auto decoded =
+            take(readInterface(original.bytes(), zkc::printJson(changed)));
+        auto mismatch = compareInterface(original.entry(), decoded);
+        require(bool(mismatch), "renamed setup must fail source comparison");
+        require(namesIdentifier(toString(std::move(mismatch)),
+                                "source.correspondence"),
+                "unexpected setup comparison diagnostic");
+        auto &input = *slot.getArray("inputs")->back().getAsObject();
+        input["path"] = json::Array{0};
+        refuses(readInterface(original.bytes(), zkc::printJson(changed)),
+                "source.interface");
+        input["path"] = json::Array{};
+        input["native"] = json::Array{2, 3, 4};
+        refuses(readInterface(original.bytes(), zkc::printJson(changed)),
+                "source.interface");
+        take(compileEntry(original));
+      });
+  cases.run("independent PCS schemas preserve key and state permissions", [] {
+    for (StringRef head : {"commitment", "proof", "commitments", "prover_key",
+                           "verifier_key", "opening_state", "opening_states"}) {
+      bool rows = head == "commitments" || head == "opening_states";
+      StringRef domain = rows ? "rows.merkle-keccak256.koala-bear/1"
+                              : "multilinear.kzg.bls12-381/1";
+      bool wire = head == "commitment" || head == "proof";
+      bool shared = wire || head == "commitments";
+      auto type = ((rows ? "!oracle.object<\"" : "!pcs.object<\"") + domain +
+                   "\", \"" + head + "\">")
+                      .str();
+      auto mlir =
+          "module {\"protocol.module\"() <{profile = "
+          "#protocol.profile<protocol>}> ({\"protocol.func\"() <{sym_name = "
+          "\"Transfer\", roles = [\"P\"], function_type = (" +
+          type +
+          ") -> (), input_roles = [[\"P\"]], output_roles = []}> ({^bb0(%a: " +
+          type +
+          "): \"protocol.return\"() : () -> ()}) : () -> ()}) : () -> ()}";
+      auto value = document();
+      auto &root = *value.getAsObject();
+      root["original"] = toHex(SHA256::hash(arrayRefFromStringRef(mlir)), true);
+      auto &p = protocol(value);
+      p["roles"] = json::Array{"P"};
+      p["outputs"] = json::Array{};
+      p["services"] = json::Array{};
+      p["inputs"] =
+          json::Array{json::Object{{"name", "data"},
+                                   {"type", (head + ":" + domain).str()},
+                                   {"roles", json::Array{"P"}},
+                                   {"index", 0},
+                                   {"native", json::Array{0}},
+                                   {"schema", scalar()}}};
+      auto &schema = shape(value);
+      schema["type"] = (head + ":" + domain).str();
+      schema["kind"] = "builtin";
+      schema["leaves"] = json::Array{(head + ":" + domain).str()};
+      schema["permissions"] = json::Array{"Copy", "Drop"};
+      if (shared)
+        schema.getArray("permissions")->push_back("Share");
+      if (wire)
+        schema.getArray("permissions")->push_back("Wire");
+      if (!rows) {
+        json::Array selectors{
+            json::Object{{"port", 0}, {"path", json::Array{}}}};
+        root["setups"] = json::Array{
+            json::Object{{"name", "pcs"}, {"inputs", std::move(selectors)}}};
+      }
+      take(readInterface(mlir, zkc::printJson(value)));
+      if (!wire) {
+        schema.getArray("permissions")->push_back("Wire");
+        refuses(readInterface(mlir, zkc::printJson(value)), "source.interface");
+        schema.getArray("permissions")->pop_back();
+      }
+      if (!shared) {
+        schema.getArray("permissions")->push_back("Share");
+        refuses(readInterface(mlir, zkc::printJson(value)), "source.interface");
+      }
+    }
   });
   return cases.result();
 }

@@ -196,12 +196,34 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     });
   };
   out.object([&] {
-    out.attribute("format", "zkc.language-interface/5");
+    out.attribute("format", "zkc.language-interface/6");
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);
     out.attribute("entry", entry.entry().qualifiedName);
     out.attribute("protocol", entry.protocol().symbol);
+    out.attributeArray("setups", [&] {
+      for (const auto &slot : entry.entry().setups) {
+        if (!charge(slot.name.size() + slot.inputs.size() + 1))
+          break;
+        out.object([&] {
+          out.attribute("name", slot.name);
+          out.attributeArray("inputs", [&] {
+            for (const auto &input : slot.inputs) {
+              if (!charge(input.path.size() + 1))
+                break;
+              out.object([&] {
+                out.attribute("port", input.port);
+                out.attributeArray("path", [&] {
+                  for (unsigned index : input.path)
+                    out.value(index);
+                });
+              });
+            }
+          });
+        });
+      }
+    });
     out.attributeObject("job", [&] {
       const auto &proof = entry.entry().proof;
       out.attribute("kind", proof ? "proof" : "run");

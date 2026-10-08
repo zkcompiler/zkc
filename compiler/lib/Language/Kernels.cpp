@@ -85,7 +85,7 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
              span);
       return {};
     }
-    bool formed = matchesKernelSort(*value, sort);
+    bool formed = matchesStaticSort(*value, sort);
     if (!formed) {
       fail("source.kernel", "installed static argument sort differs", span);
       return {};

@@ -72,23 +72,31 @@ Error Layouts::charge(uint64_t n) {
 }
 Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                                       const SpecificationSelector &selector) {
-  const auto &ports = selector.output ? decl.outputs : decl.inputs;
-  if (selector.port >= ports.size() || selector.path.size() > limits.typeDepth)
+  return select(selector.output ? decl.outputs : decl.inputs, selector.port,
+                selector.path);
+}
+Expected<LayoutSlice> Layouts::selectInput(const Declaration &decl,
+                                           const EntryInput &selector) {
+  return select(decl.inputs, selector.port, selector.path);
+}
+Expected<LayoutSlice> Layouts::select(ArrayRef<Port> ports, unsigned port,
+                                      ArrayRef<unsigned> path) {
+  if (port >= ports.size() || path.size() > limits.typeDepth)
     return error("source.layout", "logical selector is out of bounds");
   uint64_t offset = 0;
   std::shared_ptr<const Layout> selected;
-  for (unsigned i = 0; i <= selector.port; ++i) {
+  for (unsigned i = 0; i <= port; ++i) {
     if (auto error = charge(1))
       return std::move(error);
     auto layout = get(ports[i].type);
     if (!layout)
       return layout.takeError();
-    if (i == selector.port)
+    if (i == port)
       selected = *layout;
     else
       offset += (*layout)->leaves.size();
   }
-  for (auto field : selector.path) {
+  for (auto field : path) {
     if (auto error = charge(1))
       return std::move(error);
     if (selected->custody || selected->type.kind == Type::Kind::Associated ||

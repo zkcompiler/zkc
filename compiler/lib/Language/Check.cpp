@@ -51,6 +51,8 @@ bool Checker::charge(uint64_t count, Span span) {
 }
 Error Checker::takeError() { return make_error<DiagnosticError>(*diagnostic); }
 Error Checker::run() {
+  if (auto error = checkCapabilityInstallation())
+    return error;
   if (!collect() || !imports())
     return takeError();
   signatureState.resize(output.declarations.size());

@@ -7,6 +7,9 @@
 #include <map>
 #include <set>
 
+namespace zkc::language {
+class Layouts;
+}
 namespace zkc::language::detail {
 struct CaptureStorage {
   std::vector<SourceBuffer> sources;
@@ -182,6 +185,11 @@ struct SyntaxName {
   std::string name;
   Span span;
 };
+struct SyntaxSetupSlot {
+  SyntaxName name;
+  std::vector<SyntaxSelector> inputs;
+  Span span;
+};
 struct SyntaxProofEntry {
   SyntaxName prover, verifier;
   std::vector<SyntaxName> publicInputs;
@@ -218,6 +226,8 @@ struct SyntaxDeclaration {
   std::optional<Span> specificationBlock;
   std::vector<SyntaxClause> specifications;
   std::optional<SyntaxProofEntry> proof;
+  std::vector<SyntaxSetupSlot> setups;
+  bool entryBlock = false;
 };
 struct Import {
   std::string module;
@@ -233,6 +243,8 @@ llvm::Error lex(const SourceBuffer &, ModuleId, Work &, std::vector<Token> &);
 llvm::Expected<SyntaxModule> parse(const SourceBuffer &, ModuleId,
                                    llvm::ArrayRef<Token>, Work &);
 llvm::Error check(std::vector<SyntaxModule>, CheckedStorage &, Work &);
+llvm::Error checkSetups(const ClosedEntry &, Layouts &, Work &);
+llvm::Error checkCapabilityInstallation();
 } // namespace zkc::language::detail
 
 #endif

@@ -1,17 +1,15 @@
 //! Independent named proof calls over the admitted common native deployment.
 use super::{
-    Interface, NamedValues, Package, RoleInputs, arguments,
+    Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments,
     interface::raw::{Construction, Job},
-    value,
+    setups, value,
 };
 use crate::artifact::{
     hex,
-    native::{
-        AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs,
-        SetupAuthority,
-    },
+    native::{AttemptPolicy, NativeCapacity, NativeDeployment, NativeProofReport, ProofInputs},
 };
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use zkc_backends::NativeBackend;
 
 type Result<T> = std::result::Result<T, String>;
@@ -53,6 +51,7 @@ pub struct ProofRequest {
     pub inputs: RoleInputs,
     pub context: Vec<u8>,
     pub transcript_budget: u64,
+    pub setups: BTreeMap<String, Vec<u8>>,
 }
 pub struct ProofEntry {
     package: Package,
@@ -105,7 +104,7 @@ impl ProofEntry {
             return Err("entry-proof-binding-policy".into());
         }
         for port in &interface.selected_protocol().inputs {
-            value::check_import(&port.schema)?;
+            arguments::check_import(&interface, port)?;
         }
         for port in &interface.selected_protocol().outputs {
             value::check_export(&port.schema)?;
@@ -113,7 +112,7 @@ impl ProofEntry {
         let native = NativeDeployment::admit_with_setups(
             package.artifact().as_bytes(),
             &hex(&Sha256::digest(package.artifact().as_bytes())),
-            setups,
+            setups::proof_authority(&interface, setups)?,
         )?
         .with_capacity(options.capacity)?
         .with_external_work_limit(options.external_work)?;
@@ -169,17 +168,22 @@ impl ProofEntry {
             Construction::Authored {} => None,
             Construction::FiatShamir { service, .. } => Some(*service as usize),
         };
+        let keys = setups::public_keys(&self.interface, &request.setups, self.native.capacity())?;
         Ok(ProofInputs {
             public: arguments::values(
+                &self.interface,
                 public.iter().map(|i| &protocol.inputs[*i as usize]),
                 request.public,
+                Some(&keys),
             )?,
             inputs: arguments::values(
+                &self.interface,
                 protocol
                     .inputs
                     .iter()
                     .filter(|port| port.roles.contains(role)),
                 request.inputs.inputs,
+                None,
             )?,
             services: arguments::services(
                 protocol

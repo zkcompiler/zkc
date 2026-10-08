@@ -60,7 +60,7 @@ bool Checker::specialize(DeclarationId selected) {
               return false;
           auto signature =
               kernelSignature(primitive->contract, *primitive->bindingArguments,
-                              primitive->parameters, op.span);
+                              primitive->parameters, op.span, nullptr);
           if (!signature)
             return false;
           if (primitive->operands.size() != signature->inputs.size() ||
@@ -380,9 +380,26 @@ bool Checker::specialize(DeclarationId selected) {
   if (!checkProofEntry(output.declarations[selected.index],
                        output.declarations[instance->index]))
     return false;
-  for (const auto &port : output.declarations[instance->index].inputs)
-    if (!ingress(port.type, port.span))
+  const auto &inputs = output.declarations[instance->index].inputs;
+  for (unsigned i = 0; i < inputs.size(); ++i) {
+    const auto &port = inputs[i];
+    // Whole key ports use Entry setup initialization. Exact setup coverage is
+    // checked from the closed layout before closeEntry publishes its handle.
+    bool key = port.type.kind == Type::Kind::Builtin &&
+               (port.type.domain == "prover_key" ||
+                port.type.domain == "verifier_key");
+    bool initialized = llvm::any_of(
+        output.declarations[selected.index].setups, [&](const SetupSlot &slot) {
+          return llvm::any_of(slot.inputs, [&](const EntryInput &input) {
+            return input.port == i && input.path.empty();
+          });
+        });
+    if (key && initialized) {
+      if (!executableType(port.type, port.span))
+        return false;
+    } else if (!ingress(port.type, port.span))
       return false;
+  }
   output.declarations[selected.index].target = *instance;
   for (unsigned i = 0; i < templates; ++i)
     output.declarations[i].body.reset();

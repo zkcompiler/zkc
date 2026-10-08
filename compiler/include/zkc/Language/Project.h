@@ -291,6 +291,17 @@ struct SpecificationClause {
   std::optional<SpecificationSelector> decision;
   Span span;
 };
+/// A logical input subtree, shared by every participant component of the port.
+struct EntryInput {
+  unsigned port = 0;
+  std::vector<unsigned> path;
+  Span span;
+};
+struct SetupSlot {
+  std::string name;
+  std::vector<EntryInput> inputs;
+  Span span;
+};
 /// Explicit two-participant proof job choices. Public inputs name whole logical
 /// ports; acceptance can select a Boolean product component. Service indices
 /// refer to managed ports, independently of native data flattening.
@@ -355,6 +366,7 @@ struct Declaration {
   std::vector<SpecificationClause> specifications;
   std::optional<DeclarationId> target;
   std::optional<ProofEntry> proof;
+  std::vector<SetupSlot> setups;
 };
 
 namespace detail {

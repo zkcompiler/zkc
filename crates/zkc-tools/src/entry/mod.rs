@@ -16,5 +16,7 @@ mod run;
 pub use run::{NamedValues, PreparedRun, RoleInputs, RoleValues, RunEntry, RunReport, RunRequest};
 
 mod arguments;
+mod setups;
+pub use setups::SetupAuthority;
 mod proof;
 pub use proof::{BindingPolicy, BindingScope, ProofEntry, ProofOptions, ProofReport, ProofRequest};

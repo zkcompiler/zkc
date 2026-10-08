@@ -197,7 +197,26 @@ int main() {
                   bounds + " {return x;}")
                      .str()));
   });
-  cases.run("capability search consumes the source work budget", [] {
+  cases.run("normalized aliases cannot hide their formation obligations", [] {
+    refuses(check(R"(
+      type Checked<F:Field> where zkc::algebra::TwoAdicField(F)=F;
+      fn copy<F:Field>(x:F)->F where zkc::algebra::CommRing(Checked<F>) {return x;}
+    )"),
+            "source.capability");
+    refuses(check(R"(
+      domain B=field("bn254.fr");
+      type Const<F:Field> where zkc::algebra::TwoAdicField(F)=B;
+      fn copy<F:Field>(x:F)->F where zkc::algebra::CommRing(Const<F>) {return x;}
+    )"),
+            "source.capability");
+    refuses(
+        check(
+            R"(interface HasField<F:Field>{type Scalar:Field where zkc::algebra::TwoAdicField(F);})"),
+        "source.unsupported");
+    auto source = take(capture({{"m", "module m::Field;", {}}}));
+    refuses(analyze(source).checkedProject(), "source.name");
+  });
+  cases.run("capability search bounds its finite term space", [] {
     const auto source = (root + R"(
       fn call<F:Field>(n:index)->F where zkc::algebra::TwoAdicField(F) {
         return root<F>(n);
@@ -205,9 +224,20 @@ int main() {
     )")
                             .str();
     take(check(source));
-    Limits limits;
-    limits.work = 100;
-    refuses(check(source, limits), "source.limit");
+    std::string many = "fn bounded<";
+    for (unsigned i = 0; i < 129; ++i)
+      many += (i ? "," : "") + std::string("F") + std::to_string(i) + ":Field";
+    many += ">(n:index)->F0 where ";
+    for (unsigned i = 0; i < 129; ++i)
+      many += (i ? "," : "") + std::string("zkc::algebra::TwoAdicField(F") +
+              std::to_string(i) + ")";
+    many += "{return root<F0>(n);}";
+    auto result = check(root.str() + many);
+    require(!result, "unbounded capability terms were accepted");
+    auto message = toString(result.takeError());
+    require(StringRef(message).contains("source.limit") &&
+                StringRef(message).contains("capability term limit"),
+            "refusal did not reach bounded capability checking: " + message);
   });
 
   cases.run(
@@ -234,6 +264,16 @@ int main() {
       }
     )";
         take(check(library));
+        auto unbounded = library;
+        auto bound = unbounded.find("where zkc::pcs::MultilinearOpening(C)");
+        require(bound != std::string::npos, "PCS bound anchor missing");
+        unbounded.erase(
+            bound, StringRef("where zkc::pcs::MultilinearOpening(C)").size());
+        refuses(check(unbounded), "source.kernel");
+        refuses(check(library + R"(
+          fn false_bound()->() where zkc::pcs::MultilinearOpening(Rows) {return ();}
+        )"),
+                "source.capability");
         auto entry = close(library + R"(
       fn equal<C:Commitment>(a:Commit<C>,b:Commit<C>)->bool
           where zkc::pcs::MultilinearOpening(C) {
@@ -242,7 +282,7 @@ int main() {
       protocol Run<C:Commitment> roles(P,V)(a:Commit<C>@P,b:Commit<C>@V)->(accepted:bool@V)
           where zkc::pcs::MultilinearOpening(C) {
         let sent=send P->V(a);local V let ok=equal<C>(sent,b);return(accepted=ok);
-      } entry Demo=Run<Kzg>;
+      } entry Demo=Run<Kzg>{setup pcs{a,b};}
     )");
         take(compileEntry(take(prepareOriginal(entry))));
         for (StringRef head : {"prover_key", "verifier_key", "opening_state",

@@ -67,6 +67,14 @@ struct InterfaceProtocol {
   std::vector<InterfaceService> services;
   std::vector<InterfaceClause> clauses;
 };
+struct InterfaceEntryInput {
+  unsigned port = 0;
+  std::vector<unsigned> path, native;
+};
+struct InterfaceSetup {
+  std::string name;
+  std::vector<InterfaceEntryInput> inputs;
+};
 struct InterfaceProofEntry {
   ProofEntry::Construction construction = ProofEntry::Construction::Authored;
   unsigned prover = 0, verifier = 0;
@@ -81,6 +89,7 @@ struct LanguageInterface {
   std::vector<InterfaceRelation> relations;
   unsigned selected = 0;
   std::optional<InterfaceProofEntry> proof;
+  std::vector<InterfaceSetup> setups;
   const InterfaceProtocol &selectedProtocol() const {
     return protocols.at(selected);
   }

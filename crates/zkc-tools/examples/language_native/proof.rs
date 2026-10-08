@@ -2,8 +2,9 @@
 use super::*;
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_tools::artifact::native::{ProofInputs, SetupAuthority as ProofSetups};
+use zkc_tools::artifact::native::ProofInputs;
 use zkc_tools::artifact::{hex, native::NativeDeployment};
+use zkc_tools::entry::SetupAuthority as ProofSetups;
 use zkc_tools::entry::{
     BindingPolicy, BindingScope, NamedValues, Package, ProofEntry, ProofOptions, ProofRequest,
     RoleInputs as NamedRoleInputs, Value as LogicalValue,
@@ -224,6 +225,7 @@ pub(super) fn run(directory: &Path) {
                         values.insert("scalar".into(), field(witness).into());
                     }
                     ProofRequest {
+                        setups: BTreeMap::new(),
                         public: common(),
                         inputs: NamedRoleInputs {
                             inputs: values,
@@ -363,6 +365,7 @@ fn authored(directory: &Path) {
             ]))
         };
         let request = || ProofRequest {
+            setups: BTreeMap::new(),
             public: NamedValues::from([
                 ("payload".into(), payload(false)),
                 ("empty".into(), LogicalValue::Unit),

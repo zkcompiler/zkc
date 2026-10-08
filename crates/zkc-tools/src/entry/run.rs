@@ -1,9 +1,7 @@
 //! Named source calls adapt to the common native Host. There is no source
 //! evaluator here: the bound interface supplies names and product/sum layouts.
-use super::{Interface, Package, Value, arguments, value};
-use crate::protocol::run::{
-    self as native, HostLimits, HostReport, Outcome, RunHost, SetupAuthority,
-};
+use super::{Interface, Package, SetupAuthority, Value, arguments, setups, value};
+use crate::protocol::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -36,7 +34,7 @@ impl RunEntry {
             return Err("entry-job-kind".into());
         }
         for port in &interface.selected_protocol().inputs {
-            value::check_import(&port.schema)?;
+            arguments::check_import(&interface, port)?;
         }
         for port in &interface.selected_protocol().outputs {
             value::check_export(&port.schema)?;
@@ -45,7 +43,7 @@ impl RunEntry {
             package.artifact().as_bytes(),
             &Sha256::digest(package.artifact().as_bytes()).into(),
             limits,
-            setups,
+            setups::run_authority(&interface, setups)?,
         )?;
         interface.check_run(&native).map_err(|e| e.to_string())?;
         Ok(Self {
@@ -72,15 +70,22 @@ impl RunEntry {
         if request.roles.len() != protocol.roles.len() {
             return Err("entry-input-roles".into());
         }
+        setups::check_material(
+            &self.interface,
+            &request.setups,
+            self.native.limits().capacity,
+        )?;
         let mut roles = Vec::new();
         for role in &protocol.roles {
             let values = request.roles.remove(role).ok_or("entry-input-roles")?;
             let inputs = arguments::values(
+                &self.interface,
                 protocol
                     .inputs
                     .iter()
                     .filter(|port| port.roles.contains(role)),
                 values.inputs,
+                None,
             )?;
             let services = arguments::services(
                 protocol.services.iter().filter(|s| &s.owner == role),

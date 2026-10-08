@@ -82,8 +82,7 @@ public:
   std::optional<CallSignature> kernelSignature(llvm::StringRef,
                                                llvm::ArrayRef<Type>,
                                                llvm::ArrayRef<std::string>,
-                                               Span,
-                                               const Declaration * = nullptr);
+                                               Span, const Declaration *);
   std::optional<CallSignature>
   intrinsicSignature(const Declaration *, llvm::StringRef, llvm::ArrayRef<Type>,
                      llvm::ArrayRef<std::string>, Span);
@@ -109,6 +108,8 @@ private:
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
   uint64_t typeNodes = 0;
   bool entries();
+  bool configureSetups(Declaration &, const Declaration &,
+                       llvm::ArrayRef<SyntaxSetupSlot>);
   bool collect();
   bool imports();
   bool signature(DeclarationId, unsigned = 1);

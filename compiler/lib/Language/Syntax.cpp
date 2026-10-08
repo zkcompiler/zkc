@@ -209,14 +209,14 @@ private:
     advance();
     return true;
   }
-  bool path(std::string &output) {
+  bool path(std::string &output, bool allowSort = false) {
     if (!name(output))
       return false;
     while (take("::")) {
       std::string part;
       // Field and Group are also qualified catalog capability exports.
       // They remain reserved as declaration and unqualified names.
-      if (at("Field") || at("Group")) {
+      if (allowSort && (at("Field") || at("Group"))) {
         part = text().str();
         advance();
       } else if (!name(part))
@@ -309,7 +309,7 @@ private:
           at("Group")) {
         out.name = text().str();
         advance();
-      } else if (!path(out.name))
+      } else if (!path(out.name, true))
         return false;
       if (take("<")) {
         if (at(">"))
@@ -483,13 +483,34 @@ private:
     value.span.end = previousEnd;
     return true;
   }
-  bool proofEntry(SyntaxDeclaration &decl) {
+  bool entryChoices(SyntaxDeclaration &decl) {
     SyntaxProofEntry value;
     value.span = current().span;
     if (!expect("{"))
       return false;
+    decl.entryBlock = true;
     std::set<std::string> choices;
     while (!at("}") && !atEnd()) {
+      if (take("setup")) {
+        SyntaxSetupSlot slot;
+        slot.span = current().span;
+        if (!named(slot.name) || !expect("{"))
+          return false;
+        if (!at("}"))
+          do {
+            SyntaxSelector input;
+            input.span = current().span;
+            if (!name(input.port) || !selectorPath(input))
+              return false;
+            input.span.end = previousEnd;
+            slot.inputs.push_back(std::move(input));
+          } while (take(",") && !at("}"));
+        if (!expect("}") || !expect(";"))
+          return false;
+        slot.span.end = previousEnd;
+        decl.setups.push_back(std::move(slot));
+        continue;
+      }
       auto key = text().str();
       if (!choices.insert(key).second)
         return fail("source.entry", "duplicate Entry choice");
@@ -540,14 +561,18 @@ private:
       } else
         return fail("source.entry", "unknown Entry choice");
     }
-    for (StringRef key :
-         {"prover", "verifier", "public", "accept", "construction"})
-      if (!choices.count(key.str()))
-        return fail("source.entry", "missing Entry choice: " + key);
+    if (choices.empty() && decl.setups.empty())
+      return fail("source.entry", "empty Entry choice block");
+    if (!choices.empty())
+      for (StringRef key :
+           {"prover", "verifier", "public", "accept", "construction"})
+        if (!choices.count(key.str()))
+          return fail("source.entry", "missing Entry choice: " + key);
     if (!expect("}"))
       return false;
     value.span.end = previousEnd;
-    decl.proof = std::move(value);
+    if (!choices.empty())
+      decl.proof = std::move(value);
     return true;
   }
   bool purpose(RelationPurpose &value) {
@@ -795,7 +820,7 @@ private:
       d.target = target.name;
       d.targetArguments = std::move(target.arguments);
       if (at("{")) {
-        if (!proofEntry(d))
+        if (!entryChoices(d))
           return {};
       } else if (!expect(";"))
         return {};

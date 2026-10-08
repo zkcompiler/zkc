@@ -1,11 +1,12 @@
 use super::{InterfaceError as E, Result, hash, identifier, raw::*, require, text};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::interactive::{LogicalType, Type};
+use zkc_runtime::interactive::{Identity, LogicalType, Type};
 
 struct Leaf {
     ty: LogicalType,
     shared: bool,
+    needs_setup: bool,
     source_identity: Option<String>,
 }
 pub(super) struct Schemas<'a> {
@@ -27,6 +28,12 @@ impl<'a> Schemas<'a> {
         self.remaining = self.remaining.checked_sub(count).ok_or(E::Limit)?;
         Ok(())
     }
+    pub(super) fn setup_properties(&self, spelling: &str) -> Result<(Type, bool)> {
+        self.leaves
+            .get(spelling)
+            .map(|leaf| (leaf.ty.kind(), leaf.needs_setup))
+            .ok_or(E::Schema)
+    }
     pub(super) fn finish(self) -> BTreeMap<String, LogicalType> {
         self.leaves
             .into_iter()
@@ -45,6 +52,7 @@ impl<'a> Schemas<'a> {
                 .ok_or(E::Limit)?;
             require(self.retained <= 16 * 1024 * 1024, E::Limit)?;
             let shared = shared(&ty, &mut self.remaining)?;
+            let needs_setup = needs_setup(&ty, &mut self.remaining)?;
             let source_identity = ty.variant_descriptor().and_then(|d| {
                 let nominal = d.nominal_identity().ok()?;
                 let values = nominal.as_array()?;
@@ -59,6 +67,7 @@ impl<'a> Schemas<'a> {
                 Leaf {
                     ty,
                     shared,
+                    needs_setup,
                     source_identity,
                 },
             );
@@ -328,4 +337,26 @@ fn shared(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
             | Type::Commitments
             | Type::Proof
     ))
+}
+
+fn needs_setup(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
+    *remaining = remaining.checked_sub(1).ok_or(E::Limit)?;
+    if matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
+        || ty.identity() == Identity::MultilinearKzgBls12381
+    {
+        return Ok(true);
+    }
+    if let Some(element) = ty.sequence_element() {
+        return needs_setup(element, remaining);
+    }
+    if let Some(variant) = ty.variant_descriptor() {
+        for arm in variant.alternatives() {
+            for field in arm.payload() {
+                if needs_setup(field, remaining)? {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+    Ok(false)
 }

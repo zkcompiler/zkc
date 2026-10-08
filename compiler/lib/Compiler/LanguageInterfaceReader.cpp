@@ -49,7 +49,11 @@ class Reader {
   std::map<const InterfaceSchema *, std::string> schemaIdentities;
   std::map<std::string, std::shared_ptr<const InterfaceSchema>> schemas;
   StringMap<unsigned> roleIndices;
-  std::map<std::string, Permissions> nativePermissions;
+  struct NativeLeaf {
+    Permissions permissions;
+    bool setup = false, verifierKey = false, proverKey = false;
+  };
+  std::map<std::string, NativeLeaf> nativeLeaves;
   bool fail(StringRef message) {
     if (!failure)
       failure = error("source.interface", message);
@@ -173,9 +177,9 @@ class Reader {
     return result;
   }
   std::optional<Permissions> leafPermissions(StringRef spelling) {
-    auto found = nativePermissions.find(spelling.str());
-    if (found != nativePermissions.end())
-      return found->second;
+    auto found = nativeLeaves.find(spelling.str());
+    if (found != nativeLeaves.end())
+      return found->second.permissions;
     auto type = protocol::parseBoundType(spelling, false, 0, &typeBudget);
     if (!type) {
       consumeError(type.takeError());
@@ -193,7 +197,10 @@ class Reader {
     Permissions result{protocol::duplicable(*type),
                        protocol::discardable(*type), policy->shared,
                        protocol::nativeMessageData(*type)};
-    nativePermissions.emplace(spelling.str(), result);
+    nativeLeaves.emplace(spelling.str(),
+                         NativeLeaf{result, protocol::nativeSetupType(*type),
+                                    type->kind == "verifier_key",
+                                    type->kind == "prover_key"});
     return result;
   }
   bool sameFields(ArrayRef<InterfaceField> a, ArrayRef<InterfaceField> b) {
@@ -760,6 +767,34 @@ class Reader {
     view.relations.push_back(std::move(result));
     return true;
   }
+  std::shared_ptr<const InterfaceSchema>
+  project(const InterfacePort &port, const json::Array &path,
+          std::vector<unsigned> &indices, std::vector<unsigned> &native) {
+    auto schema = port.schema;
+    unsigned offset = 0;
+    for (const auto &item : path) {
+      if (!charge(1))
+        return {};
+      auto at = item.getAsInteger();
+      if (!at || *at < 0 || uint64_t(*at) >= schema->fields.size() ||
+          schema->custody || schema->kind == Type::Kind::Variant ||
+          schema->kind == Type::Kind::Associated) {
+        fail("selector path is not a logical product projection");
+        return {};
+      }
+      indices.push_back(*at);
+      offset += schema->fields[*at].offset;
+      schema = schema->fields[*at].schema;
+    }
+    if (offset > port.native.size() ||
+        schema->leaves.size() > port.native.size() - offset) {
+      fail("selector native slice is out of bounds");
+      return {};
+    }
+    for (unsigned i = 0; i < schema->leaves.size(); ++i)
+      native.push_back(port.native[offset + i]);
+    return schema;
+  }
   std::optional<InterfaceSelector>
   selector(const json::Value &value,
            std::shared_ptr<const InterfaceSchema> *selected = nullptr) {
@@ -788,29 +823,9 @@ class Reader {
     }
     InterfaceSelector result{
         *direction == "output", *port, found->second, {}, {}};
-    auto schema = ports[*port].schema;
-    unsigned offset = 0;
-    for (const auto &item : *path) {
-      if (!charge(1))
-        return {};
-      auto at = item.getAsInteger();
-      if (!at || *at < 0 || uint64_t(*at) >= schema->fields.size() ||
-          schema->custody || schema->kind == Type::Kind::Variant ||
-          schema->kind == Type::Kind::Associated) {
-        fail("selector path is not a logical product projection");
-        return {};
-      }
-      result.path.push_back(*at);
-      offset += schema->fields[*at].offset;
-      schema = schema->fields[*at].schema;
-    }
-    if (offset > ports[*port].native.size() ||
-        schema->leaves.size() > ports[*port].native.size() - offset) {
-      fail("selector native slice is out of bounds");
+    auto schema = project(ports[*port], *path, result.path, result.native);
+    if (!schema)
       return {};
-    }
-    for (unsigned i = 0; i < schema->leaves.size(); ++i)
-      result.native.push_back(ports[*port].native[offset + i]);
     if (selected)
       *selected = schema;
     return result;
@@ -1018,6 +1033,92 @@ class Reader {
     return true;
   }
 
+  bool setups(const json::Value &value) {
+    const auto *slots = value.getAsArray();
+    if (!slots || slots->size() > 64)
+      return fail("invalid setup slot array");
+    const auto &protocol = view.selectedProtocol();
+    std::set<unsigned> expected;
+    std::set<unsigned> verifierKeys, covered;
+    for (unsigned p = 0; p < protocol.inputs.size(); ++p) {
+      const auto &input = protocol.inputs[p];
+      for (unsigned i = 0; i < input.native.size(); ++i) {
+        if (!charge(1))
+          return false;
+        const auto &leaf = nativeLeaves.at(input.schema->leaves[i]);
+        if (view.proof && leaf.proverKey &&
+            is_contained(input.roles, view.proof->verifier))
+          return fail("proof prover keys must stay with the prover");
+        if (leaf.setup)
+          expected.insert(input.native[i]);
+        if (leaf.verifierKey) {
+          if (input.schema->kind != Type::Kind::Builtin ||
+              input.native.size() != 1)
+            return fail("key initialization requires a whole builtin port");
+          verifierKeys.insert(input.native[i]);
+        }
+      }
+    }
+    if (view.proof && verifierKeys.size() > 64)
+      return fail("proof verifier key limit exceeded");
+    std::set<std::string> names;
+    for (const auto &item : *slots) {
+      const auto *obj = object(item, {"name", "inputs"});
+      if (!obj)
+        return false;
+      auto name = text(*obj, "name", limits.identifierBytes);
+      auto *inputs = array(*obj, "inputs");
+      if (!name || !inputs)
+        return false;
+      if (!identifier(*name) || !names.insert(name->str()).second ||
+          inputs->empty())
+        return fail("invalid, duplicate or empty setup slot");
+      InterfaceSetup slot{name->str(), {}};
+      bool publicVerifier = false;
+      for (const auto &value : *inputs) {
+        if (!charge(1))
+          return false;
+        auto *input = object(value, {"port", "path"});
+        if (!input)
+          return false;
+        auto port = natural(*input, "port");
+        auto *path = array(*input, "path");
+        if (!port || !path)
+          return false;
+        if (*port >= protocol.inputs.size())
+          return fail("setup selector input is absent");
+        InterfaceEntryInput selected{*port, {}, {}};
+        if (!project(protocol.inputs[*port], *path, selected.path,
+                     selected.native))
+          return false;
+        bool nonempty = false;
+        for (unsigned index : selected.native) {
+          if (!charge(1))
+            return false;
+          if (!expected.count(index))
+            continue;
+          nonempty = true;
+          if (!covered.insert(index).second)
+            return fail("setup selectors overlap");
+          if (view.proof && verifierKeys.count(index)) {
+            if (!is_contained(view.proof->publicInputs, *port) ||
+                !is_contained(protocol.inputs[*port].roles,
+                              view.proof->verifier))
+              return fail("proof setup keys must be public verifier inputs");
+            publicVerifier = true;
+          }
+        }
+        if (!nonempty)
+          return fail("setup selector contains no setup-bearing input");
+        slot.inputs.push_back(std::move(selected));
+      }
+      if (view.proof && !publicVerifier)
+        return fail("proof setup slot requires a public verifier key");
+      view.setups.push_back(std::move(slot));
+    }
+    return covered.size() == expected.size() ||
+           fail("setup-bearing inputs require exactly one setup slot");
+  }
   bool job(const json::Value &value) {
     auto *header = value.getAsObject();
     if (!header)
@@ -1189,7 +1290,7 @@ class Reader {
   bool read(const json::Value &value, mlir::ModuleOp module, StringRef digest) {
     auto *obj =
         object(value, {"format", "capture", "original", "toolchain", "entry",
-                       "protocol", "protocols", "relations", "job"});
+                       "protocol", "protocols", "relations", "job", "setups"});
     if (!obj)
       return false;
     auto format = text(*obj, "format"), capture = text(*obj, "capture"),
@@ -1202,7 +1303,7 @@ class Reader {
     if (!format || !capture || !original || !toolchain || !entry || !symbol ||
         !protocols || !relations)
       return false;
-    if (*format != "zkc.language-interface/5" || !hash(*capture) ||
+    if (*format != "zkc.language-interface/6" || !hash(*capture) ||
         *original != digest || *toolchain != compilerToolchainIdentity())
       return fail("interface format, original or toolchain identity differs");
     SmallVector<StringRef> entryParts;
@@ -1252,7 +1353,8 @@ class Reader {
     }
     if (!selected)
       return fail("selected protocol is absent");
-    return job(*obj->get("job")) && statements(native);
+    return job(*obj->get("job")) && setups(*obj->get("setups")) &&
+           statements(native);
   }
 
 public:

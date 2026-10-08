@@ -355,6 +355,8 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
       storage->declarations = std::move(candidate.declarations);
       ClosedEntry entry(project, decl.id, std::move(storage));
       Layouts layouts(entry, limits);
+      if (auto error = detail::checkSetups(entry, layouts, work))
+        return error;
       std::function<Error(const Body &)> checkMessages =
           [&](const Body &body) -> Error {
         for (const auto &op : body.operations) {

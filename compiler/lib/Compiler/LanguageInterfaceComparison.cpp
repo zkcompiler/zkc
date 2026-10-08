@@ -331,6 +331,35 @@ class Comparison {
     }
     return true;
   }
+  bool setups() {
+    const auto &source = entry.entry().setups;
+    if (!charge(source.size() + view.setups.size() + 1))
+      return false;
+    if (source.size() != view.setups.size())
+      return fail("source setup slot count differs");
+    for (unsigned i = 0; i < source.size(); ++i) {
+      const auto &s = source[i];
+      const auto &a = view.setups[i];
+      if (!text(s.name, a.name) || s.inputs.size() != a.inputs.size())
+        return fail("source setup slot differs");
+      for (unsigned j = 0; j < s.inputs.size(); ++j) {
+        if (!charge(s.inputs[j].path.size() + a.inputs[j].path.size() + 1))
+          return false;
+        if (s.inputs[j].port != a.inputs[j].port ||
+            s.inputs[j].path != a.inputs[j].path)
+          return fail("source setup selector differs");
+        auto selected = layouts.selectInput(entry.protocol(), s.inputs[j]);
+        if (!selected) {
+          failure = selected.takeError();
+          return false;
+        }
+        auto offset = selected->offset;
+        if (!slice(a.inputs[j].native, offset, selected->layout->leaves.size()))
+          return false;
+      }
+    }
+    return true;
+  }
   bool job() {
     const auto &source = entry.entry().proof;
     if (bool(source) != bool(view.proof))
@@ -450,7 +479,7 @@ public:
         relations.erase(found);
       }
     }
-    if (!job())
+    if (!job() || !setups())
       return std::move(failure);
     if (!protocols.empty() || !relations.empty())
       return error("source.correspondence",

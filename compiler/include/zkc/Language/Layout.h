@@ -72,6 +72,8 @@ public:
   /// This computes representation only, not source field-access authority.
   llvm::Expected<LayoutSlice> select(const Declaration &,
                                      const SpecificationSelector &);
+  llvm::Expected<LayoutSlice> selectInput(const Declaration &,
+                                          const EntryInput &);
 
 private:
   llvm::ArrayRef<Declaration> definitions;
@@ -82,6 +84,8 @@ private:
   std::map<std::string, std::string> slots;
   std::map<std::string, std::shared_ptr<const Layout>> cache;
   llvm::Error charge(uint64_t);
+  llvm::Expected<LayoutSlice> select(llvm::ArrayRef<Port>, unsigned,
+                                     llvm::ArrayRef<unsigned>);
   llvm::Expected<std::shared_ptr<const Layout>> build(const Type &, unsigned);
   llvm::Expected<Type>
   substitute(const Type &, const std::map<std::string, Type> &, unsigned);

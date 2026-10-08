@@ -144,10 +144,14 @@ symbolic requirements must follow from explicit caller bounds and installed
 unary implications; arguments match by normalized source identity. A closed
 requirement is checked against installed facts, even in an unused declaration,
 and never established by an assumption. These are operation availability
-requirements, not cryptographic guarantees.
+requirements, not cryptographic guarantees. Before source checking, the installed
+catalog must sustain inherent sort facts and every installed unary implication.
+This preserves generic assumptions when type aliases normalize away their bounds.
 
 Bounds apply to generic type and component applications as well as calls. Parent
-bounds are inherited. A component member cannot add requirements beyond those
+bounds are inherited. Associated type declarations cannot introduce their own
+capability requirements; inherited component bounds still apply. A component member
+cannot add requirements beyond those
 provided by its component and interface member; interface bounds are substituted
 through the implementation's parameters and associated types. Type applications
 inside a clause use its complete set of bounds, independent of written order.
@@ -523,9 +527,56 @@ more general clauses remain valid attachments but cannot be selected for this
 native statement ABI.
 
 An Entry may name another complete Entry, including one declared later. Aliases
-inherit the protocol, closed arguments and every job choice. Cycles, partial
+inherit the protocol, closed arguments, setup associations and every job choice. Cycles, partial
 overrides and static re-specialization of an Entry refuse. Alias resolution uses
 the source call-depth and work bounds.
+
+### Setup associations
+
+Run and proof Entries may associate inputs with named setup slots:
+
+```text
+entry Proof = Opening<Kzg> {
+  setup pcs { vk, pk, statement.commitment };
+  prover P;
+  verifier V;
+  public { vk, statement, point };
+  accept accepted;
+  construction authored;
+}
+entry Session = Opening<Kzg> { setup pcs { vk, pk, statement.commitment }; }
+```
+
+A selector names an input or a visible product subtree. It retains logical port
+and field indices; closure derives its native leaves. The selected subtree must
+contain at least one setup-bearing leaf. Ordinary siblings are ignored. Native
+collections remain one operand, including setup-bearing variant alternatives.
+Paths cannot project through associated representations or variants.
+
+Every setup-bearing input leaf must occur in exactly one slot. Selectors cannot
+overlap, including within one slot. Names are unique identifiers, slots are
+nonempty, and at most 64 slots are admitted. Association applies to every role
+component of the logical input. The installed setup-bearing profile is
+multilinear KZG, including keys and nested commitment/proof data. Merkle commitments
+do not require a setup key. Slots do not introduce runtime operations or authorize
+setup material.
+
+A proof slot must include at least one whole public verifier-key input available
+at the verifier. Every verifier-key input must satisfy that rule; at most 64
+verifier-key ports are admitted in a proof Entry, independently of the slot count.
+Prover-key inputs must remain at the prover. The Host pins
+all keys in one slot to the same application-selected identity. Multiple slots
+may select different identities. A run slot does not require a verifier-key input.
+A block with only setup choices selects a run; adding any proof choice requires
+the complete proof block. Empty blocks refuse.
+
+Explicit setup association admits whole builtin `prover_key` and `verifier_key`
+input ports through checked Host initialization. It does not grant `Wire`,
+message transmission, nested/private key construction or opening-state ingress.
+Other input constructors keep their existing permission requirements. Current
+source slots require an input association; they do not express receive-only keys
+or a separate expected key per receive site. The native Host's authorized setup
+registry still governs incoming PCS headers.
 
 ## Managed services and guards
 
@@ -807,10 +858,11 @@ protocol symbol. Run jobs emit `zkc.run/1`; proof jobs use native policy/deploym
 version 4. Both contain ordinary `zkc.program/1` participant programs.
 Every protocol in the selected closure passes target preparation.
 
-`zkc.language-interface/5` has exactly these JSON members: `format`, `capture`,
-`original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`, `job`. `protocol`
+`zkc.language-interface/6` has exactly these JSON members: `format`, `capture`,
+`original`, `toolchain`, `entry`, `protocol`, `protocols`, `relations`, `job`,
+`setups`. `protocol`
 selects one symbol from `protocols`. Every original protocol and relation appears
-exactly once. Versions 1–4 and unknown versions refuse.
+exactly once. Versions 1–5 and unknown versions refuse.
 
 A run `job` has only `kind: "run"`. A proof job has exactly `kind: "proof"`,
 `prover`, `verifier`, `public`, `acceptance`, `target` and `construction`. Roles
@@ -820,6 +872,13 @@ construction has only `kind: "authored"`; a derived construction has exactly
 `kind: "fiat_shamir"`, `suite` and logical `service` index. Independent reading
 checks these choices against the original signature and the exact native statement.
 Source comparison separately checks that they match the selected checked Entry.
+
+`setups` is an array of records with exactly `name` and `inputs`. Each input
+selector has exactly `port` and `path`, using logical input and product-field
+indices. Native slices are derived from the checked schema. Readers check exact
+coverage, nonoverlap, nonempty selections and proof-key availability. Source
+comparison additionally binds slot names and selector choices to the checked
+Entry. Setup metadata is part of authenticated package bytes.
 
 Each protocol record has `symbol`, `roles`, `inputs`, `outputs`, `services` and
 `clauses`. Each port has `name`, display `type`, `roles`, logical `index`, ordered
@@ -963,7 +1022,7 @@ require the Host to recompile it or establish a security theorem.
 
 ### Rust interface admission
 
-The native Host reads only interface version 5. It checks strict object members,
+The native Host reads only interface version 6. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
 validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
@@ -986,16 +1045,43 @@ those choices are authenticated package metadata. The compiler/checker publicati
 path owns source correspondence and relation meaning. Reading metadata or binding
 its ports does not interpret MLIR or establish a protocol security judgment.
 
+### Named setup authority and initialization
+
+Both source Hosts accept `entry::SetupAuthority`, whose `keys` map covers setup
+slot names exactly and supplies independently authorized verifier-key identities.
+Unknown or missing names refuse with `entry-setup-authority`. The adapter derives
+native maps from the authenticated interface: run maps use role-local operand
+indices; proof maps pin every original public verifier-key index and associate
+other setup-bearing inputs with the slot's lowest verifier-key index. Native
+admission independently checks complete coverage and concrete types.
+
+`RunRequest::setups` and `ProofRequest::setups` supply verifier-key bytes for every
+slot exactly. The Host authenticates and imports them through its existing bounded
+setup loader. Whole verifier-key inputs are initialized automatically: applications
+omit them from both named role inputs and named public values. Supplying a second
+value under that port name refuses. Prover-key inputs remain explicit named
+`Value::Leaf` values containing authenticated `ProverMaterial` or a
+`ProverKeyFile` with an independently expected material fingerprint. Other
+constructors, including arbitrary native key values, refuse.
+
+Each invocation checks prover material against its assigned slot. Immutable
+material may be reused across calls; runtime accounting and setup checks still
+apply per call. Names and byte/copy limits are checked before constructing public
+key input vectors. Native input admission owns key parsing, canonical bytes,
+setup metadata checks and execution budgets. This does not establish honest setup
+generation or authorize a private source representation.
+
 ### Named run calls
 
 Rust `entry::RunEntry::admit` retains an authenticated package, validates its
 interface and admits the exact run artifact through `RunHost`. Proof jobs use a
 separate API. Before accepting a run, every logical output must be copyable and
 have no affine custody; unsupported custody returns `entry-output-custody`.
-Every input must have source `Wire` constructor permission or admission returns
-`entry-input-constructor`. These checks precede native bundle admission.
+Every ordinary input must have source `Wire` constructor permission or admission
+returns `entry-input-constructor`. Whole builtin key ports instead use the explicit
+setup route above. These checks precede native bundle admission.
 
-`RunRequest` names every participant, its input ports and service budgets exactly.
+`RunRequest` names every participant, its ordinary/prover-key input ports and service budgets exactly.
 Each role remains required even when it has no inputs. Unit values and empty
 products also remain explicit. Records use exact field names, tuples and arrays
 use ordered elements, variants name an active alternative and its payload fields,
@@ -1008,7 +1094,8 @@ Ordinary leaves use `entry::Value::Leaf(InputValue::Native(...))` or `Wire`.
 The admitted source schema's `Wire` constructor permission applies recursively
 through products and alternative payloads. A matching native representation does
 not confer private constructor authority. Source randomness comes through named
-managed services; setup keys require a separately admitted initialization route. Native leaves retain the upstream cryptographic library invariants stated
+managed services; setup keys use the named initialization route above. Native
+leaves retain the upstream cryptographic library invariants stated
 by the run Host. Variant payloads can mix native and wire data; common admission
 checks complete types, aggregate collection counts and retention before decoding
 or constructing payload containers.
@@ -1084,8 +1171,9 @@ The comparator performs whole-module admission once before comparing SSA. Target
 admission, expansion and execution retain their own limits. A checked source may
 fail target preparation or realization with the failure phase identified.
 
-Source setup initialization, dynamic source arrays and
-member-generic conformance remain outside the implemented profile. Reserved future syntax
+Receive-only setup slots, per-receive setup pins, general private ingress validators,
+dynamic source arrays and member-generic conformance remain outside the implemented
+profile. Reserved future syntax
 refuses explicitly. Existing IR support remains independent. Structural source
 comparison and runtime controls establish neither native Lean correspondence nor
 protocol security.

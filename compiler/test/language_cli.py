@@ -16,7 +16,7 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface/5'
+    assert interface['format'] == 'zkc.language-interface/6'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
     protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
@@ -275,5 +275,15 @@ with case('publish authored proof with logical products and empty public inputs'
             f'--module=sample={FIXTURES / "host_proof.zkc"}']
     package = commands.run([compiler, 'language-package', *args])
     (OUT / 'host-proof.entry').write_text(package)
+
+for entry in ('Run', 'Prove'):
+    with case(f'source setup associations compile through common native execution: {entry}'):
+        args = ['--source-format=zkc', f'--entry=sample::{entry}',
+                f'--module=sample={FIXTURES / "pcs_setup.zkc"}']
+        package = commands.run([compiler, 'language-package', *args])
+        interface = json.loads(json.loads(package)['interface'])
+        assert [slot['name'] for slot in interface['setups']] == ['first', 'second']
+        assert interface['setups'][1]['inputs'] == [{'port': 4, 'path': []}, {'port': 5, 'path': []}]
+        (OUT / f'pcs-setup-{entry}.entry').write_text(package)
 
 counted()

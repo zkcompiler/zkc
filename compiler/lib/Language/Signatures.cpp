@@ -7,9 +7,14 @@ namespace zkc::language::detail {
 bool Checker::requirements(Declaration &decl) {
   for (auto &req : sources[decl.id.index]->requirements) {
     if (!req.capability.empty()) {
+      if (decl.kind == Declaration::Kind::Associated)
+        return fail("source.unsupported",
+                    "associated members cannot declare capability bounds",
+                    req.span);
+      auto name = StringRef(req.capability).rsplit("::");
       auto exports = protocol::sourceCapabilityExports();
       auto found = llvm::find_if(exports, [&](const auto &exported) {
-        return exported.module + "::" + exported.name == req.capability;
+        return exported.module == name.first && exported.name == name.second;
       });
       if (found == exports.end())
         return fail("source.capability",
@@ -22,14 +27,16 @@ bool Checker::requirements(Declaration &decl) {
           return false;
         bound.arguments.push_back(std::move(*argument));
       }
-      if (!capabilityFormation(bound))
-        return false;
       if (llvm::none_of(bound.arguments,
                         [&](const auto &t) { return symbolic(t); })) {
         if (!entails(nullptr, bound))
           return false;
-      } else
+      } else {
+        if (!capabilityFormation(bound))
+          return false;
+        // Only open facts are stored. Closed requirements are decided above.
         decl.capabilityBounds.push_back(std::move(bound));
+      }
       continue;
     }
     auto lhs = type(decl, req.lhs);

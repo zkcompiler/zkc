@@ -15,7 +15,7 @@ fn selector(direction: &str, port: u32, role: &str) -> Value {
 }
 fn document() -> Value {
     let boolean = schema("boolean", "bool", json!(["bool"]));
-    json!({"format":"zkc.language-interface/5","capture":digest("capture"),"original":digest("original"),
+    json!({"format":"zkc.language-interface/6","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"sample::Proof","protocol":"sample_Protocol",
         "protocols":[{"symbol":"sample_Protocol","roles":["P","V"],
             "inputs":[port("statement",0,json!([0]),json!(["P","V"]),boolean.clone()),
@@ -110,7 +110,7 @@ fn exact_objects_reject_extra_duplicate_missing_and_old_fields() {
             "\"kind\":\"authored\",\"kind\":\"authored\"",
         ),
         s.clone() + "{}",
-        s.replace("language-interface/5", "language-interface/4"),
+        s.replace("language-interface/6", "language-interface/5"),
     ] {
         assert_eq!(read_text(&bad).unwrap_err(), InterfaceError::Format);
     }
@@ -432,6 +432,16 @@ fn pcs_schemas_preserve_local_material_permissions() {
         value["permissions"] = json!(permissions);
         let parsed = serde_json::from_value(value.clone()).unwrap();
         schemas::Schemas::new().check(&parsed, 0).unwrap();
+        if !shared {
+            let mut forged = value.clone();
+            forged["permissions"] = json!(["Copy", "Drop", "Share"]);
+            let forged = serde_json::from_value(forged).unwrap();
+            assert_eq!(
+                schemas::Schemas::new().check(&forged, 0),
+                Err(InterfaceError::Schema),
+                "{head} acquired sharing"
+            );
+        }
         if !wire {
             permissions.push("Wire");
             value["permissions"] = json!(permissions);
@@ -443,4 +453,148 @@ fn pcs_schemas_preserve_local_material_permissions() {
             );
         }
     }
+}
+
+fn setup_document() -> Value {
+    let mut doc = document();
+    doc["relations"] = json!([]);
+    doc["protocols"][0]["clauses"] = json!([]);
+    let mut inputs = Vec::new();
+    for (i, (name, head, role, permissions)) in [
+        ("vk", "verifier_key", "V", vec!["Copy", "Drop"]),
+        ("pk", "prover_key", "P", vec!["Copy", "Drop"]),
+        (
+            "statement",
+            "commitment",
+            "V",
+            vec!["Copy", "Drop", "Share", "Wire"],
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let leaf = format!("{head}:multilinear.kzg.bls12-381/1");
+        let mut ty = schema("builtin", &leaf, json!([leaf]));
+        ty["permissions"] = json!(permissions);
+        inputs.push(port(name, i as u32, json!([i]), json!([role]), ty));
+    }
+    doc["protocols"][0]["inputs"] = json!(inputs);
+    doc["job"]["public"] = json!([0, 2]);
+    doc["job"]["target"] = Value::Null;
+    doc["setups"] = json!([{"name":"pcs","inputs":[{"port":0,"path":[]},{"port":1,"path":[]},{"port":2,"path":[]}]}]);
+    doc
+}
+#[test]
+fn setup_selectors_derive_native_maps_independently() {
+    let doc = setup_document();
+    let interface = read(&doc).unwrap();
+    let slot = &interface.setups[0];
+    assert_eq!(slot.inputs, [0, 1, 2].into_iter().collect());
+    assert_eq!(slot.verifier_keys, [0].into_iter().collect());
+    let authority = crate::entry::SetupAuthority {
+        keys: [("pcs".into(), [7; 32])].into(),
+    };
+    let proof = crate::entry::setups::proof_authority(&interface, authority.clone()).unwrap();
+    assert_eq!(proof.keys, [(0, [7; 32])].into());
+    assert_eq!(proof.inputs, [(1, 0), (2, 0)].into());
+    let run = crate::entry::setups::run_authority(&interface, authority).unwrap();
+    assert_eq!(
+        run.inputs,
+        [
+            (("P".into(), 0), "pcs".into()),
+            (("V".into(), 0), "pcs".into()),
+            (("V".into(), 1), "pcs".into())
+        ]
+        .into()
+    );
+    assert_eq!(
+        crate::entry::setups::run_authority(&interface, Default::default()).unwrap_err(),
+        "entry-setup-authority"
+    );
+}
+#[test]
+fn malformed_setup_assignments_are_refused() {
+    let valid = setup_document();
+    for slots in [
+        json!([]),
+        json!([{"name":"pcs","inputs":[]}]),
+        json!([{"name":"pcs","inputs":[{"port":0,"path":[]},{"port":1,"path":[]}]}]),
+        json!([{"name":"pcs","inputs":[{"port":0,"path":[]},{"port":1,"path":[]},{"port":2,"path":[]},{"port":2,"path":[]}]}]),
+        json!([{"name":"pcs","inputs":[{"port":0,"path":[]}]},{"name":"other","inputs":[{"port":1,"path":[]},{"port":2,"path":[]}]}]),
+        json!([{"name":"pcs","inputs":[{"port":0,"path":[0]},{"port":1,"path":[]},{"port":2,"path":[]}]}]),
+        json!([{"name":"pcs","inputs":[{"port":99,"path":[]},{"port":1,"path":[]},{"port":2,"path":[]}]}]),
+    ] {
+        let mut bad = valid.clone();
+        bad["setups"] = slots;
+        assert_eq!(read(&bad).unwrap_err(), InterfaceError::Selection, "{bad}");
+    }
+    let mut run = valid.clone();
+    run["job"] = json!({"kind":"run"});
+    run["setups"] = json!([{"name":"first","inputs":[{"port":0,"path":[]}]},{"name":"second","inputs":[{"port":1,"path":[]},{"port":2,"path":[]}]}]);
+    read(&run).unwrap();
+    run["setups"][1]["name"] = json!("first");
+    assert_eq!(read(&run).unwrap_err(), InterfaceError::Selection);
+    let mut old = valid;
+    old["format"] = json!("zkc.language-interface/5");
+    assert_eq!(read(&old).unwrap_err(), InterfaceError::Format);
+}
+
+#[test]
+fn setup_alias_keys_share_the_pin_and_original_representative() {
+    let mut doc = setup_document();
+    let mut alias = doc["protocols"][0]["inputs"][0].clone();
+    alias["name"] = json!("alias");
+    alias["index"] = json!(3);
+    alias["native"] = json!([3]);
+    doc["protocols"][0]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(alias);
+    doc["job"]["public"] = json!([0, 2, 3]);
+    doc["setups"][0]["inputs"] = json!([
+        {"port":3,"path":[]}, {"port":2,"path":[]},
+        {"port":1,"path":[]}, {"port":0,"path":[]}
+    ]);
+    let interface = read(&doc).unwrap();
+    let authority = crate::entry::SetupAuthority {
+        keys: [("pcs".into(), [9; 32])].into(),
+    };
+    let native = crate::entry::setups::proof_authority(&interface, authority).unwrap();
+    assert_eq!(native.keys, [(0, [9; 32]), (3, [9; 32])].into());
+    assert_eq!(native.inputs, [(1, 0), (2, 0)].into());
+}
+
+#[test]
+fn proof_setup_refuses_prover_key_at_verifier() {
+    let mut doc = setup_document();
+    doc["protocols"][0]["inputs"][1]["roles"] = json!(["V"]);
+    doc["job"]["public"] = json!([0, 1, 2]);
+    assert_eq!(read(&doc).unwrap_err(), InterfaceError::Selection);
+}
+#[test]
+fn proof_setup_bounds_total_verifier_keys_separately_from_slots() {
+    let mut doc = setup_document();
+    for index in 3..67 {
+        let mut key = doc["protocols"][0]["inputs"][0].clone();
+        key["name"] = json!(format!("key{index}"));
+        key["index"] = json!(index);
+        key["native"] = json!([index]);
+        doc["protocols"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(key);
+        doc["job"]["public"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(index));
+        doc["setups"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"port":index,"path":[]}));
+    }
+    assert_eq!(read(&doc).unwrap_err(), InterfaceError::Limit);
+    doc["protocols"][0]["inputs"].as_array_mut().unwrap().pop();
+    doc["job"]["public"].as_array_mut().unwrap().pop();
+    doc["setups"][0]["inputs"].as_array_mut().unwrap().pop();
+    assert_eq!(read(&doc).unwrap().setups[0].verifier_keys.len(), 64);
 }

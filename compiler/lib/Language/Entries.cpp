@@ -23,7 +23,7 @@ bool Checker::entries() {
       return false;
     const auto &definition = output.declarations[target->index];
     if (definition.kind == Declaration::Kind::Entry) {
-      if (source.proof || !source.targetArguments.empty())
+      if (source.entryBlock || !source.targetArguments.empty())
         return fail(
             "source.entry",
             "complete Entry aliases cannot override or specialize choices",
@@ -46,6 +46,14 @@ bool Checker::entries() {
       entry.target = definition.target;
       entry.staticArguments = definition.staticArguments;
       entry.proof = definition.proof;
+      for (const auto &slot : definition.setups) {
+        if (!charge(slot.name.size() + slot.inputs.size() + 1, source.span))
+          return false;
+        for (const auto &input : slot.inputs)
+          if (!charge(input.path.size() + 1, source.span))
+            return false;
+      }
+      entry.setups = definition.setups;
     } else if (definition.kind == Declaration::Kind::Protocol) {
       auto selected =
           arguments(entry, definition, source.targetArguments, source.span);
@@ -55,6 +63,8 @@ bool Checker::entries() {
       entry.target = *target;
       entry.staticArguments = std::move(*selected);
       if (source.proof && !configureEntry(entry, definition, *source.proof))
+        return false;
+      if (!configureSetups(entry, definition, source.setups))
         return false;
     } else
       return fail("source.entry",
@@ -69,6 +79,50 @@ bool Checker::entries() {
     if (output.declarations[i].kind == Declaration::Kind::Entry &&
         !visit(visit, {i}, 1))
       return false;
+  return true;
+}
+bool Checker::configureSetups(Declaration &entry, const Declaration &protocol,
+                              ArrayRef<SyntaxSetupSlot> sources) {
+  if (sources.size() > 64)
+    return fail("source.limit", "Entry setup slot limit exceeded", entry.span);
+  auto bindings = substitution(protocol, entry.staticArguments);
+  std::set<std::string> names;
+  for (const auto &source : sources) {
+    if (!charge(source.name.name.size() + source.inputs.size() + 1,
+                source.span))
+      return false;
+    if (!names.insert(source.name.name).second || source.inputs.empty())
+      return fail("source.entry", "setup slots must be named once and nonempty",
+                  source.span);
+    SetupSlot slot{source.name.name, {}, source.span};
+    for (const auto &input : source.inputs) {
+      if (!charge(protocol.inputs.size() + input.path.size() + 1, input.span))
+        return false;
+      auto found = llvm::find_if(protocol.inputs, [&](const auto &port) {
+        return port.name == input.port;
+      });
+      if (found == protocol.inputs.end())
+        return fail("source.entry", "setup selector names an absent input",
+                    input.span);
+      EntryInput selected{
+          unsigned(found - protocol.inputs.begin()), {}, input.span};
+      auto current = substitute(found->type, bindings, input.span);
+      if (!current)
+        return false;
+      for (const auto &name : input.path) {
+        auto index = fieldIndex(entry, *current, name, input.span);
+        if (!index)
+          return false;
+        current =
+            projectedType(entry, std::move(*current), {*index}, input.span);
+        if (!current)
+          return false;
+        selected.path.push_back(*index);
+      }
+      slot.inputs.push_back(std::move(selected));
+    }
+    entry.setups.push_back(std::move(slot));
+  }
   return true;
 }
 bool Checker::configureEntry(Declaration &entry, const Declaration &protocol,

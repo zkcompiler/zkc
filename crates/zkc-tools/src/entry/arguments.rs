@@ -1,20 +1,54 @@
 //! Exact named argument admission shared by run and independent proof jobs.
 use super::{
-    NamedValues,
+    Interface, NamedValues, Value,
     interface::raw::{Port, Service},
-    value,
+    setups, value,
 };
 use crate::host::request::InputValue;
 use std::collections::BTreeMap;
 
+pub(super) fn check_import(interface: &Interface, port: &Port) -> Result<(), String> {
+    if setups::key_kind(interface, port).is_some() {
+        Ok(())
+    } else {
+        value::check_import(&port.schema)
+    }
+}
 pub(super) fn values<'a>(
+    interface: &Interface,
     ports: impl Iterator<Item = &'a Port>,
     mut values: NamedValues,
+    public_keys: Option<&BTreeMap<u32, &[u8]>>,
 ) -> Result<Vec<InputValue>, String> {
     let mut inputs = Vec::new();
     for port in ports {
-        let value = values.remove(&port.name).ok_or("entry-input-names")?;
-        value::flatten(&port.schema, value, &mut inputs)?;
+        match setups::key_kind(interface, port) {
+            Some(zkc_runtime::interactive::Type::VerifierKey) => {
+                inputs.push(if let Some(keys) = public_keys {
+                    InputValue::Wire(
+                        keys.get(&port.native[0])
+                            .ok_or("entry-setup-material")?
+                            .to_vec(),
+                    )
+                } else {
+                    InputValue::VerifierKey
+                });
+            }
+            Some(zkc_runtime::interactive::Type::ProverKey) => {
+                let value = values.remove(&port.name).ok_or("entry-input-names")?;
+                let Value::Leaf(
+                    value @ (InputValue::ProverKey(_) | InputValue::ProverKeyFile { .. }),
+                ) = value
+                else {
+                    return Err("entry-input-key".into());
+                };
+                inputs.push(value);
+            }
+            _ => {
+                let value = values.remove(&port.name).ok_or("entry-input-names")?;
+                value::flatten(&port.schema, value, &mut inputs)?;
+            }
+        }
     }
     if !values.is_empty() {
         return Err("entry-input-names".into());

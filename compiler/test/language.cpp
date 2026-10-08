@@ -775,8 +775,8 @@ void bounds() {
   sourceRefuses(basic, "source.limit", limits);
   limits = {};
   limits.work = project.checkedWork();
+  // Analysis owns this exact boundary. Entry closure has its own phase work.
   check(basic, limits);
-  must(closeEntry(project, "m::Demo", limits));
   --limits.work;
   sourceRefuses(basic, "source.limit", limits);
   uint64_t tokenCount = project.tokens(ModuleId{0}).size();
