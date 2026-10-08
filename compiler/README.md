@@ -253,7 +253,7 @@ IR → Protocol, MLIR IR and interfaces
 ClaimTranslation → Claims, IR
 Claims → Protocol → Relation → Contracts → Support → LLVM
 Frontend → Protocol
-Language → Contracts
+Language → Contracts, Relation
 FrontendLoading → Frontend
 ```
 
@@ -268,7 +268,7 @@ FrontendLoading → Frontend
 | `Zkc::Translation` | Typed source/participant carrier import and export in `Translation` |
 | `Zkc::ClaimTranslation` | Optional source-bound claim IR import and candidate checking in `ClaimTranslation` |
 | `Zkc::Frontend` | Captured-input resolution, checked authoring, static selection, retained analysis and common lowering in `Frontend` |
-| `Zkc::Language` | Immutable `.zkc` capture, lossless syntax, source checking and Entry closure; [source guide](../docs/language/mathematical.md) |
+| `Zkc::Language` | Immutable `.zkc` and relation-asset capture, lossless syntax, source checking and Entry closure; [source guide](../docs/language/mathematical.md) |
 | `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
 | `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion`, `Target` and `Dialect/Relation/Transforms` |
 | `Zkc::CompilerCore` | Typed compilation, in-memory native MLIR compilation, checked construction/claim workflows, inspection and pipeline/pass registration in `Compiler` |

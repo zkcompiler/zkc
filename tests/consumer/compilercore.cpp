@@ -2,6 +2,7 @@
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
@@ -66,6 +67,17 @@ int main(int argc, char **argv) {
     llvm::errs() << llvm::toString(std::move(error));
     return 35;
   }
+  auto interface = zkc::language::readInterface(original->bytes(),
+                                                original->interfaceJson());
+  if (!interface) {
+    llvm::errs() << llvm::toString(interface.takeError());
+    return 36;
+  }
+  if (interface->protocol != entry->protocol().symbol ||
+      interface->inputs.size() != 1 ||
+      original->interface().protocol != interface->protocol ||
+      original->interface().inputs.size() != 1)
+    return 37;
   if (argc > 2)
     return 15;
   auto result = compile();

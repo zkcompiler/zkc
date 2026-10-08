@@ -1,4 +1,5 @@
 #include "zkc/Compiler/Language.h"
+#include "LanguageInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Diagnostics.h"
@@ -232,6 +233,7 @@ struct CheckedOriginal::Storage {
   std::string original;
   std::string identity, interface, toolchain, locationsIdentity;
   Correspondence report;
+  LanguageInterface interfaceView;
 };
 std::string compilerToolchainIdentity() {
   std::string material;
@@ -326,15 +328,20 @@ Expected<CheckedOriginal> prepareOriginal(const ClosedEntry &entry,
     }
   }
   storage->locationsIdentity = digest(mapIdentity);
-  CheckedOriginal original(std::move(storage));
-  if (auto failure = checkInterface(original, original.interfaceJson(), limits))
-    return std::move(failure);
-  return original;
+  auto interfaceView = detail::readInterface(*module, storage->identity,
+                                             storage->interface, limits);
+  if (!interfaceView)
+    return interfaceView.takeError();
+  storage->interfaceView = std::move(*interfaceView);
+  return CheckedOriginal(std::move(storage));
 }
 const ClosedEntry &CheckedOriginal::entry() const { return storage->selected; }
 StringRef CheckedOriginal::bytes() const { return storage->original; }
 StringRef CheckedOriginal::identity() const { return storage->identity; }
 StringRef CheckedOriginal::interfaceJson() const { return storage->interface; }
+const LanguageInterface &CheckedOriginal::interface() const {
+  return storage->interfaceView;
+}
 StringRef CheckedOriginal::toolchain() const { return storage->toolchain; }
 StringRef CheckedOriginal::locationsIdentity() const {
   return storage->locationsIdentity;

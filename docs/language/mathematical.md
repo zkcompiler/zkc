@@ -4,8 +4,10 @@ The `.zkc` language combines total mathematical helpers, ordered local functions
 static libraries and explicit participant messages. It emits mathematical MLIR
 for the existing participant compiler and runtime. The
 [source profile](../spec/profiles/source/mathematical-language.md) defines syntax,
-permissions, role semantics and bounds. Services, protocol composition, relation
-attachments and source-facing Host jobs remain under [frontend migration](../roadmap.md).
+permissions, role semantics and bounds. Static protocol composition, managed
+randomness, bounded repetition and conditional participant completion are supported.
+Relation attachments and source-facing Host jobs remain under
+[frontend migration](../roadmap.md).
 
 For a complete small example, read [algebra.zkc](../../compiler/test/fixtures/language/algebra.zkc)
 and [transfer.zkc](../../compiler/test/fixtures/language/transfer.zkc). The two
@@ -26,6 +28,11 @@ Use the same options with `language-emit` to print checked original MLIR,
 admission and source correspondence. There is no implicit import discovery or
 fallback to the `.pir` parser. `--no-simplify` and `--release-storage` select
 existing downstream compiler options for bundle production.
+
+`--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported
+formats are `r1cs-json`, `r1cs-binary` and `air-json`; the compiler validates even
+unused assets with the native bounded readers. Capture alone does not attach a
+relation to a protocol or add runtime inputs.
 
 A bundle uses the existing [native runtime](../runtime/bundles.md). Its entry is
 the encoded protocol symbol recorded in the source interface. Runtime inputs
@@ -98,7 +105,8 @@ path; typed source job construction belongs to the Host package.
 ## C++ boundaries
 
 - `Zkc::Language`: capture supplied buffers, analyze them, and close an exact
-  Entry. This library depends only on Contracts and its common support.
+  Entry. It uses the pure Contracts and Relation components and their common
+  support; it has no MLIR, runtime or filesystem dependency.
 - `Zkc::Translation`: emit unsimplified mathematical MLIR and independently
   admit and compare actual SSA with the checked source.
 - `Zkc::CompilerCore`: `prepareOriginal` retains immutable bytes, interface,
@@ -106,6 +114,10 @@ path; typed source job construction belongs to the Host package.
   original and the existing `CompiledRun` candidate through const accessors.
   Only successful compilation can construct `CompiledEntry`; downstream MLIR
   remains caller-accessible and is separate from the immutable original.
+  `readInterface` independently checks a supplied interface against original
+  MLIR. `CheckedOriginal::interface()` exposes the retained checked view;
+  `checkInterface` binds supplied metadata to that original. A structural
+  interface view grants no authority to decode private inputs.
 - `Zkc::Driver`: read explicit bounded files and render command results.
 
 The logical type and layout APIs are [Language/Types.h](../../compiler/include/zkc/Language/Types.h)
@@ -113,6 +125,7 @@ and [Language/Layout.h](../../compiler/include/zkc/Language/Layout.h).
 The compilation APIs are [Language/Project.h](../../compiler/include/zkc/Language/Project.h),
 [Translation/Language.h](../../compiler/include/zkc/Translation/Language.h), and
 [Compiler/Language.h](../../compiler/include/zkc/Compiler/Language.h).
+The independent reader is [Compiler/LanguageInterface.h](../../compiler/include/zkc/Compiler/LanguageInterface.h).
 Diagnostics retain byte spans; recovery tokens cannot be promoted into checked
 state. The compiler never accepts a caller-constructed checked project.
 

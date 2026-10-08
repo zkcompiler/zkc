@@ -8,7 +8,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = ("ZkcLanguage", "ZkcSupport", "ZkcContracts", "ZkcRelation", "ZkcProtocol", "ZkcIR", "ZkcTranslation", "ZkcFrontend", "ZkcFrontendLoading", "ZkcClaims", "ZkcClaimTranslation", "ZkcTransforms", "ZkcCompilerCore", "ZkcDriver")
 ALLOWED = {
-    "ZkcLanguage": {"ZkcContracts"},
+    "ZkcLanguage": {"ZkcContracts", "ZkcRelation"},
     "ZkcFrontend": {"ZkcProtocol"},
     "ZkcFrontendLoading": {"ZkcFrontend"},
     "ZkcSupport": {"LLVMSupport"},
@@ -204,6 +204,7 @@ def main():
     }
     private_headers["ZkcCompilerCore"] = {
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
+        ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/NativeDeployment.h",
         ROOT / "lib/Compiler/NativeProofVerification.h",
     }

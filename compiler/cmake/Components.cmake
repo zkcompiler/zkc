@@ -257,6 +257,7 @@ add_zkc_component(Transforms
 add_zkc_component(CompilerCore
   lib/Compiler/Language.cpp
   lib/Compiler/LanguageInterface.cpp
+  lib/Compiler/LanguageInterfaceReader.cpp
   lib/Compiler/Algorithms.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/ArtifactJson.cpp

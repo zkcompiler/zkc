@@ -1,5 +1,6 @@
 #ifndef ZKC_COMPILER_LANGUAGE_H
 #define ZKC_COMPILER_LANGUAGE_H
+#include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/Run.h"
 #include "zkc/Translation/Language.h"
 #include <memory>
@@ -16,6 +17,7 @@ public:
   llvm::StringRef bytes() const;
   llvm::StringRef identity() const;
   llvm::StringRef interfaceJson() const;
+  const LanguageInterface &interface() const;
   llvm::StringRef toolchain() const;
   llvm::StringRef locationsIdentity() const;
   llvm::ArrayRef<SourceLocation> locations() const;

@@ -1,8 +1,14 @@
+#include "LanguageInterface.h"
+#include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/SHA256.h"
 #include <set>
 
 using namespace llvm;
@@ -33,9 +39,12 @@ Error preflight(StringRef bytes) {
           ++i;
         ++i;
       }
-      if (i >= bytes.size() || i - start > 262144)
-        return error("source.interface",
-                     "invalid or oversized interface string");
+      if (i >= bytes.size())
+        return error("source.interface", "unterminated interface string");
+      // JSON can spell one ASCII byte as six characters (\uXXXX). The
+      // decoded string ceiling follows the native variant carrier limit.
+      if (i - start - 1 > 6 * protocol::VariantSpellingBytes)
+        return error("source.limit", "interface string limit exceeded");
       StringRef spelling = bytes.slice(start, ++i);
       if (!validStringEncoding(spelling))
         return error("source.interface", "invalid interface string encoding");
@@ -46,8 +55,10 @@ Error preflight(StringRef bytes) {
         if (stack.empty() || !stack.back())
           return error("source.interface", "object key outside object");
         auto parsed = json::parse(spelling);
-        if (!parsed)
-          return parsed.takeError();
+        if (!parsed) {
+          consumeError(parsed.takeError());
+          return error("source.interface", "invalid interface object key");
+        }
         auto key = parsed->getAsString();
         if (!key || !stack.back()->insert(key->str()).second)
           return error("source.interface", "duplicate interface key");
@@ -64,19 +75,53 @@ Error preflight(StringRef bytes) {
   return Error::success();
 }
 } // namespace
-Error checkInterface(const CheckedOriginal &original, StringRef bytes,
-                     const Limits &limits) {
+Expected<json::Value> detail::parseInterface(StringRef bytes,
+                                             const Limits &limits) {
   if (auto error = checkLimits(limits))
-    return error;
+    return std::move(error);
   if (bytes.size() > limits.interfaceBytes)
     return error("source.limit", "interface byte limit exceeded");
   if (auto error = preflight(bytes))
-    return error;
+    return std::move(error);
   auto actual = json::parse(bytes);
   if (!actual) {
     consumeError(actual.takeError());
     return error("source.interface", "invalid interface JSON");
   }
+  return actual;
+}
+Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,
+                                          const Limits &limits) {
+  if (auto error = checkLimits(limits))
+    return std::move(error);
+  if (original.size() > limits.irBytes ||
+      bytes.size() > limits.interfaceBytes || !mlirNestingWithinLimit(original))
+    return error("source.limit", "original or interface limit exceeded");
+  auto parsed = detail::parseInterface(bytes, limits);
+  if (!parsed)
+    return parsed.takeError();
+  if (!json::isUTF8(original))
+    return error("target.admission", "original is not UTF-8");
+  mlir::DialectRegistry registry;
+  registerNativeDialects(registry);
+  mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
+  context.loadAllAvailableDialects();
+  context.printOpOnDiagnostic(false);
+  // Suppress detailed parser diagnostics; return a fixed refusal below.
+  mlir::ScopedDiagnosticHandler handler(
+      &context, [](mlir::Diagnostic &) { return mlir::success(); });
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(original, &context);
+  if (!module)
+    return error("target.admission",
+                 "original failed mathematical IR admission");
+  auto identity = toHex(SHA256::hash(arrayRefFromStringRef(original)), true);
+  return detail::decodeInterface(*module, identity, *parsed, limits);
+}
+Error checkInterface(const CheckedOriginal &original, StringRef bytes,
+                     const Limits &limits) {
+  auto actual = detail::parseInterface(bytes, limits);
+  if (!actual)
+    return actual.takeError();
   auto expected = json::parse(original.interfaceJson());
   if (!expected)
     return expected.takeError();

@@ -616,8 +616,20 @@ Zero-leaf ports retain empty native indices. Offsets are relative to their produ
 or alternative payload. Version 1 and unknown versions refuse. No relation or
 clause placeholder is present.
 
-Checking compares decoded JSON against the retained original's exact interface,
-rejecting duplicate/unknown keys, wrong versions, identities, selections and layouts.
+The standalone `readInterface` API admits original MLIR and checks the interface
+against its exact byte hash, selected protocol, flattened types and participant
+roles. It checks contiguous port/field indices, complete native coverage, variant
+labels/payloads, custody prefixes and managed-service contracts. Logical types
+with the same spelling must have consistent schemas. Promised Copy, Drop and
+Wire permissions cannot exceed native leaves; aggregate Share is checked through
+logical children while native admission checks actual placement.
+
+`CheckedOriginal::interface()` exposes the retained checked view.
+`checkInterface` compares decoded JSON against the retained original's
+exact source interface. This binds source names, nominal schemas, permissions and
+capture/Entry selection. The standalone structural view does not establish source
+correspondence or constructor authority and cannot authorize private input decoding.
+Both readers reject duplicate/unknown keys, wrong versions and malformed metadata.
 Object member order is immaterial. The original identity hashes exact MLIR bytes
 without debug locations under a fixed printing policy. The toolchain identity binds
 the installed catalog, compiler source build identity and actual LLVM/MLIR release.

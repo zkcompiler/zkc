@@ -1,8 +1,16 @@
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Project.h"
+#include "zkc/Relation/R1CS.h"
+#include "zkc/Support/Json.h"
 #include "llvm/Support/raw_ostream.h"
 int main() {
-  auto capture = zkc::language::capture({{"m", R"(module m;
+  auto relation = zkc::relation::R1CS::create("bls12-381.fr", 2, 0, 1, {});
+  if (!relation) {
+    llvm::errs() << llvm::toString(relation.takeError());
+    return 6;
+  }
+  auto capture = zkc::language::capture(
+      {{"m", R"(module m;
     struct Pair<T:Type>{pub first:T,pub second:T}
     fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
       return Pair<T>{first:x.second,second:x.first};
@@ -11,7 +19,10 @@ int main() {
       local P let r=swap(x);return(r=r);
     }
     entry Demo=Run;)",
-                                          "consumer.zkc"}});
+        "consumer.zkc"}},
+      {{"circuit", "r1cs-json", zkc::printJson(relation->encode()),
+        "unused.json"}},
+      {});
   if (!capture) {
     llvm::errs() << llvm::toString(capture.takeError());
     return 1;
@@ -21,6 +32,9 @@ int main() {
     llvm::errs() << llvm::toString(checked.takeError());
     return 2;
   }
+  if (checked->assets().size() != 1 ||
+      checked->assets()[0].identity() != relation->identity())
+    return 7;
   auto entry = zkc::language::closeEntry(*checked, "m::Demo");
   if (!entry) {
     llvm::errs() << llvm::toString(entry.takeError());
