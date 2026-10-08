@@ -69,6 +69,25 @@ bool Checker::conformance(DeclarationId id) {
       available.parameters = component.parameters;
       available.bounds = component.bounds;
       available.permissionBounds = component.permissionBounds;
+      available.capabilityBounds = component.capabilityBounds;
+      for (const auto &bound : required.capabilityBounds) {
+        CapabilityBound assumption{bound.predicate, {}, bound.span};
+        for (const auto &argument : bound.arguments) {
+          auto actual = substitute(argument, bindings, provided->span);
+          if (!actual)
+            return false;
+          assumption.arguments.push_back(std::move(*actual));
+        }
+        if (llvm::none_of(assumption.arguments,
+                          [&](const auto &t) { return symbolic(t); })) {
+          if (!entails(nullptr, assumption, "source.conformance"))
+            return false;
+        } else
+          available.capabilityBounds.push_back(std::move(assumption));
+      }
+      for (const auto &bound : provided->capabilityBounds)
+        if (!entails(&available, bound, "source.conformance"))
+          return false;
       for (const auto &parameter : required.parameters) {
         auto actual = bindings.find(parameter.atom);
         if (actual != bindings.end() &&

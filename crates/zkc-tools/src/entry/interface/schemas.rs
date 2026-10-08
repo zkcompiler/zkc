@@ -259,6 +259,13 @@ impl<'a> Schemas<'a> {
                                 | Type::Round
                                 | Type::Sequence
                                 | Type::FieldArray
+                                | Type::Commitment
+                                | Type::Commitments
+                                | Type::Proof
+                                | Type::ProverKey
+                                | Type::VerifierKey
+                                | Type::OpeningState
+                                | Type::OpeningStates
                         ),
                         _ => false,
                     }

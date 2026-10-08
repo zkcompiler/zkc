@@ -7,6 +7,7 @@ namespace zkc::language {
 /// source nominals and managed service roots cannot be erased through this API.
 bool isNativeData(const Type &);
 bool isDomainSort(llvm::StringRef);
+bool matchesKernelSort(const Type &, llvm::StringRef);
 /// Resolve a catalog association, retaining a symbolic projection when needed.
 llvm::Expected<Type> domainMember(const Type &, llvm::StringRef member);
 llvm::Expected<std::string> kernelArgument(const Type &, llvm::StringRef sort);

@@ -363,6 +363,7 @@ bool Checker::specialize(DeclarationId selected) {
     result.parameters.clear();
     result.bounds.clear();
     result.permissionBounds.clear();
+    result.capabilityBounds.clear();
     output.declarations[id.index] = std::move(result);
     instances.emplace(key, id);
     active.erase(key);

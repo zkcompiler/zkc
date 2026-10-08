@@ -44,6 +44,9 @@ public:
                       const Substitution &extra = {});
   bool assumptions(const Declaration &, const NaturalBound &,
                    const Substitution &, Span);
+  bool capabilityFormation(const CapabilityBound &);
+  bool entails(const Declaration *, const CapabilityBound &,
+               llvm::StringRef code = "source.capability");
   const Parameter *parameter(llvm::StringRef) const;
   const Declaration *typeDeclaration(const Type &) const;
   bool constructorAllowed(const Declaration &, const Type &) const;
@@ -79,7 +82,8 @@ public:
   std::optional<CallSignature> kernelSignature(llvm::StringRef,
                                                llvm::ArrayRef<Type>,
                                                llvm::ArrayRef<std::string>,
-                                               Span);
+                                               Span,
+                                               const Declaration * = nullptr);
   std::optional<CallSignature>
   intrinsicSignature(const Declaration *, llvm::StringRef, llvm::ArrayRef<Type>,
                      llvm::ArrayRef<std::string>, Span);

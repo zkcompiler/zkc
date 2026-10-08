@@ -89,7 +89,8 @@ struct SyntaxParameter {
   Span span;
 };
 struct SyntaxRequirement {
-  std::string permission;
+  std::string permission, capability;
+  std::vector<SyntaxType> arguments;
   SyntaxType lhs, rhs;
   Span span;
 };

@@ -56,6 +56,7 @@ add_zkc_component(Language
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
   lib/Language/Entries.cpp
+  lib/Language/Capabilities.cpp
   lib/Language/Permissions.cpp
   lib/Language/Conformance.cpp
   lib/Language/BodyCheck.cpp

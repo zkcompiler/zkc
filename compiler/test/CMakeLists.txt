@@ -41,6 +41,7 @@ add_test(NAME language-polynomial COMMAND zkc-language_polynomial-test
 set_tests_properties(language-polynomial PROPERTIES LABELS native)
 add_zkc_test(language_boolean CompilerCore language-boolean)
 mlir_target_link_libraries(zkc-language_boolean-test PRIVATE MLIRParser)
+add_zkc_test(language_capabilities CompilerCore language-capabilities)
 add_zkc_test(language_types CompilerCore language-types)
 mlir_target_link_libraries(zkc-language_types-test PRIVATE MLIRParser)
 add_zkc_test(language CompilerCore language-api)

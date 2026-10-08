@@ -1,10 +1,37 @@
 #include "Checker.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
 bool Checker::requirements(Declaration &decl) {
   for (auto &req : sources[decl.id.index]->requirements) {
+    if (!req.capability.empty()) {
+      auto exports = protocol::sourceCapabilityExports();
+      auto found = llvm::find_if(exports, [&](const auto &exported) {
+        return exported.module + "::" + exported.name == req.capability;
+      });
+      if (found == exports.end())
+        return fail("source.capability",
+                    "expected a qualified installed capability export",
+                    req.span);
+      CapabilityBound bound{found->predicate, {}, req.span};
+      for (const auto &syntax : req.arguments) {
+        auto argument = type(decl, syntax);
+        if (!argument)
+          return false;
+        bound.arguments.push_back(std::move(*argument));
+      }
+      if (!capabilityFormation(bound))
+        return false;
+      if (llvm::none_of(bound.arguments,
+                        [&](const auto &t) { return symbolic(t); })) {
+        if (!entails(nullptr, bound))
+          return false;
+      } else
+        decl.capabilityBounds.push_back(std::move(bound));
+      continue;
+    }
     auto lhs = type(decl, req.lhs);
     if (!lhs)
       return false;
@@ -84,6 +111,13 @@ bool Checker::chargeStaticSignature(const Declaration &decl) {
       if (!chargeType(argument, decl.span))
         return false;
   }
+  for (const auto &bound : decl.capabilityBounds) {
+    if (!charge(bound.predicate.size() + 1, bound.span))
+      return false;
+    for (const auto &argument : bound.arguments)
+      if (!chargeType(argument, bound.span))
+        return false;
+  }
   for (const auto &bound : decl.permissionBounds)
     if (!chargeType(bound.type, decl.span))
       return false;
@@ -129,6 +163,8 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     decl.bounds = output.declarations[decl.parent->index].bounds;
     decl.permissionBounds =
         output.declarations[decl.parent->index].permissionBounds;
+    decl.capabilityBounds =
+        output.declarations[decl.parent->index].capabilityBounds;
   }
   std::set<std::string> names;
   for (auto &p : decl.parameters) {
@@ -185,9 +221,9 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                        std::make_pair(id, unsigned(decl.parameters.size())));
     decl.parameters.push_back(std::move(p));
   }
-  formingParameters.erase(id.index);
   if (!requirements(decl))
     return false;
+  formingParameters.erase(id.index);
   for (const auto &application : deferredApplications[id.index]) {
     const auto &target = output.declarations[application.target.index];
     if (!checkArguments(target, application.arguments, application.span, &decl))

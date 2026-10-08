@@ -293,6 +293,17 @@ bool Checker::checkArguments(const Declaration &target, ArrayRef<Type> args,
                     "static argument lacks required permission", span);
     }
   }
+  for (const auto &bound : target.capabilityBounds) {
+    CapabilityBound goal{bound.predicate, {}, span};
+    for (const auto &argument : bound.arguments) {
+      auto actual = substitute(argument, subst, span);
+      if (!actual)
+        return false;
+      goal.arguments.push_back(std::move(*actual));
+    }
+    if (!entails(context, goal))
+      return false;
+  }
   for (const auto &bound : target.permissionBounds) {
     Type requirement = bound.type;
     requirement.assumptions = {};

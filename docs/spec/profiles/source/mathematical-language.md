@@ -134,6 +134,27 @@ same right-hand side suffices: `2 <= N` establishes `1 <= N`. Closed inequalitie
 are evaluated. There
 is no inequality solver or inference by solving equations such as `N + M = 8`.
 
+Catalog capabilities use qualified exported names in the same clause, for example
+`where zkc::algebra::TwoAdicField(F), zkc::pcs::MultilinearOpening(C)`.
+The catalog defines each predicate's argument count and sorts; arguments may be
+associated projections. Names are exact qualified exports, including
+`zkc::algebra::Field` and `zkc::curve::Group`. There are no ambient short names or
+user-declared facts. Field/Group sorts imply their corresponding facts. Other
+symbolic requirements must follow from explicit caller bounds and installed
+unary implications; arguments match by normalized source identity. A closed
+requirement is checked against installed facts, even in an unused declaration,
+and never established by an assumption. These are operation availability
+requirements, not cryptographic guarantees.
+
+Bounds apply to generic type and component applications as well as calls. Parent
+bounds are inherited. A component member cannot add requirements beyond those
+provided by its component and interface member; interface bounds are substituted
+through the implementation's parameters and associated types. Type applications
+inside a clause use its complete set of bounds, independent of written order.
+Specialization discharges and removes bounds. They introduce no runtime values,
+instance-key fields or equality assumptions. Checking is bounded by the source
+work budget and the finite requirement checker's term and assumption limits.
+
 Fixed arrays have bounded closed lengths after selection. `[a, b]` constructs an
 array; `a[0]` uses a numeric static index. A symbolic length needs a corresponding
 explicit bound for that index. Dynamic array indexing is outside this profile.
@@ -157,8 +178,9 @@ fn columns<F: Field>(matrix: Matrix<F>) -> index {
 
 `builtin` selects a logical constructor from the installed catalog. Its argument
 count and kinds are checked. This profile admits `vector`, `matrix`, `groups`,
-`indices`, `polynomial`, `table`, `point`, `round`, `sequence` and `field_array`,
-as well as scalar `field`, `group`, `bool` and `index`. Runtime collections remain
+`indices`, `polynomial`, `table`, `point`, `round`, `sequence`, `field_array`,
+`commitment`, `commitments`, `proof`, `prover_key`, `verifier_key`, `opening_state`
+and `opening_states`, as well as scalar `field`, `group`, `bool` and `index`. Runtime collections remain
 one native value; fixed source arrays retain their structural layout. Runtime
 polynomial data does not denote a formal polynomial expression. The native type
 policy owns mathematical and shared-data eligibility. Copy and Drop alone do not
@@ -171,6 +193,12 @@ layout-preserving packing contract; they cannot be passed as native Type roots.
 Managed services are separate from these data types. Container permissions retain
 element permissions, and concrete external boundaries require native message
 admission. A symbolic message shape still needs an admitted codec at closure.
+Commitments and proofs may be messages when concrete native admission permits.
+Keys and opening state remain local, copyable private data; they do not gain
+Share or Wire. Commitment collections retain the native collection policy, which
+does not currently admit them as protocol messages. Admitting a constructor does
+not admit every domain instance. External key/state inputs still require an
+explicit ingress contract; this constructor support supplies none.
 
 `kernel<...>("contract", operands...; "parameter", ...)` calls an installed
 source/construction contract from an ordinary local function. The semicolon and
@@ -181,9 +209,11 @@ tuple, and no results form unit. Constant parameters use the contract's own
 validation, including field-literal bounds. A generic field admits only `0` and
 `1` as literals; concrete field parameters are checked against that field.
 
-Generic checking may use the declared Field/Group facts and installed capability
-implications. Stronger capabilities must be established by a concrete selection;
-the compiler does not assume them from a field or group sort. Native Type roots
+Generic checking uses declared capability bounds, inherent Field/Group facts and
+installed implications. For example, `where zkc::algebra::TwoAdicField(F)` permits
+a generic wrapper for `poly.domain_root`; `where zkc::pcs::MultilinearOpening(C)`
+permits generic PCS wrappers rooted at `C` and its associated fields. Every
+concrete selection still needs the corresponding installed fact. Native Type roots
 must be admitted data with Copy and Drop. Unknown contracts,
 compiler-generated contracts, wrong statics, and source representation erasure
 refuse before emission. Selected closure checks concrete native admission and

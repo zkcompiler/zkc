@@ -214,7 +214,12 @@ private:
       return false;
     while (take("::")) {
       std::string part;
-      if (!name(part))
+      // Field and Group are also qualified catalog capability exports.
+      // They remain reserved as declaration and unqualified names.
+      if (at("Field") || at("Group")) {
+        part = text().str();
+        advance();
+      } else if (!name(part))
         return false;
       output += "::" + part;
     }
@@ -368,8 +373,27 @@ private:
         advance();
         if (!expect("(") || !type(req.lhs) || !expect(")"))
           return false;
-      } else if (!type(req.lhs) || !expect("<=") || !type(req.rhs))
-        return false;
+      } else {
+        if (!type(req.lhs))
+          return false;
+        if (take("(")) {
+          if (req.lhs.kind != SyntaxType::Kind::Name ||
+              !req.lhs.arguments.empty())
+            return fail("source.capability",
+                        "expected a capability export name");
+          req.capability = req.lhs.name;
+          if (!at(")"))
+            do {
+              SyntaxType argument;
+              if (!type(argument))
+                return false;
+              req.arguments.push_back(std::move(argument));
+            } while (take(",") && !at(")"));
+          if (!expect(")"))
+            return false;
+        } else if (!expect("<=") || !type(req.rhs))
+          return false;
+      }
       req.span.end = previousEnd;
       decl.requirements.push_back(std::move(req));
     } while (take(",") && !at("{") && !at(";") && !at("!"));

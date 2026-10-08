@@ -251,6 +251,12 @@ struct PermissionBound {
   Permissions permissions;
   Span span;
 };
+/// A catalog proposition, independent of runtime custody permissions.
+struct CapabilityBound {
+  std::string predicate;
+  std::vector<Type> arguments;
+  Span span;
+};
 /// Upper bounds on the observable effects of a callable.
 struct Effects {
   bool mayStop = false;
@@ -324,6 +330,7 @@ struct Declaration {
   std::vector<Parameter> parameters;
   std::vector<NaturalBound> bounds;
   std::vector<PermissionBound> permissionBounds;
+  std::vector<CapabilityBound> capabilityBounds;
   std::optional<Permissions> permissions;
   std::vector<TypeField> fields;
   std::vector<Alternative> alternatives;

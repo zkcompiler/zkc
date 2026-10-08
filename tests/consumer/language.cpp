@@ -28,6 +28,9 @@ int main() {
     fn swap<T:Type+Copy+Drop>(x:Pair<T>)->Pair<T>{
       return Pair<T>{first:x.second,second:x.first};
     }
+    fn root<F:Field>(n:index)->F where zkc::algebra::TwoAdicField(F) {
+      return kernel<F>("poly.domain_root",n);
+    }
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
       local P let r=swap(x);return(r=r);
     }

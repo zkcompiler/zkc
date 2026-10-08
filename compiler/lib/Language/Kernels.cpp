@@ -8,7 +8,8 @@ using namespace llvm;
 namespace zkc::language::detail {
 std::optional<Checker::CallSignature>
 Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
-                         ArrayRef<std::string> attributes, Span span) {
+                         ArrayRef<std::string> attributes, Span span,
+                         const Declaration *context) {
   auto stage = protocol::authoringStage(contract);
   if (stage != protocol::AuthoringStage::Source &&
       stage != protocol::AuthoringStage::Construction) {
@@ -84,10 +85,7 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
              span);
       return {};
     }
-    bool formed = sort == "Nat" ? value->kind == Type::Kind::Natural
-                  : sort == "Type"
-                      ? isNativeData(*value)
-                      : isDomainSort(sort) && domainSort(*value) == sort;
+    bool formed = matchesKernelSort(*value, sort);
     if (!formed) {
       fail("source.kernel", "installed static argument sort differs", span);
       return {};
@@ -109,52 +107,20 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
     fail("source.kernel", "installed static argument count differs", span);
     return {};
   }
-  // Discharge actual closed facts through the catalog. For abstract domains,
-  // only their declared source sort and installed implications are available.
-  std::vector<requirements::Term> proofTerms;
-  std::vector<requirements::Predicate> assumptions;
-  for (unsigned i = 0; i < terms.size(); ++i) {
-    proofTerms.push_back({typeIdentity(terms[i])});
-    if (terms[i].kind == Type::Kind::Field ||
-        terms[i].kind == Type::Kind::Group)
-      assumptions.push_back(requirements::Predicate::holds(
-          terms[i].kind == Type::Kind::Field ? "Field" : "Group", {i}));
-  }
   for (const auto &requirement : signature.requirements) {
-    bool closed = llvm::none_of(requirement.arguments,
-                                [&](unsigned i) { return symbolic(terms[i]); });
-    if (closed) {
-      std::vector<std::string> identities(terms.size());
-      for (unsigned i : requirement.arguments) {
-        auto identity = kernelArgument(terms[i], scope.sorts[i]);
-        if (!identity) {
-          fail("source.kernel", toString(identity.takeError()), span);
-          return {};
-        }
-        identities[i] = std::move(*identity);
-      }
-      if (!validate(
-              protocol::checkClosedRequirements({requirement}, identities)))
-        return {};
-    } else if (requirement.kind == requirements::Predicate::Kind::Equal &&
-               terms[requirement.arguments[0]] ==
-                   terms[requirement.arguments[1]]) {
-    } else {
-      auto proof =
-          requirements::derive(proofTerms, assumptions,
-                               protocol::boundCapabilityRules(), {requirement});
-      if (!proof) {
-        accept(proof.takeError());
-        return {};
-      }
-      if (!proof->goals.front()) {
+    if (requirement.kind == requirements::Predicate::Kind::Equal) {
+      if (terms[requirement.arguments[0]] != terms[requirement.arguments[1]]) {
         fail("source.kernel",
-             "generic signature does not establish installed requirement: " +
-                 requirement.relation,
-             span);
+             "installed equality requires identical source terms", span);
         return {};
       }
+      continue;
     }
+    CapabilityBound goal{requirement.relation, {}, span};
+    for (auto index : requirement.arguments)
+      goal.arguments.push_back(terms[index]);
+    if (!entails(context, goal, "source.kernel"))
+      return {};
   }
   const auto *parameterSchema = protocol::parameterContract(contract);
   const Type *literalField = parameterSchema && parameterSchema->fieldTerm
@@ -266,7 +232,8 @@ BodyChecker::kernelSignature(const Expression &expr,
       return {};
     arguments.push_back(std::move(*type));
   }
-  return checker.kernelSignature(expr.text, arguments, expr.labels, expr.span);
+  return checker.kernelSignature(expr.text, arguments, expr.labels, expr.span,
+                                 &decl);
 }
 std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
                                            unsigned depth) {

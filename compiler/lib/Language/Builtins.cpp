@@ -14,7 +14,10 @@ bool dataConstructor(StringRef name) {
   return name == "vector" || name == "matrix" || name == "groups" ||
          name == "indices" || name == "polynomial" || name == "table" ||
          name == "point" || name == "round" || name == "sequence" ||
-         name == "field_array";
+         name == "field_array" || name == "commitment" ||
+         name == "commitments" || name == "proof" || name == "prover_key" ||
+         name == "verifier_key" || name == "opening_state" ||
+         name == "opening_states";
 }
 } // namespace
 bool isDomainSort(StringRef sort) {
@@ -49,6 +52,11 @@ bool isNativeData(const Type &type) {
   return type.kind == K::Field || type.kind == K::Group ||
          type.kind == K::Boolean || type.kind == K::Index ||
          type.kind == K::Builtin;
+}
+bool matchesKernelSort(const Type &type, StringRef sort) {
+  return sort == "Nat"    ? type.kind == K::Natural
+         : sort == "Type" ? isNativeData(type)
+                          : isDomainSort(sort) && domainSort(type) == sort;
 }
 Expected<std::string> kernelArgument(const Type &type, StringRef sort) {
   if (type.symbolic)
@@ -100,11 +108,10 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
     const auto &argument = arguments[i];
     const auto &parameter = constructor->parameters[i];
     using S = protocol::StaticKind;
-    bool formed = parameter.kind == S::Type ? isNativeData(argument)
-                  : parameter.kind == S::Nat
-                      ? argument.kind == K::Natural
-                      : domainSort(argument) == parameter.sort &&
-                            isDomainSort(parameter.sort);
+    bool formed = matchesKernelSort(argument, parameter.kind == S::Type ? "Type"
+                                              : parameter.kind == S::Nat
+                                                  ? "Nat"
+                                                  : parameter.sort);
     if (!formed)
       return error("source.builtin",
                    "native type argument sort or representation differs");

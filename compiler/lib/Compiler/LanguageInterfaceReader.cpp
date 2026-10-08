@@ -315,7 +315,11 @@ class Reader {
                    leafKind == "groups" || leafKind == "indices" ||
                    leafKind == "polynomial" || leafKind == "table" ||
                    leafKind == "point" || leafKind == "round" ||
-                   leafKind == "sequence" || leafKind == "field_array");
+                   leafKind == "sequence" || leafKind == "field_array" ||
+                   leafKind == "commitment" || leafKind == "commitments" ||
+                   leafKind == "proof" || leafKind == "prover_key" ||
+                   leafKind == "verifier_key" || leafKind == "opening_state" ||
+                   leafKind == "opening_states");
     return matched || fail("logical kind differs from native leaf kind");
   }
   std::shared_ptr<const InterfaceSchema>

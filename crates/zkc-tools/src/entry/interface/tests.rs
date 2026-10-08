@@ -406,3 +406,41 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
         .join()
         .unwrap();
 }
+
+#[test]
+fn pcs_schemas_preserve_local_material_permissions() {
+    let kzg = "multilinear.kzg.bls12-381/1";
+    let rows = "rows.merkle-keccak256.koala-bear/1";
+    for (head, domain, shared, wire) in [
+        ("commitment", kzg, true, true),
+        ("proof", kzg, true, true),
+        ("commitments", rows, true, false),
+        ("prover_key", kzg, false, false),
+        ("verifier_key", kzg, false, false),
+        ("opening_state", kzg, false, false),
+        ("opening_states", rows, false, false),
+    ] {
+        let leaf = format!("{head}:{domain}");
+        let mut value = schema("builtin", &leaf, json!([leaf]));
+        let mut permissions = vec!["Copy", "Drop"];
+        if shared {
+            permissions.push("Share");
+        }
+        if wire {
+            permissions.push("Wire");
+        }
+        value["permissions"] = json!(permissions);
+        let parsed = serde_json::from_value(value.clone()).unwrap();
+        schemas::Schemas::new().check(&parsed, 0).unwrap();
+        if !wire {
+            permissions.push("Wire");
+            value["permissions"] = json!(permissions);
+            let forged = serde_json::from_value(value).unwrap();
+            assert_eq!(
+                schemas::Schemas::new().check(&forged, 0),
+                Err(InterfaceError::Schema),
+                "{head} acquired a message permission"
+            );
+        }
+    }
+}
