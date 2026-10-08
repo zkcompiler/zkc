@@ -161,8 +161,10 @@ Error inspectApplications(
     const CheckedOriginal &original,
     function_ref<Error(const ApplicationOccurrence &)> visitor,
     const Limits &limits) {
-  return inspectApplications(original.bytes(), original.interfaceJson(),
-                             visitor, limits,
-                             original.entry().project().assets());
+  return detail::withInterface(
+      original, limits,
+      [&](mlir::ModuleOp module, const LanguageInterface &view) {
+        return Inspection(view, limits, visitor).run(module);
+      });
 }
 } // namespace zkc::language

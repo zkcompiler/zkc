@@ -1,5 +1,6 @@
 use super::*;
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 use zkc_runtime::interactive::{LogicalType, PhysicalType};
 
 fn fixture(logical: &str) -> (Vec<u8>, Json) {

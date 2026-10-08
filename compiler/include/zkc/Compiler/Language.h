@@ -32,6 +32,8 @@ public:
   llvm::StringRef locationsIdentity() const;
   llvm::ArrayRef<SourceLocation> locations() const;
   const Correspondence &correspondence() const;
+  /// Ceilings under which this immutable original and interface were admitted.
+  const Limits &admissionLimits() const;
 
 private:
   static llvm::Expected<CheckedOriginal> admit(const ClosedEntry &,

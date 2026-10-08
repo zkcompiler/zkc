@@ -6,6 +6,7 @@
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Support/Refusal.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/SHA256.h"
@@ -23,11 +24,12 @@ std::error_code DiagnosticError::convertToErrorCode() const {
   return inconvertibleErrorCode();
 }
 
-Error checkLimits(const Limits &limits) {
-  const Limits ceiling;
+namespace {
+std::optional<StringRef> exceededLimit(const Limits &limits,
+                                       const Limits &ceiling) {
 #define CHECK_LIMIT(name)                                                      \
   if (limits.name > ceiling.name)                                              \
-  return detail::failure("source.limit", "cannot raise " #name " ceiling")
+  return StringRef(#name)
   CHECK_LIMIT(files);
   CHECK_LIMIT(fileBytes);
   CHECK_LIMIT(captureBytes);
@@ -55,6 +57,16 @@ Error checkLimits(const Limits &limits) {
   CHECK_LIMIT(naturalTerms);
   CHECK_LIMIT(naturalFactors);
 #undef CHECK_LIMIT
+  return {};
+}
+} // namespace
+bool Limits::covers(const Limits &other) const {
+  return !exceededLimit(other, *this);
+}
+Error checkLimits(const Limits &limits) {
+  if (auto name = exceededLimit(limits, Limits{}))
+    return detail::failure("source.limit",
+                           "cannot raise " + *name + " ceiling");
   return Error::success();
 }
 namespace detail {
@@ -62,6 +74,27 @@ Error failure(StringRef code, const Twine &message, std::optional<Span> span,
               std::vector<Span> related) {
   return make_error<DiagnosticError>(
       Diagnostic{code.str(), message.str(), span, std::move(related)});
+}
+std::optional<Diagnostic> diagnose(Error error, std::optional<Span> fallback) {
+  std::optional<Diagnostic> result;
+  handleAllErrors(
+      std::move(error),
+      [&](const DiagnosticError &e) {
+        if (!result) {
+          result = e.diagnostic();
+          if (!result->primary)
+            result->primary = fallback;
+        }
+      },
+      [&](const Refusal &e) {
+        if (!result)
+          result = Diagnostic{e.code, e.detail, fallback, {}};
+      },
+      [&](const ErrorInfoBase &e) {
+        if (!result)
+          result = Diagnostic{"source.internal", e.message(), fallback, {}};
+      });
+  return result;
 }
 bool isUnsupported(StringRef name) {
   static const std::set<StringRef> words = {
@@ -293,15 +326,8 @@ Analysis analyze(const CapturedProject &capture, const Limits &limits) {
     output->checked = CheckedProject(checked);
     return Error::success();
   };
-  handleAllErrors(
-      run(),
-      [&](const DiagnosticError &error) {
-        output->diagnostics.push_back(error.diagnostic());
-      },
-      [&](const ErrorInfoBase &error) {
-        output->diagnostics.push_back(
-            {"source.internal", error.message(), {}, {}});
-      });
+  if (auto diagnostic = detail::diagnose(run()))
+    output->diagnostics.push_back(std::move(*diagnostic));
   output->tokens = checked->tokens;
   return Analysis(std::move(output));
 }
@@ -344,15 +370,11 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
       // Metadata is bounded by definition checking. Immutable template bodies
       // are shared; specialization starts with its own phase budget.
       auto storage = std::make_shared<detail::ClosedStorage>();
-      detail::CheckedStorage candidate(project.capture());
-      candidate.assets.assign(project.assets().begin(), project.assets().end());
-      candidate.declarations.assign(project.declarations().begin(),
-                                    project.declarations().end());
-      detail::Checker closer(candidate, work);
-      if (!closer.specialize(decl.id))
-        return closer.takeError();
-      storage->protocol = *candidate.declarations[decl.id.index].target;
-      storage->declarations = std::move(candidate.declarations);
+      storage->declarations.assign(project.declarations().begin(),
+                                   project.declarations().end());
+      if (auto error = detail::specialize(storage->declarations, work, decl.id))
+        return error;
+      storage->protocol = *storage->declarations[decl.id.index].target;
       ClosedEntry entry(project, decl.id, std::move(storage));
       Layouts layouts(entry, limits);
       if (auto error = detail::checkSetups(entry, layouts, work))

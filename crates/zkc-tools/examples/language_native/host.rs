@@ -119,7 +119,7 @@ fn normalized(value: &Value) -> Json {
 }
 fn refuses(host: &RunEntry, request: RunRequest, expected: &str) {
     match host.prepare(request) {
-        Err(code) => assert_eq!(code, expected),
+        Err(code) => assert_eq!(code.code(), expected),
         Ok(_) => panic!("expected {expected}"),
     }
 }
@@ -244,7 +244,7 @@ pub(super) fn run(directory: &Path) {
         remove_wire(interface);
     });
     match RunEntry::admit(private, HostLimits::default(), SetupAuthority::default()) {
-        Err(code) => assert_eq!(code, "entry-input-constructor"),
+        Err(code) => assert_eq!(code.code(), "entry-input-constructor"),
         Ok(_) => panic!("private constructor admitted"),
     }
     match RunEntry::admit(
@@ -252,7 +252,7 @@ pub(super) fn run(directory: &Path) {
         HostLimits::default(),
         SetupAuthority::default(),
     ) {
-        Err(code) => assert_eq!(code, "entry-output-custody"),
+        Err(code) => assert_eq!(code.code(), "entry-output-custody"),
         Ok(_) => panic!("affine output admitted"),
     }
     let mut limits = HostLimits::default();

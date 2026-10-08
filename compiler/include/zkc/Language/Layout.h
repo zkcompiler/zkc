@@ -63,10 +63,15 @@ struct LayoutSlice {
   unsigned offset;
   std::shared_ptr<const Layout> layout;
 };
+/// A phase-local cache borrowing an immutable checked project or closed Entry.
+/// Keep the owner alive. Work accounting and cache state do not move or copy.
 class Layouts {
 public:
   explicit Layouts(const CheckedProject &, const Limits & = {});
   explicit Layouts(const ClosedEntry &, const Limits & = {});
+  ~Layouts();
+  Layouts(const Layouts &) = delete;
+  Layouts &operator=(const Layouts &) = delete;
   llvm::Expected<std::shared_ptr<const Layout>> get(const Type &);
   /// Select a checked logical product component in the flattened signature.
   /// This computes representation only, not source field-access authority.
@@ -78,9 +83,8 @@ public:
 private:
   llvm::ArrayRef<Declaration> definitions;
   Limits limits;
-  uint64_t remaining;
-  bool initialized = false;
-  std::map<std::string, const Declaration *> declarations;
+  struct State;
+  std::unique_ptr<State> state;
   std::map<std::string, std::string> slots;
   std::map<std::string, std::shared_ptr<const Layout>> cache;
   llvm::Error charge(uint64_t);
@@ -89,7 +93,6 @@ private:
   llvm::Expected<std::shared_ptr<const Layout>> build(const Type &, unsigned);
   llvm::Expected<Type>
   substitute(const Type &, const std::map<std::string, Type> &, unsigned);
-  const Declaration *declaration(llvm::StringRef) const;
 };
 } // namespace zkc::language
 #endif

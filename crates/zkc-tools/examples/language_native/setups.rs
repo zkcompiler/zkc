@@ -120,7 +120,8 @@ pub(super) fn run(directory: &Path) {
             SetupAuthority::default()
         )
         .err()
-        .unwrap(),
+        .unwrap()
+        .to_string(),
         "entry-setup-authority"
     );
     let mut wrong = run_request();
@@ -129,7 +130,7 @@ pub(super) fn run(directory: &Path) {
         InputValue::ProverKey(material[1].clone()).into(),
     );
     assert_eq!(
-        host.prepare(wrong).err().unwrap(),
+        host.prepare(wrong).err().unwrap().to_string(),
         "native-proof-input-setup"
     );
     let mut extra = run_request();
@@ -139,22 +140,31 @@ pub(super) fn run(directory: &Path) {
         .unwrap()
         .inputs
         .insert("vk0".into(), InputValue::VerifierKey.into());
-    assert_eq!(host.prepare(extra).err().unwrap(), "entry-input-names");
+    assert_eq!(
+        host.prepare(extra).err().unwrap().to_string(),
+        "entry-input-names"
+    );
     let mut missing = run_request();
     missing.setups.remove("second");
-    assert_eq!(host.prepare(missing).err().unwrap(), "entry-setup-material");
+    assert_eq!(
+        host.prepare(missing).err().unwrap().to_string(),
+        "entry-setup-material"
+    );
     let mut supplied = run_request();
     supplied.setups.insert(
         "first".into(),
         keys[1].verifier_key().to_bytes(&bounds).unwrap(),
     );
-    assert_eq!(host.prepare(supplied).err().unwrap(), "key-mismatch");
+    assert_eq!(
+        host.prepare(supplied).err().unwrap().to_string(),
+        "key-mismatch"
+    );
     let mut wrong_claim = run_request();
     for role in wrong_claim.roles.values_mut() {
         role.inputs.insert("claim".into(), claim(1));
     }
     assert_eq!(
-        host.prepare(wrong_claim).err().unwrap(),
+        host.prepare(wrong_claim).err().unwrap().to_string(),
         "native-proof-input-setup"
     );
     let changed = alter(&publication, |_, interface| {
@@ -163,7 +173,8 @@ pub(super) fn run(directory: &Path) {
     assert_eq!(
         RunEntry::admit(changed, HostLimits::default(), pins())
             .err()
-            .unwrap(),
+            .unwrap()
+            .to_string(),
         "entry-setup-authority"
     );
     let publication = package(directory, "Prove");
@@ -175,7 +186,12 @@ pub(super) fn run(directory: &Path) {
     let verifier = ProofEntry::admit(publication, options, pins()).unwrap();
     let request = |producing| ProofRequest {
         public: [("point".into(), point()), ("claim".into(), claim(0))].into(),
-        inputs: role(&material, claim(0), producing),
+        private: {
+            let mut role = role(&material, claim(0), producing);
+            role.inputs.remove("point");
+            role.inputs.remove("claim");
+            role
+        },
         context: vec![1, 2, 3],
         transcript_budget: Some(0),
         setups: setups(),
@@ -196,7 +212,7 @@ pub(super) fn run(directory: &Path) {
     );
     // Reuse immutable material across independent complete invocations.
     let mut unloaded = request(true);
-    unloaded.inputs.inputs.insert(
+    unloaded.private.inputs.insert(
         "pk0".into(),
         InputValue::ProverKeyFile {
             path: "/nonexistent/zkc-attempt-key".into(),
@@ -214,7 +230,8 @@ pub(super) fn run(directory: &Path) {
                 }
             )
             .err()
-            .unwrap(),
+            .unwrap()
+            .to_string(),
         "native-attempt-limits"
     );
     for _ in 0..2 {
@@ -229,11 +246,8 @@ pub(super) fn run(directory: &Path) {
             "point".into(),
             Native::Vector(vec![Scalar::from(8)].into()).into(),
         );
-        // The role and separately supplied public value cannot disagree.
-        assert_eq!(
-            verifier.verify(changed, &proof).err().unwrap(),
-            "native-proof-shared-public-input"
-        );
+        // Changing the independently supplied public statement refuses this proof.
+        assert!(!verifier.verify(changed, &proof).unwrap().is_success());
         let mut corrupted = proof;
         let last = corrupted.len() - 1;
         corrupted[last] ^= 1;
@@ -246,21 +260,23 @@ pub(super) fn run(directory: &Path) {
     for producing in [true, false] {
         let mut wrong = request(producing);
         wrong.public.insert("claim".into(), claim(1));
-        wrong.inputs.inputs.insert("claim".into(), claim(1));
         let result = if producing {
             prover.prove(wrong)
         } else {
             verifier.verify(wrong, &[])
         };
-        assert_eq!(result.err().unwrap(), "native-proof-input-setup");
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "native-proof-input-setup"
+        );
     }
     let mut wrong = request(true);
-    wrong.inputs.inputs.insert(
+    wrong.private.inputs.insert(
         "pk0".into(),
         InputValue::ProverKey(material[1].clone()).into(),
     );
     assert_eq!(
-        prover.prove(wrong).err().unwrap(),
+        prover.prove(wrong).err().unwrap().to_string(),
         "native-proof-input-setup"
     );
     let mut wrong_key = request(false);
@@ -269,7 +285,7 @@ pub(super) fn run(directory: &Path) {
         keys[1].verifier_key().to_bytes(&bounds).unwrap(),
     );
     assert_eq!(
-        verifier.verify(wrong_key, &[]).err().unwrap(),
+        verifier.verify(wrong_key, &[]).err().unwrap().to_string(),
         "key-mismatch"
     );
     let mut extra = request(false);
@@ -277,14 +293,14 @@ pub(super) fn run(directory: &Path) {
         .public
         .insert("vk0".into(), InputValue::VerifierKey.into());
     assert_eq!(
-        verifier.verify(extra, &[]).err().unwrap(),
+        verifier.verify(extra, &[]).err().unwrap().to_string(),
         "entry-input-names"
     );
     let mut limited = options;
     limited.capacity.wire_bytes = 0;
     let limited = ProofEntry::admit(package(directory, "Prove"), limited, pins()).unwrap();
     assert_eq!(
-        limited.prove(request(true)).err().unwrap(),
+        limited.prove(request(true)).err().unwrap().to_string(),
         "native-capacity-wire"
     );
 }

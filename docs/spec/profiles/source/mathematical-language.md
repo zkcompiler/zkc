@@ -42,6 +42,15 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
+Qualified references first resolve their root in the enclosing component and
+then the module's visible declarations, including imports. A resolved lexical
+root owns the rest of the path: a missing or private member does not fall back
+to an unrelated captured module. If no lexical root exists, a qualified module
+path is considered. A leading `::` explicitly selects an absolute module path,
+for example `::algebra::Fr`. It is reference syntax, not part of module or
+canonical declaration names. Optional prefix lookup preserves privacy and
+resource-limit diagnostics.
+
 ## Definition checking and Entry closure
 
 Analysis checks every definition and Entry reference against declared static
@@ -981,7 +990,7 @@ its emitted bytes need no second canonicality comparison.
 `CheckedOriginal::interface()` exposes the checked view; `selectedProtocol()`
 selects its Entry's protocol record. Host authentication must bind the retained
 interface bytes, not arbitrary caller JSON that happens to compare semantically.
-`inspectApplications` admits the entire original and interface before calling a
+The byte overload of `inspectApplications` admits the entire original and interface before calling a
 read-only visitor for each static `protocol.apply`. Each occurrence exposes its
 caller/callee records, actual MLIR operation, callee-to-caller role substitution,
 and clauses bound to actual operand/result SSA values. Its path indexes operations
@@ -1066,6 +1075,11 @@ indices; proof maps pin every original public verifier-key index and associate
 other setup-bearing inputs with the slot's lowest verifier-key index. Native
 admission independently checks complete coverage and concrete types.
 
+The source Host derives one immutable port plan from the checked interface. It
+records role order, public/private inputs, setup-key ports, selected outputs and
+external services. Generated bindings, file requests and native ABI comparison
+use that plan. Native artifact facts are read independently during comparison.
+
 `RunRequest::setups` and `ProofRequest::setups` supply verifier-key bytes for every
 slot exactly. The Host authenticates and imports them through its existing bounded
 setup loader. Whole verifier-key inputs are initialized automatically: applications
@@ -1131,14 +1145,19 @@ binds the exact deployment through `NativeDeployment`. Inputs retain the source
 constructor requirement and outputs must be copyable without affine custody.
 `prove` and `verify` take separate `ProofRequest` values; the verifier receives
 only its own inputs and the candidate proof. Neither method needs a live peer.
+The SDK supplies public values once through `ProofRequest::public`; `private`
+contains only nonpublic inputs and external service budgets. The source adapter
+assembles shared operands from these public values. Private overrides refuse;
+native admission still checks canonical agreement. Setup imports may reuse
+identical canonical bytes under the same authorized pin within an invocation;
+each native operand retains its usual resource charge.
 
-Each request supplies exact named public values, the selected role's input and
-service budget overrides, application context bytes and an optional transcript budget.
-Public values remain independently authorized by the application. Shared role
-inputs must canonically agree with them. Zero-leaf public values and role inputs
-remain required. The selected derived verifier service is compiler-owned and
-cannot also appear in the caller's service map. Products and nominal alternatives
-use the same logical schema and common admission as run calls.
+Each request also supplies application context bytes and an optional transcript
+budget. Public values remain independently authorized by the application.
+Zero-leaf public and private inputs remain required in their respective maps.
+The selected derived verifier service is compiler-owned and cannot also appear
+in the caller's service map. Products and nominal alternatives use the same
+logical schema and common admission as run calls.
 
 `ProofOptions::binding` defaults to `TranscriptRequired`. Authored construction
 requires explicit `AllowHeaderOnly`; otherwise admission returns

@@ -6,8 +6,8 @@ namespace zkc::language::detail {
 std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
   auto &expr = syntax.expressions[id];
   if (depth > checker.work.limits.expressionDepth ||
-      !checker.charge(1, expr.span)) {
-    if (!checker.diagnostic)
+      !checker.types.charge(1, expr.span)) {
+    if (!checker.types.diagnostic)
       fail("source.limit", "expression depth limit exceeded", expr.span);
     return {};
   }
@@ -77,10 +77,10 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
       return {};
     auto parts = StringRef(expr.text).rsplit("::");
     if (!parts.second.empty()) {
-      auto saved = checker.diagnostic;
+      auto saved = checker.types.diagnostic;
       auto target = checker.resolve(decl, parts.first, expr.span);
       if (!target)
-        checker.diagnostic = saved;
+        checker.types.diagnostic = saved;
       else if (checker.output.declarations[target->index].kind ==
                Declaration::Kind::Variant) {
         SyntaxType term;
@@ -100,21 +100,23 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     std::vector<std::optional<Type>> inputs;
     for (auto child : expr.children)
       inputs.push_back(hint(child, depth + 1));
-    if (checker.diagnostic)
+    if (checker.types.diagnostic)
       return {};
     auto args = actuals(callee, expr, inputs, {}, target->second);
     if (!args) {
-      if (checker.diagnostic && checker.diagnostic->code == "source.inference")
-        checker.diagnostic.reset();
+      if (checker.types.diagnostic &&
+          checker.types.diagnostic->code == "source.inference")
+        checker.types.diagnostic.reset();
       return {};
     }
-    auto sub = checker.substitution(callee, *args);
+    auto sub = checker.types.substitution(callee, *args);
     if (target->second && callee.parent)
       sub.emplace(
           "self:" +
               checker.output.declarations[callee.parent->index].qualifiedName,
           *target->second);
-    return checker.substitute(callee.outputs.front().type, sub, expr.span);
+    return checker.types.substitute(callee.outputs.front().type, sub,
+                                    expr.span);
   }
   if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For ||
       expr.kind == K::Apply || expr.kind == K::Repeat ||
@@ -122,7 +124,7 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     return {};
   for (auto child : expr.children) {
     auto result = hint(child, depth + 1);
-    if (result || checker.diagnostic)
+    if (result || checker.types.diagnostic)
       return result;
   }
   return {};
@@ -132,8 +134,8 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
                                                unsigned depth) {
   const auto &expr = syntax.expressions[id];
   if (depth > checker.work.limits.expressionDepth ||
-      !checker.charge(1, expr.span)) {
-    if (!checker.diagnostic)
+      !checker.types.charge(1, expr.span)) {
+    if (!checker.types.diagnostic)
       fail("source.limit", "expression depth limit exceeded", expr.span);
     return {};
   }
@@ -247,7 +249,7 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
     if (!operand)
       for (auto child : expr.children) {
         operand = hint(child, depth + 1);
-        if (checker.diagnostic)
+        if (checker.types.diagnostic)
           return {};
         if (operand)
           break;
@@ -283,7 +285,7 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
     for (unsigned i = 0; i < expr.children.size(); ++i) {
       auto type = operand;
       if (group && expr.kind == K::Multiply && i == 1) {
-        type = checker.associated(*operand, "Scalar", expr.span);
+        type = checker.types.associated(*operand, "Scalar", expr.span);
         if (!type)
           return {};
       }
@@ -357,7 +359,7 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       else
         field = hint(expr.children[i], depth + 1);
       if (!field) {
-        if (!checker.diagnostic)
+        if (!checker.types.diagnostic)
           fail("source.inference", "tuple element needs a type", expr.span);
         return {};
       }
@@ -379,11 +381,11 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
     } else
       for (auto child : expr.children) {
         element = hint(child, depth + 1);
-        if (element || checker.diagnostic)
+        if (element || checker.types.diagnostic)
           break;
       }
     if (!element) {
-      if (!checker.diagnostic)
+      if (!checker.types.diagnostic)
         fail("source.inference", "array literal needs an element type",
              expr.span);
       return {};
@@ -409,13 +411,13 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
            expr.span);
       return {};
     }
-    auto fs = checker.fields(type, expr.span);
+    auto fs = checker.types.fields(type, expr.span);
     if (!fs)
       return {};
     fields = std::move(*fs);
     if ((restricted(type) ||
          llvm::any_of(fields, [](auto &f) { return !f.isPublic; })) &&
-        !checker.constructorAllowed(decl, type)) {
+        !checker.types.constructorAllowed(decl, type)) {
       fail("source.private",
            "record constructor is private to its defining module", expr.span);
       return {};
@@ -447,7 +449,7 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       return {};
     values[index] = *v;
   }
-  auto caps = checker.permissions(type, expr.span, &decl);
+  auto caps = checker.types.permissions(type, expr.span, &decl);
   if (!caps)
     return {};
   if (!local() && (!caps->copy || !caps->drop)) {

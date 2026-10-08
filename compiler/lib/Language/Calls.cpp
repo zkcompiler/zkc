@@ -36,12 +36,12 @@ BodyChecker::callable(const Expression &expr) {
 }
 bool BodyChecker::infer(const Type &pattern, const Type &actual,
                         Substitution &bindings, Span span) {
-  if (!checker.charge(1, span))
+  if (!checker.types.charge(1, span))
     return false;
   if (pattern.symbolic && pattern.kind != Type::Kind::Associated) {
     // Only a bare parameter is inferred. Associations and natural equations do
     // not have unique inverses and are never solved here.
-    auto *parameter = checker.parameter(pattern.domain);
+    auto *parameter = checker.types.parameter(pattern.domain);
     if (parameter &&
         (pattern.kind != Type::Kind::Natural ||
          pattern.dimension == cantFail(Natural::atom(pattern.domain)))) {
@@ -82,7 +82,7 @@ BodyChecker::actuals(const Declaration &callee, const Expression &expr,
   Substitution bindings;
   if (component && callee.parent) {
     auto &interface = checker.output.declarations[callee.parent->index];
-    bindings = checker.substitution(interface, component->arguments);
+    bindings = checker.types.substitution(interface, component->arguments);
     bindings.emplace("self:" + interface.qualifiedName, *component);
   }
   unsigned inherited =
@@ -119,10 +119,10 @@ BodyChecker::actuals(const Declaration &callee, const Expression &expr,
     }
     result.push_back(it->second);
   }
-  if (!checker.checkArguments(callee, result, expr.span, &decl, bindings))
+  if (!checker.types.checkArguments(callee, result, expr.span, &decl, bindings))
     return {};
   for (auto &bound : callee.bounds)
-    if (!checker.assumptions(decl, bound, bindings, expr.span))
+    if (!checker.types.assumptions(decl, bound, bindings, expr.span))
       return {};
   return result;
 }
@@ -154,7 +154,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!value)
       return {};
     auto source = body.values[value->index].type;
-    if (!checker.constructorAllowed(decl, source)) {
+    if (!checker.types.constructorAllowed(decl, source)) {
       fail("source.private", "unpack requires constructor authority",
            expr.span);
       return {};
@@ -164,7 +164,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
            expr.span);
       return {};
     }
-    auto fields = checker.fields(source, expr.span);
+    auto fields = checker.types.fields(source, expr.span);
     if (!fields)
       return {};
     Type result(fields->empty() ? Type::Kind::Unit : Type::Kind::Tuple);
@@ -186,10 +186,10 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     for (auto &p : decl.parameters)
       parameterMember |= p.name == split.first;
     if (!parameterMember) {
-      auto saved = checker.diagnostic;
+      auto saved = checker.types.diagnostic;
       auto id = checker.resolve(decl, split.first, expr.span);
       if (!id)
-        checker.diagnostic = saved;
+        checker.types.diagnostic = saved;
       else if (checker.output.declarations[id->index].kind ==
                Declaration::Kind::Variant) {
         SyntaxType term;
@@ -199,12 +199,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         auto type = checker.type(decl, term);
         if (!type)
           return {};
-        if (restricted(*type) && !checker.constructorAllowed(decl, *type)) {
+        if (restricted(*type) &&
+            !checker.types.constructorAllowed(decl, *type)) {
           fail("source.private", "variant constructor is restricted",
                expr.span);
           return {};
         }
-        auto alternatives = checker.alternatives(*type, expr.span);
+        auto alternatives = checker.types.alternatives(*type, expr.span);
         if (!alternatives)
           return {};
         auto alt = llvm::find_if(
@@ -256,11 +257,11 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
            "associated domains have no representation constructor", expr.span);
       return {};
     }
-    if (!checker.constructorAllowed(decl, *type)) {
+    if (!checker.types.constructorAllowed(decl, *type)) {
       fail("source.private", "associated constructor is private", expr.span);
       return {};
     }
-    auto fields = checker.fields(*type, expr.span);
+    auto fields = checker.types.fields(*type, expr.span);
     if (!fields)
       return {};
     auto value =
@@ -290,13 +291,13 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   std::vector<std::optional<Type>> hints;
   for (auto child : expr.children) {
     hints.push_back(hint(child, depth + 1));
-    if (checker.diagnostic)
+    if (checker.types.diagnostic)
       return {};
   }
   auto staticArgs = actuals(callee, expr, hints, expected, target->second);
   if (!staticArgs)
     return {};
-  auto subst = checker.substitution(callee, *staticArgs);
+  auto subst = checker.types.substitution(callee, *staticArgs);
   if (target->second && callee.parent)
     subst.emplace(
         "self:" +
@@ -304,8 +305,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
         *target->second);
   std::vector<ValueId> args;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
-    auto type = checker.substitute(callee.inputs[i].type, subst, expr.span);
-    if (!type || (!math() && !checker.executableType(*type, expr.span)))
+    auto type =
+        checker.types.substitute(callee.inputs[i].type, subst, expr.span);
+    if (!type || (!math() && !checker.types.executableType(*type, expr.span)))
       return {};
     auto selectedOwner = owner;
     owner.reset();
@@ -320,9 +322,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     }
     if (owner && body.values[arg->index].components.size() > 1) {
-      auto p = checker.permissions(*type, expr.span, &decl);
+      auto p = checker.types.permissions(*type, expr.span, &decl);
       if (!p || !p->copy || !p->drop) {
-        if (!checker.diagnostic)
+        if (!checker.types.diagnostic)
           fail("source.permission",
                "owned call cannot duplicate or discard restricted components",
                expr.span);
@@ -332,7 +334,7 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     args.push_back(*arg);
   }
   auto resultType =
-      checker.substitute(callee.outputs.front().type, subst, expr.span);
+      checker.types.substitute(callee.outputs.front().type, subst, expr.span);
   if (!resultType)
     return {};
   std::vector<unsigned> dependencies;

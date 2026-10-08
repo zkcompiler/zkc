@@ -1,5 +1,5 @@
 #include "zkc/Language/Layout.h"
-#include "Internal.h"
+#include "Semantics.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -58,18 +58,23 @@ Expected<std::string> LayoutIdentities::get(const Layout &layout) {
   cache.emplace(&layout, *digest);
   return digest;
 }
+struct Layouts::State {
+  detail::Work work;
+  const std::vector<Declaration> &declarations;
+  std::optional<detail::Semantics> types;
+  State(const std::vector<Declaration> &declarations, const Limits &limits)
+      : work{limits}, declarations(declarations) {}
+};
 Layouts::Layouts(const CheckedProject &project, const Limits &limits)
     : definitions(project.declarations()), limits(limits),
-      remaining(limits.work) {}
+      state(std::make_unique<State>(project.storage->declarations,
+                                    this->limits)) {}
 Layouts::Layouts(const ClosedEntry &entry, const Limits &limits)
     : definitions(entry.declarations()), limits(limits),
-      remaining(limits.work) {}
-Error Layouts::charge(uint64_t n) {
-  if (n > remaining)
-    return error("source.limit", "layout work limit exceeded");
-  remaining -= n;
-  return Error::success();
-}
+      state(
+          std::make_unique<State>(entry.storage->declarations, this->limits)) {}
+Layouts::~Layouts() = default;
+Error Layouts::charge(uint64_t n) { return state->work.charge(n); }
 Expected<LayoutSlice> Layouts::select(const Declaration &decl,
                                       const SpecificationSelector &selector) {
   return select(selector.output ? decl.outputs : decl.inputs, selector.port,
@@ -112,102 +117,28 @@ Expected<LayoutSlice> Layouts::select(ArrayRef<Port> ports, unsigned port,
                  "logical selector offset exceeds native bounds");
   return LayoutSlice{static_cast<unsigned>(offset), std::move(selected)};
 }
-const Declaration *Layouts::declaration(StringRef name) const {
-  auto found = declarations.find(name.str());
-  return found == declarations.end() ? nullptr : found->second;
-}
 Expected<Type> Layouts::substitute(const Type &type,
                                    const std::map<std::string, Type> &bindings,
                                    unsigned depth) {
-  if (depth > limits.typeDepth)
-    return error("source.limit", "layout substitution depth exceeded");
-  if (auto e = charge(1))
-    return e;
-  if (type.symbolic) {
-    auto found = bindings.find(type.domain);
-    if (found != bindings.end()) {
-      auto cost =
-          typeComplexity(found->second, limits.typeNodes, limits.typeDepth);
-      if (!cost)
-        return cost.takeError();
-      if (auto e = charge(*cost))
-        return e;
-      return found->second;
-    }
-  }
-  auto cost = typeComplexity(type, limits.typeNodes, limits.typeDepth);
-  if (!cost)
-    return cost.takeError();
-  if (auto e = charge(*cost))
-    return e;
-  Type result = type;
-  for (auto &arg : result.arguments) {
-    auto replaced = substitute(arg, bindings, depth + 1);
-    if (!replaced)
-      return replaced.takeError();
-    arg = std::move(*replaced);
-  }
-  if (!result.dimension.isClosed()) {
-    NaturalArithmetic arithmetic(remaining, limits.naturalTerms,
-                                 limits.naturalFactors);
-    auto normalized = arithmetic.substitute(
-        result.dimension, [&](StringRef name) -> const Natural * {
-          auto found = bindings.find(name.str());
-          return found != bindings.end() &&
-                         found->second.kind == Type::Kind::Natural
-                     ? &found->second.dimension
-                     : nullptr;
-        });
-    remaining = arithmetic.remainingWork();
-    if (!normalized)
-      return normalized.takeError();
-    result.dimension = std::move(*normalized);
-  }
-  if (result.kind == Type::Kind::Associated) {
-    auto &base = result.arguments.front();
-    auto member = StringRef(result.domain).rsplit("::").second;
-    result.domain = base.domain + "::" + member.str();
-  }
-  if (!domainSort(result).empty() && !result.arguments.empty()) {
-    const auto &base = result.arguments.front();
-    auto member = StringRef(result.domain).rsplit("::").second;
-    if (!domainSort(base).empty()) {
-      auto resolved = domainMember(base, member);
-      if (!resolved)
-        return resolved.takeError();
-      result = std::move(*resolved);
-    } else {
-      auto *owner = declaration(base.domain);
-      auto *associated = declaration(base.domain + "::" + member.str());
-      if (!owner || !associated || associated->abstract ||
-          owner->parameters.size() != base.arguments.size())
-        return error("source.layout", "associated domain cannot be resolved");
-      std::map<std::string, Type> selected;
-      for (unsigned i = 0; i < owner->parameters.size(); ++i)
-        selected.emplace(owner->parameters[i].atom, base.arguments[i]);
-      return substitute(associated->domain, selected, depth + 1);
-    }
-  }
-  if (result.kind == Type::Kind::Natural) {
-    result.symbolic = !result.dimension.isClosed();
-    if (!result.symbolic)
-      result.domain.clear();
-  }
-  if (result.symbolic || !result.dimension.isClosed())
+  auto result = state->types->substitute(type, bindings, {}, depth);
+  if (!result)
+    return state->types->takeError();
+  if (state->types->symbolic(*result))
     return error("source.generic", "unresolved logical layout");
-  return result;
+  return std::move(*result);
 }
 Expected<std::shared_ptr<const Layout>> Layouts::get(const Type &type) {
   if (auto e = checkLimits(limits))
     return e;
-  if (!initialized) {
+  if (!state->types) {
     for (const auto &decl : definitions) {
       if (auto e = charge(decl.qualifiedName.size() + 1))
         return std::move(e);
-      if (!decl.origin)
-        declarations.emplace(decl.qualifiedName, &decl);
+      for (const auto &parameter : decl.parameters)
+        if (auto e = charge(parameter.atom.size() + 1))
+          return std::move(e);
     }
-    initialized = true;
+    state->types.emplace(state->declarations, state->work);
   }
   return build(type, 1);
 }
@@ -252,7 +183,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
   auto result = std::make_shared<Layout>();
   result->type = type;
   result->permissions = {true, true, true, true};
-  auto *decl = declaration(type.domain);
+  auto *decl = state->types->typeDeclaration(type);
   if ((type.kind == K::Record &&
        (!decl || decl->kind != Declaration::Kind::Record)) ||
       (type.kind == K::Variant &&
@@ -310,13 +241,6 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     fields.push_back({name.str(), *layout, unsigned(leaves.size())});
     leaves.insert(leaves.end(), (*layout)->leaves.begin(),
                   (*layout)->leaves.end());
-    if ((!decl || !decl->permissions) && type.kind != K::Associated) {
-      auto p = (*layout)->permissions;
-      result->permissions = {result->permissions.copy && p.copy,
-                             result->permissions.drop && p.drop,
-                             result->permissions.share && p.share,
-                             result->permissions.wire && p.wire};
-    }
     return Error::success();
   };
   if (type.kind == K::Boolean)
@@ -338,7 +262,6 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     if (!arity.isClosed())
       return error("source.generic", "formal layout requires a closed arity");
     result->formal = true;
-    result->permissions = {true, true, false, false};
     result->leaves = {PolynomialLayout{field->identity, arity.closedValue()}};
   } else if (type.kind == K::Builtin) {
     auto native = builtinLayout(type);
@@ -349,9 +272,7 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       return error("source.builtin",
                    "native data lacks an installed type policy");
     result->leaves = {native->spelling()};
-    result->permissions = {protocol::duplicable(*native),
-                           protocol::discardable(*native), policy->shared,
-                           protocol::nativeMessageData(*native)};
+
   } else if (type.kind == K::Unit) {
   } else if (type.kind == K::Tuple) {
     for (unsigned i = 0; i < type.arguments.size(); ++i)
@@ -369,7 +290,6 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       auto layout = build(*element, depth + 1);
       if (!layout)
         return layout.takeError();
-      result->permissions = (*layout)->permissions;
       result->formal = (*layout)->formal;
     }
     for (uint64_t i = 0; i < size; ++i)
@@ -381,7 +301,6 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       if (auto e =
               addField(field.name, field.type, result->fields, result->leaves))
         return e;
-      result->permissions.wire &= field.isPublic;
     }
   } else if (type.kind == K::Associated && decl && !decl->abstract) {
     if (auto e =
@@ -425,6 +344,10 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
       if (!bound)
         return bound.takeError();
     }
+  auto permissions = state->types->permissions(type, {});
+  if (!permissions)
+    return state->types->takeError();
+  result->permissions = *permissions;
   std::shared_ptr<const Layout> immutable = result;
   cache.emplace(std::move(key), immutable);
   return immutable;

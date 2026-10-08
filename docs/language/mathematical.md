@@ -195,7 +195,7 @@ setup slots executing through ordinary kernels and the common runtime.
   support; it has no MLIR, runtime or filesystem dependency.
 - `Zkc::Translation`: emit unsimplified mathematical MLIR and independently
   admit and compare actual SSA with the checked source.
-- `Zkc::CompilerCore`: `prepareOriginal` retains immutable bytes, interface,
+- `Zkc::NativeCompiler`: `prepareOriginal` retains immutable bytes, interface,
   comparison and diagnostic mappings; `compileEntry` returns that retained
   original and a tagged `CompiledRun` or `CompiledNativeProof` candidate through
   const accessors. `artifact()` exposes the variant; `bytes()` returns the exact

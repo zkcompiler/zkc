@@ -34,7 +34,7 @@ graphs.
 
 | Owner | Responsibility |
 |---|---|
-| `ZkcCompilerCore` | Admit/capture source and policy; compose projection, construction checking, lowering and deployment assembly |
+| `ZkcNativeCompiler` | Admit/capture source and policy; compose projection, construction checking, lowering and deployment assembly |
 | Protocol transforms | Rewrite selected queries/deliveries and thread generated role-local transcript calls; retain source origins and actual operand maps |
 | `protocol`, `local`, `crypto` | Existing roles/messages/services, ordered local programs/capabilities, and bound transcript kernels |
 | Shared compiler pipeline | `compileRun` and `compileNativeProof` share physical participant compilation |

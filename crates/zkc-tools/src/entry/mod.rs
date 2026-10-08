@@ -7,6 +7,8 @@ mod decode;
 mod package;
 pub use package::{CompileOptions, Package, PackageError};
 
+mod errors;
+pub use errors::{EntryError, EntryPhase};
 mod interface;
 pub use interface::{Interface, InterfaceError};
 

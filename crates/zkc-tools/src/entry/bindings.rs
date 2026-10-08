@@ -263,22 +263,10 @@ impl Generator {
         }
         Ok(())
     }
-    fn ports<'a>(
-        &mut self,
-        name: &str,
-        ports: impl Iterator<Item = &'a Port>,
-        interface: &Interface,
-        inputs: bool,
-    ) -> Result<()> {
+    fn ports<'a>(&mut self, name: &str, ports: impl Iterator<Item = &'a Port>) -> Result<()> {
         let preferred = name.strip_prefix("r#").unwrap_or(name);
         let mut fields = Vec::new();
         for port in ports {
-            if inputs
-                && super::setups::key_kind(interface, port)
-                    == Some(zkc_runtime::interactive::Type::VerifierKey)
-            {
-                continue;
-            }
             fields.push(Member {
                 source: port.name.clone(),
                 name: source_name(&port.name),
@@ -309,7 +297,6 @@ impl Generator {
 pub fn rust(package: &Package) -> Result<String> {
     let interface = Interface::read(package).map_err(|e| e.to_string())?;
     super::arguments::check_ports(&interface)?;
-    let protocol = interface.selected_protocol();
     let mut generator = Generator {
         names: Names::default(),
         types: BTreeMap::new(),
@@ -331,59 +318,44 @@ pub fn rust(package: &Package) -> Result<String> {
             "::zkc_tools::protocol::run::HostLimits",
         )
     };
-    generator.add(format!("pub fn admit(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc_tools::entry::SetupAuthority)->::core::result::Result<{host},::std::string::String>{{let package=::zkc_tools::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc_tools::entry::Package::MAX_BYTES).map_err(|e|e.to_string())?;{host}::admit(package,options,setups)}}\n"))?;
+    generator.add(format!("pub fn admit(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc_tools::entry::SetupAuthority)->::core::result::Result<{host},::zkc_tools::entry::EntryError>{{let package=::zkc_tools::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc_tools::entry::Package::MAX_BYTES)?;{host}::admit(package,options,setups)}}\n"))?;
     let public_name = interface
         .is_proof()
         .then(|| generator.names.ty("PublicInputs"));
-    let role_names: Vec<_> = protocol
-        .roles
+    let role_names: Vec<_> = interface
+        .roles()
         .iter()
         .map(|role| {
             (
-                generator.names.ty(&format!("{role}Inputs")),
-                generator.names.ty(&format!("{role}Outputs")),
+                generator.names.ty(&format!("{}Inputs", role.name)),
+                generator.names.ty(&format!("{}Outputs", role.name)),
             )
         })
         .collect();
-    if let super::interface::raw::Job::Proof { public, .. } = &interface.document.job {
+    if interface.is_proof() {
         generator.ports(
             public_name.as_ref().expect("proof public name reserved"),
-            public.iter().map(|i| &protocol.inputs[*i as usize]),
-            &interface,
-            true,
+            interface
+                .public_ports()
+                .filter(|p| p.named())
+                .map(|p| p.definition),
         )?;
     }
-    for (role, (input, output)) in protocol.roles.iter().zip(role_names) {
-        generator.ports(
-            &input,
-            protocol.inputs.iter().filter(|p| p.roles.contains(role)),
-            &interface,
-            true,
-        )?;
-        generator.ports(
-            &output,
-            protocol.outputs.iter().filter(|p| p.roles.contains(role)),
-            &interface,
-            false,
-        )?;
-        generator.add(format!("impl {input} {{ pub const ROLE: &'static ::core::primitive::str = {role:?}; pub fn into_role(self) -> (::std::string::String, ::zkc_tools::entry::RoleInputs) {{ (Self::ROLE.into(), ::zkc_tools::entry::RoleInputs {{ inputs: self.into(), ..::core::default::Default::default() }}) }} }}\n"))?;
+    for (ports, (input, output)) in interface.roles().iter().zip(role_names) {
+        let role = &ports.name;
+        generator.ports(&input, interface.named_inputs(ports).map(|p| p.definition))?;
+        generator.ports(&output, interface.output_ports(ports))?;
+        generator.add(format!("impl {input} {{ pub const ROLE: &'static ::core::primitive::str = {role:?}; pub fn into_inputs(self) -> ::zkc_tools::entry::RoleInputs {{ ::zkc_tools::entry::RoleInputs {{ inputs: self.into(), ..::core::default::Default::default() }} }} pub fn into_role(self) -> (::std::string::String, ::zkc_tools::entry::RoleInputs) {{ (Self::ROLE.into(), self.into_inputs()) }} }}\n"))?;
         generator.add(format!("impl {output} {{ pub const ROLE: &'static ::core::primitive::str = {role:?}; pub fn take(values: &mut ::zkc_tools::entry::RoleValues) -> ::core::result::Result<Self, ::std::string::String> {{ ::core::convert::TryFrom::try_from(values.remove(Self::ROLE).ok_or(\"entry-binding-role\")?) }} }}\n"))?;
     }
     for (module, names) in [
-        (
-            "setups",
-            interface
-                .document
-                .setups
-                .iter()
-                .map(|s| s.name.as_str())
-                .collect::<Vec<_>>(),
-        ),
+        ("setups", interface.setup_names().collect::<Vec<_>>()),
         (
             "services",
-            protocol
-                .services
+            interface
+                .roles()
                 .iter()
+                .flat_map(|role| interface.services(role))
                 .map(|s| s.name.as_str())
                 .collect::<Vec<_>>(),
         ),
@@ -399,10 +371,9 @@ pub fn rust(package: &Package) -> Result<String> {
         }
         generator.add("}\n")?;
     }
-    if let super::interface::raw::Job::Proof {
-        prover, verifier, ..
-    } = &interface.document.job
-    {
+    if let Some(proof) = interface.proof() {
+        let prover = &interface.roles()[proof.prover].name;
+        let verifier = &interface.roles()[proof.verifier].name;
         generator.add(format!(
             "pub const PROVER: &::core::primitive::str = {prover:?};\npub const VERIFIER: &::core::primitive::str = {verifier:?};\n"
         ))?;

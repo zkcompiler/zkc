@@ -266,7 +266,7 @@ consumer CTest inventory. It also runs the restored mathematical bundle through
 bundle itself has no Lean reader. Missing explicitly requested tools fail the check.
 
 For mathematical compilation, use `compileRun` or `compileNativeProof` from
-`ZkcCompilerCore`. An IR-only composite must decompose to admitted operations
+`ZkcNativeCompiler`. An IR-only composite must decompose to admitted operations
 before these entry points; the installed domain example tests that boundary.
 A new executable primitive still needs independent runtime admission, realization
 and codecs. Compiler contribution registration does not install Rust kernels.
@@ -339,7 +339,7 @@ initialization file under [`lib/Dialect`](../../compiler/lib/Dialect).
 declarations; dialect class declarations live in the per-dialect headers.
 Registration and mandatory verification belong to `Zkc::IR`; dialect-local
 transformation passes belong to `Zkc::Transforms`; aggregate pass registration
-belongs to `Zkc::CompilerCore`. See the [checking boundaries](../compiler/ir-verification.md).
+belongs to `Zkc::NativeCompiler`. See the [checking boundaries](../compiler/ir-verification.md).
 Operation/type declarations, definitions and registration lists are generated
 per dialect. Cross-dialect ODS constraints use explicit owner includes. Clients
 may include one owner's header or the convenience aggregate. Native-only
@@ -347,7 +347,8 @@ registration excludes the finite-table dialect and installs the closed `arith`
 models; full registration adds Table. Neither entry point registers passes.
 `Zkc::Translation` owns source import/export; IR and Transforms do not depend on
 it. Contribution transform sources should use MLIR verification and core IR
-readers, leaving source-to-IR workflows to CompilerCore.
+readers, leaving native compilation to NativeCompiler and older source workflows
+to CompilerCore.
 Public dialect queries and verifiers remain extension APIs. Raw construction
 helpers under `Dialect/detail/Builders.h` are unsupported same-version details
 and do not establish admission. Claim IR structure belongs to IR; the optional

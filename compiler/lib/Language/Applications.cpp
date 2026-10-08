@@ -34,10 +34,11 @@ bool BodyChecker::application(const Statement &statement) {
     if (!checker.bindingName(decl, name, statement.span) ||
         bindings.count(name) || services.count(name) ||
         !seen.insert(name).second)
-      return checker.diagnostic ? false
-                                : fail("source.shadow",
-                                       "duplicate or shadowing result binding",
-                                       statement.span);
+      return checker.types.diagnostic
+                 ? false
+                 : fail("source.shadow",
+                        "duplicate or shadowing result binding",
+                        statement.span);
   const auto &roleNames = expr.roles ? *expr.roles : callee.roles;
   if (roleNames.size() != callee.roles.size())
     return fail("source.roles",
@@ -65,13 +66,13 @@ bool BodyChecker::application(const Statement &statement) {
   std::vector<std::optional<Type>> hints;
   for (auto child : expr.children) {
     hints.push_back(hint(child));
-    if (checker.diagnostic)
+    if (checker.types.diagnostic)
       return false;
   }
   auto arguments = actuals(callee, expr, hints, {}, {});
   if (!arguments)
     return false;
-  auto substitution = checker.substitution(callee, *arguments);
+  auto substitution = checker.types.substitution(callee, *arguments);
   if (expr.services.size() != callee.services.size())
     return fail("source.service",
                 "protocol application managed port count differs", expr.span);
@@ -84,7 +85,8 @@ bool BodyChecker::application(const Statement &statement) {
                   expr.span);
     const auto &actual = body.services[found->second.index];
     const auto &expected = callee.services[i];
-    auto field = checker.substitute(expected.field, substitution, expr.span);
+    auto field =
+        checker.types.substitute(expected.field, substitution, expr.span);
     if (!field)
       return false;
     if (*field != actual.field || mapping[expected.owner] != actual.owner)
@@ -95,7 +97,7 @@ bool BodyChecker::application(const Statement &statement) {
   std::vector<ValueId> operands;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     const auto &port = callee.inputs[i];
-    auto type = checker.substitute(port.type, substitution, expr.span);
+    auto type = checker.types.substitute(port.type, substitution, expr.span);
     if (!type)
       return false;
     auto value = expression(expr.children[i], *type);
@@ -108,9 +110,9 @@ bool BodyChecker::application(const Statement &statement) {
       return fail("source.roles",
                   "protocol argument lacks a required participant component",
                   expr.span);
-    auto permissions = checker.permissions(*type, expr.span, &decl);
+    auto permissions = checker.types.permissions(*type, expr.span, &decl);
     if (!permissions || (available != roles && !permissions->drop))
-      return checker.diagnostic
+      return checker.types.diagnostic
                  ? false
                  : fail("source.permission",
                         "application cannot discard a component without Drop",
@@ -128,7 +130,7 @@ bool BodyChecker::application(const Statement &statement) {
   body.opaque |= callee.body->opaque;
   std::vector<Value> results;
   for (const auto &port : callee.outputs) {
-    auto type = checker.substitute(port.type, substitution, expr.span);
+    auto type = checker.types.substitute(port.type, substitution, expr.span);
     if (!type)
       return false;
     results.push_back({*type, mappedRoles(port), expr.span});

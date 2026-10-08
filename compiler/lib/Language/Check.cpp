@@ -8,91 +8,48 @@ namespace zkc::language::detail {
 Checker::Checker(std::vector<SyntaxModule> syntax, CheckedStorage &output,
                  Work &work)
     : output(output), work(work),
-      naturals(work.limits.work, work.limits.naturalTerms,
-               work.limits.naturalFactors),
+      types(output.declarations, work,
+            [this](DeclarationId id) { return signature(id); }),
       syntax(std::move(syntax)) {}
-Checker::Checker(CheckedStorage &output, Work &work)
-    : Checker({}, output, work) {
-  signatureState.assign(output.declarations.size(), 2);
-  for (const auto &decl : output.declarations) {
-    if (!decl.anonymous)
-      qualified.emplace(decl.qualifiedName, decl.id);
-    for (unsigned i = 0; i < decl.parameters.size(); ++i)
-      parameters.emplace(decl.parameters[i].atom, std::make_pair(decl.id, i));
-  }
-}
-bool Checker::fail(StringRef code, const Twine &message, Span span,
-                   std::vector<Span> related) {
-  if (!diagnostic)
-    diagnostic =
-        Diagnostic{code.str(), message.str(), span, std::move(related)};
-  return false;
-}
-bool Checker::accept(Error error) {
-  bool success = !error;
-  handleAllErrors(
-      std::move(error),
-      [&](const DiagnosticError &e) {
-        if (!diagnostic)
-          diagnostic = e.diagnostic();
-      },
-      [&](const ErrorInfoBase &e) {
-        if (!diagnostic) {
-          std::string message = e.message();
-          auto parts = StringRef(message).split(':');
-          diagnostic =
-              Diagnostic{parts.first.str(), parts.second.trim().str(), {}, {}};
-        }
-      });
-  return success;
-}
-bool Checker::charge(uint64_t count, Span span) {
-  return accept(work.charge(count, span));
-}
-Error Checker::takeError() { return make_error<DiagnosticError>(*diagnostic); }
 Error Checker::run() {
   if (auto error = checkCapabilityInstallation())
     return error;
   if (!collect() || !imports())
-    return takeError();
+    return types.takeError();
   signatureState.resize(output.declarations.size());
   for (unsigned i = 0; i < output.declarations.size(); ++i)
     if (!signature(DeclarationId{i}))
-      return takeError();
+      return types.takeError();
   if (!relationIdentities())
-    return takeError();
+    return types.takeError();
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Component && !conformance(decl.id))
-      return takeError();
+      return types.takeError();
   if (!representations())
-    return takeError();
+    return types.takeError();
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Record ||
         decl.kind == Declaration::Kind::Variant) {
-      SyntaxType syntax;
-      syntax.name = decl.qualifiedName;
-      syntax.span = decl.span;
-      for (auto &p : decl.parameters) {
-        SyntaxType argument;
-        argument.name = p.name;
-        argument.span = p.span;
-        syntax.arguments.push_back(std::move(argument));
-      }
-      auto nominal = type(decl, syntax);
-      if (!nominal || !permissions(*nominal, decl.span, &decl))
-        return takeError();
+      Type nominal(decl.kind == Declaration::Kind::Record ? Type::Kind::Record
+                                                          : Type::Kind::Variant,
+                   decl.qualifiedName);
+      for (const auto &parameter : decl.parameters)
+        nominal.arguments.push_back(parameterType(parameter));
+      if (!types.permissions(nominal, decl.span, &decl))
+        return types.takeError();
     }
   for (const auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Math)
       for (auto *ports : {&decl.inputs, &decl.outputs})
         for (const auto &port : *ports) {
-          auto caps = permissions(port.type, port.span, &decl);
+          auto caps = types.permissions(port.type, port.span, &decl);
           if (!caps)
-            return takeError();
+            return types.takeError();
           if (!caps->copy || !caps->drop) {
-            fail("source.mode", "mathematical signatures require Copy and Drop",
-                 port.span);
-            return takeError();
+            types.fail("source.mode",
+                       "mathematical signatures require Copy and Drop",
+                       port.span);
+            return types.takeError();
           }
         }
   bodyState.resize(output.declarations.size());
@@ -105,21 +62,21 @@ Error Checker::run() {
          (decl.kind == Declaration::Kind::Relation &&
           decl.relation->kind == RelationDefinition::Kind::Formula)) &&
         !decl.abstract && !body(decl.id, 1))
-      return takeError();
+      return types.takeError();
   }
   for (auto &decl : output.declarations)
     if (decl.kind == Declaration::Kind::Protocol && !specifications(decl))
-      return takeError();
+      return types.takeError();
   if (!entries())
-    return takeError();
+    return types.takeError();
   return Error::success();
 }
 bool Checker::bindingName(const Declaration &decl, StringRef name, Span span) {
   if (visible[decl.module.index].count(name.str()) ||
       llvm::any_of(decl.parameters, [&](auto &p) { return p.name == name; }))
-    return fail("source.shadow",
-                "binding shadows a visible declaration or static parameter",
-                span);
+    return types.fail(
+        "source.shadow",
+        "binding shadows a visible declaration or static parameter", span);
   return true;
 }
 bool Checker::collect() {
@@ -161,31 +118,32 @@ bool Checker::collect() {
                            "::<" + source.name + ">";
     if (!decl.anonymous &&
         !qualified.emplace(decl.qualifiedName, decl.id).second)
-      return fail("source.duplicate", "duplicate declaration: " + decl.name,
-                  decl.span);
+      return types.fail("source.duplicate",
+                        "duplicate declaration: " + decl.name, decl.span);
     if (!parent && !visible[module.index].emplace(decl.name, decl.id).second)
-      return fail("source.duplicate", "duplicate declaration: " + decl.name,
-                  decl.span);
+      return types.fail("source.duplicate",
+                        "duplicate declaration: " + decl.name, decl.span);
     auto symbol =
         decl.anonymous
             ? Expected<std::string>("zki_" + digest(decl.qualifiedName))
             : encodeSymbol(decl.qualifiedName, work.limits);
     if (!symbol)
-      return accept(symbol.takeError());
+      return types.accept(symbol.takeError());
     decl.symbol = std::move(*symbol);
+    types.indexDeclaration(decl);
     if (source.kind == Declaration::Kind::Domain) {
       auto sorts = protocol::domainSorts();
       auto sort = llvm::find_if(sorts, [&](const std::string &sort) {
         return StringRef(sort).lower() == source.target;
       });
       if (sort == sorts.end())
-        return fail("source.domain", "unknown domain sort: " + source.target,
-                    source.span);
+        return types.fail("source.domain",
+                          "unknown domain sort: " + source.target, source.span);
       if (protocol::installedDomains().identitySort(source.domain) != *sort)
-        return fail("source.domain",
-                    "expected installed " + source.target +
-                        " identity: " + source.domain,
-                    source.span);
+        return types.fail("source.domain",
+                          "expected installed " + source.target +
+                              " identity: " + source.domain,
+                          source.span);
       decl.domain = domainType(*sort, source.domain);
     }
     auto id = decl.id;
@@ -211,28 +169,30 @@ bool Checker::imports() {
   std::vector<std::vector<unsigned>> edges(syntax.size());
   for (auto &module : syntax)
     for (auto &import : module.imports) {
-      if (!charge(import.names.size() + 1, import.span))
+      if (!types.charge(import.names.size() + 1, import.span))
         return false;
       auto target = modules.find(import.module);
       if (target == modules.end())
-        return fail("source.import",
-                    "module was not explicitly captured: " + import.module,
-                    import.span);
+        return types.fail("source.import",
+                          "module was not explicitly captured: " +
+                              import.module,
+                          import.span);
       edges[module.id.index].push_back(target->second.index);
       for (auto &name : import.names) {
         auto found = qualified.find(import.module + "::" + name);
         if (found == qualified.end())
-          return fail("source.import", "unknown imported declaration: " + name,
-                      import.span);
+          return types.fail("source.import",
+                            "unknown imported declaration: " + name,
+                            import.span);
         auto &decl = output.declarations[found->second.index];
         if (!decl.isPublic)
-          return fail("source.private",
-                      "cannot import private declaration: " + name, import.span,
-                      {decl.span});
+          return types.fail("source.private",
+                            "cannot import private declaration: " + name,
+                            import.span, {decl.span});
         if (!visible[module.id.index].emplace(name, decl.id).second)
-          return fail("source.duplicate",
-                      "import conflicts with visible name: " + name,
-                      import.span);
+          return types.fail("source.duplicate",
+                            "import conflicts with visible name: " + name,
+                            import.span);
       }
     }
   std::vector<unsigned> active(syntax.size()), height(syntax.size());
@@ -240,16 +200,16 @@ bool Checker::imports() {
                                                       unsigned depth) {
     Span span{ModuleId{i}, 0, 0};
     if (depth > work.limits.importDepth)
-      return fail("source.limit", "import depth limit exceeded", span);
+      return types.fail("source.limit", "import depth limit exceeded", span);
     if (active[i] == 1)
-      return fail("source.cycle", "cyclic module imports", span);
+      return types.fail("source.cycle", "cyclic module imports", span);
     if (active[i] == 2)
       return depth - 1 + height[i] <= work.limits.importDepth ||
-             fail("source.limit", "import depth limit exceeded", span);
+             types.fail("source.limit", "import depth limit exceeded", span);
     active[i] = 1;
     height[i] = 1;
     for (auto edge : edges[i]) {
-      if (!charge(1, span) || !visit(edge, depth + 1))
+      if (!types.charge(1, span) || !visit(edge, depth + 1))
         return false;
       height[i] = std::max(height[i], height[edge] + 1);
     }
@@ -262,65 +222,82 @@ bool Checker::imports() {
   return true;
 }
 std::optional<DeclarationId> Checker::resolve(const Declaration &context,
-                                              StringRef name, Span span) {
-  if (!charge(1, span))
+                                              StringRef name, Span span,
+                                              bool required) {
+  if (!types.charge(1, span))
     return {};
-  std::optional<DeclarationId> id;
-  for (auto parent = context.parent; parent;
-       parent = output.declarations[parent->index].parent) {
-    auto found = qualified.find(
-        output.declarations[parent->index].qualifiedName + "::" + name.str());
-    if (found != qualified.end()) {
-      id = found->second;
-      break;
+  const bool absolute = name.consume_front("::");
+  auto [head, tail] = name.split("::");
+  auto member = [&](DeclarationId owner,
+                    StringRef part) -> std::optional<DeclarationId> {
+    const auto &members = output.declarations[owner.index].members;
+    if (!types.charge(members.size(), span))
+      return {};
+    for (auto id : members)
+      if (!output.declarations[id.index].anonymous &&
+          output.declarations[id.index].name == part)
+        return id;
+    return {};
+  };
+  std::optional<DeclarationId> root;
+  if (!absolute) {
+    for (auto parent = context.parent; parent;
+         parent = output.declarations[parent->index].parent) {
+      root = member(*parent, head);
+      if (types.diagnostic)
+        return {};
+      if (root)
+        break;
+    }
+    if (!root) {
+      auto found = visible[context.module.index].find(head.str());
+      if (found != visible[context.module.index].end())
+        root = found->second;
     }
   }
-  if (!id) {
-    auto found = qualified.find(name.str());
-    if (found != qualified.end())
-      id = found->second;
-  }
-  if (!id) {
-    auto parts = name.split("::");
-    auto found = visible[context.module.index].find(parts.first.str());
-    if (found != visible[context.module.index].end()) {
-      if (parts.second.empty())
-        id = found->second;
-      else {
-        auto member = qualified.find(
-            output.declarations[found->second.index].qualifiedName +
-            "::" + parts.second.str());
-        if (member != qualified.end())
-          id = member->second;
-      }
+  // Descend actual declaration members. A same-named captured module is not
+  // part of a lexical declaration's scope, including when a member is absent.
+  std::optional<DeclarationId> resolved = root;
+  if (root) {
+    while (resolved && !tail.empty()) {
+      if (!types.charge(1, span))
+        return {};
+      auto next = tail.split("::");
+      resolved = member(*resolved, next.first);
+      if (types.diagnostic)
+        return {};
+      tail = next.second;
     }
-  }
-  if (!id) {
-    fail("source.name", "unknown declaration: " + name, span);
+  } else if (auto found = qualified.find(name.str()); found != qualified.end())
+    resolved = found->second;
+  if (!resolved) {
+    if (required)
+      types.fail("source.name", "unknown declaration: " + name, span);
     return {};
   }
-  auto &decl = output.declarations[id->index];
-  for (auto current = std::optional<DeclarationId>{*id}; current;
+  auto id = *resolved;
+  for (auto current = std::optional<DeclarationId>{id}; current;
        current = output.declarations[current->index].parent) {
-    auto &ancestor = output.declarations[current->index];
+    const auto &ancestor = output.declarations[current->index];
     if (ancestor.module.index != context.module.index && !ancestor.isPublic) {
-      fail("source.private", "cannot reference private declaration: " + name,
-           span, {ancestor.span});
+      types.fail("source.private",
+                 "cannot reference private declaration: " + name, span,
+                 {ancestor.span});
       return {};
     }
   }
-  return decl.id;
+  return id;
 }
 std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
                                                     ArrayRef<std::string> names,
                                                     Span span) {
-  if (!charge(names.size() * (decl.roles.size() + 1), span))
+  if (!types.charge(names.size() * (decl.roles.size() + 1), span))
     return {};
   std::vector<unsigned> result;
   for (auto &name : names) {
     auto found = llvm::find(decl.roles, name);
     if (found == decl.roles.end()) {
-      fail("source.roles", "unknown participant: " + name, span);
+      types.fail("source.roles", "unknown participant: " + name, span);
       return {};
     }
     result.push_back(found - decl.roles.begin());
@@ -328,7 +305,7 @@ std::optional<std::vector<unsigned>> Checker::roles(const Declaration &decl,
   llvm::sort(result);
   if (result.empty() ||
       std::adjacent_find(result.begin(), result.end()) != result.end()) {
-    fail("source.roles", "role set must be nonempty and distinct", span);
+    types.fail("source.roles", "role set must be nonempty and distinct", span);
     return {};
   }
   return result;

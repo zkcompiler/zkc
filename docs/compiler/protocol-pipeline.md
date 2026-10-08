@@ -381,8 +381,8 @@ Claims and IR for claim import and independent candidate checking. IR retains
 the claim dialect's structure and mandatory protocol verification without a
 Claims dependency. CompilerCore links ClaimTranslation for its claim workflows.
 `Translation` separately owns interchange adapters and depends on IR. Transforms
-depends on IR; CompilerCore owns workflows that combine transformations with
-source import/export. Conversion implementations live in `lib/Conversion/`.
+depends on IR. NativeCompiler combines native emission, comparison and
+transforms; CompilerCore adds the older source and claim workflows. Conversion implementations live in `lib/Conversion/`.
 The [component map](../../compiler/README.md#components) records enforced build
 ownership, which need not be one library per directory. Tools and tests sit
 alongside these libraries.

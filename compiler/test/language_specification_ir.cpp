@@ -270,6 +270,37 @@ int main() {
           throw std::runtime_error(toString(std::move(error)));
         require(calls == 4 && nested == 1 && callees.size() == 2,
                 "application or generic-instance inventory differs");
+        unsigned untrustedCalls = 0;
+        if (auto error = inspectApplications(
+                original.bytes(), original.interfaceJson(),
+                [&](const ApplicationOccurrence &) -> Error {
+                  ++untrustedCalls;
+                  return Error::success();
+                }))
+          throw std::runtime_error(toString(std::move(error)));
+        require(untrustedCalls == calls, "trusted and byte inspection differ");
+        Limits tight;
+        tight.interfaceBytes = original.interfaceJson().size() - 1;
+        unsigned tightCalls = 0;
+        auto tooSmall = inspectApplications(
+            original,
+            [&](const ApplicationOccurrence &) -> Error {
+              ++tightCalls;
+              return Error::success();
+            },
+            tight);
+        require(bool(tooSmall) && tightCalls == 0,
+                "retained inspection bypasses tighter admission limits");
+        consumeError(std::move(tooSmall));
+        auto visitorError = inspectApplications(
+            original, [&](const ApplicationOccurrence &) -> Error {
+              return createStringError(inconvertibleErrorCode(),
+                                       "retained visitor stop");
+            });
+        require(bool(visitorError) && toString(std::move(visitorError)) ==
+                                          "retained visitor stop",
+                "retained inspection swallowed the visitor error");
+
         take(compileEntry(original));
         for (unsigned mutation = 0; mutation < 4; ++mutation) {
           auto candidate = parse(original.bytes());

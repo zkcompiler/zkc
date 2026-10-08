@@ -1,8 +1,7 @@
 //! Independent named proof calls over the admitted common native deployment.
+use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{
-    Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments,
-    interface::raw::{Construction, Job},
-    setups, value,
+    Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments, setups, value,
 };
 use crate::artifact::{
     hex,
@@ -58,12 +57,12 @@ impl Default for AttemptOptions {
     }
 }
 /// Public values are the application's independently authorized statement. The
-/// role input map also supplies any shared operands; native admission checks
-/// their canonical agreement. A verifier request carries no prover inputs.
+/// private map supplies only the invoked role's nonpublic inputs. The adapter
+/// assembles shared operands and native admission checks canonical agreement.
 #[derive(Debug, Default)]
 pub struct ProofRequest {
     pub public: NamedValues,
-    pub inputs: RoleInputs,
+    pub private: RoleInputs,
     pub context: Vec<u8>,
     /// None uses the operational default for derivation and zero for authored jobs.
     pub transcript_budget: Option<u64>,
@@ -75,6 +74,7 @@ pub struct ProofEntry {
     native: NativeDeployment,
     scope: BindingScope,
     completion: Option<usize>,
+    roles: (usize, usize),
 }
 /// The outer call result distinguishes preparation refusal. This report must
 /// still be checked for execution success, including rejection and cleanup.
@@ -107,31 +107,41 @@ impl ProofReport {
     }
 }
 impl ProofEntry {
-    pub fn admit(package: Package, options: ProofOptions, setups: SetupAuthority) -> Result<Self> {
-        let interface = Interface::read(&package).map_err(|e| e.to_string())?;
-        let Job::Proof { construction, .. } = &interface.document.job else {
-            return Err("entry-job-kind".into());
-        };
-        let scope = match construction {
-            Construction::Authored {} => BindingScope::HeaderOnly,
-            Construction::FiatShamir { .. } => BindingScope::Transcript,
+    pub fn admit(
+        package: Package,
+        options: ProofOptions,
+        setups: SetupAuthority,
+    ) -> EntryResult<Self> {
+        let interface = Interface::read(&package).map_err(|e| E::new(P::Interface, e))?;
+        let proof = interface
+            .proof()
+            .ok_or_else(|| E::new(P::Admission, "entry-job-kind"))?;
+        let roles = (proof.prover, proof.verifier);
+        let completion = proof.completion;
+        let scope = if proof.suite.is_some() {
+            BindingScope::Transcript
+        } else {
+            BindingScope::HeaderOnly
         };
         if scope == BindingScope::HeaderOnly && options.binding == BindingPolicy::TranscriptRequired
         {
-            return Err("entry-proof-binding-policy".into());
+            return Err(E::new(P::Admission, "entry-proof-binding-policy"));
         }
-        arguments::check_ports(&interface)?;
+        arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
         let native = NativeDeployment::admit_with_setups(
             package.artifact().as_bytes(),
             &hex(&Sha256::digest(package.artifact().as_bytes())),
-            setups::proof_authority(&interface, setups)?,
-        )?
-        .with_capacity(options.capacity)?
-        .with_external_work_limit(options.external_work)?;
-        interface.check_proof(&native).map_err(|e| e.to_string())?;
-        let completion = interface.completion().map_err(|e| e.to_string())?;
+            setups::proof_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,
+        )
+        .and_then(|n| n.with_capacity(options.capacity))
+        .and_then(|n| n.with_external_work_limit(options.external_work))
+        .map_err(|e| E::new(P::Admission, e))?;
+        interface
+            .check_proof(&native)
+            .map_err(|e| E::new(P::Binding, e))?;
         Ok(Self {
             completion,
+            roles,
             package,
             interface,
             native,
@@ -147,16 +157,30 @@ impl ProofEntry {
     pub fn binding_scope(&self) -> BindingScope {
         self.scope
     }
-    pub fn prove(&self, request: ProofRequest) -> Result<ProofReport> {
+    pub fn prove(&self, request: ProofRequest) -> EntryResult<ProofReport> {
         if self.completion.is_some() {
             return self.prove_attempts(request, AttemptOptions::default());
         }
-        let inputs = self.inputs(request, true)?;
-        Ok(self.report(self.native.execute_typed(&inputs, None)?, true))
+        let inputs = self
+            .inputs(request, true)
+            .map_err(|e| E::new(P::Request, e))?;
+        Ok(self.report(
+            self.native
+                .execute_typed(&inputs, None)
+                .map_err(|e| E::new(P::Preparation, e))?,
+            true,
+        ))
     }
-    pub fn verify(&self, request: ProofRequest, proof: &[u8]) -> Result<ProofReport> {
-        let inputs = self.inputs(request, false)?;
-        Ok(self.report(self.native.execute_typed(&inputs, Some(proof))?, false))
+    pub fn verify(&self, request: ProofRequest, proof: &[u8]) -> EntryResult<ProofReport> {
+        let inputs = self
+            .inputs(request, false)
+            .map_err(|e| E::new(P::Request, e))?;
+        Ok(self.report(
+            self.native
+                .execute_typed(&inputs, Some(proof))
+                .map_err(|e| E::new(P::Preparation, e))?,
+            false,
+        ))
     }
     /// Use the Entry's completion result with explicit application authorization.
     /// The native controller retains actual providers and cumulative work.
@@ -164,8 +188,10 @@ impl ProofEntry {
         &self,
         request: ProofRequest,
         options: AttemptOptions,
-    ) -> Result<ProofReport> {
-        let completion = self.completion.ok_or("entry-attempt-completion")?;
+    ) -> EntryResult<ProofReport> {
+        let completion = self
+            .completion
+            .ok_or_else(|| E::new(P::Request, "entry-attempt-completion"))?;
         let capacity = self.native.capacity();
         let policy = AttemptPolicy {
             completion,
@@ -179,54 +205,34 @@ impl ProofEntry {
             work: capacity.work,
             values: capacity.values,
         };
-        let inputs = self.inputs(request, true)?;
-        Ok(self.report(self.native.execute_attempts_typed(&inputs, &policy)?, true))
+        let inputs = self
+            .inputs(request, true)
+            .map_err(|e| E::new(P::Request, e))?;
+        Ok(self.report(
+            self.native
+                .execute_attempts_typed(&inputs, &policy)
+                .map_err(|e| E::new(P::Preparation, e))?,
+            true,
+        ))
     }
     fn inputs(&self, request: ProofRequest, producer: bool) -> Result<ProofInputs> {
-        let protocol = self.interface.selected_protocol();
-        let Job::Proof {
-            prover,
-            verifier,
-            public,
-            construction,
-            ..
-        } = &self.interface.document.job
-        else {
-            unreachable!("admitted proof Entry")
-        };
-        let role = if producer { prover } else { verifier };
-        let derived = match construction {
-            Construction::Authored {} => None,
-            Construction::FiatShamir { service, .. } => Some(*service as usize),
-        };
+        let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
+        let derived = self.interface.proof().and_then(|p| p.transcript).is_some();
         let keys = setups::public_keys(&self.interface, &request.setups, self.native.capacity())?;
+        let public = arguments::values(self.interface.public_ports(), request.public, Some(&keys))?;
+        let inputs = arguments::proof_inputs(
+            &self.interface,
+            role,
+            &public,
+            request.private.inputs,
+            self.native.capacity(),
+        )?;
         Ok(ProofInputs {
-            public: arguments::values(
-                &self.interface,
-                public.iter().map(|i| &protocol.inputs[*i as usize]),
-                request.public,
-                Some(&keys),
-            )?,
-            inputs: arguments::values(
-                &self.interface,
-                protocol
-                    .inputs
-                    .iter()
-                    .filter(|port| port.roles.contains(role)),
-                request.inputs.inputs,
-                None,
-            )?,
-            services: arguments::services(
-                protocol
-                    .services
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, port)| Some(*i) != derived && &port.owner == role)
-                    .map(|(_, port)| port),
-                request.inputs.services,
-            )?,
+            public,
+            inputs,
+            services: arguments::services(self.interface.services(role), request.private.services)?,
             context: request.context,
-            transcript_budget: request.transcript_budget.unwrap_or(if derived.is_some() {
+            transcript_budget: request.transcript_budget.unwrap_or(if derived {
                 super::DEFAULT_DRAW_BUDGET
             } else {
                 0
@@ -240,22 +246,15 @@ impl ProofEntry {
             output_error: None,
             binding_scope: self.scope,
         };
+        if report.native.outcome.is_err() || !report.native.cleanup_errors.is_empty() {
+            return report;
+        }
         if let Some(outputs) = &report.native.outputs {
-            let role = if producer {
-                &self.native.entry().producer().role
-            } else {
-                &self.native.entry().validator().role
-            };
+            let role = &self.interface.roles()[if producer { self.roles.0 } else { self.roles.1 }];
             let result = (|| -> Result<NamedValues> {
                 let mut leaves = outputs.clone();
                 let mut values = NamedValues::new();
-                for port in self
-                    .interface
-                    .selected_protocol()
-                    .outputs
-                    .iter()
-                    .filter(|p| p.roles.contains(role))
-                {
+                for port in self.interface.output_ports(role) {
                     let selected = port
                         .native
                         .iter()

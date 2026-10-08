@@ -3,6 +3,9 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "llvm/Support/JSON.h"
+namespace zkc::language {
+class CheckedOriginal;
+}
 namespace zkc::language::detail {
 llvm::Expected<std::string> emitInterface(const ClosedEntry &,
                                           llvm::StringRef original,
@@ -17,6 +20,11 @@ llvm::Error withInterface(
     llvm::StringRef original, llvm::StringRef interface, const Limits &,
     llvm::ArrayRef<RelationAsset>,
     llvm::function_ref<llvm::Error(mlir::ModuleOp, LanguageInterface &&)>);
+/// Reuse admitted immutable metadata; tighter limits take the byte-admission
+/// path.
+llvm::Error withInterface(
+    const CheckedOriginal &, const Limits &,
+    llvm::function_ref<llvm::Error(mlir::ModuleOp, const LanguageInterface &)>);
 llvm::Expected<llvm::json::Value> parseInterface(llvm::StringRef,
                                                  const Limits &);
 } // namespace zkc::language::detail

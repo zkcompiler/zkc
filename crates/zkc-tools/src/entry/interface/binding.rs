@@ -1,5 +1,5 @@
 //! Bind authenticated source metadata to the native owner's admitted ABI.
-use super::{Interface, InterfaceError as E, Result, raw::*, require, validate};
+use super::{Interface, InterfaceError as E, Result, raw::*, require};
 use crate::{artifact::native::NativeDeployment, protocol::run::RunHost};
 use zkc_runtime::interactive::LogicalType;
 
@@ -17,11 +17,12 @@ impl Interface {
                 && bundle.roles().len() == p.roles.len(),
             E::NativeBinding,
         )?;
-        for (expected, actual) in p.roles.iter().zip(bundle.roles()) {
+        for (role, actual) in self.roles().iter().zip(bundle.roles()) {
+            let expected = &role.name;
             let entry = &actual.entry;
             require(&entry.role == expected, E::NativeBinding)?;
-            let inputs = leaves(&p.inputs, expected);
-            let outputs = leaves(&p.outputs, expected);
+            let inputs = leaves(self.input_ports(role).map(|p| p.definition));
+            let outputs = leaves(self.output_ports(role));
             require(
                 inputs.len() == entry.inputs.len() && outputs.len() == entry.outputs.len(),
                 E::NativeBinding,
@@ -38,7 +39,7 @@ impl Interface {
                     E::NativeBinding,
                 )?;
             }
-            let services: Vec<_> = p.services.iter().filter(|s| &s.owner == expected).collect();
+            let services: Vec<_> = self.services(role).collect();
             require(services.len() == entry.services.len(), E::NativeBinding)?;
             for (index, (service, actual)) in services.iter().zip(&entry.services).enumerate() {
                 require(
@@ -54,27 +55,13 @@ impl Interface {
     /// construction. This is admission consistency, not a soundness judgment.
     pub fn check_proof(&self, deployment: &NativeDeployment) -> Result<()> {
         let p = &self.document.protocols[self.selected];
-        let Job::Proof {
-            prover,
-            verifier,
-            public,
-            acceptance,
-            construction,
-            ..
-        } = &self.document.job
-        else {
-            return Err(E::NativeBinding);
-        };
+        let proof = self.proof().ok_or(E::NativeBinding)?;
+        let prover = &self.roles()[proof.prover].name;
+        let verifier = &self.roles()[proof.verifier].name;
         let native = deployment.source_interface();
         let entry = deployment.entry();
-        let (_, accepted) = validate::select(p, acceptance)?;
-        let (suite, service) = match construction {
-            Construction::Authored {} => (None, None),
-            Construction::FiatShamir { suite, service } => (
-                Some(suite.as_str()),
-                Some(p.services[*service as usize].native as usize),
-            ),
-        };
+        let suite = proof.suite.as_deref();
+        let service = proof.transcript.map(|i| p.services[i].native as usize);
         require(
             native.version == 4
                 && native.publication == self.artifact
@@ -83,57 +70,41 @@ impl Interface {
                 && entry.entry() == p.symbol
                 && &entry.producer().role == prover
                 && &entry.validator().role == verifier
-                && native.acceptance == accepted[0] as usize
+                && native.acceptance == proof.acceptance
                 && native.suite == suite
                 && native.service == service
                 && native.roles.len() == p.roles.len(),
             E::NativeBinding,
         )?;
-        let expected_public: Vec<_> = public
-            .iter()
-            .flat_map(|i| {
-                let port = &p.inputs[*i as usize];
-                port.native
-                    .iter()
-                    .zip(&port.schema.leaves)
-                    .map(|(i, t)| (*i as usize, t.as_str()))
-            })
-            .collect();
+        let expected_public = leaves(self.public_ports().map(|p| p.definition));
         self.ports(
             &expected_public,
             native.public.iter().map(|p| (p.original, &p.logical)),
         )?;
-        for role in &p.roles {
+        for ports in self.roles() {
+            let role = &ports.name;
             let actual = native.roles.get(role).ok_or(E::NativeBinding)?;
             self.ports(
-                &leaves(&p.inputs, role),
+                &leaves(self.input_ports(ports).map(|p| p.definition)),
                 actual.data.iter().map(|p| (p.original, &p.logical)),
             )?;
             self.ports(
-                &leaves(&p.outputs, role),
+                &leaves(self.output_ports(ports)),
                 actual.outputs.iter().map(|p| (p.original, &p.logical)),
             )?;
-            let services: Vec<_> = p
-                .services
-                .iter()
-                .filter(|s| &s.owner == role && Some(s.native as usize) != service)
-                .map(|s| s.native as usize)
-                .collect();
+            let services: Vec<_> = self.services(ports).map(|s| s.native as usize).collect();
             require(actual.services == services, E::NativeBinding)?;
             let native_role = if role == prover {
                 entry.producer()
             } else {
                 entry.validator()
             };
-            let contracts = p
-                .services
-                .iter()
-                .filter(|s| &s.owner == role && Some(s.native as usize) != service);
+            let contracts: Vec<_> = self.services(ports).collect();
             require(
-                contracts.clone().count() == native_role.services.len(),
+                contracts.len() == native_role.services.len(),
                 E::NativeBinding,
             )?;
-            for (expected, actual) in contracts.zip(&native_role.services) {
+            for (expected, actual) in contracts.into_iter().zip(&native_role.services) {
                 require(
                     expected.contract == actual.contract.name(),
                     E::NativeBinding,
@@ -157,10 +128,8 @@ impl Interface {
         Ok(())
     }
 }
-fn leaves<'a>(ports: &'a [Port], role: &str) -> Vec<(usize, &'a str)> {
+fn leaves<'a>(ports: impl Iterator<Item = &'a Port>) -> Vec<(usize, &'a str)> {
     ports
-        .iter()
-        .filter(|p| p.roles.iter().any(|r| r == role))
         .flat_map(|p| {
             p.native
                 .iter()

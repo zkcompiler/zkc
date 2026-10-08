@@ -73,7 +73,7 @@ retained source/Lean routes and explicit native-reader refusals. The
 [CLI walkthroughs](../runtime/bundles.md) are executed from documentation, including
 wrong pins, truncated proofs and trailing bytes. Static/shared
 [installed consumers](../../tests/consumer/package-components.cmake) compile public headers and
-run CompilerCore-to-runtime journeys. Contributed domains exercise acceptance,
+run NativeCompiler-to-runtime journeys. Contributed domains exercise acceptance,
 refusal and restored composite execution against independent modular arithmetic.
 
 Mutation controls must change actual operands and bindings while preserving

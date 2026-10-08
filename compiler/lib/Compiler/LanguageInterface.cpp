@@ -133,6 +133,33 @@ Error detail::withInterface(
     return decoded.takeError();
   return visit(*module, std::move(*decoded));
 }
+Error detail::withInterface(
+    const CheckedOriginal &original, const Limits &limits,
+    function_ref<Error(mlir::ModuleOp, const LanguageInterface &)> visit) {
+  if (auto error = checkLimits(limits))
+    return error;
+  if (!limits.covers(original.admissionLimits()))
+    return withInterface(original.bytes(), original.interfaceJson(), limits,
+                         original.entry().project().assets(),
+                         [&](mlir::ModuleOp module, LanguageInterface &&view) {
+                           return visit(module, view);
+                         });
+  mlir::DialectRegistry registry;
+  registerNativeDialects(registry);
+  mlir::MLIRContext context(registry, mlir::MLIRContext::Threading::DISABLED);
+  context.loadAllAvailableDialects();
+  context.printOpOnDiagnostic(false);
+  mlir::ScopedDiagnosticHandler handler(
+      &context, [](mlir::Diagnostic &) { return mlir::success(); });
+  // The handle owns these exact admitted bytes. Reparse to keep visitor-owned
+  // mutable MLIR out of the handle, without re-admitting its immutable facts.
+  mlir::ParserConfig config(&context, false);
+  auto module =
+      mlir::parseSourceString<mlir::ModuleOp>(original.bytes(), config);
+  if (!module)
+    return error("source.internal", "admitted original no longer parses");
+  return visit(*module, original.interface());
+}
 Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,
                                           const Limits &limits,
                                           ArrayRef<RelationAsset> assets) {

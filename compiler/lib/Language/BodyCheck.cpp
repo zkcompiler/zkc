@@ -4,6 +4,10 @@
 #include <numeric>
 using namespace llvm;
 namespace zkc::language::detail {
+bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
+  return checker.types.fail(code, message, span);
+}
+
 namespace {
 bool prefix(ArrayRef<unsigned> a, ArrayRef<unsigned> b) {
   return a.size() <= b.size() && std::equal(a.begin(), a.end(), b.begin());
@@ -14,9 +18,6 @@ BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
                          unsigned depth)
     : checker(checker), decl(decl), syntax(syntax), body(body),
       callDepth(depth) {}
-bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
-  return checker.fail(code, message, span);
-}
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
   auto available = allRoles();
   return std::includes(available.begin(), available.end(), roles.begin(),
@@ -32,11 +33,11 @@ std::vector<unsigned> BodyChecker::allRoles() const {
   return result;
 }
 bool BodyChecker::data(const Type &type, Span span) {
-  return checker.mathematicalData(type, span, &decl);
+  return checker.types.mathematicalData(type, span, &decl);
 }
 bool BodyChecker::addService(const ServicePort &port) {
   if (!protocol() || !checker.bindingName(decl, port.name, port.span) ||
-      !checker.chargeType(port.field, port.span))
+      !checker.types.chargeType(port.field, port.span))
     return false;
   if (bindings.count(port.name) ||
       !services.emplace(port.name, ServiceId{uint32_t(body.services.size())})
@@ -61,9 +62,10 @@ std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
 }
 bool BodyChecker::addInput(StringRef name, const Type &type,
                            std::vector<unsigned> components, Span span) {
-  if (!math() && !checker.executableType(type, span))
+  if (!math() && !checker.types.executableType(type, span))
     return false;
-  if (!checker.bindingName(decl, name, span) || !checker.chargeType(type, span))
+  if (!checker.bindingName(decl, name, span) ||
+      !checker.types.chargeType(type, span))
     return false;
   if (services.count(name.str()))
     return fail("source.shadow", "data binding shadows a service", span);
@@ -86,20 +88,20 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
 std::optional<std::vector<ValueId>>
 BodyChecker::emitResults(decltype(Operation::action) action,
                          std::vector<Value> results, Span span) {
-  if (!checker.accept(checker.work.count(checker.work.operations,
-                                         checker.work.limits.operations,
-                                         "operation count", span)))
+  if (!checker.types.accept(checker.work.count(checker.work.operations,
+                                               checker.work.limits.operations,
+                                               "operation count", span)))
     return {};
   for (const auto &value : results) {
-    if (!math() && !checker.executableType(value.type, span))
+    if (!math() && !checker.types.executableType(value.type, span))
       return {};
-    if (!checker.chargeType(value.type, span) ||
-        !checker.charge(value.components.size() + 1, span))
+    if (!checker.types.chargeType(value.type, span) ||
+        !checker.types.charge(value.components.size() + 1, span))
       return {};
     if (protocol() && value.components.size() > 1) {
-      auto caps = checker.permissions(value.type, span, &decl);
+      auto caps = checker.types.permissions(value.type, span, &decl);
       if (!caps || !caps->share) {
-        if (!checker.diagnostic)
+        if (!checker.types.diagnostic)
           fail("source.permission",
                "multiple participant components require Share", span);
         return {};
@@ -121,7 +123,7 @@ BodyChecker::combine(ArrayRef<ValueId> args, Span span) {
       math() || local() ? std::vector<unsigned>{} : allRoles();
   for (auto id : args) {
     auto &next = body.values[id.index].components;
-    if (!checker.charge(result.size() + next.size() + 1, span))
+    if (!checker.types.charge(result.size() + next.size() + 1, span))
       return {};
     std::vector<unsigned> out;
     if (math())
@@ -141,25 +143,25 @@ BodyChecker::combine(ArrayRef<ValueId> args, Span span) {
 bool BodyChecker::restricted(const Type &type) {
   if (type.kind == Type::Kind::Associated || type.kind == Type::Kind::Parameter)
     return true;
-  auto *d = checker.typeDeclaration(type);
+  auto *d = checker.types.typeDeclaration(type);
   return d && d->permissions.has_value();
 }
 std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {
-  return checker.projectedType(decl, std::move(type), path, span);
+  return checker.types.projectedType(decl, std::move(type), path, span);
 }
 bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
-  if (!checker.charge(path.size() + 1, span))
+  if (!checker.types.charge(path.size() + 1, span))
     return false;
   auto type = projected(body.values[value.index].type, path, span);
   if (!type)
     return false;
-  auto caps = checker.permissions(*type, span, &decl);
+  auto caps = checker.types.permissions(*type, span, &decl);
   if (!caps)
     return false;
   auto &state = uses[value.index];
   for (auto &moved : state.moved) {
-    if (!checker.charge(moved.size() + 1, span))
+    if (!checker.types.charge(moved.size() + 1, span))
       return false;
     if (prefix(moved, path) || prefix(path, moved))
       return fail("source.move", "value or overlapping field was already moved",
@@ -177,17 +179,19 @@ bool BodyChecker::finish(Span span) {
     auto &state = uses[i];
     std::function<bool(const Type &, std::vector<unsigned>, unsigned)> check =
         [&](const Type &t, std::vector<unsigned> path, unsigned depth) {
-          if (depth > checker.work.limits.typeDepth || !checker.charge(1, span))
-            return checker.diagnostic ? false
-                                      : fail("source.limit",
-                                             "resource obligation depth", span);
-          auto caps = checker.permissions(t, span, &decl);
+          if (depth > checker.work.limits.typeDepth ||
+              !checker.types.charge(1, span))
+            return checker.types.diagnostic
+                       ? false
+                       : fail("source.limit", "resource obligation depth",
+                              span);
+          auto caps = checker.types.permissions(t, span, &decl);
           if (!caps)
             return false;
           if (caps->drop)
             return true;
           for (auto &used : state.used) {
-            if (!checker.charge(used.size() + 1, span))
+            if (!checker.types.charge(used.size() + 1, span))
               return false;
             if (prefix(used, path))
               return true;
@@ -195,7 +199,7 @@ bool BodyChecker::finish(Span span) {
           if (!restricted(t) &&
               (t.kind == Type::Kind::Record || t.kind == Type::Kind::Tuple ||
                (t.kind == Type::Kind::Array && t.dimension.isClosed()))) {
-            auto fs = checker.fields(t, span);
+            auto fs = checker.types.fields(t, span);
             if (!fs)
               return false;
             if (!fs->empty()) {
@@ -248,7 +252,7 @@ BodyChecker::place(uint32_t id, unsigned depth) {
          expr.span);
     return {};
   }
-  auto index = checker.fieldIndex(decl, *type, expr.text, expr.span);
+  auto index = checker.types.fieldIndex(decl, *type, expr.text, expr.span);
   if (!index)
     return {};
   base->second.push_back(*index);
@@ -263,7 +267,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     std::optional<unsigned> guardOwner;
     if (s.kind == Statement::Kind::Alias) {
       if (!protocol() || s.owner || !checker.bindingName(decl, s.name, s.span))
-        return checker.diagnostic
+        return checker.types.diagnostic
                    ? false
                    : fail("source.mode",
                           "service aliases require protocol mode", s.span);
@@ -357,9 +361,9 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
           !active(*receiver, s.span))
         return false;
       auto before = body.values[value->index];
-      if (!checker.executableType(before.type, s.span))
+      if (!checker.types.executableType(before.type, s.span))
         return false;
-      auto caps = checker.permissions(before.type, s.span, &decl);
+      auto caps = checker.types.permissions(before.type, s.span, &decl);
       if (!caps)
         return false;
       if (!caps->copy || !caps->drop || !caps->share || !caps->wire)
@@ -387,9 +391,9 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
         return fail("source.roles",
                     "binding cannot gain participant availability", s.span);
       if (*selected != before.components) {
-        if (!checker.executableType(before.type, s.span))
+        if (!checker.types.executableType(before.type, s.span))
           return false;
-        auto caps = checker.permissions(before.type, s.span, &decl);
+        auto caps = checker.types.permissions(before.type, s.span, &decl);
         if (!caps)
           return false;
         if (!caps->drop)
@@ -428,7 +432,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       body.mayStop = true;
     } else {
       auto &type = body.values[value->index].type;
-      auto caps = checker.permissions(type, s.span, &decl);
+      auto caps = checker.types.permissions(type, s.span, &decl);
       if (!caps)
         return false;
       if (!local())
@@ -438,15 +442,15 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       if (s.kind == Statement::Kind::Drop && !caps->drop)
         return fail("source.drop", "explicit drop requires Drop", s.span);
       if (s.kind == Statement::Kind::Consume &&
-          !checker.constructorAllowed(decl, type))
+          !checker.types.constructorAllowed(decl, type))
         return fail("source.private", "consume requires constructor authority",
                     s.span);
       if (s.kind == Statement::Kind::Consume) {
-        auto fs = checker.fields(type, s.span);
+        auto fs = checker.types.fields(type, s.span);
         if (!fs)
           return false;
         for (auto &f : *fs) {
-          auto child = checker.permissions(f.type, s.span, &decl);
+          auto child = checker.types.permissions(f.type, s.span, &decl);
           if (!child)
             return false;
           if (!child->drop)
@@ -482,7 +486,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
                     source.span);
       auto type = hint(source.results.front().second);
       if (!type) {
-        if (!checker.diagnostic)
+        if (!checker.types.diagnostic)
           fail("source.inference", "region result needs an explicit context",
                source.span);
         return false;
@@ -512,7 +516,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
           return fail("source.roles", "result unavailable at output roles",
                       syntax.expressions[id].span);
         if (available != port.roles) {
-          auto caps = checker.permissions(port.type, port.span, &decl);
+          auto caps = checker.types.permissions(port.type, port.span, &decl);
           if (!caps)
             return false;
           if (!caps->drop)
@@ -533,12 +537,14 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
 bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
   if (depth > work.limits.callDepth)
-    return fail("source.limit", "helper call depth limit exceeded", decl.span);
+    return types.fail("source.limit", "helper call depth limit exceeded",
+                      decl.span);
   if (bodyState[id.index] == 1)
-    return fail("source.cycle", "recursive callable", decl.span);
+    return types.fail("source.cycle", "recursive callable", decl.span);
   if (bodyState[id.index] == 2)
     return depth - 1 + bodyHeights[id.index] <= work.limits.callDepth ||
-           fail("source.limit", "helper call depth limit exceeded", decl.span);
+           types.fail("source.limit", "helper call depth limit exceeded",
+                      decl.span);
   bodyState[id.index] = 1;
   bodyHeights[id.index] = 1;
   Body result;
@@ -550,16 +556,16 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   BodyChecker check(*this, decl, *sources[id.index], result, depth);
   for (unsigned i = 0; i < decl.inputs.size(); ++i) {
     auto &p = decl.inputs[i];
-    auto caps = permissions(p.type, p.span, &decl);
+    auto caps = types.permissions(p.type, p.span, &decl);
     if (!caps)
       return false;
     if (result.mode == Body::Mode::Math &&
-        !mathematicalData(p.type, p.span, &decl))
+        !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol) {
       if (p.roles.size() > 1 && (!caps->copy || !caps->drop || !caps->share))
-        return fail("source.permission",
-                    "shared input requires Copy, Drop and Share", p.span);
+        return types.fail("source.permission",
+                          "shared input requires Copy, Drop and Share", p.span);
     }
     if (!check.addInput(p.name, p.type,
                         result.mode == Body::Mode::Math
@@ -572,16 +578,16 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     if (!check.addService(service))
       return false;
   for (auto &p : decl.outputs) {
-    auto caps = permissions(p.type, p.span, &decl);
+    auto caps = types.permissions(p.type, p.span, &decl);
     if (!caps)
       return false;
     if (result.mode == Body::Mode::Math &&
-        !mathematicalData(p.type, p.span, &decl))
+        !types.mathematicalData(p.type, p.span, &decl))
       return false;
     if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
         (!caps->copy || !caps->drop || !caps->share))
-      return fail("source.permission",
-                  "shared output requires Copy, Drop and Share", p.span);
+      return types.fail("source.permission",
+                        "shared output requires Copy, Drop and Share", p.span);
   }
   if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
                  result.mode == Body::Mode::Protocol))
@@ -589,8 +595,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
   if (decl.effectAllowance &&
       ((result.mayStop && !decl.effectAllowance->mayStop) ||
        (result.opaque && !decl.effectAllowance->opaque)))
-    return fail("source.effect", "body exceeds its written effect allowance",
-                decl.span);
+    return types.fail("source.effect",
+                      "body exceeds its written effect allowance", decl.span);
   decl.body = std::make_shared<Body>(std::move(result));
   bodyState[id.index] = 2;
   return true;

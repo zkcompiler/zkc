@@ -110,11 +110,12 @@ The source and finite-table routes use zkc-owned finite typed carriers,
 including the [finite source/plan format](source-plan.md). The mathematical
 route accepts closed-profile MLIR directly and emits versioned participant
 carriers. It does not admit arbitrary operations merely because MLIR parses them.
-Direct MLIR is an independent input API; the current `CompilerCore` link closure
-still includes source/frontend workflows. A separate link component should be
-introduced when an embedding needs that smaller dependency closure, with an
-installed-consumer check. Splitting targets alone would not remove the shared
-compilation storage, diagnostics and construction dependencies.
+`Zkc::NativeCompiler` owns direct native MLIR compilation and the `.zkc` Entry
+pipeline. It links Language, Translation and Transforms without the older
+Frontend, Claims or ClaimTranslation components. CompilerCore adds the older
+source, table and claim workflows. Compilation storage and common diagnostics
+belong to NativeCompiler; source-specific diagnostic adaptation stays in
+CompilerCore. Installed consumers test this dependency boundary.
 
 Before a frontend or Lean consumer needs mathematical source without linking
 MLIR, select its source exchange contract and format/toolchain identity. Retain

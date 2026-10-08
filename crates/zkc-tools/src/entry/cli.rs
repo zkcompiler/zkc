@@ -182,7 +182,7 @@ pub fn run(command: &str, args: &[String]) -> Json {
             let request = host
                 .interface()
                 .proof_request(&read(inputs, files::MAX_REQUEST_BYTES)?, producer)?;
-            protect_materials(&outputs, request.inputs.inputs.values())?;
+            protect_materials(&outputs, request.private.inputs.values())?;
             let result = if producer {
                 if let Some(attempts) = options.attempts {
                     host.prove_attempts(request, attempts)?

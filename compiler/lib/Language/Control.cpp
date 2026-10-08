@@ -58,13 +58,13 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     operation.operands.push_back(*value);
     if (match) {
       auto type = body.values[value->index].type;
-      if (restricted(type) && !checker.constructorAllowed(decl, type)) {
+      if (restricted(type) && !checker.types.constructorAllowed(decl, type)) {
         fail("source.private",
              "matching a restricted variant needs constructor authority",
              expr.span);
         return {};
       }
-      auto alts = checker.alternatives(type, expr.span);
+      auto alts = checker.types.alternatives(type, expr.span);
       if (!alts)
         return {};
       alternatives = std::move(*alts);
@@ -81,8 +81,8 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       fail("source.name", "unknown capture: " + name, expr.span);
       return {};
     }
-    auto caps = checker.permissions(body.values[it->second.index].type,
-                                    expr.span, &decl);
+    auto caps = checker.types.permissions(body.values[it->second.index].type,
+                                          expr.span, &decl);
     if (!caps)
       return {};
     if (loop && !caps->copy) {

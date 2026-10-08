@@ -205,6 +205,7 @@ pub(super) fn prepare(
     }
     // Import only independently pinned public keys. Even receive-only registry
     // material is charged; a proof header cannot extend this registry.
+    let mut imports = crate::host::setups::VerifierKeys::new(policy.ark_bounds());
     let mut keys = BTreeMap::new();
     let mut material = BTreeMap::new();
     let mut public_ids = BTreeMap::new();
@@ -215,24 +216,12 @@ pub(super) fn prepare(
         let InputValue::Wire(bytes) = input else {
             unreachable!("checked public key")
         };
-        let key = zkc_arkworks::VerifierKey::from_bytes(
-            bytes,
-            *host
-                .setups
-                .keys
-                .get(&port.original)
-                .ok_or("native-proof-key-authority")?,
-            &policy.ark_bounds(),
-        )
-        .map_err(|e| e.to_string())?;
-        if key
-            .to_bytes(&policy.ark_bounds())
-            .map_err(|e| e.to_string())?
-            != *bytes
-        {
-            return Err("native-proof-canonical-key".into());
-        }
-        let key = std::sync::Arc::new(key);
+        let pin = *host
+            .setups
+            .keys
+            .get(&port.original)
+            .ok_or("native-proof-key-authority")?;
+        let key = imports.import(bytes, pin, "native-proof-canonical-key")?;
         let id = admission.add(Input::Ready(Value::VerifierKey(key.clone())), &policy)?;
         public_ids.insert(port.original, id);
         material.entry(bytes).or_insert_with(|| key.clone());

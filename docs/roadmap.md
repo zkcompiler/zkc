@@ -102,7 +102,7 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Next package: frontend and Host refinement
+### Frontend and Host refinement
 
 The fresh frontend is complete at its [declared source profile](spec/profiles/source/mathematical-language.md).
 Authoring defaults, maintained Schnorr/Sumcheck projects, named CLI jobs, generated
@@ -110,12 +110,13 @@ Rust data bindings and installed C++/runtime consumers use the mathematical path
 Integrated review and bounded execution checks cover source meaning, admission,
 failure reporting, resource bounds and interface consistency.
 
-Review the implemented frontend and Host before adding another consumer. Fix
-local defects, and decide structural changes together: name resolution and type
-queries, closed layouts and their budgets, named Host input preparation,
-diagnostics, and native component dependencies. Keep source correspondence,
-independent readers and setup authority explicit while simplifying their owners.
-Larger changes remain proposals until their contracts and validation are settled.
+Semantic queries now have an owner separate from source checking; Entry closure
+uses checked declarations directly. Closed layouts share substitution and
+permissions with those queries. One source-owned port plan drives Host bindings
+and requests, while native admission independently checks the artifact and
+values. NativeCompiler provides a link boundary independent of the older
+Frontend and claim workflows. Component and installed-consumer checks guard
+these boundaries as the language grows.
 
 Lean remains a separate research and design effort. Do not migrate its readers as
 part of frontend or Host refinement. Preserve the older committed-proof workflow's
@@ -273,13 +274,11 @@ deferred. This keeps later choices visible without implementing them in advance.
 | Lean/Mathlib and ArkLib/VCVio upgrades | A coordinated stable toolchain update | Port adapters from `probOutput`/`probEvent` to the upstream measure API and rerun dependency/axiom audits before changing the pinned graph |
 | New dialects or higher-order abstractions | A real semantic responsibility lacks a coherent existing owner | A concrete client, ownership boundary and simpler alternatives considered; dialect count is not a target |
 
-Direct MLIR input is already an independent authoring API. Its compiler library
-still links shared source/frontend workflows. Split that link closure when a
-native-only embedding or measured dependency cost requires it; preserve installed
-components and shared compilation diagnostics. Before an independent frontend or
-Lean reader consumes mathematical source, choose a versioned exchange contract
-and bind the actual source/toolchain identity. Neither trigger introduces another
-editable mathematical IR.
+Direct MLIR and `.zkc` compilation share NativeCompiler. Native-only clients can
+link it without the older Frontend or claim workflows. Before an independent
+frontend or Lean reader consumes mathematical source, choose its versioned
+exchange contract and bind the actual source/toolchain identity. Neither trigger
+introduces another editable mathematical IR.
 
 The broader research triggers below are extensions, not definitions silently
 required by the finite core. Each starts from its promised outcome and exact

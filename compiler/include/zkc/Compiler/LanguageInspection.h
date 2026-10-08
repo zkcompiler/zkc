@@ -36,9 +36,9 @@ llvm::Error inspectApplications(
     llvm::function_ref<llvm::Error(const ApplicationOccurrence &)> visitor,
     const Limits & = {}, llvm::ArrayRef<RelationAsset> assets = {});
 /// Inspect an immutable source-checked original, including its captured assets.
-/// Reparse and structurally admit under the requested limits. Source authority
-/// comes from the retained CheckedOriginal rather than caller-supplied
-/// metadata.
+/// Parse privately and reuse the retained interface when requested limits cover
+/// its admission limits. Tighter limits trigger structural readmission before
+/// any callback. Source authority comes from the retained CheckedOriginal.
 llvm::Error inspectApplications(
     const CheckedOriginal &,
     llvm::function_ref<llvm::Error(const ApplicationOccurrence &)> visitor,

@@ -23,7 +23,7 @@ bool BodyChecker::repeat(const Statement &statement) {
     if (!checker.bindingName(decl, name, statement.span) ||
         bindings.count(name) || services.count(name) ||
         !seen.insert(name).second)
-      return checker.diagnostic
+      return checker.types.diagnostic
                  ? false
                  : fail("source.shadow", "repeat result shadows a binding",
                         statement.span);
@@ -60,9 +60,9 @@ bool BodyChecker::repeat(const Statement &statement) {
     if (!value || !use(*value, expr.span))
       return false;
     const auto &initial = body.values[value->index];
-    if (!checker.executableType(initial.type, expr.span))
+    if (!checker.types.executableType(initial.type, expr.span))
       return false;
-    auto caps = checker.permissions(initial.type, expr.span, &decl);
+    auto caps = checker.types.permissions(initial.type, expr.span, &decl);
     if (!caps)
       return false;
     std::vector<unsigned> carriedRoles;
@@ -100,9 +100,9 @@ bool BodyChecker::repeat(const Statement &statement) {
       return fail("source.name", "unknown data capture: " + name, expr.span);
     auto value = found->second;
     const auto &captured = body.values[value.index];
-    if (!checker.executableType(captured.type, expr.span))
+    if (!checker.types.executableType(captured.type, expr.span))
       return false;
-    auto caps = checker.permissions(captured.type, expr.span, &decl);
+    auto caps = checker.types.permissions(captured.type, expr.span, &decl);
     if (!caps)
       return false;
     if (!caps->copy)

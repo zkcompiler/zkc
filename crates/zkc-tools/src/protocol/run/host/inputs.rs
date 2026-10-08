@@ -303,20 +303,12 @@ pub(super) fn prepare<'a>(host: &'a RunHost, request: &RunInputs) -> Result<Prep
         host.limits.capacity.check_wire(bytes.len())?;
         admission.work(bytes.len())?;
     }
+    let mut imports = crate::host::setups::VerifierKeys::new(policy.ark_bounds());
     let mut keys = BTreeMap::new();
     let mut material = BTreeMap::new();
     for (name, bytes) in &request.setups {
         let pin = &host.authority.keys[name];
-        let key = zkc_arkworks::VerifierKey::from_bytes(bytes, *pin, &policy.ark_bounds())
-            .map_err(|e| e.to_string())?;
-        if key
-            .to_bytes(&policy.ark_bounds())
-            .map_err(|e| e.to_string())?
-            != *bytes
-        {
-            return Err("bundle-canonical-key".into());
-        }
-        let key = Arc::new(key);
+        let key = imports.import(bytes, *pin, "bundle-canonical-key")?;
         material.entry(bytes).or_insert_with(|| key.clone());
         keys.insert(name.to_owned(), key);
     }

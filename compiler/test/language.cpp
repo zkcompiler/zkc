@@ -198,6 +198,66 @@ entry Demo=Run;)";
   must(compileEntry(must(prepareOriginal(must(
       closeEntry(must(analyze(qualified).checkedProject()), "m::Demo"))))));
 }
+void nameResolution() {
+  const std::string definitions = R"(module m;
+interface I { type State: Copy + Drop; }
+component C: I { type State: Copy + Drop = bool; }
+)";
+  const std::string unrelated =
+      "module C;pub domain State=field(\"bls12-381.fr\");"
+      "pub type Missing=bool;";
+  auto checked = [&](StringRef body, bool extra) {
+    std::vector<SourceBuffer> sources{{"m", definitions + body.str(), {}}};
+    if (extra)
+      sources.push_back({"C", unrelated, {}});
+    return analyze(must(capture(std::move(sources)))).checkedProject();
+  };
+  for (bool extra : {false, true}) {
+    auto project =
+        must(checked("fn f(x:C::State)->C::State{return x;}", extra));
+    require(project.declarations().back().inputs.front().type.kind ==
+                Type::Kind::Associated,
+            "captured module replaced lexical component member");
+    refuses(checked("fn f(x:C::Missing)->bool{return x;}", extra),
+            "source.name");
+    refuses(checked("fn f(x:C::State)->index{return x;}", extra),
+            "source.type");
+  }
+  must(checked("fn f(x: ::C::State)->::C::State{return x;}", true));
+  auto captureMember = must(
+      capture({{"m", definitions + "fn f(x:C::Ghost)->bool{return x;}", {}},
+               {"m::C", "module m::C;pub type Ghost=bool;", {}}}));
+  refuses(analyze(captureMember).checkedProject(), "source.name");
+  // Private prefix lookup must preserve the original refusal and its source.
+  auto project = must(capture(
+      {{"a", "module a;domain G=group(\"bls12-381.g1\");", {}},
+       {"m", "module m;fn f(x:a::G::Scalar)->bool{return true;}", {}}}));
+  auto analysis = analyze(project);
+  require(!analysis.diagnostics().empty(), "private projection accepted");
+  require(analysis.diagnostics().front().code == "source.private",
+          "private prefix diagnostic was lost");
+  require(analysis.diagnostics().front().primary.has_value(),
+          "private projection lost source location");
+
+  // Repeated lookups in a wide component must account for the member scans.
+  constexpr unsigned width = 128, uses = 64;
+  std::string wide = "module m;interface I{";
+  for (unsigned i = 0; i < width; ++i)
+    wide += "type T" + std::to_string(i) + ": Copy + Drop;";
+  wide += "}component C:I{";
+  for (unsigned i = 0; i < width; ++i)
+    wide += "type T" + std::to_string(i) + ": Copy + Drop=bool;";
+  wide += "}";
+  auto baseWork = check(wide).checkedWork();
+  for (unsigned i = 0; i < uses; ++i)
+    wide += "fn f" + std::to_string(i) + "(x:C::T127)->C::T127{return x;}";
+  auto full = check(wide);
+  require(full.checkedWork() >= baseWork + 2 * width * uses,
+          "component lookup scans escaped the work budget");
+  Limits limit;
+  limit.work = full.checkedWork() - 1;
+  sourceRefuses(wide, "source.limit", limit);
+}
 void syntaxTreeBounds() {
   Limits limits;
   limits.parseDepth = 4;
@@ -868,6 +928,8 @@ int main(int argc, char **argv) {
   sourceControls();
   stage = "bounds";
   bounds();
+  stage = "nameResolution";
+  nameResolution();
   stage = "syntaxTreeBounds";
   syntaxTreeBounds();
   stage = "depthAndAggregateBounds";

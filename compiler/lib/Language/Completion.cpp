@@ -53,7 +53,7 @@ bool BodyChecker::complete(const Statement &statement) {
                 "completion must supply every owner output", expr.span);
   std::vector<Value> results;
   for (unsigned i = 0; i < outputs.size(); ++i) {
-    auto caps = checker.permissions(outputs[i]->type, expr.span, &decl);
+    auto caps = checker.types.permissions(outputs[i]->type, expr.span, &decl);
     if (!caps)
       return false;
     if (!caps->copy) {
@@ -72,7 +72,7 @@ bool BodyChecker::complete(const Statement &statement) {
     if (!checker.bindingName(decl, name, statement.span) ||
         bindings.count(name) || services.count(name) ||
         !unique.insert(name).second)
-      return checker.diagnostic
+      return checker.types.diagnostic
                  ? false
                  : fail("source.shadow", "completion result shadows a binding",
                         statement.span);

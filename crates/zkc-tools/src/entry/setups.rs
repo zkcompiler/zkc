@@ -1,11 +1,7 @@
 //! Translate authenticated Entry choices to each native Host's authority map.
-use super::{
-    Interface,
-    interface::raw::{Kind, Port},
-};
+use super::Interface;
 use crate::{artifact::native, protocol::run};
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::Type;
 
 type Result<T> = std::result::Result<T, String>;
 /// Application-owned expected verifier-key identities, indexed by source setup
@@ -36,16 +32,13 @@ pub(super) fn run_authority(
         .flat_map(|slot| slot.inputs.iter().map(move |i| (*i, slot.name.as_str())))
         .collect();
     let mut inputs = BTreeMap::new();
-    let protocol = interface.selected_protocol();
-    for role in &protocol.roles {
-        let native = protocol
-            .inputs
-            .iter()
-            .filter(|p| p.roles.contains(role))
-            .flat_map(|p| &p.native);
+    for role in interface.roles() {
+        let native = interface
+            .input_ports(role)
+            .flat_map(|p| &p.definition.native);
         for (local, original) in native.enumerate() {
             if let Some(slot) = slots.get(&(*original as usize)) {
-                inputs.insert((role.clone(), local), (*slot).to_owned());
+                inputs.insert((role.name.clone(), local), (*slot).to_owned());
             }
         }
     }
@@ -70,20 +63,6 @@ pub(super) fn proof_authority(
         }
     }
     Ok(result)
-}
-pub(super) fn key_kind(interface: &Interface, port: &Port) -> Option<Type> {
-    if port.schema.kind != Kind::Builtin || port.schema.custody || port.schema.leaves.len() != 1 {
-        return None;
-    }
-    if !interface
-        .setups
-        .iter()
-        .any(|slot| slot.inputs.contains(&(port.native[0] as usize)))
-    {
-        return None;
-    }
-    let kind = interface.logical_type(&port.schema.leaves[0])?.kind();
-    matches!(kind, Type::ProverKey | Type::VerifierKey).then_some(kind)
 }
 pub(super) fn check_material(
     interface: &Interface,

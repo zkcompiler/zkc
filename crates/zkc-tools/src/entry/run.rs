@@ -1,5 +1,6 @@
 //! Named source calls adapt to the common native Host. There is no source
 //! evaluator here: the bound interface supplies names and product/sum layouts.
+use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{Interface, Package, SetupAuthority, Value, arguments, setups, value};
 use crate::protocol::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
 use sha2::{Digest, Sha256};
@@ -29,19 +30,26 @@ pub struct RunEntry {
     native: RunHost,
 }
 impl RunEntry {
-    pub fn admit(package: Package, limits: HostLimits, setups: SetupAuthority) -> Result<Self> {
-        let interface = Interface::read(&package).map_err(|e| e.to_string())?;
+    pub fn admit(
+        package: Package,
+        limits: HostLimits,
+        setups: SetupAuthority,
+    ) -> EntryResult<Self> {
+        let interface = Interface::read(&package).map_err(|e| E::new(P::Interface, e))?;
         if interface.is_proof() {
-            return Err("entry-job-kind".into());
+            return Err(E::new(P::Admission, "entry-job-kind"));
         }
-        arguments::check_ports(&interface)?;
+        arguments::check_ports(&interface).map_err(|e| E::new(P::Interface, e))?;
         let native = RunHost::admit(
             package.artifact().as_bytes(),
             &Sha256::digest(package.artifact().as_bytes()).into(),
             limits,
-            setups::run_authority(&interface, setups)?,
-        )?;
-        interface.check_run(&native).map_err(|e| e.to_string())?;
+            setups::run_authority(&interface, setups).map_err(|e| E::new(P::Authority, e))?,
+        )
+        .map_err(|e| E::new(P::Admission, e))?;
+        interface
+            .check_run(&native)
+            .map_err(|e| E::new(P::Binding, e))?;
         Ok(Self {
             package,
             interface,
@@ -62,9 +70,19 @@ impl RunEntry {
     /// DEFAULT_DRAW_BUDGET; explicit zero is preserved. Empty logical
     /// products are required even though they have no native operand. The plan
     /// owns all prepared input data and may outlive the consumed request.
-    pub fn prepare(&self, mut request: RunRequest) -> Result<PreparedRun<'_>> {
-        let protocol = self.interface.selected_protocol();
-        if request.roles.len() != protocol.roles.len() {
+    pub fn prepare(&self, request: RunRequest) -> EntryResult<PreparedRun<'_>> {
+        let inputs = self.inputs(request).map_err(|e| E::new(P::Request, e))?;
+        let native = self
+            .native
+            .prepare_typed(&inputs)
+            .map_err(|e| E::new(P::Preparation, e))?;
+        Ok(PreparedRun {
+            interface: &self.interface,
+            native,
+        })
+    }
+    fn inputs(&self, mut request: RunRequest) -> Result<native::RunInputs> {
+        if request.roles.len() != self.interface.roles().len() {
             return Err("entry-input-roles".into());
         }
         setups::check_material(
@@ -73,35 +91,23 @@ impl RunEntry {
             self.native.limits().capacity,
         )?;
         let mut roles = Vec::new();
-        for role in &protocol.roles {
-            let values = request.roles.remove(role).ok_or("entry-input-roles")?;
-            let inputs = arguments::values(
-                &self.interface,
-                protocol
-                    .inputs
-                    .iter()
-                    .filter(|port| port.roles.contains(role)),
-                values.inputs,
-                None,
-            )?;
-            let services = arguments::services(
-                protocol.services.iter().filter(|s| &s.owner == role),
-                values.services,
-            )?;
+        for role in self.interface.roles() {
+            let values = request
+                .roles
+                .remove(&role.name)
+                .ok_or("entry-input-roles")?;
+            let inputs = arguments::values(self.interface.input_ports(role), values.inputs, None)?;
+            let services = arguments::services(self.interface.services(role), values.services)?;
             roles.push(native::RoleInputs {
-                role: role.clone(),
+                role: role.name.clone(),
                 inputs,
                 services,
             });
         }
-        let plan = self.native.prepare_typed(&native::RunInputs {
+        Ok(native::RunInputs {
             session: request.session,
             roles,
             setups: request.setups,
-        })?;
-        Ok(PreparedRun {
-            interface: &self.interface,
-            native: plan,
         })
     }
 }
@@ -170,21 +176,16 @@ fn collect(
     interface: &Interface,
     execution: &native::Report<zkc_backends::NativeBackend>,
 ) -> Result<RoleValues> {
-    let protocol = interface.selected_protocol();
     let mut outputs = BTreeMap::new();
-    for role in &protocol.roles {
+    for role in interface.roles() {
         let returned = execution
             .roles
             .iter()
-            .find(|r| &r.role == role)
+            .find(|r| r.role == role.name)
             .ok_or("entry-output-role")?;
         let mut leaves = returned.outputs.iter().cloned();
         let mut values = BTreeMap::new();
-        for port in protocol
-            .outputs
-            .iter()
-            .filter(|port| port.roles.contains(role))
-        {
+        for port in interface.output_ports(role) {
             values.insert(
                 port.name.clone(),
                 value::collect(&port.schema, &mut leaves)?,
@@ -193,7 +194,7 @@ fn collect(
         if leaves.next().is_some() {
             return Err("entry-output-shape".into());
         }
-        outputs.insert(role.clone(), values);
+        outputs.insert(role.name.clone(), values);
     }
     Ok(outputs)
 }

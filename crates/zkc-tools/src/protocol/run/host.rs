@@ -9,7 +9,7 @@ use crate::host::{
     setups::needs_input_setup,
 };
 use serde_json::{Value as Json, json};
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 use zkc_backends::{
     Capability, Domain, EntryPolicy, NativeBackend, PortConstraint, PublicInputs, SetupRegistry,
     Value,

@@ -1,6 +1,8 @@
 //! Checked metadata for an authenticated source package. Reading this interface
 //! checks structure and internal consistency, not MLIR meaning or native code.
 mod binding;
+mod ports;
+pub(in crate::entry) use ports::{InputPort, RolePorts};
 mod preflight;
 pub(in crate::entry) mod raw;
 mod schemas;
@@ -43,6 +45,7 @@ pub struct Interface {
     pub(in crate::entry) document: raw::Interface,
     pub(in crate::entry) selected: usize,
     types: BTreeMap<String, LogicalType>,
+    ports: ports::Ports,
     pub(in crate::entry) setups: Vec<Setup>,
     artifact: String,
     options: super::CompileOptions,
@@ -59,7 +62,10 @@ impl Interface {
         decoder.end().map_err(|_| InterfaceError::Format)?;
         let original = format!("{:x}", Sha256::digest(package.original().as_bytes()));
         let checked = validate::check(&document, &original)?;
+        let ports =
+            ports::Ports::new(&document, checked.selected, &checked.types, &checked.setups)?;
         Ok(Self {
+            ports,
             document,
             selected: checked.selected,
             types: checked.types,
@@ -90,20 +96,8 @@ impl Interface {
     pub fn setup_names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.setups.iter().map(|slot| slot.name.as_str())
     }
-    pub(in crate::entry) fn completion(&self) -> Result<Option<usize>> {
-        let raw::Job::Proof { completion, .. } = &self.document.job else {
-            return Ok(None);
-        };
-        completion
-            .as_ref()
-            .map(|selected| {
-                let (_, native) = validate::select(self.selected_protocol(), selected)?;
-                Ok(native[0] as usize)
-            })
-            .transpose()
-    }
     pub fn is_proof(&self) -> bool {
-        matches!(self.document.job, raw::Job::Proof { .. })
+        self.proof().is_some()
     }
     /// Types are admitted once per canonical spelling and shared within the view.
     pub fn logical_type(&self, spelling: &str) -> Option<&LogicalType> {

@@ -630,7 +630,7 @@ fn completion_selects_a_prover_boolean_native_output() {
         .unwrap()
         .push(port("state", 1, json!([1, 2]), json!(["P", "V"]), product));
     doc["job"]["completion"] = json!({"direction":"output","port":1,"role":"P","path":[0]});
-    assert_eq!(read(&doc).unwrap().completion().unwrap(), Some(1));
+    assert_eq!(read(&doc).unwrap().proof().unwrap().completion, Some(1));
     for (field, value) in [
         ("direction", json!("input")),
         ("port", json!(99)),

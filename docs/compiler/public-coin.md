@@ -47,7 +47,7 @@ the verifier actually observes in the same program.
 
 ## Implementation boundaries
 
-`ZkcCompilerCore` owns the analysis because it invokes the existing preparation
+`ZkcNativeCompiler` owns the analysis because it invokes the existing preparation
 workflow. `createPrepareProtocolPass(false)` exposes unsimplified expansion;
 projection and default preparation retain their existing behavior. An owned
 clone, ordinary admission, shared role availability and registered operand

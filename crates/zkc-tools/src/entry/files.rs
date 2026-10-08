@@ -1,5 +1,8 @@
 //! Strict file requests adapt named values to the existing in-process Host.
-use super::interface::raw::{Field, Job, Kind, Port, Schema};
+use super::interface::{
+    InputPort, RolePorts,
+    raw::{Field, Kind, Schema},
+};
 use super::{Interface, NamedValues, ProofRequest, RoleInputs, RunRequest, SetupAuthority, Value};
 use crate::host::{
     inputs::{digest, unhex},
@@ -93,13 +96,10 @@ impl Interface {
         if request.format != "zkc.entry-run/1" {
             return Err("entry-request-format".into());
         }
-        let protocol = self.selected_protocol();
         let mut roles = BTreeMap::new();
         for (name, role) in request.roles {
-            if !protocol.roles.contains(&name) {
-                return Err("entry-input-roles".into());
-            }
-            roles.insert(name.clone(), self.role(role, &name)?);
+            let ports = self.role(&name).ok_or("entry-input-roles")?;
+            roles.insert(name.clone(), self.decode_role(role, ports)?);
         }
         Ok(RunRequest {
             session: request.session,
@@ -109,40 +109,19 @@ impl Interface {
     }
     /// A verification request is decoded against verifier ports only.
     pub fn proof_request(&self, bytes: &[u8], producer: bool) -> Result<ProofRequest> {
-        let Job::Proof {
-            prover,
-            verifier,
-            public,
-            ..
-        } = &self.document.job
-        else {
-            return Err("entry-job-kind".into());
-        };
-        let mut request: Proof = document(bytes)?;
+        let proof = self.proof().ok_or("entry-job-kind")?;
+        let request: Proof = document(bytes)?;
         if request.format != "zkc.entry-proof/1" {
             return Err("entry-request-format".into());
         }
-        let protocol = self.selected_protocol();
-        let role = if producer { prover } else { verifier };
-        // The file's public map is this application's authority. Populate shared
-        // invocation operands from it; private inputs cannot override those names.
-        for index in public {
-            let port = &protocol.inputs[*index as usize];
-            if port.roles.contains(role) {
-                if request.inputs.contains_key(&port.name) {
-                    return Err("entry-input-names".into());
-                }
-                if let Some(value) = request.public.get(&port.name) {
-                    request.inputs.insert(port.name.clone(), value.clone());
-                }
-            }
-        }
+        let role = &self.roles()[if producer {
+            proof.prover
+        } else {
+            proof.verifier
+        }];
         Ok(ProofRequest {
-            public: self.named(
-                public.iter().map(|i| &protocol.inputs[*i as usize]),
-                request.public,
-            )?,
-            inputs: self.role(
+            public: self.named(self.public_ports(), request.public)?,
+            private: self.decode_role(
                 Role {
                     inputs: request.inputs,
                     services: request.services,
@@ -154,30 +133,24 @@ impl Interface {
             setups: material(request.setups)?,
         })
     }
-    fn role(&self, role: Role, name: &str) -> Result<RoleInputs> {
+    fn decode_role(&self, role: Role, ports: &RolePorts) -> Result<RoleInputs> {
         Ok(RoleInputs {
-            inputs: self.named(
-                self.selected_protocol()
-                    .inputs
-                    .iter()
-                    .filter(|p| p.roles.iter().any(|r| r == name)),
-                role.inputs,
-            )?,
+            inputs: self.named(self.named_inputs(ports), role.inputs)?,
             services: role.services,
         })
     }
     fn named<'a>(
         &self,
-        ports: impl Iterator<Item = &'a Port>,
+        ports: impl Iterator<Item = InputPort<'a>>,
         mut values: BTreeMap<String, Json>,
     ) -> Result<NamedValues> {
         let mut result = NamedValues::new();
         for port in ports {
-            if super::setups::key_kind(self, port) == Some(Type::VerifierKey) {
+            if port.key == Some(Type::VerifierKey) {
                 continue;
             }
             let v = values.remove(&port.name).ok_or("entry-input-names")?;
-            let value = if super::setups::key_kind(self, port) == Some(Type::ProverKey) {
+            let value = if port.key == Some(Type::ProverKey) {
                 #[derive(Deserialize)]
                 #[serde(remote = "Self", deny_unknown_fields)]
                 struct Key {

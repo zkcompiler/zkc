@@ -94,7 +94,11 @@ struct CheckedOriginal::Storage {
   std::string identity, interface, toolchain, locationsIdentity;
   Correspondence report;
   LanguageInterface interfaceView;
+  Limits limits;
 };
+const Limits &CheckedOriginal::admissionLimits() const {
+  return storage->limits;
+}
 std::string compilerToolchainIdentity() {
   static const std::string identity = [] {
     std::string material;
@@ -204,6 +208,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
     return located(std::move(error));
   auto storage = std::make_shared<CheckedOriginal::Storage>(entry);
+  storage->limits = limits;
   storage->original = original.str();
   storage->report = std::move(*compared);
   storage->identity = digest(storage->original);

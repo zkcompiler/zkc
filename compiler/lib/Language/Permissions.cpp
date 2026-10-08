@@ -1,4 +1,4 @@
-#include "Checker.h"
+#include "Semantics.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Language/Builtins.h"
@@ -11,8 +11,9 @@ Permissions intersect(Permissions a, const Permissions &b) {
           a.wire && b.wire};
 }
 } // namespace
+
 std::optional<std::vector<TypeField>>
-Checker::fields(const Type &type, Span span, unsigned depth) {
+Semantics::fields(const Type &type, Span span, unsigned depth) {
   if (depth > work.limits.typeDepth || !charge(1, span)) {
     if (!diagnostic)
       fail("source.limit", "field expansion depth", span);
@@ -62,7 +63,7 @@ Checker::fields(const Type &type, Span span, unsigned depth) {
       return {};
     }
     const auto &base = type.arguments.front();
-    auto &owner = output.declarations[decl->parent->index];
+    auto &owner = declarations[decl->parent->index];
     bindings = substitution(owner, base.arguments);
     auto repr = substitute(decl->domain, bindings, span, depth + 1);
     if (!repr)
@@ -80,7 +81,7 @@ Checker::fields(const Type &type, Span span, unsigned depth) {
   return result;
 }
 std::optional<std::vector<Alternative>>
-Checker::alternatives(const Type &type, Span span, unsigned depth) {
+Semantics::alternatives(const Type &type, Span span, unsigned depth) {
   auto *decl = typeDeclaration(type);
   if (!decl || decl->kind != Declaration::Kind::Variant) {
     fail("source.type", "match requires a nominal variant", span);
@@ -107,9 +108,9 @@ Checker::alternatives(const Type &type, Span span, unsigned depth) {
     }
   return result;
 }
-std::optional<Permissions> Checker::permissions(const Type &type, Span span,
-                                                const Declaration *scope,
-                                                unsigned depth) {
+std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
+                                                  const Declaration *scope,
+                                                  unsigned depth) {
   if (depth > work.limits.typeDepth || !charge(1, span)) {
     if (!diagnostic)
       fail("source.limit", "permission expansion depth", span);
@@ -162,6 +163,22 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
       fail("source.builtin", toString(formed.takeError()), span);
       return {};
     }
+    if (!symbolic(type)) {
+      auto native = builtinLayout(type);
+      if (!native) {
+        accept(native.takeError());
+        return {};
+      }
+      auto policy = protocol::nativeTypePolicy(*native);
+      if (!policy) {
+        fail("source.builtin", "native data lacks an installed type policy",
+             span);
+        return {};
+      }
+      return Permissions{protocol::duplicable(*native),
+                         protocol::discardable(*native), policy->shared,
+                         protocol::nativeMessageData(*native)};
+    }
     const auto *base = protocol::typePermissions(type.domain);
     auto head = protocol::nativeTypeConstructorPolicy(type.domain);
     if (!head) {
@@ -179,23 +196,11 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
         return {};
       result = intersect(result, *child);
     }
-    if (!symbolic(type)) {
-      auto native = builtinLayout(type);
-      if (!native) {
-        fail("source.builtin", toString(native.takeError()), span);
-        return {};
-      }
-      auto policy = protocol::nativeTypePolicy(*native);
-      result.share &= policy && policy->shared;
-      result.wire &= policy && protocol::nativeMessageData(*native);
-    } else {
-      // Generic message shapes still need a concrete admitted codec at closure.
-      result.wire &= type.domain == "vector" || type.domain == "matrix" ||
-                     type.domain == "groups" || type.domain == "indices" ||
-                     type.domain == "sequence" ||
-                     type.domain == "field_array" ||
-                     type.domain == "commitment" || type.domain == "proof";
-    }
+    // Open message shapes require a concrete admitted codec at closure.
+    result.wire &= type.domain == "vector" || type.domain == "matrix" ||
+                   type.domain == "groups" || type.domain == "indices" ||
+                   type.domain == "sequence" || type.domain == "field_array" ||
+                   type.domain == "commitment" || type.domain == "proof";
     return result;
   }
   Permissions result{true, true, true, true};
@@ -240,7 +245,7 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
   }
   return result;
 }
-bool Checker::executableType(const Type &type, Span span, unsigned depth) {
+bool Semantics::executableType(const Type &type, Span span, unsigned depth) {
   if (depth > work.limits.typeDepth || !charge(1, span))
     return diagnostic ? false
                       : fail("source.limit", "executable type depth", span);
@@ -274,8 +279,8 @@ bool Checker::executableType(const Type &type, Span span, unsigned depth) {
   }
   return true;
 }
-bool Checker::mathematicalData(const Type &type, Span span,
-                               const Declaration *scope, unsigned depth) {
+bool Semantics::mathematicalData(const Type &type, Span span,
+                                 const Declaration *scope, unsigned depth) {
   if (depth > work.limits.typeDepth || !charge(1, span))
     return diagnostic ? false
                       : fail("source.limit", "mathematical type depth", span);
@@ -317,15 +322,15 @@ bool Checker::mathematicalData(const Type &type, Span span,
   }
   return true;
 }
-bool Checker::constructorAllowed(const Declaration &context,
-                                 const Type &type) const {
+bool Semantics::constructorAllowed(const Declaration &context,
+                                   const Type &type) const {
   auto *decl = typeDeclaration(type);
   return decl &&
          (type.kind == Type::Kind::Record || type.kind == Type::Kind::Variant ||
           type.kind == Type::Kind::Associated) &&
          decl->module.index == context.module.index;
 }
-bool Checker::ingress(const Type &type, Span span) {
+bool Semantics::ingress(const Type &type, Span span) {
   if (!executableType(type, span))
     return false;
   auto caps = permissions(type, span);
@@ -335,9 +340,9 @@ bool Checker::ingress(const Type &type, Span span) {
                "external input requires Wire or an admitted ingress validator",
                span));
 }
-
-std::optional<Type> Checker::projectedType(const Declaration &decl, Type type,
-                                           ArrayRef<unsigned> path, Span span) {
+std::optional<Type> Semantics::projectedType(const Declaration &decl, Type type,
+                                             ArrayRef<unsigned> path,
+                                             Span span) {
   if (!charge(path.size() + 1, span))
     return {};
   for (auto index : path) {
@@ -369,9 +374,9 @@ std::optional<Type> Checker::projectedType(const Declaration &decl, Type type,
   }
   return type;
 }
-std::optional<unsigned> Checker::fieldIndex(const Declaration &decl,
-                                            const Type &type, StringRef name,
-                                            Span span) {
+std::optional<unsigned> Semantics::fieldIndex(const Declaration &decl,
+                                              const Type &type, StringRef name,
+                                              Span span) {
   auto *nominal = typeDeclaration(type);
   if (type.kind == Type::Kind::Associated ||
       type.kind == Type::Kind::Parameter || (nominal && nominal->permissions)) {

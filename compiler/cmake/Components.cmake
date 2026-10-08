@@ -52,6 +52,10 @@ add_zkc_component(Language
   lib/Language/Project.cpp
   lib/Language/Syntax.cpp
   lib/Language/Check.cpp
+  lib/Language/Semantics.cpp
+  lib/Language/KernelSignatures.cpp
+  lib/Language/IntrinsicSignatures.cpp
+  lib/Language/SemanticContracts.cpp
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
@@ -259,7 +263,7 @@ add_zkc_component(Transforms
   lib/Target/Catalog.cpp
   lib/Target/PhysicalPlan.cpp
 )
-add_zkc_component(CompilerCore
+add_zkc_component(NativeCompiler
   lib/Compiler/Language.cpp
   lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
@@ -267,7 +271,6 @@ add_zkc_component(CompilerCore
   lib/Compiler/LanguageInterfaceWriter.cpp
   lib/Compiler/LanguageInterfaceComparison.cpp
   lib/Compiler/LanguageInspection.cpp
-  lib/Compiler/Algorithms.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/RunVerification.cpp
@@ -277,11 +280,16 @@ add_zkc_component(CompilerCore
   lib/Compiler/NativeDeployment.cpp
   lib/Compiler/NativeProof.cpp
   lib/Compiler/NativeProofVerification.cpp
+  lib/Compiler/Passes.cpp
+  lib/Compiler/Pipelines.cpp
+  lib/Compiler/NativeCompilation.cpp
+)
+add_zkc_component(CompilerCore
+  lib/Compiler/SourceCompilation.cpp
+  lib/Compiler/Algorithms.cpp
   lib/Compiler/Claims.cpp
   lib/Compiler/Construction.cpp
   lib/Compiler/Inspection.cpp
-  lib/Compiler/Passes.cpp
-  lib/Compiler/Pipelines.cpp
   lib/Compiler/Source.cpp
   lib/Compiler/SourceLocations.cpp
 )
@@ -326,9 +334,10 @@ target_link_libraries(ZkcFrontendLoading PUBLIC ZkcFrontend)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils)
-target_link_libraries(ZkcCompilerCore PUBLIC ZkcTransforms ZkcTranslation ZkcFrontend ZkcClaimTranslation)
+target_link_libraries(ZkcNativeCompiler PUBLIC ZkcTransforms ZkcTranslation)
+target_link_libraries(ZkcCompilerCore PUBLIC ZkcNativeCompiler ZkcFrontend ZkcClaimTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompilerCore ZkcFrontendLoading)
-mlir_target_link_libraries(ZkcCompilerCore PUBLIC MLIRParser)
+mlir_target_link_libraries(ZkcNativeCompiler PUBLIC MLIRParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
 add_library(ZkcCompiler INTERFACE)
 add_library(Zkc::Compiler ALIAS ZkcCompiler)
@@ -338,7 +347,7 @@ target_link_libraries(ZkcCompiler INTERFACE ZkcCompilerCore ZkcDriver)
 target_include_directories(ZkcCompiler INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcTranslation ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcCompilerCore ZkcDriver)
+set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProtocol ZkcClaims ZkcIR ZkcTranslation ZkcClaimTranslation ZkcFrontend ZkcFrontendLoading ZkcTransforms ZkcNativeCompiler ZkcCompilerCore ZkcDriver)
 
 # Record actual target properties for the fast dependency-boundary test.
 set(zkc_component_manifest "")

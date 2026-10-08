@@ -161,19 +161,31 @@ pub(super) fn run(directory: &Path) {
                 let mut mismatch = typed(true, 3);
                 mismatch.inputs[1] = Value::Curve(GroupPoint::generator()).into();
                 assert_eq!(
-                    deployment.execute_typed(&mismatch, None).err().unwrap(),
+                    deployment
+                        .execute_typed(&mismatch, None)
+                        .err()
+                        .unwrap()
+                        .to_string(),
                     "native-proof-shared-public-input"
                 );
                 mismatch = typed(true, 3);
                 mismatch.public[0] = InputValue::Resource { budget: 1 };
                 assert_eq!(
-                    deployment.execute_typed(&mismatch, None).err().unwrap(),
+                    deployment
+                        .execute_typed(&mismatch, None)
+                        .err()
+                        .unwrap()
+                        .to_string(),
                     "native-input-private"
                 );
                 mismatch = typed(true, 3);
                 mismatch.inputs[2] = InputValue::Resource { budget: 1 };
                 assert_eq!(
-                    deployment.execute_typed(&mismatch, None).err().unwrap(),
+                    deployment
+                        .execute_typed(&mismatch, None)
+                        .err()
+                        .unwrap()
+                        .to_string(),
                     "native-input-private"
                 );
                 for (bad, expected) in [
@@ -198,7 +210,11 @@ pub(super) fn run(directory: &Path) {
                         _ => request.services[0] = 1_000_001,
                     }
                     assert_eq!(
-                        deployment.execute_typed(&request, None).err().unwrap(),
+                        deployment
+                            .execute_typed(&request, None)
+                            .err()
+                            .unwrap()
+                            .to_string(),
                         expected
                     );
                 }
@@ -220,14 +236,14 @@ pub(super) fn run(directory: &Path) {
                             ),
                         ])
                     };
-                    let mut values = common();
+                    let mut values = NamedValues::new();
                     if prover {
                         values.insert("scalar".into(), field(witness).into());
                     }
                     ProofRequest {
                         setups: BTreeMap::new(),
                         public: common(),
-                        inputs: NamedRoleInputs {
+                        private: NamedRoleInputs {
                             inputs: values,
                             services: if prover {
                                 BTreeMap::from([("nonces".into(), 1)])
@@ -251,14 +267,21 @@ pub(super) fn run(directory: &Path) {
                 );
                 let mut wrong_names = named_request(true, 3);
                 wrong_names
-                    .inputs
+                    .private
                     .inputs
                     .insert("extra".into(), LogicalValue::Unit);
-                assert_eq!(named.prove(wrong_names).err().unwrap(), "entry-input-names");
-                wrong_names = named_request(false, 0);
-                wrong_names.inputs.services.insert("challenges".into(), 1);
                 assert_eq!(
-                    named.verify(wrong_names, &proof_bytes).err().unwrap(),
+                    named.prove(wrong_names).err().unwrap().to_string(),
+                    "entry-input-names"
+                );
+                wrong_names = named_request(false, 0);
+                wrong_names.private.services.insert("challenges".into(), 1);
+                assert_eq!(
+                    named
+                        .verify(wrong_names, &proof_bytes)
+                        .err()
+                        .unwrap()
+                        .to_string(),
                     "entry-service-names"
                 );
                 let invalid_named = named
@@ -326,7 +349,8 @@ fn authored(directory: &Path) {
             ProofSetups::default()
         )
         .err()
-        .unwrap(),
+        .unwrap()
+        .to_string(),
         "entry-proof-binding-policy"
     );
     let options = ProofOptions {
@@ -370,13 +394,7 @@ fn authored(directory: &Path) {
                 ("payload".into(), payload(false)),
                 ("empty".into(), LogicalValue::Unit),
             ]),
-            inputs: NamedRoleInputs {
-                inputs: NamedValues::from([
-                    ("payload".into(), payload(true)),
-                    ("empty".into(), LogicalValue::Unit),
-                ]),
-                services: BTreeMap::new(),
-            },
+            private: NamedRoleInputs::default(),
             context: vec![1, 2, 3],
             transcript_budget: Some(0),
         };
@@ -402,17 +420,21 @@ fn authored(directory: &Path) {
         );
         let mut bad = request();
         bad.public.remove("empty");
-        assert_eq!(prover.prove(bad).err().unwrap(), "entry-input-names");
+        let error = prover.prove(bad).err().unwrap();
+        assert_eq!(error.phase, zkc_tools::entry::EntryPhase::Request);
+        assert_eq!(error.code(), "entry-input-names");
         bad = request();
-        bad.inputs.inputs.remove("empty");
+        bad.private
+            .inputs
+            .insert("empty".into(), LogicalValue::Unit);
         assert_eq!(
-            verifier.verify(bad, &proof).err().unwrap(),
+            verifier.verify(bad, &proof).err().unwrap().to_string(),
             "entry-input-names"
         );
         bad = request();
         bad.transcript_budget = Some(1);
         assert_eq!(
-            prover.prove(bad).err().unwrap(),
+            prover.prove(bad).err().unwrap().to_string(),
             "native-proof-unselected-transcript"
         );
         bad = request();
@@ -421,13 +443,13 @@ fn authored(directory: &Path) {
         assert!(rejected.native.outcome.is_err());
         assert!(rejected.outputs.is_none());
         bad = request();
-        let LogicalValue::Record(fields) = bad.inputs.inputs.get_mut("payload").unwrap() else {
-            unreachable!()
-        };
-        fields.insert("marker".into(), Value::Bool(false).into());
-        assert_eq!(
-            prover.prove(bad).err().unwrap(),
-            "native-proof-shared-public-input"
-        );
+        bad.private.inputs.insert("payload".into(), payload(true));
+        let error = prover.prove(bad).err().unwrap();
+        assert_eq!(error.phase, zkc_tools::entry::EntryPhase::Request);
+        assert_eq!(error.code(), "entry-input-names");
+        // The SDK accepts canonical wires as the single public supply as well.
+        let mut wired = request();
+        wired.public.insert("payload".into(), payload(true));
+        assert!(prover.prove(wired).unwrap().is_success());
     }
 }

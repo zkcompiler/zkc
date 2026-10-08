@@ -229,11 +229,11 @@ fn main() {
     let key=||zkc_tools::entry::Value::from(zkc_tools::protocol::run::InputValue::ProverKeyFile {
         path:"prover.key".into(), fingerprint:[0;32],
     });
-    let input=pcs::PInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0),point:scalar(0)};
+    let input=pcs::PInputs{pk0:key(),pk1:key(),data0:scalar(0),data1:scalar(0)};
     let input:zkc_tools::entry::NamedValues=input.into();
     assert!(matches!(input.get("pk0").unwrap(),zkc_tools::entry::Value::Leaf(zkc_tools::protocol::run::InputValue::ProverKeyFile{..})));
     let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
-    let _verifier=pcs::VInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
+    let _verifier=pcs::VInputs{};
     assert_eq!(pcs::setups::first,"first");
     let malformed=zkc_tools::entry::Value::Array(vec![zkc_tools::entry::Value::Record([("extra".into(),true.into())].into())]);
     assert_eq!(<[shapes::SampleEmpty;1]>::try_from(malformed).err().unwrap(),"entry-binding-fields");
@@ -292,18 +292,18 @@ fn main() {
     let bytes=zkc_tools::entry::files::proof_outputs(&received.into(),Default::default()).unwrap();
     assert!(std::str::from_utf8(&bytes).unwrap().contains("5a4b4356010107000000"));
     let mut tampered=bytes;tampered.push(b' ');
-    assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap(),"entry-package-identity");
+    assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap().code(),"entry-package-identity");
 
     let bytes=std::fs::read(&args[2]).unwrap();
     let prover=proof::admit(&bytes,Default::default(),Default::default()).unwrap();
     let verifier=proof::admit(&bytes,Default::default(),Default::default()).unwrap();
     let produced=prover.prove(ProofRequest{public:proof::PublicInputs{}.into(),
-        inputs:RoleInputs{inputs:proof::PInputs{done:true}.into(),..Default::default()},..Default::default()}).unwrap();
+        private:RoleInputs{inputs:proof::PInputs{done:true}.into(),..Default::default()},..Default::default()}).unwrap();
     assert!(produced.is_success());
     let returned:proof::POutputs=produced.outputs.unwrap().try_into().unwrap();
     assert!(returned.result.ready);
     let checked=verifier.verify(ProofRequest{public:proof::PublicInputs{}.into(),
-        inputs:RoleInputs{inputs:proof::VInputs{}.into(),..Default::default()},..Default::default()},&produced.native.outcome.unwrap()).unwrap();
+        private:RoleInputs{inputs:proof::VInputs{}.into(),..Default::default()},..Default::default()},&produced.native.outcome.unwrap()).unwrap();
     assert!(checked.is_success());
     let checked:proof::VOutputs=checked.outputs.unwrap().try_into().unwrap();
     assert!(checked.accepted);

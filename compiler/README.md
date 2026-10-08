@@ -249,7 +249,8 @@ compilation workflows and command handling. Arrows mean “depends on”:
 ```text
 Compiler (interface aggregate) → CompilerCore, Driver
 Driver → CompilerCore, FrontendLoading, MLIR parser
-CompilerCore → Transforms, Translation, Frontend, ClaimTranslation, MLIR parser
+CompilerCore → NativeCompiler, Frontend, ClaimTranslation
+NativeCompiler → Transforms, Translation, MLIR parser
 Translation → IR, Language
 Transforms → IR, MLIR passes and conversions
 IR → Protocol, MLIR IR and interfaces
@@ -274,7 +275,8 @@ FrontendLoading → Frontend
 | `Zkc::Language` | Immutable `.zkc` and relation-asset capture, lossless syntax, source checking and Entry closure; [source guide](../docs/language/mathematical.md) |
 | `Zkc::FrontendLoading` | Bounded project and relation-asset loading in `Frontend/Loading` |
 | `Zkc::Transforms` | SSA expansion, projection, physical conversion, target selection and storage in `Transforms`, `Conversion`, `Target` and `Dialect/Relation/Transforms` |
-| `Zkc::CompilerCore` | Typed compilation, in-memory native MLIR compilation, checked construction/claim workflows, inspection and pipeline/pass registration in `Compiler` |
+| `Zkc::NativeCompiler` | `.zkc` Entry preparation, retained originals/interfaces, native run/proof compilation and pipeline/pass registration in `Compiler` |
+| `Zkc::CompilerCore` | Older source/table compilation, checked construction/claim workflows and source inspection in `Compiler` |
 | `Zkc::Driver` | Command options, file loading and output rendering in `Driver` |
 
 The foundations have no MLIR, frontend or driver dependency. A contract
@@ -375,7 +377,12 @@ lint, not a proof that code cannot perform file I/O. The independent
 [service consumer](examples/service) exercises the finite table extension
 interface; cross-language checks live in [tests](../tests/README.md).
 
-An embedding application can request a particular component:
+Native and `.zkc` applications can link `Zkc::NativeCompiler` without the older
+Frontend or claim components. Its installed consumer compiles both run and proof
+Entries. `Compilation.h` declares the shared result and both API families;
+source/table convenience functions require CompilerCore.
+
+An application using the older source API can request CompilerCore:
 
 ```cmake
 find_package(ZkcCompiler REQUIRED CONFIG COMPONENTS CompilerCore)

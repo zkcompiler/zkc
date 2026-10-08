@@ -103,7 +103,7 @@ also consume checked plans; code generation is not the only product interface.
 
 The `.zkc` authoring path uses a pure `Language` component, direct
 mathematical MLIR emission and independent structural comparison in Translation.
-CompilerCore retains immutable originals and Entry interfaces before running the
+NativeCompiler retains immutable originals and Entry interfaces before running the
 existing participant pipeline. The [source guide](language/mathematical.md)
 records the supported mathematics, aggregate types, static components, permissions
 and ordered local control at this boundary.
@@ -324,15 +324,20 @@ alone establishes neither a speedup nor native correspondence.
 
 The fresh `.zkc` frontend stays in C++ and separates pure Language capture,
 syntax, checking and Entry closure from Translation's MLIR emission and
-comparison. CompilerCore owns parsing, immutable original retention and the
+comparison. NativeCompiler owns parsing, immutable original retention and the
 existing participant pipeline. This gives source tools checked data without
 making them own MLIR contexts. The [source guide](language/mathematical.md)
 describes its implemented scope. Language owns typed Math, Local and Protocol
 bodies, static substitution and logical layouts. Translation maps those bodies
 directly to existing dialects and independently compares the admitted result.
-CompilerCore retains the versioned source interface; it does not introduce a new
+NativeCompiler retains the versioned source interface; it does not introduce a new
 runtime carrier. Products flatten, variants retain tags, and source no-Drop checks
 remain separate from native affine custody.
+
+Within Language, `Semantics` queries declaration metadata using an explicit work
+budget. The source checker supplies lazy signature completion; Entry closure and
+layout queries use checked metadata without checker or syntax state. Layouts
+share substitution and permission rules while retaining phase-local caches.
 
 The Rust `entry` module consumes authenticated compiler packages. It checks the
 logical interface against native deployment ports and maps named values, setup

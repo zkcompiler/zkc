@@ -209,7 +209,9 @@ private:
     advance();
     return true;
   }
-  bool path(std::string &output, bool allowSort = false) {
+  bool path(std::string &output, bool allowSort = false,
+            bool allowAbsolute = false) {
+    bool absolute = allowAbsolute && take("::");
     if (!name(output))
       return false;
     while (take("::")) {
@@ -223,8 +225,11 @@ private:
         return false;
       output += "::" + part;
     }
-    return output.size() <=
-               work.limits.moduleBytes + work.limits.identifierBytes + 2 ||
+    if (absolute)
+      output.insert(0, "::");
+    return output.size() <= work.limits.moduleBytes +
+                                work.limits.identifierBytes + 2 +
+                                (absolute ? 2 : 0) ||
            fail("source.limit", "qualified name byte limit exceeded");
   }
   bool permission(Permissions &p) {
@@ -316,7 +321,7 @@ private:
           at("Group")) {
         out.name = text().str();
         advance();
-      } else if (!path(out.name, true))
+      } else if (!path(out.name, true, true))
         return false;
       if (take("<")) {
         if (at(">"))
@@ -1271,7 +1276,7 @@ private:
       if (at("index")) {
         value.text = "index";
         advance();
-      } else if (!path(value.text))
+      } else if (!path(value.text, false, true))
         return {};
       if (take("<")) {
         do {

@@ -25,7 +25,7 @@ fn role(producing: bool, done: bool) -> RoleInputs {
 }
 fn request(producing: bool, done: bool) -> ProofRequest {
     ProofRequest {
-        inputs: role(producing, done),
+        private: role(producing, done),
         ..Default::default()
     }
 }
@@ -66,7 +66,7 @@ pub(super) fn run(directory: &Path) {
         assert_eq!(single.native.attempts.len(), 1);
         let exhausted = prover.prove_attempts(request(true, false), retry).unwrap();
         assert_eq!(
-            exhausted.native.outcome.err().unwrap(),
+            exhausted.native.outcome.err().unwrap().to_string(),
             "native-attempt-limit"
         );
         assert!(exhausted.outputs.is_none());
@@ -118,7 +118,7 @@ pub(super) fn run(directory: &Path) {
             }
         }
         let mut zero = request(true, true);
-        zero.inputs.services.insert("coins".into(), 0);
+        zero.private.services.insert("coins".into(), 0);
         let stopped = prover.prove_attempts(zero, retry).unwrap();
         assert!(!stopped.is_success());
         assert_eq!(stopped.native.attempts.len(), 1);
@@ -127,7 +127,7 @@ pub(super) fn run(directory: &Path) {
             "exhausted:resource-budget"
         );
         let mut limited = request(true, false);
-        limited.inputs.services.insert("coins".into(), 1);
+        limited.private.services.insert("coins".into(), 1);
         let stopped = prover.prove_attempts(limited, retry).unwrap();
         assert_eq!(stopped.native.attempts.len(), 2);
         assert_eq!(stopped.native.attempts[0].decision, Ok(false));
@@ -140,19 +140,26 @@ pub(super) fn run(directory: &Path) {
             "exhausted:resource-budget"
         );
         let mut unknown = request(true, true);
-        unknown.inputs.services.insert("absent".into(), 1);
-        assert_eq!(prover.prove(unknown).err().unwrap(), "entry-service-names");
+        unknown.private.services.insert("absent".into(), 1);
+        assert_eq!(
+            prover.prove(unknown).err().unwrap().to_string(),
+            "entry-service-names"
+        );
         if name == "Derived" {
             let mut derived = request(true, true);
-            derived.inputs.services.insert("challenges".into(), 1);
-            assert_eq!(prover.prove(derived).err().unwrap(), "entry-service-names");
+            derived.private.services.insert("challenges".into(), 1);
+            assert_eq!(
+                prover.prove(derived).err().unwrap().to_string(),
+                "entry-service-names"
+            );
         }
         for count in [0, 1025] {
             assert_eq!(
                 prover
                     .prove_attempts(request(true, true), AttemptOptions { count, ..retry })
                     .err()
-                    .unwrap(),
+                    .unwrap()
+                    .to_string(),
                 "native-attempt-limits"
             );
         }
@@ -184,7 +191,7 @@ pub(super) fn run(directory: &Path) {
             let mut transcript = request(true, true);
             transcript.transcript_budget = Some(1);
             assert_eq!(
-                prover.prove(transcript).err().unwrap(),
+                prover.prove(transcript).err().unwrap().to_string(),
                 "native-proof-unselected-transcript"
             );
         }
@@ -198,7 +205,8 @@ pub(super) fn run(directory: &Path) {
     assert_eq!(
         once.prove_attempts(request(true, true), Default::default())
             .err()
-            .unwrap(),
+            .unwrap()
+            .to_string(),
         "entry-attempt-completion"
     );
 

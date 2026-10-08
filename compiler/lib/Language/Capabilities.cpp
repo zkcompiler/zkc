@@ -1,4 +1,4 @@
-#include "Checker.h"
+#include "Semantics.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Language/Builtins.h"
@@ -54,7 +54,8 @@ Error checkCapabilityInstallation() {
   }
   return Error::success();
 }
-bool Checker::capabilityFormation(const CapabilityBound &bound) {
+
+bool Semantics::capabilityFormation(const CapabilityBound &bound) {
   const auto *definition = declaration(bound.predicate);
   if (!definition || definition->parameters.size() != bound.arguments.size())
     return fail("source.capability",
@@ -68,8 +69,8 @@ bool Checker::capabilityFormation(const CapabilityBound &bound) {
   }
   return true;
 }
-bool Checker::entails(const Declaration *context, const CapabilityBound &goal,
-                      StringRef code) {
+bool Semantics::entails(const Declaration *context, const CapabilityBound &goal,
+                        StringRef code) {
   if (!capabilityFormation(goal))
     return false;
   auto closed = [&](const CapabilityBound &bound) {

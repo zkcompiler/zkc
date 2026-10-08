@@ -50,6 +50,8 @@ private:
 
 /// Requests may lower, but never raise, these per-invocation ceilings.
 struct Limits {
+  /// Every ceiling here is at least the corresponding ceiling in other.
+  bool covers(const Limits &other) const;
   uint64_t files = 256, fileBytes = 1048576, captureBytes = 8388608;
   uint64_t assetBytes = 67108864, assetTotalBytes = 67108864;
   uint64_t tokens = 1000000, tokenBytes = 4096;
@@ -416,6 +418,7 @@ public:
   uint64_t checkedWork() const;
 
 private:
+  friend class Layouts;
   explicit CheckedProject(std::shared_ptr<const detail::CheckedStorage>);
   std::shared_ptr<const detail::CheckedStorage> storage;
   friend Analysis analyze(const CapturedProject &, const Limits &);
@@ -443,6 +446,7 @@ public:
   llvm::ArrayRef<Declaration> declarations() const;
 
 private:
+  friend class Layouts;
   ClosedEntry(CheckedProject checked, DeclarationId selected,
               std::shared_ptr<const detail::ClosedStorage> storage)
       : checked(std::move(checked)), selected(selected),

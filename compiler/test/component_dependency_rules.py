@@ -316,8 +316,26 @@ rejects("IR cannot consume private mathematical transform helpers",
 rejects("IR cannot parse invocation input",
         root / "lib/Dialect/Protocol/IR/Projection.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
-        "parsing belongs to CompilerCore or Driver")
+        "parsing belongs to NativeCompiler, CompilerCore or Driver")
 rejects("transforms cannot parse invocation input",
         root / "lib/Transforms/Algorithms.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
-        "parsing belongs to CompilerCore or Driver")
+        "parsing belongs to NativeCompiler, CompilerCore or Driver")
+
+rejects("native compilation cannot import the old frontend",
+        root / "lib/Compiler/NativeCompilation.cpp",
+        lambda text: '#include "zkc/Frontend/Analysis.h"\n' + text,
+        "ZkcNativeCompiler: upward include")
+rejects("native compilation cannot import claim translation",
+        root / "lib/Compiler/NativeCompilation.cpp",
+        lambda text: '#include "zkc/ClaimTranslation/Claims.h"\n' + text,
+        "ZkcNativeCompiler: upward include")
+
+rejects("semantic queries cannot acquire source checker state",
+        root / "lib/Language/Semantics.cpp",
+        lambda text: '#include "Checker.h"\n' + text,
+        "semantic queries cannot depend on source checking")
+rejects("Entry closure cannot acquire source syntax",
+        root / "lib/Language/Specialize.cpp",
+        lambda text: '#include "Internal.h"\n' + text,
+        "semantic queries cannot depend on source checking")

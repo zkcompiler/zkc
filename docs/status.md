@@ -33,6 +33,11 @@ the package against an application-supplied digest and binds the named interface
 to the independently admitted native artifact. It trusts the compiler publication
 for source correspondence; it does not interpret the retained MLIR.
 
+Language separates semantic queries from source checking and Entry closure.
+Layouts share type substitution and permission rules. `Zkc::NativeCompiler`
+provides source Entry and native compilation without linking the older Frontend
+or claim workflows; installed static and shared clients exercise that boundary.
+
 The [common Host](language/entries.md) supports named logical inputs/results,
 independent prove/verify calls, immutable reusable prover material, setup slots,
 explicit attempts and bounded defaults. CLI files and optional Rust data bindings
@@ -49,7 +54,7 @@ reports retain reached execution and publication state on failure.
 | Actual receives, distributed control, services, resources and native data | [Runtime source corpus](../crates/zkc-tools/examples/language_native.rs): role substitutions, service aliases, conditional draws, nested repeats/completion, affine cleanup, vector/matrix/sequence kernels and formal polynomial realization |
 | Named Host, setup authority and attempts | [Host clients](../crates/zkc-tools/examples/language_native/host.rs), [proofs](../crates/zkc-tools/examples/language_native/proof.rs), [setups](../crates/zkc-tools/examples/language_native/setups.rs), [attempts](../crates/zkc-tools/examples/language_native/attempts.rs) |
 | Files and generated Rust data bindings | [CLI and independent Rust consumer](../tests/protocol/test_language_host.py): both transcript suites, authored proofs, malformed inputs, changed public/context values, retries, private-file protection and partial publication |
-| Maintained authoring and installed consumers | [Schnorr/Sumcheck projects](../tests/protocol/test_source_projects.py), [installed C++ API](../tests/consumer/compilercore.cpp) and [separate runtime execution](../tests/consumer/execution.py) |
+| Maintained authoring and installed consumers | [Schnorr/Sumcheck projects](../tests/protocol/test_source_projects.py), [installed C++ API](../tests/consumer/nativecompiler.cpp) and [separate runtime execution](../tests/consumer/execution.py) |
 
 The source profile does not expose every native operation as concise syntax.
 Fixed source arrays use static numeric indexing. Private ingress without an
@@ -170,7 +175,7 @@ selected verifier's guard/decision dependencies on bound entry components,
 actual received values and designated draws. It derives ordered challenge
 prefixes and authored application paths from an unsimplified prepared copy;
 unchanged challenge delivery and statement coverage are checked independently
-of candidate reports. The `ZkcCompilerCore` API, standalone report checker and
+of candidate reports. The `ZkcNativeCompiler` API, standalone report checker and
 checked native bundle option are implemented. Reports identify exact original
 and prepared IR, requirements and, for compilation, source text and bundle.
 

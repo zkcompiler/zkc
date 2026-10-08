@@ -146,6 +146,11 @@ establish a protocol's acceptance predicate. For verification,
 `ProofReport::is_success` requires the selected acceptance result; for proving,
 it requires a complete proof and returned outputs. Both retain cleanup failures.
 
+Calls that fail before execution return `EntryError`, whose `phase` identifies
+package authentication, interface reading, setup authority, native admission,
+interface binding, request conversion or native preparation. `code()` retains the underlying diagnostic.
+Execution failures and cleanup remain in the report.
+
 Generate optional convenience bindings from a trusted package:
 
 ```sh
@@ -160,16 +165,18 @@ domain, permissions and setup. Conversions preserve source field and variant
 names. Rust field/variant spellings preserve source names; special path names
 and names beginning `__zkc_` use an injective hexadecimal escape. Generated
 attributes permit source naming conventions without suppressing other warnings.
-Input structures provide `into_role`; output structures provide `take`. Role,
-setup and service constants avoid handwritten source-name strings.
+Input structures provide `into_inputs` and `into_role`; output structures provide
+`take`. Role, setup and service constants avoid handwritten source-name strings.
 
 Bindings construct and decode common Host values. They contain no protocol
 arithmetic, custom interpreter or alternate authority rules. Supply service
 budgets, setup material and context through the common request structures, then
 call `prepare`, `prove`, `prove_attempts` or `verify`. A Rust `ProofRequest` carries
-the complete invoked role inputs plus independently authorized public values;
-shared values must agree. The CLI fills shared role inputs from its public map.
-Regenerate bindings when the authorized package changes.
+public values once in `public` and only the invoked
+participant's nonpublic inputs and service budgets in `private`. Both the SDK
+and CLI assemble shared role operands from the public map; repeated public names
+in private inputs refuse. Native admission independently checks the assembled
+values against the artifact. Regenerate bindings when the authorized package changes.
 
 The [source profile](../spec/profiles/source/mathematical-language.md#named-run-calls)
 owns exact admission semantics. Native Lean correspondence and remaining older

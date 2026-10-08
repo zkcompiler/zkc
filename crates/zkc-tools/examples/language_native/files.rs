@@ -28,12 +28,12 @@ pub(super) fn setups(
     let mut imports = Vec::new();
     for (i, (bytes, pin)) in keys.into_iter().enumerate() {
         let name = format!("pk{i}");
-        producer.inputs.inputs.remove(&name).unwrap();
+        producer.private.inputs.remove(&name).unwrap();
         let path = directory.join(format!("cli-pk-{i}.bin"));
         std::fs::write(&path, bytes).unwrap();
         imports.push((name, json!({"path":path,"sha256":hex(&pin)})));
     }
-    let mut producer_values = named(&producer.inputs.inputs);
+    let mut producer_values = named(&producer.private.inputs);
     for (name, value) in imports {
         producer_values[&name] = value;
     }
@@ -46,7 +46,7 @@ pub(super) fn setups(
     for name in public.as_object().unwrap().keys() {
         producer_values.as_object_mut().unwrap().remove(name);
     }
-    let verifier_values = named(&verifier.inputs.inputs);
+    let mut verifier_values = named(&verifier.private.inputs);
     let producer_file = save(
         directory,
         "cli-producer.json",
@@ -79,6 +79,10 @@ pub(super) fn setups(
     let checked = entry::cli::run("verify", &args);
     assert_eq!(checked["status"], "accepted", "{checked}");
     producer_values
+        .as_object_mut()
+        .unwrap()
+        .extend(public.as_object().unwrap().clone());
+    verifier_values
         .as_object_mut()
         .unwrap()
         .extend(public.as_object().unwrap().clone());
