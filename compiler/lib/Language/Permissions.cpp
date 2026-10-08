@@ -137,6 +137,10 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
     }
     return inherent;
   };
+  if (isStaticOnly(type)) {
+    fail("source.type", "static term has no runtime permissions", span);
+    return {};
+  }
   if (type.symbolic || type.kind == K::Parameter)
     return scoped(type.assumptions);
   if (type.kind == K::Associated) {
@@ -168,7 +172,7 @@ std::optional<Permissions> Checker::permissions(const Type &type, Span span,
     Permissions result{base && base->copy, base && base->drop,
                        head->shared || type.domain == "sequence", true};
     for (const auto &argument : type.arguments) {
-      if (argument.kind == K::Natural)
+      if (isStaticOnly(argument))
         continue;
       auto child = permissions(argument, span, scope, depth + 1);
       if (!child)
@@ -285,8 +289,7 @@ bool Checker::mathematicalData(const Type &type, Span span,
       return fail("source.mode",
                   "native data is outside the mathematical vocabulary", span);
     for (const auto &arg : type.arguments)
-      if (arg.kind != K::Natural &&
-          !mathematicalData(arg, span, scope, depth + 1))
+      if (!isStaticOnly(arg) && !mathematicalData(arg, span, scope, depth + 1))
         return false;
   } else if (type.kind == K::Tuple || type.kind == K::Array) {
     for (const auto &arg : type.arguments)

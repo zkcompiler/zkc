@@ -692,14 +692,12 @@ private:
       }
       if (!name(d.name) || !expect("="))
         return {};
-      if (take("field"))
-        d.target = "Field";
-      else if (take("group"))
-        d.target = "Group";
-      else {
-        fail("source.domain", "expected installed field or group");
+      if (current().kind != TokenKind::Word) {
+        fail("source.domain", "expected a domain sort");
         return {};
       }
+      d.target = text().str();
+      advance();
       if (!expect("(") || current().kind != TokenKind::String) {
         fail("source.syntax", "expected installed domain identity string");
         return {};
@@ -784,11 +782,13 @@ private:
         return {};
       if (member && take(":")) {
         d.permissions.emplace();
-        if (at("Type") || at("Field") || at("Group")) {
+        if (!at("Copy") && !at("Drop") && !at("Share") && !at("Wire")) {
+          if (current().kind != TokenKind::Word) {
+            fail("source.type", "expected an associated sort or permission");
+            return {};
+          }
           d.associatedSort = text().str();
           advance();
-          if (d.associatedSort != "Type")
-            d.permissions->copy = d.permissions->drop = true;
           if (take("+"))
             do {
               if (!permission(*d.permissions))

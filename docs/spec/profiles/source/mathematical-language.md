@@ -85,10 +85,26 @@ without creating a nominal identity. Variant payloads are positional; a variant
 has one to 32 distinct alternatives. Formal mathematical types have a separate
 [authoring contract](#formal-mathematics).
 
-Domain declarations require an installed identity of the declared sort. A group's
-`Scalar` association gives its scalar field. Static parameters use `Type`, `Field`,
-`Group`, `nat`, or a selected interface. Naturals are compile-time values, distinct
-from runtime `index`. Constants, parameters, addition and multiplication normalize
+Domain declarations require an installed identity of the declared catalog sort:
+`field`, `group`, `commitment`, `transcript`, or `codec`. Static parameters use
+`Type`, `Field`, `Group`, `Commitment`, `Transcript`, `Codec`, `nat`, or a selected
+interface. Sort names take precedence in static parameter bounds; elsewhere names
+retain ordinary module resolution. Field and group domains also denote their runtime
+value types. Commitment, transcript and codec domains are static only: they cannot
+be runtime ports, tuple/array elements or arguments to a `Type` parameter.
+
+Catalog associations project domains, such as `G::Scalar`, `C::ValueField`,
+`C::PointField`, `C::EvaluationField`, `T::ChallengeField`, and
+`F::PairingG1::Scalar`. Generic checking uses the catalog's owner/result sorts;
+selection requires each association to exist for the installed identity. Closed
+associated fields/groups are identical to their directly declared types. A component
+may expose an associated domain (`type C: Commitment`); this adds no runtime value
+or constructor. Static-only domains have no Copy, Drop, Share or Wire permission.
+Naming a transcript domain does not expose managed transcript operations as local
+kernels. Runtime constructors retain their separate admitted vocabulary below.
+
+Naturals are compile-time values, distinct from runtime `index`. Constants,
+parameters, addition and multiplication normalize
 to polynomials with checked unsigned 64-bit coefficients. Equality compares those
 normal forms. Arithmetic overflow refuses rather than wrapping.
 

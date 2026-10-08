@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -27,10 +28,8 @@ bool Checker::conformance(DeclarationId id) {
                   component.span);
     if (required.kind == Declaration::Kind::Associated) {
       auto sort = required.associatedSort;
-      if ((sort == "Field" && provided->domain.kind != Type::Kind::Field) ||
-          (sort == "Group" && provided->domain.kind != Type::Kind::Group) ||
-          ((sort == "Field" || sort == "Group") &&
-           provided->associatedSort != sort))
+      if (isDomainSort(sort) && (domainSort(provided->domain) != sort ||
+                                 provided->associatedSort != sort))
         return fail("source.conformance", "associated domain sort differs",
                     provided->span);
       if (!provided->permissions.value_or(Permissions{})
@@ -38,6 +37,13 @@ bool Checker::conformance(DeclarationId id) {
         return fail("source.conformance",
                     "associated type lacks promised permissions",
                     provided->span);
+      if (isStaticOnly(provided->domain)) {
+        if (!isDomainSort(sort))
+          return fail("source.conformance",
+                      "static domain cannot satisfy a runtime associated type",
+                      provided->span);
+        continue;
+      }
       auto caps = permissions(provided->domain, provided->span, &component);
       if (!caps)
         return false;
@@ -108,8 +114,7 @@ bool Checker::conformance(DeclarationId id) {
         if (!assumptions(available, bound, {}, provided->span))
           return false;
       for (unsigned i = 0; i < provided->parameters.size(); ++i) {
-        if (provided->parameters[i].sort == Parameter::Sort::Natural ||
-            provided->parameters[i].sort == Parameter::Sort::Component)
+        if (isStaticOnly(parameterType(provided->parameters[i])))
           continue;
         auto allowed = permissions(parameterType(component.parameters[i]),
                                    provided->span, &available);

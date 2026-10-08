@@ -1,7 +1,6 @@
 #include "zkc/Contracts/Kernels.h"
 #include "BodyCheck.h"
 #include "zkc/Contracts/Declarations.h"
-#include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
@@ -65,19 +64,11 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
       value = form(term.name, *term.arguments);
     else if (term.parent) {
       const auto &base = terms[*term.parent];
-      if (symbolic(base))
-        value = associated(base, term.name, span);
-      else {
-        auto identity = protocol::associatedIdentity(base.domain, term.name);
-        if (!identity.empty() && (sort == "Field" || sort == "Group"))
-          value = Type(sort == "Field" ? Type::Kind::Field : Type::Kind::Group,
-                       identity.str());
-      }
+      value = associated(base, term.name, span);
     } else if (auto fixed = scope.constants.find(i);
                fixed != scope.constants.end()) {
-      if (sort == "Field" || sort == "Group")
-        value = Type(sort == "Field" ? Type::Kind::Field : Type::Kind::Group,
-                     fixed->second);
+      if (isDomainSort(sort))
+        value = domainType(sort, fixed->second);
       else if (sort == "Nat") {
         uint64_t n;
         if (!StringRef(fixed->second).getAsInteger(10, n)) {
@@ -93,11 +84,10 @@ Checker::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
              span);
       return {};
     }
-    bool formed = sort == "Field"   ? value->kind == Type::Kind::Field
-                  : sort == "Group" ? value->kind == Type::Kind::Group
-                  : sort == "Nat"   ? value->kind == Type::Kind::Natural
-                  : sort == "Type"  ? isNativeData(*value)
-                                    : false;
+    bool formed = sort == "Nat" ? value->kind == Type::Kind::Natural
+                  : sort == "Type"
+                      ? isNativeData(*value)
+                      : isDomainSort(sort) && domainSort(*value) == sort;
     if (!formed) {
       fail("source.kernel", "installed static argument sort differs", span);
       return {};

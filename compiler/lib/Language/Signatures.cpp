@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "zkc/Language/Builtins.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -8,8 +9,7 @@ bool Checker::requirements(Declaration &decl) {
     if (!lhs)
       return false;
     if (!req.permission.empty()) {
-      if (lhs->kind == Type::Kind::Natural ||
-          lhs->kind == Type::Kind::Component)
+      if (isStaticOnly(*lhs))
         return fail("source.permission", "permissions constrain runtime types",
                     req.span);
       bool matched = false;
@@ -108,6 +108,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
   if (signatureState[id.index] == 1)
     return fail("source.cycle", "recursive type or static signature",
                 decl.span);
+  if (decl.kind == Declaration::Kind::Associated) {
+    if (!decl.associatedSort.empty() && decl.associatedSort != "Type" &&
+        !isDomainSort(decl.associatedSort))
+      return fail("source.type", "unknown associated domain sort", decl.span);
+    if (decl.associatedSort == "Field" || decl.associatedSort == "Group") {
+      if (!decl.permissions)
+        decl.permissions.emplace();
+      decl.permissions->copy = decl.permissions->drop = true;
+    }
+  }
   auto &source = *sources[id.index];
   signatureState[id.index] = 1;
   if (decl.parent) {
@@ -141,12 +151,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     auto name = src.constraint.name;
     if (name == "Type")
       p.sort = Parameter::Sort::Type;
-    else if (name == "Field") {
-      p.sort = Parameter::Sort::Field;
-      p.permissions.copy = p.permissions.drop = true;
-    } else if (name == "Group") {
-      p.sort = Parameter::Sort::Group;
-      p.permissions.copy = p.permissions.drop = true;
+    else if (isDomainSort(name)) {
+      p.sort = Parameter::Sort::Domain;
+      p.domainSort = name;
+      if (name == "Field" || name == "Group")
+        p.permissions.copy = p.permissions.drop = true;
     } else if (name == "nat")
       p.sort = Parameter::Sort::Natural;
     else {
@@ -169,9 +178,7 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         !src.constraint.arguments.empty())
       return fail("source.generic", "static sort does not take arguments",
                   src.span);
-    if ((p.sort == Parameter::Sort::Natural ||
-         p.sort == Parameter::Sort::Component) &&
-        !(p.permissions == Permissions{}))
+    if (isStaticOnly(parameterType(p)) && !(p.permissions == Permissions{}))
       return fail("source.permission", "permissions constrain runtime types",
                   p.span);
     parameters.emplace(p.atom,
@@ -202,16 +209,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                     "component must implement an interface", decl.span);
       decl.implementation = *def;
     } else {
-      if (!valueType(*def))
+      bool domain = decl.kind == Declaration::Kind::Associated &&
+                    isDomainSort(decl.associatedSort);
+      if (!domain && !valueType(*def))
         return fail("source.type",
                     "alias or representation must denote a value type",
                     decl.span);
-      if (decl.kind == Declaration::Kind::Associated &&
+      if (decl.kind == Declaration::Kind::Associated && !domain &&
           !executableType(*def, decl.span))
         return false;
-      if (decl.kind == Declaration::Kind::Associated &&
-          ((decl.associatedSort == "Field" && def->kind != Type::Kind::Field) ||
-           (decl.associatedSort == "Group" && def->kind != Type::Kind::Group)))
+      if (domain && domainSort(*def) != decl.associatedSort)
         return fail("source.type",
                     "associated representation has a different domain sort",
                     decl.span);
@@ -219,10 +226,16 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   if (decl.kind == Declaration::Kind::Associated && !decl.abstract &&
-      decl.associatedSort != "Field" && decl.associatedSort != "Group" &&
-      decl.permissions && decl.permissions->wire)
+      !isDomainSort(decl.associatedSort) && decl.permissions &&
+      decl.permissions->wire)
     return fail("source.permission",
                 "private associated Wire requires an admitted validator",
+                decl.span);
+  if (decl.kind == Declaration::Kind::Associated &&
+      isDomainSort(decl.associatedSort) && decl.associatedSort != "Field" &&
+      decl.associatedSort != "Group" &&
+      !(decl.permissions.value_or(Permissions{}) == Permissions{}))
+    return fail("source.permission", "permissions constrain runtime types",
                 decl.span);
   auto fieldList = [&](ArrayRef<SyntaxPort> from, std::vector<TypeField> &to) {
     std::set<std::string> fields;

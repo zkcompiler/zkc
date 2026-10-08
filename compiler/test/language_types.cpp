@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -744,6 +745,145 @@ void bounds() {
   require(!result, "aggregate leaf bound escaped emission");
   consumeError(result.takeError());
 }
+void staticDomains() {
+  const std::string domains = prefix + R"(
+    domain Kzg=commitment("multilinear.kzg.bls12-381/1");
+    domain Transcript=transcript("merlin3.bls12-381.fr64be/1");
+    domain Bn=field("bn254.fr");
+    domain Ext=field("koala-bear.ext8-binomial3");
+    domain Base=field("koala-bear");
+    type Commitment<C:Commitment> = builtin("vector", C::ValueField);
+    type TranscriptValues<T:Transcript> = builtin("vector", T::ChallengeField);
+    struct Box<C:Commitment>{pub value:C::ValueField}
+    math fn doubleValue<C:Commitment>(x:C::ValueField)->C::ValueField{return x+x;}
+    fn total<C:Commitment>(xs:Commitment<C>)->C::ValueField{
+      return kernel<C::ValueField>("vector.sum",xs);
+    }
+    interface Scheme{type Domain:Commitment;}
+    component KzgScheme:Scheme{type Domain:Commitment=Kzg;}
+    struct Configured<S:Scheme>{pub value:S::Domain::ValueField}
+    fn configured<S:Scheme>(x:Configured<S>)->S::Domain::ValueField{
+      return x.value;
+    }
+  )";
+  auto selected = original(domains + R"(
+    protocol Run roles(P,V)(x:Box<Kzg>@P,v:Commitment<Kzg>@P,
+      t:TranscriptValues<Transcript>@P,c:Configured<KzgScheme>@P)
+      ->(a:Fr@V,b:Fr@P,d:Fr@P){
+      let a=send P->V(doubleValue<Kzg>(x.value));
+      local P let b=total<Kzg>(v);local P let d=configured(c);
+      return(a=a,b=b,d=d);
+    }entry Demo=Run;
+  )");
+  must(compileEntry(selected));
+  check(domains + R"(
+    math fn canonical(x:Kzg::ValueField,y:Transcript::ChallengeField)->Fr{
+      return x+y;
+    }
+    math fn chain(x:Bn::PairingG1::Scalar,y:m::Bn::PairingG2::Scalar)->Bn{
+      return x+y;
+    }
+    math fn extension(x:Ext::BaseField)->Base{return x;}
+    protocol Shared<C:Commitment> roles(P,V)
+      (x:C::ValueField@P)->(r:C::ValueField@V)
+      where Wire(C::ValueField),Share(C::ValueField){
+      let r=send P->V(x);return(r=r);
+    }
+  )" + unit);
+  for (const auto &body :
+       {"fn bad<C:Commitment>(x:C)->C{return x;}",
+        "type Bad<C:Commitment>=[C;2];", "type Bad<C:Commitment>=(C,Fr);",
+        "type Bad=Kzg;", "type Bad=Kzg::Scalar;", "type Bad=Bn::ValueField;",
+        "type Bad=Base::PairingG1;",
+        "component Bad:Scheme{type Domain:Commitment=Fr;}"})
+    refuses(domains + body + unit, "source.type");
+  for (const auto &body :
+       {"type Identity<T:Type>=T;type Bad=Identity<Kzg>;",
+        "type Bad=Commitment<Fr>;", "type Bad=TranscriptValues<Kzg>;"})
+    refuses(domains + body + unit, "source.generic");
+  for (const auto &body : {"type Bad<C:Commitment+Copy>=bool;",
+                           "type Bad<C:Commitment> where Copy(C)=bool;",
+                           "type Bad where Wire(Kzg)=bool;",
+                           "interface Bad{type Scheme:Commitment+Copy;}"})
+    refuses(domains + body + unit, "source.permission");
+  refuses(prefix + "domain Bad=commitment(\"unknown\");" + unit,
+          "source.domain");
+  refuses(prefix + "domain Bad=transcript(\"multilinear.kzg.bls12-381/1\");" +
+              unit,
+          "source.domain");
+  refuses(domains + "type Bad=builtin(\"transcript\",Transcript);" + unit,
+          "source.builtin");
+  refuses(
+      domains +
+          "interface I{type Out;} component Wrong:I{type Out:Commitment=Kzg;}" +
+          unit,
+      "source.conformance");
+  refuses(domains +
+              "component Wrong:Scheme{type Domain:Transcript=Transcript;}" +
+              unit,
+          "source.conformance");
+  refuses(domains + "interface Wrong{type D:NotASort;}" + unit, "source.type");
+  refuses(prefix + "domain Bad=codec(\"unknown\");" + unit, "source.domain");
+  refuses(prefix + "domain Bad=FIELD(\"bls12-381.fr\");" + unit,
+          "source.domain");
+  for (const auto &body : {"struct Bad{pub value:Kzg}", "enum Bad{Some(Kzg)}",
+                           "protocol Bad roles(P)(x:Kzg@P)->(){return();}"})
+    refuses(domains + body + unit, "source.type");
+  refuses(domains + "type Bad=builtin(\"vector\",Kzg);" + unit,
+          "source.builtin");
+  must(compileEntry(original(domains + R"(
+    interface Generic<C:Commitment>{fn get(x:C::ValueField)->C::ValueField;}
+    component Selected<D:Commitment>:Generic<D>{
+      fn get(x:D::ValueField)->D::ValueField{return x;}
+    }
+    component Forward<C:Commitment>:Scheme{type Domain:Commitment=C;}
+    fn extract<C:Commitment>(x:Box<C>)->C::ValueField{return x.value;}
+    fn invoke<C:Commitment,T:Generic<C>>(x:C::ValueField)->C::ValueField{
+      return T::get(x);
+    }
+    interface View{type Domain:Commitment;
+      fn identity(x:Domain::ValueField)->Domain::ValueField;}
+    component NamedView:View{type Domain:Commitment=Kzg;
+      fn identity(x:Domain::ValueField)->Domain::ValueField{return x;}}
+    protocol Run<C:Commitment> roles(P)(x:Box<C>@P,
+      c:Configured<Forward<C>>@P)->(r:C::ValueField@P)
+      where Wire(C::ValueField){
+      local P let a=extract(x);local P let b=invoke<C,Selected<C>>(a);
+      local P let d=configured(c);return(r=b+d);
+    }entry Demo=Run<Kzg>;
+  )")));
+  std::string longPath = "Bn";
+  for (unsigned i = 0; i < 100; ++i)
+    longPath += "::PairingG1::Scalar";
+  refuses(domains + "type TooDeep=" + longPath + ";" + unit, "source.limit");
+  const auto &codec = zkc::protocol::installedDomains().allCodecs().front();
+  check(prefix + "domain Encoding=codec(\"" + codec.identity +
+        "\"); type Tagged<C:Codec>=bool; fn "
+        "pass(x:Tagged<Encoding>)->bool{return x;}" +
+        unit);
+  auto kzg = domainType("Commitment", "multilinear.kzg.bls12-381/1");
+  auto fr = domainType("Field", "bls12-381.fr");
+  require(must(domainMember(kzg, "ValueField")) == fr,
+          "associated field did not use the canonical scalar kind");
+  require(must(kernelArgument(kzg, "Commitment")) == kzg.domain,
+          "closed commitment binding differs");
+  auto wrong = kernelArgument(kzg, "Transcript");
+  require(!wrong, "domain binding erased its sort");
+  consumeError(wrong.takeError());
+  auto symbolic = kzg;
+  symbolic.symbolic = true;
+  symbolic.domain = "parameter:C";
+  auto other = symbolic;
+  other.sort = "Transcript";
+  require(typeIdentity(symbolic) != typeIdentity(other) && symbolic != other,
+          "static domain identity erased its sort");
+  auto project = check(prefix + unit);
+  Layouts layouts(project);
+  auto layout = layouts.get(kzg);
+  require(!layout, "static domain acquired a runtime layout");
+  consumeError(layout.takeError());
+}
+
 void nativeData() {
   const std::string library = prefix + R"(
     type Vector<F:Field> = builtin("vector", F);
@@ -918,6 +1058,7 @@ void nativeData() {
 
 } // namespace
 int main() {
+  staticDomains();
   nativeData();
   wireAuthority();
   typing();

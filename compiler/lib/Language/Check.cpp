@@ -1,4 +1,5 @@
 #include "Checker.h"
+#include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include <algorithm>
 #include <numeric>
@@ -171,15 +172,19 @@ bool Checker::collect() {
       return accept(symbol.takeError());
     decl.symbol = std::move(*symbol);
     if (source.kind == Declaration::Kind::Domain) {
-      if (protocol::installedDomains().identitySort(source.domain) !=
-          source.target)
+      auto sorts = protocol::domainSorts();
+      auto sort = llvm::find_if(sorts, [&](const std::string &sort) {
+        return StringRef(sort).lower() == source.target;
+      });
+      if (sort == sorts.end())
+        return fail("source.domain", "unknown domain sort: " + source.target,
+                    source.span);
+      if (protocol::installedDomains().identitySort(source.domain) != *sort)
         return fail("source.domain",
                     "expected installed " + source.target +
                         " identity: " + source.domain,
                     source.span);
-      decl.domain = {source.target == "Field" ? Type::Kind::Field
-                                              : Type::Kind::Group,
-                     source.domain};
+      decl.domain = domainType(*sort, source.domain);
     }
     auto id = decl.id;
     sources.push_back(&source);

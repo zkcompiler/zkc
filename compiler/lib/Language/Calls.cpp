@@ -252,8 +252,8 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     if (!type)
       return {};
     if (type->kind != Type::Kind::Associated) {
-      fail("source.call", "associated domains use ordinary scalar operations",
-           expr.span);
+      fail("source.call",
+           "associated domains have no representation constructor", expr.span);
       return {};
     }
     if (!checker.constructorAllowed(decl, *type)) {

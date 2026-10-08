@@ -223,8 +223,9 @@ struct Body {
   std::vector<std::vector<unsigned>> formationRequirements;
 };
 struct Parameter {
-  enum class Sort { Type, Field, Group, Natural, Component } sort;
+  enum class Sort { Type, Natural, Component, Domain } sort;
   std::string name, atom;
+  std::string domainSort;
   Permissions permissions;
   std::optional<DeclarationId> interface;
   std::vector<Type> arguments;
@@ -332,8 +333,7 @@ struct Declaration {
   std::optional<Effects> effectAllowance;
   bool abstract = false;
   bool completes = false;
-  /// Empty or Type is a private representation; Field and Group expose a
-  /// domain.
+  /// Empty or Type is a private representation; catalog sorts expose a domain.
   std::string associatedSort;
   /// A closed definition records its template and exact static substitution.
   std::optional<DeclarationId> origin;

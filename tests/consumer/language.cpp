@@ -1,9 +1,22 @@
+#include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/Json.h"
 #include "llvm/Support/raw_ostream.h"
 int main() {
+  auto commitment =
+      zkc::language::domainType("Commitment", "multilinear.kzg.bls12-381/1");
+  auto field = zkc::language::domainMember(commitment, "ValueField");
+  if (!field) {
+    llvm::errs() << llvm::toString(field.takeError());
+    return 8;
+  }
+  if (*field != zkc::language::domainType("Field", "bls12-381.fr") ||
+      !zkc::language::isStaticOnly(commitment) ||
+      zkc::language::isStaticOnly(*field))
+    return 9;
+
   auto relation = zkc::relation::R1CS::create("bls12-381.fr", 2, 0, 1, {});
   if (!relation) {
     llvm::errs() << llvm::toString(relation.takeError());

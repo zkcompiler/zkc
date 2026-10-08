@@ -6,6 +6,9 @@ namespace zkc::language {
 /// Library-facing native data types. Constructor formation is catalog-owned;
 /// source nominals and managed service roots cannot be erased through this API.
 bool isNativeData(const Type &);
+bool isDomainSort(llvm::StringRef);
+/// Resolve a catalog association, retaining a symbolic projection when needed.
+llvm::Expected<Type> domainMember(const Type &, llvm::StringRef member);
 llvm::Expected<std::string> kernelArgument(const Type &, llvm::StringRef sort);
 /// Formal values are eliminated before execution and have no native data codec.
 llvm::Expected<Type> formalType(llvm::StringRef, llvm::ArrayRef<Type>);

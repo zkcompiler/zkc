@@ -17,10 +17,10 @@ struct Permissions {
            (!b.wire || wire);
   }
 };
-/// A resolved source term. Natural and Component are static sorts and cannot
-/// form runtime values. Parameters carry declaration-qualified atom identities.
-/// Nominal arguments include phantom parameters; representation is not
-/// identity.
+/// A resolved source term. Natural, Domain and Component are static sorts and
+/// cannot form runtime values. Parameters carry declaration-qualified atom
+/// identities. Nominal arguments include phantom parameters; representation is
+/// not identity.
 struct Type {
   enum class Kind {
     Boolean,
@@ -37,10 +37,13 @@ struct Type {
     Natural,
     Component,
     Builtin,
-    Formal
+    Formal,
+    Domain
   };
   Kind kind = Kind::Boolean;
   std::string domain;
+  /// Catalog sort for static-only domains; Field and Group use their own kinds.
+  std::string sort;
   std::vector<Type> arguments;
   Natural dimension;
   bool symbolic = false;
@@ -51,11 +54,17 @@ struct Type {
   bool operator==(const Type &b) const {
     if (kind == Kind::Natural && b.kind == Kind::Natural)
       return dimension == b.dimension;
-    return kind == b.kind && domain == b.domain && arguments == b.arguments &&
-           dimension == b.dimension && symbolic == b.symbolic;
+    return kind == b.kind && domain == b.domain && sort == b.sort &&
+           arguments == b.arguments && dimension == b.dimension &&
+           symbolic == b.symbolic;
   }
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
+/// Canonical source term for an admitted catalog domain sort and identity.
+/// Only this constructor sets Type::sort, and only for Kind::Domain.
+Type domainType(llvm::StringRef sort, llvm::StringRef identity);
+llvm::StringRef domainSort(const Type &);
+bool isStaticOnly(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);
 /// Injective internal key; source-facing spelling is deliberately separate.

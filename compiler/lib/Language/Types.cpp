@@ -3,6 +3,26 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 namespace zkc::language {
+Type domainType(StringRef sort, StringRef identity) {
+  Type result(sort == "Field"   ? Type::Kind::Field
+              : sort == "Group" ? Type::Kind::Group
+                                : Type::Kind::Domain,
+              identity.str());
+  if (result.kind == Type::Kind::Domain)
+    result.sort = sort.str();
+  return result;
+}
+StringRef domainSort(const Type &type) {
+  if (type.kind == Type::Kind::Field)
+    return "Field";
+  if (type.kind == Type::Kind::Group)
+    return "Group";
+  return type.kind == Type::Kind::Domain ? StringRef(type.sort) : StringRef();
+}
+bool isStaticOnly(const Type &type) {
+  return type.kind == Type::Kind::Natural ||
+         type.kind == Type::Kind::Component || type.kind == Type::Kind::Domain;
+}
 StringRef typeKindName(Type::Kind kind) {
   switch (kind) {
   case Type::Kind::Boolean:
@@ -35,6 +55,8 @@ StringRef typeKindName(Type::Kind kind) {
     return "builtin";
   case Type::Kind::Formal:
     return "formal";
+  case Type::Kind::Domain:
+    return "domain";
   }
   llvm_unreachable("unknown source type kind");
 }
@@ -53,6 +75,8 @@ std::string spelling(const Type &type) {
   default:
     break;
   }
+  if (type.kind == K::Domain && !type.symbolic)
+    return StringRef(type.sort).lower() + "<" + type.domain + ">";
   if (type.kind == K::Builtin || type.kind == K::Formal) {
     std::string result =
         std::string(type.kind == K::Formal ? "formal(\"" : "builtin(\"") +
@@ -94,6 +118,8 @@ std::string typeIdentity(const Type &type) {
   }
   out << type.symbolic << ':';
   frame(type.domain);
+  if (type.kind == Type::Kind::Domain)
+    frame(type.sort);
   frame(type.dimension.spelling());
   out << type.arguments.size() << ':';
   for (const auto &argument : type.arguments)
@@ -108,7 +134,7 @@ Expected<uint64_t> typeComplexity(const Type &type, uint64_t nodes,
     if (!nodes || level > depth)
       return error("source.limit", "expanded source type limit exceeded");
     --nodes;
-    cost += 1 + term.domain.size();
+    cost += 1 + term.domain.size() + term.sort.size();
     for (auto &[factors, coefficient] : term.dimension.terms()) {
       (void)coefficient;
       cost += 1;

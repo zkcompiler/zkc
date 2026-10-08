@@ -160,16 +160,14 @@ Expected<Type> Layouts::substitute(const Type &type,
     auto member = StringRef(result.domain).rsplit("::").second;
     result.domain = base.domain + "::" + member.str();
   }
-  if ((result.kind == Type::Kind::Field || result.kind == Type::Kind::Group) &&
-      !result.arguments.empty()) {
+  if (!domainSort(result).empty() && !result.arguments.empty()) {
     const auto &base = result.arguments.front();
     auto member = StringRef(result.domain).rsplit("::").second;
-    if (base.kind == Type::Kind::Group && member == "Scalar") {
-      result.domain = protocol::associatedIdentity(base.domain, "Scalar").str();
-      if (result.domain.empty())
-        return error("source.type", "group lacks a scalar domain");
-      result.symbolic = false;
-      result.arguments.clear();
+    if (!domainSort(base).empty()) {
+      auto resolved = domainMember(base, member);
+      if (!resolved)
+        return resolved.takeError();
+      result = std::move(*resolved);
     } else {
       auto *owner = declaration(base.domain);
       auto *associated = declaration(base.domain + "::" + member.str());

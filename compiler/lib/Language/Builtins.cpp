@@ -1,5 +1,6 @@
 #include "zkc/Language/Builtins.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;
@@ -16,6 +17,34 @@ bool dataConstructor(StringRef name) {
          name == "field_array";
 }
 } // namespace
+bool isDomainSort(StringRef sort) {
+  return llvm::is_contained(protocol::domainSorts(), sort);
+}
+Expected<Type> domainMember(const Type &base, StringRef member) {
+  auto members = protocol::associatedMemberDeclarations();
+  auto found = llvm::find_if(members, [&](const auto &entry) {
+    return entry.owner.sort == domainSort(base) && entry.name == member;
+  });
+  if (found == members.end() ||
+      found->result.kind != protocol::StaticKind::Domain ||
+      !isDomainSort(found->result.sort))
+    return error("source.type",
+                 "domain has no installed association: " + member);
+  auto identity = base.symbolic ? base.domain + "::" + member.str()
+                                : protocol::installedDomains()
+                                      .associatedIdentity(base.domain, member)
+                                      .str();
+  if (identity.empty())
+    return error("source.type", "domain association is unavailable: " + member);
+  auto result = domainType(found->result.sort, identity);
+  if (base.symbolic) {
+    result.symbolic = true;
+    result.arguments = {base};
+    if (!isStaticOnly(result))
+      result.assumptions = {true, true, false, false};
+  }
+  return result;
+}
 bool isNativeData(const Type &type) {
   return type.kind == K::Field || type.kind == K::Group ||
          type.kind == K::Boolean || type.kind == K::Index ||
@@ -36,8 +65,7 @@ Expected<std::string> kernelArgument(const Type &type, StringRef sort) {
       return error("source.builtin", "native natural is outside 0..1048576");
     return std::to_string(type.dimension.closedValue());
   }
-  if ((sort == "Field" && type.kind == K::Field) ||
-      (sort == "Group" && type.kind == K::Group)) {
+  if (isDomainSort(sort) && domainSort(type) == sort) {
     if (!protocol::staticIdentityMatches(sort, type.domain))
       return error("source.builtin", "uninstalled domain identity");
     return type.domain;
@@ -72,11 +100,11 @@ Expected<Type> builtinType(StringRef name, ArrayRef<Type> arguments) {
     const auto &argument = arguments[i];
     const auto &parameter = constructor->parameters[i];
     using S = protocol::StaticKind;
-    bool formed = parameter.kind == S::Type   ? isNativeData(argument)
-                  : parameter.kind == S::Nat  ? argument.kind == K::Natural
-                  : parameter.sort == "Field" ? argument.kind == K::Field
-                  : parameter.sort == "Group" ? argument.kind == K::Group
-                                              : false;
+    bool formed = parameter.kind == S::Type ? isNativeData(argument)
+                  : parameter.kind == S::Nat
+                      ? argument.kind == K::Natural
+                      : domainSort(argument) == parameter.sort &&
+                            isDomainSort(parameter.sort);
     if (!formed)
       return error("source.builtin",
                    "native type argument sort or representation differs");

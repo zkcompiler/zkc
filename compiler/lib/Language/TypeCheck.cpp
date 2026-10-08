@@ -1,5 +1,4 @@
 #include "Checker.h"
-#include "zkc/Contracts/Domains.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/StringExtras.h"
 #include <algorithm>
@@ -8,12 +7,12 @@ using namespace llvm;
 namespace zkc::language::detail {
 Type parameterType(const Parameter &p) {
   using K = Type::Kind;
-  Type value(p.sort == Parameter::Sort::Field       ? K::Field
-             : p.sort == Parameter::Sort::Group     ? K::Group
-             : p.sort == Parameter::Sort::Natural   ? K::Natural
-             : p.sort == Parameter::Sort::Component ? K::Component
-                                                    : K::Parameter,
-             p.atom);
+  Type value = p.sort == Parameter::Sort::Domain
+                   ? domainType(p.domainSort, p.atom)
+                   : Type(p.sort == Parameter::Sort::Natural     ? K::Natural
+                          : p.sort == Parameter::Sort::Component ? K::Component
+                                                                 : K::Parameter,
+                          p.atom);
   value.symbolic = true;
   value.assumptions = p.permissions;
   if (p.sort == Parameter::Sort::Natural)
@@ -22,9 +21,7 @@ Type parameterType(const Parameter &p) {
     value.arguments = p.arguments;
   return value;
 }
-bool valueType(const Type &type) {
-  return type.kind != Type::Kind::Natural && type.kind != Type::Kind::Component;
-}
+bool valueType(const Type &type) { return !isStaticOnly(type); }
 bool Checker::chargeType(const Type &type, Span span) {
   auto cost =
       typeComplexity(type, work.limits.typeNodes, work.limits.typeDepth);
@@ -107,8 +104,7 @@ std::optional<Type> Checker::substitute(const Type &input,
         result.domain.clear();
     }
   }
-  if ((result.kind == Type::Kind::Associated ||
-       result.kind == Type::Kind::Field || result.kind == Type::Kind::Group) &&
+  if ((result.kind == Type::Kind::Associated || !domainSort(result).empty()) &&
       !result.arguments.empty()) {
     StringRef name = result.domain;
     auto pos = name.rfind("::");
@@ -118,33 +114,35 @@ std::optional<Type> Checker::substitute(const Type &input,
 }
 std::optional<Type> Checker::associated(const Type &base, StringRef member,
                                         Span span) {
-  auto path = member.split("::");
-  if (!path.second.empty()) {
-    auto next = associated(base, path.first, span);
-    if (!next)
-      return {};
-    return associated(*next, path.second, span);
-  }
-  if (base.kind == Type::Kind::Group && member == "Scalar") {
-    Type result(Type::Kind::Field);
-    if (base.symbolic) {
-      result.domain = base.domain + "::Scalar";
-      result.symbolic = true;
-      result.assumptions = {true, true, false, false};
-      result.arguments = {base};
-    } else {
-      result.domain = protocol::installedDomains()
-                          .associatedIdentity(base.domain, "Scalar")
-                          .str();
-      if (result.domain.empty()) {
-        fail("source.type", "group has no installed Scalar association", span);
+  if (!chargeType(base, span))
+    return {};
+  if (member.contains("::")) {
+    Type current = base;
+    unsigned depth = 0;
+    while (!member.empty()) {
+      if (++depth > work.limits.typeDepth) {
+        fail("source.limit", "associated path depth limit", span);
         return {};
       }
+      auto [head, tail] = member.split("::");
+      auto next = associated(current, head, span);
+      if (!next)
+        return {};
+      current = std::move(*next);
+      member = tail;
     }
-    return result;
+    return current;
+  }
+  if (!domainSort(base).empty()) {
+    auto result = domainMember(base, member);
+    if (!result) {
+      fail("source.type", toString(result.takeError()), span);
+      return {};
+    }
+    return std::move(*result);
   }
   if (base.kind != Type::Kind::Component) {
-    fail("source.type", "associated member requires a component or group",
+    fail("source.type", "associated member requires a component or domain",
          span);
     return {};
   }
@@ -175,12 +173,14 @@ std::optional<Type> Checker::associated(const Type &base, StringRef member,
     Type result(Type::Kind::Associated, decl.qualifiedName);
     result.arguments = {base};
     result.assumptions = decl.permissions.value_or(Permissions{});
-    if (decl.associatedSort == "Field" || decl.associatedSort == "Group") {
+    if (isDomainSort(decl.associatedSort)) {
       if (!decl.abstract)
         return substitute(decl.domain, substitution(*owner, base.arguments),
                           span);
-      result.kind = decl.associatedSort == "Field" ? Type::Kind::Field
-                                                   : Type::Kind::Group;
+      auto domain = domainType(decl.associatedSort, decl.qualifiedName);
+      domain.arguments = {base};
+      domain.assumptions = result.assumptions;
+      result = std::move(domain);
       result.symbolic = true;
     }
     return result;
@@ -230,11 +230,8 @@ bool Checker::checkArguments(const Declaration &target, ArrayRef<Type> args,
     auto &a = args[i];
     bool kind = false;
     switch (p.sort) {
-    case Parameter::Sort::Field:
-      kind = a.kind == Type::Kind::Field;
-      break;
-    case Parameter::Sort::Group:
-      kind = a.kind == Type::Kind::Group;
+    case Parameter::Sort::Domain:
+      kind = domainSort(a) == p.domainSort;
       break;
     case Parameter::Sort::Natural:
       kind = a.kind == Type::Kind::Natural;
@@ -456,16 +453,29 @@ std::optional<Type> Checker::type(const Declaration &context,
         }
   }
   if (s.arguments.empty()) {
-    auto parts = StringRef(s.name).rsplit("::");
-    if (parts.second == "Scalar") {
+    // Prefer the longest resolvable declaration prefix. Module qualification
+    // and a chain of catalog projections use the same source path syntax.
+    StringRef prefix = s.name;
+    while (prefix.contains("::")) {
+      prefix = prefix.rsplit("::").first;
       auto previous = diagnostic;
-      auto base = resolve(context, parts.first, s.span);
-      if (base &&
-          output.declarations[base->index].kind == Declaration::Kind::Domain &&
-          output.declarations[base->index].domain.kind == K::Group)
-        return associated(output.declarations[base->index].domain, "Scalar",
-                          s.span);
+      auto id = resolve(context, prefix, s.span);
       diagnostic = std::move(previous);
+      if (!id)
+        continue;
+      const auto &decl = output.declarations[id->index];
+      if (decl.kind != Declaration::Kind::Domain &&
+          decl.kind != Declaration::Kind::Associated &&
+          decl.kind != Declaration::Kind::Alias)
+        continue;
+      SyntaxType syntax;
+      syntax.name = prefix.str();
+      syntax.span = s.span;
+      auto base = type(context, syntax, depth + 1);
+      if (!base)
+        return {};
+      return associated(*base, StringRef(s.name).drop_front(prefix.size() + 2),
+                        s.span);
     }
   }
   auto id = resolve(context, s.name, s.span);
