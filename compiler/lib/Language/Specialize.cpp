@@ -7,13 +7,16 @@ namespace zkc::language::detail {
 bool Checker::specialize(DeclarationId selected) {
   const unsigned templates = output.declarations.size();
   std::map<std::string, DeclarationId> instances;
+  std::map<unsigned, unsigned> heights;
   std::set<std::string> active;
   std::map<std::string, std::string> symbolKeys;
   uint64_t count = 0;
   std::function<std::optional<DeclarationId>(DeclarationId, ArrayRef<Type>,
-                                             Body::Mode)>
+                                             unsigned)>
       instantiate;
-  std::function<bool(Body &, const Substitution &, Body::Mode)> closeBody;
+  std::function<bool(Body &, const Substitution &, Body::Mode, unsigned,
+                     unsigned &)>
+      closeBody;
   auto closeType = [&](Type &type, const Substitution &bindings, Span span) {
     auto result = substitute(type, bindings, span);
     if (!result)
@@ -32,7 +35,8 @@ bool Checker::specialize(DeclarationId selected) {
            fail("source.service",
                 "no installed random service for selected field", port.span);
   };
-  closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode) {
+  closeBody = [&](Body &body, const Substitution &bindings, Body::Mode mode,
+                  unsigned depth, unsigned &height) {
     body.mode = mode;
     for (auto &service : body.services)
       if (!closeService(service, bindings))
@@ -120,10 +124,10 @@ bool Checker::specialize(DeclarationId selected) {
               output.declarations[target.index].staticArguments;
           target = *origin;
         }
-        auto instance =
-            instantiate(target, application->arguments, Body::Mode::Protocol);
+        auto instance = instantiate(target, application->arguments, depth + 1);
         if (!instance)
           return false;
+        height = std::max(height, heights.at(instance->index) + 1);
         application->callee = *instance;
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         for (auto &arg : call->arguments)
@@ -151,13 +155,10 @@ bool Checker::specialize(DeclarationId selected) {
           target = *found;
           call->arguments = call->component->arguments;
         }
-        auto targetMode =
-            output.declarations[target.index].kind == Declaration::Kind::Local
-                ? Body::Mode::Local
-                : Body::Mode::Math;
-        auto instance = instantiate(target, call->arguments, targetMode);
+        auto instance = instantiate(target, call->arguments, depth + 1);
         if (!instance)
           return false;
+        height = std::max(height, heights.at(instance->index) + 1);
         call->callee = *instance;
       } else if (auto *repeat = std::get_if<ProtocolRepeat>(&op.action)) {
         Type maximum(Type::Kind::Natural);
@@ -171,13 +172,13 @@ bool Checker::specialize(DeclarationId selected) {
                       op.span);
         repeat->maximum = maximum.dimension;
         auto copy = std::make_shared<Body>(*repeat->region);
-        if (!closeBody(*copy, bindings, Body::Mode::Protocol))
+        if (!closeBody(*copy, bindings, Body::Mode::Protocol, depth, height))
           return false;
         repeat->region = std::move(copy);
       } else if (auto *control = std::get_if<LocalControl>(&op.action)) {
         for (auto &region : control->regions) {
           auto copy = std::make_shared<Body>(*region);
-          if (!closeBody(*copy, bindings, Body::Mode::Local))
+          if (!closeBody(*copy, bindings, Body::Mode::Local, depth, height))
             return false;
           region = std::move(copy);
         }
@@ -188,8 +189,16 @@ bool Checker::specialize(DeclarationId selected) {
     return true;
   };
   instantiate = [&](DeclarationId origin, ArrayRef<Type> args,
-                    Body::Mode mode) -> std::optional<DeclarationId> {
+                    unsigned depth) -> std::optional<DeclarationId> {
     const auto &source = output.declarations[origin.index];
+    if (depth > work.limits.callDepth) {
+      fail("source.limit", "closed call depth limit exceeded", source.span);
+      return {};
+    }
+    auto mode = source.kind == Declaration::Kind::Protocol
+                    ? Body::Mode::Protocol
+                : source.kind == Declaration::Kind::Local ? Body::Mode::Local
+                                                          : Body::Mode::Math;
     if ((!source.body && source.kind != Declaration::Kind::Relation) ||
         source.abstract) {
       fail("source.call", "cannot specialize an abstract callable",
@@ -200,7 +209,6 @@ bool Checker::specialize(DeclarationId selected) {
       return {};
     std::string key;
     detail::frame(key, source.qualifiedName);
-    detail::frame(key, std::to_string(unsigned(mode)));
     for (auto &arg : args) {
       if (symbolic(arg)) {
         fail("source.generic",
@@ -213,8 +221,13 @@ bool Checker::specialize(DeclarationId selected) {
       detail::frame(key, typeIdentity(arg));
     }
     auto known = instances.find(key);
-    if (known != instances.end())
+    if (known != instances.end()) {
+      if (depth - 1 + heights.at(known->second.index) > work.limits.callDepth) {
+        fail("source.limit", "closed call depth limit exceeded", source.span);
+        return {};
+      }
       return known->second;
+    }
     if (!active.insert(key).second) {
       fail("source.cycle", "recursive static instantiation", source.span);
       return {};
@@ -290,8 +303,7 @@ bool Checker::specialize(DeclarationId selected) {
     // Native participant carriers bound identifiers to 128 bytes. Reuse the
     // instance key for long declaration paths instead of narrowing source
     // names.
-    if (!args.empty() || (result.body && result.body->mode != mode) ||
-        result.symbol.size() > 128)
+    if (!args.empty() || result.symbol.size() > 128)
       result.symbol = "zkl_" + detail::digest(key);
     if (result.symbol.size() > work.limits.symbolBytes) {
       fail("source.limit", "specialized symbol exceeds byte limit",
@@ -326,8 +338,7 @@ bool Checker::specialize(DeclarationId selected) {
       for (auto &argument : subject.arguments)
         if (!closeType(argument, bindings, subject.span))
           return false;
-      auto selected =
-          instantiate(subject.relation, subject.arguments, Body::Mode::Math);
+      auto selected = instantiate(subject.relation, subject.arguments, 1);
       if (!selected)
         return false;
       subject.relation = *selected;
@@ -349,9 +360,11 @@ bool Checker::specialize(DeclarationId selected) {
       if (clause.decision && !selectedType(result, *clause.decision))
         return {};
     }
+    unsigned height = 1;
     if (result.body) {
+      assert(result.body->mode == mode && "declaration body mode changed");
       auto body = std::make_shared<Body>(*result.body);
-      if (!closeBody(*body, bindings, mode))
+      if (!closeBody(*body, bindings, mode, depth, height))
         return {};
       if (result.kind == Declaration::Kind::Math ||
           result.kind == Declaration::Kind::Relation)
@@ -365,6 +378,7 @@ bool Checker::specialize(DeclarationId selected) {
     result.permissionBounds.clear();
     result.capabilityBounds.clear();
     output.declarations[id.index] = std::move(result);
+    heights.emplace(id.index, height);
     instances.emplace(key, id);
     active.erase(key);
     return id;
@@ -374,7 +388,7 @@ bool Checker::specialize(DeclarationId selected) {
   if (!target)
     return fail("source.entry", "Entry has no checked target",
                 output.declarations[selected.index].span);
-  auto instance = instantiate(*target, args, Body::Mode::Protocol);
+  auto instance = instantiate(*target, args, 1);
   if (!instance)
     return false;
   if (!checkProofEntry(output.declarations[selected.index],

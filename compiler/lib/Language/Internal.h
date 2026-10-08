@@ -123,6 +123,7 @@ struct Expression {
   } kind;
   std::string text;
   std::vector<uint32_t> children;
+  bool bracket = false;
   Span span;
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;

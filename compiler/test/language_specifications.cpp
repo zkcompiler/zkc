@@ -140,6 +140,13 @@ int main() {
     refuses(check(R"(module sample;relation Bad(x:bool){return x;})"),
             "source.relation");
   });
+  cases.run("unused opaque relations require immutable nominal inputs", [] {
+    refuses(check(R"(module sample; struct Token:Drop {pub value:bool}
+      relation R(statement t:Token)=opaque("vendor.r/1","key","1");)"),
+            "source.relation");
+    take(check(R"(module sample; struct Token:Copy+Drop {pub value:bool}
+      relation R(statement t:Token)=opaque("vendor.r/1","key","1");)"));
+  });
   cases.run("opaque predicates retain their explicit identity", [] {
     auto entry = close(clauses(
         "target claim=Equal(in.x,in.x) accept out.ok;",

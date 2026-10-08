@@ -1267,8 +1267,9 @@ class Reader {
         auto statement = mlir::dyn_cast<protocol_ir::StatementOp>(op);
         if (!statement)
           continue;
-        if (!proof || !proof->target ||
-            function.getSymName() != selected.symbol || ++count != 1)
+        if (&op != &function.getBody().front().front() || !proof ||
+            !proof->target || function.getSymName() != selected.symbol ||
+            ++count != 1)
           return fail("unexpected native Entry statement");
         const auto &clause = selected.clauses[*proof->target];
         const auto &relation = view.relations[clause.subject.relation];

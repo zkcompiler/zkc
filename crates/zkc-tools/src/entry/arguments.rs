@@ -7,7 +7,16 @@ use super::{
 use crate::host::request::InputValue;
 use std::collections::BTreeMap;
 
-pub(super) fn check_import(interface: &Interface, port: &Port) -> Result<(), String> {
+pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
+    for port in &interface.selected_protocol().inputs {
+        check_import(interface, port)?;
+    }
+    for port in &interface.selected_protocol().outputs {
+        value::check_export(&port.schema)?;
+    }
+    Ok(())
+}
+fn check_import(interface: &Interface, port: &Port) -> Result<(), String> {
     if setups::key_kind(interface, port).is_some() {
         Ok(())
     } else {

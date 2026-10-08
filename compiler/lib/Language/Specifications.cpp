@@ -13,7 +13,7 @@ bool Checker::relationData(const Declaration &scope, const Type &type,
   if (!charge(1, span))
     return false;
   if (!depth) {
-    if (!chargeType(type, span) || !executableType(type, span))
+    if (!chargeType(type, span))
       return false;
     auto caps = permissions(type, span, &scope);
     if (!caps)

@@ -699,7 +699,36 @@ protocol Run roles(P)()->(){local P let r=forward<C>();return();}entry Demo=Run;
     first(module, "local.exec.resource_unit_consume")->erase();
   });
 }
+void sourceNotation() {
+  original(
+      "module m;math fn pick(x:[bool;2])->bool{return x[1];}protocol Run "
+      "roles(P)(x:[bool;2]@P)->(r:bool@P){return(r=pick(x));}entry Demo=Run;");
+  for (StringRef bad : {"x[01]", "x.1", "x[value]"})
+    refuses(
+        ("module m;math fn pick(x:[bool;2])->bool{return " + bad + ";}").str(),
+        "source.index");
+  refuses(
+      "module m;struct Rec{pub member:bool}math fn pick(x:Rec)->bool{return "
+      "x[member];}",
+      "source.index");
+  refuses("module m;math fn pick(x:(bool,bool))->bool{return x[0];}",
+          "source.index");
+  refuses("module m;type Bad<N:nat*2>=[bool;N];", "source.syntax");
+  refuses("module m;fn halt()->(){stop \"unknown\";}", "source.mode");
+  for (StringRef reason :
+       {"reject", "abort", "exhausted", "incomplete", "refused"})
+    must(compileEntry(original(
+        ("module m;fn halt()->bool{stop \"" + reason +
+         "\";}protocol Run roles(P)()->(r:bool@P){local P let x=halt();"
+         "return(r=x);}entry Demo=Run;")
+            .str())));
+}
 void bounds() {
+  Limits termLimits;
+  termLimits.typeNodes = 2;
+  check("module m;type A=bool;type B=bool;type C=bool;type D=bool;",
+        termLimits);
+  refuses("module m;type A=(bool,bool,bool);", "source.limit", termLimits);
   std::string inherited = prefix + "interface Many<";
   for (unsigned i = 0; i < 64; ++i)
     inherited += (i ? "," : "") + std::string("N") + std::to_string(i) + ":nat";
@@ -1063,6 +1092,7 @@ int main() {
   wireAuthority();
   typing();
   layoutsAndCorrespondence();
+  sourceNotation();
   bounds();
   outs() << "types, permissions, static dispatch, local regions and "
             "correspondence checked\n";

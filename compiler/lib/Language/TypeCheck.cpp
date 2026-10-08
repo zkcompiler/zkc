@@ -333,8 +333,15 @@ bool Checker::checkArguments(const Declaration &target, ArrayRef<Type> args,
 }
 std::optional<Type> Checker::type(const Declaration &context,
                                   const SyntaxType &s, unsigned depth) {
-  if (depth > work.limits.typeDepth || ++typeNodes > work.limits.typeNodes ||
-      !charge(1, s.span)) {
+  auto result = elaborateType(context, s, depth);
+  if (result && !chargeType(*result, s.span))
+    return {};
+  return result;
+}
+std::optional<Type> Checker::elaborateType(const Declaration &context,
+                                           const SyntaxType &s,
+                                           unsigned depth) {
+  if (depth > work.limits.typeDepth || !charge(1, s.span)) {
     if (!diagnostic)
       fail("source.limit", "source type complexity limit exceeded", s.span);
     return {};
@@ -344,7 +351,7 @@ std::optional<Type> Checker::type(const Declaration &context,
   if (s.kind == S::Builtin || s.kind == S::Formal) {
     std::vector<Type> arguments;
     for (const auto &syntax : s.arguments) {
-      auto argument = type(context, syntax, depth + 1);
+      auto argument = elaborateType(context, syntax, depth + 1);
       if (!argument)
         return {};
       arguments.push_back(std::move(*argument));
@@ -369,7 +376,7 @@ std::optional<Type> Checker::type(const Declaration &context,
     return result;
   }
   if (s.kind == S::PowerOfTwo) {
-    auto exponent = type(context, s.arguments[0], depth + 1);
+    auto exponent = elaborateType(context, s.arguments[0], depth + 1);
     if (!exponent)
       return {};
     if (exponent->kind != K::Natural) {
@@ -390,8 +397,8 @@ std::optional<Type> Checker::type(const Declaration &context,
     return result;
   }
   if (s.kind == S::Add || s.kind == S::Multiply) {
-    auto a = type(context, s.arguments[0], depth + 1),
-         b = type(context, s.arguments[1], depth + 1);
+    auto a = elaborateType(context, s.arguments[0], depth + 1),
+         b = elaborateType(context, s.arguments[1], depth + 1);
     if (!a || !b)
       return {};
     if (a->kind != K::Natural || b->kind != K::Natural) {
@@ -413,8 +420,8 @@ std::optional<Type> Checker::type(const Declaration &context,
     return result;
   }
   if (s.kind == S::Array) {
-    auto element = type(context, s.arguments[0], depth + 1),
-         count = type(context, s.arguments[1], depth + 1);
+    auto element = elaborateType(context, s.arguments[0], depth + 1),
+         count = elaborateType(context, s.arguments[1], depth + 1);
     if (!element || !count)
       return {};
     if (!valueType(*element) || count->kind != K::Natural) {
@@ -436,7 +443,7 @@ std::optional<Type> Checker::type(const Declaration &context,
   if (s.kind == S::Tuple) {
     Type result(s.arguments.empty() ? K::Unit : K::Tuple);
     for (auto &child : s.arguments) {
-      auto t = type(context, child, depth + 1);
+      auto t = elaborateType(context, child, depth + 1);
       if (!t)
         return {};
       if (!valueType(*t)) {
@@ -482,7 +489,7 @@ std::optional<Type> Checker::type(const Declaration &context,
       SyntaxType syntax;
       syntax.name = prefix.str();
       syntax.span = s.span;
-      auto base = type(context, syntax, depth + 1);
+      auto base = elaborateType(context, syntax, depth + 1);
       if (!base)
         return {};
       return associated(*base, StringRef(s.name).drop_front(prefix.size() + 2),

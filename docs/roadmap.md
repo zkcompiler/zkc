@@ -9,15 +9,17 @@ Detail each package immediately before implementation.
 
 The native IR foundation is complete at its declared scope, with bounded
 implementation and execution evidence in the [validation map](compiler/foundation-validation.md).
-Frontend migration and the native Lean connection come next. The target remains one mathematical compiler path and one
-general interpreter with installed primitives.
+The fresh frontend and its default CLI/SDK workflow are implemented and stabilized.
+The native Lean connection and remaining consumer migration come next. The target
+remains one mathematical compiler path and one general interpreter with installed
+primitives.
 
 Start from `protocol → participant → exec → physical` and one mathematical SSA
 program. Revisit a responsibility boundary when a concrete counterexample or simpler
 validated design warrants it.
-Direct MLIR programs and small generators exercise the foundation before frontend
-migration. Independent noninteractive proof production and validation, including
-selected transcript constructions, belong to the foundation. Rust code generation
+Direct MLIR programs and source projects both exercise the foundation.
+Independent noninteractive proof production and validation, including selected
+transcript constructions, belong to the foundation. Rust code generation
 and general network transport remain later work.
 
 ### Completion milestones
@@ -41,13 +43,13 @@ Use the native mathematical pipeline as the target for migrated capabilities.
 The fresh `.zkc` source path covers mathematical helpers, nominal products/variants,
 static components/generics, permissions, bounded naturals, ordered local control,
 messages and selected Entries with independently checked MLIR emission.
-**Protocols and specifications** adds services, composition, distributed control,
-formal polynomial authorship, typed predicates and attachments. Independent
-native/interface admission, source inventory comparison, composition queries and
-contrasting execution controls are implemented. **Entries and Host** implements
-construction selection, trusted inputs and typed CLI jobs. The current package
-is integrated frontend stabilization, consumer migration and removal of
-superseded paths whose checking obligations have moved.
+Services, composition, distributed control, formal polynomial authorship, typed
+predicates and attachments are implemented. Independent native/interface
+admission, source inventory comparison, composition queries and contrasting
+execution controls cover their declared boundaries. Entries and Host add
+construction selection, trusted inputs and typed CLI/SDK jobs. Integrated review,
+source-project validation and installed consumer checks close this frontend
+profile; the remaining consumer gates below govern full migration.
 
 Detail each package before implementation. Relation targets remain distinct from
 input/output conditions. Dynamic data access, additional native primitives and
@@ -100,29 +102,28 @@ Research and review precede each implementation package. A counterexample can
 change its design or bring a dependency forward. Later packages remain coarse
 until their own starting point.
 
-### Current package: frontend stabilization and migration
+### Next package: native Lean connection
 
-Protocols/specifications and Entries/Host are implemented and reviewed. Finish
-the joined implementation across the maintained source libraries, published CLI
-walkthrough, generated Rust data bindings and installed C++/runtime consumers.
-Check architecture and simplicity, actual mathematical/role/resource behavior,
-independent source/interface admission, failure reporting and operational bounds.
-Resolve integrated review findings before closing this package.
+The fresh frontend is complete at its [declared source profile](spec/profiles/source/mathematical-language.md).
+Authoring defaults, maintained Schnorr/Sumcheck projects, named CLI jobs, generated
+Rust data bindings and installed C++/runtime consumers use the mathematical path.
+Integrated review and bounded execution checks cover source meaning, admission,
+failure reporting, resource bounds and interface consistency.
 
-The authoring defaults now use `.zkc`. Preserve the older committed-proof
-walkthrough's independent Lean checks and the remaining
-[consumer gates](compiler/migration.md#frontend-consumer-transition). Delete an
-old implementation only when its last required consumer has moved with its
-checking and comparison evidence. A new frontend's completion is distinct from
-full native migration.
+Next, define and implement native Lean semantics and the source/artifact checking
+boundary. Preserve the older committed-proof workflow's independent checks until
+their actual replacement is connected. The
+[consumer inventory](compiler/migration.md#frontend-consumer-transition) owns
+remaining requirements; detail this next package before changing its readers.
 
-After stabilization, connect native source/artifacts to Lean, then migrate the
-remaining library, checker, identity/setup and table consumers at their declared
-boundaries. Receive-only source slots and per-receive selectors belong to the
-setup-consumer migration; explicit source input slots already use common native
-authority. Rust algorithm generation, network transports and richer language
-inference remain later extensions. The interpreter stays the common execution
-backend.
+Then migrate the remaining library, checker, identity/setup and table consumers
+at their declared boundaries. Receive-only source slots and per-receive selectors
+belong to setup-consumer migration; explicit source input slots already use
+common native authority. Delete each older implementation with its last migrated
+consumer and checking evidence. Frontend completion does not close full migration.
+
+Rust algorithm generation, network transports and richer language inference
+remain later extensions. The interpreter stays the common execution backend.
 
 ### Foundation completion and later migration
 
@@ -134,8 +135,8 @@ a complete library from supported mechanisms has its own migration milestone.
 
 With stabilization and cleanup complete:
 
-1. Connect frontend elaboration and native Lean/checking as consumers of the
-   stable contracts. Detail their dependency order when each package starts;
+1. Connect native Lean/checking to the completed frontend exchange and native
+   contracts. Detail the semantic and reader boundaries when the package starts;
    retain direct MLIR input. Preserve source identity, requirements and actual
    settings, operands and service/key authority. Inventory `.pir`, R1CS/AIR,
    generic/static libraries, diagnostics and checking consumers as the fresh
@@ -149,7 +150,8 @@ With stabilization and cleanup complete:
    Preserve required behavior and comparisons from the migration inventory,
    including existing Groth16/snarkjs, machine and AIR clients. New full BP+ and
    lookup libraries retain separately selected scopes.
-3. Move CLI/SDK/default entry points and validate installed users. Remove each
+3. Move remaining consumer-specific CLI/SDK entry points and validate their
+   installed users; the primary authoring defaults already use `.zkc`. Remove each
    superseded compiler path, carrier, internal adapter and package dependency as
    its last consumer moves. Remove unused private helpers within their package.
    Independently useful mathematics and formal models retain their own purpose.

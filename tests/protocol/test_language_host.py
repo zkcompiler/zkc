@@ -173,7 +173,15 @@ def test_generated_bindings_are_an_independent_rust_consumer(toolchain, journal,
     proof_package, proof_pin = compile_entry(toolchain, journal, directory, 'Derived')
     shapes_dir = directory / 'shapes'
     shapes_dir.mkdir()
-    shapes_package, shapes_pin = compile_entry(toolchain, journal, shapes_dir, 'Demo', FIXTURES / 'host_bindings.zkc')
+    collision = shapes_dir / 'p.zkc'
+    collision.write_text('module p;pub struct Outputs {pub flag:bool}')
+    shapes_package = shapes_dir / 'Demo.entry'
+    shapes_report = json.loads(journal.run([
+        toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        f'--module=sample={FIXTURES / "host_bindings.zkc"}', f'--module=p={collision}',
+        '--entry=sample::Demo', f'--output={shapes_package}',
+    ]))
+    shapes_pin = shapes_report['package_sha256']
     pcs_package, pcs_pin = compile_entry(toolchain, journal, directory, 'Prove', FIXTURES / 'pcs_setup.zkc')
     for name, package, pin in [('run', run_package, run_pin), ('proof', proof_package, proof_pin), ('shapes', shapes_package, shapes_pin), ('pcs', pcs_package, pcs_pin)]:
         journal.run([toolchain.runtime, 'bindings', package, pin, directory / f'{name}.rs'])
@@ -198,9 +206,13 @@ path = "main.rs"
 #[allow(dead_code)] mod run { include!("run.rs"); }
 #[allow(dead_code)] mod proof { include!("proof.rs"); }
 #[allow(dead_code)] mod pcs { include!("pcs.rs"); }
-#[allow(dead_code)] mod shapes {
+#[allow(dead_code, non_camel_case_types)] mod shapes {
     struct String; struct Box; struct From; struct TryFrom; #[allow(non_camel_case_types)] struct entry;
     type Result<T> = ::core::result::Result<T, ()>;
+    struct Ok; struct Err;
+    struct bool; struct u64; struct u8; struct str;
+    #[allow(unused_macros)] macro_rules! Debug { ($($items:tt)*) => { compile_error!("shadowed Debug") }; }
+    #[allow(unused_macros)] macro_rules! vec { ($($items:tt)*) => { compile_error!("shadowed vec") }; }
     include!("shapes.rs");
 }
 use zkc_tools::entry::{RoleInputs,RunRequest,ProofRequest};
@@ -223,6 +235,8 @@ fn main() {
     let _public=pcs::PublicInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
     let _verifier=pcs::VInputs{claim:pcs::SampleClaim{c:scalar(0),tag:true},point:scalar(0)};
     assert_eq!(pcs::setups::first,"first");
+    let malformed=zkc_tools::entry::Value::Array(vec![zkc_tools::entry::Value::Record([("extra".into(),true.into())].into())]);
+    assert_eq!(<[shapes::SampleEmpty;1]>::try_from(malformed).err().unwrap(),"entry-binding-fields");
     let named:zkc_tools::entry::Value=shapes::SampleCases::a__b{}.into();
     let zkc_tools::entry::Value::Variant{alternative,..}=named else{panic!()};
     assert_eq!(alternative,"a__b");
@@ -233,7 +247,7 @@ fn main() {
     let input=shapes::PInputs {
         empty:shapes::SampleEmpty{}, choice:shapes::SampleCases::__zkc_53656c66{},
         names:shapes::SampleNames{r#async:true,__zkc_73656c66:false,Foo:true,foo:false,__zkc_5f:true},
-        zero:[],
+        zero:[], collision:shapes::POutputs2{flag:true},
     };
     let mut named:zkc_tools::entry::NamedValues=input.into();
     let zkc_tools::entry::Value::Record(fields)=named.get("names").unwrap() else {panic!()};
@@ -248,6 +262,7 @@ fn main() {
     let mut result=host.prepare(RunRequest{session:"binding_shapes".into(),setups:Default::default(),
         roles:[("P".into(),RoleInputs{inputs:restored.into(),..Default::default()})].into(),
     }).unwrap().execute();
+    assert!(result.is_success());
     let output:shapes::POutputs=result.outputs.as_mut().unwrap().remove("P").unwrap().try_into().unwrap();
     assert!(output.wrapped.value);
     assert!(matches!(output.choice,shapes::SampleCases::__zkc_53656c66{}));
@@ -419,3 +434,27 @@ entry Demo=Run{prover P;verifier V;public{};accept accepted;construction authore
     assert results.read_bytes() == b'unchanged'
     journal.run([toolchain.runtime, 'verify', package, pin, verifier, proof, '--allow-header-only', f'--results={results}'])
     assert json.loads(results.read_text())['values']['accepted'] is True
+
+
+def test_interface_publication_and_host_share_resource_boundaries(toolchain, journal, directory):
+    source = directory / 'source.zkc'
+    def program(count):
+        ports = ','.join(f'a{i}:[();1024]@P' for i in range(count))
+        return f'module sample;protocol Run roles(P)({ports})->(){{return();}}entry Demo=Run;'
+    source.write_text(program(7))
+    package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
+    journal.run([toolchain.runtime, 'bindings', package, pin, directory / 'bindings.rs'])
+    request = write(directory / 'inputs.json', {
+        'format': 'zkc.entry-run/1', 'session': 'bounded_interface',
+        'roles': {'P': {'inputs': {f'a{i}': [None] * 1024 for i in range(7)}}},
+    })
+    executed = json.loads(journal.run([toolchain.runtime, 'run-entry', package, pin, request]))
+    assert executed['status'] == 'executed'
+    source.write_text(program(9))
+    refused = directory / 'oversized.entry'
+    result = json.loads(journal.run([
+        toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
+        f'--module=sample={source}', '--entry=sample::Demo', f'--output={refused}',
+    ], refuses='entry-compilation'))
+    assert 'source.limit' in result['diagnostics']
+    assert not refused.exists()

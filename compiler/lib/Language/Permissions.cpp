@@ -382,7 +382,8 @@ std::optional<unsigned> Checker::fieldIndex(const Declaration &decl,
   }
   unsigned index;
   if (type.kind == Type::Kind::Array) {
-    if (name.getAsInteger(10, index)) {
+    if ((name.size() > 1 && name.front() == '0') ||
+        name.getAsInteger(10, index)) {
       fail("source.index", "fixed arrays require a static numeric index", span);
       return {};
     }

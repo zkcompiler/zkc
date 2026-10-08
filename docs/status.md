@@ -60,9 +60,12 @@ Formula/opaque/captured relations and target/input/output/continuation clauses
 state intent; they add no guard, satisfaction fact or security theorem.
 Source no-Drop rules and native affine custody retain their separate checks.
 
-Entries/Host implementation and review are complete. Integrated frontend
-stabilization is in progress. Native Lean correspondence, full existing library
-and external compatibility, and the remaining table/checker consumers stay open.
+The fresh frontend is implemented and stabilized at this source profile.
+Integrated review covers role availability, closed call/type bounds, source/native
+admission, Host resource limits and generated binding hygiene. Maintained source
+projects, the default walkthrough/demo and installed API consumers use this path.
+Native Lean correspondence, remaining existing libraries and external
+compatibility, and table/checker migration stay open.
 
 ## Foundation capability map
 
@@ -226,8 +229,8 @@ provers/verifiers, a cryptographic retry bound, or a native refinement theorem.
 
 ## 2. Paths that execute end to end
 
-**Frontend.** Immutable input, analysis and checked-module APIs retain nominal
-records, products/unit, finite arrays with retained element/count identity,
+**Retained `.pir` frontend.** Immutable input, analysis and checked-module APIs
+retain nominal records, products/unit, finite arrays with retained element/count identity,
 lexical bindings/scopes, domain parameters, resolved calls and specialization
 origins before common PIR erasure. Participant placement
 blocks share the function checker and capture only used owned leaves. Named

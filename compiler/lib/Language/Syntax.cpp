@@ -352,7 +352,7 @@ private:
     do {
       SyntaxParameter p;
       p.span = current().span;
-      if (!name(p.name) || !expect(":") || !type(p.constraint, 1, 2))
+      if (!name(p.name) || !expect(":") || !type(p.constraint, 1, 3))
         return false;
       while (take("+"))
         if (!permission(p.permissions))
@@ -1315,6 +1315,7 @@ private:
       bool bracket = source.text[previousEnd - 1] == '[';
       Expression projection;
       projection.kind = Expression::Kind::Projection;
+      projection.bracket = bracket;
       projection.children = {left};
       projection.span = span;
       if (current().kind == TokenKind::Decimal) {

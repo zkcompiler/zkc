@@ -18,8 +18,9 @@ protocol-library migration and external prover/verifier compatibility have their
 own milestones; they are not foundation completion conditions.
 
 The existing `protocol → participant → exec → physical` profiles remain the
-architecture. Direct MLIR and small generators provide the test programs. Frontend and native
-Lean consumers follow the [frontend roadmap](../roadmap.md#current-package-frontend-stabilization-and-migration).
+architecture. Direct MLIR and source programs exercise the foundation. The fresh
+frontend is implemented; native Lean and remaining consumers follow the
+[migration roadmap](../roadmap.md#next-package-native-lean-connection).
 The long-term migration still preserves existing features, libraries and checking
 obligations; changing this milestone does not remove those obligations.
 
@@ -135,7 +136,8 @@ foundation gate is coverage of the general requirements above.
 | Extension and checking | Body-derived dependencies and bounds; exact semantic admission; source/candidate identity, provenance, observation inputs and checker applicability | Affine observation and other rich algebraic analyses, property transport automation and broad new Lean proofs |
 
 Existing functionality needed by these rows moves now at the IR/runtime level.
-User-facing frontend syntax and package ergonomics remain later. A postponed
+User-facing source syntax and package ergonomics have their own
+[implemented profile](../spec/profiles/source/mathematical-language.md). A postponed
 consumer gets a destination and preservation obligation; it is not erased from
 the overall migration inventory.
 
@@ -502,7 +504,7 @@ Select any richer definition carrier with its actual analysis/checking consumer.
 
 Retain source locations, symbol and application origins, actual operands,
 requirements and compiler settings through the applicable transformations.
-Plan a source-to-IR interface for the later frontend without inventing a second
+The frontend's source-to-IR interface must preserve these contracts without a second
 mathematical IR. Locations alone are not correspondence evidence. Existing report
 checkers must either cover new forms or reject them explicitly; old proofs and
 reports do not automatically apply to richer regions or carriers.

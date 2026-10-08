@@ -120,12 +120,7 @@ impl ProofEntry {
         {
             return Err("entry-proof-binding-policy".into());
         }
-        for port in &interface.selected_protocol().inputs {
-            arguments::check_import(&interface, port)?;
-        }
-        for port in &interface.selected_protocol().outputs {
-            value::check_export(&port.schema)?;
-        }
+        arguments::check_ports(&interface)?;
         let native = NativeDeployment::admit_with_setups(
             package.artifact().as_bytes(),
             &hex(&Sha256::digest(package.artifact().as_bytes())),

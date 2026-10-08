@@ -431,9 +431,31 @@ entry Demo=Run;)zkc");
     }
   });
   cases.run("malformed JSON and Unicode refuse", [] {
-    for (StringRef bytes : {"{", "[]", "{\"x\":\"\\uD800\"}",
-                            "{\"x\":123456789012345678901234567890}"})
+    for (StringRef bytes : {"{", "[]", "{\"x\":\"\\uD800\"}"})
       refuses(readInterface(original, bytes), "source.interface");
+  });
+  cases.run("publication and independent readers share lexical limits", [] {
+    std::string exact = "[";
+    for (unsigned i = 0; i < 199999; ++i)
+      exact += i ? ",0" : "0";
+    exact += "]";
+    // An array is not an interface, but exactly 200000 lexical nodes reaches
+    // schema admission. One more node fails before parsing that schema.
+    refuses(readInterface(original, exact), "source.interface");
+    exact.insert(exact.size() - 1, ",0");
+    refuses(readInterface(original, exact), "source.limit");
+    refuses(readInterface(original, "{\"x\":12345678901}"), "source.limit");
+    std::string source = "module sample;protocol Run roles(P)(";
+    for (unsigned i = 0; i < 9; ++i) {
+      if (i)
+        source += ",";
+      source += "a" + std::to_string(i) + ":[();1024]@P";
+    }
+    source += ")->(){return();}entry Demo=Run;";
+    auto captured = take(capture({{"sample", source, {}}}));
+    auto project = take(analyze(captured).checkedProject());
+    refuses(prepareOriginal(take(closeEntry(project, "sample::Demo"))),
+            "source.limit");
   });
   cases.run("source agreement remains stronger than a structural interface",
             [] {

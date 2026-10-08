@@ -51,6 +51,32 @@ std::string replaceText(std::string text, StringRef before, StringRef after) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  cases.run("closed component dispatch bounds the actual and cached call graph",
+            [] {
+              const std::string declarations = R"(module sample;
+      interface Step { math fn run(x:bool)->bool; }
+      component Base:Step {math fn run(x:bool)->bool{return x;}}
+      component Wrap<C:Step>:Step {math fn run(x:bool)->bool{return C::run(x);}}
+      math fn extra<C:Step>(x:bool)->bool{return C::run(x);}
+      protocol Run<C:Step> roles(P)(x:bool@P)->(r:bool@P){
+        let first=C::run(x);return(r=first);
+      }
+    )";
+              Limits limits;
+              limits.callDepth = 3;
+              take(close(declarations + "entry Demo=Run<Wrap<Base>>;", limits));
+              refuses(close(declarations + "entry Demo=Run<Wrap<Wrap<Base>>>;",
+                            limits),
+                      "source.limit");
+              auto cached = replaceText(declarations, "return(r=first)",
+                                        "return(r=extra<C>(first))");
+              // First use caches Wrap<Base>; the second reaches that same
+              // instance one level deeper and must include its complete height.
+              refuses(close(cached + "entry Demo=Run<Wrap<Base>>;", limits),
+                      "source.limit");
+              limits.callDepth = 4;
+              take(close(cached + "entry Demo=Run<Wrap<Base>>;", limits));
+            });
   cases.run("proof choices resolve logical indices and complete aliases", [] {
     auto selected = take(close(source()));
     const auto &proof = *selected.entry().proof;

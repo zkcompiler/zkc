@@ -17,7 +17,8 @@ source, construction, participant algorithms and physical execution. The
 
 | Boundary | Pages |
 |---|---|
-| Source analysis and elaboration | [Frontend](frontend.md), [compiler work budgets](frontend-budgets.md), [elaboration rules](elaboration.md), [common source model](source-model.md) |
+| Mathematical source and named execution | [Source guide](../language/mathematical.md), [Entries and Host](../language/entries.md), [source specification](../spec/profiles/source/mathematical-language.md) |
+| Retained `.pir` analysis and elaboration | [Frontend](frontend.md), [compiler work budgets](frontend-budgets.md), [elaboration rules](elaboration.md), [common source model](source-model.md) |
 | Static and semantic selection | [Specialization](specialization.md), [independent generic validation](library-design/validation.md), [components](components.md) |
 | Mathematical representation | [IR foundation](ir-foundation.md), [foundation validation](foundation-validation.md), [resource origin analysis](resource-origins.md), [structured mathematics](structured-mathematics.md), [composed numeric state](composed-state.md), [mathematical composition](mathematical-composition.md), [nested data](nested-data.md): polynomial meaning, finite data and actual relation boundaries |
 | Shared compiler contracts | [Operation contracts](operation-contracts.md), [protocol library extension](protocol-libraries.md), [closed reference libraries](libraries.md) |

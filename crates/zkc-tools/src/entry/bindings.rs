@@ -103,8 +103,8 @@ impl Generator {
     }
     fn schema(&mut self, schema: &Schema, prefix: &str) -> Result<String> {
         let simple = match schema.kind {
-            Kind::Boolean => Some("bool"),
-            Kind::Index => Some("u64"),
+            Kind::Boolean => Some("::core::primitive::bool"),
+            Kind::Index => Some("::core::primitive::u64"),
             Kind::Unit => Some("()"),
             Kind::Field | Kind::Group | Kind::Builtin => Some("::zkc_tools::entry::Value"),
             _ => None,
@@ -146,7 +146,7 @@ impl Generator {
                     self.members(&arm.fields, &format!("{prefix}_{}", arm.name))?,
                 ));
             }
-            self.add(format!("#[allow(non_camel_case_types, non_snake_case)]\n#[derive(Debug)]\npub enum {name} {{\n"))?;
+            self.add(format!("#[allow(non_camel_case_types, non_snake_case)]\n#[derive(::core::fmt::Debug)]\npub enum {name} {{\n"))?;
             for (_, arm, fields) in &arms {
                 self.add(format!("{arm} {{"))?;
                 for f in fields {
@@ -175,13 +175,13 @@ impl Generator {
             } else {
                 ""
             };
-            self.add(format!("impl ::core::convert::TryFrom<::zkc_tools::entry::Value> for {name} {{type Error=::std::string::String;fn try_from(value: ::zkc_tools::entry::Value)->::core::result::Result<Self,::std::string::String>{{let ::zkc_tools::entry::Value::Variant{{alternative,{mutable}fields}}=value else{{return Err(\"entry-binding-value\".into());}};let result=match alternative.as_str(){{\n"))?;
+            self.add(format!("impl ::core::convert::TryFrom<::zkc_tools::entry::Value> for {name} {{type Error=::std::string::String;fn try_from(value: ::zkc_tools::entry::Value)->::core::result::Result<Self,::std::string::String>{{let ::zkc_tools::entry::Value::Variant{{alternative,{mutable}fields}}=value else{{return ::core::result::Result::Err(\"entry-binding-value\".into());}};let result=match alternative.as_str(){{\n"))?;
             for (source, arm, fields) in &arms {
                 self.add(format!("{source:?}=>Self:: {arm}{{"))?;
                 self.decode_fields(fields, "fields")?;
                 self.add("},\n")?;
             }
-            self.add("_=>return Err(\"entry-binding-alternative\".into()),};if !fields.is_empty(){return Err(\"entry-binding-fields\".into());}Ok(result)}}\n")?;
+            self.add("_=>return ::core::result::Result::Err(\"entry-binding-alternative\".into()),};if !fields.is_empty(){return ::core::result::Result::Err(\"entry-binding-fields\".into());}::core::result::Result::Ok(result)}}\n")?;
         } else {
             let fields = self.members(&schema.fields, prefix)?;
             self.structure(&name, &fields)?;
@@ -202,7 +202,7 @@ impl Generator {
                     self.add("].into()")?;
                 }
                 Kind::Tuple => {
-                    self.add("vec![")?;
+                    self.add("::std::vec![")?;
                     for f in &fields {
                         self.add(format!("value.{}.into(),", f.name))?;
                     }
@@ -215,7 +215,7 @@ impl Generator {
                 _ => unreachable!(),
             }
             self.add(")}}\n")?;
-            self.add(format!("impl ::core::convert::TryFrom<::zkc_tools::entry::Value> for {name} {{type Error=::std::string::String;fn try_from(value: ::zkc_tools::entry::Value)->::core::result::Result<Self,::std::string::String>{{let ::zkc_tools::entry::Value:: {variant}(values)=value else{{return Err(\"entry-binding-value\".into());}};"))?;
+            self.add(format!("impl ::core::convert::TryFrom<::zkc_tools::entry::Value> for {name} {{type Error=::std::string::String;fn try_from(value: ::zkc_tools::entry::Value)->::core::result::Result<Self,::std::string::String>{{let ::zkc_tools::entry::Value:: {variant}(values)=value else{{return ::core::result::Result::Err(\"entry-binding-value\".into());}};"))?;
             match schema.kind {
                 Kind::Record => {
                     if !fields.is_empty() {
@@ -223,7 +223,7 @@ impl Generator {
                     }
                     self.add("let result=Self{")?;
                     self.decode_fields(&fields, "values")?;
-                    self.add("};if !values.is_empty(){return Err(\"entry-binding-fields\".into());}Ok(result)")?;
+                    self.add("};if !values.is_empty(){return ::core::result::Result::Err(\"entry-binding-fields\".into());}::core::result::Result::Ok(result)")?;
                 }
                 Kind::Tuple => {
                     self.add("let mut values=values.into_iter();let result=Self{")?;
@@ -233,10 +233,10 @@ impl Generator {
                             f.name
                         ))?;
                     }
-                    self.add("};if values.next().is_some(){return Err(\"entry-binding-fields\".into());}Ok(result)")?;
+                    self.add("};if values.next().is_some(){return ::core::result::Result::Err(\"entry-binding-fields\".into());}::core::result::Result::Ok(result)")?;
                 }
                 Kind::Associated => self.add(format!(
-                    "Ok(Self{{{}:__zkc_decode(*values)?}})",
+                    "::core::result::Result::Ok(Self{{{}:__zkc_decode(*values)?}})",
                     fields[0].name
                 ))?,
                 _ => unreachable!(),
@@ -247,7 +247,7 @@ impl Generator {
     }
     fn structure(&mut self, name: &str, fields: &[Member]) -> Result<()> {
         self.add(format!(
-            "#[allow(non_snake_case)]\n#[derive(Debug)]\npub struct {name} {{\n"
+            "#[allow(non_snake_case)]\n#[derive(::core::fmt::Debug)]\npub struct {name} {{\n"
         ))?;
         for f in fields {
             self.add(format!("pub {}: {},\n", f.name, f.ty))?;
@@ -265,12 +265,12 @@ impl Generator {
     }
     fn ports<'a>(
         &mut self,
-        preferred: &str,
+        name: &str,
         ports: impl Iterator<Item = &'a Port>,
         interface: &Interface,
         inputs: bool,
-    ) -> Result<String> {
-        let name = self.names.ty(preferred);
+    ) -> Result<()> {
+        let preferred = name.strip_prefix("r#").unwrap_or(name);
         let mut fields = Vec::new();
         for port in ports {
             if inputs
@@ -285,7 +285,7 @@ impl Generator {
                 ty: self.schema(&port.schema, &format!("{preferred}_{}", port.name))?,
             });
         }
-        self.structure(&name, &fields)?;
+        self.structure(name, &fields)?;
         let parameter = if fields.is_empty() { "_value" } else { "value" };
         self.add(format!(
             "impl ::core::convert::From<{name}> for ::zkc_tools::entry::NamedValues {{fn from({parameter}: {name})->Self {{["
@@ -298,9 +298,9 @@ impl Generator {
         self.add(format!("impl ::core::convert::TryFrom<::zkc_tools::entry::NamedValues> for {name} {{type Error=::std::string::String;fn try_from({mutable}values: ::zkc_tools::entry::NamedValues)->::core::result::Result<Self,::std::string::String>{{let result=Self{{"))?;
         self.decode_fields(&fields, "values")?;
         self.add(
-            "};if !values.is_empty(){return Err(\"entry-binding-fields\".into());}Ok(result)}}\n",
+            "};if !values.is_empty(){return ::core::result::Result::Err(\"entry-binding-fields\".into());}::core::result::Result::Ok(result)}}\n",
         )?;
-        Ok(name)
+        Ok(())
     }
 }
 /// Generate convenience data types and an admission helper pinned to this exact
@@ -316,7 +316,7 @@ pub fn rust(package: &Package) -> Result<String> {
     };
     generator.add("// Generated from an authenticated zkc Entry package.\n// Mathematical leaves retain checked ::zkc_tools::entry::Value ingress.\n#[allow(dead_code)]\nfn __zkc_decode<T: ::core::convert::TryFrom<::zkc_tools::entry::Value>>(value: ::zkc_tools::entry::Value) -> ::core::result::Result<T, ::std::string::String> where T::Error: ::core::fmt::Display { T::try_from(value).map_err(|error| error.to_string()) }\n")?;
     generator.add(format!(
-        "pub const PACKAGE_SHA256:[u8;32]={:?};\n",
+        "pub const PACKAGE_SHA256:[::core::primitive::u8;32]={:?};\n",
         package.identity()
     ))?;
     let (host, options) = if interface.is_proof() {
@@ -330,30 +330,43 @@ pub fn rust(package: &Package) -> Result<String> {
             "::zkc_tools::protocol::run::HostLimits",
         )
     };
-    generator.add(format!("pub fn admit(bytes:&[u8],options: {options},setups: ::zkc_tools::entry::SetupAuthority)->::core::result::Result<{host},::std::string::String>{{let package=::zkc_tools::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc_tools::entry::Package::MAX_BYTES).map_err(|e|e.to_string())?;{host}::admit(package,options,setups)}}\n"))?;
+    generator.add(format!("pub fn admit(bytes:&[::core::primitive::u8],options: {options},setups: ::zkc_tools::entry::SetupAuthority)->::core::result::Result<{host},::std::string::String>{{let package=::zkc_tools::entry::Package::capture(bytes,&PACKAGE_SHA256,::zkc_tools::entry::Package::MAX_BYTES).map_err(|e|e.to_string())?;{host}::admit(package,options,setups)}}\n"))?;
+    let public_name = interface
+        .is_proof()
+        .then(|| generator.names.ty("PublicInputs"));
+    let role_names: Vec<_> = protocol
+        .roles
+        .iter()
+        .map(|role| {
+            (
+                generator.names.ty(&format!("{role}Inputs")),
+                generator.names.ty(&format!("{role}Outputs")),
+            )
+        })
+        .collect();
     if let super::interface::raw::Job::Proof { public, .. } = &interface.document.job {
         generator.ports(
-            "PublicInputs",
+            public_name.as_ref().expect("proof public name reserved"),
             public.iter().map(|i| &protocol.inputs[*i as usize]),
             &interface,
             true,
         )?;
     }
-    for role in &protocol.roles {
-        let input = generator.ports(
-            &format!("{role}Inputs"),
+    for (role, (input, output)) in protocol.roles.iter().zip(role_names) {
+        generator.ports(
+            &input,
             protocol.inputs.iter().filter(|p| p.roles.contains(role)),
             &interface,
             true,
         )?;
-        let output = generator.ports(
-            &format!("{role}Outputs"),
+        generator.ports(
+            &output,
             protocol.outputs.iter().filter(|p| p.roles.contains(role)),
             &interface,
             false,
         )?;
-        generator.add(format!("impl {input} {{ pub const ROLE: &'static str = {role:?}; pub fn into_role(self) -> (::std::string::String, ::zkc_tools::entry::RoleInputs) {{ (Self::ROLE.into(), ::zkc_tools::entry::RoleInputs {{ inputs: self.into(), ..::core::default::Default::default() }}) }} }}\n"))?;
-        generator.add(format!("impl {output} {{ pub const ROLE: &'static str = {role:?}; pub fn take(values: &mut ::zkc_tools::entry::RoleValues) -> ::core::result::Result<Self, ::std::string::String> {{ ::core::convert::TryFrom::try_from(values.remove(Self::ROLE).ok_or(\"entry-binding-role\")?) }} }}\n"))?;
+        generator.add(format!("impl {input} {{ pub const ROLE: &'static ::core::primitive::str = {role:?}; pub fn into_role(self) -> (::std::string::String, ::zkc_tools::entry::RoleInputs) {{ (Self::ROLE.into(), ::zkc_tools::entry::RoleInputs {{ inputs: self.into(), ..::core::default::Default::default() }}) }} }}\n"))?;
+        generator.add(format!("impl {output} {{ pub const ROLE: &'static ::core::primitive::str = {role:?}; pub fn take(values: &mut ::zkc_tools::entry::RoleValues) -> ::core::result::Result<Self, ::std::string::String> {{ ::core::convert::TryFrom::try_from(values.remove(Self::ROLE).ok_or(\"entry-binding-role\")?) }} }}\n"))?;
     }
     for (module, names) in [
         (
@@ -379,7 +392,7 @@ pub fn rust(package: &Package) -> Result<String> {
         ))?;
         for name in names {
             generator.add(format!(
-                "pub const {}: &str = {name:?};\n",
+                "pub const {}: &::core::primitive::str = {name:?};\n",
                 source_name(name)
             ))?;
         }
@@ -390,7 +403,7 @@ pub fn rust(package: &Package) -> Result<String> {
     } = &interface.document.job
     {
         generator.add(format!(
-            "pub const PROVER: &str = {prover:?};\npub const VERIFIER: &str = {verifier:?};\n"
+            "pub const PROVER: &::core::primitive::str = {prover:?};\npub const VERIFIER: &::core::primitive::str = {verifier:?};\n"
         ))?;
     }
     Ok(generator.code)

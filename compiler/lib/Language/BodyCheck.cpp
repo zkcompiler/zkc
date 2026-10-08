@@ -18,13 +18,15 @@ bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
   return checker.fail(code, message, span);
 }
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
-  auto available = activeRoles.value_or(allRoles());
+  auto available = allRoles();
   return std::includes(available.begin(), available.end(), roles.begin(),
                        roles.end()) ||
          fail("source.roles",
               "action uses a participant outside the active roster", span);
 }
 std::vector<unsigned> BodyChecker::allRoles() const {
+  if (activeRoles)
+    return *activeRoles;
   std::vector<unsigned> result(decl.roles.size());
   std::iota(result.begin(), result.end(), 0);
   return result;
@@ -241,6 +243,11 @@ BodyChecker::place(uint32_t id, unsigned depth) {
       projected(body.values[base->first.index].type, base->second, expr.span);
   if (!type)
     return {};
+  if (expr.bracket != (type->kind == Type::Kind::Array)) {
+    fail("source.index", "use brackets for arrays and dots for product fields",
+         expr.span);
+    return {};
+  }
   auto index = checker.fieldIndex(decl, *type, expr.text, expr.span);
   if (!index)
     return {};
@@ -372,7 +379,7 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     }
     if (s.roles) {
       auto selected = checker.roles(decl, *s.roles, s.span);
-      if (!selected)
+      if (!selected || !active(*selected, s.span))
         return false;
       auto before = body.values[value->index];
       if (!std::includes(before.components.begin(), before.components.end(),
@@ -460,6 +467,10 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     if (!local())
       return fail("source.mode", "stop requires ordered local mode",
                   source.span);
+    if (!llvm::is_contained(
+            {"reject", "abort", "exhausted", "incomplete", "refused"},
+            source.stopReason))
+      return fail("source.mode", "unknown local stop reason", source.span);
     body.stopped = true;
     body.stopReason = source.stopReason;
     body.mayStop = true;

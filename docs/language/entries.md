@@ -139,7 +139,12 @@ never cause an automatic rerun.
 The common API is `entry::RunEntry` or `entry::ProofEntry` in `zkc-tools`. An
 immutable admitted handle can prepare independent calls. `RoleInputs`,
 `RunRequest` and `ProofRequest` hold invocation data; reports keep outcomes and
-cleanup even when no complete result exists.
+cleanup even when no complete result exists. `RunReport::is_success` requires
+completed execution, successful cleanup and decoded outputs; `into_result` keeps
+the complete report on either branch. Interactive completion alone does not
+establish a protocol's acceptance predicate. For verification,
+`ProofReport::is_success` requires the selected acceptance result; for proving,
+it requires a complete proof and returned outputs. Both retain cleanup failures.
 
 Generate optional convenience bindings from a trusted package:
 
@@ -161,8 +166,10 @@ setup and service constants avoid handwritten source-name strings.
 Bindings construct and decode common Host values. They contain no protocol
 arithmetic, custom interpreter or alternate authority rules. Supply service
 budgets, setup material and context through the common request structures, then
-call `prepare`, `prove`, `prove_attempts` or `verify`. Regenerate bindings when the
-authorized package changes.
+call `prepare`, `prove`, `prove_attempts` or `verify`. A Rust `ProofRequest` carries
+the complete invoked role inputs plus independently authorized public values;
+shared values must agree. The CLI fills shared role inputs from its public map.
+Regenerate bindings when the authorized package changes.
 
 The [source profile](../spec/profiles/source/mathematical-language.md#named-run-calls)
 owns exact admission semantics. Native Lean correspondence and remaining older

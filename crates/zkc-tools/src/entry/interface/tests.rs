@@ -317,6 +317,21 @@ fn recursive_and_lexical_limits_precede_unbounded_allocation() {
         preflight::check(format!("[{}]", vec!["0"; 200_000].join(",")).as_bytes()),
         Err(InterfaceError::Limit)
     );
+    assert_eq!(
+        preflight::check(format!("[{}]", vec!["0"; 199_999].join(",")).as_bytes()),
+        Ok(())
+    );
+    for size in [6 * 256 * 1024, 6 * 256 * 1024 + 1] {
+        let string = format!("\"{}\"", "a".repeat(size));
+        assert_eq!(
+            preflight::check(string.as_bytes()),
+            if size == 6 * 256 * 1024 {
+                Ok(())
+            } else {
+                Err(InterfaceError::Limit)
+            }
+        );
+    }
     assert_eq!(preflight::check(b"]"), Err(InterfaceError::Format));
 }
 

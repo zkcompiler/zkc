@@ -21,9 +21,11 @@ Error preflight(StringRef bytes) {
   if (!json::isUTF8(bytes))
     return error("source.interface", "interface is not UTF-8");
   std::vector<std::optional<std::set<std::string>>> stack;
+  unsigned nodes = 0;
   for (size_t i = 0; i < bytes.size();) {
     char c = bytes[i++];
     if (c == '{' || c == '[') {
+      ++nodes;
       if (stack.size() == 256)
         return error("source.limit", "interface nesting limit exceeded");
       stack.push_back(c == '{'
@@ -34,6 +36,7 @@ Error preflight(StringRef bytes) {
         return error("source.interface", "unbalanced interface JSON");
       stack.pop_back();
     } else if (c == '"') {
+      ++nodes;
       size_t start = i - 1;
       while (i < bytes.size() && bytes[i] != '"') {
         if (bytes[i] == '\\')
@@ -64,14 +67,17 @@ Error preflight(StringRef bytes) {
         if (!key || !stack.back()->insert(key->str()).second)
           return error("source.interface", "duplicate interface key");
       }
-    } else if (isDigit(c) || c == '-') {
+    } else if (!isSpace(c) && c != ',' && c != ':') {
+      ++nodes;
       size_t start = i - 1;
-      while (i < bytes.size() &&
-             (isAlnum(bytes[i]) || StringRef(".+-").contains(bytes[i])))
+      while (i < bytes.size() && !isSpace(bytes[i]) &&
+             !StringRef("[]{}\",:").contains(bytes[i]))
         ++i;
-      if (i - start > 20)
-        return error("source.interface", "oversized interface number");
+      if (i - start > 10)
+        return error("source.limit", "interface scalar limit exceeded");
     }
+    if (nodes > 200000)
+      return error("source.limit", "interface node limit exceeded");
   }
   return Error::success();
 }

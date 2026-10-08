@@ -10,6 +10,10 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
     let (mut quoted, mut escaped, mut scalar) = (false, false, false);
     for &b in bytes {
         if quoted {
+            if !escaped && b == b'"' {
+                quoted = false;
+                continue;
+            }
             length += 1;
             // A Unicode escape uses at most six bytes per decoded byte.
             if length > 6 * 256 * 1024 {
@@ -19,8 +23,6 @@ pub(super) fn check(bytes: &[u8]) -> Result<()> {
                 escaped = false;
             } else if b == b'\\' {
                 escaped = true;
-            } else if b == b'"' {
-                quoted = false;
             }
             continue;
         }

@@ -1,4 +1,10 @@
-# Frontend analysis and lowering
+# Retained source analysis and lowering
+
+This page describes the `.pir` Frontend and its common-source consumers. New
+`.zkc` programs use the [mathematical source path](../language/mathematical.md)
+and [Entry Host](../language/entries.md). Their responsibilities are summarized
+in the [architecture](../architecture.md#5-rust-tools-execution-and-backend-adapters);
+the [migration inventory](migration.md) records the remaining `.pir` consumers.
 
 The frontend is a typed construction layer above PIR. It retains declaration
 identity, nominal source types and static selections while authors build a

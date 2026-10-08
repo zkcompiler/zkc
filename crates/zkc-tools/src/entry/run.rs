@@ -34,12 +34,7 @@ impl RunEntry {
         if interface.is_proof() {
             return Err("entry-job-kind".into());
         }
-        for port in &interface.selected_protocol().inputs {
-            arguments::check_import(&interface, port)?;
-        }
-        for port in &interface.selected_protocol().outputs {
-            value::check_export(&port.schema)?;
-        }
+        arguments::check_ports(&interface)?;
         let native = RunHost::admit(
             package.artifact().as_bytes(),
             &Sha256::digest(package.artifact().as_bytes()).into(),
@@ -122,6 +117,30 @@ pub struct RunReport {
     pub native: HostReport,
     pub outputs: Option<RoleValues>,
     pub output_error: Option<String>,
+}
+impl RunReport {
+    /// A completed run with successful cleanup and decoded outputs. Protocol
+    /// acceptance remains an explicit value, unlike ProofReport::is_success.
+    #[must_use]
+    pub fn is_success(&self) -> bool {
+        self.native.failure.is_none()
+            && self.native.cleanup_errors.is_empty()
+            && self
+                .native
+                .execution
+                .as_ref()
+                .is_some_and(|r| r.outcome == Outcome::Completed)
+            && self.output_error.is_none()
+            && self.outputs.is_some()
+    }
+    /// Retain execution and cleanup evidence on either branch.
+    pub fn into_result(self) -> std::result::Result<Self, Box<Self>> {
+        if self.is_success() {
+            Ok(self)
+        } else {
+            Err(Box::new(self))
+        }
+    }
 }
 impl PreparedRun<'_> {
     pub fn execute(self) -> RunReport {

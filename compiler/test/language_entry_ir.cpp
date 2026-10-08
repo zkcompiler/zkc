@@ -6,7 +6,9 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SHA256.h"
 using namespace llvm;
 using namespace zkc;
 using namespace zkc::language;
@@ -85,6 +87,28 @@ int main(int argc, char **argv) {
     require(take(compileEntry(alias)).bytes() ==
                 take(compileEntry(checked)).bytes(),
             "complete alias changed native deployment");
+  });
+  cases.run("standalone admission pins the statement before execution", [&] {
+    auto checked = original(source);
+    auto module = parse(checked.bytes());
+    protocol_ir::StatementOp statement;
+    module->walk([&](protocol_ir::StatementOp op) { statement = op; });
+    require(bool(statement) && statement->getNextNode(),
+            "statement fixture missing");
+    auto readReprinted = [&] {
+      std::string bytes;
+      raw_string_ostream out(bytes);
+      module->print(out);
+      auto value = take(json::parse(checked.interfaceJson()));
+      (*value.getAsObject())["original"] =
+          toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
+      return readInterface(bytes, printJson(value));
+    };
+    take(readReprinted());
+    statement->moveAfter(statement->getNextNode());
+    require(succeeded(mlir::verify(*module)),
+            "late statement must be structurally valid native IR");
+    refuses(readReprinted(), "unexpected native Entry statement");
   });
   cases.run("another installed suite preserves original but changes explicit "
             "construction",

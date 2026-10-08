@@ -51,7 +51,9 @@ private:
 };
 /// Strict comparison with the independently retained interface. Unknown fields,
 /// duplicate keys, another Entry, another environment, and dangling port edits
-/// all refuse. JSON member order and whitespace do not determine identity.
+/// all refuse. JSON member order and whitespace are ignored by this comparison.
+/// This diagnostic query does not admit a publication; use admitOriginal to
+/// authorize canonical bytes against source.
 llvm::Error checkInterface(const CheckedOriginal &, llvm::StringRef,
                            const Limits & = {});
 std::string compilerToolchainIdentity();

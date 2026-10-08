@@ -53,9 +53,9 @@ closure roots, even when execution never calls them. An
 unselected Entry's target-admission failure does not invalidate another Entry;
 source errors in any definition still reject analysis.
 
-An instance key contains the qualified declaration name, checked body mode and
-canonical static arguments, with each component length framed. Concrete
-instances in their declared body mode retain the encoded declaration symbol when
+An instance key contains the qualified declaration name and canonical static
+arguments, with each component length framed. A declaration fixes its body mode.
+Concrete instances retain the encoded declaration symbol when
 it fits the native 128-byte identifier limit. Longer paths and specializations use `zkl_`
 followed by the complete SHA-256 key digest; distinct keys that produce the same
 symbol are refused. No declaration-table index enters the symbol. Local logical
@@ -1035,13 +1035,17 @@ validation preserves kind, exact logical identity, permissions, custody, field
 slices and nominal alternatives. Every logical port remains present, including
 zero-leaf values. Selectors and Entry choices must agree with those schemas.
 
-The reader bounds interface bytes at 4 MiB, JSON nesting at 256 and lexical nodes
+Compiler publication and both readers bound interface bytes at 4 MiB, JSON
+nesting at 256 and lexical nodes
 at 200,000 before typed decoding. Scalar tokens have at most ten bytes; encoded
 string tokens have at most six times 256 KiB. Decoded strings retain their owning
 name/type limits. Schema depth is at most 32, each aggregate has at most 1,024
 leaves, and validation has a cumulative work allowance of 1,000,000. Native leaf
 parsing retains its own structural bounds; cached descriptors have an additional
-16 MiB total retained charge. Unknown and duplicate fields refuse.
+16 MiB total retained charge. Work bounds apply independently to each admission
+algorithm; a caller may also lower the compiler's phase limits. Unknown and
+duplicate fields refuse. The bounded tree format retains self-contained schemas;
+identities permit descriptor reuse without introducing cyclic schema references.
 
 Native binding checks the exact artifact bytes from the authenticated package,
 selected entry, participant roster, logical data types, services and output
@@ -1114,7 +1118,11 @@ report. On complete execution with successful cleanup, it reconstructs all named
 results, including empty products. Other outcomes publish no complete logical
 result; they remain visible in the native report. An unexpected reconstruction
 failure has its own `output_error` and cannot become successful named output.
-No source evaluation or protocol-specific execution loop is added.
+`RunReport::is_success` checks completion, successful cleanup and decoded outputs;
+`into_result` preserves the full report on either branch. A successful interactive
+run does not imply a protocol acceptance predicate: the caller must inspect its
+explicit result values. No source evaluation or protocol-specific execution loop
+is added.
 
 ### Named proof calls
 

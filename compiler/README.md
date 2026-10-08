@@ -20,9 +20,12 @@ representation boundaries and the implementation homes this path builds toward.
 The fresh [mathematical source language](../docs/language/mathematical.md)
 uses `.zkc` capture, source checking and direct native MLIR emission. Its
 `language-*` commands retain an immutable original and selected Entry interface,
-and `language-bundle` uses the existing participant compiler/runtime. The first
-fragment supports concrete field/Boolean helpers and messages; it is separate
-from the `.pir` consumers described below.
+and `language-bundle` uses the existing participant compiler/runtime.
+`language-package` publishes selected run/proof Entries for the shared CLI and
+Rust Hosts. The source supports typed generics/components, mathematical and local
+helpers, protocol composition, services, relations and explicit construction;
+see the [source profile](../docs/spec/profiles/source/mathematical-language.md)
+for its exact limits. The `.pir` consumers below retain separate migration gates.
 
 The [typed source model](../docs/compiler/source-model.md) serves text and
 programmatic authoring through owned records and immutable documents.

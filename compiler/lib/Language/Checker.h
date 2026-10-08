@@ -59,7 +59,7 @@ public:
   bool bindingName(const Declaration &, llvm::StringRef, Span);
   bool body(DeclarationId, unsigned);
   bool relation(Declaration &);
-  bool relationData(const Declaration &, const Type &, Span, unsigned = 1);
+  bool relationData(const Declaration &, const Type &, Span, unsigned = 0);
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
   bool relationIdentities();
   bool specifications(Declaration &);
@@ -91,6 +91,8 @@ public:
   std::optional<Type> associated(const Type &, llvm::StringRef, Span);
 
 private:
+  std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
+                                    unsigned);
   std::vector<SyntaxModule> syntax;
   std::map<std::string, ModuleId> modules;
   std::map<std::string, DeclarationId> qualified;
@@ -106,7 +108,6 @@ private:
   };
   std::set<unsigned> formingParameters;
   std::map<unsigned, std::vector<DeferredApplication>> deferredApplications;
-  uint64_t typeNodes = 0;
   bool entries();
   bool configureSetups(Declaration &, const Declaration &,
                        llvm::ArrayRef<SyntaxSetupSlot>);

@@ -628,6 +628,17 @@ protocol Run roles(P,V)(n:index@V)->(){
 }entry Demo=Run;
 )");
   must(compileEntry(empty));
+  auto restricted = R"(module m;
+math fn truth()->bool{return true;}
+protocol Run roles(P,V)(n:index@V)->(){
+ let ()=repeat roles(V)(i<n,max 2)carry()capture(){
+   let literal@V=true;let constant@V=truth();yield();
+ };return();
+}entry Demo=Run;)";
+  must(compileEntry(original(restricted)));
+  sourceRefuses(replace(restricted, "literal@V", "literal@P"), "source.roles");
+  sourceRefuses(replace(restricted, "constant@V", "constant@P"),
+                "source.roles");
   auto nonparticipant = R"(module m;fn truth()->bool{return true;}
 protocol Run roles(P,V)(n:index@V)->(){let ()=repeat roles(V)(i<n,max 2)carry()capture(){local P let x=truth();yield();};return();}entry Demo=Run;)";
   sourceRefuses(nonparticipant, "source.roles");

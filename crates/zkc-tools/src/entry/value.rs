@@ -215,7 +215,10 @@ impl<T: Into<Value>, const N: usize> From<[T; N]> for Value {
         Self::Array(values.into_iter().map(Into::into).collect())
     }
 }
-impl<T: TryFrom<Value>, const N: usize> TryFrom<Value> for [T; N] {
+impl<T: TryFrom<Value>, const N: usize> TryFrom<Value> for [T; N]
+where
+    T::Error: std::fmt::Display,
+{
     type Error = String;
     fn try_from(value: Value) -> Result<Self> {
         let Value::Array(values) = value else {
@@ -226,7 +229,7 @@ impl<T: TryFrom<Value>, const N: usize> TryFrom<Value> for [T; N] {
         }
         values
             .into_iter()
-            .map(|v| T::try_from(v).map_err(|_| "entry-binding-value".into()))
+            .map(|v| T::try_from(v).map_err(|error| error.to_string()))
             .collect::<Result<Vec<T>>>()?
             .try_into()
             .map_err(|_| "entry-binding-value".into())

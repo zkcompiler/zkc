@@ -142,6 +142,9 @@ pub(super) fn run(directory: &Path) {
             );
             assert!(report.native.cleanup_errors.is_empty());
             assert!(report.output_error.is_none());
+            let report = report
+                .into_result()
+                .unwrap_or_else(|_| panic!("completed run failed"));
             let outputs = report.outputs.unwrap();
             assert_eq!(
                 normalized(&outputs["P"]["sent"]),
@@ -256,6 +259,7 @@ pub(super) fn run(directory: &Path) {
     limits.capacity.work.instructions = 0;
     let stopped = RunEntry::admit(publication, limits, SetupAuthority::default()).unwrap();
     let stopped = stopped.prepare(request(0, false)).unwrap().execute();
+    assert!(!stopped.is_success());
     assert!(stopped.outputs.is_none());
     assert!(matches!(
         stopped.native.execution.as_ref().unwrap().outcome,
@@ -303,6 +307,7 @@ fn services(directory: &Path) {
             report.native.resources[0]["state"]["transitions"],
             transitions
         );
+        assert_eq!(report.is_success(), completed);
         assert_eq!(report.outputs.is_some(), completed);
         if let Some(outputs) = report.outputs {
             assert_eq!(
