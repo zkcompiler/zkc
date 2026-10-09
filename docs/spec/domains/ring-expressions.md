@@ -124,6 +124,23 @@ form with its map, and `ring::checkSharing` is that judgment, with refusals
 `ring-sharing-inputs`, `ring-sharing-map`, `ring-sharing-node` and
 `ring-sharing-outputs`.
 
+The compiler's `language::shareAsset` applies this transformation to a captured
+ring arena or to every arena in a relation Bundle. Its independent checker also
+requires exact preservation of the Bundle's public slots, channels, table and
+group declarations, authority, height, read model, input bindings, assertion
+scopes and interactions. This preserves the mathematical substitutions and read
+obligations. Resource costs can decrease; equal budget-refusal behavior is not a
+claim.
+
+`zkc-compile asset-share ring-json INPUT` and
+`zkc-compile asset-share relation-bundle-json INPUT` emit the checked canonical
+result. Capture that result with `--asset` when compiling the consuming source.
+The resulting Entry binds its new identity and contents. This is an explicit
+asset transformation; it does not rewrite an already published Entry or run
+implicitly as part of ordinary program simplification. Kind, map-count and
+surrounding-context mismatches refuse as `asset-sharing-kind`,
+`asset-sharing-shape` and `asset-sharing-context`.
+
 ## Native bulk substitution
 
 Four ordered algebra kernels use one SHA-256 asset parameter and the installed
@@ -132,12 +149,11 @@ parameter is exactly 64 lowercase hexadecimal digits. It is part of the program;
 the Host separately admits the referenced arena into an immutable registry.
 No proof message installs or changes an evaluator.
 
-The current compiler checks the operation contract and digest reference; the
-Host admits the referenced arena. The digest does not expose an arithmetic body
-to MLIR optimization. Rewriting or lowering inside an arena would require the
-compiler to retain and admit its contents, derive the resulting identity and
-check the changed interpretation. Bulk evaluation and protocol compilation are
-implemented; compiler transformations of external arena bodies are not.
+The compiler admits and retains captured arena contents, checks closed field
+compatibility, and includes required bodies in the Entry package. The Host
+independently admits those bodies and checks references before execution.
+Structural sharing operates on the shared arena representation described above;
+the arena is not expanded into a second arithmetic representation in MLIR.
 
 | Contract | Data operands | Result layout |
 |---|---|---|

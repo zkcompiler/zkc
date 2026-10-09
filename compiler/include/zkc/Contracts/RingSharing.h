@@ -37,7 +37,8 @@ llvm::Expected<Sharing> shareExpression(const Expression &original);
 /// images of the original children in the same order, and every output
 /// position mapped. These checks imply equal per-node field facts, equal
 /// degrees for every weight vector, equal used inputs per output position and
-/// equal evaluation under every algebra. Refusals: ring-sharing-map,
+/// equal mathematical substitution under every compatible algebra. Resource
+/// costs and budget-refusal behavior can differ. Refusals: ring-sharing-map,
 /// ring-sharing-inputs, ring-sharing-node, ring-sharing-outputs.
 llvm::Error checkSharing(const Expression &original, const Expression &shared,
                          llvm::ArrayRef<uint32_t> nodeMap);

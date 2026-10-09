@@ -180,6 +180,7 @@ add_zkc_component(Transforms
   lib/Target/PhysicalPlan.cpp
 )
 add_zkc_component(Compiler
+  lib/Compiler/AssetSharing.cpp
   lib/Compiler/Language.cpp
   lib/Compiler/LanguagePackage.cpp
   lib/Compiler/LanguageInterface.cpp
@@ -202,6 +203,7 @@ add_zkc_component(Compiler
 )
 add_zkc_component(Driver
   lib/Driver/Language.cpp
+  lib/Driver/Assets.cpp
   lib/Driver/Compiler.cpp
   lib/Driver/Relations.cpp
   lib/Driver/AIR.cpp

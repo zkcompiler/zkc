@@ -18,6 +18,7 @@ add_test(NAME math-realization COMMAND zkc-math_realization-test
 set_tests_properties(math-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-math_realization-test PRIVATE MLIRParser)
 add_zkc_test(language_package Compiler language-package)
+add_zkc_test(asset_sharing Compiler asset-sharing)
 add_zkc_test(language_interface Compiler language-interface)
 add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_expression_assets Language language-expression-assets)

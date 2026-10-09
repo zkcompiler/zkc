@@ -160,3 +160,34 @@ def test_expression_dimensions_and_degree_follow_captured_contents(toolchain, jo
     journal.run([toolchain.runtime, 'prove', package, pin, request, proof])
     result = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof]))
     assert result['status'] == 'accepted'
+
+
+def test_compiler_asset_sharing_reduces_work_without_changing_sumcheck(toolchain, journal, directory):
+    arena = ['zkc.ring/0', ['koala-bear'] * 2,
+             [['input', 0], ['input', 1], ['mul', 0, 1],
+              ['input', 0], ['input', 1], ['mul', 3, 4], ['add', 2, 5]], [6]]
+    authored = write(directory, 'repeated.ring.json', arena)
+    shared = directory / 'shared.ring.json'
+    shared.write_text(journal.run([toolchain.compiler, 'asset-share', 'ring-json', authored]))
+    rewritten = json.loads(shared.read_text())
+    assert rewritten[1] == arena[1] and len(rewritten[2]) == 4 < len(arena[2])
+    request = write(directory, 'sharing-request.json', {'format': 'zkc.entry-proof/0',
+        'public': values(claim=200)})
+    results = []
+    identities = []
+    for name, path in [('authored', authored), ('shared', shared)]:
+        package, pin = build(toolchain, journal, directory, 'Proof', arena=path)
+        identities.append(json.loads(package.read_text())['assets'][0][0])
+        proof = directory / f'{name}.proof'
+        produced = json.loads(journal.run([toolchain.runtime, 'prove', package, pin, request, proof]))
+        verified = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof]))
+        assert verified['status'] == 'accepted'
+        results.append((produced['execution']['ring_work'], verified['execution']['ring_work']))
+    assert identities[0] != identities[1]
+    assert results[1][0] < results[0][0] and results[1][1] < results[0][1]
+
+
+def test_asset_sharing_command_refusals(toolchain, journal):
+    journal.run([toolchain.compiler, 'asset-share'], refuses='asset-sharing-command')
+    journal.run([toolchain.compiler, 'asset-share', 'unknown', '/not/opened'],
+                refuses='asset-sharing-kind')
