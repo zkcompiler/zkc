@@ -27,7 +27,7 @@ NativeProofPolicy selection() {
   policy.entry = "main";
   policy.producer = "Alice";
   policy.validator = "Bob";
-  policy.suite = "merlin3.bls12-381.fr64be/1";
+  policy.suite = "merlin3.bls12-381.fr64be/0";
   policy.service = 4;
   policy.publicInputs = {0, 2};
   return policy;
@@ -51,8 +51,8 @@ int main(int argc, char **argv) {
     return module;
   };
   auto schnorr = read("schnorr-services");
-  for (StringRef suite : {"merlin3.bls12-381.fr64be/1",
-                          "spongefish0.7.4.keccak.bls12-381.fr64be/1"})
+  for (StringRef suite : {"merlin3.bls12-381.fr64be/0",
+                          "spongefish0.7.4.keccak.bls12-381.fr64be/0"})
     for (StringRef fixture :
          {"schnorr-services", "iterated-sumcheck", "nested-schnorr"})
       cases.run(fixture + ": " + suite, [&] {

@@ -80,7 +80,7 @@ impl Keys {
         // Reject an inadmissible public transport before the expensive setup.
         bounds.bytes(codec::size(Kind::Verifier, n)?)?;
         let params = Pcs::setup(n, rng);
-        let setup_id = codec::fingerprint(b"zkc-arkworks/setup/v1", &[], &params)?;
+        let setup_id = codec::fingerprint(b"zkc-arkworks/setup/v0", &[], &params)?;
         // Move the exactly-sized setup arrays. trim(n) would clone every basis
         // table, temporarily retaining an unnecessary second full setup.
         let vk = upstream::VerifierKey {
@@ -391,7 +391,7 @@ fn key_fingerprint(
     setup_id: [u8; 32],
     key: &upstream::VerifierKey<Bls12_381>,
 ) -> Result<[u8; 32], Error> {
-    codec::fingerprint(b"zkc-arkworks/key/v1", &setup_id, key)
+    codec::fingerprint(b"zkc-arkworks/key/v0", &setup_id, key)
 }
 
 fn validate_verifier(key: &upstream::VerifierKey<Bls12_381>) -> Result<(), Error> {

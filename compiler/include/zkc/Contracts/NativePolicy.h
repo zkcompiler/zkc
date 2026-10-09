@@ -12,7 +12,7 @@ struct NativeTypeConstructorPolicy {
 };
 std::optional<NativeTypeConstructorPolicy>
     nativeTypeConstructorPolicy(llvm::StringRef);
-/// Closed native-local/1 vocabulary. The caller supplies a shared node budget;
+/// Closed native-local/0 vocabulary. The caller supplies a shared node budget;
 /// exhaustion or depth above 64 sets limited and returns no policy.
 std::optional<NativeTypePolicy>
 nativeTypePolicy(const BoundType &, unsigned &remaining, bool &limited);

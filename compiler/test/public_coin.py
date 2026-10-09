@@ -12,7 +12,7 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 F = '!algebra.field<"bls12-381.fr">'
-S = '!protocol.service_ref<"random.bls12-381.fr/1">'
+S = '!protocol.service_ref<"random.bls12-381.fr/0">'
 P = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 source_path, requirement_path = OUT / "source.mlir", OUT / "requirement.json"
 report_path = OUT / "view.json"
@@ -20,7 +20,7 @@ report_path = OUT / "view.json"
 
 def requirement(bound, service, sites, prover="Prover", verifier="Checker"):
     return {
-        "format": "zkc.public-coin-requirement/1",
+        "format": "zkc.public-coin-requirement/0",
         "entry": "main",
         "prover": prover,
         "verifier": verifier,
@@ -48,7 +48,7 @@ def checked(name, text, req, *flags):
             "protocol-checked-bundle", text, f"--public-coin={requirement_path}", *flags
         )
     )
-    assert result["format"] == "zkc.checked-run/1"
+    assert result["format"] == "zkc.checked-run/0"
     record = result["public_coin"]
     assert record["source_sha256"] == hashlib.sha256(text.encode()).hexdigest()
     assert (
@@ -124,7 +124,7 @@ assert (
 # The selected relation is unsatisfiable for every w. A statement-only future
 # hash leaves w adaptive: residual sum = (1-tau)(w-1)+tau(w-2) = w-1-tau.
 asset = [
-    "zkc.relation.r1cs/1",
+    "zkc.relation.r1cs/0",
     "bls12-381.fr",
     "2",
     "0",
@@ -283,7 +283,7 @@ assert (
             report_path,
         ]
     )["format"]
-    == "zkc.public-coin-checked/1"
+    == "zkc.public-coin-checked/0"
 )
 for change in [
     lambda v: v["draws"][0].update(prefix_length=1),
@@ -395,7 +395,7 @@ nested_view = analyze(nested, nested_req)
 assert nested_view["draws"][0]["path"] == ["outer", "inner", "draw"]
 assert nested_view["draws"][0]["delivery"]["path"] == ["outer", "inner", "coin"]
 # An unused statement operand is still mandatory, independent of SSA liveness.
-statement = f'relation.declare @predicate {{kind="external",key="view",revision="1",signature=({F})->i1,purposes=["statement"]}}'
+statement = f'relation.declare @predicate {{kind="external",key="view",revision="0",signature=({F})->i1,purposes=["statement"]}}'
 bind = f'protocol.statement @predicate(%x) {{selectors=["Checker"],acceptance=0:i64}} : {F}\n'
 dead_statement = small(
     bind + query() + delivery() + "%ok=arith.constant true", declarations=statement

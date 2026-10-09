@@ -7,7 +7,7 @@ use zkc_runtime::interactive::{
     PhysicalType, Runner, Stop, StopKind, ValueBudget,
 };
 use zkc_tools::run::*;
-const BOOL: &str = "bool@native.bool/1";
+const BOOL: &str = "bool@native.bool/0";
 #[derive(Clone, Copy, Debug, Default)]
 enum Decode {
     #[default]
@@ -103,7 +103,7 @@ fn carrier() -> Json {
 }
 fn typed_carrier(ty: &str) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [[
             "function",
@@ -149,7 +149,7 @@ fn raw() -> Json {
     message_bundle(BOOL)
 }
 fn message_bundle(ty: &str) -> Json {
-    json!({"format":"zkc.run/1", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
+    json!({"format":"zkc.run/0", "candidate":typed_carrier(ty).to_string(), "entry":"main", "roles":["Alice","Bob"],
         "steps":[step(0,0,Some(0)),step(0,1,Some(0)),step(1,0,Some(0)),step(0,2,None),step(1,1,None)]})
 }
 fn step(role: usize, instruction: usize, anchor: Option<usize>) -> Json {
@@ -384,7 +384,7 @@ fn outer_decoder_checks_duplicates_unknown_missing_and_bounds() {
 #[test]
 fn coherent_cross_role_reordering_remains_supplied_only() {
     let c = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [[
             "function",
@@ -454,7 +454,7 @@ fn cancellation_between_halves_keeps_bytes_and_unpolled_receiver() {
         matches!(&report.outcome, Outcome::HostCancelled(reason) if reason.text == "host interruption")
     );
     assert_eq!(hook.transfers, 0);
-    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
     assert_eq!(
         report.roles[0].before,
         State::Unpolled {
@@ -488,7 +488,7 @@ fn cancellation_between_halves_keeps_bytes_and_unpolled_receiver() {
 fn malformed_bytes_stop_receive_and_consume_slot_with_prior_effects() {
     for (bytes, reason) in [
         (vec![], DecodeReason::Length),
-        (b"ZKCV\x01\x05\x02".to_vec(), DecodeReason::Boolean),
+        (b"ZKCV\x00\x05\x02".to_vec(), DecodeReason::Boolean),
     ] {
         let report = execute(
             &mut Controls {
@@ -517,7 +517,7 @@ fn malformed_bytes_stop_receive_and_consume_slot_with_prior_effects() {
 fn typed_message_change_is_distinct_from_bad_encoding() {
     let report = execute(
         &mut Controls {
-            replacement: Some(b"ZKCV\x01\x05\x01".to_vec()),
+            replacement: Some(b"ZKCV\x00\x05\x01".to_vec()),
             ..Default::default()
         },
         inputs(),
@@ -561,7 +561,7 @@ fn codec_and_hook_failures_preserve_the_exact_handoff_state() {
                 ..
             }
         ));
-        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
         assert_eq!(report.wire.receives, 0);
     }
     for (hook, kind) in [
@@ -589,7 +589,7 @@ fn codec_and_hook_failures_preserve_the_exact_handoff_state() {
                 ..
             }
         ));
-        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+        assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
     }
 }
 #[test]
@@ -752,7 +752,7 @@ fn final_return_failure_and_cumulative_wire_limit_preserve_prefix() {
     assert!(report.pending.is_none());
     let report = execute(
         &mut Controls {
-            replacement: Some(b"ZKCV\x01\x05\x01".to_vec()),
+            replacement: Some(b"ZKCV\x00\x05\x01".to_vec()),
             ..Default::default()
         },
         inputs(),
@@ -763,7 +763,7 @@ fn final_return_failure_and_cumulative_wire_limit_preserve_prefix() {
     );
     failed(&report, FailureKind::Limit);
     assert!(matches!(report.roles[1].before, State::Unpolled { .. }));
-    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x01\x05\0");
+    assert_eq!(report.pending.as_ref().unwrap().bytes, b"ZKCV\x00\x05\0");
     assert_eq!(report.wire.replacement_bytes, 0);
 }
 #[test]
@@ -887,13 +887,13 @@ fn loop_bundle() -> Json {
         })
         .collect();
     let candidate = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         participants,
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    json!({"format": "zkc.run/1", "candidate": candidate.to_string(), "entry":"main",
+    json!({"format": "zkc.run/0", "candidate": candidate.to_string(), "entry":"main",
         "roles":["Alice","Bob"], "steps":[
             {"loop":[step(0,0,Some(0)),step(1,0,Some(0))], "body":[],
              "yield":[step(0,1,None),step(1,1,None)]},
@@ -1190,7 +1190,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
         role[4]
             .as_array_mut()
             .unwrap()
-            .push(json!(["n", "index@native.index/1"]));
+            .push(json!(["n", "index@native.index/0"]));
         role[6].as_array_mut().unwrap().insert(
             0,
             json!([
@@ -1321,7 +1321,7 @@ fn structured_bundles_transfer_dynamic_and_nested_messages() {
     // A serializable logical value does not automatically authorize its wire grammar.
     assert_eq!(
         admit(&message_bundle(
-            "polynomial:bn254.fr@arkworks.bn254-fr-polynomial/1"
+            "polynomial:bn254.fr@arkworks.bn254-fr-polynomial/0"
         ))
         .unwrap_err(),
         BundleError::WireType

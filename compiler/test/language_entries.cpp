@@ -15,7 +15,7 @@ constexpr StringLiteral base = R"(module sample;
  {let ok@V=true;return(ok=ok);}
 )";
 constexpr StringLiteral setupBase = R"(module sample;
- domain C=commitment("multilinear.kzg.bls12-381/1");
+ domain C=commitment("multilinear.kzg.bls12-381/0");
  type PK=builtin("prover_key",C);type VK=builtin("verifier_key",C);
  type Commit=builtin("commitment",C);type Proof=builtin("proof",C);
  struct Statement{pub left:Commit,pub right:Proof,pub ordinary:bool}
@@ -29,7 +29,7 @@ std::string setupSource(StringRef choices = setupChoices) {
   return (setupBase + "entry Demo=Run" + choices).str();
 }
 constexpr StringLiteral choices = R"({prover P;verifier V;public{x};accept ok;
- target claim;construction fiat_shamir("merlin3.bls12-381.fr64be/1"){derive coins;}})";
+ target claim;construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive coins;}})";
 Expected<ClosedEntry> close(StringRef text, const Limits &limits = {}) {
   auto captured = capture({{"sample", text.str(), {}}});
   if (!captured)
@@ -132,8 +132,8 @@ int main() {
            {"accept ok", "accept absent"},
            {"target claim", "target absent"},
            {"derive coins", "derive absent"},
-           {"merlin3.bls12-381.fr64be/1", "uninstalled"},
-           {"construction fiat_shamir(\"merlin3.bls12-381.fr64be/1\"){derive "
+           {"merlin3.bls12-381.fr64be/0", "uninstalled"},
+           {"construction fiat_shamir(\"merlin3.bls12-381.fr64be/0\"){derive "
             "coins;}",
             "construction authored;"}})
     cases.run(

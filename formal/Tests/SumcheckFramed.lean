@@ -25,7 +25,7 @@ example : Framed.root "sumcheck" otherPolynomial 0 ≠ Framed.root "sumcheck" ze
 
 def request : List (Frame F) := [
   .context "sumcheck" 1 0,
-  .statement "sumcheck.quadratic.v1" [0, 0, 0],
+  .statement "sumcheck.quadratic.v0" [0, 0, 0],
   .message 0 ⟨0, 0, 0⟩,
   .request 0]
 

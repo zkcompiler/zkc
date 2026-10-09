@@ -8,7 +8,7 @@ private def resolve (physical : Bool) (binding : Declaration) : Result Signature
   let [domain] := binding.arguments | throw "binding-resource-unit-domain"
   ensure (resourceUnitDomain domain) "binding-resource-unit-domain"
   ensure ((!physical && binding.implementation.isEmpty) || binding.implementation == "logical/" ++ binding.contract) "binding-implementation"
-  let ty := ValueType.mk "resource_unit" domain (if physical then "logical.resource_unit/1" else "")
+  let ty := ValueType.mk "resource_unit" domain (if physical then "logical.resource_unit/0" else "")
   return ⟨if binding.contract == "resource_unit.create" then [] else [ty],
     if binding.contract == "resource_unit.consume" then [] else [ty]⟩
 

@@ -48,9 +48,9 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
         implementation: "arkworks/field.add".into(),
     };
     // Literal witness independent of either registry's generated inventory.
-    let field = "field:bls12-381.fr@arkworks.fr/1";
+    let field = "field:bls12-381.fr@arkworks.fr/0";
     let bytes = serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [[
             "add_binding",
             "field.add",

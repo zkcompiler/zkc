@@ -171,17 +171,17 @@ fn joint(bundle: &serde_json::Value, verifier_c: u64) {
         SetupAuthority::default(),
     )
     .unwrap();
-    let ty = "field:bls12-381.fr@arkworks.fr/1";
+    let ty = "field:bls12-381.fr@arkworks.fr/0";
     let wire = |n: u64| {
         let mut bytes = [0u8; 32];
         bytes[..8].copy_from_slice(&n.to_le_bytes());
         format!(
-            "5a4b43560101{}",
+            "5a4b43560001{}",
             bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
         )
     };
     let inputs = json!([
-        "zkc.bundle-inputs/1",
+        "zkc.bundle-inputs/0",
         "joint-language-test",
         [
             [

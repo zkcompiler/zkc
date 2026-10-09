@@ -110,10 +110,10 @@ operations or unrealized casts cannot slip through a partial conversion.
 
 ## Policy and formats
 
-`zkc.native-proof-policy/5` is the sole proof policy for flat programs, bounded
+`zkc.native-proof-policy/0` is the sole proof policy for flat programs, bounded
 loops, PCS, structured messages and authored execution. Deployment, descriptor,
 construction metadata and invocation binding each have one current schema.
-Every proof embeds `zkc.program/2`; joint execution uses `zkc.run/1`. This is one
+Every proof embeds `zkc.program/0`; joint execution uses `zkc.run/0`. This is one
 proof contract within the four IR profiles. Unknown tags and malformed records
 refuse independently.
 
@@ -168,8 +168,8 @@ are bounded checks, not a derivation theorem or native Lean semantics.
 
 Installed transcript suites use explicit affine state. Authored external
 Monero/OpenVM data-state transitions retain their distinct contracts. The BLS
-suites are `merlin3.bls12-381.fr64be/1` and
-`spongefish0.7.4.keccak.bls12-381.fr64be/1`; Ristretto and
+suites are `merlin3.bls12-381.fr64be/0` and
+`spongefish0.7.4.keccak.bls12-381.fr64be/0`; Ristretto and
 ext8 suites are also registered. BN254 challenges remain outside the profile.
 
 The native root binds source and policy identity, ordered actual public values,
@@ -190,7 +190,7 @@ A second recursive descriptor would duplicate that control.
 Canonical decoding precedes observation of received values. Structured codecs
 bind complete types, tags, lengths and actual payloads. External raw-byte formats
 need an explicit adapter retaining the relevant bytes; a permissive internal
-decoder would change transcript meaning. The `ZKCPRF01` outer frame carries the
+decoder would change transcript meaning. The `ZKCPRF00` outer frame carries the
 SHA-256 digest of the canonical native invocation root.
 
 A completed producer may return only a proof prefix. The independent validator

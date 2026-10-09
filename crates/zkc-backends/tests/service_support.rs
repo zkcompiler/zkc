@@ -18,7 +18,7 @@ fn native() -> NativeBackend {
 }
 fn program(contract: &str, output: &str) -> Vec<u8> {
     serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [[
@@ -41,23 +41,23 @@ fn program(contract: &str, output: &str) -> Vec<u8> {
 const SERVICES: &[(ServiceContract, &str, &str)] = &[
     (
         ServiceContract::RandomBls12381Field,
-        "random.bls12-381.fr/1",
-        "field:bls12-381.fr@arkworks.fr/1",
+        "random.bls12-381.fr/0",
+        "field:bls12-381.fr@arkworks.fr/0",
     ),
     (
         ServiceContract::RandomBn254Field,
-        "random.bn254.fr/1",
-        "field:bn254.fr@arkworks.bn254-fr/1",
+        "random.bn254.fr/0",
+        "field:bn254.fr@arkworks.bn254-fr/0",
     ),
     (
         ServiceContract::RandomRistrettoField,
-        "random.ristretto255.scalar/1",
-        "field:ristretto255.scalar@dalek.scalar/1",
+        "random.ristretto255.scalar/0",
+        "field:ristretto255.scalar@dalek.scalar/0",
     ),
     (
         ServiceContract::RandomExtensionField,
-        "random.koala-bear.ext8-binomial3/1",
-        "field:koala-bear.ext8-binomial3@plonky3.koala-bear.ext8-binomial3/1",
+        "random.koala-bear.ext8-binomial3/0",
+        "field:koala-bear.ext8-binomial3@plonky3.koala-bear.ext8-binomial3/0",
     ),
 ];
 struct Adapter {
@@ -117,10 +117,10 @@ fn independently_authored_shapes_and_bounded_support_are_required_at_installatio
         |s| s.signature.inputs.push(s.signature.outputs[0].clone()),
         |s| s.signature.outputs.clear(),
         |s| s.signature.outputs.push(s.signature.outputs[0].clone()),
-        |s| s.signature.outputs[0] = PhysicalType::parse("bool@native.bool/1").unwrap(),
+        |s| s.signature.outputs[0] = PhysicalType::parse("bool@native.bool/0").unwrap(),
         |s| {
             s.signature.outputs[0] =
-                PhysicalType::parse("field:koala-bear@plonky3.koala-bear/1").unwrap()
+                PhysicalType::parse("field:koala-bear@plonky3.koala-bear/0").unwrap()
         },
         |s| s.max_retained_bytes = usize::MAX,
     ];

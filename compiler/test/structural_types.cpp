@@ -44,21 +44,21 @@ void representationPatterns() {
                                           {Kind::Nat, {}, 4, 1}};
   const TypeArgumentPattern emptyRange[] = {{Kind::Domain, "bls12-381.fr"},
                                             {Kind::Nat, {}, 0, 1}};
-  validate({{"field_array", positive, "test.array/1", true}});
-  validate({{"field_array", emptyRange, "test.array/1", true}},
+  validate({{"field_array", positive, "test.array/0", true}});
+  validate({{"field_array", emptyRange, "test.array/0", true}},
            "representation-pattern");
   const TypeArgumentPattern later[] = {{Kind::Domain, "bls12-381.fr"},
                                        {Kind::Nat, {}, 8, 5}};
   const TypeArgumentPattern overlap[] = {{Kind::Domain, "bls12-381.fr"},
                                          {Kind::Nat, {}, 8, 4}};
-  validate({{"field_array", positive, "test.array/1", true},
-            {"field_array", later, "test.array/1", true}});
-  validate({{"field_array", positive, "test.array/1", true},
-            {"field_array", overlap, "test.array/2", true}},
+  validate({{"field_array", positive, "test.array/0", true},
+            {"field_array", later, "test.array/0", true}});
+  validate({{"field_array", positive, "test.array/0", true},
+            {"field_array", overlap, "test.alternative-array/0", true}},
            "representation-default");
   const TypeArgumentPattern arguments[] = {{Kind::Type, "field:koala-bear"},
                                            {Kind::Nat, {}, 1048576}};
-  AppliedTypeRepresentation row{"fixed_vector", arguments, "test.vector/1",
+  AppliedTypeRepresentation row{"fixed_vector", arguments, "test.vector/0",
                                 true};
   validate({row});
   for (StringRef constructor : {"missing", "resource_unit", "bool"}) {
@@ -83,7 +83,7 @@ void representationPatterns() {
         TypeArgumentPattern{Kind::Type, "field:missing"},
         TypeArgumentPattern{Kind::Type, "fixed_vector<bool,04>"},
         TypeArgumentPattern{Kind::Type,
-                            "field:koala-bear@plonky3.koala-bear/1"},
+                            "field:koala-bear@plonky3.koala-bear/0"},
         TypeArgumentPattern{Kind::Type, "field:koala-bear", 1}}) {
     TypeArgumentPattern malformed[] = {argument, arguments[1]};
     bad = row;
@@ -104,12 +104,12 @@ void representationPatterns() {
   // not shadow that separate key space, even with a valid Domain identity.
   for (StringRef domain : {"koala-bear", "bls12-381.g1", "missing", ""}) {
     TypeArgumentPattern pattern{Kind::Domain, domain};
-    validate({{"field", {pattern}, "test.field/1", true}},
+    validate({{"field", {pattern}, "test.field/0", true}},
              "representation-constructor");
   }
   validate({row, row}, "representation-duplicate");
   auto alternative = row;
-  alternative.representation = "test.vector/2";
+  alternative.representation = "test.alternative-vector/0";
   validate({row, alternative}, "representation-default");
   alternative.isDefault = false;
   validate({row, alternative});
@@ -152,7 +152,7 @@ int main() {
   auto physical = defaultRepresentation(type);
   check(bool(physical), "installed fixed-vector representation unavailable");
   check(physical->spelling() ==
-            "fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/1",
+            "fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/0",
         "physical selection erased structural type arguments");
   auto resource = accepts("fixed_vector<rng:bls12-381.fr,2>");
   check(affine(resource.spelling()) && !duplicable(resource.spelling()) &&
@@ -170,7 +170,7 @@ int main() {
         "fixed_vector<field:koala-bear,-1>", "fixed_vector<field:koala-bear,>",
         "fixed_vector<field:koala-bear,4,5>", "fixed_vector<koala-bear,4>",
         "fixed_vector<field:missing,4>", "fixed_vector<field<koala-bear>,4>",
-        "fixed_vector<field:koala-bear@plonky3.koala-bear/1,4>",
+        "fixed_vector<field:koala-bear@plonky3.koala-bear/0,4>",
         "fixed_vector<field:koala-bear,4>>", "fixed_vector:koala-bear.4",
         "field<koala-bear>", "bool:"})
     refuses(spelling);
@@ -193,8 +193,8 @@ int main() {
   refuses(nested, "binding-type-limit");
   refuses("sequence<rng:bls12-381.fr>", "sequence-element-permission");
   for (auto spelling :
-       {"sequence<prover_key:multilinear.kzg.bls12-381/1>",
-        "sequence<opening_state:multilinear.kzg.bls12-381/1>"}) {
+       {"sequence<prover_key:multilinear.kzg.bls12-381/0>",
+        "sequence<opening_state:multilinear.kzg.bls12-381/0>"}) {
     auto local = accepts(spelling);
     check(duplicable(local) && discardable(local) &&
               bool(defaultRepresentation(local)) && !nativeMessageData(local),

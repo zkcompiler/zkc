@@ -59,7 +59,7 @@ entry Proof = Schnorr<G> {
   public { base, point };
   accept accepted;
   target knowledge;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/1") {
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0") {
     derive challenges;
   }
 }
@@ -152,7 +152,7 @@ Fixed arrays currently use static numeric indices. Private ingress requires a
 validator that this source profile does not yet expose. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
-`language-interface` emits `zkc.language-interface/7`. Schemas retain an exact
+`language-interface` emits `zkc.language-interface/0`. Schemas retain an exact
 logical type identity and kind separately from their display label. A logical port's `native`
 indices and recursive `schema` describe its flattened fields, variant payloads and
 custody. These indices refer to the original mathematical signature, not a promise

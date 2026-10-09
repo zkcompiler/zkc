@@ -186,7 +186,7 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       return llvm::toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
     };
     json::Value record(
-        json::Object{{"format", "zkc.compiled-public-coin/1"},
+        json::Object{{"format", "zkc.compiled-public-coin/0"},
                      {"view", std::move(*publicCoin)},
                      {"source_sha256", digest(text)},
                      {"bundle_sha256", digest(*bundle)},
@@ -313,7 +313,7 @@ compileNativeProof(StringRef text, StringRef filename,
     return toHex(SHA256::hash(arrayRefFromStringRef(bytes)), true);
   };
   json::Value deployment(json::Array{
-      "zkc.native-proof/5", digest(text), constructed->descriptor,
+      "zkc.native-proof/0", digest(text), constructed->descriptor,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
       json::Array{options.simplify ? "true" : "false",
                   options.releaseStorage ? "true" : "false"},

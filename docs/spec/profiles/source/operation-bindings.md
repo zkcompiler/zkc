@@ -29,7 +29,7 @@ The executable retains an explicit operation-binding array alongside its
 local functions, participants and entry points:
 
 ```
-["zkc.program/2", bindings, functions, participants, entries]
+["zkc.program/0", bindings, functions, participants, entries]
 
 binding = [symbol, logical_contract, static_arguments, implementation]
 ```
@@ -125,7 +125,7 @@ control interfaces take the installed default physical ports. Kernel
 results receive the selected implementation's ports. Consequently, two values
 with the same logical type may have different physical types in one artifact.
 
-For tables, `arkworks.mle-lsb/1` and `arkworks.mle-msb/1` denote different actual
+For tables, `arkworks.mle-lsb/0` and `arkworks.mle-msb/0` denote different actual
 storage orders for the same logical MSB-coordinate polynomial. Changing the
 representation label alone is invalid. A crossing requires an ordered
 `arkworks/table.relayout` instruction with a physical-only `table.relayout`

@@ -11,7 +11,7 @@ OUT = records()
 commands = Commands(OUT)
 fixtures = Path(__file__).parent / 'fixtures/mathematical'
 manifest = []
-policy_data = ['zkc.native-proof-policy/5', 'main', 'P', 'V', '1', '', '', ['0', '1'], []]
+policy_data = ['zkc.native-proof-policy/0', 'main', 'P', 'V', '1', '', '', ['0', '1'], []]
 policy = OUT / 'policy.json'
 policy.write_text(json.dumps(policy_data))
 for family in ['r1cs', 'air']:
@@ -23,8 +23,8 @@ for family in ['r1cs', 'air']:
         with case(name):
             deployment = commands.run([compiler, 'protocol-proof', source, policy, *options])
             envelope = json.loads(deployment)
-            assert envelope[0] == 'zkc.native-proof/5'
-            assert json.loads(envelope[4])[0] == 'zkc.program/2'
+            assert envelope[0] == 'zkc.native-proof/0'
+            assert json.loads(envelope[4])[0] == 'zkc.program/0'
             assert len(envelope[4]) < 40000
             (OUT / f'{name}.deployment').write_text(deployment)
             manifest.append(dict(name=name, family=family))
@@ -42,7 +42,7 @@ for family in ['r1cs', 'air']:
         path.write_text(changed)
         commands.run([compiler, 'protocol-check-proof', source, policy, path],
                      refuses='native-proof-correspondence')
-        changed = candidate.replace('relation_revision = "1"', 'relation_revision = "2"')
+        changed = candidate.replace('relation_revision = "0"', 'relation_revision = "other"')
         commands.verified(changed, 'mathematical-projection')
         changed, count = re.subn(r'("algebra.exec.field_equal"\()(%\w+), (%\w+)',
                                 r'\1\3, \3', candidate, count=1)
@@ -98,7 +98,7 @@ for family in ['r1cs', 'air']:
                                 'selectors=["P","V","P"]')
         shared = shared.replace('kind="external"', 'kind="alternate"')
         shared = shared.replace('key="example/', 'key="renamed/').replace(
-            'revision="1"', 'revision="2"')
+            'revision="0"', 'revision="other"')
         path = OUT / f'{family}_shared.mlir'
         path.write_text(shared)
         (OUT / f'{family}_shared.deployment').write_text(commands.run([
@@ -106,7 +106,7 @@ for family in ['r1cs', 'air']:
         manifest.append(dict(name=f'{family}_shared', family=family))
     with case(f'{family} structured data through transcript construction'):
         first, witness = ('!ms', '!v') if family == 'r1cs' else ('!config', '!trace')
-        derived = '!s = !protocol.service_ref<"random.bls12-381.fr/1">\n' + text
+        derived = '!s = !protocol.service_ref<"random.bls12-381.fr/0">\n' + text
         derived = derived.replace(f'%witness:{witness}):', f'%witness:{witness},%random:!s):')
         derived = derived.replace(f'function_type=({first},!v,{witness})',
                                   f'function_type=({first},!v,{witness},!s)')
@@ -121,7 +121,7 @@ for family in ['r1cs', 'air']:
         path = OUT / f'{family}_derived.mlir'
         path.write_text(derived)
         p = list(policy_data)
-        p[5:7] = ['merlin3.bls12-381.fr64be/1', '3']
+        p[5:7] = ['merlin3.bls12-381.fr64be/0', '3']
         p[8] = [['draw', 'challenge']]
         altered = OUT / 'derived.policy'
         altered.write_text(json.dumps(p))
@@ -134,7 +134,7 @@ for family in ['r1cs', 'air']:
         manifest.append(dict(name=f'{family}_derived', family=family))
         requirement = OUT / 'public-coin.json'
         requirement.write_text(json.dumps(dict(
-            format='zkc.public-coin-requirement/1', entry='main', prover='P', verifier='V',
+            format='zkc.public-coin-requirement/0', entry='main', prover='P', verifier='V',
             service=3, decision=1, bound_inputs=[0, 1],
             draws=[dict(query_site='draw', delivery_site='challenge')])))
         commands.run([compiler, 'protocol-public-coin', path, requirement],
@@ -198,7 +198,7 @@ with case('logical relation data does not install a native wire codec'):
     # A logical static array is supported independently of native array codecs.
     unsupported = '''!m = tensor<4x!algebra.field<"koala-bear">>
 module { "protocol.module"() ({
-relation.declare @relation {kind="external",key="example/foreign",revision="1",signature=(!m)->i1,purposes=["parameter"]}
+relation.declare @relation {kind="external",key="example/foreign",revision="0",signature=(!m)->i1,purposes=["parameter"]}
 "protocol.func"() ({ ^entry(%data:!m,%ok:i1):
  protocol.statement @relation(%data) {selectors=["V"],acceptance=0 : i64} : !m
  "protocol.return"(%ok) : (i1)->()

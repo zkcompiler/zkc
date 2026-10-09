@@ -196,7 +196,7 @@ Error writeInterface(json::OStream &out, BoundedStream &stream,
     });
   };
   out.object([&] {
-    out.attribute("format", "zkc.language-interface/7");
+    out.attribute("format", "zkc.language-interface/0");
     out.attribute("capture", entry.project().capture().identity());
     out.attribute("original", original);
     out.attribute("toolchain", toolchain);

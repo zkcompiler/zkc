@@ -83,7 +83,7 @@ pub fn check(
             assert!(products.iter().all(|rows| rows.len() == n));
             let domain = Radix2EvaluationDomain::<F>::new(n).unwrap();
             let coset = domain.get_coset(*shift).unwrap();
-            let mut witness = b"ZKCV\x01\x29".to_vec();
+            let mut witness = b"ZKCV\x00\x29".to_vec();
             witness.extend_from_slice(&(w.len() as u32).to_le_bytes());
             for value in w.iter() {
                 witness.extend(encode(value));
@@ -159,10 +159,10 @@ pub fn check(
                 envelope,
                 input,
                 proof,
-                "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+                "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             );
             replay.message("trace", "P", "V");
-            replay.query("draw", 6, "random.koala-bear.ext8-binomial3/1", "V");
+            replay.query("draw", 6, "random.koala-bear.ext8-binomial3/0", "V");
             let challenge = replay.extension();
             replay.observe(
                 "challenge",
@@ -176,9 +176,9 @@ pub fn check(
             );
             replay.message("root", "P", "V");
             let row = replay.message("row", "P", "V");
-            assert_eq!(&row[..10], b"ZKCV\x01\x1b\x01\0\0\0");
+            assert_eq!(&row[..10], b"ZKCV\x00\x1b\x01\0\0\0");
             let actual =
-                transcript::extension_value(&[b"ZKCV\x01\x1a".as_slice(), &row[10..]].concat());
+                transcript::extension_value(&[b"ZKCV\x00\x1a".as_slice(), &row[10..]].concat());
             replay.message("path", "P", "V");
             let rejections = replay.finish();
             let root = E::two_adic_generator(n.trailing_zeros() as usize);
@@ -219,7 +219,7 @@ pub fn check_g2_ingress() {
         })
         .unwrap();
     assert!(wrong.is_on_curve());
-    let mut wire = b"ZKCV\x01\x30".to_vec();
+    let mut wire = b"ZKCV\x00\x30".to_vec();
     wrong.serialize_compressed(&mut wire).unwrap();
     let ty = Value::Bn254G2(Bn254G2::generator()).physical_type();
     assert_eq!(

@@ -9,7 +9,7 @@ class Operation;
 }
 namespace zkc::mathematical {
 using NativeTypePolicy = protocol::NativeTypePolicy;
-// Closed native-local/1 vocabulary. Nominal formation is checked before any
+// Closed native-local/0 vocabulary. Nominal formation is checked before any
 // use permission is returned; containers recursively check their leaves.
 std::optional<NativeTypePolicy> nativeTypePolicy(mlir::Type type);
 class NativeTypePolicies {

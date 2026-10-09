@@ -41,7 +41,7 @@ fn native_values_match_wire_execution_without_decoding_or_request_borrow() {
     };
     assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
     assert_eq!(plan.execute().json(), expected);
-    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 1, 5, 0]));
+    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0]));
     assert_eq!(
         host.prepare_typed(&wire).unwrap().execute().json(),
         expected
@@ -85,7 +85,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     let mut limits = HostLimits::default();
     limits.capacity.wire_bytes = 6;
     let bounded = self::host(&raw, limits);
-    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 1, 5, 0]));
+    let wire = request(|| InputValue::Wire(vec![0x5a, 0x4b, 0x43, 0x56, 0, 5, 0]));
     assert_eq!(refusal(&bounded, &wire), "native-capacity-wire");
     // Wire limits govern transport, not already constructed immutable data.
     assert!(bounded.prepare_typed(&inputs).is_ok());
@@ -124,7 +124,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
     let policy = zkc_backends::Policy::default();
     let first = zkc_arkworks::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
     let other = zkc_arkworks::Keys::setup_for_development(1, &policy.ark_bounds()).unwrap();
-    let logical = LogicalType::parse("commitment:multilinear.kzg.bls12-381/1").unwrap();
+    let logical = LogicalType::parse("commitment:multilinear.kzg.bls12-381/0").unwrap();
     let seq = LogicalType::sequence(logical.clone()).unwrap();
     let (raw, _) = fixture(&seq.spelling());
     let authority = SetupAuthority {
@@ -387,9 +387,9 @@ fn typed_key_imports_use_explicit_authorized_constructors() {
     .unwrap();
     for prover in [false, true] {
         let logical = if prover {
-            "prover_key:multilinear.kzg.bls12-381/1"
+            "prover_key:multilinear.kzg.bls12-381/0"
         } else {
-            "verifier_key:multilinear.kzg.bls12-381/1"
+            "verifier_key:multilinear.kzg.bls12-381/0"
         };
         let (raw, _) = fixture(logical);
         let host = RunHost::admit(
@@ -443,7 +443,7 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
         payload: vec![
             InputValue::Variant {
                 alternative: 1,
-                payload: vec![InputValue::Wire(b"ZKCV\x01\x05\x01".to_vec())],
+                payload: vec![InputValue::Wire(b"ZKCV\x00\x05\x01".to_vec())],
             },
             Value::Index(9).into(),
         ],
@@ -485,7 +485,7 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
     limits.capacity.elements = 4;
     let host = self::host(&raw, limits);
     let vector = || InputValue::from(Value::Vector(vec![zkc_backends::Scalar::from(1); 3].into()));
-    let mut wire = b"ZKCV\x01\x42\x03\0\0\0".to_vec();
+    let mut wire = b"ZKCV\x00\x42\x03\0\0\0".to_vec();
     // Valid shape, deliberately invalid field encodings. Whole-value count
     // refusal must occur before expensive canonical element decoding.
     wire.extend_from_slice(&[255; 96]);
@@ -560,7 +560,7 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
             (("Bob".into(), 0), "setup".into()),
         ]),
     };
-    let (raw, _) = fixture("prover_key:multilinear.kzg.bls12-381/1");
+    let (raw, _) = fixture("prover_key:multilinear.kzg.bls12-381/0");
     let admit = |limits| {
         RunHost::admit(
             &raw,

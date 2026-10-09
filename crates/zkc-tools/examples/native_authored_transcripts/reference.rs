@@ -14,7 +14,7 @@ use zkc_tools::proof::NativeDeployment;
 fn packed(state: &openvm::Duplex) -> Value {
     let s = state.snapshot();
     words(
-        [1514881876, 1, 2]
+        [1514881876, 0, 2]
             .into_iter()
             .chain(s.state.map(u64::from))
             .chain([s.absorb_index as u64, s.sample_index as u64]),
@@ -56,7 +56,7 @@ pub(super) fn monero_data(count: usize, snapshot: bool) -> (Vec<Value>, Vec<Valu
     work += monero::hash_work(0, true).unwrap().units().unwrap();
     expected.push(words(final_word.map(u64::from)));
     let initial = if snapshot {
-        words([1514881876, 1, 1].into_iter().chain(seed.map(u64::from)))
+        words([1514881876, 0, 1].into_iter().chain(seed.map(u64::from)))
     } else {
         words(seed.map(u64::from))
     };

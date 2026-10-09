@@ -10,7 +10,7 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / 'fixtures/mathematical'
-SUITES = ['merlin3.bls12-381.fr64be/1', 'spongefish0.7.4.keccak.bls12-381.fr64be/1']
+SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0']
 manifest = []
 
 def expanded(caller, callee):
@@ -20,8 +20,8 @@ def policy(family, suite):
     if family == 'nested':
         draws = [[expanded(expanded('segment', step), site) for site in ('draw_challenge', 'challenge')]
                  for step in ('first', 'second')]
-        return ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', suite, '5', ['0', '1', '3'], draws]
-    return ['zkc.native-proof-policy/5', 'main', 'P', 'V', '0', suite, '4', ['1', '2', '3'], [['draw', 'challenge']]]
+        return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, '5', ['0', '1', '3'], draws]
+    return ['zkc.native-proof-policy/0', 'main', 'P', 'V', '0', suite, '4', ['1', '2', '3'], [['draw', 'challenge']]]
 
 for family, fixture in [('sumcheck', 'iterated-sumcheck'), ('cubic', 'cubic-sumcheck'), ('nested', 'nested-schnorr')]:
     source = (FIXTURES / (fixture + '.mlir')).read_text()
@@ -33,9 +33,9 @@ for family, fixture in [('sumcheck', 'iterated-sumcheck'), ('cubic', 'cubic-sumc
                 src.write_text(source); pol.write_text(json.dumps(policy(family, suite)))
                 result = commands.run([compiler, 'protocol-proof', src, pol, *options])
                 envelope = json.loads(result)
-                assert envelope[0] == 'zkc.native-proof/5'
+                assert envelope[0] == 'zkc.native-proof/0'
                 assert envelope[1] == hashlib.sha256(source.encode()).hexdigest()
-                assert json.loads(envelope[4])[0] == 'zkc.program/2'
+                assert json.loads(envelope[4])[0] == 'zkc.program/0'
                 (OUT / (name + '.deployment')).write_text(result)
                 manifest.append(dict(name=name, family=family))
                 if not suffix and suite_index == 0:
@@ -94,7 +94,7 @@ with case('distinct field-array shapes retain distinct transcript bindings'):
     }) {sym_name="main",function_type=(ui64,!q_t,!q_t,!q_f,!q_f,!q_rng)->i1,roles=["P","V"],input_roles=[["P"],["P","V"],["P","V"],["V"],["V"],["V"]],output_roles=[["V"]]} : ()->()'''
     source = qa + ca + 'module { "protocol.module"() ({' + qb + cb + main + '}) {profile=#protocol.profile<protocol>} : ()->() }'
     src = OUT / 'mixed_shapes.mlir'; src.write_text(source)
-    p = ['zkc.native-proof-policy/5','main','P','V','0',SUITES[0],'5',['1','2','3','4'],
+    p = ['zkc.native-proof-policy/0','main','P','V','0',SUITES[0],'5',['1','2','3','4'],
          [[expanded(call,site) for site in ('draw','challenge')] for call in ('quadratic','cubic')]]
     pol = OUT / 'mixed_shapes.policy'; pol.write_text(json.dumps(p))
     result = json.loads(commands.run([compiler,'protocol-proof',src,pol]))
@@ -116,8 +116,8 @@ with case('iterated source correspondence checks real control operands'):
     candidate.write_text(changed)
     commands.run([compiler, 'protocol-check-proof', src, pol, candidate], refuses='native-proof-correspondence')
     # An unknown construction tag cannot authorize transcript helpers.
-    assert 'zkc.native-construction/5' in original
-    candidate.write_text(original.replace('zkc.native-construction/5', 'invalid.native-construction'))
+    assert 'zkc.native-construction/0' in original
+    candidate.write_text(original.replace('zkc.native-construction/0', 'invalid.native-construction'))
     commands.run([compiler, 'protocol-check-proof', src, pol, candidate], refuses='native-proof-candidate')
     # Updating both the action metadata and loop bounds cannot authorize a
     # different source maximum.

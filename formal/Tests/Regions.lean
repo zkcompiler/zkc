@@ -18,7 +18,7 @@ def request : RegionArtifact.Request Ty Protocol.Operation :=
   ⟨⟨"trace", declarations, .scalar .seven, dependencies⟩, [], body⟩
 
 def candidate : RegionArtifact.Candidate Ty Protocol.Operation :=
-  ⟨⟨1, RegionArtifact.semanticsVersion, [], "direct-logical-plan", "direct-lowering",
+  ⟨⟨formatVersion, RegionArtifact.semanticsVersion, [], "direct-logical-plan", "direct-lowering",
     completeExecution, request.context, []⟩, body⟩
 
 -- There is no Boolean input or artificial initial Boolean value.
@@ -28,7 +28,7 @@ example : (RegionArtifact.check request candidate (language := Protocol.language
 example : (RegionArtifact.check request { candidate with body := .ret 0 }
     (language := Protocol.language)).isOk = false := by decide
 example : (RegionArtifact.check request
-    { candidate with metadata := { candidate.metadata with semantics := "finite-source-1" } }
+    { candidate with metadata := { candidate.metadata with semantics := "finite-source-0" } }
     (language := Protocol.language)).isOk = false := by decide
 example : (RegionArtifact.check request
     { candidate with metadata := { candidate.metadata with requirements := [⟨"extra", "1"⟩] } }

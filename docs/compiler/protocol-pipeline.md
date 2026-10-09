@@ -16,7 +16,7 @@ owns exact formation and projection rules.
 
 The `plan` dialect's physical data wrappers do not provide a separate table/plan
 executor. The [program profile](../spec/profiles/compiler/program.md) admits the
-closed physical artifact as `zkc.program/2`.
+closed physical artifact as `zkc.program/0`.
 
 ## Preparation and projection
 

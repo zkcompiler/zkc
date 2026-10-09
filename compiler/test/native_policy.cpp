@@ -82,19 +82,19 @@ int main() {
          std::initializer_list<std::pair<StringRef, bool>>{
              {"field:bls12-381.fr", true},
              {"groups:bls12-381.g1", true},
-             {"proof:multilinear.kzg.bls12-381/1", true},
+             {"proof:multilinear.kzg.bls12-381/0", true},
              {"vector:bn254.fr", true},
              {"groups:bn254.g2", true},
              {"groups:ristretto255.group", true},
              {"group:bn254.gt", true},
              {"matrix:koala-bear.ext8-binomial3", true},
-             {"proof:rows.merkle-keccak256.koala-bear/1", true},
-             {"proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/1", true},
-             {"opening_state:rows.merkle-keccak256.koala-bear/1", false},
-             {"commitments:rows.merkle-keccak256.koala-bear/1", false},
+             {"proof:rows.merkle-keccak256.koala-bear/0", true},
+             {"proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0", true},
+             {"opening_state:rows.merkle-keccak256.koala-bear/0", false},
+             {"commitments:rows.merkle-keccak256.koala-bear/0", false},
              {"table:bls12-381.fr", false},
              {"rng:bls12-381.fr", false},
-             {"verifier_key:multilinear.kzg.bls12-381/1", false}}) {
+             {"verifier_key:multilinear.kzg.bls12-381/0", false}}) {
       auto encoded = protocol::encodeVariant(
           {"Optional", {{"None", {}}, {"Some", {leaf.str()}}}});
       require(bool(encoded), "closed grammar fixture failed");
@@ -253,7 +253,7 @@ int main() {
                 "new structural constructor requires native policy review");
     for (StringRef spelling :
          {"vector<rng:bls12-381.fr>",
-          "matrix<opening_state:multilinear.kzg.bls12-381/1>",
+          "matrix<opening_state:multilinear.kzg.bls12-381/0>",
           "polynomial<rng:bls12-381.fr>"}) {
       auto value = protocol::parseBoundType(spelling, false);
       require(!value, "domain constructor accepted an arbitrary type leaf");
@@ -393,7 +393,7 @@ int main() {
   cases.run("statement preservation refuses computed candidate operands", [&] {
     auto source = parseSourceString<ModuleOp>(R"mlir(module {
       "protocol.module"() ({
-        relation.declare @r {kind="external", key="test/statement", revision="1", signature=(i1) -> i1, purposes=["statement"]}
+        relation.declare @r {kind="external", key="test/statement", revision="0", signature=(i1) -> i1, purposes=["statement"]}
         "protocol.func"() ({ ^entry(%a: i1, %b: i1):
           %computed = arith.andi %a, %b : i1
           protocol.statement @r(%a) {selectors=["P"], acceptance=0 : i64} : i1

@@ -132,7 +132,7 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("native-proof-candidate"));
       if (auto e = checkNativeProof(*original, *candidate, *policy))
         return fail(std::move(e));
-      outs() << "[\"zkc.native-proof-checked/1\"]\n";
+      outs() << "[\"zkc.native-proof-checked/0\"]\n";
     } else {
       auto constructed = constructNativeProof(*original, *policy);
       if (!constructed)
@@ -165,7 +165,7 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(report.takeError());
       if (auto error = checkPublicCoin(*original, *requirement, *report))
         return fail(std::move(error));
-      outs() << "{\"format\":\"zkc.public-coin-checked/1\"}\n";
+      outs() << "{\"format\":\"zkc.public-coin-checked/0\"}\n";
     } else {
       auto report = analyzePublicCoin(*original, *requirement);
       if (!report)
@@ -244,7 +244,7 @@ int zkc::runCompiler(int argc, char **argv,
       return fail(result.takeError());
     if (result->publicCoin || result->correspondence)
       outs() << json::Value(json::Object{
-                    {"format", "zkc.checked-run/1"},
+                    {"format", "zkc.checked-run/0"},
                     {"bundle", result->bundle},
                     {"correspondence",
                      result->correspondence

@@ -11,7 +11,7 @@ use zkc_runtime::interactive::{
 use zkc_test_support::variants::logical;
 
 fn physical(nominal: &str, arms: Json) -> String {
-    format!("{}@logical.variant/1", logical(nominal, arms))
+    format!("{}@logical.variant/0", logical(nominal, arms))
 }
 fn descriptor(ty: &str) -> std::sync::Arc<zkc_runtime::interactive::VariantDescriptor> {
     LogicalType::parse(ty)
@@ -35,7 +35,7 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
         .map(|(i, _)| format!("out{i}"))
         .collect::<Vec<_>>();
     json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [
             ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
             [
@@ -80,9 +80,9 @@ fn fixture(ports: Json, results: Json, body: Json) -> Json {
 fn bytes(j: &Json) -> Vec<u8> {
     serde_json::to_vec(j).unwrap()
 }
-const FIELD: &str = "field:bls12-381.fr@arkworks.fr/1";
-const RNG: &str = "rng:bls12-381.fr@host.resource/1";
-const UNIT: &str = "resource_unit:Slot.A@logical.resource_unit/1";
+const FIELD: &str = "field:bls12-381.fr@arkworks.fr/0";
+const RNG: &str = "rng:bls12-381.fr@host.resource/0";
+const UNIT: &str = "resource_unit:Slot.A@logical.resource_unit/0";
 
 #[test]
 fn exact_canonical_descriptors_and_conservative_permissions() {
@@ -157,7 +157,7 @@ fn malformed_descriptors_fail_closed() {
         (json!([]), "variant:alternatives"),
         (json!([["a", []], ["a", []]]), "variant:duplicate-label"),
         (json!([["bad!", []]]), "variant:label"),
-        (json!([["ok", ["bool@native.bool/1"]]]), "variant:payload"),
+        (json!([["ok", ["bool@native.bool/0"]]]), "variant:payload"),
         (
             json!([["ok", ["unknown"]]]),
             "explicit nominal identity required",
@@ -193,7 +193,7 @@ fn malformed_descriptors_fail_closed() {
             "variant:hex",
         ),
         (format!("{valid}f"), "variant:hex"),
-        (format!("{valid}@logical.variant/1"), "variant:hex"),
+        (format!("{valid}@logical.variant/0"), "variant:hex"),
         ("variant:".to_owned(), "variant:hex"),
     ] {
         refused_as(&bad, detail);
@@ -216,7 +216,7 @@ fn malformed_descriptors_fail_closed() {
         deep = logical(&format!("N{i}"), json!([["ok", [deep]]]));
     }
     refused_as(&deep, "variant:limit");
-    let error = PhysicalType::parse(&format!("{valid}@host.resource/1")).unwrap_err();
+    let error = PhysicalType::parse(&format!("{valid}@host.resource/0")).unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
@@ -230,21 +230,21 @@ fn malformed_descriptors_fail_closed() {
 fn malformed_descriptor_graphs_name_the_failed_check() {
     for (descriptor, detail) in [
         (json!([]), "variant:descriptor"),
-        (json!(["zkc.variant/1"]), "variant:descriptor"),
+        (json!(["zkc.variant/0"]), "variant:descriptor"),
         // A canonical graph whose root is a lone string, not a variant tree.
-        (json!(["zkc.variant/1", ["x"]]), "variant:descriptor"),
+        (json!(["zkc.variant/0", ["x"]]), "variant:descriptor"),
         (json!(["invalid.variant", ["x"]]), "variant:format"),
-        (json!(["zkc.variant/1", []]), "variant:descriptor"),
-        (json!(["zkc.variant/1", [1]]), "variant:graph-node"),
+        (json!(["zkc.variant/0", []]), "variant:descriptor"),
+        (json!(["zkc.variant/0", [1]]), "variant:graph-node"),
         (
-            json!(["zkc.variant/1", ["x", ["01"]]]),
+            json!(["zkc.variant/0", ["x", ["01"]]]),
             "variant:graph-reference",
         ),
         (
-            json!(["zkc.variant/1", ["x", ["99999999999999999999"]]]),
+            json!(["zkc.variant/0", ["x", ["99999999999999999999"]]]),
             "variant:graph-reference",
         ),
-        (json!(["zkc.variant/1", [["0"]]]), "variant:graph-reference"),
+        (json!(["zkc.variant/0", [["0"]]]), "variant:graph-reference"),
     ] {
         refused_as(&raw(descriptor), detail);
     }
@@ -254,10 +254,10 @@ fn malformed_descriptor_graphs_name_the_failed_check() {
     for i in 0..40 {
         nodes.push(json!([i.to_string(), i.to_string()]));
     }
-    refused_as(&raw(json!(["zkc.variant/1", nodes])), "variant:graph-limit");
+    refused_as(&raw(json!(["zkc.variant/0", nodes])), "variant:graph-limit");
     // One node past the graph's node budget, however small each node is.
     let wide: Vec<Json> = (0..=16384).map(|_| json!("x")).collect();
-    refused_as(&raw(json!(["zkc.variant/1", wide])), "variant:graph-limit");
+    refused_as(&raw(json!(["zkc.variant/0", wide])), "variant:graph-limit");
     let valid = logical("X", json!([["ok", []]]));
     for (tree, detail) in [
         (json!(["X", [["ok"]]]), "variant:alternative"),
@@ -354,7 +354,7 @@ fn selected_arm_and_capture_execute_on_native_backend() {
         ("two", json!(["x", "flag"]), 14),
     ] {
         let j = fixture(
-            json!([["x", FIELD], ["cap", FIELD], ["flag", "bool@native.bool/1"]]),
+            json!([["x", FIELD], ["cap", FIELD], ["flag", "bool@native.bool/0"]]),
             json!([FIELD]),
             json!([
                 ["variant", "pack", ty, arm, payload, "v"],
@@ -407,7 +407,7 @@ fn nested_affine_rng_crosses_only_selected_frames_and_keeps_authority() {
         json!([["rng", ["rng:bls12-381.fr"]], ["zero", []]]),
     );
     let outer = physical("Outer", json!([["nested", [inner]], ["unused", []]]));
-    let inner_physical = format!("{inner}@logical.variant/1");
+    let inner_physical = format!("{inner}@logical.variant/0");
     let j = fixture(
         json!([["r", RNG]]),
         json!([FIELD, RNG]),
@@ -850,8 +850,8 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
     let j = fixture(
         json!([
             ["r", RNG],
-            ["lo", "index@native.index/1"],
-            ["hi", "index@native.index/1"]
+            ["lo", "index@native.index/0"],
+            ["hi", "index@native.index/0"]
         ]),
         json!([RNG]),
         json!([
@@ -962,11 +962,11 @@ fn duplicate_affine_captures_refuse() {
 #[test]
 fn private_match_cannot_schedule_transcript_challenges() {
     let ty = physical("Private", json!([["a", []], ["b", []]]));
-    let transcript = "transcript:merlin3.bls12-381.fr64be/1@host.resource/1";
+    let transcript = "transcript:merlin3.bls12-381.fr64be/0@host.resource/0";
     let mut j = fixture(
         json!([
             ["t", transcript],
-            ["coordinates", "indices@native.indices/1"]
+            ["coordinates", "indices@native.indices/0"]
         ]),
         json!([]),
         json!([
@@ -1002,7 +1002,7 @@ fn private_match_cannot_schedule_transcript_challenges() {
     j[1].as_array_mut().unwrap().push(json!([
         "challenge",
         "transcript.native.indexed.challenge",
-        ["merlin3.bls12-381.fr64be/1"],
+        ["merlin3.bls12-381.fr64be/0"],
         "arkworks/transcript.native.indexed.challenge"
     ]));
     let mut outside_match = j.clone();

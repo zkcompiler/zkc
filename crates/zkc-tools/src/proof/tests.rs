@@ -11,13 +11,13 @@ fn nested_wire_permission_is_exact() {
     ] {
         let logical = wire_type(spelling, false).unwrap();
         let physical = PhysicalType::default_for(logical.clone()).unwrap();
-        assert_eq!(wire_codec(&logical).as_deref(), Some("zkc.native-data/1"));
+        assert_eq!(wire_codec(&logical).as_deref(), Some("zkc.native-data/0"));
         assert_eq!(input_kind(&physical).unwrap(), "wire");
     }
     for spelling in [
         "polynomial:bn254.fr",
         "sequence<polynomial:bn254.fr>",
-        "sequence<prover_key:multilinear.kzg.bls12-381/1>",
+        "sequence<prover_key:multilinear.kzg.bls12-381/0>",
     ] {
         assert!(wire_type(spelling, false).is_err());
     }
@@ -37,7 +37,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         } else {
             vec![]
         };
-        outputs.push("bool@native.bool/1".into());
+        outputs.push("bool@native.bool/0".into());
         let mut values = if returned { vec!["u"] } else { vec![] };
         values.push("done");
         let mut body = vec![json!(["op", "create", "create", [], [], ["u"]])];
@@ -47,7 +47,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         body.push(json!(["bool_constant", "done", "done", true]));
         body.push(json!(["return", values]));
         let candidate = json!([
-            "zkc.program/2",
+            "zkc.program/0",
             [
                 [
                     "create",
@@ -68,7 +68,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     "function",
                     "accept",
                     [],
-                    ["bool@native.bool/1"],
+                    ["bool@native.bool/0"],
                     [
                         ["bool_constant", "accept", "yes", true],
                         ["return", ["yes"]]
@@ -93,7 +93,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                     "main",
                     "V",
                     [],
-                    ["bool@native.bool/1"],
+                    ["bool@native.bool/0"],
                     [
                         ["local", "accept", "accept", [], ["yes"]],
                         ["return", ["yes"]]
@@ -105,9 +105,9 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         ])
         .to_string();
         let descriptor = json!([
-            "zkc.native-proof-descriptor/5",
+            "zkc.native-proof-descriptor/0",
             [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy/0",
                 "main",
                 "P",
                 "V",
@@ -117,7 +117,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 [],
                 []
             ],
-            "zkc.native-origin/2",
+            "zkc.native-origin/0",
             [],
             [],
             []
@@ -128,7 +128,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             json!([["1", "bool"]])
         };
         let deployment = json!([
-            "zkc.native-proof/5",
+            "zkc.native-proof/0",
             "0".repeat(64),
             descriptor,
             hash(&logical::encode_tree(&descriptor).unwrap()),
@@ -216,7 +216,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             continue;
         }
         let deployment = admitted.unwrap();
-        let inputs = json!(["zkc.native-proof-inputs/1", [], [], "", [], "0"]);
+        let inputs = json!(["zkc.native-proof-inputs/0", [], [], "", [], "0"]);
         let report = deployment.execute(&inputs, None).unwrap();
         assert!(report.cleanup_errors.is_empty());
         let proof = report.outcome.unwrap();
@@ -245,7 +245,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
         assert_eq!(hex(&proof[8..40]), vector["sha256"]);
         let root = logical::decode_tree(&prepared.root).unwrap();
         assert_eq!(root, vector["tree"]);
-        assert_eq!(root[0], "zkc.native-proof-binding/5");
+        assert_eq!(root[0], "zkc.native-proof-binding/0");
         // Bind the complete current invocation, including its context and arity.
         for field in [0, 3, 4, 10] {
             let mut changed = root.clone();
@@ -381,9 +381,9 @@ fn domain_inputs_use_current_native_codec() {
 fn setup_authority_parser_rejects_ambiguous_records() {
     let id = "00".repeat(32);
     for value in [
-        json!(["zkc.native-setup-authority/1", [["2", id], ["2", id]], []]),
+        json!(["zkc.native-setup-authority/0", [["2", id], ["2", id]], []]),
         json!([
-            "zkc.native-setup-authority/1",
+            "zkc.native-setup-authority/0",
             [["2", id]],
             [["1", "2"], ["1", "2"]]
         ]),
@@ -394,8 +394,8 @@ fn setup_authority_parser_rejects_ambiguous_records() {
         );
     }
     for value in [
-        json!(["zkc.native-setup-authority/1", [["02", id]], []]),
-        json!(["zkc.native-setup-authority/1", [["2", "aF".repeat(32)]], []]),
+        json!(["zkc.native-setup-authority/0", [["02", id]], []]),
+        json!(["zkc.native-setup-authority/0", [["2", "aF".repeat(32)]], []]),
         json!(["invalid.native-setup-authority", [], []]),
     ] {
         assert!(SetupAuthority::parse(&serde_json::to_vec(&value).unwrap()).is_err());

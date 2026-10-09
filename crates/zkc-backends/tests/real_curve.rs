@@ -33,7 +33,7 @@ fn nominal_bindings_match_independent_provider_signatures() {
     for (contract, arguments) in [
         ("curve.generator", vec!["bls12-381.g1"]),
         ("curve.scale", vec!["bls12-381.g1"]),
-        ("pcs.commit", vec!["multilinear.kzg.bls12-381/1"]),
+        ("pcs.commit", vec!["multilinear.kzg.bls12-381/0"]),
         ("poly.fold", vec!["bls12-381.fr"]),
         ("bool.and", vec![]),
         ("control.require", vec![]),
@@ -67,7 +67,7 @@ fn nominal_bindings_match_independent_provider_signatures() {
         ),
         (
             "transcript.observe.nonce",
-            vec!["merlin3.bls12-381.fr64be/1"],
+            vec!["merlin3.bls12-381.fr64be/0"],
             "arkworks/transcript.observe.nonce",
         ),
         ("bool.and", vec![], "reference/bool.and"),
@@ -84,8 +84,8 @@ fn nominal_bindings_match_independent_provider_signatures() {
         );
     }
     assert!(LogicalType::parse("scalar:bls12-381.fr").is_err());
-    assert!(LogicalType::parse("group:reference.additive.bls12-381.fr/1").is_err());
-    assert!(PhysicalType::parse("group:bls12-381.g1@reference.additive-fr/1").is_err());
+    assert!(LogicalType::parse("group:reference.additive.bls12-381.fr/0").is_err());
+    assert!(PhysicalType::parse("group:bls12-381.g1@reference.additive-fr/0").is_err());
 }
 #[test]
 fn public_curve_kernels_and_vector_bounds_run_through_runner() {
@@ -183,11 +183,11 @@ fn public_codecs_are_exact_and_nominally_typed() {
     let b = real();
     let g = Value::Curve(GroupPoint::generator());
     let wire = b.encode_native_value(&g).unwrap();
-    assert_eq!(&wire[..6], b"ZKCV\x01\x09");
+    assert_eq!(&wire[..6], b"ZKCV\x00\x09");
     assert_eq!(wire.len(), 54);
     // A scalar-sized payload is malformed for G1; never map the
     // exposed discrete logarithm onto a curve generator.
-    let mut malformed_group = b"ZKCV\x01\x09".to_vec();
+    let mut malformed_group = b"ZKCV\x00\x09".to_vec();
     malformed_group.extend(zkc_arkworks::encode_scalar(&Scalar::from(1)).unwrap());
     assert!(
         b.decode_native_value(&g.physical_type(), &malformed_group)
@@ -222,7 +222,7 @@ fn public_codecs_are_exact_and_nominally_typed() {
                 .is_err()
         );
     }
-    let mut enormous = b"ZKCV\x01\x43".to_vec();
+    let mut enormous = b"ZKCV\x00\x43".to_vec();
     enormous.extend(u32::MAX.to_le_bytes());
     assert_eq!(
         b.decode_native_value(
@@ -236,7 +236,7 @@ fn public_codecs_are_exact_and_nominally_typed() {
         .to_string(),
         "native-wire-limit"
     );
-    let mut invalid = b"ZKCV\x01\x43".to_vec();
+    let mut invalid = b"ZKCV\x00\x43".to_vec();
     invalid.extend(1u32.to_le_bytes());
     invalid.extend([0; 48]);
     invalid[10] = 0x80;
@@ -250,7 +250,7 @@ fn public_codecs_are_exact_and_nominally_typed() {
         )
         .is_err()
     );
-    let mut nonexistent = b"ZKCV\x01\x43".to_vec();
+    let mut nonexistent = b"ZKCV\x00\x43".to_vec();
     nonexistent.extend(2u32.to_le_bytes());
     assert_eq!(
         b.decode_native_value(

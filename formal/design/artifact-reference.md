@@ -4,7 +4,7 @@
 construction records defined by [`Tools.Artifact`](../Tools/Artifact/Main.lean).
 It interprets the original generic library or common protocol's validator under
 its selected transcript construction. These records are independent of the
-supported `zkc.program/2` carrier; this tool is not a native proof Host or a
+supported `zkc.program/0` carrier; this tool is not a native proof Host or a
 validator of the current compiler's output.
 
 ## Module responsibilities
@@ -31,7 +31,7 @@ Lean implements source control, Fr and Ristretto-scalar arithmetic, finite vecto
 univariate polynomials and BLS table operations independently.
 Public SHA-256, Merlin and group/PCS computations enter as explicitly supplied
 replies. Each request contains the actual configured key and public operands,
-or the binding root and complete transcript history. `/2` requests retain full
+or the binding root and complete transcript history. Requests retain full
 nominal types and explicit operation static arguments. Suite-bearing Merlin
 requests expect raw 64-byte output; Lean performs the corresponding field
 reduction. Values retain the nominal field/group distinction; another domain

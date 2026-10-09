@@ -31,7 +31,7 @@ native = commands.verified(module('exec'))
 commands.source('protocol-export', native, refuses='native-physical-required')
 native = commands.verified(native, None, '--zkc-select-physical')
 carrier = json.loads(commands.source('protocol-export', native))
-assert carrier[0] == 'zkc.program/2'
+assert carrier[0] == 'zkc.program/0'
 assert len(carrier) == 5 and len(carrier[3][0]) == 8
 assert json.loads(canonical_program(commands, json.dumps(carrier))) == carrier
 mutant = list(carrier)

@@ -256,8 +256,8 @@ int main() {
         let opened=kernel<C>("pcs.open",committed.1,point);
         return kernel<C>("pcs.check",vk,committed.0,point,opened.0,opened.1);
       }
-      domain Kzg=commitment("multilinear.kzg.bls12-381/1");
-      domain Rows=commitment("rows.merkle-keccak256.koala-bear/1");
+      domain Kzg=commitment("multilinear.kzg.bls12-381/0");
+      domain Rows=commitment("rows.merkle-keccak256.koala-bear/0");
       fn concrete(pk:ProverKey<Kzg>,vk:VerifierKey<Kzg>,
           data:Table<Kzg::ValueField>,point:Point<Kzg::PointField>)->bool {
         return round<Kzg>(pk,vk,data,point);

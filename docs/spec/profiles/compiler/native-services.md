@@ -7,8 +7,8 @@ It defines a native execution contract. The [mathematical source profile](../sou
 ## Common IR
 
 `!protocol.service_ref<Contract>` is a reference to one managed service root.
-Installed contracts are `random.bls12-381.fr/1`, `random.bn254.fr/1`,
-`random.ristretto255.scalar/1` and `random.koala-bear.ext8-binomial3/1`.
+Installed contracts are `random.bls12-381.fr/0`, `random.bn254.fr/0`,
+`random.ristretto255.scalar/0` and `random.koala-bear.ext8-binomial3/0`.
 These four RNG distributions/providers are the complete registered service
 surface. Arbitrary user-defined request/reply families require a future extension.
 Each has method `draw`, no arguments, and one result in its named field under
@@ -22,7 +22,7 @@ The admitted operation is:
 
 ```mlir
 %x = "protocol.query"(%rng) {method="draw", owner="Alice", site="challenge"}
-  : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
+  : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
 ```
 
 It draws one field element and changes the root's state. Its result is available
@@ -58,7 +58,7 @@ certificate and is not exported in participant JSON.
 
 ### Native carrier
 
-The current carrier is [the program format](program.md), `zkc.program/2`.
+The current carrier is [the program format](program.md), `zkc.program/0`.
 The root has five fields. Every participant record has an eighth field containing
 service rows `[name, contract, input_index]`, where the index is a canonical
 nonnegative decimal string. Participants without services use an empty list.

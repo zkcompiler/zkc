@@ -31,7 +31,7 @@ def inventory(toolchain):
     declarations = json.loads(run([
         toolchain.tool("compiler", "zkc-tblgen"), "--dump-contract-declarations",
         "-I", ROOT / "compiler/include", ROOT / "compiler/include/zkc/Contracts/Declarations.td"]))
-    assert declarations["format"] == "zkc.contract-declarations/3"
+    assert declarations["format"] == "zkc.contract-declarations/0"
     operation_fields = {"name", "scope", "stage", "commonGeneric", "parameters",
                         "inputs", "outputs", "requirements", "facets"}
     for operation in declarations["operations"]:
@@ -112,13 +112,13 @@ def required_atomic_types():
         "ristretto255.group": "group groups",
         "bn254.g1": "group groups",
         "bn254.g2": "group groups",
-        "multilinear.kzg.bls12-381/1": "commitment proof opening_state prover_key verifier_key",
-        "rows.merkle-keccak256.koala-bear/1": "commitment proof opening_state commitments opening_states",
-        "rows.merkle-keccak256.koala-bear.ext8-binomial3/1": "commitment proof opening_state commitments opening_states",
-        "merlin3.bls12-381.fr64be/1": "transcript",
-        "merlin3.ristretto255.scalar64le/1": "transcript",
-        "spongefish0.7.4.keccak.bls12-381.fr64be/1": "transcript",
-        "merlin3.koala-bear.ext8-binomial3.rejection31le/1": "transcript",
+        "multilinear.kzg.bls12-381/0": "commitment proof opening_state prover_key verifier_key",
+        "rows.merkle-keccak256.koala-bear/0": "commitment proof opening_state commitments opening_states",
+        "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
+        "merlin3.bls12-381.fr64be/0": "transcript",
+        "merlin3.ristretto255.scalar64le/0": "transcript",
+        "spongefish0.7.4.keccak.bls12-381.fr64be/0": "transcript",
+        "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
     assert len(result) == 63
@@ -171,7 +171,7 @@ def test_atomic_representations(inventory, drivers, directory):
     probes = set(keys)
     for row in catalog["logical_types"]:
         names = {r["representation"] for r in rows if r["kind"] == row["kind"]}
-        names.add("unknown.representation/1")
+        names.add("unknown.representation/0")
         probes.update((row["kind"], row["domain"], name) for name in names)
     requests, expected = [], []
     for kind, domain, representation in sorted(probes):
@@ -195,16 +195,16 @@ def test_structural_formation_permissions_and_refusals(drivers, directory):
         return f"fixed_vector<{element},{n}>"
 
     accepted = [
-        (fixed("field:koala-bear", n), True, True, "plonky3.fixed-vector/1")
+        (fixed("field:koala-bear", n), True, True, "plonky3.fixed-vector/0")
         for n in (0, 1, 4, 1048576)
     ] + [
         (fixed("field:bls12-381.fr"), True, True, None),
         (fixed(fixed("field:koala-bear"), 2), True, True, None),
-        ("resource_unit:Ticket", False, True, "logical.resource_unit/1"),
+        ("resource_unit:Ticket", False, True, "logical.resource_unit/0"),
         (fixed("resource_unit:Ticket", 0), False, True, None),
         (fixed("resource_unit:Ticket"), False, True, None),
         (fixed("rng:bls12-381.fr", 0), False, False, None),
-        (fixed("transcript:merlin3.bls12-381.fr64be/1"), False, False, None),
+        (fixed("transcript:merlin3.bls12-381.fr64be/0"), False, False, None),
         (fixed(fixed("rng:bls12-381.fr")), False, False, None),
     ]
     deepest = "field:koala-bear"
@@ -217,8 +217,8 @@ def test_structural_formation_permissions_and_refusals(drivers, directory):
         "fixed_vector<field:\"koala-bear\">", "fixed_vector<field:\"koala-bear\",4,4>",
         "fixed_vector<\"koala-bear\",4>", "fixed_vector<4,field:\"koala-bear\">",
         "fixed_vector<field:unknown,4>", "fixed_vector<field:\"koala-bear\", 4>",
-        "fixed_vector<field:\"koala-bear\"@plonky3.koala-bear/1,4>",
-        fixed("field:koala-bear") + "@plonky3.fixed-vector/1",
+        "fixed_vector<field:\"koala-bear\"@plonky3.koala-bear/0,4>",
+        fixed("field:koala-bear") + "@plonky3.fixed-vector/0",
         fixed("field:koala-bear", "04"), fixed("field:koala-bear", "-1"),
         fixed("field:koala-bear", "+4"), fixed("field:koala-bear", "1.0"),
         fixed("field:koala-bear", "1048577"), fixed("field:koala-bear", "18446744073709551616"),
@@ -266,11 +266,11 @@ def candidates(inventory):
                         "vector:koala-bear", "vector:koala-bear.ext8-binomial3",
                         "matrix:bn254.fr", "matrix:koala-bear.ext8-binomial3",
                         "groups:bn254.g2", "groups:ristretto255.group",
-                        "commitment:rows.merkle-keccak256.koala-bear/1",
-                        "proof:rows.merkle-keccak256.koala-bear/1",
-                        "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/1",
-                        "opening_state:rows.merkle-keccak256.koala-bear/1",
-                        "commitments:rows.merkle-keccak256.koala-bear/1"]]
+                        "commitment:rows.merkle-keccak256.koala-bear/0",
+                        "proof:rows.merkle-keccak256.koala-bear/0",
+                        "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+                        "opening_state:rows.merkle-keccak256.koala-bear/0",
+                        "commitments:rows.merkle-keccak256.koala-bear/0"]]
         else:
             sort = {"field": "Field", "fixed": "Field", "array": "Field", "group": "Group",
                     "commitment": "Commitment", "transcript": "Transcript"}[group]
@@ -516,14 +516,14 @@ def test_explicit_semantic_witnesses(drivers, directory):
         ("pairing.check", ["bn254.fr"], ["groups:bn254.g1", "groups:bn254.g2"], ["bool"]),
         ("pairing.apply", ["bn254.fr"], ["group:bn254.g1", "group:bn254.g2"], ["group:bn254.gt"]),
         ("vector.equal", ["bn254.fr"], ["vector:bn254.fr", "vector:bn254.fr"], ["bool"]),
-        ("pcs.check", ["multilinear.kzg.bls12-381/1"],
-         ["verifier_key:multilinear.kzg.bls12-381/1", "commitment:multilinear.kzg.bls12-381/1",
-          "point:bls12-381.fr", "field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/1"], ["bool"]),
-        ("oracle.commit", ["rows.merkle-keccak256.koala-bear/1"], ["vector:koala-bear", "index"],
-         ["commitment:rows.merkle-keccak256.koala-bear/1", "opening_state:rows.merkle-keccak256.koala-bear/1"]),
-        ("transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/1"],
-         ["transcript:merlin3.bls12-381.fr64be/1", "indices"],
-         ["field:bls12-381.fr", "transcript:merlin3.bls12-381.fr64be/1"]),
+        ("pcs.check", ["multilinear.kzg.bls12-381/0"],
+         ["verifier_key:multilinear.kzg.bls12-381/0", "commitment:multilinear.kzg.bls12-381/0",
+          "point:bls12-381.fr", "field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/0"], ["bool"]),
+        ("oracle.commit", ["rows.merkle-keccak256.koala-bear/0"], ["vector:koala-bear", "index"],
+         ["commitment:rows.merkle-keccak256.koala-bear/0", "opening_state:rows.merkle-keccak256.koala-bear/0"]),
+        ("transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"],
+         ["transcript:merlin3.bls12-381.fr64be/0", "indices"],
+         ["field:bls12-381.fr", "transcript:merlin3.bls12-381.fr64be/0"]),
     ]
     requests = [binding(name, args) for name, args, _, _ in witnesses]
     expected = [{"accepted": True, "physical": False, "inputs": inputs, "outputs": outputs}
@@ -559,11 +559,11 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
             ("fixed_vector.dot", ["unknown", "4"]),
             ("fixed_vector.dot", ["koala-bear", "04"]),
             ("fixed_vector.dot", ["koala-bear", "1048577"]),
-            ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/1"]),
+            ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0"]),
             ("transcript.native.indexed.observe.data", ["unknown.suite", "field:bls12-381.fr"]),
-            ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/1",
+            ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
                                                       "field_array<bls12-381.g1,4>"]),
-            ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/1",
+            ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
                                                       "field:bls12-381.fr", "invented.codec"]),
             ("resource_unit.create", ["0bad"]),
             ("field.add", ["koala-bear", "koala-bear"]),
@@ -871,7 +871,7 @@ def test_generated_applied_representations(inventory, drivers, directory):
         wanted.append({"kind": "logical", "required": bool(matches),
                        "default": logical + "@" + defaults[0]["representation"] if defaults else None})
         representations = {p["representation"] for p in patterns if p["constructor"] == constructor}
-        representations.add("unknown.representation/1")
+        representations.add("unknown.representation/0")
         for representation in sorted(representations):
             physical = logical + "@" + representation
             requests.append({"physical_type": physical})
@@ -904,7 +904,7 @@ def test_native_array_signature_witnesses(drivers, directory):
                 binding("field_array.at", ["bls12-381.fr", "4"]),
                 {"type": "field_array<bls12-381.g1,4>"},
                 binding("transcript.native.indexed.observe.data",
-                        ["merlin3.bls12-381.fr64be/1", "field_array<bls12-381.g1,4>"])]
+                        ["merlin3.bls12-381.fr64be/0", "field_array<bls12-381.g1,4>"])]
     expected = [{"accepted": True, "physical": False, "inputs": ["vector:bls12-381.fr"], "outputs": [array]},
                 {"accepted": True, "physical": False, "inputs": [array], "outputs": [field]},
                 {"accepted": False}, {"accepted": False}]
@@ -961,9 +961,9 @@ def origin_tree(value):
 
 def test_actual_origin_template_admission(drivers, directory):
     def template(kind, *, path=(), port="input_2", entry="main", tail=()):
-        event = (["query", "Round", "draw", port, "random.bls12-381.fr/1", "draw", "V"]
+        event = (["query", "Round", "draw", port, "random.bls12-381.fr/0", "draw", "V"]
                  if kind == "query" else ["message", "Round", "response", "response", "P", "V"])
-        return ["zkc.native-origin-template/1", entry, list(path), list(tail), event]
+        return ["zkc.native-origin-template/0", entry, list(path), list(tail), event]
 
     query_origin = template("query", path=[["repeat", "main", "rounds"], ["apply", "main", "step"]])
     message_origin = template("message")
@@ -989,7 +989,7 @@ def test_actual_origin_template_admission(drivers, directory):
     cases = []
     for kind, name, attributes, expected in specimens:
         contract = "transcript.native.indexed." + ("challenge" if kind == "query" else "observe.data")
-        arguments = ["merlin3.bls12-381.fr64be/1"] + (["bool"] if kind == "message" else [])
+        arguments = ["merlin3.bls12-381.fr64be/0"] + (["bool"] if kind == "message" else [])
         cases.append({"name": name, "contract": contract, "arguments": arguments,
                       "implementation": "arkworks/" + contract, "attributes": attributes, "admitted": expected})
         if name == "size-ceiling":
@@ -1046,7 +1046,7 @@ def entry_record(child, *, custody=False, permissions=None, name="Record"):
 
 def entry_request(schema, roles, *, setup=False):
     document = {
-        "format": "zkc.language-interface/7", "capture": "1" * 64,
+        "format": "zkc.language-interface/0", "capture": "1" * 64,
         "original": sha256(b"conformance original").hexdigest(), "toolchain": "conformance",
         "entry": "test::Main", "protocol": "Main", "relations": [], "job": {"kind": "run"},
         "setups": ([{"name": "setup", "inputs": [{"port": 0, "path": []}]}] if setup else []),
@@ -1068,9 +1068,9 @@ def share_witnesses():
         ("polynomial:bls12-381.fr", "builtin", True, True, True, False),
         ("field_array<bls12-381.fr,0>", "builtin", True, True, True, False),
         ("sequence<sequence<field:koala-bear>>", "builtin", True, True, True, False),
-        ("prover_key:multilinear.kzg.bls12-381/1", "builtin", False, True, True, True),
-        ("sequence<prover_key:multilinear.kzg.bls12-381/1>", "builtin", False, True, True, True),
-        ("opening_state:rows.merkle-keccak256.koala-bear/1", "builtin", False, True, True, False),
+        ("prover_key:multilinear.kzg.bls12-381/0", "builtin", False, True, True, True),
+        ("sequence<prover_key:multilinear.kzg.bls12-381/0>", "builtin", False, True, True, True),
+        ("opening_state:rows.merkle-keccak256.koala-bear/0", "builtin", False, True, True, False),
         ("sequence<fixed_vector<field:koala-bear,4>>", "builtin", False, True, True, False),
         ("fixed_vector<field:koala-bear,0>", "builtin", False, True, False, False),
         ("fixed_vector<fixed_vector<field:koala-bear,4>,2>", "builtin", False, True, False, False),
@@ -1152,12 +1152,12 @@ def test_share_policy_drift_is_observed(drivers, directory):
 def variant_share_witnesses():
     requests, spellings, expected = [], [], []
     for leaf, kind, shared in [("field:koala-bear", "field", True),
-                               ("opening_state:rows.merkle-keccak256.koala-bear/1", "builtin", False)]:
+                               ("opening_state:rows.merkle-keccak256.koala-bear/0", "builtin", False)]:
         # A literal canonical postorder graph for Choice = Empty | Value(leaf).
         # No production variant builder supplies this independently authored graph.
         nodes = ["zkc.language", "test::Choice", ["0", "1"], "Empty", [], ["3", "4"],
                  "Value", leaf, ["7"], ["6", "8"], ["5", "9"], ["2", "10"]]
-        spelling = "variant:" + json.dumps(["zkc.variant/1", nodes], separators=(",", ":")).encode().hex()
+        spelling = "variant:" + json.dumps(["zkc.variant/0", nodes], separators=(",", ":")).encode().hex()
         spellings.append(spelling)
         for multi in (False, True):
             permissions = ["Copy", "Drop", "Share"] if multi else ["Copy", "Drop"]

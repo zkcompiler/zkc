@@ -22,8 +22,8 @@ private def resolve (physical : Bool) (binding : Declaration) (shape : Support.S
   let diagonal := binding.implementation == "arkworks-diagonal/" ++ binding.contract
   let representation := fun output i (ty : ValueType) =>
     if diagonal && ((output && i == 0 && binding.contract == "vector.mul") ||
-        (!output && i == 1 && binding.contract == "vector.dot")) then "arkworks.fr-diagonal/1"
-    else if msb && ty.kind == "table" then "arkworks.mle-msb/1"
+        (!output && i == 1 && binding.contract == "vector.dot")) then "arkworks.fr-diagonal/0"
+    else if msb && ty.kind == "table" then "arkworks.mle-msb/0"
     else ty.defaultRepresentation
   Support.realize physical binding logical (Support.scalarBackend field)
     (if field == fr then alternatives binding.contract else []) representation

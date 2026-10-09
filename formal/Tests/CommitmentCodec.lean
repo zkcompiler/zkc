@@ -10,7 +10,7 @@ private def identity : CommitmentIdentity :=
   ⟨2, ByteArray.mk (Array.replicate 32 13), ByteArray.mk (Array.replicate 32 29)⟩
 
 private def wire (proof : Bool) (i : CommitmentIdentity) : ByteArray :=
-  (magic.push (if proof then 7 else 6)) ++ "ZKCAR006".toUTF8 ++
+  (magic.push (if proof then 7 else 6)) ++ "ZKCAR000".toUTF8 ++
     ByteArray.mk #[if proof then 3 else 2] ++ little 8 i.rank ++ i.setup ++ i.key ++
     ByteArray.mk (Array.replicate (if proof then 96*i.rank else 48) 0)
 

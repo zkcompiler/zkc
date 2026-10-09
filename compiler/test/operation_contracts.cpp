@@ -165,7 +165,7 @@ int main() {
   // It has no logical kernel row and must not acquire one through discovery.
   BindingApplication relayout{
       "table.relayout",
-      {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
+      {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
       "arkworks/table.relayout"};
   auto physicalRelayout = resolveBinding(relayout, true);
   require(bool(physicalRelayout), "physical relayout must be installed");

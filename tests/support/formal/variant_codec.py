@@ -8,7 +8,7 @@ import json
 
 def tree(spelling):
     version, nodes = json.loads(bytes.fromhex(spelling.removeprefix('variant:')))
-    assert version == 'zkc.variant/1'
+    assert version == 'zkc.variant/0'
     values = []
     for node in nodes:
         values.append(node if isinstance(node, str) else [values[int(r)] for r in node])
@@ -27,7 +27,7 @@ def encode_tree(value):
         return ids[key]
 
     intern(value)
-    raw = json.dumps(['zkc.variant/1', nodes], ensure_ascii=False, separators=(',', ':'))
+    raw = json.dumps(['zkc.variant/0', nodes], ensure_ascii=False, separators=(',', ':'))
     return 'variant:' + raw.encode().hex()
 
 

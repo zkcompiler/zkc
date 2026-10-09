@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 pub(crate) const HEADER: usize = 81;
 pub(crate) const G1_BYTES: usize = 48;
 pub(crate) const G2_BYTES: usize = 96;
-const MAGIC: &[u8; 8] = b"ZKCAR006";
+const MAGIC: &[u8; 8] = b"ZKCAR000";
 
 #[derive(Clone, Copy)]
 pub(crate) enum Kind {

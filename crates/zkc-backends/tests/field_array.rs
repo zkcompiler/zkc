@@ -29,7 +29,7 @@ fn exact_frame_and_shape_are_checked() {
     assert_eq!(native_wire_size(&ty), Some(70));
     assert!(!ty.logical().kind().is_serializable());
     let bytes = backend.encode_native_value(&value).unwrap();
-    let mut expected = b"ZKCV\x01\x40".to_vec();
+    let mut expected = b"ZKCV\x00\x40".to_vec();
     for x in [1u8, 2] {
         let mut scalar = [0u8; 32];
         scalar[0] = x;

@@ -47,8 +47,8 @@ def run : IO Unit := do
   checks.holds (affine "resource_unit:Slot.A" && !duplicable "resource_unit:Slot.A" &&
     discardable "resource_unit:Slot.A" && !serializable "resource_unit:Slot.A") "permissions"
   checks.holds ((Bindings.valueType false "resource_unit:Slot.A").isOk) "nominal-logical"
-  checks.holds ((Bindings.valueType true "resource_unit:Slot.A@logical.resource_unit/1").isOk) "nominal-physical"
-  checks.holds (!(Bindings.valueType true "resource_unit:Slot.A@host.resource/1").isOk) "wrong-representation"
+  checks.holds ((Bindings.valueType true "resource_unit:Slot.A@logical.resource_unit/0").isOk) "nominal-physical"
+  checks.holds (!(Bindings.valueType true "resource_unit:Slot.A@host.resource/0").isOk) "wrong-representation"
   checks.holds (!(Bindings.valueType false "resource_unit:0bad").isOk) "bad-domain"
   checks.holds (!(Bindings.resolve true ⟨"op", "resource_unit.create", ["Slot.A"], "arkworks/resource_unit.create"⟩).isOk) "wrong-provider"
   checks.holds (errorCode exercise == "success") "create-pass-consume"

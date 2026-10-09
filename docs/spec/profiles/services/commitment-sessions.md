@@ -78,7 +78,7 @@ their ordered global messages.
 
 The selected preparation realization uses the
 [natural table interpreter](../compiler/factor-preparation.md#concrete-table-preparation).
-For key `h`, its preparation key has version `1`, origin `700`, captures `[0]`,
+For key `h`, its preparation key has version `0`, origin `700`, captures `[0]`,
 and six instructions: instruction `i`, for `i=0,…,5`, appends
 `(register[i]+h) % 7`. The result contains seven cells. Consumption is
 `(m+table[r % 7]) % 7`, with the interpreter's total missing-cell fallback;

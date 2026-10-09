@@ -64,10 +64,10 @@ fn numerical_identity_and_independent_installation_have_no_crypto_associations()
     );
     assert!(zkc_backends::domains::for_identity(Identity::None).is_none());
     for (kind, repr) in [
-        (Type::Field, "plonky3.koala-bear/1"),
-        (Type::Vector, "plonky3.koala-bear-vector/1"),
-        (Type::Polynomial, "plonky3.koala-bear-polynomial/1"),
-        (Type::Round, "plonky3.koala-bear-quadratic/1"),
+        (Type::Field, "plonky3.koala-bear/0"),
+        (Type::Vector, "plonky3.koala-bear-vector/0"),
+        (Type::Polynomial, "plonky3.koala-bear-polynomial/0"),
+        (Type::Round, "plonky3.koala-bear-quadratic/0"),
     ] {
         let ty = KOALA_BEAR.physical(kind).unwrap();
         assert_eq!(ty.representation().name(), repr);
@@ -75,7 +75,7 @@ fn numerical_identity_and_independent_installation_have_no_crypto_associations()
         assert_eq!(KOALA_BEAR.codec(kind), ty.logical().codec());
         assert_eq!(
             ty.logical().codec().unwrap(),
-            format!("zkcv.{}.koala-bear/1", kind.name())
+            format!("zkcv.{}.koala-bear/0", kind.name())
         );
         assert!(PhysicalType::new(ty.logical(), Representation::Fr).is_err());
         assert!(PhysicalType::new(ty.logical(), Representation::DalekScalar).is_err());
@@ -474,7 +474,7 @@ fn composed_product_dot_and_affine_fold_execute_without_setup() {
 }
 
 fn wire(tag: u8, count: Option<u32>, scalars: &[u32]) -> Vec<u8> {
-    let mut bytes = vec![0x5a, 0x4b, 0x43, 0x56, 1, tag];
+    let mut bytes = vec![0x5a, 0x4b, 0x43, 0x56, 0, tag];
     if let Some(n) = count {
         bytes.extend(n.to_le_bytes());
     }
@@ -749,7 +749,7 @@ fn native_wire_inputs_use_exact_nominal_type() {
         std::slice::from_ref(&v),
         &["out".into()],
     );
-    let wire = zkc_test_support::unhex("5a4b43560114020000000200000003000000");
+    let wire = zkc_test_support::unhex("5a4b43560014020000000200000003000000");
     let values = vec![
         b.decode_native_value(&v, &wire).unwrap(),
         b.decode_native_value(&f, &b.encode_native_value(&field(5)).unwrap())

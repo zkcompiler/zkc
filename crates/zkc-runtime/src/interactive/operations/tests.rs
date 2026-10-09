@@ -57,16 +57,16 @@ fn transcript_alternatives_keep_payload_and_primary_checks() {
     )
     .unwrap();
     for (suite, payload, accepted) in [
-        ("merlin3.bls12-381.fr64be/1", "field:bls12-381.fr", true),
-        ("merlin3.bls12-381.fr64be/1", "field:bn254.fr", true),
-        ("merlin3.bls12-381.fr64be/1", "wrong-type", false),
+        ("merlin3.bls12-381.fr64be/0", "field:bls12-381.fr", true),
+        ("merlin3.bls12-381.fr64be/0", "field:bn254.fr", true),
+        ("merlin3.bls12-381.fr64be/0", "wrong-type", false),
         (
-            "merlin3.ristretto255.scalar64le/1",
+            "merlin3.ristretto255.scalar64le/0",
             "field:ristretto255.scalar",
             false,
         ),
         (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/1",
+            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
             "field:bls12-381.fr",
             false,
         ),
@@ -84,12 +84,12 @@ fn transcript_alternatives_keep_payload_and_primary_checks() {
         contract: "transcript.native.indexed.observe.data".into(),
         implementation: "independent/test".into(),
         arguments: vec![
-            "merlin3.bls12-381.fr64be/1".into(),
+            "merlin3.bls12-381.fr64be/0".into(),
             "field:bls12-381.fr".into(),
         ],
     };
     let logical = logical_signature(&binding).unwrap();
-    binding.arguments[0] = "spongefish0.7.4.keccak.bls12-381.fr64be/1".into();
+    binding.arguments[0] = "spongefish0.7.4.keccak.bls12-381.fr64be/0".into();
     assert!(registry.select(&binding, &logical).is_err());
 }
 
@@ -103,7 +103,7 @@ fn transcript_data_refuses_local_table_layouts() {
         let binding = OperationBinding {
             contract: "transcript.native.indexed.observe.data".into(),
             implementation: "arkworks/transcript.native.indexed.observe.data".into(),
-            arguments: vec!["merlin3.bls12-381.fr64be/1".into(), payload.into()],
+            arguments: vec!["merlin3.bls12-381.fr64be/0".into(), payload.into()],
         };
         assert!(binding.signature().is_err());
     }

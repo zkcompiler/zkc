@@ -75,7 +75,7 @@ pub fn authority(bytes: &[u8]) -> Result<SetupAuthority> {
         return Err("entry-request-limit".into());
     }
     let value: Authority = document(bytes)?;
-    if value.format != "zkc.entry-setups/1" {
+    if value.format != "zkc.entry-setups/0" {
         return Err("entry-request-format".into());
     }
     Ok(SetupAuthority {
@@ -93,7 +93,7 @@ impl Interface {
             return Err("entry-job-kind".into());
         }
         let request: Run = document(bytes)?;
-        if request.format != "zkc.entry-run/1" {
+        if request.format != "zkc.entry-run/0" {
             return Err("entry-request-format".into());
         }
         let mut roles = BTreeMap::new();
@@ -111,7 +111,7 @@ impl Interface {
     pub fn proof_request(&self, bytes: &[u8], producer: bool) -> Result<ProofRequest> {
         let proof = self.proof().ok_or("entry-job-kind")?;
         let request: Proof = document(bytes)?;
-        if request.format != "zkc.entry-proof/1" {
+        if request.format != "zkc.entry-proof/0" {
             return Err("entry-request-format".into());
         }
         let role = &self.roles()[if producer {

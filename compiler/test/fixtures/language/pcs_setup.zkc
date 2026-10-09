@@ -1,5 +1,5 @@
 module sample;
-domain Kzg=commitment("multilinear.kzg.bls12-381/1");
+domain Kzg=commitment("multilinear.kzg.bls12-381/0");
 type PK<C:Commitment>=builtin("prover_key",C);
 type VK<C:Commitment>=builtin("verifier_key",C);
 type Vector<F:Field>=builtin("vector",F);

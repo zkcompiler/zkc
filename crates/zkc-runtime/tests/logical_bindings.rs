@@ -116,33 +116,33 @@ fn installed_bindings_have_exact_logical_ports() {
         ),
         (
             "oracle.commit",
-            &["rows.merkle-keccak256.koala-bear/1"],
+            &["rows.merkle-keccak256.koala-bear/0"],
             &["vector:koala-bear", "index"],
             &[
-                "commitment:rows.merkle-keccak256.koala-bear/1",
-                "opening_state:rows.merkle-keccak256.koala-bear/1",
+                "commitment:rows.merkle-keccak256.koala-bear/0",
+                "opening_state:rows.merkle-keccak256.koala-bear/0",
             ],
             AttributeRule::None,
         ),
         (
             "opening_states.empty",
-            &["rows.merkle-keccak256.koala-bear/1"],
+            &["rows.merkle-keccak256.koala-bear/0"],
             &[],
-            &["opening_states:rows.merkle-keccak256.koala-bear/1"],
+            &["opening_states:rows.merkle-keccak256.koala-bear/0"],
             AttributeRule::None,
         ),
         (
             "commitments.length",
-            &["rows.merkle-keccak256.koala-bear/1"],
-            &["commitments:rows.merkle-keccak256.koala-bear/1"],
+            &["rows.merkle-keccak256.koala-bear/0"],
+            &["commitments:rows.merkle-keccak256.koala-bear/0"],
             &["index"],
             AttributeRule::None,
         ),
         (
             "transcript.native.indexed.observe.data",
-            &["merlin3.bls12-381.fr64be/1", "bool"],
-            &["transcript:merlin3.bls12-381.fr64be/1", "bool", "indices"],
-            &["transcript:merlin3.bls12-381.fr64be/1"],
+            &["merlin3.bls12-381.fr64be/0", "bool"],
+            &["transcript:merlin3.bls12-381.fr64be/0", "bool", "indices"],
+            &["transcript:merlin3.bls12-381.fr64be/0"],
             AttributeRule::NativeMessageTemplate,
         ),
         (
@@ -241,21 +241,21 @@ fn open_selection_does_not_relax_nominal_requirements() {
         ("curve.msm", vec!["koala-bear"]),
         ("pairing.check", vec!["bls12-381.fr"]),
         ("poly.domain_root", vec!["bls12-381.fr"]),
-        ("oracle.commit", vec!["multilinear.kzg.bls12-381/1"]),
+        ("oracle.commit", vec!["multilinear.kzg.bls12-381/0"]),
         ("pcs.commit", vec!["koala-bear"]),
         ("random.index", vec!["koala-bear"]),
-        ("transcript.draw_index", vec!["merlin3.bls12-381.fr64be/1"]),
+        ("transcript.draw_index", vec!["merlin3.bls12-381.fr64be/0"]),
         (
             "transcript.observe.field",
             vec![
-                "merlin3.bls12-381.fr64be/1",
+                "merlin3.bls12-381.fr64be/0",
                 "koala-bear",
-                "zkcv.field.bls12-381.fr/1",
+                "zkcv.field.bls12-381.fr/0",
             ],
         ),
         (
             "transcript.observe.bool",
-            vec!["merlin3.bls12-381.fr64be/1", "zkcv.index/1"],
+            vec!["merlin3.bls12-381.fr64be/0", "zkcv.index/0"],
         ),
         ("resource_unit.create", vec![]),
         ("resource_unit.create", vec!["invalid slot"]),
@@ -275,7 +275,7 @@ fn unknown_transcript_contracts_are_not_logical_or_physical_bindings() {
     for contract in ["invalid.transcript", "transcript.native.indexed.unknown"] {
         let b = binding(
             contract,
-            &["merlin3.bls12-381.fr64be/1"],
+            &["merlin3.bls12-381.fr64be/0"],
             &format!("arkworks/{contract}"),
         );
         assert!(b.logical_signature().is_err(), "{contract}");
@@ -288,39 +288,39 @@ fn unknown_transcript_contracts_are_not_logical_or_physical_bindings() {
 fn selected_observations_keep_the_installed_suite_policy() {
     for (suite, provider, payload) in [
         (
-            "merlin3.bls12-381.fr64be/1",
+            "merlin3.bls12-381.fr64be/0",
             "arkworks",
             "group:bls12-381.g1",
         ),
         (
-            "merlin3.ristretto255.scalar64le/1",
+            "merlin3.ristretto255.scalar64le/0",
             "dalek",
             "field:ristretto255.scalar",
         ),
         (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/1",
+            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
             "spongefish",
             "matrix:bls12-381.fr",
         ),
         (
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             "plonky3",
             "vector:koala-bear",
         ),
         (
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             "plonky3",
             "field:koala-bear.ext8-binomial3",
         ),
         (
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             "plonky3",
-            "commitment:rows.merkle-keccak256.koala-bear/1",
+            "commitment:rows.merkle-keccak256.koala-bear/0",
         ),
         (
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             "plonky3",
-            "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/1",
+            "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
         ),
     ] {
         let ty = LogicalType::parse(payload).unwrap();
@@ -409,7 +409,7 @@ fn explicit_selections_preserve_ports_and_exact_physical_layouts() {
         ),
         (
             "transcript.native.indexed.challenge",
-            vec!["spongefish0.7.4.keccak.bls12-381.fr64be/1"],
+            vec!["spongefish0.7.4.keccak.bls12-381.fr64be/0"],
             "spongefish/transcript.native.indexed.challenge",
             Representation::Resource,
             false,
@@ -462,7 +462,7 @@ fn invalid_explicit_implementations_refuse_at_both_stages() {
         ("index.add", vec![], "native/unknown"),
         (
             "oracle.commit",
-            vec!["rows.merkle-keccak256.koala-bear/1"],
+            vec!["rows.merkle-keccak256.koala-bear/0"],
             "arkworks/oracle.commit",
         ),
         ("pairing.check", vec!["bn254.fr"], "plonky3/pairing.check"),
@@ -576,39 +576,39 @@ fn physical_type_errors_separate_incompatible_representations_from_bad_types() {
 
     for (spelling, code, detail) in [
         (
-            "field:koala-bear@arkworks.fr/1",
+            "field:koala-bear@arkworks.fr/0",
             ErrorCode::Representation,
             "representation does not implement logical type",
         ),
         (
-            "field:koala-bear@uninstalled.field/1",
+            "field:koala-bear@uninstalled.field/0",
             ErrorCode::Representation,
             "uninstalled representation",
         ),
         (
-            "fixed_vector<field:bls12-381.fr,4>@plonky3.fixed-vector/1",
+            "fixed_vector<field:bls12-381.fr,4>@plonky3.fixed-vector/0",
             ErrorCode::Representation,
             "unrepresented logical type",
         ),
         (
-            "fixed_vector<field:koala-bear,04>@plonky3.fixed-vector/1",
+            "fixed_vector<field:koala-bear,04>@plonky3.fixed-vector/0",
             ErrorCode::Type,
             "structural-natural",
         ),
         (
-            "unknown<bool,4>@plonky3.fixed-vector/1",
+            "unknown<bool,4>@plonky3.fixed-vector/0",
             ErrorCode::Type,
             "uninstalled structural constructor",
         ),
         (
-            "bool:@native.bool/1",
+            "bool:@native.bool/0",
             ErrorCode::Type,
             "noncanonical nominal spelling",
         ),
         ("bool", ErrorCode::Type, "physical representation required"),
         ("bool@", ErrorCode::Type, "uninstalled representation"),
         (
-            "bool@native.bool/1@native.bool/1",
+            "bool@native.bool/0@native.bool/0",
             ErrorCode::Type,
             "uninstalled representation",
         ),
@@ -627,7 +627,7 @@ fn physical_type_errors_separate_incompatible_representations_from_bad_types() {
 fn relayout_is_a_physical_only_contract() {
     let mut b = binding(
         "table.relayout",
-        &["bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"],
+        &["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"],
         "arkworks/table.relayout",
     );
     assert_eq!(
@@ -685,7 +685,7 @@ impl Backend for NoBackend {
 
 fn carrier(b: &OperationBinding) -> serde_json::Value {
     json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [["op", b.contract, b.arguments, b.implementation]],
         [],
         [[
@@ -750,7 +750,7 @@ fn production_admission_still_requires_backend_advertisement() {
         "function",
         "Constant",
         [],
-        ["index@native.index/1"],
+        ["index@native.index/0"],
         [["op", "site", "op", ["0"], [], ["x"]], ["return", ["x"]]],
         ["Constant", []]
     ]]);
@@ -793,7 +793,7 @@ fn logical_spelling_limit_excludes_the_outer_representation() {
         assert!(LogicalType::parse(&spelling).is_ok());
         // This type deliberately has no realization. Reaching selection proves
         // that the valid suffix did not consume the logical spelling allowance.
-        let physical = format!("{spelling}@plonky3.fixed-vector/1");
+        let physical = format!("{spelling}@plonky3.fixed-vector/0");
         let error = PhysicalType::parse(&physical).unwrap_err();
         assert_eq!(error.code, ErrorCode::Representation);
         assert_eq!(error.detail, "unrepresented logical type");
@@ -818,7 +818,7 @@ fn logical_spelling_limit_excludes_the_outer_representation() {
         "logical-type-limit"
     );
     assert_eq!(
-        PhysicalType::parse(&format!("{spelling}@plonky3.fixed-vector/1"))
+        PhysicalType::parse(&format!("{spelling}@plonky3.fixed-vector/0"))
             .unwrap_err()
             .detail,
         "logical-type-limit"
@@ -831,9 +831,9 @@ fn representation_spelling_is_checked_independently() {
         "field:koala-bear",
         "field:koala-bear@",
         "field:koala-bear@unknown",
-        "field:koala-bear@plonky3.koala-bear/1@native.index/1",
-        "fixed_vector<field:koala-bear@plonky3.koala-bear/1,4>@plonky3.fixed-vector/1",
-        "field:koala-bear@arkworks.fr/1",
+        "field:koala-bear@plonky3.koala-bear/0@native.index/0",
+        "fixed_vector<field:koala-bear@plonky3.koala-bear/0,4>@plonky3.fixed-vector/0",
+        "field:koala-bear@arkworks.fr/0",
     ] {
         assert!(PhysicalType::parse(spelling).is_err(), "{spelling}");
     }
@@ -851,7 +851,7 @@ fn variant_spelling_keeps_its_existing_larger_limit() {
     for bytes in [4096, 256 * 1024] {
         let spelling = variant_with_bytes(bytes);
         assert!(LogicalType::parse(&spelling).is_ok());
-        let physical = PhysicalType::parse(&format!("{spelling}@logical.variant/1")).unwrap();
+        let physical = PhysicalType::parse(&format!("{spelling}@logical.variant/0")).unwrap();
         assert_eq!(physical.logical().spelling(), spelling);
     }
     let spelling = variant_with_bytes(256 * 1024 + 2);
@@ -860,7 +860,7 @@ fn variant_spelling_keeps_its_existing_larger_limit() {
         "variant:limit"
     );
     assert_eq!(
-        PhysicalType::parse(&format!("{spelling}@logical.variant/1"))
+        PhysicalType::parse(&format!("{spelling}@logical.variant/0"))
             .unwrap_err()
             .detail,
         "physical type spelling limit"

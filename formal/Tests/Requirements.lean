@@ -62,16 +62,16 @@ private def refusal (input : String) : Option String :=
   match Tools.RequirementChecker.dispatch input with
   | .error code => some code
   | .ok _ => none
-#guard (accepted "[[\"zkc.requirements/1\",[[null,\"X\"],[\"apply\",\"Seal\",[]]],[],[],[[\"=\",[1,1]]]],[\"zkc.requirements-certificate/1\",[[[\"=\",[1,1]],\"application\",[],0]],[0]]]" == true)
-#guard (accepted "[[\"zkc.requirements/1\",[[\"apply\",\"Seal\",[0]]],[],[],[]],[\"zkc.requirements-certificate/1\",[],[]]]" == false)
-#guard (accepted "[[\"zkc.requirements/1\",[[\"apply\",\"\",[]]],[],[],[]],[\"zkc.requirements-certificate/1\",[],[]]]" == false)
-#guard (accepted "[[\"zkc.requirements/1\",[[\"apply\",\"Seal\",[]],[\"apply\",\"Seal\",[]]],[],[],[]],[\"zkc.requirements-certificate/1\",[],[]]]" == false)
-#guard (accepted "[[\"zkc.requirements/1\",[[null,\"F\"]],[],[],[[\"=\",[0,0]]]],[\"zkc.requirements-certificate/1\",[[[\"=\",[0,0]],\"reflexivity\",[],0]],[0]]]" == true)
+#guard (accepted "[[\"zkc.requirements/0\",[[null,\"X\"],[\"apply\",\"Seal\",[]]],[],[],[[\"=\",[1,1]]]],[\"zkc.requirements-certificate/0\",[[[\"=\",[1,1]],\"application\",[],0]],[0]]]" == true)
+#guard (accepted "[[\"zkc.requirements/0\",[[\"apply\",\"Seal\",[0]]],[],[],[]],[\"zkc.requirements-certificate/0\",[],[]]]" == false)
+#guard (accepted "[[\"zkc.requirements/0\",[[\"apply\",\"\",[]]],[],[],[]],[\"zkc.requirements-certificate/0\",[],[]]]" == false)
+#guard (accepted "[[\"zkc.requirements/0\",[[\"apply\",\"Seal\",[]],[\"apply\",\"Seal\",[]]],[],[],[]],[\"zkc.requirements-certificate/0\",[],[]]]" == false)
+#guard (accepted "[[\"zkc.requirements/0\",[[null,\"F\"]],[],[],[[\"=\",[0,0]]]],[\"zkc.requirements-certificate/0\",[[[\"=\",[0,0]],\"reflexivity\",[],0]],[0]]]" == true)
 -- One request format and one certificate format; a raised version name is refused.
-#guard (refusal "[[\"zkc.requirements/2\",[],[],[],[]],[\"zkc.requirements-certificate/1\",[],[]]]" == some "requirements-version")
-#guard (refusal "[[\"zkc.requirements/1\",[],[],[],[]],[\"zkc.requirements-certificate/2\",[],[]]]" == some "requirements-version")
+#guard (refusal "[[\"invalid.requirements\",[],[],[],[]],[\"zkc.requirements-certificate/0\",[],[]]]" == some "requirements-version")
+#guard (refusal "[[\"zkc.requirements/0\",[],[],[],[]],[\"invalid.requirements-certificate\",[],[]]]" == some "requirements-version")
 -- A step names the declaration it uses; one beyond the table is refused.
-#guard (refusal "[[\"zkc.requirements/1\",[[null,\"F\"]],[],[],[[\"=\",[0,0]]]],[\"zkc.requirements-certificate/1\",[[[\"=\",[0,0]],\"reflexivity\",[],1]],[0]]]" == some "requirements-declaration")
+#guard (refusal "[[\"zkc.requirements/0\",[[null,\"F\"]],[],[],[[\"=\",[0,0]]]],[\"zkc.requirements-certificate/0\",[[[\"=\",[0,0]],\"reflexivity\",[],1]],[0]]]" == some "requirements-declaration")
 
 #print axioms Derives.sound
 #print axioms checked_sound

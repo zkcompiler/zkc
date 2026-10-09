@@ -8,7 +8,7 @@ use zkc_backends::{GroupPoint, Scalar};
 use zkc_tools::proof::hex;
 pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: Option<Scalar>) {
     let root = root(envelope, input);
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
     assert_eq!(envelope[3], hex(&Sha256::digest(tree(&envelope[2]))));
     let policy = &envelope[2][1];
@@ -34,7 +34,7 @@ pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: O
                 protocol,
                 site,
                 format!("input_{}", case["challenge_port"].as_u64().unwrap_or(4)),
-                "random.bls12-381.fr/1",
+                "random.bls12-381.fr/0",
                 "draw",
                 v
             ])
@@ -58,14 +58,14 @@ pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: O
             })
             .collect::<Vec<_>>();
         let template = tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             entry,
             path,
             [],
             event
         ]));
         assert_eq!(envelope[2][3][event_index], json!([kind, hex(&template)]));
-        let origin = tree(&json!(["zkc.native-origin/2", entry, path, [], event]));
+        let origin = tree(&json!(["zkc.native-origin/0", entry, path, [], event]));
         event_index += 1;
         origin
     };
@@ -124,7 +124,7 @@ pub fn verify(case: &Json, envelope: &Json, input: &Json, proof: &[u8], nonce: O
             pos += 8;
             let payload = &proof[pos..pos + length];
             pos += length;
-            assert_eq!(payload, b"ZKCV\x01\x05\x01");
+            assert_eq!(payload, b"ZKCV\x00\x05\x01");
             let t = transcript.as_mut().unwrap();
             t.absorb(b"origin", &origin);
             t.absorb(b"value", payload);

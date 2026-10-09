@@ -101,7 +101,7 @@ fn conversions_retain_length_identity_and_never_expose_a_codec() {
     let value = call("from_vector", 3, vec![input.clone()]).remove(0);
     assert_eq!(
         value.physical_type().spelling(),
-        "fixed_vector<field:koala-bear,3>@plonky3.fixed-vector/1"
+        "fixed_vector<field:koala-bear,3>@plonky3.fixed-vector/0"
     );
     assert_ne!(value.physical_type(), input.physical_type());
     assert!(value.physical_type().is_duplicable());
@@ -328,8 +328,8 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         "1048577",
         "unknown<bool,0>",
         "fixed_vector<bool,01>",
-        "fixed_vector<bool,2>@plonky3.fixed-vector/1",
-        "zkcv.fixed_vector.koala-bear/1",
+        "fixed_vector<bool,2>@plonky3.fixed-vector/0",
+        "zkcv.fixed_vector.koala-bear/0",
     ] {
         carrier[2][0][5][1][1][1] = json!(bad);
         let error = admit_supplied(

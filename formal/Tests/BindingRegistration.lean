@@ -33,11 +33,11 @@ private def declarationJson (binding : Declaration) : Json :=
   .arr #[.str binding.name, .str binding.contract, Lean.toJson binding.arguments, .str binding.implementation]
 
 private def common (bindings : List Declaration) : Result Explicit.Module :=
-  Explicit.common (.arr #[.str "zkc.protocol/1", .arr (bindings.map declarationJson).toArray,
+  Explicit.common (.arr #[.str "zkc.protocol/0", .arr (bindings.map declarationJson).toArray,
     .arr #[], .arr #[], .arr #[], .arr #[]])
 
 private def candidate (bindings : List Declaration) : Result Explicit.CandidateLocals :=
-  Explicit.candidateLocals (.arr #[.str "zkc.participants/1", .arr (bindings.map declarationJson).toArray,
+  Explicit.candidateLocals (.arr #[.str "zkc.participants/0", .arr (bindings.map declarationJson).toArray,
     .str "physical", .arr #[], .arr #[], .arr #[]])
 
 /-- Change only one full-type resolver. Its name and generic shape are unchanged,
@@ -48,7 +48,7 @@ private def divergent (contribution : Contribution) : Contribution :=
       { operation with resolve := fun physical binding => do
           let signature ← operation.resolve physical binding
           return { signature with outputs :=
-            [ValueType.mk "bool" "" (if physical then "native.bool/1" else "")] } }
+            [ValueType.mk "bool" "" (if physical then "native.bool/0" else "")] } }
     else operation⟩
 
 def run : IO Unit := do
@@ -92,39 +92,39 @@ def run : IO Unit := do
   -- One independently expected complete signature for each contributed domain.
   let cases : List (Declaration × List String × List String) := [
     (⟨"field", "field.add", [fr], "arkworks/field.add"⟩,
-      ["field:bls12-381.fr@arkworks.fr/1", "field:bls12-381.fr@arkworks.fr/1"], ["field:bls12-381.fr@arkworks.fr/1"]),
+      ["field:bls12-381.fr@arkworks.fr/0", "field:bls12-381.fr@arkworks.fr/0"], ["field:bls12-381.fr@arkworks.fr/0"]),
     (⟨"vector", "vector.dot", [fr], "arkworks-diagonal/vector.dot"⟩,
-      ["vector:bls12-381.fr@arkworks.fr-vector/1", "vector:bls12-381.fr@arkworks.fr-diagonal/1"], ["field:bls12-381.fr@arkworks.fr/1"]),
+      ["vector:bls12-381.fr@arkworks.fr-vector/0", "vector:bls12-381.fr@arkworks.fr-diagonal/0"], ["field:bls12-381.fr@arkworks.fr/0"]),
     (⟨"matrix", "matrix.shape_check", [koalaBear], "plonky3/matrix.shape_check"⟩,
-      ["matrix:koala-bear@plonky3.koala-bear-sparse-coo/1"], ["bool@native.bool/1"]),
+      ["matrix:koala-bear@plonky3.koala-bear-sparse-coo/0"], ["bool@native.bool/0"]),
     (⟨"poly", "poly.fold", [fr], "arkworks-msb/poly.fold"⟩,
-      ["table:bls12-381.fr@arkworks.mle-msb/1", "field:bls12-381.fr@arkworks.fr/1"], ["table:bls12-381.fr@arkworks.mle-msb/1"]),
+      ["table:bls12-381.fr@arkworks.mle-msb/0", "field:bls12-381.fr@arkworks.fr/0"], ["table:bls12-381.fr@arkworks.mle-msb/0"]),
     (⟨"curve", "curve.scale_each", [ristrettoGroup], "dalek-diagonal/curve.scale_each"⟩,
-      ["vector:ristretto255.scalar@dalek.scalar-vector/1", "groups:ristretto255.group@dalek.ristretto-vector/1"],
-      ["groups:ristretto255.group@dalek.ristretto-diagonal/1"]),
+      ["vector:ristretto255.scalar@dalek.scalar-vector/0", "groups:ristretto255.group@dalek.ristretto-vector/0"],
+      ["groups:ristretto255.group@dalek.ristretto-diagonal/0"]),
     (⟨"pairing", "pairing.check", [bn254Fr], "arkworks/pairing.check"⟩,
-      ["groups:bn254.g1@arkworks.bn254-g1-vector/1", "groups:bn254.g2@arkworks.bn254-g2-vector/1"], ["bool@native.bool/1"]),
+      ["groups:bn254.g1@arkworks.bn254-g1-vector/0", "groups:bn254.g2@arkworks.bn254-g2-vector/0"], ["bool@native.bool/0"]),
     (⟨"pcs", "pcs.equal", [pcs], "arkworks/pcs.equal"⟩,
-      ["commitment:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1",
-       "commitment:multilinear.kzg.bls12-381/1@arkworks.multilinear-pcs/1"], ["bool@native.bool/1"]),
+      ["commitment:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0",
+       "commitment:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0"], ["bool@native.bool/0"]),
     (⟨"oracle", "commitments.length", [rowBase], "plonky3/commitments.length"⟩,
-      ["commitments:rows.merkle-keccak256.koala-bear/1@plonky3.merkle-roots/1"], ["index@native.index/1"]),
+      ["commitments:rows.merkle-keccak256.koala-bear/0@plonky3.merkle-roots/0"], ["index@native.index/0"]),
     (⟨"random", "random.index", [koalaBearExt8], "plonky3/random.index"⟩,
-      ["rng:koala-bear.ext8-binomial3@host.resource/1", "index@native.index/1"],
-      ["index@native.index/1", "rng:koala-bear.ext8-binomial3@host.resource/1"]),
+      ["rng:koala-bear.ext8-binomial3@host.resource/0", "index@native.index/0"],
+      ["index@native.index/0", "rng:koala-bear.ext8-binomial3@host.resource/0"]),
     (⟨"transcript", "transcript.challenge", [spongefishTranscript], "spongefish/transcript.challenge"⟩,
-      ["transcript:spongefish0.7.4.keccak.bls12-381.fr64be/1@host.resource/1"],
-      ["field:bls12-381.fr@arkworks.fr/1", "transcript:spongefish0.7.4.keccak.bls12-381.fr64be/1@host.resource/1"]),
+      ["transcript:spongefish0.7.4.keccak.bls12-381.fr64be/0@host.resource/0"],
+      ["field:bls12-381.fr@arkworks.fr/0", "transcript:spongefish0.7.4.keccak.bls12-381.fr64be/0@host.resource/0"]),
     (⟨"native", "index.equal", [], "native/index.equal"⟩,
-      ["index@native.index/1", "index@native.index/1"], ["bool@native.bool/1"]),
+      ["index@native.index/0", "index@native.index/0"], ["bool@native.bool/0"]),
     (⟨"external", "external.openvm.sample", [], "native/external.openvm.sample"⟩,
-      ["indices@native.indices/1"], ["indices@native.indices/1", "index@native.index/1"]),
+      ["indices@native.indices/0"], ["indices@native.indices/0", "index@native.index/0"]),
     (⟨"fixed", "fixed_vector.from_vector", [koalaBear, "4"], "plonky3/fixed_vector.from_vector"⟩,
-      ["vector:koala-bear@plonky3.koala-bear-vector/1"], ["fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/1"]),
+      ["vector:koala-bear@plonky3.koala-bear-vector/0"], ["fixed_vector<field:koala-bear,4>@plonky3.fixed-vector/0"]),
     (⟨"resource", "resource_unit.pass", ["Trace"], "logical/resource_unit.pass"⟩,
-      ["resource_unit:Trace@logical.resource_unit/1"], ["resource_unit:Trace@logical.resource_unit/1"]),
-    (⟨"table", "table.relayout", [fr, "arkworks.mle-lsb/1", "arkworks.mle-msb/1"], "arkworks/table.relayout"⟩,
-      ["table:bls12-381.fr@arkworks.mle-lsb/1"], ["table:bls12-381.fr@arkworks.mle-msb/1"])]
+      ["resource_unit:Trace@logical.resource_unit/0"], ["resource_unit:Trace@logical.resource_unit/0"]),
+    (⟨"table", "table.relayout", [fr, "arkworks.mle-lsb/0", "arkworks.mle-msb/0"], "arkworks/table.relayout"⟩,
+      ["table:bls12-381.fr@arkworks.mle-lsb/0"], ["table:bls12-381.fr@arkworks.mle-msb/0"])]
   for (binding, inputs, outputs) in cases do
     checks.holds ((ports (resolve true binding)).toOption == some (inputs, outputs)) ("physical signature: " ++ binding.contract)
     checks.holds (agrees (installed.resolve true binding) (reversed.resolve true binding))

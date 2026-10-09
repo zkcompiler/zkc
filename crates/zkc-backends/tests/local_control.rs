@@ -59,7 +59,7 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
     }
     gather(&body, &mut bindings);
     serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program/0",
         bindings.into_values().collect::<Vec<_>>(),
         [["function", "local", ports, outputs, body, ["local", []]]],
         [[

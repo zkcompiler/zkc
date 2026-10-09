@@ -4,7 +4,7 @@
 candidate checker. It is tooling, outside the reusable `Zkc` library. Lake builds
 it as `interactive-protocol`; the whole-package declaration audit explicitly
 includes its types and bodies. `Zkc` never imports this consumer. Its portable
-records are independent of the current `.zkc`/MLIR/`zkc.program/2` pipeline.
+records are independent of the current `.zkc`/MLIR/`zkc.program/0` pipeline.
 
 ## Components
 
@@ -46,13 +46,13 @@ a whole-prover callback.
 
 ## Input and observation contracts
 
-Inputs are `["zkc.reference-inputs/1", entry, session, supplied, resources,
+Inputs are `["zkc.reference-inputs/0", entry, session, supplied, resources,
 answers, replies]`, optionally followed by setup selections. The session is
 explicit. Keys, fields, tables, points and deterministic test resources use
 bounded tagged values; private opening state is issued by actual interpreted
 commit and cannot be forged through entry JSON.
 
-Observations are `zkc.reference-observation/1` records: entry, selected role or
+Observations are `zkc.reference-observation/0` records: entry, selected role or
 joint mode, outcome, ordered events, residual resources, unused reply count and
 proof scope.
 Every event retains its actual session, instance, call/iteration path, role and

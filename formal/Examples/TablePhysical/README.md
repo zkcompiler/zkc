@@ -59,11 +59,11 @@ The `lower` command retains the Lean-only `zkc-table-physical-reference` profile
 The same checker/evaluator also accepts the retained `zkc-table-physical-plan`
 tag. Both formats
 use the same typed body and theorem; the tag does not extend the theorem to
-compiled Rust or the current `zkc.program/2` carrier.
+compiled Rust or the current `zkc.program/0` carrier.
 
 For a candidate carrying that plan tag, `admit` and `run-admitted` also accept
-the installed `table-round/1` profile and source certificate. `admit-entry` and
-`run-entry` consume `table-endpoint/1` with an explicit actor/phase entry. Both
+the installed `table-round/0` profile and source certificate. `admit-entry` and
+`run-entry` consume `table-endpoint/0` with an explicit actor/phase entry. Both
 tools share policy resolution in [TableAdmission](../../Tools/TableAdmission.lean).
 The physical tool validates the actual endpoint state before binding inputs.
 The interpreter's fallback for an undecodable operand is `.stopped .refused`.

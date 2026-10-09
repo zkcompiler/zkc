@@ -15,7 +15,7 @@ against agreement caused only by a shared inventory mistake.
 `attribute-admission.json` is an independently authored set of 81 input/outcome
 witnesses. It is not generated from TableGen, either registry, or a production
 validator. The C++ driver calls the binding overload of `checkParameters`; the
-Rust tools example constructs one retained local operation in `zkc.program/2` and
+Rust tools example constructs one retained local operation in `zkc.program/0` and
 calls `admit_supplied` with the installed native backend. Positive controls
 ensure an unrelated carrier or backend refusal cannot satisfy a negative case.
 Operation attributes are positional strings; keyed objects, duplicate request

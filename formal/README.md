@@ -71,7 +71,7 @@ narrow imports for other capabilities. There is no compatibility aggregate.
 | `Zkc.Protocols.Sumcheck.Committed.Security` | Fixed-original, honestly committed adaptive Sumcheck with joint opening-loss bound; [precise security scope](design/committed-sumcheck.md) |
 | `Zkc.Compiler.DefinitionInlining` | Optional capture-safe inlining with separate definition-reference renaming and complete execution equality |
 | `Zkc.Source.RegionBounds` | Compositional semantic call bounds without expanding shared suffixes |
-| `Zkc.Compiler.RegionArtifact` | Typed erasure and consumer-bound direct checking for `region-source-1`; [model and laws](Zkc/Compiler/RegionArtifact.lean) |
+| `Zkc.Compiler.RegionArtifact` | Typed erasure and consumer-bound direct checking for `region-source-0`; [model and laws](Zkc/Compiler/RegionArtifact.lean) |
 | `Zkc.Compiler.RegionFolding` | Checked alias substitution through compact regions under total procedure laws; [logical-to-physical table instance](Examples/TableProtocol/Optimization.lean) |
 | `Zkc.Source.LocalInputs` | Available inputs/captures and permitted-view locality |
 | `Zkc.Source.PhaseAdmissionInterpretation` | Checked summaries under lawful interpretation |

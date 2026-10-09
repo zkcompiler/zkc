@@ -136,7 +136,7 @@ private def step (terms : Array Term) (value : Json) : Result Step := do
 def check (request certificate : Json) : Result Json := do
   match (← array request).toList, (← array certificate).toList with
   | [.str version, ts, ps, rs, gs], [.str certificateVersion, ss, answers] =>
-      ensure (version == "zkc.requirements/1" && certificateVersion == "zkc.requirements-certificate/1")
+      ensure (version == "zkc.requirements/0" && certificateVersion == "zkc.requirements-certificate/0")
         "requirements-version"
       checkWork ts ps gs ss
       let terms ← terms ts

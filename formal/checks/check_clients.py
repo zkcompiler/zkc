@@ -78,7 +78,7 @@ def check(root, output, with_arklib=False, lake="lake"):
         }
         if not passed:
             break
-    record = {'format': 'zkc.library-clients.v2', 'clients': results,
+    record = {'format': 'zkc.library-clients.v0', 'clients': results,
               'status': 'pass' if all(x['status'] == 'pass' for x in results.values()) else 'fail'}
     (output / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
     return record

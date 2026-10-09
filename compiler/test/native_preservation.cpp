@@ -81,7 +81,7 @@ unsigned removeAbsorption(ModuleOp module, StringRef origin) {
 
 constexpr StringLiteral loopFixture = R"mlir(
 !f = !algebra.field<"bls12-381.fr">
-!rng = !protocol.service_ref<"random.bls12-381.fr/1">
+!rng = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%n:ui64,%x:!f,%coins:!rng):
   "protocol.repeat"(%n,%n,%x) ({ ^outer(%i:ui64,%N:ui64,%X:!f):
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
   auto source = parseSourceFile<ModuleOp>(argv[1], &context);
   require(bool(source), "fixture parse");
   auto policy = take(parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/5", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/1", "4", ["0", "2"], [["draw_challenge", "challenge"]]])"));
+      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", "4", ["0", "2"], [["draw_challenge", "challenge"]]])"));
   auto built = take(constructNativeProof(*source, policy));
   auto projected = OwningOpRef<ModuleOp>(cast<ModuleOp>((*source)->clone()));
   PassManager passes(&context);
@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
     auto input = parseSourceString<ModuleOp>(loopFixture, &context);
     require(bool(input), "loop fixture parse");
     auto selected = take(parseNativeProofPolicy(
-        R"(["zkc.native-proof-policy/5","main","P","V","0","merlin3.bls12-381.fr64be/1","2",["0","1"],[["draw","challenge"]]])"));
+        R"(["zkc.native-proof-policy/0","main","P","V","0","merlin3.bls12-381.fr64be/0","2",["0","1"],[["draw","challenge"]]])"));
     auto construction = take(constructNativeProof(*input, selected));
     SmallVector<zkc::detail::NativeTranscriptEvent> facts;
     auto &sequence = *(*construction.descriptor.getAsArray())[3].getAsArray();

@@ -26,7 +26,7 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
             continue;
         }
         let bytes = backend.encode_native_value(&v).unwrap();
-        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 1, tag]);
+        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 0, tag]);
         let decoded = backend
             .decode_native_value(&v.physical_type(), &bytes)
             .unwrap();
@@ -197,7 +197,7 @@ fn fixed_native_bytes_and_local_only_values_do_not_depend_on_decoder_agreement()
                 continue;
             }
             let expected = [
-                b"ZKCV\x01".to_vec(),
+                b"ZKCV\x00".to_vec(),
                 vec![tag],
                 2u32.to_le_bytes().to_vec(),
                 scalar_bytes(2),
@@ -213,6 +213,6 @@ fn fixed_native_bytes_and_local_only_values_do_not_depend_on_decoder_agreement()
     let hex = zkc_test_support::hex(&b.encode_native_value(&generator).unwrap());
     assert_eq!(
         hex,
-        "5a4b43560110e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76"
+        "5a4b43560010e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76"
     );
 }

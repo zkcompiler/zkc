@@ -16,9 +16,9 @@ def compile_bundle(name, text, expected, *options):
     bundle = json.loads(output)
     (OUT / f'{name}.bundle').write_text(output)
     (OUT / f'{name}.mlir').write_text(text)
-    assert bundle['format'] == 'zkc.run/1'
+    assert bundle['format'] == 'zkc.run/0'
     candidate = json.loads(bundle['candidate'])
-    assert candidate[0] == 'zkc.program/2'
+    assert candidate[0] == 'zkc.program/0'
     programs = {p[3]: p[6] for p in candidate[3]}
     authored_local = {(r, s) for r, k, s, _ in expected if k == 'local'}
     actual = []

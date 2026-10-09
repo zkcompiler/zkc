@@ -135,7 +135,7 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .decode_native_value(
             &zkc_runtime::interactive::PhysicalType::default_for(
                 zkc_runtime::interactive::LogicalType::parse(
-                    "commitment:multilinear.kzg.bls12-381/1",
+                    "commitment:multilinear.kzg.bls12-381/0",
                 )
                 .unwrap(),
             )
@@ -155,7 +155,7 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
     let proof = verifier
         .decode_native_value(
             &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("proof:multilinear.kzg.bls12-381/1")
+                zkc_runtime::interactive::LogicalType::parse("proof:multilinear.kzg.bls12-381/0")
                     .unwrap(),
             )
             .unwrap(),

@@ -256,7 +256,7 @@ fn main() {
         let mut artifact: serde_json::Value = serde_json::from_slice(&single).unwrap();
         let participant = &mut artifact[3][0];
         match case {
-            0 => participant[7][0][1] = "random.bls12-381.fr/2".into(),
+            0 => participant[7][0][1] = "random.uninstalled/0".into(),
             1 => participant[7][0][2] = "1".into(),
             2 => participant[6][0][2] = "missing".into(),
             3 => participant[6][0][3] = "reset".into(),
@@ -271,12 +271,12 @@ fn main() {
             6 => artifact[0] = "invalid.program".into(),
             7 => {
                 participant.as_array_mut().unwrap().pop();
-                artifact[0] = "zkc.program/2".into();
+                artifact[0] = "zkc.program/0".into();
             }
             8 => participant[7]
                 .as_array_mut()
                 .unwrap()
-                .push(serde_json::json!(["other", "random.bls12-381.fr/1", "0"])),
+                .push(serde_json::json!(["other", "random.bls12-381.fr/0", "0"])),
             9 => participant[4] = serde_json::json!([[participant[7][0][0], "bool"]]),
             10 => participant[6].as_array_mut().unwrap().insert(
                 0,
@@ -629,7 +629,7 @@ fn main() {
 
     // Failed service binding preserves affine inputs and backend custody.
     let mut artifact: serde_json::Value = serde_json::from_slice(&single).unwrap();
-    artifact[3][0][4] = serde_json::json!([["rng", "rng:bls12-381.fr@host.resource/1"]]);
+    artifact[3][0][4] = serde_json::json!([["rng", "rng:bls12-381.fr@host.resource/0"]]);
     let artifact = serde_json::to_vec(&artifact).unwrap();
     let mut native = backend("Alice", "affine_input");
     let input = native

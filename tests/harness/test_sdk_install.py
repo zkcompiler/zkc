@@ -78,7 +78,7 @@ endif()
         "Driver": (["Compiler"], "compiler() + 1"),
     }
     cmake = [f'''cmake_minimum_required(VERSION 3.21)
-project(SDKFixture VERSION 0.1 LANGUAGES CXX)
+project(SDKFixture VERSION 0.0.0 LANGUAGES CXX)
 find_package(MLIR REQUIRED CONFIG)
 include("{ROOT}/compiler/cmake/InstallSDK.cmake")
 add_library(VendorPublic STATIC VendorPublic.cpp)

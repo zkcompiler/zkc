@@ -88,7 +88,7 @@ fn inputs(envelope: &Json, case: &Json, producing: bool) -> Json {
         envelope[2][3].as_array().unwrap().len()
     };
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",
@@ -310,7 +310,7 @@ fn envelope_mutations(envelope: &Json) {
         (vec![2, 1, 7], json!(["0"]), "native-proof-public-map"),
         (
             vec![2, 5, 0, 2],
-            json!("zkcv.bool/1"),
+            json!("zkcv.bool/0"),
             "native-proof-message-map",
         ),
         (vec![6, 1, 5], json!("1"), "native-proof-acceptance-map"),

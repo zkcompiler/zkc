@@ -336,7 +336,7 @@ fn canonical_coordinate_wire_is_exact_and_domain_separated() {
             continue;
         }
         let bytes = b.encode_native_value(&value).unwrap();
-        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 1, tag]);
+        assert_eq!(&bytes[..6], &[b'Z', b'K', b'C', b'V', 0, tag]);
         let decoded = b.decode_native_value(&ty.clone(), &bytes).unwrap();
         assert_value(&value, &decoded);
         assert!(

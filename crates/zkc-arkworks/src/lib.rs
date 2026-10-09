@@ -77,7 +77,7 @@ pub use table_msb::MsbTable;
 
 /// The exact scheme, scalar, layout, embedding and codec profile bound by IDs.
 /// Base and challenge fields are identical; the embedding is the identity.
-pub const PROFILE: &str = "zkc-arkworks/v1;arkworks=0.6.0;field=BLS12-381::Fr;pcs=MultilinearPC;hiding=false;logical=msb-first;storage=bit-reversal;point=unchanged;embedding=identity;codec=compressed-exact-v1";
+pub const PROFILE: &str = "zkc-arkworks/v0;arkworks=0.6.0;field=BLS12-381::Fr;pcs=MultilinearPC;hiding=false;logical=msb-first;storage=bit-reversal;point=unchanged;embedding=identity;codec=compressed-exact-v0";
 
 mod group;
 pub use group::{GROUP_BYTES, GroupPoint, scalar_from_wide_be};

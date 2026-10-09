@@ -105,14 +105,14 @@ pub fn transcript_attributes(
             source,
             site,
             "input_0",
-            "random.bls12-381.fr/1",
+            "random.bls12-381.fr/0",
             "draw",
             receiver
         ])
     };
     vec![zkc_test_support::hex(
         &zkc_runtime::logical::encode_tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             "main",
             [],
             [],
@@ -134,9 +134,9 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
             "bool" | "index" | "indices" => kind.to_owned(),
             "group" | "groups" => format!("{kind}:bls12-381.g1"),
             "commitment" | "proof" | "prover_key" | "verifier_key" | "opening_state" => {
-                format!("{kind}:multilinear.kzg.bls12-381/1")
+                format!("{kind}:multilinear.kzg.bls12-381/0")
             }
-            "transcript" => "transcript:merlin3.bls12-381.fr64be/1".into(),
+            "transcript" => "transcript:merlin3.bls12-381.fr64be/0".into(),
             _ => format!("{kind}:bls12-381.fr"),
         };
         PhysicalType::default_for(LogicalType::parse(&nominal).unwrap())
@@ -220,16 +220,16 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
                 .unwrap_or(&implementation)
                 .to_owned();
             let arguments = if contract.starts_with("pcs.") {
-                json!(["multilinear.kzg.bls12-381/1"])
+                json!(["multilinear.kzg.bls12-381/0"])
             } else if contract.starts_with("curve.") && contract != "curve.response" {
                 json!(["bls12-381.g1"])
             } else if contract == "transcript.native.indexed.observe.data" {
                 json!([
-                    "merlin3.bls12-381.fr64be/1",
+                    "merlin3.bls12-381.fr64be/0",
                     types[op[4][1].as_str().unwrap()].logical().spelling()
                 ])
             } else if contract.starts_with("transcript.") {
-                json!(["merlin3.bls12-381.fr64be/1"])
+                json!(["merlin3.bls12-381.fr64be/0"])
             } else if matches!(
                 contract.as_str(),
                 "control.require" | "bool.and" | "bool.not" | "bool.or" | "indices.empty"
@@ -275,7 +275,7 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
         body(&mut p[6]);
     }
     serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program/0",
         bindings.into_values().collect::<Vec<_>>(),
         declarations[0],
         declarations[1],

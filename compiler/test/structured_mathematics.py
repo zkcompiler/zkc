@@ -38,7 +38,7 @@ with case('checked bundles bind original requirements and concrete connector'):
             (OUT / f'{entry}{suffix}.checked.json').write_text(text)
             (OUT / f'{entry}{suffix}.bundle').write_text(result['bundle'])
             report = result['correspondence']
-            assert result['format'] == 'zkc.checked-run/1'
+            assert result['format'] == 'zkc.checked-run/0'
             assert report['source_sha256'] == hashlib.sha256(source.encode()).hexdigest()
             assert report['requirements_sha256'] == hashlib.sha256(report['requirement_source'].encode()).hexdigest()
             # The digest uses the exact compiler serialization before wrapping.
@@ -297,7 +297,7 @@ with case('nonidentity ports preserve original requirements and actual handoff')
     array = f'tensor<4x{field}>'
     types = {name: field for name in ['claim', 'extra', 'r0', 'r1', 'next1',
                                      'delivered0', 'delivered1']}
-    types.update(T=array, U=array, random='!protocol.service_ref<"random.bls12-381.fr/1">', accept='i1')
+    types.update(T=array, U=array, random='!protocol.service_ref<"random.bls12-381.fr/0">', accept='i1')
 
     def reorder(body, entry, inputs, outputs, input_roles, output_roles):
         lines = body.splitlines()

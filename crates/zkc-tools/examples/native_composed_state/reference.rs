@@ -19,10 +19,10 @@ pub fn msm(a: &[Scalar], g: &[GroupPoint]) -> GroupPoint {
         .fold(GroupPoint::identity(), |sum, (a, g)| sum.add(&g.scale(*a)))
 }
 fn group_wire(g: &GroupPoint) -> Vec<u8> {
-    [b"ZKCV\x01\x09".as_slice(), &g.to_bytes().unwrap()].concat()
+    [b"ZKCV\x00\x09".as_slice(), &g.to_bytes().unwrap()].concat()
 }
 fn vector(a: &[Scalar]) -> Vec<u8> {
-    let mut bytes = b"ZKCV\x01\x42".to_vec();
+    let mut bytes = b"ZKCV\x00\x42".to_vec();
     bytes.extend_from_slice(&(a.len() as u32).to_le_bytes());
     for x in a {
         bytes.extend_from_slice(&scalar_wire(*x)[6..]);
@@ -30,7 +30,7 @@ fn vector(a: &[Scalar]) -> Vec<u8> {
     bytes
 }
 fn groups(g: &[GroupPoint]) -> Vec<u8> {
-    let mut bytes = b"ZKCV\x01\x43".to_vec();
+    let mut bytes = b"ZKCV\x00\x43".to_vec();
     bytes.extend_from_slice(&(g.len() as u32).to_le_bytes());
     for x in g {
         bytes.extend_from_slice(&x.to_bytes().unwrap());
@@ -57,7 +57,7 @@ impl Writer<'_> {
                 self.entry,
                 site,
                 "input_5",
-                "random.bls12-381.fr/1",
+                "random.bls12-381.fr/0",
                 "draw",
                 "V"
             ])
@@ -72,7 +72,7 @@ impl Writer<'_> {
             ])
         };
         let template = tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             self.entry,
             path,
             [],
@@ -83,7 +83,7 @@ impl Writer<'_> {
             hex(&template)
         ])));
         tree(&json!([
-            "zkc.native-origin/2",
+            "zkc.native-origin/0",
             self.entry,
             path,
             coordinates,
@@ -122,7 +122,7 @@ pub fn proof(
         entry,
         descriptor: &envelope[2],
         transcript: Transcript::new(envelope[2][1][5].as_str().unwrap(), &root),
-        bytes: [b"ZKCPRF01".as_slice(), &Sha256::digest(&root)].concat(),
+        bytes: [b"ZKCPRF00".as_slice(), &Sha256::digest(&root)].concat(),
     };
     w.message(None, "salt", &scalar_wire(salt));
     let inv = salt.inverse().unwrap();

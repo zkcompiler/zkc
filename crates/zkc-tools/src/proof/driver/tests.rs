@@ -4,9 +4,9 @@ use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::interactive::{Runner, admit_supplied};
 
 fn fresh(role: &str) -> Runner<NativeBackend> {
-    let boolean = "bool@native.bool/1";
+    let boolean = "bool@native.bool/0";
     let bytes = serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [

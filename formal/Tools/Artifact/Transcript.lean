@@ -16,7 +16,7 @@ def duplexFrame (tag : UInt8) (label payload : ByteArray) : ByteArray :=
 private def duplexRequest (root : ByteArray) (history : Array Json) : Result Json := do
   let absorb (tag : UInt8) (name : String) (data : ByteArray) :=
     Json.arr #[.str "absorb", .str (hex (duplexFrame tag name.toUTF8 data))]
-  let mut steps := #[absorb 0 "domain" "zkc.artifact/1".toUTF8,
+  let mut steps := #[absorb 0 "domain" "zkc.artifact/0".toUTF8,
     absorb 0 "suite" Bindings.spongefishTranscript.toUTF8, absorb 1 "binding" root]
   for action in history do
     match ← Decode.array action with
@@ -28,7 +28,7 @@ private def duplexRequest (root : ByteArray) (history : Array Json) : Result Jso
           |>.push (absorb 2 "challenge" (ByteArray.mk #[0, 0, 0, 0, 0, 0, 0, 64]))
           |>.push (.arr #[.str "squeeze", .str "64"])
     | _ => throw "transcript-history"
-  return .arr #[.str "zkc.duplex-request/1", .str Bindings.spongefishTranscript, .arr steps]
+  return .arr #[.str "zkc.duplex-request/0", .str Bindings.spongefishTranscript, .arr steps]
 
 /-- Full call sequence, including domain and labels. The external adapter
 interprets these calls; it does not choose a domain-separation protocol. -/
@@ -55,8 +55,8 @@ def transcriptRequest (root : ByteArray) (history : Array Json) (suite : String 
           |>.push (append "query-bound" (.str (hex (little 8 n))))
           |>.push (.arr #[.str "challenge", label "query-index", .str "64"])
     | _ => throw "transcript-history"
-  return .arr #[.str "zkc.transcript-request/3", .str suite,
-    label "zkc.artifact/1", .arr steps]
+  return .arr #[.str "zkc.transcript-request/0", .str suite,
+    label "zkc.artifact/0", .arr steps]
 
 
 end Tools.Artifact

@@ -15,15 +15,15 @@ using namespace llvm;
 using namespace zkc;
 namespace {
 constexpr StringLiteral fixture = R"(module { "protocol.module"() ({
-"protocol.func"() ({^bb0(%s:!protocol.service_ref<"random.bls12-381.fr/1">):
-%q="protocol.query"(%s) {owner="V",method="draw",site="draw"} : (!protocol.service_ref<"random.bls12-381.fr/1">)->!algebra.field<"bls12-381.fr">
+"protocol.func"() ({^bb0(%s:!protocol.service_ref<"random.bls12-381.fr/0">):
+%q="protocol.query"(%s) {owner="V",method="draw",site="draw"} : (!protocol.service_ref<"random.bls12-381.fr/0">)->!algebra.field<"bls12-381.fr">
 %d=protocol.exchange %q {sender="V",receiver="P",site="coin"} : !algebra.field<"bls12-381.fr">
 %yes=arith.constant true
 "protocol.return"(%yes) : (i1)->()})
-{sym_name="main",function_type=(!protocol.service_ref<"random.bls12-381.fr/1">)->i1,roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
+{sym_name="main",function_type=(!protocol.service_ref<"random.bls12-381.fr/0">)->i1,roles=["P","V"],input_roles=[["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() })";
 constexpr StringLiteral requirement =
-    R"({"format":"zkc.public-coin-requirement/1","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
+    R"({"format":"zkc.public-coin-requirement/0","entry":"main","prover":"P","verifier":"V","service":0,"decision":0,"bound_inputs":[],"draws":[{"query_site":"draw","delivery_site":"coin"}]})";
 constexpr StringLiteral helperPrograms = R"mlir(module { "protocol.module"() ({
   func.func private @conjoin(%x: i1, %y: i1) -> i1 {
     %both = arith.andi %x, %y : i1

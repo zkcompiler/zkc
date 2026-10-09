@@ -90,7 +90,7 @@ fn inputs(
         .collect();
     let transcript_budget = if envelope[2][1][5] == "" { "0" } else { "64" };
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",
@@ -135,7 +135,7 @@ fn main() {
             inputs: BTreeMap::from([(1, 2), (3, 2), (7, 8), (9, 8)]),
         };
         let config = json!([
-            "zkc.native-setup-authority/1",
+            "zkc.native-setup-authority/0",
             [
                 ["2", hex(&authority.keys[&2])],
                 ["8", hex(&authority.keys[&8])]

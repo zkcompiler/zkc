@@ -10,7 +10,7 @@ pub(super) struct Checked {
     pub setups: Vec<super::Setup>,
 }
 pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
-    require(document.format == "zkc.language-interface/7", E::Format)?;
+    require(document.format == "zkc.language-interface/0", E::Format)?;
     require(
         hash(&document.capture) && document.original == original,
         E::Identity,

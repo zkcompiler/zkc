@@ -21,7 +21,7 @@ for suffix, options in [
         policy.write_text(
             json.dumps(
                 [
-                    "zkc.native-proof-policy/5",
+                    "zkc.native-proof-policy/0",
                     "main",
                     "P",
                     "V",
@@ -98,7 +98,7 @@ with case("unused keys and terminal commitments"):
     manifest.append(dict(name="terminal"))
 with case("derived transcript observes two authorized setups"):
     text = source.read_text().replace(
-        "module {", '!svc = !protocol.service_ref<"random.bls12-381.fr/1">\nmodule {', 1
+        "module {", '!svc = !protocol.service_ref<"random.bls12-381.fr/0">\nmodule {', 1
     )
     text = text.replace("%rb:!f,%vb:!f):", "%rb:!f,%vb:!f,%random:!svc):")
     text = text.replace(
@@ -121,12 +121,12 @@ with case("derived transcript observes two authorized setups"):
     policy.write_text(
         json.dumps(
             [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy/0",
                 "main",
                 "P",
                 "V",
                 "0",
-                "merlin3.bls12-381.fr64be/1",
+                "merlin3.bls12-381.fr64be/0",
                 "12",
                 ["2", "3", "4", "5", "8", "9", "10", "11"],
                 [["draw", "challenge"]],

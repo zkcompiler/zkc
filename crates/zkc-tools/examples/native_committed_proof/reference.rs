@@ -35,7 +35,7 @@ impl Oracle<'_> {
                 protocol,
                 site,
                 "input_4",
-                "random.bls12-381.fr/1",
+                "random.bls12-381.fr/0",
                 "draw",
                 "V"
             ])
@@ -50,7 +50,7 @@ impl Oracle<'_> {
             ])
         };
         let template = tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             "main",
             path,
             [],
@@ -64,7 +64,7 @@ impl Oracle<'_> {
             "missing authored occurrence {protocol}/{site}"
         );
         tree(&json!([
-            "zkc.native-origin/2",
+            "zkc.native-origin/0",
             "main",
             path,
             coordinates.iter().map(u64::to_string).collect::<Vec<_>>(),
@@ -108,7 +108,7 @@ impl Oracle<'_> {
     }
 }
 fn index(bytes: &[u8]) -> u64 {
-    assert_eq!(&bytes[..6], b"ZKCV\x01\x1f");
+    assert_eq!(&bytes[..6], b"ZKCV\x00\x1f");
     assert_eq!(bytes.len(), 14);
     u64::from_le_bytes(bytes[6..].try_into().unwrap())
 }
@@ -150,7 +150,7 @@ fn coefficients(a: &[Scalar], b: &[Scalar], cubic: bool) -> Vec<Scalar> {
 // Decode only the fixed canonical point payloads into an independent upstream
 // verifier; the native codec and wrapper check are not this oracle.
 fn opening(bytes: &[u8], root: &[u8], proof: &[u8], point: &[Scalar], value: Scalar) {
-    assert_eq!(&bytes[..9], b"ZKCAR006\x01");
+    assert_eq!(&bytes[..9], b"ZKCAR000\x01");
     let n = usize::try_from(u64::from_le_bytes(bytes[9..17].try_into().unwrap())).unwrap();
     assert_eq!(point.len(), n);
     assert_eq!(bytes.len(), 81 + 48 + 96 + 48 * n);
@@ -169,8 +169,8 @@ fn opening(bytes: &[u8], root: &[u8], proof: &[u8], point: &[Scalar], value: Sca
     };
     assert_eq!(root.len(), 135);
     assert_eq!(proof.len(), 87 + 96 * n);
-    assert_eq!(&root[..6], b"ZKCV\x01\x06");
-    assert_eq!(&proof[..6], b"ZKCV\x01\x07");
+    assert_eq!(&root[..6], b"ZKCV\x00\x06");
+    assert_eq!(&proof[..6], b"ZKCV\x00\x07");
     let commitment = pcs::Commitment::<Bls12_381> {
         nv: n,
         g_product: G1Affine::deserialize_compressed(&root[87..]).unwrap(),
@@ -201,7 +201,7 @@ fn unhex(v: &Json) -> Vec<u8> {
 }
 pub fn verify(envelope: &Json, input: &Json, proof: &[u8], family: &str, n: usize) {
     let root = root(envelope, input);
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
     let public = |port: &str| {
         unhex(
@@ -235,7 +235,7 @@ pub fn verify(envelope: &Json, input: &Json, proof: &[u8], family: &str, n: usiz
             };
             let record = read();
             let (value, opening_proof) = if family == "structured" {
-                assert_eq!(&record[..10], b"ZKCV\x01\x41\x01\x00\x00\x00");
+                assert_eq!(&record[..10], b"ZKCV\x00\x41\x01\x00\x00\x00");
                 let value_len = u32::from_le_bytes(record[10..14].try_into().unwrap()) as usize;
                 let end = 14 + value_len;
                 let proof_len =
@@ -268,7 +268,7 @@ pub fn verify(envelope: &Json, input: &Json, proof: &[u8], family: &str, n: usiz
         for i in 0..n {
             let path = [json!(["repeat", "main", "rounds"])];
             let bytes = oracle.message(&path, &[i as u64], "main", "round_message");
-            assert_eq!(&bytes[..6], b"ZKCV\x01\x40");
+            assert_eq!(&bytes[..6], b"ZKCV\x00\x40");
             let actual: Vec<_> = bytes[6..]
                 .as_chunks::<32>()
                 .0

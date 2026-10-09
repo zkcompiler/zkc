@@ -9,7 +9,7 @@ This profile extends [structured mathematics](structured-mathematics.md) and
 `!data.sequence<T>` denotes a finite ordered immutable sequence with a runtime
 length and one exact element type. Its canonical logical spelling is
 `sequence<T>`, where `T` is a canonical logical type spelling. The selected
-physical spelling is `sequence<T>@logical.sequence/1`; every element uses its
+physical spelling is `sequence<T>@logical.sequence/0`; every element uses its
 installed default representation. Length is a value property, not a type
 parameter. Type formation uses the existing structural depth, expansion and
 spelling bounds.
@@ -87,7 +87,7 @@ backend; attempts within that invocation retain its consumed work.
 
 ## Native framing and setup
 
-The native proof profile and `zkc.program/2` admit sequences recursively over the
+The native proof profile and `zkc.program/0` admit sequences recursively over the
 closed native message grammar. Keys, private state, affine data and unsupported
 provider leaves stay outside that grammar, including inactive alternatives and
 empty sequences. Host programmatic values and proof `wire` inputs use the

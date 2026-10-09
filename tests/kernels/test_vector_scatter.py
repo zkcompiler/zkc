@@ -14,7 +14,7 @@ DOMAINS = [
 
 
 def wire(values, tag, width):
-    return (b'ZKCV\x01' + bytes([tag]) + len(values).to_bytes(4, 'little')
+    return (b'ZKCV\x00' + bytes([tag]) + len(values).to_bytes(4, 'little')
             + b''.join(x.to_bytes(width, 'little') for x in values)).hex()
 
 

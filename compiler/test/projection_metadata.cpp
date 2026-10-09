@@ -42,7 +42,7 @@ void rename(protocol_ir::ProtocolModuleOp scope, Operation *symbol,
   SymbolTable::setSymbolName(symbol, replacement);
 }
 constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
-  relation.declare @predicate {sym_visibility="private",kind="external", key="example/echo", revision="1", signature=(i1) -> i1, purposes=["statement"]}
+  relation.declare @predicate {sym_visibility="private",kind="external", key="example/echo", revision="0", signature=(i1) -> i1, purposes=["statement"]}
   "protocol.func"() ({
   ^entry(%x: i1):
     protocol.statement @predicate(%x) {selectors=["P"], acceptance=0 : i64} : i1

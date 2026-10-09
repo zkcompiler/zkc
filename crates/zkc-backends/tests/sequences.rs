@@ -45,7 +45,7 @@ fn formation_distinguishes_copying_storage_and_wire_permission() {
         "matrix:bls12-381.fr",
         "field:koala-bear",
         "sequence<index>",
-        "prover_key:multilinear.kzg.bls12-381/1",
+        "prover_key:multilinear.kzg.bls12-381/0",
     ] {
         let ty = LogicalType::sequence(LogicalType::parse(element).unwrap()).unwrap();
         assert!(ty.is_duplicable() && ty.is_discardable());
@@ -69,7 +69,7 @@ fn formation_distinguishes_copying_storage_and_wire_permission() {
             .encode_native_value(&empty)
             .is_err()
     );
-    let setup = LogicalType::parse("sequence<proof:multilinear.kzg.bls12-381/1>").unwrap();
+    let setup = LogicalType::parse("sequence<proof:multilinear.kzg.bls12-381/0>").unwrap();
     assert!(zkc_backends::requires_setup(setup));
 }
 
@@ -77,7 +77,7 @@ fn formation_distinguishes_copying_storage_and_wire_permission() {
 fn empty_records_sums_and_nested_sequences_have_canonical_boundaries() {
     assert_eq!(
         roundtrip(&sequence("index", vec![])),
-        b"ZKCV\x01\x45\0\0\0\0"
+        b"ZKCV\x00\x45\0\0\0\0"
     );
     let inner = sequence("index", vec![Value::Index(7)]);
     roundtrip(&sequence(
@@ -379,7 +379,7 @@ fn empty_private_sequences_are_local_and_setup_checks_reach_active_elements() {
         zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     let other =
         zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
-    let empty = sequence("prover_key:multilinear.kzg.bls12-381/1", vec![]);
+    let empty = sequence("prover_key:multilinear.kzg.bls12-381/0", vec![]);
     assert!(
         support::backend(Policy::default())
             .encode_native_value(&empty)
@@ -510,7 +510,7 @@ fn native_matrix_decode_peak_and_canonicality_are_exact() {
         max_table_elements: 1 << 21,
         ..Policy::default()
     });
-    let mut excessive = b"ZKCV\x01\x17".to_vec();
+    let mut excessive = b"ZKCV\x00\x17".to_vec();
     for n in [65536u32, 65536, (1 << 20) + 1] {
         excessive.extend_from_slice(&n.to_le_bytes());
     }

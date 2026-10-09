@@ -665,7 +665,7 @@ Error checkFormulaDefinitions(ModuleOp original, uint64_t &remaining) {
       return error("source.limit", "formula admission work limit exceeded");
     --remaining;
     auto declaration = dyn_cast<relation::DeclareOp>(op);
-    if (!declaration || declaration.getKind() != "zkc.language.formula/1")
+    if (!declaration || declaration.getKind() != "zkc.language.formula/0")
       continue;
     auto name = relation::formulaSymbol(declaration.getKey());
     auto helper = table.lookup<func::FuncOp>(name);

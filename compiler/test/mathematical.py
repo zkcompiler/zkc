@@ -110,7 +110,7 @@ receives = (ROOT / "receives.mlir").read_text()
 
 with case("acceptance maps identify independent role components"):
     family = '''module { "protocol.module"() ({
-      relation.declare @check {kind="external", key="example/component", revision="1", signature=(i1) -> i1, purposes=["statement"]}
+      relation.declare @check {kind="external", key="example/component", revision="0", signature=(i1) -> i1, purposes=["statement"]}
       "protocol.func"() ({
       ^entry(%x: i1):
         protocol.statement @check(%x) {selectors=["P"], acceptance=0 : i64} : i1
@@ -326,7 +326,7 @@ wide_helper = mixed.replace('}) {profile=', f'func.func private @wide({wide_argu
 unused_intermediate = (mixed.replace('return %s, %t', 'return %a, %w')
     .replace('input_roles=[["Alice","Bob"]', 'input_roles=[["Bob"]')
     .replace('output_roles=[["Alice","Bob"]', 'output_roles=[["Bob"]'))
-conflict = 'relation.declare @conflicting {kind="external", key="example/schnorr", revision="1", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["statement", "statement", "witness"]}'
+conflict = 'relation.declare @conflicting {kind="external", key="example/schnorr", revision="0", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["statement", "statement", "witness"]}'
 conflicting_relation = schnorr.replace('}) {profile=', conflict+'\n}) {profile=')
 negative += [
     ("wide helper dependency work bound", wide_helper, "mathematical-analysis-limit"),

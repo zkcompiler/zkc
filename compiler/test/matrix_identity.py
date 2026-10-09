@@ -30,7 +30,7 @@ def run(tool, *args, text=None, refuses=None):
 
 def digest(field, matrix):
     return hashlib.sha256(
-        json.dumps(["zkc.matrix/1", field, matrix], separators=(",", ":")).encode()
+        json.dumps(["zkc.matrix/0", field, matrix], separators=(",", ":")).encode()
     ).hexdigest()
 
 

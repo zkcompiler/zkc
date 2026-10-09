@@ -21,7 +21,7 @@ physical = commands.verified(source, None, "--zkc-project-protocol",
                              "--zkc-lower-math", "--zkc-select-physical")
 original = json.loads(commands.source("protocol-export", physical))
 participant = original[3][0]
-participant[7] = [["rng", "random.bls12-381.fr/1", str(len(participant[4]))]]
+participant[7] = [["rng", "random.bls12-381.fr/0", str(len(participant[4]))]]
 loop_index = next(i for i, row in enumerate(participant[6]) if row[0] == "loop")
 
 
@@ -60,7 +60,7 @@ for label, mutate, code in [
 for depth, code in [(29, None), (30, "interactive-json-depth"), (65, "interactive-body")]:
     with case(f"nested local bodies: {depth}"):
         candidate = copy.deepcopy(original)
-        boolean = "bool@native.bool/1"
+        boolean = "bool@native.bool/0"
         body = [["yield", ["x"]]]
         for level in range(depth):
             output = f"r{level}"

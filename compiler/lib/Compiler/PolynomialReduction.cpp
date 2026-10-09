@@ -76,7 +76,7 @@ Expected<SmallVector<Requirement, 1>> parse(StringRef text) {
     return value.takeError();
   auto *object = value->getAsObject();
   if (!object || !keys(*object, {"format", "requirements"}) ||
-      object->getString("format") != "zkc.polynomial-requirements/1")
+      object->getString("format") != "zkc.polynomial-requirements/0")
     return error("polynomial-requirement-format");
   auto *array = object->getArray("requirements");
   if (!array || array->empty() || array->size() > 64)
@@ -95,8 +95,8 @@ Expected<SmallVector<Requirement, 1>> parse(StringRef text) {
                "decision"},
               unsigned(o->get("composition") != nullptr) +
                   unsigned(o->get("relation") != nullptr)) ||
-        (o->getString("family") != "boolean-sum-to-point/1" &&
-         o->getString("family") != "r1cs-sum-to-point/1") ||
+        (o->getString("family") != "boolean-sum-to-point/0" &&
+         o->getString("family") != "r1cs-sum-to-point/0") ||
         !name(*o, "id", r.id) || !name(*o, "reduction", r.reduction) ||
         !name(*o, "terminal", r.terminal) || !name(*o, "recipe", r.recipe) ||
         !name(*o, "verifier", r.verifier) ||
@@ -120,7 +120,7 @@ Expected<SmallVector<Requirement, 1>> parse(StringRef text) {
           r.reductionSite == r.terminalSite)
         return error("polynomial-requirement-format");
     }
-    if (o->getString("family") == "r1cs-sum-to-point/1") {
+    if (o->getString("family") == "r1cs-sum-to-point/0") {
       auto *asset = o->get("relation");
       if (!asset || r.composition.empty())
         return error("polynomial-requirement-format");
@@ -361,7 +361,7 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
       cast<ArrayAttr>(source.getInputRoles()[r.service]).size() != 1 ||
       cast<pir::ServiceReferenceType>(
           source.getFunctionType().getInput(r.service))
-              .getContract() != "random.bls12-381.fr/1")
+              .getContract() != "random.bls12-381.fr/0")
     return refuse("challenge service");
   Indices incoming(r.subjects), outgoing(r.residualSubjects),
       terminalInputs(r.terminalSubjects);
@@ -713,8 +713,8 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
     results.push_back(std::move(*result));
     canonical.push_back(
         json::Object{{"id", r.id},
-                     {"family", r.externalRelation ? "r1cs-sum-to-point/1"
-                                                   : "boolean-sum-to-point/1"},
+                     {"family", r.externalRelation ? "r1cs-sum-to-point/0"
+                                                   : "boolean-sum-to-point/0"},
                      {"reduction", r.reduction},
                      {"terminal", r.terminal},
                      {"recipe", r.recipe},
@@ -734,7 +734,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
       (*canonical.back().getAsObject())["relation"] =
           r.externalRelation->encode();
       auto &record = *results.back().getAsObject();
-      record["family"] = "r1cs-sum-to-point/1";
+      record["family"] = "r1cs-sum-to-point/0";
       record["relation_identity"] = r.externalRelation->identity();
       record["relation_scope"] =
           "exact native adapter source for the independent R1CS; adapter, "
@@ -749,7 +749,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
   }
   std::string requirementSource, originalIR, candidateIR;
   raw_string_ostream(requirementSource)
-      << json::Value(json::Object{{"format", "zkc.polynomial-requirements/1"},
+      << json::Value(json::Object{{"format", "zkc.polynomial-requirements/0"},
                                   {"requirements", std::move(canonical)}});
   raw_string_ostream sourceStream(originalIR), candidateStream(candidateIR);
   original.print(sourceStream);
@@ -758,7 +758,7 @@ Expected<json::Value> checkPolynomialReductions(ModuleOp original,
     return toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
   };
   return json::Object{
-      {"format", "zkc.polynomial-correspondence/1"},
+      {"format", "zkc.polynomial-correspondence/0"},
       {"requirements", std::move(results)},
       {"requirement_source", requirementSource},
       {"requirements_sha256", digest(requirementSource)},

@@ -95,7 +95,7 @@ fn inputs(envelope: &Json, producing: bool, tag: usize, count: usize) -> Json {
         .map(|p| json!([p[0], "1"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",
@@ -144,7 +144,7 @@ fn run(directory: &Path) {
                 row[0] = json!("00");
             } else {
                 row[1] = json!("bool");
-                row[2] = json!("zkcv.bool/1");
+                row[2] = json!("zkcv.bool/0");
             }
             changed[3] = json!(digest(&reference::tree(&changed[2])));
             let encoded = serde_json::to_vec(&changed).unwrap();
@@ -188,7 +188,7 @@ fn run(directory: &Path) {
             "native-proof-wire-map"
         );
         let original: Json = serde_json::from_str(envelope[4].as_str().unwrap()).unwrap();
-        assert_eq!(original[0], "zkc.program/2");
+        assert_eq!(original[0], "zkc.program/0");
         for (tag, count) in [(0, 0), (1, 0), (1, 1), (1, 4), (2, 0), (2, 1), (2, 7)] {
             let p = inputs(&envelope, true, tag, count);
             let v = inputs(&envelope, false, tag, count);
@@ -269,7 +269,7 @@ fn main() {
 // native decoder, origin builder and proof-host transition code.
 fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, count: usize) {
     let root = reference::root(envelope, input);
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
     let mut event = 0;
     let mut origin = |kind: &str, site: &str, sender: &str, receiver: &str| {
@@ -279,7 +279,7 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
                 "main",
                 site,
                 "input_4",
-                "random.bls12-381.fr/1",
+                "random.bls12-381.fr/0",
                 "draw",
                 "Bob"
             ])
@@ -287,7 +287,7 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
             json!(["message", "main", site, site, sender, receiver])
         };
         let template = reference::tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             "main",
             [],
             [],
@@ -295,7 +295,7 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
         ]));
         assert_eq!(envelope[2][3][event], json!([kind, hex(&template)]));
         event += 1;
-        reference::tree(&json!(["zkc.native-origin/2", "main", [], [], data]))
+        reference::tree(&json!(["zkc.native-origin/0", "main", [], [], data]))
     };
     let mut position = 40;
     let mut frame = || {
@@ -306,14 +306,14 @@ fn verify_reference(envelope: &Json, input: &Json, proof: &[u8], tag: usize, cou
         bytes
     };
     let record = frame();
-    assert_eq!(&record[..10], b"ZKCV\x01\x41\0\0\0\0");
+    assert_eq!(&record[..10], b"ZKCV\x00\x41\0\0\0\0");
     let size = u32::from_le_bytes(record[10..14].try_into().unwrap()) as usize;
     assert_eq!(size, 54);
     let commitment = reference::group(&record[14..14 + size]);
-    let mut batch = b"ZKCV\x01\x41".to_vec();
+    let mut batch = b"ZKCV\x00\x41".to_vec();
     batch.extend_from_slice(&(tag as u32).to_le_bytes());
     if tag != 0 {
-        let mut vector = b"ZKCV\x01\x42".to_vec();
+        let mut vector = b"ZKCV\x00\x42".to_vec();
         vector.extend_from_slice(&(count as u32).to_le_bytes());
         for i in 1..=count {
             vector.extend_from_slice(&reference::scalar_wire(Scalar::from(i as u64))[6..]);
@@ -375,12 +375,12 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
         ),
         _ => unreachable!(),
     };
-    let mut expected = b"ZKCV\x01".to_vec();
+    let mut expected = b"ZKCV\x00".to_vec();
     expected.push(tag);
     expected.extend_from_slice(&1u32.to_le_bytes());
     expected.extend(body);
     assert_eq!(backend().encode_native_value(&value).unwrap(), expected);
-    let yes = hex(b"ZKCV\x01\x05\x01");
+    let yes = hex(b"ZKCV\x00\x05\x01");
     let input = |role| {
         let map = envelope[6]
             .as_array()
@@ -412,7 +412,7 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
                 ])
             })
             .collect();
-        json!(["zkc.native-proof-inputs/1", public, data, "", [], "0"])
+        json!(["zkc.native-proof-inputs/0", public, data, "", [], "0"])
     };
     let p = input("Alice");
     let v = input("Bob");
@@ -422,7 +422,7 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     let validated = deployment.execute(&v, Some(&proof)).unwrap();
     clean(&validated);
     validated.outcome.unwrap();
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     assert_eq!(
         &proof[8..40],
         &Sha256::digest(reference::root(envelope, &p))[..]

@@ -20,7 +20,7 @@ class Entry:
 
     def run_roles(self, name, roles, *, refuses=None):
         request = self.journal.write(f'{name}.inputs.json', {
-            'format': 'zkc.entry-run/1', 'session': 'kernel_controls',
+            'format': 'zkc.entry-run/0', 'session': 'kernel_controls',
             'roles': roles,
         })
         output = self.directory / f'{name}.outputs.json'

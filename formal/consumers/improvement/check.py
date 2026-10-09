@@ -99,7 +99,7 @@ def main():
                     if sha(sources / f"{name}.lean") != before[str(HERE / f"{name}.lean")]]
     passed = run.returncode == 0 and audit is not None and not drift and not copied_drift
     record = {
-        "format": "zkc.formal-improvement.v1", "status": "pass" if passed else "fail",
+        "format": "zkc.formal-improvement.v0", "status": "pass" if passed else "fail",
         "command": command, "exit_code": run.returncode, "lean_version": version,
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "modules": list(MODULES), "input_files": len(before),

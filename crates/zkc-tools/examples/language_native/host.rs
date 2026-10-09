@@ -23,7 +23,7 @@ fn scalar(n: u64) -> Value {
 }
 fn data(arm: usize, wire: bool) -> Value {
     let leaf = if wire {
-        let mut bytes = b"ZKCV\x01\x01".to_vec();
+        let mut bytes = b"ZKCV\x00\x01".to_vec();
         let mut scalar = [0; 32];
         scalar[0] = 7;
         bytes.extend_from_slice(&scalar);

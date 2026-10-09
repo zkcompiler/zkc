@@ -208,7 +208,7 @@ collision = module(
 commands.verified(collision)
 commands.verified(collision, "mathematical-formation", "--zkc-project-protocol")
 # Overlapping role names catch a missed substitution that could still verify.
-service = '!protocol.service_ref<"random.bls12-381.fr/1">'
+service = '!protocol.service_ref<"random.bls12-381.fr/0">'
 swap_leaf = f""""protocol.func"() ({{^bb0(%s:{service}):
 %yes=arith.constant true
 %r="protocol.query"(%s) {{method="draw",owner="B",site="draw"}} : ({service})->{F}
@@ -249,7 +249,7 @@ for body, role_name in participants:
         assert 'peer = "A"' in body and '"protocol.service_query"' not in body
 assert {role_name for _, role_name in participants} == {"A", "B"}
 # Same entry service reference through two applications means one evolving root.
-service = '!protocol.service_ref<"random.bls12-381.fr/1">'
+service = '!protocol.service_ref<"random.bls12-381.fr/0">'
 service_source = module(f""""protocol.func"() ({{^bb0(%s:{service}):
 %v="protocol.query"(%s) {{method="draw",owner="A",site="draw"}} : ({service})->{F}
 "protocol.return"(%v) : ({F})->()}})
@@ -263,7 +263,7 @@ service_source = module(f""""protocol.func"() ({{^bb0(%s:{service}):
     commands.source("protocol-bundle", service_source, "--entry=main")
 )
 # A callee's statement acceptance index cannot silently become a caller index.
-statement = 'relation.declare @predicate {kind="external",key="test",revision="1",signature=(i1)->i1,purposes=["statement"]}\n'
+statement = 'relation.declare @predicate {kind="external",key="test",revision="0",signature=(i1)->i1,purposes=["statement"]}\n'
 with_statement = boundary.replace(
     '"protocol.func"()', statement + '"protocol.func"()', 1
 ).replace(
@@ -380,7 +380,7 @@ commands.run(
 # Candidate-only declarations are outside the retained source contract too.
 extra = candidate.replace(
     '"protocol.projection"',
-    'relation.declare @extra {kind="external",key="test",revision="1",signature=()->i1,purposes=[]}\n"protocol.projection"',
+    'relation.declare @extra {kind="external",key="test",revision="0",signature=()->i1,purposes=[]}\n"protocol.projection"',
     1,
 )
 commands.verified(extra)
@@ -400,7 +400,7 @@ commands.run(
 
 def relation(columns, outputs, inputs, rows):
     return [
-        "zkc.relation.r1cs/1",
+        "zkc.relation.r1cs/0",
         "bls12-381.fr",
         str(columns),
         str(outputs),
@@ -460,7 +460,7 @@ for name, asset in assets.items():
     report = artifact(name, checked(text, requirements))
     arity = report["requirements"][0]["arity"]
     assert [r["degree"] for r in report["requirements"][0]["rounds"]] == [3] * arity
-    assert report["requirements"][0]["family"] == "r1cs-sum-to-point/1"
+    assert report["requirements"][0]["family"] == "r1cs-sum-to-point/0"
     assert report["requirements"][0]["composition"]["verifier_role"] == "Checker"
     (OUT / f"{name}_evaluate.bundle").write_text(
         commands.source("protocol-bundle", text, "--entry=evaluate")

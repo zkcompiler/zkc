@@ -293,7 +293,7 @@ class ExecutionModelReader {
         }
         auto value = op->getAttrOfType<BoolAttr>("value");
         if (!value || type(op->getResult(0).getType()) !=
-                          (physical ? "bool@native.bool/1" : "bool")) {
+                          (physical ? "bool@native.bool/0" : "bool")) {
           fail("native-boolean-type");
           return {};
         }

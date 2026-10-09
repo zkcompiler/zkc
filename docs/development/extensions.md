@@ -56,7 +56,7 @@ unrelated structure valid.
 
 ## Runtime and native implementation
 
-All executable extensions use `zkc.program/2` and the shared Runner. Update C++
+All executable extensions use `zkc.program/0` and the shared Runner. Update C++
 export and Rust admission for the same exact type/control contract. Hosts retain
 their application responsibilities: authenticated identity, input and setup
 binding, limits, failure reports, cleanup and publication.

@@ -372,7 +372,7 @@ fn local_body(
                     &mut env,
                     &mut seen,
                     output,
-                    PhysicalType::parse("bool@native.bool/1")?,
+                    PhysicalType::parse("bool@native.bool/0")?,
                 )?;
             }
             LocalInstruction::Stop { site: s, .. } => {
@@ -541,7 +541,7 @@ fn local_body(
                 }
                 let mut ports = vec![(
                     induction.clone(),
-                    PhysicalType::parse("index@native.index/1")?,
+                    PhysicalType::parse("index@native.index/0")?,
                 )];
                 ports.extend(
                     carried
@@ -570,7 +570,7 @@ fn local_body(
                     if !matches!(body.last(), Some(LocalInstruction::Yield(_))) {
                         return Err(err(ErrorCode::Record, "local-control-yield"));
                     }
-                    yielded.insert(0, PhysicalType::parse("bool@native.bool/1")?);
+                    yielded.insert(0, PhysicalType::parse("bool@native.bool/0")?);
                 }
                 local_body(body, child, sites, true, Some(&yielded))?;
                 results(&mut env, &mut seen, outputs, &types)?;
@@ -813,7 +813,7 @@ impl Check<'_> {
                         return Err(err(ErrorCode::Record, "interactive-loop-count"));
                     }
                     let induction_type = lookup(&env, &count.value)?;
-                    if induction_type != PhysicalType::parse("index@native.index/1")? {
+                    if induction_type != PhysicalType::parse("index@native.index/0")? {
                         return Err(err(ErrorCode::Type, "interactive-loop-count"));
                     }
                     let types = carried
@@ -864,7 +864,7 @@ impl Check<'_> {
                     operands(
                         &mut env,
                         std::slice::from_ref(condition),
-                        &[PhysicalType::parse("bool@native.bool/1")?],
+                        &[PhysicalType::parse("bool@native.bool/0")?],
                     )?;
                     operands(&mut env, values, self.entry_outputs)?;
                     let types: Vec<_> = self

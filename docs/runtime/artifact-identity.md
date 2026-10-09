@@ -6,7 +6,7 @@ from trusted compilation or distribution. Computing that digest from an unknown
 received file does not authorize its contents.
 
 Versioned tags identify format and construction families. During development,
-their numbers stay fixed under the [format version policy](../development/maintenance.md#format-versions).
+zkc-owned versions stay at `0` under the [format version policy](../development/maintenance.md#format-versions).
 A digest identifies exact bytes; it does not establish that a different build
 interprets those bytes with the same semantics.
 
@@ -14,7 +14,7 @@ interprets those bytes with the same semantics.
 
 | Identity | Binds |
 |---|---|
-| Entry package | Exact published `zkc.entry/1` bytes, including original/interface, compilation choices and selected artifact |
+| Entry package | Exact published `zkc.entry/0` bytes, including original/interface, compilation choices and selected artifact |
 | Native deployment or joint bundle | Exact emitted envelope bytes and the executable, policy or schedule they contain |
 | Native proof source | Exact retained UTF-8 mathematical source bytes under the proof profile |
 | Invocation context | The selected policy's canonical public values, application context and authorized setup configuration |

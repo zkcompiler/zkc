@@ -413,7 +413,7 @@ class Comparison {
     if (definition.kind == K::Formula)
       return (actual.formula && !actual.asset &&
               *actual.formula == formulaSymbol(decl) &&
-              actual.externalKind == "zkc.language.formula/1" &&
+              actual.externalKind == "zkc.language.formula/0" &&
               actual.key == decl.symbol) ||
              fail("source predicate binding differs");
     if (definition.kind == K::Opaque)
@@ -425,10 +425,10 @@ class Comparison {
     const auto &asset = entry.project().assets()[*definition.asset];
     return (!actual.formula && actual.asset &&
             actual.asset->identity() == asset.identity() &&
-            actual.key == asset.identity() && actual.revision == "1" &&
+            actual.key == asset.identity() && actual.revision == "0" &&
             actual.externalKind == (definition.kind == K::R1CS
-                                        ? "zkc.relation.r1cs/1"
-                                        : "zkc.relation.air/1")) ||
+                                        ? "zkc.relation.r1cs/0"
+                                        : "zkc.relation.air/0")) ||
            fail("source captured relation identity differs");
   }
 

@@ -23,7 +23,7 @@ EdwardsScalarModule::admit(const DomainCatalog &catalog, StringRef group,
   // A raw Edwards domain with a claimed ScalarAction flag is still refused.
   if (group != "edwards25519.prime-subgroup" ||
       scalar != "edwards25519.scalar" ||
-      representation != "dalek.edwards-prime-subgroup/1")
+      representation != "dalek.edwards-prime-subgroup/0")
     return refuse("representation.unsupported-scalar-module");
   const auto *g = catalog.domain(group);
   const auto *s = catalog.domain(scalar);

@@ -1,6 +1,6 @@
 !f = !algebra.field<"bls12-381.fr">
 !g = !algebra.group<"bls12-381.g1">
-!rng = !protocol.service_ref<"random.bls12-381.fr/1">
+!rng = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%g:!g,%x:!f,%y:!g,%nonce:!rng,%challenge_service:!rng):
 %k = "protocol.query"(%nonce) {method="draw", owner="P", site="nonce"} : (!rng) -> !f

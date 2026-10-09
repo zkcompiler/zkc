@@ -27,8 +27,8 @@ From `formal/`, with the pinned dependencies prepared:
 lake build table-protocol Tests.TableProtocolAudit
 .lake/build/bin/table-protocol check SOURCE PLAN
 .lake/build/bin/table-protocol run SOURCE PLAN INPUTS
-.lake/build/bin/table-protocol admit SOURCE PLAN table-round/1 CERTIFICATE
-.lake/build/bin/table-protocol run-admitted SOURCE PLAN INPUTS table-round/1 CERTIFICATE
+.lake/build/bin/table-protocol admit SOURCE PLAN table-round/0 CERTIFICATE
+.lake/build/bin/table-protocol run-admitted SOURCE PLAN INPUTS table-round/0 CERTIFICATE
 ```
 
 Exact direct lowering is checked over decoded source and plan in this example's
@@ -48,7 +48,7 @@ no cryptographic randomness or endpoint projection claim. Both tree and compact
 source use the maintained phase checker. `Tests.TableAdmission` instantiates its
 artifact permission theorems with these summaries.
 
-`table-endpoint/1` instead takes a consumer entry `["prover", phase]` and an
+`table-endpoint/0` instead takes a consumer entry `["prover", phase]` and an
 invocation state `["prover", phase, tableState]`. `admit-entry` checks this phase;
 `run-entry` also checks actual state agreement before binding inputs.
 `Tests.EndpointAdmission` connects accepted entry validation to the existing

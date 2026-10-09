@@ -13,7 +13,7 @@ open Lean (Json)
 def setupContext (roles : List Name) (json : Json) : Result
     (List (Name × List CommitmentIdentity) × List (Json × CommitmentIdentity)) := do
   if json == .arr #[] then return ([], [])
-  let [.str "zkc.reference-setups/1", keys, receiving] ← Decode.array json
+  let [.str "zkc.reference-setups/0", keys, receiving] ← Decode.array json
     | throw "reference-setup-context"
   let keys ← Decode.pairs Decode.name (fun j => do
     let identities ← (← Decode.array j 64).mapM CommitmentIdentity.decode

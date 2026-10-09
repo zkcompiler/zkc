@@ -15,7 +15,7 @@ operations make no MLIR purity or speculatability claim.
 An external construction state in this contract is an ordinary, copyable
 `indices` value, not an affine `transcript` capability. Every component has the
 existing canonical unsigned 64-bit index encoding. State envelopes are
-`[1514881876, 1, suite, payload...]`. Version 1 fixes these suites:
+`[1514881876, 0, suite, payload...]`. Version 0 fixes these suites:
 
 | Suite | Exact interpretation | Payload |
 |---|---|---|
@@ -52,7 +52,7 @@ such disclosure is safe for an arbitrary enclosing protocol.
 
 Every operation has no static arguments and no operation attributes. The sole
 installed physical implementation is `native/<operation>`. The `external.monero`
-and `external.openvm` names select the version-1 suites above, independently of
+and `external.openvm` names select the version-0 suites above, independently of
 any internally installed transcript suite. Unknown providers fail admission.
 
 | Operation | Inputs | Outputs |

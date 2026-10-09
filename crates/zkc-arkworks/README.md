@@ -99,7 +99,7 @@ Public PCS objects have an **81-byte envelope**:
 
 | Offset | Width | Meaning |
 |---|---:|---|
-| 0 | 8 | ASCII `ZKCAR006`, the fixed wire marker |
+| 0 | 8 | ASCII `ZKCAR000`, the fixed wire marker |
 | 8 | 1 | Kind: verifier key = 1, commitment = 2, opening proof = 3, prover key = 4 |
 | 9 | 8 | Arity, unsigned little-endian u64 |
 | 17 | 32 | Setup fingerprint |
@@ -138,13 +138,13 @@ Fingerprints use the actual SHA-256 implementation in `sha2 = 0.10.9`.
 The preimage is `LE64(len(domain)) || domain || LE64(len(PROFILE)) || PROFILE ||
 LE64(len(context)) || context || canonical_compressed(object)`.
 
-- Setup domain: `zkc-arkworks/setup/v1`, empty context, object = all upstream
+- Setup domain: `zkc-arkworks/setup/v0`, empty context, object = all upstream
   `UniversalParams` in upstream field order (`num_vars`, G1 basis vectors, G2
   basis vectors, g, h, masks). This binds all public setup material, not a label.
-- Key domain: `zkc-arkworks/key/v1`, context = the 32-byte setup ID, object =
+- Key domain: `zkc-arkworks/key/v0`, context = the 32-byte setup ID, object =
   upstream `VerifierKey` (`nv`, g, h, masks). Thus the key pin also binds the
   claimed full-setup fingerprint and the selected layout/codec profile.
-- Prover domain: `zkc-arkworks/prover/v1`, context = `setup_id || key_id`
+- Prover domain: `zkc-arkworks/prover/v0`, context = `setup_id || key_id`
   (64 bytes), object = upstream `CommitterKey` in field order (`nv`, G1 basis
   vectors, G2 basis vectors, g, h). This pins every prover basis, including rows
   unused by commit, and the complete profile/metadata association. It is distinct

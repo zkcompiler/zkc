@@ -8,7 +8,7 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   auto module = mlir::parseSourceString<mlir::ModuleOp>(R"(
-!B = !plan.data<i1, "native.bool/1">
+!B = !plan.data<i1, "native.bool/0">
 module { "protocol.module"() ({
  "protocol.participant"() ({ ^entry(%x:!B): "protocol.finish"(%x) : (!B)->() })
  {sym_name="p",function_type=(!B)->!B,instance="main",role="P"} : ()->()

@@ -24,9 +24,9 @@ def project(text, name):
 
 with case("queries survive optimization and split calculation segments"):
     carrier, logical = project(source, "services")
-    assert carrier[0] == "zkc.program/2"
+    assert carrier[0] == "zkc.program/0"
     alice = next(p for p in carrier[3] if p[3] == "Alice")
-    assert alice[7] == [["service_0", "random.bls12-381.fr/1", "0"], ["service_3", "random.bls12-381.fr/1", "3"]]
+    assert alice[7] == [["service_0", "random.bls12-381.fr/0", "0"], ["service_3", "random.bls12-381.fr/0", "3"]]
     assert len(alice[4]) == 2
     assert [op[1] for op in alice[6] if op[0] == "query"] == ["first_draw", "second_draw", "unused_draw"]
     assert [op[0] for op in alice[6]] == ["local", "query", "query", "query", "local", "send", "return"]
@@ -55,14 +55,14 @@ with case("native carrier imports and exports without changing its profile"):
 with case("common service indices map to role-local ingress indices"):
     shifted = '''module { "protocol.module"() ({
       "protocol.func"() ({
-      ^entry(%a: !algebra.field<"bls12-381.fr">, %service: !protocol.service_ref<"random.bls12-381.fr/1">):
-        %draw = "protocol.query"(%service) {owner="Bob", method="draw", site="draw"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
+      ^entry(%a: !algebra.field<"bls12-381.fr">, %service: !protocol.service_ref<"random.bls12-381.fr/0">):
+        %draw = "protocol.query"(%service) {owner="Bob", method="draw", site="draw"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
         "protocol.return"(%draw) : (!algebra.field<"bls12-381.fr">) -> ()
-      }) {sym_name="main", function_type=(!algebra.field<"bls12-381.fr">, !protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">, roles=["Alice", "Bob"], input_roles=[["Alice"], ["Bob"]], output_roles=[["Bob"]]} : () -> ()
+      }) {sym_name="main", function_type=(!algebra.field<"bls12-381.fr">, !protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">, roles=["Alice", "Bob"], input_roles=[["Alice"], ["Bob"]], output_roles=[["Bob"]]} : () -> ()
     }) {profile=#protocol.profile<protocol>} : () -> () }'''
     shifted_carrier, shifted_ir = project(shifted, "shifted_service_index")
     bob = next(p for p in shifted_carrier[3] if p[3] == "Bob")
-    assert bob[7] == [["service_0", "random.bls12-381.fr/1", "0"]]
+    assert bob[7] == [["service_0", "random.bls12-381.fr/0", "0"]]
     assert 'service_inputs = [1]' in shifted_ir
     imported = canonical_program(commands, json.dumps(shifted_carrier))
     roundtrip = json.loads(imported)
@@ -71,7 +71,7 @@ with case("common service indices map to role-local ingress indices"):
 for name, old, new in [
     ("shared reference owner", 'input_roles=[["Alice"]', 'input_roles=[["Alice", "Bob"]'),
     ("wrong query owner", 'method="draw", owner="Alice", site="first_draw"', 'method="draw", owner="Bob", site="first_draw"'),
-    ("unknown service", "random.bls12-381.fr/1", "random.bls12-381.fr/2"),
+    ("unknown service", "random.bls12-381.fr/0", "random.uninstalled/0"),
     ("unknown method", 'method="draw"', 'method="reset"'),
     ("duplicate occurrence", 'site="second_draw"', 'site="first_draw"'),
     ("query data argument", '"protocol.query"(%first)', '"protocol.query"(%first, %x)'),
@@ -80,7 +80,7 @@ for name, old, new in [
         mutated = source.replace(old, new)
         # The argument mutation also updates its function type to reach formation.
         if name == "query data argument":
-            mutated = "\n".join(line.replace(': (!protocol.service_ref<"random.bls12-381.fr/1">) ->', ': (!protocol.service_ref<"random.bls12-381.fr/1">, !algebra.field<"bls12-381.fr">) ->')
+            mutated = "\n".join(line.replace(': (!protocol.service_ref<"random.bls12-381.fr/0">) ->', ': (!protocol.service_ref<"random.bls12-381.fr/0">, !algebra.field<"bls12-381.fr">) ->')
                                 if '"protocol.query"(%first, %x)' in line else line for line in mutated.splitlines())
         commands.verified(mutated, "mathematical-formation", "--canonicalize", "--cse")
 
@@ -100,17 +100,17 @@ with case("a query can be the first participant action"):
     project('''module {
     "protocol.module"() ({
       "protocol.func"() ({
-      ^entry(%r: !protocol.service_ref<"random.bls12-381.fr/1">):
-        %x = "protocol.query"(%r) {method="draw", owner="Alice", site="draw"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
+      ^entry(%r: !protocol.service_ref<"random.bls12-381.fr/0">):
+        %x = "protocol.query"(%r) {method="draw", owner="Alice", site="draw"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
         "protocol.return"(%x) : (!algebra.field<"bls12-381.fr">) -> ()
-      }) {sym_name="main", function_type=(!protocol.service_ref<"random.bls12-381.fr/1">) -> (!algebra.field<"bls12-381.fr">), roles=["Alice"], input_roles=[["Alice"]], output_roles=[["Alice"]]} : () -> ()
+      }) {sym_name="main", function_type=(!protocol.service_ref<"random.bls12-381.fr/0">) -> (!algebra.field<"bls12-381.fr">), roles=["Alice"], input_roles=[["Alice"]], output_roles=[["Alice"]]} : () -> ()
     }) {profile=#protocol.profile<protocol>} : () -> ()
     }''', "service_single")
 
 
 # Reference values must never become ordinary data or peer-available results.
 field = '!algebra.field<"bls12-381.fr">'
-reference = '!protocol.service_ref<"random.bls12-381.fr/1">'
+reference = '!protocol.service_ref<"random.bls12-381.fr/0">'
 for name, operation in [
     ("reference exchange", f'%bad = protocol.exchange %first {{sender="Alice", receiver="Bob", site="bad"}} : {reference}'),
     ("reference selection", f'%bad = "arith.select"(%go, %first, %second) : (i1, {reference}, {reference}) -> {reference}'),
@@ -153,7 +153,7 @@ with case("participant records refuse an extra empty field"):
     canonical_program(commands, json.dumps(mutated), refuses="interactive-record")
 
 with case("service index MLIR attribute must have the admitted integer type"):
-    bad = logical.replace('fr/1", 0]', 'fr/1", 18446744073709551616 : i128]')
+    bad = logical.replace('fr/0", 0]', 'fr/0", 18446744073709551616 : i128]')
     assert bad != logical
     commands.source("protocol-export", bad, refuses="mathematical-projection")
 
@@ -161,7 +161,7 @@ with case("service ports require their module profile even when unused"):
     # Construct the port-only shape from a freshly projected query-free program
     # so no data use remains dangling after removing queries.
     port_only = source[source.index('module {'):]
-    port_only = port_only[:port_only.index('    protocol.statement')] + '\n    "protocol.return"(%x, %accept) : (!algebra.field<"bls12-381.fr">, i1) -> ()\n  }) {sym_name="main", function_type=(!protocol.service_ref<"random.bls12-381.fr/1">, !algebra.field<"bls12-381.fr">, i1, !protocol.service_ref<"random.bls12-381.fr/1">, i1, i1) -> (!algebra.field<"bls12-381.fr">, i1), roles=["Alice", "Bob", "Observer"], input_roles=[["Alice"], ["Alice"], ["Alice"], ["Alice"], ["Bob"], ["Observer"]], output_roles=[["Alice"], ["Bob"]]} : () -> ()\n}) {profile=#protocol.profile<protocol>} : () -> ()\n}'
+    port_only = port_only[:port_only.index('    protocol.statement')] + '\n    "protocol.return"(%x, %accept) : (!algebra.field<"bls12-381.fr">, i1) -> ()\n  }) {sym_name="main", function_type=(!protocol.service_ref<"random.bls12-381.fr/0">, !algebra.field<"bls12-381.fr">, i1, !protocol.service_ref<"random.bls12-381.fr/0">, i1, i1) -> (!algebra.field<"bls12-381.fr">, i1), roles=["Alice", "Bob", "Observer"], input_roles=[["Alice"], ["Alice"], ["Alice"], ["Alice"], ["Bob"], ["Observer"]], output_roles=[["Alice"], ["Bob"]]} : () -> ()\n}) {profile=#protocol.profile<protocol>} : () -> ()\n}'
     _, port_ir = project(port_only, "services_unused")
     assert '#protocol.profile<exec>' in port_ir
     malformed = port_ir.replace('#protocol.profile<exec>', '#protocol.profile<protocol>')

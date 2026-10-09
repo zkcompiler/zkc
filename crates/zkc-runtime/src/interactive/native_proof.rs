@@ -217,7 +217,7 @@ fn verifier_data(ty: &PhysicalType) -> bool {
         || ty.has_native_data_frame()
 }
 fn verifier_key(ty: &PhysicalType) -> bool {
-    ty.logical().spelling() == "verifier_key:multilinear.kzg.bls12-381/1"
+    ty.logical().spelling() == "verifier_key:multilinear.kzg.bls12-381/0"
         && PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty)
 }
 // General admission already checks SSA uniqueness, exact call/result arity,

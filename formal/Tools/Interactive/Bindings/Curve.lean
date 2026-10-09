@@ -20,7 +20,7 @@ private def resolve (physical : Bool) (binding : Declaration) (shape : Support.S
   -- Mathematical binding only. Public-operand leakage admission is host-owned.
   let representation := fun output i (ty : ValueType) =>
     if diagonal && ((output && i == 0 && binding.contract == "curve.scale_each") ||
-        (!output && i == 1 && binding.contract == "curve.msm")) then "dalek.ristretto-diagonal/1"
+        (!output && i == 1 && binding.contract == "curve.msm")) then "dalek.ristretto-diagonal/0"
     else ty.defaultRepresentation
   Support.realize physical binding (Support.signature shape field group) (Support.scalarBackend field)
     (if group == ristrettoGroup then alternatives binding.contract else []) representation

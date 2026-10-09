@@ -62,8 +62,8 @@ certificate format. These model-specific tags are defined by its
 [transport](../../../../formal/Tools/RequirementChecker/Transport.lean):
 
 ```text
-["zkc.requirements/1", terms, assumptions, implications, goals]
-["zkc.requirements-certificate/1", steps, answers]
+["zkc.requirements/0", terms, assumptions, implications, goals]
+["zkc.requirements-certificate/0", steps, answers]
 ```
 
 Terms are `[null, name]` roots, `[parent_index, member]` projections and

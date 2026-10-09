@@ -38,7 +38,7 @@ def decodeDescriptor (source : Source) (json : Json)
        random, acceptance, .str suite, .str identity] ← Decode.array json
     | throw "construction-descriptor"
   -- The identity policy is a field; both policies are current.
-  ensure (tag == "zkc.construction/1" &&
+  ensure (tag == "zkc.construction/0" &&
     (identity == "exact" || identity == "normalized")) "construction-descriptor"
   ensure (Bindings.transcriptDomain suite) "construction-transcript-suite"
   let field ← Bindings.associatedIdentity suite "ChallengeField"
@@ -153,7 +153,7 @@ structure Location where
   operation : Name := ""
 
 def Location.origin (location : Location) (event : Json) : Json :=
-  .arr #[.str "zkc.logical-origin/1", .str location.entry, .str location.binding,
+  .arr #[.str "zkc.logical-origin/0", .str location.entry, .str location.binding,
     .arr (location.path.map PathElement.json).toArray, event]
 
 def Location.challenge (location : Location) : Json :=
@@ -168,7 +168,7 @@ def Location.request (location : Location) (kernel : Name) (attrs : List String)
      (arguments : List String := []) : Json :=
   let fields := #[.str "operation", .str location.protocol, .str location.localSite,
     .str location.function, .str location.operation, .str location.sourceRole, .str kernel]
-  .arr #[.str "zkc.logical-origin/2", .str location.entry, .str location.binding,
+  .arr #[.str "zkc.logical-origin/0", .str location.entry, .str location.binding,
     .arr (location.path.map PathElement.json).toArray,
     .arr (fields ++ #[.arr (arguments.map Json.str).toArray, .arr (attrs.map Json.str).toArray])]
 

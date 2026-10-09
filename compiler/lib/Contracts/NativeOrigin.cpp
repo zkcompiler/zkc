@@ -63,7 +63,7 @@ Error checkNativeOrigin(StringRef hex, StringRef kind) {
   StringRef value;
   uint64_t count;
   if (!reader.array(5) || !reader.string(value) ||
-      value != "zkc.native-origin-template/1" || !reader.name() ||
+      value != "zkc.native-origin-template/0" || !reader.name() ||
       !reader.header(1, count) || count > 64)
     return invalid();
   for (uint64_t i = 0; i < count; ++i) {
@@ -97,7 +97,7 @@ encodeNativeOriginTemplate(StringRef entry,
   if (!identifier(entry) || path.size() > 64 || event.empty() ||
       event.size() > 7 || !all_of(event, identifier))
     return error("interactive-native-origin");
-  size_t size = 9 + 9 + StringRef("zkc.native-origin-template/1").size() + 9 +
+  size_t size = 9 + 9 + StringRef("zkc.native-origin-template/0").size() + 9 +
                 entry.size() + 9 + 9 + 9;
   for (const auto &step : path) {
     if ((step[0] != "apply" && step[0] != "repeat") ||
@@ -114,7 +114,7 @@ encodeNativeOriginTemplate(StringRef entry,
   std::string bytes;
   bytes.reserve(size);
   header(bytes, 1, 5);
-  string(bytes, "zkc.native-origin-template/1");
+  string(bytes, "zkc.native-origin-template/0");
   string(bytes, entry);
   header(bytes, 1, path.size());
   for (const auto &step : path) {

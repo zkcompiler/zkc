@@ -107,7 +107,7 @@ roots = ''' + json.dumps(test_roots) + "\n")
     drift = any(support.lake.sha(ROOT / p) != h or support.lake.sha(output / p) != h for p, h in inputs.items())
     passed = result.returncode == 0 and match is not None and not drift
     record = {
-        "format": "zkc.foundation-check.v1", "status": "pass" if passed else "fail",
+        "format": "zkc.foundation-check.v0", "status": "pass" if passed else "fail",
         "exit_code": result.returncode, "lean_version": version, "lake_executable": lake,
         "toolchain": (output / "lean-toolchain").read_text().strip(),
         "source_drift": drift, "source_inputs": inputs,

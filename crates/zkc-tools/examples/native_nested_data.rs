@@ -157,7 +157,7 @@ fn inputs(
         .map(|p| json!([p[0], "1"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         ports,
         "",
@@ -190,7 +190,7 @@ fn execute(
     report.outcome
 }
 fn replaced(proof: &[u8], payload: &[u8]) -> Vec<u8> {
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     let mut result = proof[..40].to_vec();
     result.extend_from_slice(&(payload.len() as u64).to_le_bytes());
     result.extend_from_slice(payload);
@@ -205,7 +205,7 @@ fn main() {
     std::fs::write(
         directory.join("nested.setups.json"),
         serde_json::to_vec(&json!([
-            "zkc.native-setup-authority/1",
+            "zkc.native-setup-authority/0",
             [["2", hex(&keys.verifier_key().metadata().key_id())]],
             [["1", "2"], ["3", "2"]]
         ]))
@@ -260,7 +260,7 @@ fn main() {
                 assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
                 let mut t = reference::Transcript::new(envelope[2][1][5].as_str().unwrap(), &root);
                 let origin = |event: Json| {
-                    reference::tree(&json!(["zkc.native-origin/2", "main", [], [], event]))
+                    reference::tree(&json!(["zkc.native-origin/0", "main", [], [], event]))
                 };
                 t.absorb(
                     b"origin",
@@ -274,7 +274,7 @@ fn main() {
                         "main",
                         "draw",
                         "input_1",
-                        "random.bls12-381.fr/1",
+                        "random.bls12-381.fr/0",
                         "draw",
                         "V"
                     ])),
@@ -287,7 +287,7 @@ fn main() {
                 assert_eq!(frame_length, proof.len() - 48);
             }
             if family == "matrix" {
-                assert_eq!(&proof[48..54], b"ZKCV\x01\x17");
+                assert_eq!(&proof[48..54], b"ZKCV\x00\x17");
                 let mut wrong = proof[48..].to_vec();
                 wrong[6..10].copy_from_slice(&((count + 1) as u32).to_le_bytes());
                 assert_eq!(
@@ -297,7 +297,7 @@ fn main() {
                 publish(directory, name, count, &p, &v, &proof);
                 continue;
             }
-            assert_eq!(&proof[48..54], b"ZKCV\x01\x45");
+            assert_eq!(&proof[48..54], b"ZKCV\x00\x45");
             assert_eq!(
                 u32::from_le_bytes(proof[54..58].try_into().unwrap()) as usize,
                 count
@@ -312,7 +312,7 @@ fn main() {
             }
             assert_eq!(pos, 48 + frame_length);
             let batch = |items: &[Vec<u8>]| {
-                let mut b = b"ZKCV\x01\x45".to_vec();
+                let mut b = b"ZKCV\x00\x45".to_vec();
                 b.extend_from_slice(&(items.len() as u32).to_le_bytes());
                 for item in items {
                     b.extend_from_slice(item);

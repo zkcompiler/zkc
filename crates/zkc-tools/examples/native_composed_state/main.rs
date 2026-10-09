@@ -79,7 +79,7 @@ fn inputs(envelope: &Json, producing: bool, n: u64, a: &[Scalar], g: &[GroupPoin
         .map(|p| json!([p[0], "64"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",

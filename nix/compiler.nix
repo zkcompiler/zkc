@@ -9,7 +9,7 @@
 }:
 stdenv.mkDerivation {
   pname = "zkc-compiler";
-  version = "0.1.0";
+  version = "0.0.0";
   src = source;
   outputs = [
     "out"

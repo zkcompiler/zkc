@@ -47,7 +47,7 @@ and its body-dependent evidence remain the owner of that stronger guarantee.
 ## Portable representation
 
 Logical type spelling is `variant:H`, where `H` is lowercase hexadecimal of
-compact UTF-8 JSON `["zkc.variant/1", nodes]`. This is a self-contained content
+compact UTF-8 JSON `["zkc.variant/0", nodes]`. This is a self-contained content
 graph, not an ambient registry. A node is either a printable ASCII string or an
 array of canonical decimal-string references to earlier nodes. The last node
 is the root. Nodes are interned by exact content in first-use postorder: repeated
@@ -108,7 +108,7 @@ Executable values incur the charges below. Bounded unpack scratch is additional
 to installed metadata; concurrent
 loads and allocator overhead are not a process memory guarantee.
 
-The physical spelling appends `@logical.variant/1`; those 18 suffix bytes are
+The physical spelling appends `@logical.variant/0`; those 18 suffix bytes are
 additional to the logical bound. Payloads still use logical types, whose admitted
 default representations determine their physical values. This profile supplies
 no arbitrary alternative representation. Unknown descriptor tags and malformed

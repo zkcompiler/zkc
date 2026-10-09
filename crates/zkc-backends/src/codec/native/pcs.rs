@@ -125,7 +125,7 @@ pub(super) fn preflight<'a>(
         return Err(Invalid(DecodeReason::Header));
     }
     if bytes[15..23] != (key.metadata().arity() as u64).to_le_bytes()
-        || &bytes[6..14] != b"ZKCAR006"
+        || &bytes[6..14] != b"ZKCAR000"
         || bytes[14] != if tag == 6 { 2 } else { 3 }
         || bytes[23..55] != key.metadata().setup_id()
         || bytes[55..87] != key.metadata().key_id()

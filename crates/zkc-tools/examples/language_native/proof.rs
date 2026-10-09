@@ -84,7 +84,7 @@ pub(super) fn run(directory: &Path) {
                                 .iter_mut()
                                 .find(|s| s["owner"] == "P")
                                 .unwrap();
-                            service["contract"] = json!("random.bn254.fr/1");
+                            service["contract"] = json!("random.bn254.fr/0");
                         }
                     });
                     assert_eq!(
@@ -117,7 +117,7 @@ pub(super) fn run(directory: &Path) {
                         json!([])
                     };
                     json!([
-                        "zkc.native-proof-inputs/1",
+                        "zkc.native-proof-inputs/0",
                         [["V", "0", base], ["V", "1", point]],
                         data,
                         "",

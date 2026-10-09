@@ -18,7 +18,7 @@ tools.overrideAttrs (
   })
   // {
     pname = "zkc-project-checks";
-    version = "0.1.0";
+    version = "0.0.0";
     src = source;
     # Generated bindings are compiled as a separate consumer crate. Reuse the
     # Rust package's toolchain and offline vendor hooks for that boundary test.

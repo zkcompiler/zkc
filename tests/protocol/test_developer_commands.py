@@ -83,7 +83,7 @@ def test_published_mathematical_walkthrough(marker, toolchain, directory, journa
         report = json.loads(result.stdout)
         assert report["status"] == "executed" and report["outcome"] == ["completed"]
         assert report["acceptance"] is None
-        assert report["roles"][1]["outputs"] == [["wire", "bool@native.bool/1", "5a4b4356010500"]]
+        assert report["roles"][1]["outputs"] == [["wire", "bool@native.bool/0", "5a4b4356000500"]]
         return
     output = Path(result.stdout.rsplit("Proof files: ", 1)[1].strip())
     assert output.parent == directory

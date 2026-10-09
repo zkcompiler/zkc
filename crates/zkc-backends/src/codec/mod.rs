@@ -13,7 +13,7 @@ pub fn requires_setup(ty: LogicalType) -> bool {
         || ty.identity() == Identity::MultilinearKzgBls12381
             && matches!(ty.kind(), Type::Commitment | Type::Proof)
 }
-const MAGIC: &[u8] = b"ZKCV\x01";
+const MAGIC: &[u8] = b"ZKCV\x00";
 fn decode_bool(body: &[u8]) -> std::result::Result<bool, zkc_runtime::interactive::DecodeReason> {
     match body {
         [0] => Ok(false),

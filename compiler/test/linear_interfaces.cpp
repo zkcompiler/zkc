@@ -90,7 +90,7 @@ void catalogAndCarriers(MLIRContext &ctx) {
   require(catalog.associatedIdentity("ristretto255.group", "Scalar") ==
               "ristretto255.scalar",
           "nominal group scalar association");
-  require(catalog.associatedIdentity("merlin3.ristretto255.scalar64le/1",
+  require(catalog.associatedIdentity("merlin3.ristretto255.scalar64le/0",
                                      "ChallengeField") == "ristretto255.scalar",
           "nominal challenge field association");
   for (StringRef fact :
@@ -143,12 +143,12 @@ void catalogAndCarriers(MLIRContext &ctx) {
   refuse(parseBoundType("groups:ristretto255.scalar", false),
          "binding-type-identity");
   refuse(
-      parseBoundType("vector:ristretto255.scalar@arkworks.fr-vector/1", true),
+      parseBoundType("vector:ristretto255.scalar@arkworks.fr-vector/0", true),
       "binding-representation");
-  refuse(parseBoundType("polynomial:ristretto255.scalar@dalek.scalar-vector/1",
+  refuse(parseBoundType("polynomial:ristretto255.scalar@dalek.scalar-vector/0",
                         true),
          "binding-representation");
-  refuse(parseBoundType("groups:bls12-381.g1@dalek.ristretto-diagonal/1", true),
+  refuse(parseBoundType("groups:bls12-381.g1@dalek.ristretto-diagonal/0", true),
          "binding-representation");
   refuse(DomainCatalog::create({{"bad.g", "Group", {{"Scalar", "bad.g"}}, {}}},
                                {}, {}, {}),
@@ -166,10 +166,10 @@ void catalogAndCarriers(MLIRContext &ctx) {
 
   for (auto [contract, nominal, impl, kind, rep] :
        {std::tuple{"vector.mul", "bls12-381.fr", "arkworks-diagonal/vector.mul",
-                   "vector", "arkworks.fr-diagonal/1"},
+                   "vector", "arkworks.fr-diagonal/0"},
         std::tuple{"curve.scale_each", "ristretto255.group",
                    "dalek-diagonal/curve.scale_each", "groups",
-                   "dalek.ristretto-diagonal/1"}}) {
+                   "dalek.ristretto-diagonal/0"}}) {
     protocol::OperationBinding b{"map", {contract, {nominal}, impl}};
     auto physical = accept(resolveBinding(b.application, true));
     require(physical.outputs[0].kind == kind &&
@@ -186,10 +186,10 @@ void catalogAndCarriers(MLIRContext &ctx) {
       "msm", {"curve.msm", {"ristretto255.group"}, "dalek-diagonal/curve.msm"}};
   auto physical = accept(resolveBinding(msm.application, true));
   require(physical.inputs[0].identity == "ristretto255.scalar" &&
-              physical.inputs[0].representation == "dalek.scalar-vector/1" &&
+              physical.inputs[0].representation == "dalek.scalar-vector/0" &&
               physical.inputs[1].representation ==
-                  "dalek.ristretto-diagonal/1" &&
-              physical.outputs[0].representation == "dalek.ristretto/1",
+                  "dalek.ristretto-diagonal/0" &&
+              physical.outputs[0].representation == "dalek.ristretto/0",
           "MSM exact domains and operand roles");
   msm.application.arguments[0] = "bls12-381.g1";
   refuse(resolveBinding(msm.application, true), "binding-implementation");
@@ -198,7 +198,7 @@ void catalogAndCarriers(MLIRContext &ctx) {
   protocol::OperationBinding observe{
       "observe",
       {"transcript.native.indexed.observe.data",
-       {"merlin3.ristretto255.scalar64le/1", "rng:ristretto255.scalar"},
+       {"merlin3.ristretto255.scalar64le/0", "rng:ristretto255.scalar"},
        ""}};
   refuse(resolveBinding(observe.application, false), "native-proof-wire-type");
   observe.application.arguments[1] = "vector:ristretto255.scalar";

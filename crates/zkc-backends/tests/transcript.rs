@@ -77,7 +77,7 @@ fn origin(path: Json, kind: &str) -> Vec<u8> {
             "Source",
             "draw",
             "input_0",
-            "random.bls12-381.fr/1",
+            "random.bls12-381.fr/0",
             "draw",
             "V"
         ])
@@ -95,7 +95,7 @@ fn origin(path: Json, kind: &str) -> Vec<u8> {
         .map(|p| p[2].clone())
         .collect::<Vec<_>>();
     tree(&json!([
-        "zkc.native-origin/2",
+        "zkc.native-origin/0",
         "main",
         frames,
         coordinates,
@@ -103,13 +103,13 @@ fn origin(path: Json, kind: &str) -> Vec<u8> {
     ]))
 }
 fn canonical_field(n: u64) -> Vec<u8> {
-    let mut b = b"ZKCV\x01\x01".to_vec();
+    let mut b = b"ZKCV\x00\x01".to_vec();
     b.extend(n.to_le_bytes());
     b.extend([0; 24]);
     b
 }
 fn direct(root: &[u8], paths: &[Json], value: u64) -> Scalar {
-    let mut m = merlin::Transcript::new(b"zkc.artifact/1");
+    let mut m = merlin::Transcript::new(b"zkc.artifact/0");
     m.append_message(b"binding", root);
     let mut raw = [0; 64];
     for path in paths {
@@ -172,7 +172,7 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
                 .decode_native_value(
                     &zkc_runtime::interactive::PhysicalType::default_for(
                         zkc_runtime::interactive::LogicalType::parse(
-                            "transcript:merlin3.bls12-381.fr64be/1"
+                            "transcript:merlin3.bls12-381.fr64be/0"
                         )
                         .unwrap()
                     )
@@ -202,7 +202,7 @@ fn binding_value_origin_order_reset_and_budget_controls() {
                 let slot = [1, 2, 3, 4, 6][mutation - 2];
                 template[4][slot] = json!(match slot {
                     3 => "input_1",
-                    4 => "random.ristretto255.scalar/1",
+                    4 => "random.ristretto255.scalar/0",
                     _ => "different",
                 });
                 j[2][0][4][2][3][0] = json!(zkc_test_support::hex(&tree(&template)));
@@ -256,11 +256,11 @@ fn nested() -> Vec<u8> {
     j[3][0][4]
         .as_array_mut()
         .unwrap()
-        .push(json!(["n", "index@native.index/1"]));
+        .push(json!(["n", "index@native.index/0"]));
     j[2][0][2]
         .as_array_mut()
         .unwrap()
-        .push(json!(["iteration", "index@native.index/1"]));
+        .push(json!(["iteration", "index@native.index/0"]));
     j[1].as_array_mut().unwrap().push(json!([
         "indices.append",
         "indices.append",
@@ -605,7 +605,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         let binding = OperationBinding {
             contract: "transcript.native.indexed.observe.data".into(),
             arguments: vec![
-                "merlin3.bls12-381.fr64be/1".into(),
+                "merlin3.bls12-381.fr64be/0".into(),
                 value.physical_type().logical().spelling(),
             ],
             implementation: "arkworks/transcript.native.indexed.observe.data".into(),
@@ -636,7 +636,7 @@ fn public_scalar_group_and_commitment_kinds_observe_ordinary_canonical_wire() {
         let tok = backend
             .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
             .unwrap();
-        let mut m = merlin::Transcript::new(b"zkc.artifact/1");
+        let mut m = merlin::Transcript::new(b"zkc.artifact/0");
         m.append_message(b"binding", &root());
         m.append_message(b"origin", &origin(json!([]), "message"));
         m.append_message(b"value", &bytes);
@@ -665,14 +665,14 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
     let message = tree(&json!([
-        "zkc.native-origin/2",
+        "zkc.native-origin/0",
         "source_entry",
         [["apply", "source_entry", "application"]],
         [],
         ["message", "Round", "commitment", "commitment", "P", "V"]
     ]));
     let query = tree(&json!([
-        "zkc.native-origin/2",
+        "zkc.native-origin/0",
         "source_entry",
         [["apply", "source_entry", "application"]],
         [],
@@ -681,12 +681,12 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
             "Round",
             "coin",
             "input_0",
-            "random.bls12-381.fr/1",
+            "random.bls12-381.fr/0",
             "draw",
             "V"
         ]
     ]));
-    let mut reference = merlin::Transcript::new(b"zkc.artifact/1");
+    let mut reference = merlin::Transcript::new(b"zkc.artifact/0");
     reference.append_message(b"binding", &root());
     reference.append_message(b"origin", &message);
     reference.append_message(b"value", &canonical_field(7));
@@ -708,7 +708,7 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         let mut program: Json = serde_json::from_slice(&program1()).unwrap();
         for (index, bytes) in [(1, &message), (2, &query)] {
             let mut template = logical::decode_tree(bytes).unwrap();
-            template[0] = json!("zkc.native-origin-template/1");
+            template[0] = json!("zkc.native-origin-template/0");
             program[2][0][4][index][3] = json!([hex(&tree(&template))]);
         }
         program[3][0][3] = json!(role);

@@ -91,7 +91,7 @@ def decodeConfiguration (source : Source) (descriptor : Descriptor) (binding : I
     (definition : Protocol) (json : Json) : Result SetupConfiguration := do
   let record ← Decode.array json
   let (records, inputJson, receiveJson) ← match record with
-    | [.str "zkc.public-configuration/1", records, inputs, receives] => pure (records, inputs, receives)
+    | [.str "zkc.public-configuration/0", records, inputs, receives] => pure (records, inputs, receives)
     | _ => throw "public-configuration"
   let ports ← definition.arguments.filterM fun p =>
     return (← binding.role p.owner) == descriptor.validator && typeKind p.ty == "verifier_key"

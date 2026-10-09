@@ -364,7 +364,7 @@ pub(crate) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
             .ok_or_else(|| exhausted("wire-bytes"))?;
         policy.wire(bytes)?;
         let mut out = crate::kernels::arithmetic::reserve(bytes)?;
-        out.extend_from_slice(b"ZKCV\x01");
+        out.extend_from_slice(b"ZKCV\x00");
         out.push(tag(domain, kind).expect("public oracle kind"));
         if kind != Type::Commitment {
             out.extend((hashes.len() as u32).to_le_bytes());

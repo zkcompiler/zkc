@@ -51,7 +51,7 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
         .map(|p| json!([p[0], "16"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",
@@ -106,7 +106,7 @@ fn main() {
                 ]
             } else {
                 let wire = [
-                    b"ZKCV\x01\x10".as_slice(),
+                    b"ZKCV\x00\x10".as_slice(),
                     &[
                         0xe2, 0xf2, 0xae, 0x0a, 0x6a, 0xbc, 0x4e, 0x71, 0xa8, 0x84, 0xa9, 0x61,
                         0xc5, 0x00, 0x51, 0x5f, 0x58, 0xe3, 0x0b, 0x6a, 0xa5, 0x82, 0xdd, 0x8d,
@@ -277,7 +277,7 @@ fn check_suite_mutations(envelope: &Json) {
         .map(|n| u8::from_str_radix(&origin[n..n + 2], 16).unwrap())
         .collect();
     let mut record = logical::decode_tree(&bytes).unwrap();
-    record[4][4] = json!("random.bls12-381.fr/1");
+    record[4][4] = json!("random.bls12-381.fr/0");
     query[1] = json!(hex(&logical::encode_tree(&record).unwrap()));
     changed[3] = json!(hex(&Sha256::digest(
         logical::encode_tree(&changed[2]).unwrap()
@@ -308,35 +308,35 @@ fn check_reference(envelope: &Json, input: &Json, proof: &[u8], values: &[Value]
             constants::RISTRETTO_BASEPOINT_POINT, ristretto::CompressedRistretto, scalar::Scalar,
         };
         let mut r =
-            reference::Replay::new(envelope, input, proof, "merlin3.ristretto255.scalar64le/1");
+            reference::Replay::new(envelope, input, proof, "merlin3.ristretto255.scalar64le/0");
         let wire = r.message("commitment", "Alice", "Bob");
-        assert_eq!(&wire[..6], b"ZKCV\x01\x10");
+        assert_eq!(&wire[..6], b"ZKCV\x00\x10");
         let commitment = CompressedRistretto(wire[6..].try_into().unwrap())
             .decompress()
             .unwrap();
-        r.query("draw_challenge", 4, "random.ristretto255.scalar/1", "Bob");
+        r.query("draw_challenge", 4, "random.ristretto255.scalar/0", "Bob");
         let challenge = r.ristretto();
         r.observe(
             "challenge",
             "Bob",
             "Alice",
-            &[b"ZKCV\x01\x0d".as_slice(), &challenge.to_bytes()].concat(),
+            &[b"ZKCV\x00\x0d".as_slice(), &challenge.to_bytes()].concat(),
         );
         let challenge = if two_draws {
-            r.query("draw2", 4, "random.ristretto255.scalar/1", "Bob");
+            r.query("draw2", 4, "random.ristretto255.scalar/0", "Bob");
             let second = r.ristretto();
             r.observe(
                 "challenge2",
                 "Bob",
                 "Alice",
-                &[b"ZKCV\x01\x0d".as_slice(), &second.to_bytes()].concat(),
+                &[b"ZKCV\x00\x0d".as_slice(), &second.to_bytes()].concat(),
             );
             challenge + second
         } else {
             challenge
         };
         let wire = r.message("response", "Alice", "Bob");
-        assert_eq!(&wire[..6], b"ZKCV\x01\x0d");
+        assert_eq!(&wire[..6], b"ZKCV\x00\x0d");
         let response =
             Option::<Scalar>::from(Scalar::from_canonical_bytes(wire[6..].try_into().unwrap()))
                 .unwrap();
@@ -350,18 +350,18 @@ fn check_reference(envelope: &Json, input: &Json, proof: &[u8], values: &[Value]
             envelope,
             input,
             proof,
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
         );
         r.message("bn_random", "P", "V");
         let randomness = reference::extension_value(r.message("ext_random", "P", "V"));
         for site in ["a", "b", "scalar", "base"] {
             r.message(site, "P", "V");
         }
-        r.query("draw", 5, "random.koala-bear.ext8-binomial3/1", "V");
+        r.query("draw", 5, "random.koala-bear.ext8-binomial3/0", "V");
         let challenge = r.extension();
         r.observe("challenge", "V", "P", &reference::extension_wire(challenge));
         let challenge = if two_draws {
-            r.query("draw2", 5, "random.koala-bear.ext8-binomial3/1", "V");
+            r.query("draw2", 5, "random.koala-bear.ext8-binomial3/0", "V");
             let second = r.extension();
             r.observe("challenge2", "V", "P", &reference::extension_wire(second));
             challenge + second

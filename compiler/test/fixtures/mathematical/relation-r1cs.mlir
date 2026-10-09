@@ -19,7 +19,7 @@ module { "protocol.module"() ({
 "local.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
 "local.binding"() {sym_name="vector_mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
 "local.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["bls12-381.fr"],implementation=""} : ()->()
-relation.declare @relation {kind="external",key="example/r1cs-data",revision="1",signature=(!ms,!v,!v)->i1,purposes=["parameter","statement","witness"]}
+relation.declare @relation {kind="external",key="example/r1cs-data",revision="0",signature=(!ms,!v,!v)->i1,purposes=["parameter","statement","witness"]}
 local.func @validate(%matrices:!ms,%public:!v,%assignment:!v)->i1 attributes {logical_origin=["validate",[]]} {
 %zero = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["0"],site="zero"} : ()->ui64
 %one_index = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["1"],site="one_index"} : ()->ui64

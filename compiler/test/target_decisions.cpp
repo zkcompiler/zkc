@@ -463,7 +463,7 @@ int main() {
                field),
            "binding-no-conversion");
     auto from =
-        take(parseBoundType("table:bls12-381.fr@arkworks.mle-lsb/1", true));
+        take(parseBoundType("table:bls12-381.fr@arkworks.mle-lsb/0", true));
     auto to = from;
     to.identity = "bn254.fr";
     reject(checkDirectConversion(

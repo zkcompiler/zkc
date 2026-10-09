@@ -90,7 +90,7 @@ fn complete_expected_types_frame_records_alternatives_and_dynamic_data() {
                 ],
             );
             let bytes = roundtrip(&value);
-            assert_eq!(&bytes[..10], b"ZKCV\x01\x41\0\0\0\0");
+            assert_eq!(&bytes[..10], b"ZKCV\x00\x41\0\0\0\0");
         }
     }
     for value in [
@@ -181,11 +181,11 @@ fn inactive_unsupported_payloads_do_not_inherit_wire_authority() {
     let backend = common::ark_backend(None);
     for leaf in [
         "rng:bls12-381.fr",
-        "prover_key:multilinear.kzg.bls12-381/1",
-        "verifier_key:multilinear.kzg.bls12-381/1",
+        "prover_key:multilinear.kzg.bls12-381/0",
+        "verifier_key:multilinear.kzg.bls12-381/0",
         "table:bls12-381.fr",
         "polynomial:bn254.fr",
-        "opening_state:rows.merkle-keccak256.koala-bear/1",
+        "opening_state:rows.merkle-keccak256.koala-bear/0",
     ] {
         let ty = logical("Optional", json!([["none", []], ["some", [leaf]]]));
         let value = variant(&ty, 0, vec![]);
@@ -195,7 +195,7 @@ fn inactive_unsupported_payloads_do_not_inherit_wire_authority() {
             Err(Error::Backend(_))
         ));
         assert!(matches!(
-            backend.decode_native_value(&value.physical_type(), b"ZKCV\x01\x41\0\0\0\0"),
+            backend.decode_native_value(&value.physical_type(), b"ZKCV\x00\x41\0\0\0\0"),
             Err(Error::Backend(_))
         ));
     }
@@ -274,7 +274,7 @@ fn nested_pcs_frames_require_the_authorized_setup_and_exact_metadata() {
             ["none", []],
             [
                 "some",
-                ["field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/1"]
+                ["field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/0"]
             ]
         ]),
     );
@@ -490,7 +490,7 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     let state = keys.prover_key().commit(&table).unwrap();
     let ty = logical(
         "Record",
-        json!([["record", ["commitment:multilinear.kzg.bls12-381/1"]]]),
+        json!([["record", ["commitment:multilinear.kzg.bls12-381/0"]]]),
     );
     let value = variant(
         &ty,
@@ -517,11 +517,11 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
         let inputs = json!([
             ["t", t],
             ["v", value.physical_type().spelling()],
-            ["ix", "indices@native.indices/1"]
+            ["ix", "indices@native.indices/0"]
         ]);
         let origin = zkc_test_support::hex(
             &encoding::encode_tree(&json!([
-                "zkc.native-origin-template/1",
+                "zkc.native-origin-template/0",
                 "main",
                 [],
                 [],
@@ -530,11 +530,11 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             .unwrap(),
         );
         let program = json!([
-            "zkc.program/2",
+            "zkc.program/0",
             [[
                 "observe",
                 "transcript.native.indexed.observe.data",
-                ["merlin3.bls12-381.fr64be/1", ty],
+                ["merlin3.bls12-381.fr64be/0", ty],
                 "arkworks/transcript.native.indexed.observe.data"
             ]],
             [[

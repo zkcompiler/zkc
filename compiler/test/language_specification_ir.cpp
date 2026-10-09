@@ -64,7 +64,7 @@ int main() {
               require(report.declarations == 4,
                       "relation/helper definition inventory differs");
               auto declaration = relation(*module);
-              require(declaration.getKind() == "zkc.language.formula/1" &&
+              require(declaration.getKind() == "zkc.language.formula/0" &&
                           declaration.getRevision().size() == 64,
                       "formula representation identity missing");
               std::string formula;

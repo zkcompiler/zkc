@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import tempfile
 
-FORMAT = "canonical-git-v1"
+FORMAT = "canonical-git-v0"
 NORMALIZER = Path(__file__).resolve().parents[1] / "nix/normalize-git-source.sh"
 
 

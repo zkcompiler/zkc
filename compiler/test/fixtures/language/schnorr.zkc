@@ -24,6 +24,6 @@ entry Demo=Schnorr<G>{
   public{base,point};
   accept accepted;
   target knowledge;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/1"){derive challenges;}
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive challenges;}
 }
 entry Release=Demo;

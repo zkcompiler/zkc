@@ -23,9 +23,9 @@ impl<'a> Replay<'a> {
     pub fn new(envelope: &'a Json, input: &Json, proof: &'a [u8], suite: &str) -> Self {
         assert_eq!(envelope[2][1][5], suite);
         let root = encoding::root(envelope, input);
-        assert_eq!(&proof[..8], b"ZKCPRF01");
+        assert_eq!(&proof[..8], b"ZKCPRF00");
         assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
-        let mut transcript = merlin::Transcript::new(b"zkc.artifact/1");
+        let mut transcript = merlin::Transcript::new(b"zkc.artifact/0");
         transcript.append_message(b"binding", &root);
         Self {
             envelope,
@@ -38,7 +38,7 @@ impl<'a> Replay<'a> {
     }
     fn origin(&mut self, data: Json) {
         let template = encoding::tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             "main",
             [],
             [],
@@ -49,7 +49,7 @@ impl<'a> Replay<'a> {
         self.event += 1;
         self.transcript.append_message(
             b"origin",
-            &encoding::tree(&json!(["zkc.native-origin/2", "main", [], [], data])),
+            &encoding::tree(&json!(["zkc.native-origin/0", "main", [], [], data])),
         );
     }
     pub fn observe(&mut self, site: &str, sender: &str, receiver: &str, wire: &[u8]) {
@@ -114,7 +114,7 @@ impl<'a> Replay<'a> {
     }
 }
 pub fn extension_wire(value: KoalaBearExt8) -> Vec<u8> {
-    let mut wire = b"ZKCV\x01\x1a".to_vec();
+    let mut wire = b"ZKCV\x00\x1a".to_vec();
     for x in <KoalaBearExt8 as BasedVectorSpace<KoalaBear>>::as_basis_coefficients_slice(&value) {
         wire.extend_from_slice(&x.as_canonical_u32().to_le_bytes());
     }
@@ -122,7 +122,7 @@ pub fn extension_wire(value: KoalaBearExt8) -> Vec<u8> {
 }
 pub fn extension_value(wire: &[u8]) -> KoalaBearExt8 {
     assert_eq!(wire.len(), 38);
-    assert_eq!(&wire[..6], b"ZKCV\x01\x1a");
+    assert_eq!(&wire[..6], b"ZKCV\x00\x1a");
     let coordinates: Vec<_> = wire[6..]
         .as_chunks::<4>()
         .0

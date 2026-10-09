@@ -12,7 +12,7 @@ open Tools.Interactive
 
 def selected (descriptor : Json) : Bool :=
   match descriptor with
-  | .arr fields => fields[0]? == some (.str "zkc.construction/1") &&
+  | .arr fields => fields[0]? == some (.str "zkc.construction/0") &&
       fields[8]? == some (.str "normalized")
   | _ => false
 
@@ -44,7 +44,7 @@ def Prepared.configuration (prepared : Prepared) (json : Json) : Result Json :=
   resolveConfiguration prepared.resolution prepared.original.source json
 
 def Prepared.inspection (prepared : Prepared) : Json :=
-  .arr #[.str "zkc.identity-inspection/1", prepared.resolution.carrier.json,
+  .arr #[.str "zkc.identity-inspection/0", prepared.resolution.carrier.json,
     prepared.descriptor.json, prepared.normalized]
 
 end Tools.Artifact.Identity

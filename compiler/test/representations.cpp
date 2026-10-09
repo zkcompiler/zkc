@@ -72,7 +72,7 @@ int main() {
         "no overflow");
   const std::string f = "edwards25519.scalar",
                     g = "edwards25519.prime-subgroup", raw = "edwards25519.raw",
-                    r = "dalek.edwards-prime-subgroup/1";
+                    r = "dalek.edwards-prime-subgroup/0";
   const std::string modulus = "723700557733226221397318656304299424085711635937"
                               "9907606001950938285454250989";
   auto catalogue =
@@ -81,18 +81,18 @@ int main() {
                              {raw, "Group", {{"Scalar", f}}, {"ScalarAction"}}},
                             {{"group", g}, {"group", raw}}, {},
                             {{r, "group", g, false, {}},
-                             {"dalek.edwards-raw/1", "group", raw, false, {}}});
+                             {"dalek.edwards-raw/0", "group", raw, false, {}}});
   check(bool(catalogue), "catalogue admits");
   auto law = EdwardsScalarModule::admit(*catalogue, g, r, f);
   check(bool(law), "module law admits");
   check(law->scalarDomain().identity == f && law->groupDomain().identity == g &&
             law->arithmeticRepresentation().identity == r,
         "law retains actual tuple");
-  rejects(EdwardsScalarModule::admit(*catalogue, raw, "dalek.edwards-raw/1", f),
+  rejects(EdwardsScalarModule::admit(*catalogue, raw, "dalek.edwards-raw/0", f),
           "representation.unsupported-scalar-module");
   rejects(EdwardsScalarModule::admit(*catalogue, g, r, "ristretto255.scalar"),
           "representation.unsupported-scalar-module");
-  rejects(EdwardsScalarModule::admit(*catalogue, g, "dalek.edwards-raw/1", f),
+  rejects(EdwardsScalarModule::admit(*catalogue, g, "dalek.edwards-raw/0", f),
           "representation.unsupported-scalar-module");
   auto missing = DomainCatalog::create(
       {{f, "Field", {}, {"Field"}, modulus}, {g, "Group", {{"Scalar", f}}, {}}},

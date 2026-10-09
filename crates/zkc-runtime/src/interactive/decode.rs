@@ -494,7 +494,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
     let mut bindings = BTreeMap::new();
     let mut binding_type_bytes = 0usize;
     match string(&a[0])? {
-        "zkc.program/2" => {
+        "zkc.program/0" => {
             for value in list(&a[1], Limits::DEFINITIONS)? {
                 let r = array(value)?;
                 if r.len() != 4 {
@@ -597,7 +597,7 @@ mod tests {
         let inner = json!(["Inner", [["many", vec![leaf; 32]]]]);
         let tree = json!([nominal, [["many", vec![inner; 32]]]]);
         format!(
-            "{}@logical.variant/1",
+            "{}@logical.variant/0",
             zkc_test_support::variants::encode_tree(tree)
         )
     }
@@ -608,7 +608,7 @@ mod tests {
             .map(|(i, t)| json!([format!("x{i}"), t]))
             .collect();
         serde_json::to_vec(&json!([
-            "zkc.program/2",
+            "zkc.program/0",
             [],
             [[
                 "function",
@@ -675,7 +675,7 @@ mod tests {
                     json!([
                         format!("observe{i}"),
                         "transcript.native.indexed.observe.data",
-                        ["merlin3.bls12-381.fr64be/1", ty.logical().spelling()],
+                        ["merlin3.bls12-381.fr64be/0", ty.logical().spelling()],
                         "arkworks/transcript.native.indexed.observe.data"
                     ])
                 })

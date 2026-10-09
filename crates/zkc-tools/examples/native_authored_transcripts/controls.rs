@@ -282,7 +282,7 @@ pub(super) fn controls(
     // Wire framing is valid here. Primitive input validation owns these stops.
     let invalid = if snapshot {
         vec![
-            (words([1514881876, 1, 9]), "refused:external-state-width"),
+            (words([1514881876, 0, 9]), "refused:external-state-width"),
             (
                 words(vec![0; if family == "monero" { 35 } else { 21 }]),
                 "refused:external-state-suite",

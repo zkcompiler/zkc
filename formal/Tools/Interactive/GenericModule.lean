@@ -121,14 +121,14 @@ private def prepareCode (library : Library) : Nat → Json → StateT Demand Res
     return Json.arr body.toArray
 
 private def prepareCommon (library : Library) (json : Json) : StateT Demand Result Explicit.Module := do
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array json
+  let [.str "zkc.protocol/0", bindings, functions, protocols, instances, entries] ← Decode.array json
     | throw "binding-common-source"
   let functions ← (← Decode.array functions limits.definitions).mapM fun function => do
     let [.str "function", name, args, results, body, origin] ← Decode.array function
       | throw "binding-function"
     let body ← prepareCode library limits.depth body
     return Json.arr #[.str "function", name, args, results, body, origin]
-  Explicit.common (.arr #[.str "zkc.protocol/1", bindings, .arr functions.toArray, protocols, instances, entries])
+  Explicit.common (.arr #[.str "zkc.protocol/0", bindings, .arr functions.toArray, protocols, instances, entries])
 
 /-- Prepare a library's common source. `executable` is what the caller is
 asking about and is carried through to admission: a declaration is admitted
@@ -136,7 +136,7 @@ without an entry, an external body or an opaque port, and an executable
 source is not. -/
 def prepare (library : Library) (additionalCalls : List Name := [])
     (executable : Bool := true) : Result Prepared := do
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array library.common
+  let [.str "zkc.protocol/0", bindings, functions, protocols, instances, entries] ← Decode.array library.common
     | throw "binding-common-source"
   let bindingNames ← (← Decode.array bindings).mapM fun j => do
     let name :: _ ← Decode.array j | throw "binding-declaration"
@@ -169,7 +169,7 @@ def prepare (library : Library) (additionalCalls : List Name := [])
 
 def prepareSource (json : Json) (executable : Bool := true) : Result Prepared := do
   let library ← match ← Decode.array json with
-    | .str "zkc.protocol/1" :: _ => pure (Library.mk [] [] json)
+    | .str "zkc.protocol/0" :: _ => pure (Library.mk [] [] json)
     | _ => library json
   prepare library [] executable
 

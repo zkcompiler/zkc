@@ -222,7 +222,7 @@ Expected<BoundOperation> resolveBinding(const BindingApplication &binding,
     if (physical && binding.implementation != "logical/" + binding.contract)
       return error("binding-implementation");
     BoundType ty{"resource_unit", binding.arguments[0],
-                 physical ? "logical.resource_unit/1" : ""};
+                 physical ? "logical.resource_unit/0" : ""};
     return BoundOperation{binding.contract == "resource_unit.create"
                               ? std::vector<BoundType>{}
                               : std::vector<BoundType>{ty},

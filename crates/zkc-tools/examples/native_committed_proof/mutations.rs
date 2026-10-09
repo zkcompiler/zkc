@@ -75,9 +75,9 @@ pub fn check(
     // a PCS value is admitted only with explicit authority for that input.
     let nested = zkc_test_support::variants::logical(
         "PrivateCommitment",
-        json!([["value", ["commitment:multilinear.kzg.bls12-381/1"]]]),
+        json!([["value", ["commitment:multilinear.kzg.bls12-381/0"]]]),
     );
-    for logical in ["opening_state:multilinear.kzg.bls12-381/1", &nested] {
+    for logical in ["opening_state:multilinear.kzg.bls12-381/0", &nested] {
         let ty = zkc_runtime::interactive::PhysicalType::default_for(
             zkc_runtime::interactive::LogicalType::parse(logical).unwrap(),
         )

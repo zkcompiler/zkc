@@ -81,7 +81,7 @@ Successful proof bytes are unchanged when different ceilings are sufficient.
 The CLI reports the effective record, including defaults:
 
 ```text
-["zkc.native-capacity/2", "elements", "groups", "wire_bytes", "value_bytes",
+["zkc.native-capacity/0", "elements", "groups", "wire_bytes", "value_bytes",
  ["instructions", "iterations"], ["live_bytes", "total_bytes"]]
 ```
 

@@ -1148,7 +1148,7 @@ impl<B: Backend> Runner<B> {
         let value = B::Value::from_control_index(index)?;
         self.validate(
             &value,
-            PhysicalType::parse("index@native.index/1").expect("installed index representation"),
+            PhysicalType::parse("index@native.index/0").expect("installed index representation"),
             false,
         )?;
         Ok(value)
@@ -1205,7 +1205,7 @@ impl<B: Backend> Runner<B> {
                         let value = B::Value::from_control_bool(*value)?;
                         self.validate(
                             &value,
-                            PhysicalType::parse("bool@native.bool/1")
+                            PhysicalType::parse("bool@native.bool/0")
                                 .expect("installed Boolean representation"),
                             false,
                         )?;

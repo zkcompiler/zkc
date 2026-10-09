@@ -17,7 +17,7 @@ private def outputIdentity (location : Location) (expected : CommitmentIdentity)
 def commit (location : Location) (key : CommitmentIdentity) (table : Math.Table) : RunM (List Value) := do
   checked location (authorized (← get) location.scope.role (.proverKey key))
   require location (key.rank == table.rank) "arity-mismatch"
-  let [.commitment bytes] ← external location "pcs.commit" ["multilinear.kzg.bls12-381/1"] []
+  let [.commitment bytes] ← external location "pcs.commit" ["multilinear.kzg.bls12-381/0"] []
       [.proverKey key, .table table]
     | failAt location "refused" "primitive-response"
   outputIdentity location key "commitment" bytes
@@ -27,7 +27,7 @@ def openCommitment (location : Location) (state : OpeningState) (point : List Ma
   checked location (authorized (← get) location.scope.role (.opening state))
   require location (state.identity.rank == point.length) "arity-mismatch"
   let value ← checked location (state.original.evaluate point)
-  let [.proof bytes] ← external location "pcs.open" ["multilinear.kzg.bls12-381/1"] []
+  let [.proof bytes] ← external location "pcs.open" ["multilinear.kzg.bls12-381/0"] []
       [.opening state, .point point]
     | failAt location "refused" "primitive-response"
   outputIdentity location state.identity "proof" bytes
@@ -40,7 +40,7 @@ def checkCommitment (location : Location) (key : CommitmentIdentity) (commitment
   outputIdentity location key "commitment" commitment
   outputIdentity location key "proof" proof
   require location (key.rank == point.length) "arity-mismatch"
-  let [.boolean accepted] ← external location "pcs.check" ["multilinear.kzg.bls12-381/1"] []
+  let [.boolean accepted] ← external location "pcs.check" ["multilinear.kzg.bls12-381/0"] []
       [.verifierKey key, .commitment commitment, .point point, .field value, .proof proof]
     | failAt location "refused" "primitive-response"
   return [.boolean accepted]

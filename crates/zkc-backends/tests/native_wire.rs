@@ -54,7 +54,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
     let backend = ark_backend(None);
     let boolean = Value::Bool(false).physical_type();
     for b in 2..=255 {
-        let mut bytes = b"ZKCV\x01\x05".to_vec();
+        let mut bytes = b"ZKCV\x00\x05".to_vec();
         bytes.push(b);
         assert_eq!(
             backend.decode_native_value(&boolean, &bytes).unwrap_err(),
@@ -66,7 +66,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
     let modulus =
         zkc_test_support::unhex("01000000fffffffffe5bfeff02a4bd5305d8a10908d83933487d9d2953a7ed73");
     for payload in [modulus, vec![255; 32]] {
-        let mut bytes = b"ZKCV\x01\x01".to_vec();
+        let mut bytes = b"ZKCV\x00\x01".to_vec();
         bytes.extend(payload);
         assert_eq!(
             backend.decode_native_value(&field, &bytes).unwrap_err(),
@@ -80,7 +80,7 @@ fn invalid_boolean_scalar_and_group_encodings_have_closed_reasons() {
     infinity[0] = 0xc0;
     infinity[47] = 1;
     for payload in [nonsubgroup, infinity, vec![255; 48], vec![0; 48]] {
-        let mut bytes = b"ZKCV\x01\x09".to_vec();
+        let mut bytes = b"ZKCV\x00\x09".to_vec();
         bytes.extend(payload);
         assert_eq!(
             backend.decode_native_value(&group, &bytes).unwrap_err(),
@@ -119,7 +119,7 @@ fn policy_failure_and_other_providers_never_become_decode_stops() {
             .unwrap_err(),
         NativeWireError::Invalid(DecodeReason::Length)
     );
-    let ty = PhysicalType::parse("polynomial:bn254.fr@arkworks.bn254-fr-polynomial/1").unwrap();
+    let ty = PhysicalType::parse("polynomial:bn254.fr@arkworks.bn254-fr-polynomial/0").unwrap();
     assert_eq!(native_wire_size(&ty), None);
     assert!(matches!(
         limited.decode_native_value(&ty, &[]),
@@ -159,7 +159,7 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
         assert_eq!(native_wire_size(&ty), None);
         let bytes = codec.encode_native_value(&value).unwrap();
         let expected = [
-            b"ZKCV\x01\x02".to_vec(),
+            b"ZKCV\x00\x02".to_vec(),
             (n as u32).to_le_bytes().to_vec(),
             (1..=1u64 << n)
                 .flat_map(|x| [x.to_le_bytes().to_vec(), vec![0; 24]].concat())
@@ -224,10 +224,10 @@ fn native_public_tables_are_canonical_and_bounded_before_allocation() {
             );
         }
     }
-    let other = PhysicalType::parse("table:bls12-381.fr@arkworks.mle-msb/1").unwrap();
+    let other = PhysicalType::parse("table:bls12-381.fr@arkworks.mle-msb/0").unwrap();
     assert!(!zkc_backends::has_native_wire(&other));
     assert!(matches!(
-        codec.decode_native_value(&other, b"ZKCV\x01\x02"),
+        codec.decode_native_value(&other, b"ZKCV\x00\x02"),
         Err(NativeWireError::Backend(_))
     ));
 }

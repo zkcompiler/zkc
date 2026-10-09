@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
             "proof Entry compiled as run");
         auto artifact = take(json::parse(compiled.bytes()));
         const auto &deployment = *artifact.getAsArray();
-        require(deployment[0].getAsString() == "zkc.native-proof/5" &&
+        require(deployment[0].getAsString() == "zkc.native-proof/0" &&
                     deployment[1].getAsString() == checked.identity(),
                 "deployment source identity differs");
         auto &policy = *(*deployment[2].getAsArray())[1].getAsArray();
@@ -114,10 +114,10 @@ int main(int argc, char **argv) {
             "construction",
             [&] {
               auto text = source;
-              auto position = text.find("merlin3.bls12-381.fr64be/1");
+              auto position = text.find("merlin3.bls12-381.fr64be/0");
               text.replace(position,
-                           StringRef("merlin3.bls12-381.fr64be/1").size(),
-                           "spongefish0.7.4.keccak.bls12-381.fr64be/1");
+                           StringRef("merlin3.bls12-381.fr64be/0").size(),
+                           "spongefish0.7.4.keccak.bls12-381.fr64be/0");
               auto first = original(source), second = original(text);
               require(first.bytes() == second.bytes(),
                       "construction choice changed authored protocol");
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
         )";
           text += R"(}
         entry Demo=Wrapper{prover P;verifier V;public{base,point,n};accept accepted;
-          construction fiat_shamir("merlin3.bls12-381.fr64be/1"){derive challenges;}}
+          construction fiat_shamir("merlin3.bls12-381.fr64be/0"){derive challenges;}}
       )";
           auto compiled = take(compileEntry(original(text)));
           auto artifact = take(json::parse(compiled.bytes()));
@@ -365,7 +365,7 @@ int main(int argc, char **argv) {
         auto value = take(json::parse(checked.interfaceJson()));
         (*value.getAsObject()->getObject("job")->getObject(
             "construction"))["suite"] =
-            "spongefish0.7.4.keccak.bls12-381.fr64be/1";
+            "spongefish0.7.4.keccak.bls12-381.fr64be/0";
         auto view = take(readInterface(checked.bytes(), printJson(value)));
         auto error = compareInterface(checked.entry(), view);
         require(bool(error),

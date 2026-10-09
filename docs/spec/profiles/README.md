@@ -57,7 +57,7 @@ These profiles describe independently formalized programs, analyses, protocols
 and experiments. Their model-specific formats and executable references are not
 additional native compiler or runtime paths. Correspondence applies to the exact
 Lean subjects and premises named by each page; it does not validate `.zkc` or
-`zkc.program/2`.
+`zkc.program/0`.
 
 | Group | Profile | Selected scope |
 |---|---|---|
@@ -69,7 +69,7 @@ Lean subjects and premises named by each page; it does not validate `.zkc` or
 | Source | [Generic static foundation](source/generic-definitions.md) | Checked equality/capability derivations and structured type substitution with complete execution preservation; native generic resolution is separate |
 | Source | [Located calls and shared control](source/located-execution.md) | Role-local execution/admission, complete stop origins, peer-state frames and actual guard/count agreement |
 | Source | [Resolved common protocols](source/common-protocols.md) | Role-owned ports, shared protocol bodies, selected bindings, independent reception and fixed public loops with complete stopping |
-| Compiler | [Direct plans](compiler/direct-plan.md) | Evaluator, exact direct checking, version-1 grammar and separate phase sidecar |
+| Compiler | [Direct plans](compiler/direct-plan.md) | Evaluator, exact direct checking, version-0 grammar and separate phase sidecar |
 | Compiler | [Scheduled participant lowering](compiler/scheduled-participants.md) | Role-local operands, distinct send/receive instructions, shared calls/loops and complete source-to-target execution equality |
 | Compiler | [Finite phase certificates](compiler/finite-phases.md) | All-reply summaries, finite covers, structural checking and realized admission |
 | Compiler | [Factor preparation](compiler/factor-preparation.md) | Live facts, guarded typed rule, frames, allocation and immutable preparation |

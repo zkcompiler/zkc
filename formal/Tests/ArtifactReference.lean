@@ -46,7 +46,7 @@ example : drawWith (ByteArray.mk (Array.replicate 64 255)) =
 example : drawWith (ByteArray.mk (Array.replicate 63 0)) = "transcript-challenge-width" := by native_decide
 
 private def ristrettoDescriptor : Descriptor := { descriptor with
-  json := .arr #[.str "zkc.construction/1", .str "main", .str "P", .str "V", .arr #[],
+  json := .arr #[.str "zkc.construction/0", .str "main", .str "P", .str "V", .arr #[],
     .arr #[], .str "0", .str Bindings.ristrettoTranscript, .str "normalized"] }
 private def ristrettoSource : Source := { source with
   environment := .explicit [⟨"selected_draw", "random.draw", [Bindings.ristrettoScalar], ""⟩] }
@@ -57,7 +57,7 @@ private def requestFor (suite : String) : Result Json := do
   transcriptRequest (initial 1).root #[.arr #[.str "challenge", .str (hex origin)]] suite
 
 -- The exact request carries the suite and framing. An answer for the BLS suite
--- or the legacy protocol cannot satisfy it, even at the identical origin.
+-- or an unknown request format cannot satisfy it, even at the identical origin.
 private def requestRoute (reply : Option Json) : Bool := Id.run do
   let state := match reply with
     | none => initial 1
@@ -71,8 +71,8 @@ private def requestRoute (reply : Option Json) : Bool := Id.run do
     next.draws == 1 && next.history.size == 1 && next.events.size == 1
 example : requestRoute none = true := by native_decide
 example : requestRoute (requestFor Bindings.transcriptIdentity).toOption = true := by native_decide
-example : requestRoute (some (.arr #[.str "zkc.transcript-request/1",
-    .str "arkworks.bls12-381/1", .str "01", .arr #[]])) = true := by native_decide
+example : requestRoute (some (.arr #[.str "invalid.transcript-request",
+    .str "arkworks.bls12-381/0", .str "01", .arr #[]])) = true := by native_decide
 
 private def ristrettoBytes (bytes : ByteArray) : String × Nat × Nat := Id.run do
   let .ok request := requestFor Bindings.ristrettoTranscript | return ("bad-request", 0, 0)
@@ -90,8 +90,8 @@ example : ristrettoBytes (ByteArray.mk (Array.replicate 64 255)) =
     (toString ((256^64 - 1) % Bindings.ristrettoModulus), 1, 1) := by native_decide
 example : ristrettoBytes (little 63 1) = ("refused:transcript-challenge-width", 1, 1) := by native_decide
 
--- A retired source tag cannot enter the current artifact interpreter.
-example : (artifactSource (.arr #[.str "zkc.protocol/2", .str "arkworks.bls12-381/1",
+-- An unknown source tag cannot enter the current artifact interpreter.
+example : (artifactSource (.arr #[.str "invalid.protocol", .str "arkworks.bls12-381/0",
     .arr #[], .arr #[], .arr #[], .arr #[]])).isOk = false := by native_decide
 
 -- Opaque group calculations stay public primitive requests. No scalar model or
@@ -102,7 +102,7 @@ private def groupPending : Bool :=
   let (result, next) := (evaluate groupSource ristrettoDescriptor location "generator" [] []).run (initial 1)
   match result with
   | .error e => e.reason == "pending-primitive" && e.request ==
-      .arr #[.str "zkc.public-primitive/1", .arr #[], .str "curve.generator",
+      .arr #[.str "zkc.public-primitive/0", .arr #[], .str "curve.generator",
         .arr #[.str Bindings.ristrettoGroup], .arr #[], .arr #[]] && next.requests == #[e.request]
   | _ => false
 example : groupPending = true := by native_decide
@@ -115,19 +115,19 @@ private def stopped : String × Nat × Nat :=
   (match result with | .error e => e.reason | _ => "returned", state.events.size, state.history.size)
 example : stopped = ("exhausted", 1, 0) := by native_decide
 
--- Absorbed origins retain their established contract while typed operation
--- observations include explicit static arguments.
-example : ((location.challenge.getArr?).toOption.map (·[0]!) == some (.str "zkc.logical-origin/1")) = true := by native_decide
+-- Origins use a tagged-event format; typed operation observations retain
+-- explicit static arguments.
+example : ((location.challenge.getArr?).toOption.map (·[0]!) == some (.str "zkc.logical-origin/0")) = true := by native_decide
 example : (((location.request "random.draw" [] ["bls12-381.fr"]).getArr?).toOption.map (·[0]!) ==
-    some (.str "zkc.logical-origin/2")) = true := by native_decide
+    some (.str "zkc.logical-origin/0")) = true := by native_decide
 
 -- Structural setup fixtures deliberately contain no valid curve points. These
 -- controls exercise metadata/coverage only; the public service checks real keys.
 private def keyWire (tail : UInt8 := 0) : ByteArray :=
-  ("ZKCAR006".toUTF8.push 1) ++ little 8 1 ++
+  ("ZKCAR000".toUTF8.push 1) ++ little 8 1 ++
     ByteArray.mk ((Array.replicate 64 (7 : UInt8) ++ Array.replicate 191 0).push tail)
 private def commitmentWire : ByteArray :=
-  (magic.push 6) ++ ("ZKCAR006".toUTF8.push 2) ++ little 8 1 ++
+  (magic.push 6) ++ ("ZKCAR000".toUTF8.push 2) ++ little 8 1 ++
     ByteArray.mk (Array.replicate 64 7 ++ Array.replicate 48 0)
 private def setup : SetupConfiguration := { keys := [("a", .verifierKey keyWire)] }
 
@@ -139,9 +139,9 @@ example : (checkSetup setup "absent" (.publicBytes "commitment" commitmentWire))
 
 private def fixture (count : Nat) : Source × Instance × Protocol := Id.run do
   let definition : Protocol := ⟨"Policy", ["P", "V"], [],
-    [⟨"payload", "P", "commitment:multilinear.kzg.bls12-381/1"⟩,
-     ⟨"a", "V", "verifier_key:multilinear.kzg.bls12-381/1"⟩,
-     ⟨"b", "V", "verifier_key:multilinear.kzg.bls12-381/1"⟩], [], [],
+    [⟨"payload", "P", "commitment:multilinear.kzg.bls12-381/0"⟩,
+     ⟨"a", "V", "verifier_key:multilinear.kzg.bls12-381/0"⟩,
+     ⟨"b", "V", "verifier_key:multilinear.kzg.bls12-381/0"⟩], [], [],
     some [.loop "visits" (.constant count) [] ["payload"]
       [.message "commit" "commit" "P" "V" "payload" "received", .yield []] [], .ret []]⟩
   let binding : Instance := ⟨"policy", "Policy", [], [], [("P", "P"), ("V", "V")]⟩
@@ -158,9 +158,9 @@ private def strings (xs : List String) : Json := .arr (xs.map Json.str).toArray
 private def inputPolicy : Json := strings ["P", "payload", "a"]
 private def receivePolicy : Json := strings ["policy", "V", "commit", "a"]
 private def configuration (tail : UInt8) (inputs receives : List Json) : Json :=
-  .arr #[.str "zkc.public-configuration/1",
-    .arr #[strings ["a", "verifier_key:multilinear.kzg.bls12-381/1", hex keyWire],
-            strings ["b", "verifier_key:multilinear.kzg.bls12-381/1", hex (keyWire tail)]],
+  .arr #[.str "zkc.public-configuration/0",
+    .arr #[strings ["a", "verifier_key:multilinear.kzg.bls12-381/0", hex keyWire],
+            strings ["b", "verifier_key:multilinear.kzg.bls12-381/0", hex (keyWire tail)]],
     .arr inputs.toArray, .arr receives.toArray]
 private def configured (count : Nat) (json : Json) : Result Unit := do
   let (source, binding, definition) := fixture count

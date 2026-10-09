@@ -339,9 +339,9 @@ fn fixture_type(kind: &str) -> String {
         }
         "field" | "scalar" => "bls12-381.fr",
         "group" | "groups" => "bls12-381.g1",
-        "transcript" => "merlin3.bls12-381.fr64be/1",
+        "transcript" => "merlin3.bls12-381.fr64be/0",
         "prover_key" | "verifier_key" | "opening_state" | "commitment" | "proof" => {
-            "multilinear.kzg.bls12-381/1"
+            "multilinear.kzg.bls12-381/0"
         }
         _ => "bls12-381.fr",
     };
@@ -424,7 +424,7 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         json!([key, key, args, format!("arkworks/{key}")])
     })
     .collect();
-    json!(["zkc.program/2", bindings, functions, participants, entries])
+    json!(["zkc.program/0", bindings, functions, participants, entries])
 }
 
 fn participant(
@@ -618,7 +618,7 @@ fn unknown_program_format_and_extra_fields_are_distinct_refusals() {
 #[test]
 fn binding_records_and_non_nominal_types_rejected() {
     let mut j = identity();
-    j[1] = json!("caller.backend/1");
+    j[1] = json!("caller.backend/0");
     reject(&j, ErrorCode::Record);
     for ty in ["opaque:Secret", "nonce", "custom", "arkworks.field"] {
         let mut j = identity();
@@ -1544,12 +1544,12 @@ fn nonpolynomial_group_roles_use_distinct_typed_backend_and_consumed_nonce() {
 fn closed_profile_participants_are_not_an_execution_format() {
     let mut candidate = identity();
     for profile in [
-        "arkworks.multilinear.bls12-381/1",
-        "arkworks.bls12-381/1",
-        "reference.group/1",
+        "arkworks.multilinear.bls12-381/0",
+        "arkworks.bls12-381/0",
+        "reference.group/0",
     ] {
         // Keep the format valid so the malformed bindings field is checked.
-        candidate[0] = json!("zkc.program/2");
+        candidate[0] = json!("zkc.program/0");
         candidate[1] = json!(profile);
         reject(&candidate, ErrorCode::Record);
     }
@@ -1558,7 +1558,7 @@ fn closed_profile_participants_are_not_an_execution_format() {
 #[test]
 fn reference_variant_selects_only_active_resource_and_preserves_stop_trace() {
     let ty = format!(
-        "{}@logical.variant/1",
+        "{}@logical.variant/0",
         zkc_test_support::variants::logical(
             "Reference",
             json!([["draw", ["rng:bls12-381.fr"]], ["empty", []]])
@@ -1714,13 +1714,13 @@ fn runner_refuses_a_variant_that_misreports_itself() {
     }
 }
 
-const INDICES: &str = "indices@native.indices/1";
-const INDEX: &str = "index@native.index/1";
-const TRANSCRIPT: &str = "transcript:merlin3.bls12-381.fr64be/1@host.resource/1";
+const INDICES: &str = "indices@native.indices/0";
+const INDEX: &str = "index@native.index/0";
+const TRANSCRIPT: &str = "transcript:merlin3.bls12-381.fr64be/0@host.resource/0";
 
 fn tag_type(payload: &[&str]) -> String {
     format!(
-        "{}@logical.variant/1",
+        "{}@logical.variant/0",
         zkc_test_support::variants::logical("Tag", json!([["yes", payload], ["no", []]]))
     )
 }
@@ -1878,7 +1878,7 @@ fn private_match_refuses_a_history_effect_under_nested_local_control() {
 /// operation's attribute rule.
 #[test]
 fn private_match_refuses_internal_transcript_observation_and_challenge() {
-    let suite = "merlin3.bls12-381.fr64be/1";
+    let suite = "merlin3.bls12-381.fr64be/0";
     for (contract, arguments, inputs, outputs) in [
         (
             "transcript.native.indexed.observe.data",
@@ -1900,7 +1900,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                 [
                     ["t", TRANSCRIPT],
                     ["n", INDEX],
-                    ["coordinates", "indices@native.indices/1"]
+                    ["coordinates", "indices@native.indices/0"]
                 ],
                 [TRANSCRIPT],
                 [
@@ -1921,7 +1921,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                                         "kernel",
                                         [zkc_test_support::hex(
                                             &crate::logical::encode_tree(&json!([
-                                                "zkc.native-origin-template/1",
+                                                "zkc.native-origin-template/0",
                                                 "main",
                                                 [],
                                                 [],
@@ -1936,7 +1936,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
                                                         "Source",
                                                         "draw",
                                                         "input_0",
-                                                        "random.bls12-381.fr/1",
+                                                        "random.bls12-381.fr/0",
                                                         "draw",
                                                         "V"
                                                     ])
@@ -1960,7 +1960,7 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
             json!([
                 ["t", TRANSCRIPT],
                 ["n", INDEX],
-                ["coordinates", "indices@native.indices/1"]
+                ["coordinates", "indices@native.indices/0"]
             ]),
             json!([TRANSCRIPT]),
             json!([
@@ -2057,9 +2057,9 @@ fn leaf_payload_types_have_a_single_canonical_spelling() {
 #[test]
 fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let logical = zkc_test_support::variants::logical("Local", json!([["empty", []]]));
-    let ty = format!("{logical}@logical.variant/1");
+    let ty = format!("{logical}@logical.variant/0");
     let mut program = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [[
@@ -2079,7 +2079,7 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
         "Local",
         json!([["empty", []], ["owned", ["rng:bls12-381.fr"]]]),
     );
-    let affine = format!("{affine}@logical.variant/1");
+    let affine = format!("{affine}@logical.variant/0");
     program[3][0][4][0][1] = json!(affine);
     program[3][0][5][0] = json!(affine);
     let error = admit_supplied(&bytes(&program), &Mock::new()).unwrap_err();

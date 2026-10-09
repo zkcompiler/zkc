@@ -22,7 +22,7 @@ fn authority(keys: &Keys, authored: bool) -> zkc_tools::proof::SetupAuthority {
 fn authority_record(keys: &Keys, authored: bool) -> Json {
     let a = authority(keys, authored);
     json!([
-        "zkc.native-setup-authority/1",
+        "zkc.native-setup-authority/0",
         a.keys
             .iter()
             .map(|(p, id)| json!([p.to_string(), hex(id)]))
@@ -156,7 +156,7 @@ fn inputs(envelope: &Json, family: &str, keys: &Keys, path: &Path, producing: bo
         })
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",
@@ -366,7 +366,7 @@ fn structured_mutations(deployment: &NativeDeployment, input: &Json, proof: &[u8
     let size = u64::from_le_bytes(proof[40..48].try_into().unwrap()) as usize;
     let mut absent = proof[..40].to_vec();
     absent.extend_from_slice(&10u64.to_le_bytes());
-    absent.extend_from_slice(b"ZKCV\x01\x41");
+    absent.extend_from_slice(b"ZKCV\x00\x41");
     absent.extend_from_slice(&0u32.to_le_bytes());
     absent.extend_from_slice(&proof[48 + size..]);
     assert!(

@@ -11,7 +11,7 @@ using namespace mlir;
 namespace zkc::detail {
 namespace {
 // Outer JSON costs seven nodes per step, one per role, and eleven fixed nodes.
-// Keep emitted maxima within the run/1 decoder's 250000-node cap.
+// Keep emitted maxima within the run/0 decoder's 250000-node cap.
 static_assert(32768 * 7 + 1024 + 11 <= 250000);
 using Coordinate = std::pair<std::string, std::string>;
 struct Role {
@@ -301,7 +301,7 @@ Expected<std::string> buildRunBundle(ModuleOp prepared, ModuleOp module,
       return error("run-limit");
     roles.push_back(name.str());
   }
-  auto bundle = printJson(json::Object{{"format", "zkc.run/1"},
+  auto bundle = printJson(json::Object{{"format", "zkc.run/0"},
                                        {"candidate", std::move(encoded)},
                                        {"entry", entry.str()},
                                        {"roles", std::move(roles)},

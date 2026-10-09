@@ -120,7 +120,7 @@ mathematical rewrite.
 ## Native array boundary
 
 The installed array representation is
-`field_array<bls12-381.fr,N>@arkworks.field-array/1`, with an empty extra nominal
+`field_array<bls12-381.fr,N>@arkworks.field-array/0`, with an empty extra nominal
 identity. This complete identity is checked independently in C++ and Rust.
 Other fields can have mathematical formation without an installed native array
 provider.
@@ -152,15 +152,15 @@ promise admission under a particular run's resource policy.
 ## Independent reduction requirements
 
 The optional checker recognizes the closed polynomial family
-`boolean-sum-to-point/1` and the relation-pinned
+`boolean-sum-to-point/0` and the relation-pinned
 [R1CS specialization](protocol-composition.md#independently-specified-r1cs-client). Requirements are supplied separately from the candidate:
 
 ```json
 {
-  "format": "zkc.polynomial-requirements/1",
+  "format": "zkc.polynomial-requirements/0",
   "requirements": [{
     "id": "public-sumcheck",
-    "family": "boolean-sum-to-point/1",
+    "family": "boolean-sum-to-point/0",
     "reduction": "reduction", "terminal": "terminal", "recipe": "recipe",
     "verifier": "V", "terminal_role": "V",
     "subjects": [0, 1], "claim": 2, "service": 3,
@@ -239,8 +239,8 @@ physical selection. Missing or empty requirements cannot select unchecked mode.
 The selected entry must belong to a checked reduction/terminal pair or its
 [checked static composition](protocol-composition.md#checked-reduction-and-terminal-application).
 
-The wrapper `zkc.checked-run/1` contains the exact ordinary
-`zkc.run/1` bundle JSON as a string plus `correspondence` and `public_coin`
+The wrapper `zkc.checked-run/0` contains the exact ordinary
+`zkc.run/0` bundle JSON as a string plus `correspondence` and `public_coin`
 reports. An unrequested report is null. The correspondence
 report binds the exact selected bundle bytes, both companion bundle byte
 digests, source/requirements, selected entry and post-check passes.

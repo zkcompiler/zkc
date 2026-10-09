@@ -175,7 +175,7 @@ LogicalResult verifyNativeExecution(Operation *unit,
         if (physical && algebra::isFieldArray(logical(type))) {
           auto selected = cast<plan::DataType>(type);
           representation =
-              selected.getRepresentation() == "arkworks.field-array/1";
+              selected.getRepresentation() == "arkworks.field-array/0";
         }
         if (!policy || !policy->wire || !representation) {
           (void)refuse(op, "unsupported native wire type");

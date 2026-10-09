@@ -5,7 +5,7 @@
   hash,
   format,
 }:
-assert format == "canonical-git-v1";
+assert format == "canonical-git-v0";
 fetchgit {
   inherit url rev hash;
   leaveDotGit = true;

@@ -24,7 +24,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
             .ok_or_else(|| exhausted("wire-bytes"))?;
         policy.wire(length)?;
         let mut out = reserve(length)?;
-        out.extend_from_slice(b"ZKCV\x01");
+        out.extend_from_slice(b"ZKCV\x00");
         out.push(tag);
         out.extend(
             u32::try_from(count)

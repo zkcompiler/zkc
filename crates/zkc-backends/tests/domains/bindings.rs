@@ -138,7 +138,7 @@ fn nominal_associations_and_native_advertisements_are_checked_independently() {
             ];
             assert_eq!(backend.binding_signature(&b), Some(b.signature().unwrap()));
             let mut bad = b.clone();
-            *bad.arguments.last_mut().unwrap() = "zkcv.vector.uninstalled/1".into();
+            *bad.arguments.last_mut().unwrap() = "zkcv.vector.uninstalled/0".into();
             assert!(bad.signature().is_err());
             assert!(backend.binding_signature(&bad).is_none());
             if kind != "bool" {

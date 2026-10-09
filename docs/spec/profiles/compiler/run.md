@@ -41,12 +41,12 @@ bundle carries executable scheduling data. It adds no IR stage or dialect.
 
 ## Bundle and admission
 
-`zkc.run/1` is one JSON object with exactly these mandatory fields:
+`zkc.run/0` is one JSON object with exactly these mandatory fields:
 
 ```json
 {
-  "format": "zkc.run/1",
-  "candidate": "<exact zkc.program/2 JSON text>",
+  "format": "zkc.run/0",
+  "candidate": "<exact zkc.program/0 JSON text>",
   "entry": "main",
   "roles": ["Alice", "Bob"],
   "steps": [
@@ -107,7 +107,7 @@ or a source-correspondence certificate.
 
 ## Message admission
 
-`zkc.run/1` embeds exactly `zkc.program/2` and uses the compact schedule
+`zkc.run/0` embeds exactly `zkc.program/0` and uses the compact schedule
 contract below. Other bundle or embedded program tags refuse without fallback.
 The bundle admits each complete physical message type supported by the installed
 native codec, including the variable-size frames defined by
@@ -178,10 +178,10 @@ then release all endpoint leases through normal finalization.
 Scalar/group wire types use the exact default representations of the
 [structured native message grammar](structured-proof-messages.md): Boolean,
 BLS Fr/G1, BN254 Fr/G1/G2, KoalaBear base/ext8 and Ristretto scalar/group.
-They reuse the installed `ZKCV` version-1 frames, including recursively nested
+They reuse the installed `ZKCV` version-0 frames, including recursively nested
 sequences and variants. This bundle follows installed native codec support;
 proof deployment adds its own admission and authority checks.
-Unsigned `index@native.index/1` is also supported: 14 bytes, with header
+Unsigned `index@native.index/0` is also supported: 14 bytes, with header
 `ZKCV`, version `01`, tag `31` (hex), then exactly eight little-endian bytes.
 The [structured extension](structured-mathematics.md#native-array-boundary)
 also admits complete BLS field-array identities with frame size `6 + 32*N`.
@@ -365,7 +365,7 @@ zkc run-bundle BUNDLE EXPECTED_SHA256 INPUTS
 Input JSON is an array:
 
 ```text
-["zkc.bundle-inputs/1", session,
+["zkc.bundle-inputs/0", session,
   [[role,
     [[position, exact_physical_type, [kind, value]], ...],
     [[service_position, exact_contract, budget], ...]], ...],
@@ -390,7 +390,7 @@ and constructed proof deployments retain their existing transcript contracts.
 Setup authority is application input, separate from invocation key material:
 
 ```text
-["zkc.bundle-setups/1",
+["zkc.bundle-setups/0",
  [[setup_name, expected_key_id_hex], ...],
  [[role, input_position, setup_name], ...]]
 ```
@@ -408,9 +408,9 @@ Received PCS values select among the authorized registry keys using their native
 headers. The Host does not promise an independently pinned key at each receive
 site; applications must assess this registry-based authority contract.
 
-The capacity file uses `zkc.native-capacity/2`, shared with the native proof host.
+The capacity file uses `zkc.native-capacity/0`, shared with the native proof host.
 The dispatch/wire file is
-`["zkc.bundle-limits/1", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
+`["zkc.bundle-limits/0", dispatches, message_bytes, total_wire_bytes, external_work_per_role]`.
 Defaults/hard ceilings are 32768 dispatched occurrences, 4096 bytes per message
 and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work units
 per role. Both API and CLI refuse requests above these ceilings without clamping.
@@ -419,7 +419,7 @@ installed bounds. Reports retain the requested admission, capacity and execution
 limits. Per-runner instruction, iteration and retained-value budgets are
 separate from structural schedule size and runtime dispatch occurrences.
 
-`zkc.bundle-result/1` retains the primary outcome, reached schedule, pending-wire
+`zkc.bundle-result/0` retains the primary outcome, reached schedule, pending-wire
 metadata, role states before/after cancellation, outputs, usage and backend work.
 After issuance begins, ordinary failures return a report and retire every issued
 capability and managed service, including partial initialization. Retirement or

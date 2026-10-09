@@ -328,7 +328,7 @@ size_t validateScalarModule(ModuleOp module) {
 int run(int argc, char **argv) {
   try {
     if (argc == 2 && StringRef(argv[1]) == "--version") {
-      outs() << "zkc-llzk/v1 LLVM/20.1.8 LLZK/" ZKC_LLZK_REVISION "\n";
+      outs() << "zkc-llzk/v0 LLVM/20.1.8 LLZK/" ZKC_LLZK_REVISION "\n";
       return 0;
     }
     require(argc == 12, "llzk-cli",
@@ -482,7 +482,7 @@ int run(int argc, char **argv) {
     // Field declarations remain in memory and the receipt. Direct binary export
     // avoids llzk-translate's missing felt-dialect registration altogether.
     json::Object receipt{
-        {"schema", "zkc-llzk-receipt/v1"},
+        {"schema", "zkc-llzk-receipt/v0"},
         {"status", "Exported"},
         {"llzk_revision", ZKC_LLZK_REVISION},
         {"llvm_version", "20.1.8"},

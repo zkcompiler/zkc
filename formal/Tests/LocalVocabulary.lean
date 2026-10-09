@@ -88,15 +88,15 @@ private def artifactSequence (r : Bool) : Tools.Artifact.Value :=
   else .publicBytes "groups" (sequenceWire r)
 example : ([false, true].all fun r =>
     (artifact (binding "curve.length" [group r]) [artifactSequence r]).toOption ==
-      some [.arr #[.str "index", .str "5a4b4356011f0200000000000000"]]) = true := by native_decide
+      some [.arr #[.str "index", .str "5a4b4356001f0200000000000000"]]) = true := by native_decide
 example : ([false, true].all fun r =>
     (artifact (binding "curve.get" [group r]) [artifactSequence r, .fromArithmetic .bls (.index 1)]).toOption ==
       some [.arr #[.str ("group:" ++ group r), .str (Tools.Artifact.hex (pointWire r))]]) = true := by native_decide
 example : ([false, true].all fun r =>
     (artifact (binding "curve.get" [group r]) [artifactSequence r, .fromArithmetic .bls (.index 2)]).isOk == false) = true := by native_decide
 example : ((artifact (binding "bool.not") [.boolean true]).toOption ==
-    some [.arr #[.str "bool", .str "5a4b4356010500"]]) = true := by native_decide
+    some [.arr #[.str "bool", .str "5a4b4356000500"]]) = true := by native_decide
 example : ((artifact (binding "bool.or") [.boolean false, .boolean true]).toOption ==
-    some [.arr #[.str "bool", .str "5a4b4356010501"]]) = true := by native_decide
+    some [.arr #[.str "bool", .str "5a4b4356000501"]]) = true := by native_decide
 
 end Tests.LocalVocabulary

@@ -543,7 +543,7 @@ interpreter does not consult them to compute values. They do not dynamically
 resolve a different provider meaning. The selected lookup and insertion prices
 are one unit each.
 
-For the bilinear natural instance, the key has version `1`, origin `o`, captures
+For the bilinear natural instance, the key has version `0`, origin `o`, captures
 `[a,b,c,d,x]` and two instructions computing `a+b*x` and `c+d*x` from those
 registers. The exact provider result is:
 

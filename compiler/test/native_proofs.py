@@ -11,11 +11,11 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / 'fixtures/mathematical'
-SUITES = ['merlin3.bls12-381.fr64be/1', 'spongefish0.7.4.keccak.bls12-381.fr64be/1']
+SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0']
 manifest = []
 schnorr = (FIXTURES / 'schnorr-services.mlir').read_text()
 field = '!algebra.field<"bls12-381.fr">'
-service = '!protocol.service_ref<"random.bls12-381.fr/1">'
+service = '!protocol.service_ref<"random.bls12-381.fr/0">'
 
 
 def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
@@ -25,17 +25,17 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
     deployment = commands.run([compiler, 'protocol-proof', source_path, policy_path, *options])
     (OUT / f'{name}.deployment').write_text(deployment)
     envelope = json.loads(deployment)
-    assert envelope[0] == 'zkc.native-proof/5'
+    assert envelope[0] == 'zkc.native-proof/0'
     assert envelope[1] == hashlib.sha256(source.encode()).hexdigest()
     assert envelope[2][1] == policy
     assert envelope[5] == hashlib.sha256(envelope[4].encode()).hexdigest()
-    assert json.loads(envelope[4])[0] == 'zkc.program/2'
+    assert json.loads(envelope[4])[0] == 'zkc.program/0'
     manifest.append(dict(name=name, family=family, rounds=rounds))
     return source_path, policy_path
 
 
 def policy(suite, public=None):
-    return ['zkc.native-proof-policy/5', 'main', 'Alice', 'Bob', '0', suite,
+    return ['zkc.native-proof-policy/0', 'main', 'Alice', 'Bob', '0', suite,
             '4' if suite else '', public or ['0', '2'],
             [['draw_challenge', 'challenge']] if suite else []]
 

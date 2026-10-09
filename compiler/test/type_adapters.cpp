@@ -71,7 +71,7 @@ int main() {
   cases.run("nondefault physical layout", [&] {
     roundTrip(
         context,
-        take(parseBoundType("table:bls12-381.fr@arkworks.mle-msb/1", true)),
+        take(parseBoundType("table:bls12-381.fr@arkworks.mle-msb/0", true)),
         true);
   });
   for (StringRef spelling : {"fixed_vector<field:koala-bear,4>",
@@ -101,9 +101,9 @@ int main() {
 
   const std::string field = "bls12-381.fr";
   const std::string group = "bls12-381.g1";
-  const std::string pcs = "multilinear.kzg.bls12-381/1";
-  const std::string oracle = "rows.merkle-keccak256.koala-bear/1";
-  const std::string transcript = "merlin3.bls12-381.fr64be/1";
+  const std::string pcs = "multilinear.kzg.bls12-381/0";
+  const std::string oracle = "rows.merkle-keccak256.koala-bear/0";
+  const std::string transcript = "merlin3.bls12-381.fr64be/0";
   auto dynamicVector = [](Type element) -> Type {
     return RankedTensorType::get({ShapedType::kDynamic}, element);
   };
@@ -160,7 +160,7 @@ int main() {
   });
   cases.run("resource unit physical wrapper", [&] {
     roundTrip(context,
-              take(parseBoundType("resource_unit:Guard@logical.resource_unit/1",
+              take(parseBoundType("resource_unit:Guard@logical.resource_unit/0",
                                   true)),
               true);
   });
@@ -308,7 +308,7 @@ int main() {
     });
   }
   auto logical = zkc::algebra::FieldType::get(&context, field);
-  auto physical = zkc::plan::DataType::get(&context, logical, "arkworks.fr/1");
+  auto physical = zkc::plan::DataType::get(&context, logical, "arkworks.fr/0");
   cases.run("fixed-vector native type verifier", [&] {
     ScopedDiagnosticHandler diagnostics(&context,
                                         [](Diagnostic &) { return success(); });
@@ -335,18 +335,18 @@ int main() {
   });
   cases.run("nested physical wrapper", [&] {
     refuses(encodeBoundType(
-                zkc::plan::DataType::get(&context, physical, "arkworks.fr/1"),
+                zkc::plan::DataType::get(&context, physical, "arkworks.fr/0"),
                 true),
             "binding-type");
   });
   cases.run("wrapped noncanonical tensor", [&] {
     auto tensor = RankedTensorType::get({2}, logical);
     refuses(encodeBoundType(zkc::plan::DataType::get(&context, tensor,
-                                                     "arkworks.fr-vector/1"),
+                                                     "arkworks.fr-vector/0"),
                             true),
             "binding-representation");
   });
-  for (StringRef representation : {"", "uninstalled", "arkworks.g1/1"})
+  for (StringRef representation : {"", "uninstalled", "arkworks.g1/0"})
     cases.run(Twine("wrong physical representation: ") + representation, [&] {
       refuses(encodeBoundType(
                   zkc::plan::DataType::get(&context, logical, representation),

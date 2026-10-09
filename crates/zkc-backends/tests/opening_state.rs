@@ -35,7 +35,7 @@ fn exact_contracts_and_wrong_operation_arities_fail_closed() {
     let b = ark_backend(None);
     let binding = |contract: &str| zkc_runtime::interactive::OperationBinding {
         contract: contract.into(),
-        arguments: vec!["multilinear.kzg.bls12-381/1".into()],
+        arguments: vec!["multilinear.kzg.bls12-381/0".into()],
         implementation: format!("arkworks/{contract}"),
     };
     let commit = b.binding_signature(&binding("pcs.commit")).unwrap();
@@ -367,7 +367,7 @@ fn state_passes_explicit_local_ports_and_can_be_borrowed_twice() {
     assert_eq!(backend.active_frames(), 0);
     // No parent variable can be fetched in a child whose port list omits it.
     let mut unpassed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    unpassed[2][0][2] = json!([["p", "point:bls12-381.fr@arkworks.point/1"]]);
+    unpassed[2][0][2] = json!([["p", "point:bls12-381.fr@arkworks.point/0"]]);
     unpassed[3][0][6][0][3] = json!(["p"]);
     unpassed[3][0][6][1][3] = json!(["p"]);
     assert_eq!(
@@ -499,7 +499,7 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
         );
         for forged in [
             &[][..],
-            &b"ZKCV\x01\x00"[..],
+            &b"ZKCV\x00\x00"[..],
             &backend.encode_native_value(&f(2)).unwrap()[..],
         ] {
             assert_eq!(

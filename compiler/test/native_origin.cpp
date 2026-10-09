@@ -11,7 +11,7 @@ int main() {
   };
   auto indexed = encodeNativeOriginTemplate(
       "main", {{"repeat", "main", "rounds"}, {"apply", "main", "step"}},
-      {"query", "Round", "draw", "input_2", "random.bls12-381.fr/1", "draw",
+      {"query", "Round", "draw", "input_2", "random.bls12-381.fr/0", "draw",
        "V"});
   if (!indexed) {
     errs() << toString(indexed.takeError());
@@ -66,12 +66,12 @@ int main() {
   // A plain origin header cannot be substituted for the indexed template.
   auto plain = *message;
   const std::string current =
-      "7a6b632e6e61746976652d6f726967696e2d74656d706c6174652f31";
+      "7a6b632e6e61746976652d6f726967696e2d74656d706c6174652f30";
   auto start = plain.find(current);
   if (start == std::string::npos)
     return 1;
   plain.replace(start, current.size(),
-                "7a6b632e6e61746976652d6f726967696e2f32");
+                "7a6b632e6e61746976652d6f726967696e2f30");
   plain.replace(start - 16, 16, "1300000000000000");
   if (!refuses(checkNativeOrigin(plain, "message")))
     return 1;

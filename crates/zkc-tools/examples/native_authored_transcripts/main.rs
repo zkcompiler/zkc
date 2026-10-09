@@ -63,7 +63,7 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
         })
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         ports,
         "617574686f726564",
@@ -72,7 +72,7 @@ fn inputs(envelope: &Json, values: &[Value], producing: bool) -> Json {
     ])
 }
 fn messages(proof: &[u8]) -> Vec<&[u8]> {
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     let mut rest = &proof[40..];
     let mut result = Vec::new();
     while !rest.is_empty() {

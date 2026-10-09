@@ -14,8 +14,8 @@ for name, fixture in [('evaluate', 'recipe-evaluate'), ('constant', 'constant-su
         for suffix, options in [('', ()), ('_plain', ('--no-simplify',)), ('_release', ('--release-storage',))]:
             result = commands.source('protocol-bundle', source, *options)
             bundle = json.loads(result)
-            assert bundle['format'] == 'zkc.run/1'
-            assert json.loads(bundle['candidate'])[0] == 'zkc.program/2'
+            assert bundle['format'] == 'zkc.run/0'
+            assert json.loads(bundle['candidate'])[0] == 'zkc.program/0'
             (OUT / (name + suffix + '.bundle')).write_text(result)
         if 'maximum=8:i64' not in source:
             assert name in ('evaluate', 'data', 'traces')
@@ -68,7 +68,7 @@ with case('nested unused polynomial observation is checked before DCE'):
     commands.source('protocol-bundle', source.replace('     %zero =', extra + '     %zero ='), refuses='polynomial-formation')
 with case('statement bindings stay at entry'):
     source = (FIXTURES / 'iterated-sumcheck.mlir').read_text()
-    declaration = ''' "relation.declare"() {sym_name="claim_relation",kind="external",key="example/claim",revision="1",signature=(!f)->i1,purposes=["statement"]} : ()->()
+    declaration = ''' "relation.declare"() {sym_name="claim_relation",kind="external",key="example/claim",revision="0",signature=(!f)->i1,purposes=["statement"]} : ()->()
 '''
     statement = '''     "protocol.statement"(%current) {relation=@claim_relation,selectors=["V"],acceptance=0:i64} : (!f)->()
 '''
@@ -94,7 +94,7 @@ module {{ "protocol.module"() ({{
 }}) {{profile=#protocol.profile<protocol>}} : ()->() }}
 '''
     bundle = json.loads(commands.source('protocol-bundle', source))
-    assert bundle['format'] == 'zkc.run/1'
+    assert bundle['format'] == 'zkc.run/0'
     commands.source('protocol-bundle', source.replace('index=1:i64', 'index=2:i64'), refuses='mathematical-formation')
 with case('preparation retains tensor construction from scalar constants'):
     source = '''!f = !algebra.field<"bls12-381.fr">

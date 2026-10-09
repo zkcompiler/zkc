@@ -196,7 +196,7 @@ Declaration ::= [String, Type, Access, Kind]
 Context     ::= [String, List(Declaration), Type, List(Reference)]
 Claim       ::= [String, String, String]
 
-Request ::= ["zkc-request", 1, "finite-source-1",
+Request ::= ["zkc-request", 0, "finite-source-0",
              Context, List(Reference), Control]
 
 Candidate ::= ["zkc-plan", Nat, String, List(String), String, String,
@@ -218,7 +218,7 @@ is a distinct step. A vocabulary can still encode a specialized value in an
 operation descriptor; any resulting disclosure is subject to the artifact's
 [release contract](../../realization/artifacts.md#lifecycle-and-release).
 
-The request decoder requires version `1` and semantics `finite-source-1`.
+The request decoder requires version `0` and semantics `finite-source-0`.
 A well-typed mismatch of either is `invalid-shape`. The candidate decoder
 retains its numeric version and string semantic version; unsupported values
 are rejected subsequently by the metadata checker. This difference in stage
@@ -240,8 +240,8 @@ listed error whose condition fails:
 
 | Required condition | Error code |
 |---|---|
-| Candidate format is `1` | `unsupported-format-version` |
-| Candidate semantics is `finite-source-1` | `unsupported-semantics-version` |
+| Candidate format is `0` | `unsupported-format-version` |
+| Candidate semantics is `finite-source-0` | `unsupported-semantics-version` |
 | Candidate capabilities are `[]` | `unsupported-capability` |
 | Realization is `direct-logical-plan` | `unsupported-realization` |
 | Rule is `direct-lowering` | `unsupported-rule` |
@@ -349,15 +349,15 @@ The source, policy, entry cover and permitted return cover are supplied
 separately. Decoding the sidecar establishes only certificate syntax. The
 phase checker must accept it against those actual operands, and use additionally
 requires the interpretation's policy realization and initial coverage laws.
-The sidecar is not a field of version `1`, a new direct-lowering rule, or
+The sidecar is not a field of version `0`, a new direct-lowering rule, or
 evidence that the direct checker establishes phase admission by itself.
 
 ## Compact region profile
 
-The separately selected `region-source-1` profile adds explicit computation
+The separately selected `region-source-0` profile adds explicit computation
 binding. It uses the same language, values, operation interpretations and
 complete-execution semantics. It does not extend the accepted grammar of
-`finite-source-1` or alter a previously issued request's meaning.
+`finite-source-0` or alter a previously issued request's meaning.
 
 Its intrinsically typed source, `Region L Γ τ`, contains the five structured
 source constructors and this additional constructor:
@@ -395,9 +395,9 @@ control-depth level and are formed under the respective contexts above.
 Malformed dormant bodies or suffixes fail formation even when execution would
 stop before reaching them.
 
-The request envelope substitutes `"region-source-1"` and `RegionControl` for
+The request envelope substitutes `"region-source-0"` and `RegionControl` for
 the old semantic version and body. The candidate envelope keeps its fields and
-uses `RegionControl`; metadata checking requires exactly `"region-source-1"`.
+uses `RegionControl`; metadata checking requires exactly `"region-source-0"`.
 All other metadata conditions, error precedence, text parsing and custody
 requirements remain those specified above.
 

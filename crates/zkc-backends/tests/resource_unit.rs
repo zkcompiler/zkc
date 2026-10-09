@@ -8,11 +8,11 @@ use zkc_runtime::interactive::{
 };
 
 fn ty(domain: &str) -> String {
-    format!("resource_unit:{domain}@logical.resource_unit/1")
+    format!("resource_unit:{domain}@logical.resource_unit/0")
 }
 fn fixture(ports: Json, results: Json, body: Json, args: Json, names: Json) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [
             [
                 "make",
@@ -103,7 +103,7 @@ fn exact_nominal_formation_and_no_wire_permission() {
         );
     }
     refused_as(
-        PhysicalType::parse("resource_unit:Slot.A@host.resource/1"),
+        PhysicalType::parse("resource_unit:Slot.A@host.resource/0"),
         ErrorCode::Representation,
         "representation does not implement logical type",
     );
@@ -321,7 +321,7 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
     let mut other_branch = branch.clone();
     other_branch[0][1] = json!("advance_else");
     let program = fixture(
-        json!([["a", ty("Slot.A")], ["choose", "bool@native.bool/1"]]),
+        json!([["a", ty("Slot.A")], ["choose", "bool@native.bool/0"]]),
         json!([ty("Slot.A")]),
         json!([
             [

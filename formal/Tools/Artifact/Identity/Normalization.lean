@@ -238,7 +238,7 @@ def normalizedProtocol (original : Generic.Prepared) (resolved : Carrier) (entry
   let protocols ← (← recordsNamed resolved.protocols protocols).mapM
     (normalizeDeclaration [] 4 7 true)
   let [entryRecord] ← recordsNamed resolved.entries [entry] | throw "identity-entry"
-  return .arr #[.str "zkc.protocol-identity/1", entryRecord,
+  return .arr #[.str "zkc.protocol-identity/0", entryRecord,
     ← sorted (← recordsNamed resolved.instances instances), ← sorted protocols,
     ← sorted functions, ← sorted definitions, ← sorted flattened]
 

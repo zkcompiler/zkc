@@ -8,7 +8,7 @@ open Zkc.Source.TablePreparation
 /-- f(x,y)=a+b*x+c*y+d*x*y; fix x and materialize the
     residual coefficients [a+b*x,c+d*x]. Captures are in the exact key. -/
 def key (origin a b c d x : Nat) : Key :=
-  ⟨1,origin,[a,b,c,d,x],
+  ⟨0,origin,[a,b,c,d,x],
     [.add (.reg 0) (.mul (.reg 1) (.reg 4)),
      .add (.reg 2) (.mul (.reg 3) (.reg 4))]⟩
 def consume (t : List Nat) (y : Nat) := t[5]?.getD 0 + t[6]?.getD 0 * y

@@ -1,7 +1,7 @@
 use std::fmt;
 
 pub const MAX_PROOF_BYTES: usize = 16 * 1024 * 1024;
-const MAGIC: &[u8; 8] = b"ZKCPRF01";
+const MAGIC: &[u8; 8] = b"ZKCPRF00";
 const HEADER_BYTES: usize = MAGIC.len() + 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,7 +161,7 @@ mod tests {
     fn exact_context_and_bounded_payload_consumption() {
         // Independently spelled fixture: one 3-byte payload and one empty
         // payload. Payload framing cannot steal or ignore trailing messages.
-        let mut fixture = b"ZKCPRF01".to_vec();
+        let mut fixture = b"ZKCPRF00".to_vec();
         fixture.extend([9; 32]);
         fixture.extend([3, 0, 0, 0, 0, 0, 0, 0, 4, 5, 6]);
         fixture.extend([0; 8]);

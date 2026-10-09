@@ -889,7 +889,7 @@ json::Array stringsJSON(ArrayRef<StringRef> values) {
   return result;
 }
 json::Object inventory(const Model &m) {
-  json::Object result{{"format", "zkc.contract-declarations/3"}};
+  json::Object result{{"format", "zkc.contract-declarations/0"}};
   json::Array sorts;
   for (const auto *sort : m.sorts)
     sorts.push_back(name(sort));

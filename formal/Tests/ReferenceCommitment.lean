@@ -14,7 +14,7 @@ private def initial : State := { setupKeys := [("P", [identity])] }
 
 -- These zero point bytes test structural service contracts, not cryptography.
 private def wire (proof : Bool) (key : CommitmentIdentity) : ByteArray :=
-  (Tools.Artifact.magic.push (if proof then 7 else 6)) ++ "ZKCAR006".toUTF8 ++
+  (Tools.Artifact.magic.push (if proof then 7 else 6)) ++ "ZKCAR000".toUTF8 ++
     ByteArray.mk #[if proof then 3 else 2] ++ Tools.Artifact.little 8 key.rank ++ key.setup ++ key.key ++
     ByteArray.mk (Array.replicate (if proof then 96*key.rank else 48) 0)
 
@@ -25,7 +25,7 @@ private def summary (result : Except Fault (List Value) × State) : String :=
 
 private def serviceState (contract : String) (inputs : List Value) (outputs : List Value) : State :=
   { initial with answers := Std.HashMap.ofList [
-      ((requestJson location contract ["multilinear.kzg.bls12-381/1"] [] inputs).compress,
+      ((requestJson location contract ["multilinear.kzg.bls12-381/0"] [] inputs).compress,
         .arr #[.str "ok", valuesJson outputs])] }
 
 private def probe (wrongKey : Bool) : String := Id.run do
@@ -51,14 +51,14 @@ example : probe true = "refused:key-mismatch" := by native_decide
 -- Key declarations remain role-scoped even though their identity is public.
 example : authorized initial "P" (.proverKey identity) = .ok () := by native_decide
 example : authorized initial "V" (.proverKey identity) = .error "unauthorized-setup" := by native_decide
-example : (decodeValue (.arr #[.str "opening_state:multilinear.kzg.bls12-381/1", .arr #[]])).map
+example : (decodeValue (.arr #[.str "opening_state:multilinear.kzg.bls12-381/0", .arr #[]])).map
     (fun _ => ()) = .error "reference-value-not-supported" := by native_decide
 
-private def duplicateSetup : Json := .arr #[.str "zkc.reference-setups/1",
+private def duplicateSetup : Json := .arr #[.str "zkc.reference-setups/0",
   .arr #[.arr #[.str "P", .arr #[identity.json, identity.json]]], .arr #[]]
 example : (setupContext ["P"] duplicateSetup).map (fun _ => ()) = .error "duplicate-setup" := by native_decide
 
-private def receiving : Json := receiveKey location "commitment" "V" "commitment:multilinear.kzg.bls12-381/1"
+private def receiving : Json := receiveKey location "commitment" "V" "commitment:multilinear.kzg.bls12-381/0"
 private def receiveProbe (selected : Option CommitmentIdentity) : String :=
   summary ((do
     validateReceivingKey location receiving (.commitment (wire false identity))

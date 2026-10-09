@@ -44,6 +44,6 @@ Two interpreters agreeing on an already wrong exported plan cannot detect the
 source-to-plan error. Unsupported cases and timeouts are not agreement.
 
 C++/Rust checks remain bounded native evidence. Lean source/direct-plan models
-have their own interpretations and proofs. A connection to `zkc.program/2` needs an
+have their own interpretations and proofs. A connection to `zkc.program/0` needs an
 explicit interpretation. Native semantics and differential/formal connections remain
 separate work under [assurance](../assurance.md).

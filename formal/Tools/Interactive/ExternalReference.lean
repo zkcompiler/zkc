@@ -31,15 +31,15 @@ private def fields (location : Location) (ns : List Nat) : RunM Unit :=
 private def payload (location : Location) (v : Value) (suite width : Nat) : RunM (List Nat) := do
   let ns ← getIndices location v
   require location (ns.length == width + 3) "external-state-width"
-  require location (ns.take 3 == [magic, 1, suite]) "external-state-suite"
+  require location (ns.take 3 == [magic, 0, suite]) "external-state-suite"
   return ns.drop 3
-private def packed (suite : Nat) (ns : List Nat) : Value := indices ([magic, 1, suite] ++ ns)
+private def packed (suite : Nat) (ns : List Nat) : Value := indices ([magic, 0, suite] ++ ns)
 
 /-- Exact input and primitive version are part of the request. Replies are
 explicit trusted assumptions, never an oracle for the whole transition. -/
 private def primitive (location : Location) (name : String) (input : List Nat) : RunM (List Nat) := do
   let reply ← successfulReply location (← oracle location
-    (.arr #[.str "zkc.external-primitive/1", location.json, .str name, numbers input]))
+    (.arr #[.str "zkc.external-primitive/0", location.json, .str name, numbers input]))
   let values ← checked location (Decode.array reply)
   checked location (values.mapM Decode.natural)
 private def hash (location : Location) (input : List Nat) : RunM (List Nat) := do

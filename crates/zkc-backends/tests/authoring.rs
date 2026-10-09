@@ -96,15 +96,15 @@ impl Backend for Divergent {
     fn binding_signature(&self, _: &OperationBinding) -> Option<BoundSignature> {
         Some(BoundSignature {
             inputs: if self.input {
-                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/1").unwrap()]
+                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap()]
             } else {
-                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/1").unwrap(); 2]
+                vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap(); 2]
             },
             outputs: vec![
                 PhysicalType::parse(if self.input {
-                    "field:bls12-381.fr@arkworks.fr/1"
+                    "field:bls12-381.fr@arkworks.fr/0"
                 } else {
-                    "bool@native.bool/1"
+                    "bool@native.bool/0"
                 })
                 .unwrap(),
             ],

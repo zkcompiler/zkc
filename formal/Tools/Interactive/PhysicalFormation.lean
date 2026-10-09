@@ -9,7 +9,7 @@ set_option autoImplicit false
 namespace Tools.Interactive.PhysicalFormation
 
 private def diagonal (ty : Ty) : Bool :=
-  ty.endsWith "@arkworks.fr-diagonal/1" || ty.endsWith "@dalek.ristretto-diagonal/1"
+  ty.endsWith "@arkworks.fr-diagonal/0" || ty.endsWith "@dalek.ristretto-diagonal/0"
 
 def checkBody (bindings : List OperationBinding) : Nat → List Instruction → Result Unit
   | 0, _ => .error "body-depth-limit"

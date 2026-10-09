@@ -11,7 +11,7 @@
 int main() {
   for (llvm::StringRef field : {"bls12-381.fr", "ristretto255.scalar",
                                 "bn254.fr", "koala-bear.ext8-binomial3"}) {
-    std::string contract = ("random." + field + "/1").str();
+    std::string contract = ("random." + field + "/0").str();
     if (zkc::protocol::randomServiceField(contract) != field)
       return 1;
     std::string source =
@@ -74,7 +74,7 @@ int main() {
       return 9;
     llvm::consumeError(rejected.takeError());
     auto invalid = *program;
-    invalid.participants.front().services.front().contract = "custom.service/1";
+    invalid.participants.front().services.front().contract = "custom.service/0";
     auto refused = zkc::protocol::admit(invalid);
     if (!refused)
       return 10;

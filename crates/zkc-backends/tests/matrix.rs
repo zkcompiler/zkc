@@ -81,7 +81,7 @@ fn call(d: usize, name: &str, attrs: &[&str], args: Vec<Value>) -> Value {
         .remove(0)
 }
 fn wire(d: usize, rows: u32, columns: u32, entries: &[(u32, u32, u64)]) -> Vec<u8> {
-    let mut b = b"ZKCV\x01".to_vec();
+    let mut b = b"ZKCV\x00".to_vec();
     b.push(23 + d as u8);
     for n in [rows, columns, entries.len() as u32] {
         b.extend(n.to_le_bytes());
@@ -459,7 +459,7 @@ fn nonzeros_use_separate_cap_and_large_inputs_keep_constant_size_programs() {
 fn exact_nonzero_cap_and_dimension_cap_are_independent_of_dense_vector_policy() {
     let n = 1usize << 20;
     let mut bytes = Vec::with_capacity(18 + 12 * n);
-    bytes.extend_from_slice(b"ZKCV\x01\x19");
+    bytes.extend_from_slice(b"ZKCV\x00\x19");
     for v in [1024u32, 1024, n as u32] {
         bytes.extend(v.to_le_bytes());
     }
@@ -569,7 +569,7 @@ fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payload
                 &outputs,
                 &["c".into(), "t2".into()],
             );
-            let mut direct = merlin::Transcript::new(b"zkc.artifact/1");
+            let mut direct = merlin::Transcript::new(b"zkc.artifact/0");
             direct.append_message(b"binding", &root);
             direct.append_message(
                 b"origin",

@@ -121,7 +121,7 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
     );
     assert!(
         host.decode_native_value(
-            &PhysicalType::parse("field:bls12-381.fr@arkworks.fr/1").unwrap(),
+            &PhysicalType::parse("field:bls12-381.fr@arkworks.fr/0").unwrap(),
             &wire
         )
         .is_err()

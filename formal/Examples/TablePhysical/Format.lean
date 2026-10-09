@@ -45,7 +45,7 @@ structure Candidate where
   profile : Profile := .reference
 
 def candidateCodec : Format.Codec Candidate where
-  encode candidate := .arr #[.str candidate.profile.formatName, toJson (1 : Nat),
+  encode candidate := .arr #[.str candidate.profile.formatName, toJson (0 : Nat),
     (ArtifactFormat.context types).encode candidate.context,
     RegionFormat.encode types operations candidate.body]
   decode json := do
@@ -55,7 +55,7 @@ def candidateCodec : Format.Codec Candidate where
         | "zkc-table-physical-reference" => pure Profile.reference
         | "zkc-table-physical-plan" => pure Profile.native
         | _ => throw Format.Error.shape
-      if (← Format.natural version) != 1 then throw .shape
+      if (← Format.natural version) != 0 then throw .shape
       return ⟨← (ArtifactFormat.context types).decode context,
         ← RegionFormat.decode types operations 256 body, profile⟩
     | _ => throw .shape

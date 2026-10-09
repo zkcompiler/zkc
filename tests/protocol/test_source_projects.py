@@ -56,7 +56,7 @@ def test_source_protocols_reject_false_inputs(toolchain, journal, directory, pro
     producer_value, verifier_value = read(project, 'prover'), read(project, 'verifier')
     if project == 'schnorr':
         # Canonical scalar 4 against the public point 3*G.
-        producer_value['inputs']['scalar'] = (b'ZKCV\x01\x01' + (4).to_bytes(32, 'little')).hex()
+        producer_value['inputs']['scalar'] = (b'ZKCV\x00\x01' + (4).to_bytes(32, 'little')).hex()
     else:
         # The first round is valid, but two table entries remain. The actual
         # terminal predicate must reject; returning a round claim is insufficient.
@@ -71,7 +71,7 @@ def test_source_protocols_reject_false_inputs(toolchain, journal, directory, pro
 def test_sumcheck_uses_received_coefficients_and_actual_claim(toolchain, journal, directory):
     package, pin = build(toolchain, journal, directory, 'sumcheck', 'Proof', [])
     producer_value, verifier_value = read('sumcheck', 'prover'), read('sumcheck', 'verifier')
-    wrong = (b'ZKCV\x01\x01' + (11).to_bytes(32, 'little')).hex()
+    wrong = (b'ZKCV\x00\x01' + (11).to_bytes(32, 'little')).hex()
     producer_value['public']['claim'] = verifier_value['public']['claim'] = wrong
     producer = request(directory, 'producer.json', producer_value)
     verifier = request(directory, 'verifier.json', verifier_value)

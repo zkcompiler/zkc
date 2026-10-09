@@ -67,7 +67,7 @@ For fixed `F,n`, the full Sumcheck root is:
 ```text
 root(domain,p,claim) =
   [context(domain,n,claim),
-   statement("sumcheck.quadratic.v1",coefficients(p))].
+   statement("sumcheck.quadratic.v0",coefficients(p))].
 ```
 
 The state is `(prover : S, provider : Q, frames : List (Frame F), position : Nat)`.

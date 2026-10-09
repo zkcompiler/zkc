@@ -11,7 +11,7 @@ and closes a selected Entry. Translation emits a mathematical `protocol.module`.
 Preparation expands local applications and protocol applications; projection
 assigns actions and values to participants. Mathematical lowering produces the
 `exec` profile. Representation and kernel selection produce `physical` programs,
-exported as `zkc.program/2` for the generic participant runtime.
+exported as `zkc.program/0` for the generic participant runtime.
 
 ## Build and validate
 
@@ -41,7 +41,7 @@ malformed records refuse. Transcript construction uses
 indexed origin templates, `transcript.native.indexed.challenge` and typed
 `transcript.native.indexed.observe.data`; loops and flat protocols share this
 model. An empty suite selects an authored proof without constructed transcripts.
-`protocol-export` emits a checked physical `zkc.program/2` artifact.
+`protocol-export` emits a checked physical `zkc.program/0` artifact.
 
 Relation data commands retain R1CS import/export, normalization, inspection,
 matrices, evaluation, and native Sumcheck authoring (`relation-protocol` and
@@ -52,7 +52,7 @@ import/export, evaluation and polynomial planning. The isolated
 There is no JSON-program-to-MLIR importer. `protocol::exportProgram` returns
 checked typed Program records; `protocol::exportModule` returns the checked
 physical JSON carrier. Program codecs read only
-`zkc.program/2`, the physical executable carrier, with explicit participant
+`zkc.program/0`, the physical executable carrier, with explicit participant
 arguments.
 
 ## Components and ownership

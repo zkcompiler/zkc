@@ -34,7 +34,7 @@ def changingSend (state : Nat × F) :
 
 def firstRequest : List (Zkc.Protocols.AlgebraicRounds.Construction.Frame F) := [
   .context "sumcheck" 2 1,
-  .statement "sumcheck.quadratic.v1" [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  .statement "sumcheck.quadratic.v0" [0, 0, 0, 0, 0, 0, 0, 0, 0],
   .message 0 ⟨6, 2, 1⟩, .request 0]
 
 def secondRequest : List (Zkc.Protocols.AlgebraicRounds.Construction.Frame F) :=

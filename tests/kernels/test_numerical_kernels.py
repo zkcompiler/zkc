@@ -17,7 +17,7 @@ def wire(kind, value, extension):
     values = [value] if kind == 'field' else value
     payload = b'' if kind == 'field' else len(values).to_bytes(4, 'little')
     payload += b''.join(coordinates(v if extension else v[:1]) for v in values)
-    return (b'ZKCV\x01' + bytes([tag]) + payload).hex()
+    return (b'ZKCV\x00' + bytes([tag]) + payload).hex()
 
 
 def direct(coefficients, point):
@@ -105,5 +105,5 @@ entry Demo=Run;
     entry = Entry(toolchain, journal, directory, source)
     for query in (0, P + 1, 2**64 - 1):
         outputs = entry.run_roles(str(query), {'P': {'inputs': {'q': query}}, 'V': {'inputs': {}}})
-        expected = (b'ZKCV\x01\x44' + (2).to_bytes(4, 'little') + query.to_bytes(8, 'little') * 2).hex()
+        expected = (b'ZKCV\x00\x44' + (2).to_bytes(4, 'little') + query.to_bytes(8, 'little') * 2).hex()
         assert outputs == {'P': {}, 'V': {'result': expected, 'count': 2}}

@@ -10,7 +10,7 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / "fixtures/mathematical"
-SUITES = ["merlin3.bls12-381.fr64be/1", "spongefish0.7.4.keccak.bls12-381.fr64be/1"]
+SUITES = ["merlin3.bls12-381.fr64be/0", "spongefish0.7.4.keccak.bls12-381.fr64be/0"]
 manifest = []
 for family in ["product", "cubic", "authored", "structured"]:
     fixture = "structured-opening" if family == "structured" else "authored-opening" if family in ("authored", "structured") else "committed-" + family
@@ -26,7 +26,7 @@ for family in ["product", "cubic", "authored", "structured"]:
                 source, policy = OUT / (name + ".mlir"), OUT / (name + ".policy")
                 source.write_text((FIXTURES / (fixture + ".mlir")).read_text())
                 selected = [
-                    "zkc.native-proof-policy/5",
+                    "zkc.native-proof-policy/0",
                     "main",
                     "P",
                     "V",
@@ -43,8 +43,8 @@ for family in ["product", "cubic", "authored", "structured"]:
                     [compiler, "protocol-proof", source, policy, *options]
                 )
                 envelope = json.loads(result)
-                assert envelope[0] == "zkc.native-proof/5"
-                assert envelope[2][0] == "zkc.native-proof-descriptor/5"
+                assert envelope[0] == "zkc.native-proof/0"
+                assert envelope[2][0] == "zkc.native-proof-descriptor/0"
                 (OUT / (name + ".deployment")).write_text(result)
                 manifest.append(dict(name=name, family=family))
 (OUT / "manifest.json").write_text(json.dumps(manifest))
@@ -92,14 +92,14 @@ with case("multiple verifier setups are current public inputs"):
 
 with case("unused PCS entry operands still require setup authorization"):
     src, policy = OUT / "unused-key.mlir", OUT / "unused-key.policy"
-    src.write_text('''!pk = !pcs.object<"multilinear.kzg.bls12-381/1", "prover_key">
+    src.write_text('''!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%key:!pk,%accepted:i1):
    "protocol.return"(%accepted) : (i1)->()
  }) {sym_name="main",function_type=(!pk,i1)->i1,roles=["P","V"],input_roles=[["P"],["V"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 ''')
-    policy.write_text(json.dumps(["zkc.native-proof-policy/5", "main", "P", "V", "0", "", "", ["1"], []]))
+    policy.write_text(json.dumps(["zkc.native-proof-policy/0", "main", "P", "V", "0", "", "", ["1"], []]))
     commands.run([compiler, "protocol-proof", src, policy], refuses="native-proof-setup-coverage")
 
 with case("source checking retains terminal and construction provenance"):
@@ -108,8 +108,8 @@ with case("source checking retains terminal and construction provenance"):
     candidate = OUT / "constructed.mlir"
     candidate.write_text(original)
     commands.run([compiler, "protocol-check-proof", src, policy, candidate])
-    assert "zkc.native-construction/5" in original
-    candidate.write_text(original.replace("zkc.native-construction/5", "invalid.native-construction"))
+    assert "zkc.native-construction/0" in original
+    candidate.write_text(original.replace("zkc.native-construction/0", "invalid.native-construction"))
     commands.run([compiler, "protocol-check-proof", src, policy, candidate], refuses="native-proof-candidate")
     candidate.write_text(original.replace("maximum = 8 : i64", "maximum = 9 : i64"))
     assert candidate.read_text() != original

@@ -328,7 +328,7 @@ class Admission {
         if (!local)
           return fail("native-boolean-context");
         if (!bind({literal->output},
-                  {{physical ? "bool@native.bool/1" : "bool"}}, env))
+                  {{physical ? "bool@native.bool/0" : "bool"}}, env))
           return false;
       } else if (const auto *stop = instruction.get<program::Stop>()) {
         StringRef reason = stop->reason;
@@ -589,7 +589,7 @@ class Admission {
               !nested->body.back().get<program::Yield>())
             return fail("local-control-yield");
           yielded.insert(yielded.begin(),
-                         Port{physical ? "bool@native.bool/1" : "bool"});
+                         Port{physical ? "bool@native.bool/0" : "bool"});
         }
         if (!body(nested->body, std::move(inner), yielded, def, owner, true,
                   sites, depth + 1, true, nullptr, inMatch))

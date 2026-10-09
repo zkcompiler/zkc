@@ -178,8 +178,8 @@ def run : IO Unit := do
   checks.holds (!(decodeStop commonStop false).isOk) "projected stop rejects common spelling"
   checks.holds ((Variant.parse choice.spelling).toOption == some choice) "canonical descriptor roundtrip"
   checks.holds ((Bindings.valueType false choice.spelling).isOk) "logical descriptor"
-  checks.holds ((Bindings.valueType true (choice.spelling ++ "@logical.variant/1")).isOk) "physical descriptor"
-  checks.holds (!(Bindings.valueType true (choice.spelling ++ "@native.variant/1")).isOk) "fixed representation"
+  checks.holds ((Bindings.valueType true (choice.spelling ++ "@logical.variant/0")).isOk) "physical descriptor"
+  checks.holds (!(Bindings.valueType true (choice.spelling ++ "@native.variant/0")).isOk) "fixed representation"
   checks.holds (!(Bindings.valueType false choice.spelling.toUpper).isOk) "uppercase hex refused"
   let spaced := "variant:" ++ Variant.hex (" " ++ choice.json.compress).toUTF8
   checks.holds (!(Bindings.valueType false spaced).isOk) "noncanonical JSON refused"
@@ -191,7 +191,7 @@ def run : IO Unit := do
   checks.holds (malformed ⟨.str "N", []⟩) "empty alternatives refused"
   checks.holds (malformed ⟨.str "N", [("A", []), ("A", [])]⟩) "duplicate alternatives refused"
   checks.holds (malformed ⟨.str "N", [("0bad", [])]⟩) "label grammar"
-  checks.holds (malformed ⟨.str "N", [("A", ["bool@native.bool/1"])]⟩) "physical payload refused"
+  checks.holds (malformed ⟨.str "N", [("A", ["bool@native.bool/0"])]⟩) "physical payload refused"
   checks.holds (malformed ⟨.str "N", [("A", ["unknown"])]⟩) "unknown payload refused"
   checks.holds (malformed ⟨.str "N", [("A", List.replicate 129 "bool")]⟩) "payload bound"
   checks.holds (malformed ⟨.str "N", (List.range 33).map (fun i => (s!"A{i}", []))⟩) "alternative bound"
@@ -257,7 +257,7 @@ def run : IO Unit := do
   checks.holds (helperEffect == .error "variant-challenge") "history effect through a helper refused"
   checks.holds (nestedEffect == .error "variant-challenge") "history effect under a nested loop refused"
   checks.holds (transcriptEffect "transcript.observe.index"
-      [Bindings.transcriptIdentity, "zkcv.index/1"] ["t", "n"] ["t2"] == .error "variant-challenge")
+      [Bindings.transcriptIdentity, "zkcv.index/0"] ["t", "n"] ["t2"] == .error "variant-challenge")
     "internal transcript observation refused in an arm"
   checks.holds (transcriptEffect "transcript.challenge"
       [Bindings.transcriptIdentity] ["t"] ["x", "t2"] == .error "variant-challenge")
@@ -281,7 +281,7 @@ def run : IO Unit := do
   checks.holds (raised (External.compute location "external.monero.init" [index 3])
       == "external-operands") "external operand kind"
   checks.holds (raised (External.compute location "external.openvm.sample_bits"
-      [indices ([External.magic, 1, 2] ++ List.replicate 18 0), indices [1]]) == "external-operands")
+      [indices ([External.magic, 0, 2] ++ List.replicate 18 0), indices [1]]) == "external-operands")
     "external operand arity"
   checks.holds (raised (External.compute location "external.monero.bogus" []) == "external-operands")
     "unknown external operation"
@@ -300,7 +300,7 @@ def run : IO Unit := do
     "variant type depth budget remains distinct"
   checks.holds (refusal (Bindings.valueType false "variant:zz") == "binding-type")
     "logical binding descriptor refusal"
-  checks.holds (refusal (Bindings.valueType true "variant:zz@logical.variant/1") == "binding-type")
+  checks.holds (refusal (Bindings.valueType true "variant:zz@logical.variant/0") == "binding-type")
     "physical binding descriptor refusal"
   checks.holds (refusal (Value.validateAt 0 (Value.variant choice "None" [])) == "variant-depth")
     "value nesting fuel"

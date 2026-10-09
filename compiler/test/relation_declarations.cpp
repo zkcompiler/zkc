@@ -34,7 +34,7 @@ int main() {
   };
   const std::string declaration = R"mlir(
 relation.declare @predicate {
-  kind = "external", key = "example/echo", revision = "1",
+  kind = "external", key = "example/echo", revision = "0",
   signature = (!algebra.field<"bls12-381.fr">) -> i1,
   purposes = ["statement"]
 }
@@ -167,7 +167,7 @@ relation.declare @predicate {
                    {{"None", {}}, {"Some", {"rng:bls12-381.fr"}}}),
            variant("HiddenKey",
                    {{"None", {}},
-                    {"Some", {"verifier_key:multilinear.kzg.bls12-381/1"}}})})
+                    {"Some", {"verifier_key:multilinear.kzg.bls12-381/0"}}})})
     require(!parse(schema(type), context) &&
                 refusal.find("relation-declaration-signature") !=
                     std::string::npos,

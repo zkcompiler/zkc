@@ -38,7 +38,7 @@ entry Demo = Run;
 
 
 def wire(kind, value):
-    header = b'ZKCV\x01' + bytes([{'field': 26, 'vector': 27, 'matrix': 30}[kind]])
+    header = b'ZKCV\x00' + bytes([{'field': 26, 'vector': 27, 'matrix': 30}[kind]])
     if kind == 'field':
         payload = coordinates(value)
     elif kind == 'vector':

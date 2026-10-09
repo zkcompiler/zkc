@@ -189,7 +189,7 @@ private def callHeight (definitions : List Definition) (configurations : List Co
       return height
 
 def library (json : Json) : Result Library := do
-  let [.str "zkc.library/1", declarations, configurations, common] ← Decode.array json
+  let [.str "zkc.library/0", declarations, configurations, common] ← Decode.array json
     | throw "generic-library"
   let definitions ← (← Decode.array declarations limits.definitions).mapM decodeDefinition
   let configurations ← (← Decode.array configurations limits.definitions).mapM decodeConfiguration

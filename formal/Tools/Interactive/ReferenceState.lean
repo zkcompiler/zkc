@@ -40,7 +40,7 @@ private def frameJson : Control.Frame → Json
   | .localCall site function => .arr #[.str "local", .str site, .str function]
 
 def Location.json (location : Location) : Json :=
-  .arr #[.str "source-origin/2", .str location.session, .str location.entry,
+  .arr #[.str "source-origin/0", .str location.session, .str location.entry,
     .str location.scope.binding, .arr (location.scope.path.map frameJson).toArray,
     .str location.scope.site, .str location.scope.role,
     match location.definition with
@@ -136,7 +136,7 @@ def event (location : Location) (record : Json) (weight : Nat := 1) : RunM Unit 
 
 def requestJson (location : Location) (contract : String) (arguments attributes : List String)
     (inputs : List Value) : Json :=
-  .arr #[.str "zkc.reference-primitive/2", location.json, .str contract,
+  .arr #[.str "zkc.reference-primitive/0", location.json, .str contract,
     .arr (arguments.map Json.str).toArray, .arr (attributes.map Json.str).toArray, valuesJson inputs]
 
 /-- Replies are an explicit service assumption. A missing exact request stops

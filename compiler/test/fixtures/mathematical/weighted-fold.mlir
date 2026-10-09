@@ -1,6 +1,6 @@
 !f = !algebra.field<"bls12-381.fr">
 !v = tensor<?x!f>
-!rng = !protocol.service_ref<"random.bls12-381.fr/1">
+!rng = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
  "local.binding"() {sym_name="split",contract="vector.split",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "local.binding"() {sym_name="dot",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()

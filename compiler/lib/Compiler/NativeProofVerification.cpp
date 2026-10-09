@@ -419,7 +419,7 @@ class TranscriptCorrespondence {
         after.getDictionary(a.getContext()) != before ||
         !construction.getAs<StringAttr>("format") ||
         construction.getAs<StringAttr>("format").getValue() !=
-            "zkc.native-construction/5" ||
+            "zkc.native-construction/0" ||
         !construction.getAs<TypeAttr>("transcript") ||
         construction.getAs<TypeAttr>("transcript").getValue() != stateType)
       return false;

@@ -286,7 +286,7 @@ def main():
         }
     with HeaderParser(args.lean, lake=args.lake) as headers:
         checked = {name: check_boundary(name, boundary, headers) for name, boundary in boundaries.items()}
-    print(json.dumps({"format": "zkc.library-boundaries.v2", "status": "pass",
+    print(json.dumps({"format": "zkc.library-boundaries.v0", "status": "pass",
                       "main_package_pins": pins,
                       "boundaries": checked,
                       "scope": "complete owned library imports, selected narrower dependency boundaries, "

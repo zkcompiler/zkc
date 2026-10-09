@@ -42,7 +42,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
     };
     let result_types = if returned.is_empty() { vec![] } else { outputs };
     let mut carrier = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [[
             "b",
             binding.contract,
@@ -90,7 +90,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             ["bls12-381.fr"],
             dot
         ]));
-        carrier[2][0][3] = json!(["field:bls12-381.fr@arkworks.fr/1"]);
+        carrier[2][0][3] = json!(["field:bls12-381.fr@arkworks.fr/0"]);
         carrier[2][0][4] = json!([
             ["op", "view", "b", [], ["a0", "a1"], ["view"]],
             ["op", "consume", "dot", [], ["a0", "view"], ["out"]],
@@ -114,7 +114,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             ["ristretto255.group"],
             msm
         ]));
-        carrier[2][0][3] = json!(["group:ristretto255.group@dalek.ristretto/1"]);
+        carrier[2][0][3] = json!(["group:ristretto255.group@dalek.ristretto/0"]);
         carrier[2][0][4] = json!([
             ["op", "view", "b", [], ["a0", "a1"], ["view"]],
             ["op", "consume", "msm", [], ["a0", "view"], ["out"]],
@@ -715,7 +715,7 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                 // A public wrong-kind wrapper must refuse there without panic.
                 let ty = value.physical_type().spelling();
                 let carrier = serde_json::to_vec(&json!([
-                    "zkc.program/2",
+                    "zkc.program/0",
                     [],
                     [],
                     [[
@@ -847,16 +847,16 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
         .unwrap();
     let entry = registry.get("independent/observation").unwrap();
     for (suite, payload, accepted) in [
-        ("merlin3.bls12-381.fr64be/1", "field:bls12-381.fr", true),
-        ("merlin3.bls12-381.fr64be/1", "field:bn254.fr", true),
-        ("merlin3.bls12-381.fr64be/1", "wrong-type", false),
+        ("merlin3.bls12-381.fr64be/0", "field:bls12-381.fr", true),
+        ("merlin3.bls12-381.fr64be/0", "field:bn254.fr", true),
+        ("merlin3.bls12-381.fr64be/0", "wrong-type", false),
         (
-            "merlin3.ristretto255.scalar64le/1",
+            "merlin3.ristretto255.scalar64le/0",
             "field:ristretto255.scalar",
             false,
         ),
         (
-            "spongefish0.7.4.keccak.bls12-381.fr64be/1",
+            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
             "field:bls12-381.fr",
             false,
         ),
@@ -947,7 +947,7 @@ fn transcript_alternative_refuses_unsupported_table_payload() {
             .unwrap()
             .signature(&binding(
                 "transcript.native.indexed.observe.data",
-                &["merlin3.bls12-381.fr64be/1", "table:bls12-381.fr"],
+                &["merlin3.bls12-381.fr64be/0", "table:bls12-381.fr"],
                 "independent/msb-observation"
             ))
             .is_none()
@@ -1264,31 +1264,31 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["bn254.g2"],
         &["bn254.gt"],
         &["ristretto255.group"],
-        &["multilinear.kzg.bls12-381/1"],
-        &["rows.merkle-keccak256.koala-bear/1"],
-        &["rows.merkle-keccak256.koala-bear.ext8-binomial3/1"],
-        &["merlin3.bls12-381.fr64be/1"],
-        &["merlin3.ristretto255.scalar64le/1"],
-        &["merlin3.koala-bear.ext8-binomial3.rejection31le/1"],
-        &["spongefish0.7.4.keccak.bls12-381.fr64be/1"],
-        &["merlin3.bls12-381.fr64be/1", "field:bls12-381.fr"],
+        &["multilinear.kzg.bls12-381/0"],
+        &["rows.merkle-keccak256.koala-bear/0"],
+        &["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],
+        &["merlin3.bls12-381.fr64be/0"],
+        &["merlin3.ristretto255.scalar64le/0"],
+        &["merlin3.koala-bear.ext8-binomial3.rejection31le/0"],
+        &["spongefish0.7.4.keccak.bls12-381.fr64be/0"],
+        &["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"],
         &[
-            "merlin3.ristretto255.scalar64le/1",
+            "merlin3.ristretto255.scalar64le/0",
             "field:ristretto255.scalar",
         ],
         &[
-            "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             "field:koala-bear",
         ],
         &[
-            "spongefish0.7.4.keccak.bls12-381.fr64be/1",
+            "spongefish0.7.4.keccak.bls12-381.fr64be/0",
             "field:bls12-381.fr",
         ],
         &["bls12-381.fr", "2"],
         &["koala-bear", "2"],
         &["field:bls12-381.fr"],
         &["Slot.A"],
-        &["bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"],
+        &["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"],
     ];
     for (implementation, contract) in &backend_rows {
         assert!(

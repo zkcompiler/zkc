@@ -96,7 +96,7 @@ fn direct(root: &[u8], wire: &[u8]) -> ([u8; 64], [u8; 64]) {
 fn direct_frames(root: &[u8], wire: &[u8], message: &[u8], query: &[u8]) -> ([u8; 64], [u8; 64]) {
     let mut t = Keccak::default();
     for data in [
-        frame(0, b"domain", b"zkc.artifact/1"),
+        frame(0, b"domain", b"zkc.artifact/0"),
         frame(0, b"suite", SUITE.name().as_bytes()),
         frame(1, b"binding", root),
         frame(1, b"origin", message),
@@ -141,7 +141,7 @@ fn independent_frames_vectors_native_sampler_and_fresh_state() {
     let mut b = backend(Policy::default());
     let value = field(false, 7);
     // This fixture is canonical Fr wire, checked independently below.
-    let wire = [b"ZKCV\x01\x01".as_slice(), &[7], &[0; 31]].concat();
+    let wire = [b"ZKCV\x00\x01".as_slice(), &[7], &[0; 31]].concat();
     assert_eq!(b.encode_native_value(&value).unwrap(), wire);
     // Retain the published raw primitive fixture; it is not a generated contract.
     let raw = |kind| {
@@ -218,13 +218,13 @@ fn nominal_provider_codec_and_wrong_field_admission() {
         }
     }
     let mut obs = binding_for(SUITE, "transcript.native.indexed.observe.data");
-    obs.arguments[1] = "zkcv.field.ristretto255.scalar/1".into();
+    obs.arguments[1] = "zkcv.field.ristretto255.scalar/0".into();
     assert!(obs.signature().is_err());
     assert!(b.binding_signature(&obs).is_none());
     obs.arguments[1] = "ristretto255.scalar".into();
     assert!(obs.signature().is_err());
     assert!(b.binding_signature(&obs).is_none());
-    assert!(Identity::parse("spongefish0.7.4.keccak.ristretto255.scalar64le/1").is_err());
+    assert!(Identity::parse("spongefish0.7.4.keccak.ristretto255.scalar64le/0").is_err());
 }
 #[test]
 fn malformed_roots_wrong_suite_authority_and_budget() {
@@ -283,7 +283,7 @@ fn prefix_lengths_domain_context_and_event_binding() {
         frame(2, b"challenge", &64u64.to_be_bytes())
     );
     let wire = zkc_test_support::unhex(
-        "5a4b435601010700000000000000000000000000000000000000000000000000000000000000",
+        "5a4b435600010700000000000000000000000000000000000000000000000000000000000000",
     );
     let base = direct(&root(), &wire);
     for text in [

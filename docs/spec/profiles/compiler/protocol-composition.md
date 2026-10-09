@@ -13,7 +13,7 @@ call stack, bundle connector, or separately mutable relation graph.
   : (tensor<4x!algebra.field<"bls12-381.fr">>,
      tensor<1x!algebra.field<"bls12-381.fr">>,
      !algebra.field<"bls12-381.fr">,
-     !protocol.service_ref<"random.bls12-381.fr/1">)
+     !protocol.service_ref<"random.bls12-381.fr/0">)
   -> (tensor<4x!algebra.field<"bls12-381.fr">>,
       tensor<1x!algebra.field<"bls12-381.fr">>,
       !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">)
@@ -113,8 +113,8 @@ handoff obligation. Digests identify bytes; they do not authenticate a report.
 
 ## Independently specified R1CS client
 
-`r1cs-sum-to-point/1` adds a mandatory `relation` containing canonical
-`zkc.relation.r1cs/1` JSON and a mandatory composition requirement. It accepts the
+`r1cs-sum-to-point/0` adds a mandatory `relation` containing canonical
+`zkc.relation.r1cs/0` JSON and a mandatory composition requirement. It accepts the
 exact source emitted by `authorR1CSSumcheck` for that independently supplied
 relation, ignoring locations only. This pins matrix coefficients, ordered public
 layout, relation identity, assignment construction, zero claim, weight draws,

@@ -110,8 +110,9 @@ belongs in the pull request body, which is what survives the squash.
   belongs on the [status page](../docs/status.md), not in the
   specification.
 - **Formats and identities.** Version persisted or exchanged formats and
-  cryptographic byte constructions. Before stabilization, keep their current
-  version numbers fixed and update producers, readers and fixtures together.
+  cryptographic byte constructions. Before stabilization, keep zkc-owned
+  format and construction versions at `0` and update producers, readers and
+  fixtures together.
   Maintain one current schema with exact shape and unknown-field validation;
   do not add compatibility readers or migration notes. See the
   [format version policy](../docs/development/maintenance.md#format-versions).

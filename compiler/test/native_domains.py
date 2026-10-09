@@ -13,7 +13,7 @@ manifest = []
 for family, suite, service, public, roles, draws in [
     (
         "domain-values",
-        "merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+        "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
         "5",
         ["0", "1", "2", "3", "4"],
         ["P", "V"],
@@ -21,7 +21,7 @@ for family, suite, service, public, roles, draws in [
     ),
     (
         "ristretto-services",
-        "merlin3.ristretto255.scalar64le/1",
+        "merlin3.ristretto255.scalar64le/0",
         "4",
         ["0", "2"],
         ["Alice", "Bob"],
@@ -37,7 +37,7 @@ for family, suite, service, public, roles, draws in [
         with case(name):
             source = fixtures / (family + ".mlir")
             p = [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy/0",
                 "main",
                 *roles,
                 "0",
@@ -63,7 +63,7 @@ for family, suite, service, public, roles, draws in [
         source = (fixtures / (family + ".mlir")).read_text()
         if family == "ristretto-services":
             ty = '!algebra.field<"ristretto255.scalar">'
-            service_ty = '!protocol.service_ref<"random.ristretto255.scalar/1">'
+            service_ty = '!protocol.service_ref<"random.ristretto255.scalar/0">'
             at = '%cx ='
             new = f'''%c2 = "protocol.query"(%challenge_service) {{method="draw",owner="Bob",site="draw2"}} : ({service_ty})->{ty}
 %challenge2 = protocol.exchange %c2 {{site="challenge2",sender="Bob",receiver="Alice"}} : {ty}
@@ -73,7 +73,7 @@ for family, suite, service, public, roles, draws in [
             source = source.replace(at, new + at).replace('field_multiply %challenge, %x', 'field_multiply %combinedP, %x').replace('group_scale %y, %challenge', 'group_scale %y, %combinedV')
         else:
             ty = '!algebra.field<"koala-bear.ext8-binomial3">'
-            service_ty = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/1">'
+            service_ty = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'
             at = '%sum ='
             new = f'''%c2 = "protocol.query"(%random) {{method="draw",owner="V",site="draw2"}} : ({service_ty})->{ty}
 %challenge2 = protocol.exchange %c2 {{site="challenge2",sender="V",receiver="P"}} : {ty}
@@ -102,7 +102,7 @@ for family, suite, service, public, roles, draws in [
         manifest.append(dict(name=name, family=family, retries=True))
     with case(family + " suite field mismatch"):
         source = fixtures / (family + ".mlir")
-        p[5] = "merlin3.bls12-381.fr64be/1"
+        p[5] = "merlin3.bls12-381.fr64be/0"
         policy = OUT / (family + "_suite_mismatch.policy")
         policy.write_text(json.dumps(p))
         commands.run(

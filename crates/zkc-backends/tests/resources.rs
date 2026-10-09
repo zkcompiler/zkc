@@ -272,7 +272,7 @@ fn nested_program() -> Vec<u8> {
         &["next"],
     );
     let mut j: serde_json::Value = serde_json::from_slice(&raw).unwrap();
-    j[2][0][2] = json!([["a", "rng:bls12-381.fr@host.resource/1"]]);
+    j[2][0][2] = json!([["a", "rng:bls12-381.fr@host.resource/0"]]);
     j[3][0][6] = json!([
         [
             "loop",
@@ -402,8 +402,8 @@ fn non_top_exit_refusal_preserves_views_for_ordered_cleanup_without_resource_eff
     };
     let mut j: serde_json::Value = serde_json::from_slice(&nested_program()).unwrap();
     j[3][0][5] = json!([
-        "rng:bls12-381.fr@host.resource/1",
-        "rng:bls12-381.fr@host.resource/1"
+        "rng:bls12-381.fr@host.resource/0",
+        "rng:bls12-381.fr@host.resource/0"
     ]);
     j[3][0][6][1] = json!(["return", ["out0", "b"]]);
     j[2][0][4] = json!([["return", ["a"]]]);

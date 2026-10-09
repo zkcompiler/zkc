@@ -70,9 +70,9 @@ pub fn binding(d: bool, name: &str) -> OperationBinding {
         }
     } else if name == "transcript.native.indexed.challenge" {
         if d {
-            "merlin3.ristretto255.scalar64le/1"
+            "merlin3.ristretto255.scalar64le/0"
         } else {
-            "merlin3.bls12-381.fr64be/1"
+            "merlin3.bls12-381.fr64be/0"
         }
     } else {
         if d {
@@ -100,16 +100,16 @@ pub fn native_origin(kind: &str, site: &str, template: bool) -> Vec<u8> {
             "Source",
             site,
             "input_0",
-            "random.bls12-381.fr/1",
+            "random.bls12-381.fr/0",
             "draw",
             "V"
         ])
     };
     tree(&json!([
         if template {
-            "zkc.native-origin-template/1"
+            "zkc.native-origin-template/0"
         } else {
-            "zkc.native-origin/2"
+            "zkc.native-origin/0"
         },
         "main",
         [],
@@ -179,7 +179,7 @@ pub fn program(
     }
     body.push(json!(["return", returns]));
     serde_json::to_vec(&json!([
-        "zkc.program/2",
+        "zkc.program/0",
         rows,
         [[
             "function",

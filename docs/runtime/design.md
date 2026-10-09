@@ -1,6 +1,6 @@
 # Runtime design
 
-`zkc-runtime` provides one Runner for the closed `zkc.program/2` executable.
+`zkc-runtime` provides one Runner for the closed `zkc.program/0` executable.
 It advances local computation and exposes communication/service cuts. Installed
 backends execute admitted operations with their exact type, effect, resource and
 representation contracts. Whole protocols remain visible in the program.
@@ -9,9 +9,9 @@ representation contracts. Whole protocols remain visible in the program.
 
 | Host | Boundary |
 |---|---|
-| Entry | Authenticated `zkc.entry/1` publication, named source interface and selected run/proof job |
+| Entry | Authenticated `zkc.entry/0` publication, named source interface and selected run/proof job |
 | Proof | Authenticated native deployment, explicit public context, independent producer and validator execution |
-| Joint | Authenticated `zkc.run/1` bundle, role layouts and checked dispatch of actual messages |
+| Joint | Authenticated `zkc.run/0` bundle, role layouts and checked dispatch of actual messages |
 
 In `zkc-tools`, `entry` delegates to the public `proof` and `run` modules;
 `host` owns shared input preparation, capacity, setup and I/O support. Entry

@@ -32,7 +32,7 @@ impl Oracle<'_> {
                 protocol,
                 site,
                 "input_4",
-                "random.bls12-381.fr/1",
+                "random.bls12-381.fr/0",
                 "draw",
                 "V"
             ])
@@ -47,7 +47,7 @@ impl Oracle<'_> {
             ])
         };
         let template = tree(&json!([
-            "zkc.native-origin-template/1",
+            "zkc.native-origin-template/0",
             "main",
             path,
             [],
@@ -61,7 +61,7 @@ impl Oracle<'_> {
             "missing authored occurrence {protocol}/{site}"
         );
         tree(&json!([
-            "zkc.native-origin/2",
+            "zkc.native-origin/0",
             "main",
             path,
             coordinates.iter().map(u64::to_string).collect::<Vec<_>>(),
@@ -105,7 +105,7 @@ impl Oracle<'_> {
     }
 }
 fn index(bytes: &[u8]) -> u64 {
-    assert_eq!(&bytes[..6], b"ZKCV\x01\x1f");
+    assert_eq!(&bytes[..6], b"ZKCV\x00\x1f");
     assert_eq!(bytes.len(), 14);
     u64::from_le_bytes(bytes[6..].try_into().unwrap())
 }
@@ -146,7 +146,7 @@ fn coefficients(a: &[Scalar], b: &[Scalar], cubic: bool) -> Vec<Scalar> {
 }
 pub fn verify(envelope: &Json, input: &Json, proof: &[u8], family: &str, n: u64) {
     let root = root(envelope, input);
-    assert_eq!(&proof[..8], b"ZKCPRF01");
+    assert_eq!(&proof[..8], b"ZKCPRF00");
     assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
     assert_eq!(envelope[3], hex(&Sha256::digest(tree(&envelope[2]))));
     let mut oracle = Oracle {
@@ -197,7 +197,7 @@ pub fn verify(envelope: &Json, input: &Json, proof: &[u8], family: &str, n: u64)
         for i in 0..n {
             let path = [json!(["repeat", "main", "rounds"])];
             let bytes = oracle.message(&path, &[i], "main", "round_message");
-            assert_eq!(&bytes[..6], b"ZKCV\x01\x40");
+            assert_eq!(&bytes[..6], b"ZKCV\x00\x40");
             let expected = coefficients(&a, &b, cubic);
             assert_eq!(bytes.len(), 6 + 32 * expected.len());
             let actual: Vec<_> = bytes[6..]

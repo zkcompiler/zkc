@@ -107,22 +107,22 @@ int main() {
   fold.application.implementation.clear();
   refuse(resolveBinding(fold.application, true), "binding-stage");
   protocol::OperationBinding opening{
-      "open", {"pcs.open", {"multilinear.kzg.bls12-381/1"}, ""}};
+      "open", {"pcs.open", {"multilinear.kzg.bls12-381/0"}, ""}};
   protocol::OperationBinding challenge{"draw",
                                        {"transcript.native.indexed.challenge",
-                                        {"merlin3.bls12-381.fr64be/1"},
+                                        {"merlin3.bls12-381.fr64be/0"},
                                         ""}};
   require(accept(resolveBinding(challenge.application, false))
                   .outputs[0]
                   .identity == "bls12-381.fr",
           "installed Merlin challenge field");
-  challenge.application.arguments = {"sha256.fiat-shamir.bls12-381/1"};
+  challenge.application.arguments = {"sha256.fiat-shamir.bls12-381/0"};
   refuse(resolveBinding(challenge.application, false),
          "binding-static-identity");
   protocol::OperationBinding observe{
       "observe",
       {"transcript.native.indexed.observe.data",
-       {"merlin3.bls12-381.fr64be/1", "vector:bls12-381.fr"},
+       {"merlin3.bls12-381.fr64be/0", "vector:bls12-381.fr"},
        ""}};
   auto observed = accept(resolveBinding(observe.application, false));
   require(observed.inputs[1].identity == "bls12-381.fr" &&
@@ -182,15 +182,15 @@ int main() {
   require(bool(malformed), "binding arity refused");
   require(toString(std::move(malformed)) == "binding-static-arity",
           "binding-static-arity");
-  const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/1";
+  const std::string spongefish = "spongefish0.7.4.keccak.bls12-381.fr64be/0";
   // Explicit policy preserves the selected provider for all installed suites,
   // including suites whose physical state is named host.resource/1.
   for (const auto &[suite, provider] :
-       {std::pair{"merlin3.bls12-381.fr64be/1", "arkworks"},
-        std::pair{"merlin3.ristretto255.scalar64le/1", "dalek"},
-        std::pair{"merlin3.koala-bear.ext8-binomial3.rejection31le/1",
+       {std::pair{"merlin3.bls12-381.fr64be/0", "arkworks"},
+        std::pair{"merlin3.ristretto255.scalar64le/0", "dalek"},
+        std::pair{"merlin3.koala-bear.ext8-binomial3.rejection31le/0",
                   "plonky3"},
-        std::pair{"spongefish0.7.4.keccak.bls12-381.fr64be/1", "spongefish"}}) {
+        std::pair{"spongefish0.7.4.keccak.bls12-381.fr64be/0", "spongefish"}}) {
     BindingApplication application{
         "transcript.native.indexed.challenge", {suite}, ""};
     const std::string implementation =

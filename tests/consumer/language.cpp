@@ -6,7 +6,7 @@
 #include "llvm/Support/raw_ostream.h"
 int main() {
   auto commitment =
-      zkc::language::domainType("Commitment", "multilinear.kzg.bls12-381/1");
+      zkc::language::domainType("Commitment", "multilinear.kzg.bls12-381/0");
   auto field = zkc::language::domainMember(commitment, "ValueField");
   if (!field) {
     llvm::errs() << llvm::toString(field.takeError());

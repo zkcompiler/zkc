@@ -142,24 +142,24 @@ int main() {
   });
   cases.run("unused opaque relations require immutable nominal inputs", [] {
     refuses(check(R"(module sample; struct Token:Drop {pub value:bool}
-      relation R(statement t:Token)=opaque("vendor.r/1","key","1");)"),
+      relation R(statement t:Token)=opaque("vendor.r/0","key","1");)"),
             "source.relation");
     take(check(R"(module sample; struct Token:Copy+Drop {pub value:bool}
-      relation R(statement t:Token)=opaque("vendor.r/1","key","1");)"));
+      relation R(statement t:Token)=opaque("vendor.r/0","key","1");)"));
   });
   cases.run("opaque predicates retain their explicit identity", [] {
     auto entry = close(clauses(
         "target claim=Equal(in.x,in.x) accept out.ok;",
         "relation Equal(statement x:bool,witness "
-        "y:bool)=opaque(\"vendor.predicate/1\",\"key\",\"revision\");"));
+        "y:bool)=opaque(\"vendor.predicate/0\",\"key\",\"revision\");"));
     const auto &relation = closedDeclaration(entry, "Equal");
     require(!relation.body &&
                 relation.relation->kind == RelationDefinition::Kind::Opaque &&
                 relation.relation->key == "key" &&
                 relation.relation->revision == "revision",
             "opaque predicate acquired a body or different identity");
-    for (StringRef kind : {"", "zkc.language.formula/1", "zkc.relation.r1cs/1",
-                           "zkc.relation.air/1"})
+    for (StringRef kind : {"", "zkc.language.formula/0", "zkc.relation.r1cs/0",
+                           "zkc.relation.air/0"})
       refuses(check(("module sample;relation Bad(statement x:bool)=opaque(\"" +
                      kind + "\",\"key\",\"r\");")
                         .str()),
@@ -265,24 +265,24 @@ int main() {
   });
   cases.run("opaque identities have fixed exact logical signatures", [] {
     refuses(check(R"(module sample;
-      relation Ext<N:nat>(statement x:[bool;N])=opaque("vendor.k/1","key","r");)"),
+      relation Ext<N:nat>(statement x:[bool;N])=opaque("vendor.k/0","key","r");)"),
             "source.relation");
     for (StringRef second : {"[bool;2]", "Other"}) {
       auto text =
           ("module sample;struct Nominal{pub x:bool}struct Other{pub x:bool}"
            "relation A(statement "
-           "x:Nominal)=opaque(\"vendor.k/1\",\"key\",\"r\");"
+           "x:Nominal)=opaque(\"vendor.k/0\",\"key\",\"r\");"
            "relation B(statement x:" +
-           second + ")=opaque(\"vendor.k/1\",\"key\",\"r\");")
+           second + ")=opaque(\"vendor.k/0\",\"key\",\"r\");")
               .str();
       refuses(check(text), "source.relation");
     }
     take(check(R"(module sample;
-      relation A(statement x:bool)=opaque("vendor.k/1","key","r");
-      relation B(statement renamed:bool)=opaque("vendor.k/1","key","r");)"));
+      relation A(statement x:bool)=opaque("vendor.k/0","key","r");
+      relation B(statement renamed:bool)=opaque("vendor.k/0","key","r");)"));
     refuses(check(R"(module sample;
-      relation A(statement x:bool)=opaque("vendor.k/1","key","r");
-      relation B(witness x:bool)=opaque("vendor.k/1","key","r");)"),
+      relation A(statement x:bool)=opaque("vendor.k/0","key","r");
+      relation B(witness x:bool)=opaque("vendor.k/0","key","r");)"),
             "source.relation");
     refuses(check(R"(module sample;
       relation A(statement x:bool)=opaque("zkc.invalid-relation","key","r");)"),

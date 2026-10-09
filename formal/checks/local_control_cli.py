@@ -41,7 +41,7 @@ def source():
             [['op', 'plus', 'add', [], ['acc', 'i'], ['sum']], ['yield', ['sum']]], ['total']]
     body = [['if', 'branch', 'choose', ['lo', 'hi', 'x'],
              [loop, ['yield', ['total']]], [['yield', ['x']]], ['out']], ['return', ['out']]]
-    return ['zkc.protocol/1', [['add', 'index.add', [], '']],
+    return ['zkc.protocol/0', [['add', 'index.add', [], '']],
             [['function', 'Sum', args, ['index'], body, ['Sum', []]]],
             [['protocol', 'Main', ['P'], [], [[n, 'P', t] for n, t in args], [['P', 'index']], [],
               [['local', 'invoke', 'P', 'Sum', [n for n, _ in args], ['out']], ['return', ['out']]]]],
@@ -52,9 +52,9 @@ def candidate(s, physical=False):
     args = copy.deepcopy(s[2][0][2])
     results = ['index']
     if physical:
-        args = [[n, t + '@native.' + t + '/1'] for n, t in args]
-        results = ['index@native.index/1']
-    return ['zkc.participants/1', [['add', 'index.add', [], 'native/index.add' if physical else '']],
+        args = [[n, t + '@native.' + t + '/0'] for n, t in args]
+        results = ['index@native.index/0']
+    return ['zkc.participants/0', [['add', 'index.add', [], 'native/index.add' if physical else '']],
             'physical' if physical else 'logical',
             [['function', 'Sum', args, results, copy.deepcopy(s[2][0][4]), ['Sum', []]]],
             [['participant', 'p', 'root', 'P', [], args, results,
@@ -63,7 +63,7 @@ def candidate(s, physical=False):
 
 
 def inputs(choose=True, lo=0, hi=4, x=0):
-    return ['zkc.reference-inputs/1', 'main', 'test', [['P', [
+    return ['zkc.reference-inputs/0', 'main', 'test', [['P', [
         ['choose', ['bool', str(choose).lower()]], ['lo', ['index', str(lo)]],
         ['hi', ['index', str(hi)]], ['x', ['index', str(x)]]]]], [], [], []]
 
@@ -74,7 +74,7 @@ def generic(s):
     body[0][4][0][7][0] = ['op', 'plus', 'index.add', [], [], ['acc', 'i'], ['sum']]
     declaration = ['generic_function', 'SumDef', [], [], g[2][0][2], ['index'], body]
     g[1], g[2] = [], []
-    return ['zkc.library/1', [declaration], [['configure', 'Sum', 'SumDef', [], []]], g]
+    return ['zkc.library/0', [declaration], [['configure', 'Sum', 'SumDef', [], []]], g]
 
 
 def helper_source(s):
@@ -102,7 +102,7 @@ def main():
                 check(len(requests) == (max(hi-lo, 0) if choose else 0), ('reached requests', requests))
                 if requests:
                     path = requests[0][1][1][4]
-                    helper = form[0] == 'zkc.protocol/1' and len(form[2]) > 1
+                    helper = form[0] == 'zkc.protocol/0' and len(form[2]) > 1
                     branch_site, loop_site = ('lc_6_branch', 'lc_4_loop') if helper else ('branch', 'loop')
                     check(path[-2:] == [['if', branch_site, 'then'], ['for', loop_site, str(lo)]], ('path', path))
         for physical in [False, True]:
@@ -121,7 +121,7 @@ def main():
                 result = invoke(root, INTERACTIVE, '--check', s, bad)
                 check(result[0] == 'refused', ('candidate mutation', change, result))
         c = candidate(s, True)
-        storage = ['zkc.local-resources/1', '67108864', []]
+        storage = ['zkc.local-resources/0', '67108864', []]
         # 4 root inputs, 4 local inputs, 3 branch inputs, 4*(index+carry+sum),
         # loop result, branch result, wrapper result and root return = 27 scalars.
         for params, expected, instructions, allocations in [((True, 0, 4, 0), 6, 14, 27),
@@ -151,23 +151,23 @@ def main():
                  [['op', 'element', 'get', [], ['xs', 'i'], ['item']],
                   ['op', 'plus', 'add', [], ['acc', 'item'], ['next']], ['yield', ['next']]], ['out']],
                 ['return', ['out']]]
-        vector_source = ['zkc.protocol/1', declarations,
+        vector_source = ['zkc.protocol/0', declarations,
                          [['function', 'Sum', [['xs', v]], [f], body, ['Sum', []]]],
                          [['protocol', 'Main', ['P'], [], [['xs', 'P', v]], [['P', f]], [],
                            [['local', 'invoke', 'P', 'Sum', ['xs'], ['out']], ['return', ['out']]]]],
                          s[4], s[5]]
-        vp, fp = v + '@arkworks.fr-vector/1', f + '@arkworks.fr/1'
+        vp, fp = v + '@arkworks.fr-vector/0', f + '@arkworks.fr/0'
         physical_declarations = [[name, contract, args,
                                   ('native/' if contract.startswith('index.') else 'arkworks/') + contract]
                                  for name, contract, args, _ in declarations]
-        vector_candidate = ['zkc.participants/1', physical_declarations, 'physical',
+        vector_candidate = ['zkc.participants/0', physical_declarations, 'physical',
                             [['function', 'Sum', [['xs', vp]], [fp], body, ['Sum', []]]],
                             [['participant', 'p', 'root', 'P', [], [['xs', vp]], [fp],
                               [['local', 'invoke', 'Sum', ['xs'], ['out']], ['return', ['out']]]]],
                             c[5]]
         for xs, expected, instructions, total in [(['1', '2', '3'], '6', '16', '10976'),
                                                 ([], '0', '7', '3584')]:
-            vector_inputs = ['zkc.reference-inputs/1', 'main', 'test', [['P', [['xs', [v, xs]]]]], [], [], []]
+            vector_inputs = ['zkc.reference-inputs/0', 'main', 'test', [['P', [['xs', [v, xs]]]]], [], [], []]
             result = invoke(root, INTERACTIVE, '--reference', vector_source, vector_inputs)
             check(result[3] == ['returned', [[f, expected]]], ('input-length vector sum', result))
             result = invoke(root, INTERACTIVE, '--physical-local-reference', vector_source,
@@ -201,16 +201,16 @@ def main():
         protocol[5] = [['V', 'bool']]
         protocol[7][-1] = ['return', ['accepted']]
         identity_source[4][0][5] = [['P', 'P'], ['V', 'V']]
-        descriptor = ['zkc.construction/1', 'main', 'P', 'V', [['accepted', [['V', 'accepted']]]],
-                      ['coins', []], '0', 'merlin3.bls12-381.fr64be/1', 'normalized']
+        descriptor = ['zkc.construction/0', 'main', 'P', 'V', [['accepted', [['V', 'accepted']]]],
+                      ['coins', []], '0', 'merlin3.bls12-381.fr64be/0', 'normalized']
         result = invoke(root, ARTIFACT, 'identity', identity_source, descriptor)
-        check(result[0] == 'zkc.identity-inspection/1', ('identity', result))
+        check(result[0] == 'zkc.identity-inspection/0', ('identity', result))
         normalized = result[3]
         changed = copy.deepcopy(identity_source)
         changed[2][0][4][0][4][0][7][0][2] = 'multiply'
         changed[1].append(['multiply', 'index.mul', [], ''])
         changed_identity = invoke(root, ARTIFACT, 'identity', changed, descriptor)
-        check(changed_identity[0] == 'zkc.identity-inspection/1' and changed_identity[3] != normalized,
+        check(changed_identity[0] == 'zkc.identity-inspection/0' and changed_identity[3] != normalized,
               ('nested operation identity mutation', changed_identity))
         renamed = copy.deepcopy(identity_source)
         loop = renamed[2][0][4][0][4][0]
@@ -218,7 +218,7 @@ def main():
         loop[5][0][0] = 'renamed_acc'
         loop[7][0][4] = ['renamed_acc', 'renamed_i']
         renamed_identity = invoke(root, ARTIFACT, 'identity', renamed, descriptor)
-        check(renamed_identity[0] == 'zkc.identity-inspection/1' and renamed_identity[3] == normalized,
+        check(renamed_identity[0] == 'zkc.identity-inspection/0' and renamed_identity[3] == normalized,
               ('local induction/carry alpha identity', renamed_identity))
     print(f'{checks} Lean local-control CLI assertions passed')
 

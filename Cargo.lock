@@ -2527,7 +2527,7 @@ dependencies = [
 
 [[package]]
 name = "zkc-arkworks"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -2543,7 +2543,7 @@ dependencies = [
 
 [[package]]
 name = "zkc-backends"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -2573,7 +2573,7 @@ dependencies = [
 
 [[package]]
 name = "zkc-runtime"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde_json",
  "zkc-test-support",
@@ -2588,7 +2588,7 @@ dependencies = [
 
 [[package]]
 name = "zkc-tools"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",

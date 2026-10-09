@@ -16,7 +16,7 @@ with case('explicit source path retains its original and interface'):
     commands.run([compiler, 'language-check', *options])
     original = commands.run([compiler, 'language-emit', *options])
     interface = json.loads(commands.run([compiler, 'language-interface', *options]))
-    assert interface['format'] == 'zkc.language-interface/7'
+    assert interface['format'] == 'zkc.language-interface/0'
     assert interface['entry'] == 'transfer::Demo'
     assert interface['protocol'] == 's8_transfer8_Transfer'
     protocol = next(p for p in interface['protocols'] if p['symbol'] == interface['protocol'])
@@ -55,7 +55,7 @@ with case('Entry packages retain exact source, interface and artifact bytes'):
     package_bytes = commands.run([compiler, 'language-package', *options])
     package = json.loads(package_bytes)
     assert set(package) == {'format', 'original', 'interface', 'artifact', 'options'}
-    assert package['format'] == 'zkc.entry/1'
+    assert package['format'] == 'zkc.entry/0'
     assert package['original'] == commands.run([compiler, 'language-emit', *options])
     assert json.loads(package['interface']) == interface
     assert package['artifact'] == commands.run([compiler, 'language-bundle', *options]).removesuffix('\n')
@@ -167,7 +167,7 @@ with case('managed aliases retain ordered queries and owner guards'):
     schema = json.loads(commands.run([compiler, 'language-interface', *args]))
     schema = next(p for p in schema['protocols'] if p['symbol'] == schema['protocol'])
     assert schema['services'] == [{'name': 'coins', 'owner': 'V',
-                                   'contract': 'random.bls12-381.fr/1', 'native': 1}]
+                                   'contract': 'random.bls12-381.fr/0', 'native': 1}]
     (OUT / 'host-services.entry').write_text(commands.run([compiler, 'language-package', *args]))
     for optimized in (0, 1):
         flags = [] if optimized else ['--no-simplify']
@@ -250,12 +250,12 @@ entry Demo=Identity;
     assert depth == 32
     (OUT / 'deep-schema.entry').write_text(package)
 
-for suite, identity in enumerate(('merlin3.bls12-381.fr64be/1',
-                                   'spongefish0.7.4.keccak.bls12-381.fr64be/1')):
+for suite, identity in enumerate(('merlin3.bls12-381.fr64be/0',
+                                   'spongefish0.7.4.keccak.bls12-381.fr64be/0')):
     with case(f'proof Entry compiles through explicit construction: {identity}'):
         source = OUT / f'proof-{suite}.zkc'
         source.write_text((FIXTURES / 'schnorr.zkc').read_text().replace(
-            'merlin3.bls12-381.fr64be/1', identity))
+            'merlin3.bls12-381.fr64be/0', identity))
         args = ['--source-format=zkc', '--entry=sample::Demo', f'--module=sample={source}']
         schema = json.loads(commands.run([compiler, 'language-interface', *args]))
         assert schema['job']['construction']['suite'] == identity
@@ -264,7 +264,7 @@ for suite, identity in enumerate(('merlin3.bls12-381.fr64be/1',
             for released in (0, 1):
                 flags = ([] if simplified else ['--no-simplify']) + (['--release-storage'] if released else [])
                 deployment = commands.run([compiler, 'language-bundle', *args, *flags])
-                assert json.loads(deployment)[0] == 'zkc.native-proof/5'
+                assert json.loads(deployment)[0] == 'zkc.native-proof/0'
                 (OUT / f'source-proof-{suite}-{simplified}-{released}.json').write_text(deployment)
                 package = commands.run([compiler, 'language-package', *args, *flags])
                 assert json.loads(package)['artifact'] == deployment.removesuffix('\n')
@@ -290,7 +290,7 @@ for entry in ('Derived', 'Plain', 'Once', 'Run'):
     with case(f'named attempt selection and operational budgets: {entry}'):
         source = OUT / f'attempt-{entry}.zkc'
         source.write_text((FIXTURES / 'attempts.zkc').read_text())
-        suites = ('merlin3.bls12-381.fr64be/1', 'spongefish0.7.4.keccak.bls12-381.fr64be/1') if entry == 'Derived' else ('merlin3.bls12-381.fr64be/1',)
+        suites = ('merlin3.bls12-381.fr64be/0', 'spongefish0.7.4.keccak.bls12-381.fr64be/0') if entry == 'Derived' else ('merlin3.bls12-381.fr64be/0',)
         for suite, identity in enumerate(suites):
             source.write_text((FIXTURES / 'attempts.zkc').read_text().replace(suites[0], identity))
             args = ['--source-format=zkc', f'--entry=sample::{entry}', f'--module=sample={source}']

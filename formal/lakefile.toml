@@ -1,5 +1,5 @@
 name = "zkc"
-version = "0.1.0"
+version = "0.0.0"
 # Every library and executable declared below. What a build of this package
 # means is stated here rather than in a list the justfile and the workflow
 # each keep their own copy of.

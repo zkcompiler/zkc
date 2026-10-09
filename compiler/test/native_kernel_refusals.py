@@ -31,7 +31,7 @@ vector = f'tensor<?x{field}>'
 gather = fixture('vector.gather', 'bls12-381.fr', 'algebra.exec.vector_gather', [vector], vector, ['0', '3'])
 commands.verified(gather)
 physical = commands.verified(gather, None, '--zkc-participant-pipeline')
-assert json.loads(commands.source('protocol-export', physical))[0] == 'zkc.program/2'
+assert json.loads(commands.source('protocol-export', physical))[0] == 'zkc.program/0'
 reject(gather.replace('["0", "3"]', '["0", "01"]'), 'noncanonical-natural')
 reject(gather.replace('["0", "3"]', '["-1"]'), 'expected-natural')
 reject(gather.replace('["0", "3"]', '["18446744073709551616"]'), 'interactive-kernel-parameters')

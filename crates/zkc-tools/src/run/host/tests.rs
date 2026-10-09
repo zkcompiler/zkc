@@ -8,7 +8,7 @@ fn fixture(logical: &str) -> (Vec<u8>, Json) {
         .unwrap()
         .spelling();
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [
@@ -35,17 +35,17 @@ fn fixture(logical: &str) -> (Vec<u8>, Json) {
         ],
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    let raw = json!({"format":"zkc.run/1","candidate":carrier.to_string(),"entry":"main","roles":["Alice","Bob"],
+    let raw = json!({"format":"zkc.run/0","candidate":carrier.to_string(),"entry":"main","roles":["Alice","Bob"],
         "steps":[{"role":0,"instruction":0,"anchor":null},{"role":1,"instruction":0,"anchor":null}]}).to_string().into_bytes();
     let spec = if logical == "bool" {
-        json!(["wire", "5a4b4356010500"])
+        json!(["wire", "5a4b4356000500"])
     } else {
         json!([logical.split(':').next().unwrap(), "2"])
     };
     (
         raw,
         json!([
-            "zkc.bundle-inputs/1",
+            "zkc.bundle-inputs/0",
             "session",
             [
                 ["Alice", [["0", ty, spec]], []],
@@ -76,7 +76,7 @@ fn false_output_and_bounded_work_keep_complete_reports() {
         report.execution.as_ref().unwrap().outcome,
         Outcome::Completed
     );
-    assert_eq!(report.json()["roles"][0]["outputs"][0][2], "5a4b4356010500");
+    assert_eq!(report.json()["roles"][0]["outputs"][0][2], "5a4b4356000500");
     assert!(report.cleanup_errors.is_empty());
     let mut limits = HostLimits::default();
     limits.capacity.work.instructions = 0;
@@ -159,7 +159,7 @@ fn later_input_failure_and_shared_capacity_refuse_before_issuance() {
 }
 #[test]
 fn transcript_roots_and_extra_authority_are_refused() {
-    let (raw, input) = fixture("transcript:merlin3.bls12-381.fr64be/1");
+    let (raw, input) = fixture("transcript:merlin3.bls12-381.fr64be/0");
     let host = host(&raw, HostLimits::default());
     assert!(
         matches!(host.prepare(input.to_string().as_bytes()),Err(code) if code=="bundle-transcript-input-unsupported")
@@ -176,7 +176,7 @@ fn transcript_roots_and_extra_authority_are_refused() {
         .is_err()
     );
     assert!(
-        SetupAuthority::parse(br#"["zkc.bundle-setups/1",[],[["Alice","0","missing"]]]"#).is_ok()
+        SetupAuthority::parse(br#"["zkc.bundle-setups/0",[],[["Alice","0","missing"]]]"#).is_ok()
     );
     let authority = SetupAuthority {
         inputs: BTreeMap::from([(("Alice".into(), 0), "missing".into())]),
@@ -205,8 +205,8 @@ fn key_files_are_authenticated_and_captured_before_execution() {
     )
     .unwrap();
     for logical in [
-        "prover_key:multilinear.kzg.bls12-381/1",
-        "verifier_key:multilinear.kzg.bls12-381/1",
+        "prover_key:multilinear.kzg.bls12-381/0",
+        "verifier_key:multilinear.kzg.bls12-381/0",
     ] {
         let (raw, mut input) = fixture(logical);
         input[3] = json!([[
@@ -271,14 +271,14 @@ fn partial_managed_service_issuance_retires_unleased_roots() {
     let mut outer: Json = serde_json::from_slice(&raw).unwrap();
     let mut candidate: Json = serde_json::from_str(outer["candidate"].as_str().unwrap()).unwrap();
     for role in candidate[3].as_array_mut().unwrap() {
-        role[7] = json!([["coins", "random.bls12-381.fr/1", "0"]]);
+        role[7] = json!([["coins", "random.bls12-381.fr/0", "0"]]);
     }
     outer["candidate"] = json!(candidate.to_string());
     let raw = outer.to_string();
     let host = host(raw.as_bytes(), HostLimits::default());
     let (_, mut input) = fixture("bool");
     for role in input[2].as_array_mut().unwrap() {
-        role[2] = json!([["0", "random.bls12-381.fr/1", "2"]]);
+        role[2] = json!([["0", "random.bls12-381.fr/0", "2"]]);
     }
     let mut issued = 0;
     let report = host
@@ -301,9 +301,9 @@ fn partial_managed_service_issuance_retires_unleased_roots() {
 
 #[test]
 fn returned_unit_is_result_custody_not_a_cleanup_failure() {
-    let ty = "resource_unit:Slot.A@logical.resource_unit/1";
+    let ty = "resource_unit:Slot.A@logical.resource_unit/0";
     let candidate = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [[
             "create",
             "resource_unit.create",
@@ -366,9 +366,9 @@ fn returned_unit_is_result_custody_not_a_cleanup_failure() {
             steps.push(json!({"role":1,"instruction":1,"anchor":null}));
             inputs.push(json!(["Bob", [], []]));
         }
-        let raw=json!({"format":"zkc.run/1","candidate":candidate.to_string(),"entry":"main","roles":roles,"steps":steps}).to_string();
+        let raw=json!({"format":"zkc.run/0","candidate":candidate.to_string(),"entry":"main","roles":roles,"steps":steps}).to_string();
         let host = host(raw.as_bytes(), HostLimits::default());
-        let input = json!(["zkc.bundle-inputs/1", "session", inputs, []]);
+        let input = json!(["zkc.bundle-inputs/0", "session", inputs, []]);
         let mut report = host
             .prepare(input.to_string().as_bytes())
             .unwrap()
@@ -450,7 +450,7 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
         .unwrap()
         .spelling();
     let candidate = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [
             [
                 "init",
@@ -492,9 +492,9 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
         ]],
         [["entry", "main", [["Alice", "a"]]]]
     ]);
-    let raw = json!({"format":"zkc.run/1", "candidate":candidate.to_string(), "entry":"main", "roles":["Alice"],
+    let raw = json!({"format":"zkc.run/0", "candidate":candidate.to_string(), "entry":"main", "roles":["Alice"],
         "steps":[{"role":0,"instruction":0,"anchor":null},{"role":0,"instruction":1,"anchor":null}]}).to_string();
-    let input = json!(["zkc.bundle-inputs/1", "session", [["Alice", [], []]], []]).to_string();
+    let input = json!(["zkc.bundle-inputs/0", "session", [["Alice", [], []]], []]).to_string();
     for ceiling in [0, NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT] {
         let host = host(
             raw.as_bytes(),
@@ -536,13 +536,13 @@ fn capability_reports_use_input_positions_with_interleaved_data() {
         role[4]
             .as_array_mut()
             .unwrap()
-            .insert(0, json!(["unused", "bool@native.bool/1"]));
+            .insert(0, json!(["unused", "bool@native.bool/0"]));
     }
     for role in input[2].as_array_mut().unwrap() {
         role[1][0][0] = json!("1");
         role[1].as_array_mut().unwrap().insert(
             0,
-            json!(["0", "bool@native.bool/1", ["wire", "5a4b4356010500"]]),
+            json!(["0", "bool@native.bool/0", ["wire", "5a4b4356000500"]]),
         );
     }
     bundle["candidate"] = json!(candidate.to_string());
@@ -623,7 +623,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
     .unwrap();
     assert!(registry.get(keys.verifier_key().metadata()).is_some());
     let shared = imports.import(&bytes, pin, "canonical").unwrap();
-    let (raw, _) = fixture("verifier_key:multilinear.kzg.bls12-381/1");
+    let (raw, _) = fixture("verifier_key:multilinear.kzg.bls12-381/0");
     let request = RunInputs {
         session: "setup_reuse".into(),
         roles: ["Alice", "Bob"]

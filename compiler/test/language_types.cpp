@@ -794,8 +794,8 @@ void bounds() {
 }
 void staticDomains() {
   const std::string domains = prefix + R"(
-    domain Kzg=commitment("multilinear.kzg.bls12-381/1");
-    domain Transcript=transcript("merlin3.bls12-381.fr64be/1");
+    domain Kzg=commitment("multilinear.kzg.bls12-381/0");
+    domain Transcript=transcript("merlin3.bls12-381.fr64be/0");
     domain Bn=field("bn254.fr");
     domain Ext=field("koala-bear.ext8-binomial3");
     domain Base=field("koala-bear");
@@ -855,7 +855,7 @@ void staticDomains() {
     refuses(domains + body + unit, "source.permission");
   refuses(prefix + "domain Bad=commitment(\"unknown\");" + unit,
           "source.domain");
-  refuses(prefix + "domain Bad=transcript(\"multilinear.kzg.bls12-381/1\");" +
+  refuses(prefix + "domain Bad=transcript(\"multilinear.kzg.bls12-381/0\");" +
               unit,
           "source.domain");
   refuses(domains + "type Bad=builtin(\"transcript\",Transcript);" + unit,
@@ -908,7 +908,7 @@ void staticDomains() {
         "\"); type Tagged<C:Codec>=bool; fn "
         "pass(x:Tagged<Encoding>)->bool{return x;}" +
         unit);
-  auto kzg = domainType("Commitment", "multilinear.kzg.bls12-381/1");
+  auto kzg = domainType("Commitment", "multilinear.kzg.bls12-381/0");
   auto fr = domainType("Field", "bls12-381.fr");
   require(must(domainMember(kzg, "ValueField")) == fr,
           "associated field did not use the canonical scalar kind");

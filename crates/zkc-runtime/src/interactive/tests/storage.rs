@@ -195,7 +195,7 @@ fn program(release: bool, repeat: Option<u64>) -> Json {
     one(
         json!([["function", "storage", [], [], body]]),
         if repeat.is_some() {
-            json!([["count", "index@native.index/1"]])
+            json!([["count", "index@native.index/0"]])
         } else {
             json!([])
         },

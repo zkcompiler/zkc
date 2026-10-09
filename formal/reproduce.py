@@ -183,7 +183,7 @@ def run(args):
     passed = (all(run['status'] == 'pass' for run in runs.values()) and not changed
               and (not args.with_arklib or 'arklib' in runs) and clients['status'] == 'pass')
     record = {
-        'format': 'zkc.formal-reproduction.v3', 'status': 'pass' if passed else 'fail',
+        'format': 'zkc.formal-reproduction.v0', 'status': 'pass' if passed else 'fail',
         'with_arklib': args.with_arklib, 'source_drift': changed,
         'elapsed_seconds': round(time.monotonic() - start, 2),
         'lake_executable': lake,
@@ -215,7 +215,7 @@ if __name__ == '__main__':
     try:
         run(args)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        failure = {'format': 'zkc.formal-reproduction-failure.v2', 'status': 'fail',
+        failure = {'format': 'zkc.formal-reproduction-failure.v0', 'status': 'fail',
                    'stage': 'preparation-or-validation', 'error': str(error)}
         if not existed and args.output.is_dir():
             (args.output / 'failure.json').write_text(json.dumps(failure, indent=2) + '\n')

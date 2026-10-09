@@ -18,11 +18,11 @@ def matrix_wire(tag, width, rows, columns, entries):
     payload = b''.join(n.to_bytes(4, 'little') for n in (rows, columns, len(entries)))
     payload += b''.join(r.to_bytes(4, 'little') + c.to_bytes(4, 'little')
                         + value.to_bytes(width, 'little') for r, c, value in entries)
-    return (b'ZKCV\x01' + bytes([tag]) + payload).hex()
+    return (b'ZKCV\x00' + bytes([tag]) + payload).hex()
 
 
 def vector_wire(tag, width, values):
-    return (b'ZKCV\x01' + bytes([tag]) + len(values).to_bytes(4, 'little')
+    return (b'ZKCV\x00' + bytes([tag]) + len(values).to_bytes(4, 'little')
             + b''.join(x.to_bytes(width, 'little') for x in values)).hex()
 
 
@@ -68,7 +68,7 @@ entry Demo=Run;
         mv = [sum(dense[r][c] * x[c] for c in range(columns)) % modulus for r in range(rows)]
         tv = [sum(y[r] * dense[r][c] for r in range(rows)) % modulus for c in range(columns)]
         bi = sum(y[r] * dense[r][c] * x[c] for r in range(rows) for c in range(columns)) % modulus
-        scalar = (b'ZKCV\x01' + bytes([scalar_tag]) + bi.to_bytes(width, 'little')).hex()
+        scalar = (b'ZKCV\x00' + bytes([scalar_tag]) + bi.to_bytes(width, 'little')).hex()
         assert entry.run(name, inputs)['result'] == [vector_wire(vector_tag, width, mv),
             vector_wire(vector_tag, width, tv), scalar, (rows, columns) == (2, 3)]
 

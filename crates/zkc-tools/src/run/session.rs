@@ -5,7 +5,7 @@ use zkc_runtime::interactive::{
     Value, ValueBudget, WorkBudget,
 };
 
-/// The closed native wire profile selected by `zkc.run/1` bundle admission.
+/// The closed native wire profile selected by `zkc.run/0` bundle admission.
 /// Implementations preserve its exact physical identities and canonical framing;
 /// this trait is not a codec extension point. Invalid is a receive outcome;
 /// Limit and Backend are failures before accepting the receive completion.
@@ -860,7 +860,7 @@ mod contract_tests {
     }
     fn loop_bundle() -> Bundle {
         let candidate = json!([
-            "zkc.program/2",
+            "zkc.program/0",
             [],
             [],
             [[
@@ -868,7 +868,7 @@ mod contract_tests {
                 "a",
                 "root",
                 "Alice",
-                [["n", "index@native.index/1"]],
+                [["n", "index@native.index/0"]],
                 [],
                 [
                     [
@@ -886,7 +886,7 @@ mod contract_tests {
             ]],
             [["entry", "main", [["Alice", "a"]]]]
         ]);
-        let raw = json!({"format":"zkc.run/1", "candidate":candidate.to_string(),
+        let raw = json!({"format":"zkc.run/0", "candidate":candidate.to_string(),
             "entry":"main", "roles":["Alice"], "steps":[
                 {"loop":[{"role":0,"instruction":0,"anchor":0}], "body":[],
                  "yield":[{"role":0,"instruction":1,"anchor":null}]},

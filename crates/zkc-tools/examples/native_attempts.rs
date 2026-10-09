@@ -75,7 +75,7 @@ fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
         .map(|p| json!([p[0], "4"]))
         .collect();
     json!([
-        "zkc.native-proof-inputs/1",
+        "zkc.native-proof-inputs/0",
         public,
         data,
         "",
@@ -631,7 +631,7 @@ fn empty_attempts(directory: &Path) {
     .unwrap();
     let input = |complete| {
         json!([
-            "zkc.native-proof-inputs/1",
+            "zkc.native-proof-inputs/0",
             [],
             [[
                 "0",
@@ -659,7 +659,7 @@ fn empty_attempts(directory: &Path) {
     assert!(complete.attempts[0].transcript.is_none());
     let proof = complete.outcome.unwrap();
     assert_eq!(proof.len(), 40);
-    let validator = json!(["zkc.native-proof-inputs/1", [], [], "", [], "0"]);
+    let validator = json!(["zkc.native-proof-inputs/0", [], [], "", [], "0"]);
     assert!(
         deployment
             .execute(&validator, Some(&proof))

@@ -16,9 +16,9 @@ constexpr StringLiteral original = R"mlir(
 module {
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
     "protocol.func"() <{sym_name = "Transfer", roles = ["P", "V"],
-      function_type = (i1, i1, !protocol.service_ref<"random.bls12-381.fr/1">) -> i1,
+      function_type = (i1, i1, !protocol.service_ref<"random.bls12-381.fr/0">) -> i1,
       input_roles = [["P"], ["P"], ["V"]], output_roles = [["V"]]}> ({
-    ^bb0(%a: i1, %b: i1, %rng: !protocol.service_ref<"random.bls12-381.fr/1">):
+    ^bb0(%a: i1, %b: i1, %rng: !protocol.service_ref<"random.bls12-381.fr/0">):
       %c = "arith.andi"(%a, %b) : (i1, i1) -> i1
       %d = "protocol.exchange"(%c) <{sender = "P", receiver = "V", site = "message"}> : (i1) -> i1
       "protocol.return"(%d) : (i1) -> ()
@@ -56,7 +56,7 @@ json::Value document() {
   // Hand-authored interface and IR: no source checker, layout builder or
   // emitter.
   json::Object root{
-      {"format", "zkc.language-interface/7"},
+      {"format", "zkc.language-interface/0"},
       {"setups", json::Array{}},
       {"capture", std::string(64, '0')},
       {"original", toHex(SHA256::hash(arrayRefFromStringRef(original)), true)},
@@ -79,7 +79,7 @@ json::Value document() {
                                            {"schema", scalar()}}}},
       {"services",
        json::Array{json::Object{{"name", "coins"},
-                                {"contract", "random.bls12-381.fr/1"},
+                                {"contract", "random.bls12-381.fr/0"},
                                 {"owner", "V"},
                                 {"native", 2}}}}};
   json::Object protocol{{"symbol", "Transfer"}, {"clauses", json::Array{}}};
@@ -175,7 +175,7 @@ int main() {
       "hand-authored clauses bind product fields and actual participants", [] {
         auto native = original.str();
         native.insert(native.find("    \"protocol.func\""), R"(
-      "relation.declare"() <{sym_name="Claim", kind="vendor.claim/1", key="key", revision="1",
+      "relation.declare"() <{sym_name="Claim", kind="vendor.claim/0", key="key", revision="0",
         signature=(i1,i1)->i1, purposes=["statement","witness"]}> : ()->()
     )");
         auto value = document();
@@ -436,7 +436,7 @@ entry Demo=Run;)zkc");
         if (field == "owner")
           s[field] = "P";
         if (field == "contract")
-          s[field] = "random.bn254.fr/1";
+          s[field] = "random.bn254.fr/0";
         if (field == "native")
           s[field] = 1;
         if (field == "name")
@@ -703,7 +703,7 @@ entry Demo=Run;)zkc");
   cases.run(
       "setup metadata binds source choices and derived product slices", [] {
         auto original = compile(R"(module sample;
-      domain C=commitment("multilinear.kzg.bls12-381/1");
+      domain C=commitment("multilinear.kzg.bls12-381/0");
       type PK=builtin("prover_key",C);type VK=builtin("verifier_key",C);
       type Commit=builtin("commitment",C);type Proof=builtin("proof",C);
       struct Statement{pub left:Commit,pub right:Proof,pub ordinary:bool}
@@ -739,8 +739,8 @@ entry Demo=Run;)zkc");
     for (StringRef head : {"commitment", "proof", "commitments", "prover_key",
                            "verifier_key", "opening_state", "opening_states"}) {
       bool rows = head == "commitments" || head == "opening_states";
-      StringRef domain = rows ? "rows.merkle-keccak256.koala-bear/1"
-                              : "multilinear.kzg.bls12-381/1";
+      StringRef domain = rows ? "rows.merkle-keccak256.koala-bear/0"
+                              : "multilinear.kzg.bls12-381/0";
       bool wire = head == "commitment" || head == "proof";
       bool shared = wire || head == "commitments";
       auto type = ((rows ? "!oracle.object<\"" : "!pcs.object<\"") + domain +

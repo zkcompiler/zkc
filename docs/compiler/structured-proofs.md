@@ -59,7 +59,7 @@ Copyability alone does not grant total mathematical operations, a wire codec or
 cross-role availability. Every alternative is checked, including inactive ones.
 No key or live resource can hide inside a message. Existing common generic
 contracts are constructor applications; the construction observer uses
-an explicit complete-Type input term. The `zkc.contract-declarations/3` inventory
+an explicit complete-Type input term. The `zkc.contract-declarations/0` inventory
 records that port as `{"term": index}`. The generated executable catalog
 combines common and non-generic declarations without widening common admission.
 

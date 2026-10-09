@@ -2,7 +2,7 @@
 
 zkc uses one compilation and execution model. `.zkc` Language emits mathematical
 MLIR, which passes through `protocol`, `participant`, `exec` and `physical`
-profiles and is exported as `zkc.program/2`. Entry packages, proof deployments
+profiles and is exported as `zkc.program/0`. Entry packages, proof deployments
 and joint bundles execute through the same Rust Runner and installed kernels.
 
 ## System map
@@ -14,7 +14,7 @@ explicit .zkc modules + Assets                 direct mathematical MLIR
                                                          ▼
                   protocol → participant → exec → physical
                                                          │
-                                                   zkc.program/2
+                                                   zkc.program/0
                                                          │
                           authenticated Entry / proof / joint Host
                                                          │
@@ -40,7 +40,7 @@ relation declarations and the bounded native R1CS adapter.
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
 | `exec` | Demand-driven mathematical realization and explicit executable local calls |
 | `physical` | Admitted representations, installed kernels, conversions and storage handling |
-| `zkc.program/2` | Closed executable participant description admitted by C++ export and Rust loading |
+| `zkc.program/0` | Closed executable participant description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
 The [pipeline](compiler/protocol-pipeline.md) explains the transitions. Each
@@ -103,7 +103,7 @@ Lean models define complete execution, observations, conditional refinement and
 selected protocol experiments. Their direct plans, finite tables and source
 representations remain independent research subjects. They are not stages of
 the native compiler, and their executable correspondence results do not validate
-`zkc.program/2`. [Assurance](assurance.md) owns that distinction.
+`zkc.program/0`. [Assurance](assurance.md) owns that distinction.
 
 Extensions add ordinary mathematical operations, transparent local algorithms,
 protocol libraries or backend kernels at the appropriate owner. A whole-protocol

@@ -44,7 +44,7 @@ operations are refused at export.
 
 ## Expansion and accounting
 
-The policy identifier is `canonical-expanded-locals/1`. It defines execution of
+The policy identifier is `canonical-expanded-locals/0`. It defines execution of
 this subset by ordered, capture-free expansion before projection. Each nested
 call substitutes its actual argument values, retains every primitive in source
 order, and binds its returned aliases into the caller. A return adds no primitive

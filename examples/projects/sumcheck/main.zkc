@@ -7,7 +7,7 @@ entry Proof = Sumcheck<Fr, 2> {
   verifier V;
   public { values, claim, rounds };
   accept accepted;
-  construction fiat_shamir("merlin3.bls12-381.fr64be/1") {
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0") {
     derive challenges;
   }
 }

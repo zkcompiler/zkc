@@ -3,15 +3,15 @@
 
 int main() {
   using namespace zkc::protocol;
-  if (randomServiceField("random.bn254.fr/1") != "bn254.fr" ||
-      !randomServiceField("random.koala-bear/1").empty() ||
+  if (randomServiceField("random.bn254.fr/0") != "bn254.fr" ||
+      !randomServiceField("random.koala-bear/0").empty() ||
       nativeChallengeField(
-          "merlin3.koala-bear.ext8-binomial3.rejection31le/1") !=
+          "merlin3.koala-bear.ext8-binomial3.rejection31le/0") !=
           "koala-bear.ext8-binomial3")
     return 2;
   const BindingApplication mixed{
       "transcript.native.indexed.observe.data",
-      {"merlin3.koala-bear.ext8-binomial3.rejection31le/1", "group:bn254.g2"},
+      {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "group:bn254.g2"},
       "plonky3/transcript.native.indexed.observe.data"};
   auto observed = resolveBinding(mixed, true);
   if (!observed) {

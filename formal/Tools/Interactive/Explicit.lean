@@ -60,7 +60,7 @@ def Module.names (module : Module) : List Name :=
     module.source.entries.map Prod.fst
 
 def common (json : Json) : Result Module := do
-  let [.str "zkc.protocol/1", bindings, functions, protocols, instances, entries] ← Decode.array json
+  let [.str "zkc.protocol/0", bindings, functions, protocols, instances, entries] ← Decode.array json
     | throw "binding-common-source"
   let bindings ← (← Decode.array bindings limits.definitions).mapM (declaration false)
   let functions ← (← Decode.array functions limits.definitions).mapM (fun j => function false j true)
@@ -82,7 +82,7 @@ structure CandidateLocals where
 
 /-- Local decoding alone does not admit participant control or source meaning. -/
 def candidateLocals (json : Json) : Result CandidateLocals := do
-  let [.str "zkc.participants/1", bindings, stage, functions, participants, entries] ← Decode.array json
+  let [.str "zkc.participants/0", bindings, stage, functions, participants, entries] ← Decode.array json
     | throw "binding-candidate"
   let stage ← Decode.string stage
   ensure (stage == "logical" || stage == "physical") "unknown-stage"

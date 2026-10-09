@@ -95,7 +95,7 @@ private def intern : Nat → Json → StateT Packing (Except String) Nat
 
 private def packJson (tree : Json) : Except String Json := do
   let (_, state) ← (intern 64 tree).run {}
-  let result := Json.arr #[.str "zkc.variant/1", .arr state.nodes]
+  let result := Json.arr #[.str "zkc.variant/0", .arr state.nodes]
   require (result.compress.utf8ByteSize ≤ (256 * 1024 - 8) / 2)
   return result
 
@@ -108,7 +108,7 @@ private def unpack (text : String) : Except String Json := do
   let some decoded := String.fromUTF8? bytes | throw "variant-descriptor"
   preflight decoded
   let json ← (Json.parse decoded).mapError fun _ => "variant-descriptor"
-  let .arr #[.str "zkc.variant/1", .arr nodes] := json | throw "variant-descriptor"
+  let .arr #[.str "zkc.variant/0", .arr nodes] := json | throw "variant-descriptor"
   require (!nodes.isEmpty && nodes.size ≤ 16384)
   let mut values : Array Json := #[]
   let mut sizes : Array Nat := #[]

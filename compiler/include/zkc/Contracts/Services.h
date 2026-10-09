@@ -9,10 +9,10 @@ struct RandomService {
   llvm::StringLiteral contract, field;
 };
 inline constexpr RandomService randomServices[] = {
-    {"random.bls12-381.fr/1", "bls12-381.fr"},
-    {"random.bn254.fr/1", "bn254.fr"},
-    {"random.ristretto255.scalar/1", "ristretto255.scalar"},
-    {"random.koala-bear.ext8-binomial3/1", "koala-bear.ext8-binomial3"}};
+    {"random.bls12-381.fr/0", "bls12-381.fr"},
+    {"random.bn254.fr/0", "bn254.fr"},
+    {"random.ristretto255.scalar/0", "ristretto255.scalar"},
+    {"random.koala-bear.ext8-binomial3/0", "koala-bear.ext8-binomial3"}};
 inline llvm::StringRef randomServiceField(llvm::StringRef contract) {
   for (const auto &service : randomServices)
     if (service.contract == contract)
@@ -27,10 +27,10 @@ inline llvm::StringRef randomServiceContract(llvm::StringRef field) {
 }
 inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {
   // Native proof support is an explicit policy; the catalog owns the field.
-  if (suite == "merlin3.bls12-381.fr64be/1" ||
-      suite == "spongefish0.7.4.keccak.bls12-381.fr64be/1" ||
-      suite == "merlin3.ristretto255.scalar64le/1" ||
-      suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/1")
+  if (suite == "merlin3.bls12-381.fr64be/0" ||
+      suite == "spongefish0.7.4.keccak.bls12-381.fr64be/0" ||
+      suite == "merlin3.ristretto255.scalar64le/0" ||
+      suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0")
     return installedDomains().associatedIdentity(suite, "ChallengeField");
   return {};
 }

@@ -17,8 +17,8 @@ example : (environmentSignature (.explicit [⟨"draw", "transcript.challenge", [
 
 -- Pin complete domain separation, independently of the external replay adapter.
 private def expectedRequest : Json :=
-    .arr #[.str "zkc.transcript-request/3", .str "merlin3.bls12-381.fr64be/1",
-      .str "7a6b632e61727469666163742f31", .arr #[
+    .arr #[.str "zkc.transcript-request/0", .str "merlin3.bls12-381.fr64be/0",
+      .str "7a6b632e61727469666163742f30", .arr #[
         .arr #[.str "append", .str "62696e64696e67", .str "01"],
         .arr #[.str "append", .str "6f726967696e", .str "02"],
         .arr #[.str "append", .str "76616c7565", .str "03"],

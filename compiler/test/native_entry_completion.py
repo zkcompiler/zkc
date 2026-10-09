@@ -103,12 +103,12 @@ with case("exit operands preserve source correspondence"):
     policy.write_text(
         json.dumps(
             [
-                "zkc.native-proof-policy/5",
+                "zkc.native-proof-policy/0",
                 "main",
                 "P",
                 "V",
                 "0",
-                "merlin3.bls12-381.fr64be/1",
+                "merlin3.bls12-381.fr64be/0",
                 "3",
                 ["0", "1"],
                 [["draw", "challenge"]],

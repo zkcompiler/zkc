@@ -43,10 +43,10 @@ struct Records {
                                     {"test.codec2", "table", "test.f2"},
                                     {"test.bool", "bool", ""}};
   std::vector<DomainRepresentation> reps{
-      {"test.lsb/1", "table", "test.f1", true, "lsb"},
-      {"test.msb/1", "table", "test.f1", false, "msb"},
-      {"test.other/1", "table", "test.f2", false, "lsb"},
-      {"test.bool/1", "bool", "", true, ""}};
+      {"test.lsb/0", "table", "test.f1", true, "lsb"},
+      {"test.msb/0", "table", "test.f1", false, "msb"},
+      {"test.other/0", "table", "test.f2", false, "lsb"},
+      {"test.bool/0", "bool", "", true, ""}};
   std::vector<DefaultProvider> providers{{"test.f1", "custom"}};
   Expected<DomainCatalog> build() const {
     return DomainCatalog::create(domains, logicalTypes, codecs, reps,
@@ -204,7 +204,7 @@ void closedCatalogs() {
               !catalog.defaultCodec("bool", "test.f1"),
           "codec defaults use both kind and domain");
   require(catalog.defaultRepresentation("table", "test.f1")->identity ==
-              "test.lsb/1",
+              "test.lsb/0",
           "explicitly installed default");
   require(
       !catalog.defaultRepresentation("table", "test.f2") &&
@@ -213,9 +213,9 @@ void closedCatalogs() {
           !catalog.defaultRepresentation("unknown", "test.f1") &&
           !catalog.defaultRepresentation("bool", "test.f1"),
       "neither a legal representation nor the kind alone implies a default");
-  require(catalog.representation("table", "test.f2", "test.other/1") &&
-              !catalog.representation("table", "test.f1", "test.other/1") &&
-              !catalog.representation("field", "test.f2", "test.other/1"),
+  require(catalog.representation("table", "test.f2", "test.other/0") &&
+              !catalog.representation("table", "test.f1", "test.other/0") &&
+              !catalog.representation("field", "test.f2", "test.other/0"),
           "legal representation is indexed by kind and domain");
   require(catalog.representationForLayout("table", "test.f1", "msb") &&
               !catalog.representationForLayout("table", "test.f2", "msb") &&
@@ -231,9 +231,9 @@ void closedCatalogs() {
           ambiguous.codec("test.alternate.codec") &&
           ambiguous.defaultCodec("table", "test.f2"),
       "ambiguous codec defaults fail closed without hiding explicit codecs");
-  records.reps.push_back({"test.lsb/1", "field", "test.f2", true, ""});
+  records.reps.push_back({"test.lsb/0", "field", "test.f2", true, ""});
   records.logicalTypes.push_back({"field", "test.f2"});
-  records.reps[2].identity = "test.lsb/1";
+  records.reps[2].identity = "test.lsb/0";
   records.reps[2].isDefault = true;
   const auto shared = accept(records.build());
   require(shared.defaultRepresentation("field", "test.f2") &&
@@ -275,8 +275,8 @@ void independentFormationAndProviders() {
           "sort and nominal installation do not imply logical admission");
 
   records.reps = {
-      {"dalek.unrelated-carrier/1", "field", "test.f1", true, ""},
-      {"plonky3.unselected-carrier/1", "field", "test.f2", true, ""}};
+      {"dalek.unrelated-carrier/0", "field", "test.f1", true, ""},
+      {"plonky3.unselected-carrier/0", "field", "test.f2", true, ""}};
   const auto physical = accept(records.build());
   require(physical.defaultProvider("test.f1").empty() &&
               physical.defaultProvider("test.f2").empty(),
@@ -286,11 +286,11 @@ void independentFormationAndProviders() {
   require(
       selected.defaultProvider("test.f1") == "custom" &&
           selected.defaultRepresentation("field", "test.f1")->identity ==
-              "dalek.unrelated-carrier/1" &&
+              "dalek.unrelated-carrier/0" &&
           selected.defaultProvider("test.f2").empty() &&
           selected.defaultProvider("test.g").empty(),
       "explicit provider policy ignores representation and associated names");
-  records.reps[0].identity = "arkworks.renamed-carrier/1";
+  records.reps[0].identity = "arkworks.renamed-carrier/0";
   require(accept(records.build()).defaultProvider("test.f1") == "custom",
           "renaming a representation leaves provider selection unchanged");
 
@@ -326,16 +326,16 @@ void installedInventory() {
       {"bn254.g1", {"group", "groups"}},
       {"bn254.g2", {"group", "groups"}},
       {"bn254.gt", {"group"}},
-      {"merlin3.bls12-381.fr64be/1", {"transcript"}},
-      {"spongefish0.7.4.keccak.bls12-381.fr64be/1", {"transcript"}},
-      {"merlin3.ristretto255.scalar64le/1", {"transcript"}},
-      {"merlin3.koala-bear.ext8-binomial3.rejection31le/1", {"transcript"}},
-      {"multilinear.kzg.bls12-381/1",
+      {"merlin3.bls12-381.fr64be/0", {"transcript"}},
+      {"spongefish0.7.4.keccak.bls12-381.fr64be/0", {"transcript"}},
+      {"merlin3.ristretto255.scalar64le/0", {"transcript"}},
+      {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", {"transcript"}},
+      {"multilinear.kzg.bls12-381/0",
        {"commitment", "proof", "prover_key", "verifier_key", "opening_state"}},
-      {"rows.merkle-keccak256.koala-bear/1",
+      {"rows.merkle-keccak256.koala-bear/0",
        {"commitment", "proof", "opening_state", "commitments",
         "opening_states"}},
-      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/1",
+      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
        {"commitment", "proof", "opening_state", "commitments",
         "opening_states"}}};
   std::set<std::pair<std::string, std::string>> pairs, actual;
@@ -378,17 +378,17 @@ void installedInventory() {
       {"bn254.g1", "arkworks"},
       {"bn254.g2", "arkworks"},
       {"bn254.gt", "arkworks"},
-      {"multilinear.kzg.bls12-381/1", "arkworks"},
-      {"merlin3.bls12-381.fr64be/1", "arkworks"},
+      {"multilinear.kzg.bls12-381/0", "arkworks"},
+      {"merlin3.bls12-381.fr64be/0", "arkworks"},
       {"ristretto255.scalar", "dalek"},
       {"ristretto255.group", "dalek"},
-      {"merlin3.ristretto255.scalar64le/1", "dalek"},
-      {"spongefish0.7.4.keccak.bls12-381.fr64be/1", "spongefish"},
+      {"merlin3.ristretto255.scalar64le/0", "dalek"},
+      {"spongefish0.7.4.keccak.bls12-381.fr64be/0", "spongefish"},
       {"koala-bear", "plonky3"},
       {"koala-bear.ext8-binomial3", "plonky3"},
-      {"merlin3.koala-bear.ext8-binomial3.rejection31le/1", "plonky3"},
-      {"rows.merkle-keccak256.koala-bear/1", "plonky3"},
-      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/1", "plonky3"}};
+      {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "plonky3"},
+      {"rows.merkle-keccak256.koala-bear/0", "plonky3"},
+      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "plonky3"}};
   require(catalog.allDomains().size() == providers.size(),
           "the complete installed provider domain inventory is unchanged");
   for (const auto &identity : identities) {
@@ -405,37 +405,37 @@ struct ExpectedType {
   const char *kind, *domain, *rep, *codec;
 };
 const ExpectedType types[] = {
-    {"bool", "", "native.bool/1", "zkcv.bool/1"},
-    {"index", "", "native.index/1", "zkcv.index/1"},
-    {"indices", "", "native.indices/1", "zkcv.indices/1"},
-    {"field", "bls12-381.fr", "arkworks.fr/1", "zkcv.field.bls12-381.fr/1"},
-    {"vector", "bls12-381.fr", "arkworks.fr-vector/1",
-     "zkcv.vector.bls12-381.fr/1"},
-    {"matrix", "bls12-381.fr", "arkworks.fr-sparse-coo/1",
-     "zkcv.matrix.bls12-381.fr/1"},
-    {"polynomial", "bls12-381.fr", "arkworks.polynomial/1",
-     "zkcv.polynomial.bls12-381.fr/1"},
-    {"table", "bls12-381.fr", "arkworks.mle-lsb/1",
-     "zkcv.table.bls12-381.fr/1"},
-    {"point", "bls12-381.fr", "arkworks.point/1", "zkcv.point.bls12-381.fr/1"},
-    {"round", "bls12-381.fr", "arkworks.quadratic/1",
-     "zkcv.round.bls12-381.fr/1"},
-    {"group", "bls12-381.g1", "arkworks.g1/1", "zkcv.group.bls12-381.g1/1"},
-    {"groups", "bls12-381.g1", "arkworks.g1-vector/1",
-     "zkcv.groups.bls12-381.g1/1"},
-    {"rng", "bls12-381.fr", "host.resource/1", ""},
-    {"nonce", "bls12-381.fr", "host.resource/1", ""},
-    {"transcript", "merlin3.bls12-381.fr64be/1", "host.resource/1", ""},
-    {"commitment", "multilinear.kzg.bls12-381/1", "arkworks.multilinear-pcs/1",
-     "zkcv.commitment.multilinear-kzg.bls12-381/1"},
-    {"proof", "multilinear.kzg.bls12-381/1", "arkworks.multilinear-pcs/1",
-     "zkcv.proof.multilinear-kzg.bls12-381/1"},
-    {"prover_key", "multilinear.kzg.bls12-381/1", "arkworks.multilinear-pcs/1",
+    {"bool", "", "native.bool/0", "zkcv.bool/0"},
+    {"index", "", "native.index/0", "zkcv.index/0"},
+    {"indices", "", "native.indices/0", "zkcv.indices/0"},
+    {"field", "bls12-381.fr", "arkworks.fr/0", "zkcv.field.bls12-381.fr/0"},
+    {"vector", "bls12-381.fr", "arkworks.fr-vector/0",
+     "zkcv.vector.bls12-381.fr/0"},
+    {"matrix", "bls12-381.fr", "arkworks.fr-sparse-coo/0",
+     "zkcv.matrix.bls12-381.fr/0"},
+    {"polynomial", "bls12-381.fr", "arkworks.polynomial/0",
+     "zkcv.polynomial.bls12-381.fr/0"},
+    {"table", "bls12-381.fr", "arkworks.mle-lsb/0",
+     "zkcv.table.bls12-381.fr/0"},
+    {"point", "bls12-381.fr", "arkworks.point/0", "zkcv.point.bls12-381.fr/0"},
+    {"round", "bls12-381.fr", "arkworks.quadratic/0",
+     "zkcv.round.bls12-381.fr/0"},
+    {"group", "bls12-381.g1", "arkworks.g1/0", "zkcv.group.bls12-381.g1/0"},
+    {"groups", "bls12-381.g1", "arkworks.g1-vector/0",
+     "zkcv.groups.bls12-381.g1/0"},
+    {"rng", "bls12-381.fr", "host.resource/0", ""},
+    {"nonce", "bls12-381.fr", "host.resource/0", ""},
+    {"transcript", "merlin3.bls12-381.fr64be/0", "host.resource/0", ""},
+    {"commitment", "multilinear.kzg.bls12-381/0", "arkworks.multilinear-pcs/0",
+     "zkcv.commitment.multilinear-kzg.bls12-381/0"},
+    {"proof", "multilinear.kzg.bls12-381/0", "arkworks.multilinear-pcs/0",
+     "zkcv.proof.multilinear-kzg.bls12-381/0"},
+    {"prover_key", "multilinear.kzg.bls12-381/0", "arkworks.multilinear-pcs/0",
      ""},
-    {"verifier_key", "multilinear.kzg.bls12-381/1",
-     "arkworks.multilinear-pcs/1", ""},
-    {"opening_state", "multilinear.kzg.bls12-381/1",
-     "arkworks.multilinear-pcs/1", ""}};
+    {"verifier_key", "multilinear.kzg.bls12-381/0",
+     "arkworks.multilinear-pcs/0", ""},
+    {"opening_state", "multilinear.kzg.bls12-381/0",
+     "arkworks.multilinear-pcs/0", ""}};
 
 void installedBindings() {
   mlir::DialectRegistry registry;
@@ -465,18 +465,18 @@ void installedBindings() {
   }
   require(installedIdentitySort("bls12-381.fr") == "Field" &&
               installedIdentitySort("bls12-381.g1") == "Group" &&
-              installedIdentitySort("multilinear.kzg.bls12-381/1") ==
+              installedIdentitySort("multilinear.kzg.bls12-381/0") ==
                   "Commitment" &&
-              installedIdentitySort("merlin3.bls12-381.fr64be/1") ==
+              installedIdentitySort("merlin3.bls12-381.fr64be/0") ==
                   "Transcript" &&
-              installedIdentitySort("zkcv.bool/1") == "Codec",
+              installedIdentitySort("zkcv.bool/0") == "Codec",
           "installed nominal and codec sorts");
   for (StringRef member : {"ValueField", "PointField", "EvaluationField"})
-    require(associatedIdentity("multilinear.kzg.bls12-381/1", member) ==
+    require(associatedIdentity("multilinear.kzg.bls12-381/0", member) ==
                 "bls12-381.fr",
             "PCS associated field");
   require(associatedIdentity("bls12-381.g1", "Scalar") == "bls12-381.fr" &&
-              associatedIdentity("merlin3.bls12-381.fr64be/1",
+              associatedIdentity("merlin3.bls12-381.fr64be/0",
                                  "ChallengeField") == "bls12-381.fr",
           "group and transcript associated fields");
   for (StringRef fact :
@@ -486,17 +486,17 @@ void installedBindings() {
       catalog.hasFact("Group", {"bls12-381.g1"}) &&
           catalog.hasFact("ScalarAction", {"bls12-381.g1"}) &&
           catalog.hasFact("MultilinearOpening",
-                          {"multilinear.kzg.bls12-381/1"}) &&
-          catalog.hasFact("FieldTranscript", {"merlin3.bls12-381.fr64be/1"}) &&
-          catalog.hasFact("Transcript", {"merlin3.bls12-381.fr64be/1"}),
+                          {"multilinear.kzg.bls12-381/0"}) &&
+          catalog.hasFact("FieldTranscript", {"merlin3.bls12-381.fr64be/0"}) &&
+          catalog.hasFact("Transcript", {"merlin3.bls12-381.fr64be/0"}),
       "installed group, PCS and transcript facts");
 
-  codecs["commitments"] = "zkcv.commitments.rows-merkle-keccak256.koala-bear/1";
+  codecs["commitments"] = "zkcv.commitments.rows-merkle-keccak256.koala-bear/0";
   std::map<std::string, std::string> roots{
       {"Field", "bls12-381.fr"},
       {"Group", "bls12-381.g1"},
-      {"Commitment", "multilinear.kzg.bls12-381/1"},
-      {"Transcript", "merlin3.bls12-381.fr64be/1"}};
+      {"Commitment", "multilinear.kzg.bls12-381/0"},
+      {"Transcript", "merlin3.bls12-381.fr64be/0"}};
   for (const auto &operation : boundOperationContracts()) {
     const bool oracle =
         any_of(operation.signature.requirements, [](const auto &predicate) {
@@ -517,7 +517,7 @@ void installedBindings() {
             sort == "Codec"
                 ? codecs.at(StringRef(operation.name).rsplit('.').second.str())
             : sort == "Commitment" && oracle
-                ? "rows.merkle-keccak256.koala-bear/1"
+                ? "rows.merkle-keccak256.koala-bear/0"
             : sort == "Field" && (embedding || operation.name == "random.index")
                 ? "koala-bear.ext8-binomial3"
             : sort == "Field" && (operation.name == "pairing.check" ||
@@ -553,7 +553,7 @@ void installedBindings() {
           auto expected = a;
           expected.representation =
               prefix == "arkworks-msb/" && a.kind == "table"
-                  ? "arkworks.mle-msb/1"
+                  ? "arkworks.mle-msb/0"
                   : accept(defaultRepresentation(a)).representation;
           require(b == expected,
                   "installed operation representation selection");
@@ -574,21 +574,21 @@ void installedBindings() {
          "binding-type-identity");
   refuse(defaultRepresentation({"unknown", "bls12-381.fr", ""}),
          "binding-type");
-  refuse(defaultRepresentation({"bool", "", "native.bool/1"}),
+  refuse(defaultRepresentation({"bool", "", "native.bool/0"}),
          "binding-physical-type-at-logical-stage");
-  refuse(parseBoundType("table:bls12-381.fr@arkworks.fr/1", true),
+  refuse(parseBoundType("table:bls12-381.fr@arkworks.fr/0", true),
          "binding-representation");
-  refuse(parseBoundType("table:unsupported@arkworks.mle-lsb/1", true),
+  refuse(parseBoundType("table:unsupported@arkworks.mle-lsb/0", true),
          "binding-type-identity");
 
   protocol::OperationBinding conversion{
       "convert",
       {"table.relayout",
-       {"bls12-381.fr", "arkworks.mle-lsb/1", "arkworks.mle-msb/1"},
+       {"bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"},
        "arkworks/table.relayout"}};
   require(accept(resolveBinding(conversion.application, true))
                   .outputs[0]
-                  .representation == "arkworks.mle-msb/1",
+                  .representation == "arkworks.mle-msb/0",
           "explicit table conversion");
   conversion.application.arguments[0] = "unsupported";
   refuse(resolveBinding(conversion.application, true), "binding-conversion");
@@ -668,7 +668,7 @@ void extensionField() {
           "extension provider");
   require(accept(resolveBinding(embed.application, true))
                   .inputs[0]
-                  .representation == "plonky3.koala-bear/1",
+                  .representation == "plonky3.koala-bear/0",
           "embedding has distinct physical ports");
   embed.application.arguments = {"koala-bear"};
   refuse(resolveBinding(embed.application, true), "binding-static-identity");
@@ -689,24 +689,24 @@ void bn254Domains() {
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   for (const auto &t : std::vector<ExpectedType>{
-           {"field", "bn254.fr", "arkworks.bn254-fr/1",
-            "zkcv.field.bn254.fr/1"},
-           {"vector", "bn254.fr", "arkworks.bn254-fr-vector/1",
-            "zkcv.vector.bn254.fr/1"},
-           {"polynomial", "bn254.fr", "arkworks.bn254-fr-polynomial/1",
-            "zkcv.polynomial.bn254.fr/1"},
-           {"round", "bn254.fr", "arkworks.bn254-fr-round/1",
-            "zkcv.round.bn254.fr/1"},
-           {"matrix", "bn254.fr", "arkworks.bn254-fr-sparse-coo/1",
-            "zkcv.matrix.bn254.fr/1"},
-           {"group", "bn254.g1", "arkworks.bn254-g1/1",
-            "zkcv.group.bn254.g1/1"},
-           {"groups", "bn254.g1", "arkworks.bn254-g1-vector/1",
-            "zkcv.groups.bn254.g1/1"},
-           {"group", "bn254.g2", "arkworks.bn254-g2/1",
-            "zkcv.group.bn254.g2/1"},
-           {"groups", "bn254.g2", "arkworks.bn254-g2-vector/1",
-            "zkcv.groups.bn254.g2/1"}}) {
+           {"field", "bn254.fr", "arkworks.bn254-fr/0",
+            "zkcv.field.bn254.fr/0"},
+           {"vector", "bn254.fr", "arkworks.bn254-fr-vector/0",
+            "zkcv.vector.bn254.fr/0"},
+           {"polynomial", "bn254.fr", "arkworks.bn254-fr-polynomial/0",
+            "zkcv.polynomial.bn254.fr/0"},
+           {"round", "bn254.fr", "arkworks.bn254-fr-round/0",
+            "zkcv.round.bn254.fr/0"},
+           {"matrix", "bn254.fr", "arkworks.bn254-fr-sparse-coo/0",
+            "zkcv.matrix.bn254.fr/0"},
+           {"group", "bn254.g1", "arkworks.bn254-g1/0",
+            "zkcv.group.bn254.g1/0"},
+           {"groups", "bn254.g1", "arkworks.bn254-g1-vector/0",
+            "zkcv.groups.bn254.g1/0"},
+           {"group", "bn254.g2", "arkworks.bn254-g2/0",
+            "zkcv.group.bn254.g2/0"},
+           {"groups", "bn254.g2", "arkworks.bn254-g2-vector/0",
+            "zkcv.groups.bn254.g2/0"}}) {
     BoundType logical{t.kind, t.domain, ""};
     const auto physical = accept(defaultRepresentation(logical));
     require(physical.representation == t.rep &&
@@ -747,12 +747,12 @@ void bn254Domains() {
   for (StringRef kind : {"table", "point", "nonce", "transcript"})
     require(!catalog.defaultRepresentation(kind, "bn254.fr"),
             "BN254 does not invent unrelated execution services");
-  refuse(parseBoundType("groups:bn254.g1@arkworks.bn254-g2-vector/1", true),
+  refuse(parseBoundType("groups:bn254.g1@arkworks.bn254-g2-vector/0", true),
          "binding-representation");
-  refuse(parseBoundType("field:bn254.fr@arkworks.fr/1", true),
+  refuse(parseBoundType("field:bn254.fr@arkworks.fr/0", true),
          "binding-representation");
   require(!catalog.hasFact("Encodes.field",
-                           {"zkcv.field.bn254.fr/1", "bls12-381.fr"}),
+                           {"zkcv.field.bn254.fr/0", "bls12-381.fr"}),
           "BN254 and BLS scalar codecs remain nominally distinct");
   protocol::OperationBinding msb{"round",
                                  {"poly.round_evaluate",

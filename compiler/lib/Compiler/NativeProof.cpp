@@ -47,16 +47,16 @@ Expected<protocol::BoundType> wire(Type type, bool input = false) {
       (input && logical->kind == "table" &&
        logical->identity == "bls12-381.fr") ||
       (input && logical->kind == "verifier_key" &&
-       logical->identity == "multilinear.kzg.bls12-381/1"))
+       logical->identity == "multilinear.kzg.bls12-381/0"))
     return *logical;
   return error("native-proof-wire-type");
 }
 StringRef wireCodec(const protocol::BoundType &type) {
   if (protocol::nativeDataFrame(type))
-    return "zkc.native-data/1";
+    return "zkc.native-data/0";
   if (type.kind == "verifier_key")
-    return "zkc.native-verifier-key/1";
-  return type.kind == "field_array" ? "zkc.native-field-array/1"
+    return "zkc.native-verifier-key/0";
+  return type.kind == "field_array" ? "zkc.native-field-array/0"
                                     : protocol::defaultCodec(type);
 }
 bool owns(ArrayAttr set, StringRef role) {
@@ -453,7 +453,7 @@ json::Value encodeNativeProofPolicy(const NativeProofPolicy &p) {
     inputs.push_back(std::to_string(port));
   for (const auto &[query, delivery] : p.draws)
     draws.push_back(json::Array{query, delivery});
-  return json::Array{"zkc.native-proof-policy/5",
+  return json::Array{"zkc.native-proof-policy/0",
                      p.entry,
                      p.producer,
                      p.validator,
@@ -472,7 +472,7 @@ Expected<NativeProofPolicy> readProofPolicy(StringRef text, bool selectDraws) {
     return parsed.takeError();
   auto *a = parsed->getAsArray();
   if (!a || a->size() != 9 ||
-      (*a)[0].getAsString() != "zkc.native-proof-policy/5")
+      (*a)[0].getAsString() != "zkc.native-proof-policy/0")
     return error("native-proof-policy");
   NativeProofPolicy p;
   for (auto [i, target] : {std::pair{1u, &p.entry},
@@ -849,7 +849,7 @@ public:
     auto actions = rewrite(rewrite, original.getAs<ArrayAttr>("actions"));
     auto construction = builder.getDictionaryAttr(
         {builder.getNamedAttr(
-             "format", builder.getStringAttr("zkc.native-construction/5")),
+             "format", builder.getStringAttr("zkc.native-construction/0")),
          builder.getNamedAttr("transcript", TypeAttr::get(stateType)),
          builder.getNamedAttr("removed_services",
                               builder.getArrayAttr({builder.getI64IntegerAttr(
@@ -977,8 +977,8 @@ constructNativeProof(ModuleOp source, const NativeProofPolicy &policy) {
                                               admitted->events))
     return std::move(e);
   json::Value descriptor(json::Array{
-      "zkc.native-proof-descriptor/5", encodeNativeProofPolicy(policy),
-      "zkc.native-origin/2", std::move(admitted->sequence),
+      "zkc.native-proof-descriptor/0", encodeNativeProofPolicy(policy),
+      "zkc.native-origin/0", std::move(admitted->sequence),
       std::move(admitted->publicBindings), std::move(admitted->messages)});
   return NativeProofConstruction{std::move(candidate), std::move(descriptor),
                                  std::move(admitted->wireSites)};

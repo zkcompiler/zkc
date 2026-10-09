@@ -13,7 +13,7 @@ open Zkc.Source Zkc.Compiler PhaseAdmission Protocol
 
 inductive Phase where | ready | sent deriving DecidableEq, Repr
 
-def profile : String := "table-round/1"
+def profile : String := "table-round/0"
 
 def interaction : PIR.Interaction protocolInterface where
   Role := Unit

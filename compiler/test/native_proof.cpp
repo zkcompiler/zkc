@@ -33,13 +33,13 @@ int main(int argc, char **argv) {
   require(bool(source), "source parse");
   auto original = print(*source);
   auto policy = parseNativeProofPolicy(
-      R"(["zkc.native-proof-policy/5", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/1", "4", ["0", "2"], [["draw_challenge", "challenge"]]])");
+      R"(["zkc.native-proof-policy/0", "main", "Alice", "Bob", "0", "merlin3.bls12-381.fr64be/0", "4", ["0", "2"], [["draw_challenge", "challenge"]]])");
   if (!policy) {
     errs() << toString(policy.takeError());
     return 1;
   }
-  for (const char *suite : {"merlin3.bls12-381.fr64be/1",
-                            "spongefish0.7.4.keccak.bls12-381.fr64be/1"}) {
+  for (const char *suite : {"merlin3.bls12-381.fr64be/0",
+                            "spongefish0.7.4.keccak.bls12-381.fr64be/0"}) {
     policy->suite = suite;
     auto built = constructNativeProof(*source, *policy);
     if (!built) {

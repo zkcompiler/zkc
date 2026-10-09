@@ -29,7 +29,7 @@ for call in (sender[6][0], sender[6][3]):
     assert not any('resource' in str(port) or 'rng:' in str(port) for port in function[2:4])
 assert functions['work'][4][0][0] == 'if', 'math optimization changed authored control'
 assert functions['work'][4][0][1] == 'lc_15_authored_branch'
-assert 'host.resource/1' in functions['work'][2][1][1]
+assert 'host.resource/0' in functions['work'][2][1][1]
 
 # Verify the mutation really changes the fixture before checking its refusal.
 def refuses(old, new, diagnostic):
@@ -51,8 +51,8 @@ refuses('{site="nested"}', '{site="nested", bad="new_semantics"}', 'interactive-
 refuses('callee=@work', 'callee=@missing', 'interactive-symbol-kind')
 refuses('callee=@work', 'callee=@main', 'interactive-symbol-kind')
 refuses('callee=@work', 'callee=@leaf', 'interactive-call-signature')
-for ty in ['!local.capability<"rng:bls12-381.fr">', '!pcs.object<"multilinear.kzg.bls12-381/1", "prover_key">', '!pcs.object<"multilinear.kzg.bls12-381/1", "verifier_key">']:
-    declaration = f'relation.declare @forbidden {{kind="external", key="example/type", revision="1", signature=({ty}) -> i1, purposes=["statement"]}}'
+for ty in ['!local.capability<"rng:bls12-381.fr">', '!pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">', '!pcs.object<"multilinear.kzg.bls12-381/0", "verifier_key">']:
+    declaration = f'relation.declare @forbidden {{kind="external", key="example/type", revision="0", signature=({ty}) -> i1, purposes=["statement"]}}'
     commands.verified('module { ' + declaration + ' }', 'relation-declaration-signature')
 
 # Non-scalar wire data passes through the common graph as whole components.
@@ -86,10 +86,10 @@ for name in ['mixed-unit', 'mixed-inverse', 'mixed-nonce', 'mixed-transcript']:
     (OUT / (name + '.physical.mlir')).write_text(ir)
 
 # A reusable service root and an affine RNG have different entry/call custody.
-service_draw = draw.replace('^entry(%x:', '^entry(%service: !protocol.service_ref<"random.bls12-381.fr/1">, %x:')
-service_draw = service_draw.replace('function_type=(', 'function_type=(!protocol.service_ref<"random.bls12-381.fr/1">, ', 1)
+service_draw = draw.replace('^entry(%x:', '^entry(%service: !protocol.service_ref<"random.bls12-381.fr/0">, %x:')
+service_draw = service_draw.replace('function_type=(', 'function_type=(!protocol.service_ref<"random.bls12-381.fr/0">, ', 1)
 service_draw = service_draw.replace('input_roles=[["P"],["P"],["P"]]', 'input_roles=[["P"],["P"],["P"],["P"]]')
-service_draw = service_draw.replace('    %sum =', '    %queried = "protocol.query"(%service) {method="draw", owner="P", site="query"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">\n    %sum =')
+service_draw = service_draw.replace('    %sum =', '    %queried = "protocol.query"(%service) {method="draw", owner="P", site="query"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">\n    %sum =')
 service_draw = service_draw.replace('algebra.field_add %x, %x', 'algebra.field_add %x, %queried')
 ir = commands.verified(service_draw, None, '--zkc-project-protocol', '--zkc-simplify-participant', '--zkc-lower-math', '--zkc-select-physical')
 (OUT / 'mixed-service.json').write_text(commands.source('protocol-export', ir))

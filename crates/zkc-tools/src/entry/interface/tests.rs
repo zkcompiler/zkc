@@ -15,7 +15,7 @@ fn selector(direction: &str, port: u32, role: &str) -> Value {
 }
 fn document() -> Value {
     let boolean = schema("boolean", "bool", json!(["bool"]));
-    json!({"format":"zkc.language-interface/7","setups":[],"capture":digest("capture"),"original":digest("original"),
+    json!({"format":"zkc.language-interface/0","setups":[],"capture":digest("capture"),"original":digest("original"),
         "toolchain":"test-toolchain","entry":"sample::Proof","protocol":"sample_Protocol",
         "protocols":[{"symbol":"sample_Protocol","roles":["P","V"],
             "inputs":[port("statement",0,json!([0]),json!(["P","V"]),boolean.clone()),
@@ -31,7 +31,7 @@ fn document() -> Value {
             "acceptance":selector("output",0,"V"),"completion":null,"target":"knowledge","construction":{"kind":"authored"}}})
 }
 fn read_text(interface: &str) -> Result<Interface> {
-    let frame = json!({"format":"zkc.entry/1","original":"original","interface":interface,
+    let frame = json!({"format":"zkc.entry/0","original":"original","interface":interface,
         "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false}}).to_string();
     let package = Package::capture(
         frame.as_bytes(),
@@ -187,7 +187,7 @@ fn exact_objects_reject_extra_duplicate_missing_fields_and_unknown_formats() {
             "\"kind\":\"authored\",\"kind\":\"authored\"",
         ),
         s.clone() + "{}",
-        s.replace("zkc.language-interface/7", "invalid.language-interface"),
+        s.replace("zkc.language-interface/0", "invalid.language-interface"),
     ] {
         assert_eq!(read_text(&bad).unwrap_err(), InterfaceError::Format);
     }
@@ -254,12 +254,12 @@ fn proof_and_clause_selections_are_complete() {
     }
     let mut value = document();
     value["protocols"][0]["services"] =
-        json!([{"name":"coins","owner":"V","contract":"random.bls12-381.fr/1","native":2}]);
+        json!([{"name":"coins","owner":"V","contract":"random.bls12-381.fr/0","native":2}]);
     assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
     value["job"]["construction"] =
-        json!({"kind":"fiat_shamir","suite":"merlin3.bls12-381.fr64be/1","service":0});
+        json!({"kind":"fiat_shamir","suite":"merlin3.bls12-381.fr64be/0","service":0});
     assert!(read(&value).is_ok());
-    value["job"]["construction"]["suite"] = json!("merlin3.ristretto255.scalar64le/1");
+    value["job"]["construction"]["suite"] = json!("merlin3.ristretto255.scalar64le/0");
     assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
 }
 #[test]
@@ -481,10 +481,10 @@ fn custody_optional_targets_and_continuations_have_positive_controls() {
     read(&value).unwrap();
     let mut value = document();
     value["protocols"][0]["services"] = json!([
-        {"name":"coins","owner":"V","contract":"random.bls12-381.fr/1","native":2},
-        {"name":"other","owner":"V","contract":"random.bls12-381.fr/1","native":3}]);
+        {"name":"coins","owner":"V","contract":"random.bls12-381.fr/0","native":2},
+        {"name":"other","owner":"V","contract":"random.bls12-381.fr/0","native":3}]);
     value["job"]["construction"] =
-        json!({"kind":"fiat_shamir","suite":"merlin3.bls12-381.fr64be/1","service":0});
+        json!({"kind":"fiat_shamir","suite":"merlin3.bls12-381.fr64be/0","service":0});
     assert_eq!(read(&value).unwrap_err(), InterfaceError::Selection);
 }
 #[test]
@@ -509,8 +509,8 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
 
 #[test]
 fn pcs_schemas_preserve_local_material_permissions() {
-    let kzg = "multilinear.kzg.bls12-381/1";
-    let rows = "rows.merkle-keccak256.koala-bear/1";
+    let kzg = "multilinear.kzg.bls12-381/0";
+    let rows = "rows.merkle-keccak256.koala-bear/0";
     for (head, domain, shared, wire) in [
         ("commitment", kzg, true, true),
         ("proof", kzg, true, true),
@@ -573,7 +573,7 @@ fn setup_document() -> Value {
     .into_iter()
     .enumerate()
     {
-        let leaf = format!("{head}:multilinear.kzg.bls12-381/1");
+        let leaf = format!("{head}:multilinear.kzg.bls12-381/0");
         let mut ty = schema("builtin", &leaf, json!([leaf]));
         ty["permissions"] = json!(permissions);
         inputs.push(port(name, i as u32, json!([i]), json!([role]), ty));

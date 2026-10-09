@@ -1,9 +1,9 @@
 //! General control and cleanup contracts, using a noncryptographic backend.
 use super::*;
 use serde_json::{Value as Json, json};
-const BOOL: &str = "bool@native.bool/1";
-const INDEX: &str = "index@native.index/1";
-const RNG: &str = "rng:bls12-381.fr@host.resource/1";
+const BOOL: &str = "bool@native.bool/0";
+const INDEX: &str = "index@native.index/0";
+const RNG: &str = "rng:bls12-381.fr@host.resource/0";
 #[derive(Clone, Debug)]
 struct Datum {
     ty: PhysicalType,
@@ -79,7 +79,7 @@ impl Backend for Store {
 }
 fn artifact(body: Json, functions: Json) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         functions,
         [[

@@ -12,7 +12,7 @@ Keep the semantic effect tree, typed source, MLIR graph and runtime plan distinc
 substitution and analysis. MLIR provides mutable SSA/region infrastructure for
 search and transformation. A formal target plan exposes scheduling and contracted
 operations in a form with a small interpreter. Connecting that model to the
-supported `zkc.program/2` carrier and common Rust Runner requires a separate
+supported `zkc.program/0` carrier and common Rust Runner requires a separate
 interpretation.
 
 Use the [source architecture](../DESIGN.md#3-mathematical-objects-and-source-representation):
@@ -226,7 +226,7 @@ method; robust security against foreign contexts requires additional hypotheses.
 [S12](sources.md#s12), [S4](sources.md#s4)
 
 A typed target model can describe calls to contracted kernels. Connecting it to
-`zkc.program/2` requires erasure and instruction-dispatch correspondence.
+`zkc.program/0` requires erasure and instruction-dispatch correspondence.
 Backend selection can happen before validation if its configuration is part of
 the checked subject. Selection after validation needs a theorem covering all
 allowed implementations of the selected contract.

@@ -385,13 +385,13 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
         ));
     }
     let bytes = backend.encode_native_value(&f(1)).unwrap();
-    let mut expected = b"ZKCV\x01\x28".to_vec();
+    let mut expected = b"ZKCV\x00\x28".to_vec();
     expected.push(1);
     expected.extend([0; 31]);
     assert_eq!(bytes, expected);
     let g = Value::Bn254G1(G1::generator());
     let bytes = backend.encode_native_value(&g).unwrap();
-    let mut expected = b"ZKCV\x01\x2e".to_vec();
+    let mut expected = b"ZKCV\x00\x2e".to_vec();
     // Arkworks BN254's smaller y-coordinate sign is clear for (1,2).
     expected.push(1);
     expected.extend([0; 31]);

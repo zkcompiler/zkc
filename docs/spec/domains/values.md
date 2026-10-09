@@ -105,8 +105,8 @@ retained: target `group_add` multiplies target-field elements, `group_scale`
 exponentiates, zero denotes the multiplicative identity, and negation inverts.
 
 The installed target is `bn254.gt`, with scalar field `bn254.fr`, canonical
-representation `arkworks.bn254-gt/1`, and generator equal to the pairing of the
-installed G1/G2 generators. Its codec is `zkcv.group.bn254.gt/1`: ZKCV tag 50
+representation `arkworks.bn254-gt/0`, and generator equal to the pairing of the
+installed G1/G2 generators. Its codec is `zkcv.group.bn254.gt/0`: ZKCV tag 50
 followed by exactly 384 canonical arkworks bytes. Decoding checks canonical
 encoding and target subgroup membership; extension-field zero is invalid.
 Only individual target-group values are installed, including recursive data
@@ -184,7 +184,7 @@ The portable slot spelling is a case-sensitive ASCII identifier of 1–128 bytes
 starting with a letter, with subsequent letters, digits, `_`, `-`, or `.`.
 Slot selection must preserve exact nominal equality and inequality; truncation
 or an unchecked hash collision assumption does not establish that relation.
-The physical spelling is `resource_unit:D@logical.resource_unit/1`. Its empty
+The physical spelling is `resource_unit:D@logical.resource_unit/0`. Its empty
 payload is distinct from runtime bookkeeping for ownership and identity. MLIR
 uses `!local.capability<"resource_unit:D">` and the existing physical data wrapper.
 No byte wire encoding is installed, including for the empty payload.

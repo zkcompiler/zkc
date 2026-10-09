@@ -1,15 +1,15 @@
-!pk = !pcs.object<"multilinear.kzg.bls12-381/1", "prover_key">
-!vk = !pcs.object<"multilinear.kzg.bls12-381/1", "verifier_key">
-!c = !pcs.object<"multilinear.kzg.bls12-381/1", "commitment">
-!o = !pcs.object<"multilinear.kzg.bls12-381/1", "opening_state">
-!proof = !pcs.object<"multilinear.kzg.bls12-381/1", "proof">
+!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
+!vk = !pcs.object<"multilinear.kzg.bls12-381/0", "verifier_key">
+!c = !pcs.object<"multilinear.kzg.bls12-381/0", "commitment">
+!o = !pcs.object<"multilinear.kzg.bls12-381/0", "opening_state">
+!proof = !pcs.object<"multilinear.kzg.bls12-381/0", "proof">
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
 !a = tensor<3x!f>
 !q = !poly.polynomial<"bls12-381.fr", 1>
-!rng = !protocol.service_ref<"random.bls12-381.fr/1">
-!state = !local.variant<"variant:5b227a6b632e76617269616e742f31222c5b22706f6c792e726573696475616c2e70726f64756374222c227374617465222c22706f696e743a626c7331322d3338312e6672222c227461626c653a626c7331322d3338312e6672222c5b2232222c2233222c2233225d2c5b2231222c2234225d2c5b2235225d2c5b2230222c2236225d5d5d">
+!rng = !protocol.service_ref<"random.bls12-381.fr/0">
+!state = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b22706f6c792e726573696475616c2e70726f64756374222c227374617465222c22706f696e743a626c7331322d3338312e6672222c227461626c653a626c7331322d3338312e6672222c5b2232222c2233222c2233225d2c5b2231222c2234225d2c5b2235225d2c5b2230222c2236225d5d5d">
 module { "protocol.module"() ({
  "poly.recipe"() ({ ^slots(%a:!f,%b:!f):
    %p = algebra.field_multiply %a, %b : (!f,!f)->!f
@@ -36,10 +36,10 @@ module { "protocol.module"() ({
    local.return %out : !p
  }
 
- "local.binding"() {sym_name="commit_kernel",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
- "local.binding"() {sym_name="open_kernel",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
- "local.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
- "local.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/1"],implementation=""} : ()->()
+ "local.binding"() {sym_name="commit_kernel",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "local.binding"() {sym_name="open_kernel",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "local.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "local.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  local.func @commit(%k:!pk,%t:!t) -> (!c,!o) attributes {logical_origin=["commit",[]]} {
    %r:2 = "pcs.exec.commit"(%k,%t) {binding=@commit_kernel,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
    local.return %r#0,%r#1 : !c,!o

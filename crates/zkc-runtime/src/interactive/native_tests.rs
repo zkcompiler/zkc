@@ -7,7 +7,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-const FIELD: &str = "field:bls12-381.fr@arkworks.fr/1";
+const FIELD: &str = "field:bls12-381.fr@arkworks.fr/0";
 #[derive(Debug)]
 struct V {
     clones: Arc<AtomicUsize>,
@@ -33,14 +33,14 @@ impl Clone for V {
 impl V {
     fn index(number: u64) -> Self {
         Self {
-            ty: PhysicalType::parse("index@native.index/1").unwrap(),
+            ty: PhysicalType::parse("index@native.index/0").unwrap(),
             number,
             ..Self::field()
         }
     }
     fn boolean(value: bool) -> Self {
         Self {
-            ty: PhysicalType::parse("bool@native.bool/1").unwrap(),
+            ty: PhysicalType::parse("bool@native.bool/0").unwrap(),
             number: u64::from(value),
             ..Self::field()
         }
@@ -124,7 +124,7 @@ fn program() -> Admitted {
 }
 fn program_with_type(field: &str) -> Admitted {
     let value = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [[
             "function",
@@ -318,7 +318,7 @@ fn wrong_unexposed_stale_and_wrong_type_requests_do_not_advance() {
         if private {
             bad.public = false;
         } else {
-            bad.ty = PhysicalType::parse("bool@native.bool/1").unwrap();
+            bad.ty = PhysicalType::parse("bool@native.bool/0").unwrap();
         }
         assert_eq!(
             r.complete_receive(&cut, Ok(bad)),
@@ -524,11 +524,11 @@ fn borrowed_poll_exposure_finish_and_send_exhaustion_preserve_stops() {
 }
 
 fn local_candidate(body: serde_json::Value) -> Admitted {
-    let index = "index@native.index/1";
-    let boolean = "bool@native.bool/1";
+    let index = "index@native.index/0";
+    let boolean = "bool@native.bool/0";
     let ports = json!([["lo", index], ["hi", index], ["flag", boolean]]);
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [["function", "f", ports, [index], body, ["f", []]]],
         [[
@@ -671,7 +671,7 @@ fn local_induction_rejects_a_backend_literal_with_the_wrong_type() {
 #[test]
 fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [[
@@ -679,7 +679,7 @@ fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
             "a",
             "root",
             "Alice",
-            [["n", "index@native.index/1"]],
+            [["n", "index@native.index/0"]],
             [],
             [
                 [

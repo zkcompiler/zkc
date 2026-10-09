@@ -9,7 +9,7 @@ use zkc_runtime::interactive::{
 };
 
 const MAGIC: u64 = 1_514_881_876;
-const VERSION: u64 = 1;
+const VERSION: u64 = 0;
 pub(crate) const DEFAULT_WORK_LIMIT: u64 = 16_777_216;
 
 pub(crate) struct Budget {

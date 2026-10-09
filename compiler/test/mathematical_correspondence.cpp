@@ -42,13 +42,13 @@ Operation *site(ModuleOp module, StringRef name, StringRef role) {
 constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
   func.func private @identity(%x:i1) -> i1 { return %x : i1 }
   "protocol.func"() ({
-  ^entry(%n:ui64, %x:i1, %y:i1, %rng:!protocol.service_ref<"random.bls12-381.fr/1">):
+  ^entry(%n:ui64, %x:i1, %y:i1, %rng:!protocol.service_ref<"random.bls12-381.fr/0">):
     %actual = func.call @identity(%x) : (i1) -> i1
     %rx = protocol.exchange %actual {site="first", sender="P",receiver="V"} : i1
     %ry = protocol.exchange %y {site="second", sender="P",receiver="V"} : i1
     protocol.guard %rx {site="check",owner="V"}
-    %a = "protocol.query"(%rng) {site="draw_a",owner="V",method="draw"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
-    %b = "protocol.query"(%rng) {site="draw_b",owner="V",method="draw"} : (!protocol.service_ref<"random.bls12-381.fr/1">) -> !algebra.field<"bls12-381.fr">
+    %a = "protocol.query"(%rng) {site="draw_a",owner="V",method="draw"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
+    %b = "protocol.query"(%rng) {site="draw_b",owner="V",method="draw"} : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
     %draw = protocol.exchange %b {site="draw_message",sender="V",receiver="P"} : !algebra.field<"bls12-381.fr">
     %out:2 = "protocol.repeat"(%n,%rx,%ry,%x,%y) ({
     ^body(%i:ui64,%state_a:i1,%state_b:i1,%capture_x:i1,%capture_y:i1):
@@ -57,7 +57,7 @@ constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
     }) {site="round",carried=2:i64,maximum=8:i64,roles=["V"],carried_roles=[["V"],["V"]]} : (ui64,i1,i1,i1,i1) -> (i1,i1)
     "protocol.finish_if"(%out#0,%out#0,%out#1) {site="done",owner="V"} : (i1,i1,i1) -> ()
     "protocol.return"(%out#0,%out#1) : (i1,i1) -> ()
-  }) {sym_name="main",function_type=(ui64,i1,i1,!protocol.service_ref<"random.bls12-381.fr/1">)->(i1,i1),roles=["P","V"],input_roles=[["V"],["P","V"],["P","V"],["V"]],output_roles=[["V"],["V"]]} : () -> ()
+  }) {sym_name="main",function_type=(ui64,i1,i1,!protocol.service_ref<"random.bls12-381.fr/0">)->(i1,i1),roles=["P","V"],input_roles=[["V"],["P","V"],["P","V"],["V"]],output_roles=[["V"],["V"]]} : () -> ()
 }) {profile=#protocol.profile<protocol>} : () -> () })mlir";
 void negative(ModuleOp source, ModuleOp projected, StringRef name,
               const std::function<void(ModuleOp)> &mutate) {

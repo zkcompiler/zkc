@@ -386,7 +386,7 @@ def reference (source candidateJson inputJson storageJson : Json) : Result Json 
   let [(_, _, occurrence)] := occurrences | throw "physical-local-selection"
   let function ← lookup occurrence.function (candidate.functions.map fun f => (f.code.name, f))
   checkSupported candidate.bindings limits.depth (function.code.body.getD [])
-  let [.str "zkc.local-resources/1", ceiling, capacities] ← Decode.array storageJson
+  let [.str "zkc.local-resources/0", ceiling, capacities] ← Decode.array storageJson
     | throw "physical-storage-input"
   let ceiling ← Decode.natural ceiling
   ensure (ceiling ≤ liveLimit) "physical-output-ceiling"
@@ -415,7 +415,7 @@ def reference (source candidateJson inputJson storageJson : Json) : Result Json 
   let outcome : Json := match outcome with
     | .ok values => .arr #[.str "returned", valuesJson (values.map Stored.value)]
     | .error fault => .arr #[.str fault.reason, .str fault.detail, fault.location.json]
-  return .arr #[.str "zkc.physical-reference/1", outcome, .arr state.logical.events,
+  return .arr #[.str "zkc.physical-reference/0", outcome, .arr state.logical.events,
     state.logical.resourcesJson, state.accounting.json, .arr state.steps,
     .arr #[.str "source-checked-local-plan", .str "single-root-local-return",
       .str "exact-capacity-successful-allocation-premise", .str "conservative-payload-accounting",

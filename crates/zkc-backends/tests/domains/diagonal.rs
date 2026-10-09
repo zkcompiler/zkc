@@ -185,9 +185,9 @@ fn every_diagonal_use_and_all_function_boundaries_are_checked() {
         check(j); // nominal cast through a consumer declaration
         let mut j = base.clone();
         let view = if d {
-            "groups:ristretto255.group@dalek.ristretto-diagonal/1"
+            "groups:ristretto255.group@dalek.ristretto-diagonal/0"
         } else {
-            "vector:bls12-381.fr@arkworks.fr-diagonal/1"
+            "vector:bls12-381.fr@arkworks.fr-diagonal/0"
         };
         j[2][0][3] = json!([view]);
         j[2][0][4][3] = json!(["return", ["diag"]]);

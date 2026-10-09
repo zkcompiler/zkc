@@ -7,13 +7,13 @@ use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supp
 
 fn candidate(value: bool) -> Json {
     json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [[
             "function",
             "literal",
             [],
-            ["bool@native.bool/1"],
+            ["bool@native.bool/0"],
             [
                 ["bool_constant", "make", "result", value],
                 ["return", ["result"]]
@@ -26,7 +26,7 @@ fn candidate(value: bool) -> Json {
             "instance",
             "P",
             [],
-            ["bool@native.bool/1"],
+            ["bool@native.bool/0"],
             [
                 ["local", "run", "literal", [], ["out"]],
                 ["return", ["out"]]
@@ -141,7 +141,7 @@ fn formats_shapes_context_and_names_are_independently_checked() {
         .insert(0, json!(["bool_constant", "root_literal", "v", true]));
     refused(value);
     let mut value = candidate(true);
-    value[2][0][3] = json!(["index@native.index/1"]);
+    value[2][0][3] = json!(["index@native.index/0"]);
     refused(value);
 }
 
@@ -152,7 +152,7 @@ impl zkc_runtime::interactive::Value for WrongBoolean {
         Ok(Self)
     }
     fn physical_type(&self) -> zkc_runtime::interactive::PhysicalType {
-        zkc_runtime::interactive::PhysicalType::parse("index@native.index/1").unwrap()
+        zkc_runtime::interactive::PhysicalType::parse("index@native.index/0").unwrap()
     }
     fn validate_serializable(&self) -> Result<(), zkc_runtime::interactive::BackendError> {
         Ok(())
@@ -356,9 +356,9 @@ fn program_service_query_executes_and_releases_its_lease() {
             std::collections::BTreeMap::from([("coins".into(), root.clone())]),
         )
         .unwrap();
-    let field = "field:bls12-381.fr@arkworks.fr/1";
+    let field = "field:bls12-381.fr@arkworks.fr/0";
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [[
@@ -372,7 +372,7 @@ fn program_service_query_executes_and_releases_its_lease() {
                 ["query", "sample", "coins", "draw", [], ["x"]],
                 ["return", ["x"]]
             ],
-            [["coins", "random.bls12-381.fr/1", "0"]]
+            [["coins", "random.bls12-381.fr/0", "0"]]
         ]],
         [["entry", "main", [["P", "p"]]]]
     ]);
@@ -407,7 +407,7 @@ fn program_service_query_executes_and_releases_its_lease() {
 fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
     use zkc_runtime::interactive::{PathElement, WorkBudget};
     let carrier = json!([
-        "zkc.program/2",
+        "zkc.program/0",
         [],
         [],
         [[
@@ -415,7 +415,7 @@ fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
             "p",
             "root",
             "P",
-            [["n", "index@native.index/1"]],
+            [["n", "index@native.index/0"]],
             [],
             [
                 [

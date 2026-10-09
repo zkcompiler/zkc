@@ -2,12 +2,12 @@
 
 This chapter defines complete typed messages and setup authorization for the
 single [native proof contract](native-proofs.md). Flat messages, bounded repeats,
-PCS and nested data all use the native proof policy, `zkc.native-origin/2`, `ZKCPRF01` proof
-framing and `zkc.native-proof-inputs/1` invocation records.
+PCS and nested data all use the native proof policy, `zkc.native-origin/0`, `ZKCPRF00` proof
+framing and `zkc.native-proof-inputs/0` invocation records.
 
 ## Complete types
 
-`zkc.program/2` carries these values through the existing protocol, participant,
+`zkc.program/0` carries these values through the existing protocol, participant,
 exec and physical profiles. Proof admission independently checks message,
 input, key and control restrictions. Program admission alone grants no proof
 deployment authority or transport support in another Host.
@@ -20,7 +20,7 @@ The complete logical message grammar is:
 - field `vector` and sparse `matrix` in each installed scalar domain;
 - `groups` in BLS12-381 G1, BN254 G1/G2 and Ristretto;
 - `field_array<bls12-381.fr,N>`, including zero, with `N <= 1048576`;
-- commitments and opening proofs of `multilinear.kzg.bls12-381/1`;
+- commitments and opening proofs of `multilinear.kzg.bls12-381/0`;
 - root and path leaves for both installed KoalaBear Merkle row schemes;
 - nominal finite variants whose **every alternative** has payloads in this grammar;
 - `sequence<T>` with `T` recursively in this grammar. The
@@ -100,7 +100,7 @@ neither authenticity nor the expected coordinate: `oracle.check` consumes the
 actual root, caller-supplied width/height/index, row and path. Merkle leaves
 require no KZG setup; their opening state remains local.
 
-Descriptor codec identity is `zkc.native-data/1` for vectors, group vectors,
+Descriptor codec identity is `zkc.native-data/0` for vectors, group vectors,
 matrices, indices and recursive containers. Fixed scalar/group, PCS and Merkle
 root/path leaves retain their installed ZKCV codec identities. Matching public ZKCV bytes do not equate descriptor codec identities:
 the descriptor separately binds the exact type, representation and consumer.
@@ -158,7 +158,7 @@ Path-specific authority within a host input is outside this profile.
 The CLI selects this configuration with `--setups=PATH`. The bounded format is:
 
 ```text
-["zkc.native-setup-authority/1",
+["zkc.native-setup-authority/0",
  [["vk_port", "expected_key_id_hex"], ...],
  [["input_port", "vk_port"], ...]]
 ```
@@ -210,8 +210,8 @@ Its static arguments are the suite and canonical complete logical type. The
 installed implementation requires an installed native challenge suite, the closed
 message grammar and exact default physical representations. The suites are the
 existing BLS Merlin/Spongefish suites, Ristretto Merlin
-`merlin3.ristretto255.scalar64le/1` and KoalaBear ext8 Merlin
-`merlin3.koala-bear.ext8-binomial3.rejection31le/1`. The selected random-service
+`merlin3.ristretto255.scalar64le/0` and KoalaBear ext8 Merlin
+`merlin3.koala-bear.ext8-binomial3.rejection31le/0`. The selected random-service
 contract and draw result must match the suite's challenge field.
 
 Complete-type observation absorbs bytes, so its payload domain need not equal

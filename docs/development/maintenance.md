@@ -13,17 +13,20 @@ Host requests and results, relation formats, proof bindings and transcript
 framing. Opaque compiler fingerprints, generated symbol seeds and in-process
 structures do not need independent format versions.
 
-Before stabilization, keep the existing version numbers fixed during internal
-development. Update producers, readers, examples and fixtures together, including
-independently derived byte and hash vectors when their inputs change. Maintain
-one current schema with strict admission; do not add older readers, compatibility
-layers or migration histories. Equal version numbers do not guarantee that
-artifacts from different development builds are compatible.
+Before stabilization, use version `0` for all zkc-owned formats and constructions,
+including binary headers, suite identifiers and independent research tools. Use
+`0.0.0` where package manifests require SemVer. Keep these versions fixed during
+internal development. Update producers, readers, examples and fixtures together,
+including independently derived byte and hash vectors when their inputs change.
+Maintain one current schema with strict admission; do not add
+older readers, compatibility layers or migration histories. Equal version numbers
+do not guarantee that artifacts from different development builds are compatible.
 
-Once an external contract is stabilized, review version changes when its encoding,
-interpretation or cryptographic construction changes. Ordinary implementation
-refactoring does not require a format version change. External standards, suite
-identities and dependency releases retain their own version rules.
+Use version `1` for the first stabilized external contract. After that, review
+version changes when its encoding, interpretation or cryptographic construction
+changes. Ordinary implementation refactoring does not require a format version
+change. Upstream standards, algorithm names and dependency releases retain their
+own version rules.
 
 ## Pins and source ownership
 

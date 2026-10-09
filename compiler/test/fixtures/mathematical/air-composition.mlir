@@ -5,10 +5,10 @@
 !e = !algebra.field<"koala-bear.ext8-binomial3">
 !ev = tensor<?x!e>
 !poly = !poly.univariate<"koala-bear.ext8-binomial3">
-!root = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/1","commitment">
-!path = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/1","proof">
-!state = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/1","opening_state">
-!rng = !protocol.service_ref<"random.koala-bear.ext8-binomial3/1">
+!root = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","commitment">
+!path = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","proof">
+!state = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","opening_state">
+!rng = !protocol.service_ref<"random.koala-bear.ext8-binomial3/0">
 module { "protocol.module"() ({
 "local.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
 "local.binding"() {sym_name="field_constant",contract="field.constant",arguments=["koala-bear.ext8-binomial3"],implementation=""} : ()->()
@@ -29,11 +29,11 @@ module { "protocol.module"() ({
 "local.binding"() {sym_name="base_vector_add",contract="vector.add",arguments=["koala-bear"],implementation=""} : ()->()
 "local.binding"() {sym_name="base_vector_equal",contract="vector.equal",arguments=["koala-bear"],implementation=""} : ()->()
 "local.binding"() {sym_name="bool_and",contract="bool.and",arguments=[],implementation=""} : ()->()
-"local.binding"() {sym_name="oracle_commit",contract="oracle.commit",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/1"],implementation=""} : ()->()
-"local.binding"() {sym_name="oracle_open",contract="oracle.open",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/1"],implementation=""} : ()->()
+"local.binding"() {sym_name="oracle_commit",contract="oracle.commit",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],implementation=""} : ()->()
+"local.binding"() {sym_name="oracle_open",contract="oracle.open",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],implementation=""} : ()->()
 "local.binding"() {sym_name="vector_slice",contract="vector.slice",arguments=["koala-bear.ext8-binomial3"],implementation=""} : ()->()
 "local.binding"() {sym_name="vector_equal",contract="vector.equal",arguments=["koala-bear.ext8-binomial3"],implementation=""} : ()->()
-"local.binding"() {sym_name="oracle_check",contract="oracle.check",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/1"],implementation=""} : ()->()
+"local.binding"() {sym_name="oracle_check",contract="oracle.check",arguments=["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],implementation=""} : ()->()
 
 local.func @fold(%trace:!bv,%shift:!e,%challenge:!e,%n:ui64)->(!ev) attributes {logical_origin=["fold",[]]} {
   %two = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["2"],site="two"} : ()->(ui64)

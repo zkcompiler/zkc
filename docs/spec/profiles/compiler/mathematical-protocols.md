@@ -163,7 +163,7 @@ on this edge; these checks are not an independent proof of their
 arithmetic semantics. Resource exhaustion remains a possible runtime failure, as
 with other realized total calculations.
 
-Preparation then expands admitted `local.apply` using `canonical-expanded-locals/1`
+Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
 before freezing local definitions. An application inside a local region remains
 inside that region; it is not hoisted to protocol mathematics. Subsequent common preparation,
 projection, participant simplification and lowering preserve those bodies and their

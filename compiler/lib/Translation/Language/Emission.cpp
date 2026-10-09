@@ -815,15 +815,15 @@ public:
             take(formulas.get(helper, logicalInputs, logicalPurposes));
         if (!identity)
           return std::move(failure);
-        kind = "zkc.language.formula/1";
+        kind = "zkc.language.formula/0";
         key = decl.symbol;
         revision = std::move(*identity);
       } else if (definition.kind == K::R1CS || definition.kind == K::AIR) {
         const auto &asset = project.project().assets()[*definition.asset];
-        kind = definition.kind == K::R1CS ? "zkc.relation.r1cs/1"
-                                          : "zkc.relation.air/1";
+        kind = definition.kind == K::R1CS ? "zkc.relation.r1cs/0"
+                                          : "zkc.relation.air/0";
         key = asset.identity().str();
-        revision = "1";
+        revision = "0";
       }
       builder.setInsertionPointToEnd(definitions);
       if (!make("relation.declare", {}, {},
