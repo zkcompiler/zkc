@@ -17,13 +17,14 @@ struct SyntaxType {
     Builtin,
     Formal,
     Natural,
+    AssetProperty,
     Add,
     Multiply,
     PowerOfTwo,
     Array,
     Tuple
   } kind = Kind::Name;
-  std::string name;
+  std::string name, assetName;
   Span span;
   // Parser-maintained height also bounds left-associated syntax and its
   // cleanup.
@@ -88,6 +89,7 @@ struct Expression {
   Span span;
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;
+  std::map<unsigned, std::string> assetParameters;
   std::vector<std::string> captures;
   std::vector<std::string> services;
   std::vector<std::optional<std::vector<std::string>>> carriedRoles;

@@ -266,7 +266,25 @@ private:
     if (!bounded(depth))
       return false;
     out.span = current().span;
-    if (take("pow2")) {
+    if (take("asset")) {
+      out.kind = SyntaxType::Kind::AssetProperty;
+      if (!expect("(") || current().kind != TokenKind::String)
+        return fail("source.syntax", "asset property requires a captured name");
+      out.assetName = text().drop_front().drop_back().str();
+      advance();
+      if (!expect(",") || current().kind != TokenKind::String)
+        return fail("source.syntax", "asset property requires a property name");
+      out.name = text().drop_front().drop_back().str();
+      advance();
+      while (take(",")) {
+        SyntaxType argument;
+        if (!type(argument, depth + 1))
+          return false;
+        out.arguments.push_back(std::move(argument));
+      }
+      if (!expect(")"))
+        return false;
+    } else if (take("pow2")) {
       out.kind = SyntaxType::Kind::PowerOfTwo;
       SyntaxType exponent;
       if (!expect("(") || !type(exponent, depth + 1) || !expect(")"))
@@ -1100,13 +1118,22 @@ private:
       }
       if (take(";")) {
         do {
-          if (current().kind != TokenKind::String) {
-            fail("source.syntax",
-                 "operation parameters must be literal strings");
-            return {};
+          if (value.kind == Expression::Kind::Kernel && take("asset")) {
+            std::string asset;
+            if (!path(asset))
+              return {};
+            value.assetParameters.emplace(value.labels.size(),
+                                          std::move(asset));
+            value.labels.emplace_back();
+          } else {
+            if (current().kind != TokenKind::String) {
+              fail("source.syntax", "operation parameters require literal "
+                                    "strings or captured assets");
+              return {};
+            }
+            value.labels.push_back(text().drop_front().drop_back().str());
+            advance();
           }
-          value.labels.push_back(text().drop_front().drop_back().str());
-          advance();
         } while (take(","));
       }
       if (!expect(")"))

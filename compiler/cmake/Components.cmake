@@ -48,6 +48,8 @@ add_zkc_component(Contracts
 add_zkc_component(Language
   lib/Language/Types.cpp
   lib/Language/Assets.cpp
+  lib/Language/AssetProperties.cpp
+  lib/Language/AssetClosure.cpp
   lib/Language/Layout.cpp
   lib/Language/Natural.cpp
   lib/Language/Project.cpp

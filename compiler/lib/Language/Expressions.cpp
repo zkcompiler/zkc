@@ -15,8 +15,9 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
   using K = Expression::Kind;
   if (expr.kind == K::Kernel || expr.kind == K::Intrinsic) {
     std::vector<Type> arguments;
+    std::vector<std::string> parameters;
     auto signature = expr.kind == K::Kernel
-                         ? kernelSignature(expr, arguments)
+                         ? kernelSignature(expr, arguments, parameters)
                          : intrinsicSignature(expr, arguments);
     if (!signature)
       return {};

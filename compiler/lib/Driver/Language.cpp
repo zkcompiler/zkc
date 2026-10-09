@@ -88,7 +88,8 @@ int runLanguageCompiler(int argc, char **argv) {
       if (name.empty() || path.empty() || path.size() > 4096 ||
           sources.size() + assets.size() == limits.files ||
           (format != "r1cs-json" && format != "r1cs-binary" &&
-           format != "air-json"))
+           format != "air-json" && format != "ring-json" &&
+           format != "relation-bundle-json"))
         return refuse(
             error("source.options", "expected --asset=NAME=FORMAT=FILE"));
       auto bytes =

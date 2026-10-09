@@ -40,8 +40,9 @@ private:
   bool repeat(const Statement &);
   bool complete(const Statement &);
   std::optional<ValueId> kernel(const Expression &, unsigned);
-  std::optional<Semantics::CallSignature> kernelSignature(const Expression &,
-                                                          std::vector<Type> &);
+  std::optional<Semantics::CallSignature>
+  kernelSignature(const Expression &, std::vector<Type> &,
+                  std::vector<std::string> &);
   std::optional<ValueId> intrinsic(const Expression &, unsigned);
   std::optional<Semantics::CallSignature>
   intrinsicSignature(const Expression &, std::vector<Type> &);

@@ -34,7 +34,7 @@ struct ApplicationOccurrence {
 llvm::Error inspectApplications(
     llvm::StringRef original, llvm::StringRef interface,
     llvm::function_ref<llvm::Error(const ApplicationOccurrence &)> visitor,
-    const Limits & = {}, llvm::ArrayRef<RelationAsset> assets = {});
+    const Limits & = {}, llvm::ArrayRef<Asset> assets = {});
 /// Inspect an immutable source-checked original, including its captured assets.
 /// Parse privately and reuse the retained interface when requested limits cover
 /// its admission limits. Tighter limits trigger structural readmission before

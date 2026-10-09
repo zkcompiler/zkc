@@ -13,13 +13,14 @@ struct CheckedStorage {
   explicit CheckedStorage(CapturedProject capture)
       : capture(std::move(capture)) {}
   CapturedProject capture;
-  std::vector<RelationAsset> assets;
+  std::vector<Asset> assets;
   std::vector<std::vector<Token>> tokens;
   std::vector<Declaration> declarations;
   std::string installation;
   uint64_t work = 0;
 };
 struct ClosedStorage {
+  std::vector<Asset> assets;
   std::vector<Declaration> declarations;
   DeclarationId protocol;
 };
@@ -47,6 +48,8 @@ struct Work {
   llvm::Error count(uint64_t &counter, uint64_t limit, llvm::StringRef what,
                     std::optional<Span> span = {});
 };
+
+llvm::Error closeAssets(const CheckedProject &, ClosedStorage &, Work &);
 
 } // namespace zkc::language::detail
 #endif

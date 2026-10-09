@@ -414,7 +414,7 @@ private:
 class CheckedProject {
 public:
   const CapturedProject &capture() const;
-  llvm::ArrayRef<RelationAsset> assets() const;
+  llvm::ArrayRef<Asset> assets() const;
   llvm::ArrayRef<Declaration> declarations() const;
   llvm::ArrayRef<Token> tokens(ModuleId) const;
   llvm::StringRef installationIdentity() const;
@@ -444,6 +444,9 @@ public:
   const CheckedProject &project() const { return checked; }
   const Declaration &entry() const;
   const Declaration &protocol() const;
+  /// Canonical evaluator assets required by reachable closed operations.
+  /// Sorted and deduplicated by definition identity.
+  llvm::ArrayRef<Asset> assets() const;
   /// Original type declarations and the selected Entry's closed instances.
   /// Only the reachable instances have bodies; declaration IDs remain local.
   llvm::ArrayRef<Declaration> declarations() const;

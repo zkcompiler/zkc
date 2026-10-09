@@ -8,14 +8,37 @@ using namespace llvm;
 namespace zkc::language::detail {
 std::optional<Semantics::CallSignature>
 BodyChecker::kernelSignature(const Expression &expr,
-                             std::vector<Type> &arguments) {
+                             std::vector<Type> &arguments,
+                             std::vector<std::string> &parameters) {
   for (const auto &syntax : expr.arguments) {
     auto type = checker.type(decl, syntax);
     if (!type)
       return {};
     arguments.push_back(std::move(*type));
   }
-  return checker.types.kernelSignature(expr.text, arguments, expr.labels,
+  parameters = expr.labels;
+  for (const auto &parameter : expr.assetParameters) {
+    auto position = parameter.first;
+    const auto &name = parameter.second;
+    if (!checker.types.charge(checker.output.assets.size() + name.size() + 1,
+                              expr.span))
+      return {};
+    auto found = llvm::find_if(checker.output.assets, [&](const auto &asset) {
+      return asset.name() == name;
+    });
+    if (found == checker.output.assets.end()) {
+      fail("source.asset-reference", "captured asset is absent", expr.span);
+      return {};
+    }
+    if (!StringRef(expr.text).starts_with("ring.") || position != 0 ||
+        !found->ring()) {
+      fail("source.asset-reference",
+           "operation does not accept this asset kind", expr.span);
+      return {};
+    }
+    parameters[position] = found->identity().str();
+  }
+  return checker.types.kernelSignature(expr.text, arguments, parameters,
                                        expr.span, &decl);
 }
 
@@ -27,7 +50,8 @@ std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
     return {};
   }
   std::vector<Type> arguments;
-  auto signature = kernelSignature(expr, arguments);
+  std::vector<std::string> parameters;
+  auto signature = kernelSignature(expr, arguments, parameters);
   if (!signature)
     return {};
   if (expr.children.size() != signature->inputs.size()) {
@@ -42,7 +66,8 @@ std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
     operands.push_back(*input);
   }
   Type result = signature->resultType();
-  LocalPrimitive primitive{expr.text, std::move(operands), expr.labels};
+  LocalPrimitive primitive{expr.text, std::move(operands),
+                           std::move(parameters)};
   primitive.bindingArguments = std::move(arguments);
   // The installed local envelope does not certify totality.
   body.mayStop = true;

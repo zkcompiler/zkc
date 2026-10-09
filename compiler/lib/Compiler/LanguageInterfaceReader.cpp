@@ -38,7 +38,7 @@ class Reader {
   Error failure = Error::success();
   LanguageInterface view;
   InterfaceProtocol *current = nullptr;
-  ArrayRef<RelationAsset> assets;
+  ArrayRef<Asset> assets;
   StringMap<unsigned> relationIndices;
   std::map<std::tuple<std::string, std::string, std::string>, unsigned>
       relationIdentities;
@@ -1370,7 +1370,7 @@ class Reader {
   }
 
 public:
-  explicit Reader(const Limits &limits, ArrayRef<RelationAsset> assets)
+  explicit Reader(const Limits &limits, ArrayRef<Asset> assets)
       : limits(limits), remaining(limits.work), assets(assets),
         formulas(remaining, limits.irBytes) {
     (void)!!failure;
@@ -1387,7 +1387,7 @@ Expected<LanguageInterface> decodeInterface(mlir::ModuleOp module,
                                             StringRef digest,
                                             const json::Value &value,
                                             const Limits &limits,
-                                            ArrayRef<RelationAsset> assets) {
+                                            ArrayRef<Asset> assets) {
   return Reader(limits, assets).run(value, module, digest);
 }
 } // namespace zkc::language::detail

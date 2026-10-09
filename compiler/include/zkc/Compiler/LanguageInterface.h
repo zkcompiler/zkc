@@ -58,7 +58,7 @@ struct InterfaceRelation {
   RelationDefinition::Kind kind = RelationDefinition::Kind::Opaque;
   std::vector<InterfaceRelationInput> inputs;
   std::optional<std::string> formula;
-  std::optional<RelationAsset> asset;
+  std::optional<Asset> asset;
 };
 struct InterfaceProtocol {
   std::string symbol;
@@ -109,6 +109,6 @@ llvm::Error compareInterface(const ClosedEntry &, const LanguageInterface &,
 /// No source checker or emitter is called.
 llvm::Expected<LanguageInterface>
 readInterface(llvm::StringRef original, llvm::StringRef interface,
-              const Limits & = {}, llvm::ArrayRef<RelationAsset> assets = {});
+              const Limits & = {}, llvm::ArrayRef<Asset> assets = {});
 } // namespace zkc::language
 #endif

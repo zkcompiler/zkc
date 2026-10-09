@@ -104,7 +104,7 @@ Expected<json::Value> detail::parseInterface(StringRef bytes,
 }
 Error detail::withInterface(
     StringRef original, StringRef bytes, const Limits &limits,
-    ArrayRef<RelationAsset> assets,
+    ArrayRef<Asset> assets,
     function_ref<Error(mlir::ModuleOp, LanguageInterface &&)> visit) {
   if (auto error = checkLimits(limits))
     return error;
@@ -167,7 +167,7 @@ Error detail::withInterface(
 }
 Expected<LanguageInterface> readInterface(StringRef original, StringRef bytes,
                                           const Limits &limits,
-                                          ArrayRef<RelationAsset> assets) {
+                                          ArrayRef<Asset> assets) {
   std::optional<LanguageInterface> result;
   if (auto error =
           detail::withInterface(original, bytes, limits, assets,

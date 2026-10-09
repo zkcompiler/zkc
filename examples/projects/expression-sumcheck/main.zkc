@@ -8,11 +8,11 @@ domain Extension = field("koala-bear.ext8-binomial3");
 component Product<F: Field>: Expression<F> {
   fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F> {
     return kernel<F>("ring.affine_sum", low, high, rows;
-      "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
+      asset product);
   }
   fn evaluate(values: Vector<F>) -> F {
     let result = kernel<F>("ring.point", values;
-      "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
+      asset product);
     return kernel<F>("vector.at", result; "0");
   }
 }
@@ -28,14 +28,16 @@ protocol BaseSumcheck roles(P,V)
   local P let prover_values = embed_vector(values);
   local V let verifier_values = embed_vector(values);
   local V let expected = embed_scalar(claim);
-  let accepted = apply Sumcheck<Extension,16,2,2,Product<Extension>>
+  let accepted = apply Sumcheck<Extension,16,asset("product","inputs"),
+    asset("product","degree"),Product<Extension>>
     (prover_values, verifier_values, expected, rounds) using(challenges);
   return (accepted = accepted);
 }
 protocol ExtensionSumcheck roles(P,V)
     (values: Vector<Extension> @(P,V), claim: Extension @V, rounds: index @(P,V))
     using(challenges: Random<Extension> @V) -> (accepted: bool @V) {
-  let accepted = apply Sumcheck<Extension,16,2,2,Product<Extension>>
+  let accepted = apply Sumcheck<Extension,16,asset("product","inputs"),
+    asset("product","degree"),Product<Extension>>
     (values, values, claim, rounds) using(challenges);
   return (accepted = accepted);
 }

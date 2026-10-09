@@ -12,13 +12,14 @@ llvm::Expected<std::string> emitInterface(const ClosedEntry &,
                                           llvm::StringRef toolchain,
                                           const Limits &);
 /// The caller has verified this exact original module and computed its digest.
-llvm::Expected<LanguageInterface>
-decodeInterface(mlir::ModuleOp, llvm::StringRef digest,
-                const llvm::json::Value &, const Limits &,
-                llvm::ArrayRef<RelationAsset> = {});
+llvm::Expected<LanguageInterface> decodeInterface(mlir::ModuleOp,
+                                                  llvm::StringRef digest,
+                                                  const llvm::json::Value &,
+                                                  const Limits &,
+                                                  llvm::ArrayRef<Asset> = {});
 llvm::Error withInterface(
     llvm::StringRef original, llvm::StringRef interface, const Limits &,
-    llvm::ArrayRef<RelationAsset>,
+    llvm::ArrayRef<Asset>,
     llvm::function_ref<llvm::Error(mlir::ModuleOp, LanguageInterface &&)>);
 /// Reuse admitted immutable metadata; tighter limits take the byte-admission
 /// path.

@@ -497,7 +497,7 @@ int main() {
                 !take(evaluate(*retained.r1cs(), {"8"}, {"1", "9", "3"})).bound,
                 "captured R1CS lost the public prefix binding");
           }
-          auto changed = RelationAsset::read(
+          auto changed = Asset::read(
               {"different",
                asset.format,
                zkc::printJson(
