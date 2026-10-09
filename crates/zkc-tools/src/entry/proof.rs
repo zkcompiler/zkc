@@ -144,10 +144,16 @@ impl ProofEntry {
         interface
             .check_proof(&native)
             .map_err(|e| E::new(P::Binding, e))?;
-        let assets =
-            EntryAssets::admit(&package, native.entry().admitted(), native.entry().entry())
-                .map_err(|e| E::new(P::Assets, e))?;
-        let native = native.with_ring_assets(assets.registry().clone());
+        let assets = EntryAssets::admit(
+            &package,
+            &interface,
+            native.entry().admitted(),
+            native.entry().entry(),
+        )
+        .map_err(|e| E::new(P::Assets, e))?;
+        let native = native
+            .with_ring_assets(assets.registry().clone())
+            .with_relation_assets(assets.relation_registry().clone());
         Ok(Self {
             completion,
             roles,

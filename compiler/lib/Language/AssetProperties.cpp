@@ -11,7 +11,7 @@ bool ringProjection(StringRef member) {
   return member == "Inputs" || member == "Outputs" || member == "Degree";
 }
 bool bundleProjection(StringRef member) {
-  return member == "Tables" || member == "Publics";
+  return member == "Tables" || member == "Publics" || member == "Channels";
 }
 } // namespace
 const Asset *Semantics::capturedAsset(const Type &term, Span span) {
@@ -78,8 +78,9 @@ std::optional<Type> Semantics::assetProjection(const Type &base,
     const auto *bundle = asset->bundle();
     if (!bundle)
       return refuse("asset kind has no projections");
-    value =
-        member == "Tables" ? bundle->tables().size() : bundle->publics().size();
+    value = member == "Tables"     ? bundle->tables().size()
+            : member == "Channels" ? bundle->channels().size()
+                                   : bundle->publics().size();
   }
   result.dimension = Natural::constant(value);
   return result;

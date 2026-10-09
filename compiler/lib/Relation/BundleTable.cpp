@@ -80,11 +80,15 @@ Expected<BundleTableView> bundleTableView(const Bundle &bundle, uint32_t table,
   return view;
 }
 
-Expected<BundleTableLengths> bundleTableLengths(const Bundle &bundle,
-                                                const BundleTableView &view,
-                                                uint32_t height) {
-  if (view.table >= bundle.tables().size())
-    return zkc::error("relation-table-index");
+Expected<BundleTableLengths>
+bundleTableLengths(const Bundle &bundle, const BundleTableView &reference,
+                   uint32_t height) {
+  // Re-derive facts from the admitted Bundle. The public descriptive view is
+  // not an authority for lengths or resource bounds.
+  auto checked = bundleTableView(bundle, reference.table, reference.field);
+  if (!checked)
+    return checked.takeError();
+  const auto &view = *checked;
   const auto &t = bundle.tables()[view.table];
   const auto &policy = t.height;
   if (height < policy.min || height > policy.max ||

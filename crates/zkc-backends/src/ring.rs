@@ -104,7 +104,7 @@ impl Default for Budget {
     }
 }
 impl Budget {
-    fn charge(&mut self, work: u64) -> Result<()> {
+    pub(crate) fn charge(&mut self, work: u64) -> Result<()> {
         let next = self
             .spent
             .checked_add(work)

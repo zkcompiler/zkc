@@ -57,11 +57,14 @@ impl RunEntry {
             .map_err(|e| E::new(P::Binding, e))?;
         let assets = EntryAssets::admit(
             &package,
+            &interface,
             native.bundle().admitted(),
             native.bundle().entry(),
         )
         .map_err(|e| E::new(P::Assets, e))?;
-        let native = native.with_ring_assets(assets.registry().clone());
+        let native = native
+            .with_ring_assets(assets.registry().clone())
+            .with_relation_assets(assets.relation_registry().clone());
         Ok(Self {
             package,
             interface,

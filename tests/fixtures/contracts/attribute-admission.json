@@ -84,5 +84,10 @@
   {"name": "field-array-dynamic-bounds", "contract": "field_array.at", "arguments": ["bls12-381.fr", "4"], "implementation": "arkworks/field_array.at", "attributes": ["4"], "admitted": true},
   {"name": "field-array-u64", "contract": "field_array.at", "arguments": ["bls12-381.fr", "4"], "implementation": "arkworks/field_array.at", "attributes": ["18446744073709551615"], "admitted": true},
   {"name": "field-array-overflow", "contract": "field_array.at", "arguments": ["bls12-381.fr", "4"], "implementation": "arkworks/field_array.at", "attributes": ["18446744073709551616"], "admitted": false},
-  {"name": "field-array-leading-zero", "contract": "field_array.at", "arguments": ["bls12-381.fr", "4"], "implementation": "arkworks/field_array.at", "attributes": ["04"], "admitted": false}
+  {"name": "field-array-leading-zero", "contract": "field_array.at", "arguments": ["bls12-381.fr", "4"], "implementation": "arkworks/field_array.at", "attributes": ["04"], "admitted": false},
+  {"name": "relation-table-asset-valid", "contract": "relation.table_rows", "arguments": ["koala-bear", "0"], "implementation": "plonky3/relation.table_rows", "attributes": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "admitted": true},
+  {"name": "relation-table-asset-missing", "contract": "relation.table_rows", "arguments": ["koala-bear", "0"], "implementation": "plonky3/relation.table_rows", "attributes": [], "admitted": false},
+  {"name": "relation-table-asset-uppercase", "contract": "relation.table_rows", "arguments": ["koala-bear", "0"], "implementation": "plonky3/relation.table_rows", "attributes": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], "admitted": false},
+  {"name": "relation-table-asset-short", "contract": "relation.table_rows", "arguments": ["koala-bear", "0"], "implementation": "plonky3/relation.table_rows", "attributes": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "admitted": false},
+  {"name": "relation-table-asset-extra", "contract": "relation.table_rows", "arguments": ["koala-bear", "0"], "implementation": "plonky3/relation.table_rows", "attributes": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0"], "admitted": false}
 ]

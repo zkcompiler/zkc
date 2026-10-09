@@ -10,6 +10,7 @@ mod oracle;
 mod pcs;
 mod poly;
 mod random;
+mod relation;
 mod support;
 mod table;
 mod transcript;
@@ -203,6 +204,7 @@ fn installed() -> Result<&'static Registry> {
                 &pcs::CONTRIBUTION,
                 &poly::CONTRIBUTION,
                 &random::CONTRIBUTION,
+                &relation::CONTRIBUTION,
                 &transcript::CONTRIBUTION,
                 &vector::CONTRIBUTION,
                 &table::CONTRIBUTION,

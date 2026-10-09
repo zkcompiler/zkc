@@ -9,6 +9,7 @@ mod external_kernels;
 mod kernels;
 pub mod matrix;
 pub mod oracle;
+pub mod relation;
 mod resource;
 pub mod ring;
 mod sampling;

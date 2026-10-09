@@ -12,6 +12,9 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod table;
+pub use table::{TableData, TableLengths, TableView};
+
 pub const BYTE_LIMIT: usize = 8 * 1024 * 1024;
 pub const DATA_BYTE_LIMIT: usize = 256 * 1024 * 1024;
 pub const TABLE_LIMIT: usize = 256;

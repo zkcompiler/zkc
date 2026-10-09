@@ -67,11 +67,11 @@ generation or authorize a private source representation.
 
 ## Packaged expression assets
 
-Both named Hosts take their ring arenas from the authenticated package's
+Both named Hosts take their ring arenas and relation Bundles from the authenticated package's
 [`assets` member](../formats/entry.md#published-entry-package) and from nowhere
 else. After native admission and interface binding, `RunEntry::admit` and
-`ProofEntry::admit` admit every packaged body through the independent ring
-reader and the backend registry, with their formation, identity, per-item and
+`ProofEntry::admit` admit every packaged body through its independent ring or
+Bundle reader and backend registry, with their formation, identity, per-item and
 aggregate limits. Registry refusals pass through unchanged, for example
 `refused:ring-asset-identity` when a body does not hash to its expected
 digest. The retained body must also be byte-identical to the admitted
@@ -89,18 +89,23 @@ carrier is the field of the operation's first vector operand, taken from the
 admitted signature. The referenced arena must be admitted, else
 `entry-asset-missing`, and its inputs and facts must be interpretable in that
 carrier under the kernels' own rule, else `entry-asset-carrier`: KoalaBear
-arenas under an Ext8 carrier are permitted, the converse is not. An operation
+arenas under an Ext8 carrier are permitted, the converse is not.
+For `relation.table_rows`, the Host checks the selected static table index and
+the Bundle view's exact field requirements. It does not promote a base-field
+trace to arbitrary extension-field values. A Bundle relation declaration also
+requires its packaged body; the Host independently checks its derived formal
+ABI, returning `entry-asset-relation` on disagreement. An operation
 of another asset-naming contract returns `entry-asset-contract`. These checks
 complete before any request is converted or any input, key or resource is
 issued; a missing or incompatible asset is never deferred to execution. An
 admitted asset that no reachable operation references is retained and
 reported, not refused.
 
-The admitted registry is installed into the Entry's native run or proof Host
+The admitted registries are installed into the Entry's native run or proof Host
 before the Entry is returned. `RunEntry::assets` and `ProofEntry::assets`
-expose it as `EntryAssets`: admitted identities, each admitted expression, the
+expose them as `EntryAssets`: admitted identities, each admitted expression or Bundle, the
 checked references with their function, site, binding and identity, and the
-registry itself. No `RunEntry` or `ProofEntry` method accepts a caller-supplied
+registries themselves. No `RunEntry` or `ProofEntry` method accepts a caller-supplied
 registry, so an application cannot replace or extend the packaged assets on the
 authenticated path. The native `RunHost`, `NativeDeployment` and backend
 registry constructors keep their explicit registry route for direct native

@@ -47,6 +47,7 @@ pub(crate) struct RoleMap {
 #[derive(Clone, Debug)]
 pub struct NativeDeployment {
     ring_assets: zkc_backends::ring::Registry,
+    relation_assets: zkc_backends::relation::Registry,
     ring_work_limit: u64,
     publication: String,
     choices: [bool; 2],
@@ -311,6 +312,7 @@ impl NativeDeployment {
         .map_err(|e| e.to_string())?;
         Ok(Self {
             ring_assets: Default::default(),
+            relation_assets: Default::default(),
             ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
             publication: expected_sha256.to_owned(),
             choices: [choices[0] == "true", choices[1] == "true"],
@@ -335,6 +337,10 @@ impl NativeDeployment {
     }
     pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
         self.ring_assets = assets;
+        self
+    }
+    pub fn with_relation_assets(mut self, assets: zkc_backends::relation::Registry) -> Self {
+        self.relation_assets = assets;
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {

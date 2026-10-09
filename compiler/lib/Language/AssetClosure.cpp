@@ -1,6 +1,7 @@
 #include "State.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/RingExpression.h"
+#include "zkc/Relation/Bundle.h"
 #include <functional>
 
 using namespace llvm;
@@ -65,6 +66,36 @@ Error closeAssets(const CheckedProject &project, ClosedStorage &closed,
                                  "expression node field differs from carrier",
                                  operation.span);
             }
+          } else if (const auto *bundle = found->second->bundle()) {
+            if (!primitive->bindingArguments ||
+                primitive->bindingArguments->size() != 2)
+              return failure("source.asset-reference", "invalid table binding",
+                             operation.span);
+            const auto &carrier = (*primitive->bindingArguments)[0];
+            const auto &table = (*primitive->bindingArguments)[1];
+            if (carrier.kind != Type::Kind::Field || carrier.symbolic ||
+                table.kind != Type::Kind::Natural ||
+                !table.dimension.isClosed())
+              return failure("source.asset-reference",
+                             "table binding is not closed", operation.span);
+            const auto index = table.dimension.closedValue();
+            if (index >= bundle->tables().size())
+              return failure("source.asset-table",
+                             "table index is out of range", operation.span);
+            const auto key = carrier.domain + ":" + std::to_string(index);
+            if (checked.emplace(identity, key).second) {
+              const auto &definition = bundle->tables()[index];
+              if (auto error = work.charge(definition.arena.nodes().size() +
+                                               definition.groups.size() +
+                                               bundle->publics().size() + 1,
+                                           operation.span))
+                return error;
+              auto view =
+                  relation::bundleTableView(*bundle, index, carrier.domain);
+              if (!view)
+                return failure("source.asset-carrier",
+                               toString(view.takeError()), operation.span);
+            }
           }
           retained.emplace(identity, found->second);
         }
@@ -81,10 +112,23 @@ Error closeAssets(const CheckedProject &project, ClosedStorage &closed,
     }
     return Error::success();
   };
-  for (const auto &declaration : closed.declarations)
+  for (const auto &declaration : closed.declarations) {
+    if (auto error = work.charge(1, declaration.span))
+      return error;
+    if (declaration.relation &&
+        declaration.relation->kind == RelationDefinition::Kind::Bundle) {
+      const auto index = declaration.relation->asset;
+      if (!index || *index >= project.assets().size() ||
+          !project.assets()[*index].bundle())
+        return failure("source.asset-reference", "captured relation is absent",
+                       declaration.span);
+      const auto &asset = project.assets()[*index];
+      retained.emplace(asset.identity().str(), &asset);
+    }
     if (declaration.body)
       if (auto error = visit(*declaration.body))
         return error;
+  }
   for (const auto &entry : retained)
     closed.assets.push_back(*entry.second);
   return Error::success();

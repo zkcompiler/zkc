@@ -261,8 +261,9 @@ int main() {
         require(entry.project().assets()[*closed.relation->asset].identity() ==
                     machine().identity(),
                 "captured asset identity was lost");
-        require(entry.assets().empty(),
-                "a relation-only bundle is not an evaluator asset");
+        require(entry.assets().size() == 1 &&
+                    entry.assets().front().identity() == machine().identity(),
+                "a declaration-only bundle must retain its contents");
         // Formal names are free; order, type and purpose are bound.
         take(close(source(
             substitute(signature.str(), "witness trace", "witness columns"))));
@@ -301,8 +302,13 @@ int main() {
     auto compiled = take(compileEntry(original));
     auto package = take(packageEntry(compiled));
     auto packaged = take(json::parse(package.bytes()));
-    require(packaged.getAsObject()->getArray("assets")->empty(),
-            "package carried a relation-only bundle");
+    auto *assets = packaged.getAsObject()->getArray("assets");
+    require(assets->size() == 1 &&
+                (*(*assets)[0].getAsArray())[0].getAsString() ==
+                    machine().identity() &&
+                (*(*assets)[0].getAsArray())[1].getAsString() ==
+                    zkc::printJson(machine().encode()),
+            "package lost the declared relation's canonical contents");
   });
   cases.run("declared formals must spell the derived ABI exactly", [] {
     for (auto [before, after] : std::vector<std::pair<StringRef, StringRef>>{

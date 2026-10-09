@@ -130,7 +130,7 @@ permissions. Instance keys include the asset identity.
 Projections derive naturals from the asset, never from the author. A ring term
 `A` has `A::Inputs`, the ordered input count; `A::Outputs`, the output count;
 and `A::Degree`, the largest output degree with every input weighted one. A
-bundle term `B` has `B::Tables` and `B::Publics` for a closed term only. A
+bundle term `B` has `B::Tables`, `B::Publics` and `B::Channels` for a closed term only. A
 closed term yields the constant at once. A generic term yields a distinct
 natural factor that closure substitutes: inference never solves a parameter
 through a projection, and `pow2` of a projection is unsupported. A degree above
@@ -263,12 +263,15 @@ validation, including field-literal bounds. A generic field admits only `0` and
 
 A contract whose parameter is an asset identity takes an asset term of the
 accepted sort instead of a literal: `kernel<F>("ring.point", v; A)` or
-`; Product`. The term may be a declared asset domain or a generic parameter.
+`; Product`. The parameter declaration's `assetFormat` selects `Ring`
+(`zkc.ring/0`) or `Bundle` (`zkc.relation-bundle/0`); the frontend does not infer
+the family from the operation name. The term may be a declared asset domain or a generic parameter.
 A literal digest, a term of another sort or an asset term at a position that
 takes a literal refuses. The compiler writes the closed term's canonical
 identity into the emitted parameter when the body closes, retains the asset for
-the Entry package, and checks that the arena's fields are the selected carrier
-field or embed into it. Source comparison compares the closed body's identities
+the Entry package, and checks the family's reference rules. Ring substitution
+admits the carrier field and its base field; a Bundle table view checks the
+table index and exact declared column fields. Source comparison compares the closed body's identities
 with the original MLIR, so a changed digest is a correspondence failure.
 
 Generic checking uses declared capability bounds, inherent Field/Group facts and

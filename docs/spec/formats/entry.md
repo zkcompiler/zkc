@@ -74,11 +74,13 @@ supplied outside this small JSON. For a bundle it derives the formal list from
 the admitted bundle, as the
 [protocol contract](../language/protocols.md#bundle-declarations) defines, and
 requires the record to spell exactly that count, each purpose, each logical
-kind and each single native leaf. A relation-only bundle is not a package
-asset: the digest in the definition record is its only package-level reference.
-The Rust Host reader recognizes `bundle` and checks the digest form and that
-every formal is one native field, Boolean, index or vector leaf. It holds no
-bundle, derives nothing from one and evaluates no relation.
+kind and each single native leaf. A Bundle used only in a relation declaration
+is retained in the package's `assets` member. The Rust interface reader checks
+the digest and single-leaf structure; Entry admission then independently derives
+the formal purposes and exact field, Boolean, index and vector types from the
+packaged Bundle. A mismatch returns `entry-asset-relation`. This checks the
+declaration's meaning without evaluating its predicate or proving that the
+protocol's acceptance implies it.
 
 Each clause has `name`, `kind`, `subject`, `residual` and `decision`; absent optional
 fields are JSON null. An application has a relation symbol and ordered `operands`.
@@ -182,26 +184,28 @@ covers the exact emitted bytes, including source capture, selected Entry,
 toolchain, compilation options and assets. Complete Entry aliases can share
 executable bytes while naming different packages.
 
-`assets` carries the compiler-visible expression assets the native artifact
-references. It is an array of pairs `[expected_sha256, body]`: the lowercase
+`assets` carries the compiler-visible assets referenced by executable operations
+or Bundle relation declarations. It is an array of pairs `[expected_sha256, body]`: the lowercase
 SHA-256 of the body's canonical encoding and that exact canonical text. Every
-body is a [`zkc.ring/0` arena](../domains/ring-expressions.md). The compiler
-includes each arena a reachable `ring.*` operation names, in strictly
-ascending digest order, so duplicates cannot occur. The package names no
-asset paths or asset names; the digest in the program is the only reference.
-An empty array is the exact form when the program names no asset. The member
+body is a [`zkc.ring/0` arena](../domains/ring-expressions.md) or
+[`zkc.relation-bundle/0`](../domains/relation-bundles.md). The compiler includes
+every required body in strictly ascending digest order, so duplicates cannot
+occur. The package names no asset paths or capture names; executable parameters
+and relation definitions refer to canonical digests.
+An empty array is the exact form when neither names an asset. The member
 is required: a package without it is not `zkc.entry/0`.
 
 The whole escaped package is bounded to 64 MiB; callers may lower this limit.
 The original, interface and artifact retain their own component limits. Assets
 number at most 256, each body is at most the arena's 8 MiB, and all bodies
-together are at most the Host registry's 32 MiB. The Rust reader refuses a
+together are at most 32 MiB. The Rust reader refuses a
 descending or repeated digest, a digest that is not 64 lowercase hexadecimal
 digits, or a pair of another shape with `entry-package-format`, and an
 exceeded count or byte bound with `entry-package-limit`. Reading checks only
 those bounds as a precheck on text; the Host admits each body and the
-program's references when an Entry is admitted, and the registry's own charge
-of canonical bytes plus decoded metadata decides the aggregate bound there. The `language-package` command writes exact package bytes
+program's references when an Entry is admitted. The combined registries' charge
+of canonical bytes plus decoded metadata is also bounded to 32 MiB, and can
+refuse a package within the transport limit. The `language-package` command writes exact package bytes
 without a trailing newline. Package identity is distinct from the original
 identity used by native proof binding. A consumer must obtain its expected
 package identity independently; internal hashes do not authenticate a supplied

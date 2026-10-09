@@ -241,12 +241,13 @@ int main() {
         check(source("", "Run<Product>", "where 1 <= Product::Inputs::Bits"),
               {product()}),
         "source.type");
-    auto bundled = source("domain Recurrence = bundle(asset recurrence);\n"
-                          "fn tables<B: Bundle>() -> index {"
-                          " return index<B::Tables>(); }\n"
-                          "fn fixed() -> index {"
-                          " return index<Recurrence::Tables +"
-                          " Recurrence::Publics>(); }\n");
+    auto bundled =
+        source("domain Recurrence = bundle(asset recurrence);\n"
+               "fn tables<B: Bundle>() -> index {"
+               " return index<B::Tables>(); }\n"
+               "fn fixed() -> index {"
+               " return index<Recurrence::Tables +"
+               " Recurrence::Publics + Recurrence::Channels>(); }\n");
     refuses(check(bundled, {product(), bundle()}), "source.asset-projection");
     auto closedBundle = rewrite(bundled, "index<B::Tables>()", "index<1>()");
     auto entry = take(close(closedBundle, {product(), bundle()}));

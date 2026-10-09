@@ -14,6 +14,55 @@ It does not select a domain, selector convention, quotient, commitment or proof
 protocol. Importing a bundle from an external system is a separate adequacy
 claim; structural identity is not semantic equivalence.
 
+## Compiler-visible table evaluation
+
+Source captures a Bundle with `domain R = bundle(asset relation)` and can pass
+it through generic `B: Bundle` parameters. A closed
+`kernel<F, Table>("relation.table_rows", witness, configuration, public_data,
+height; B)` evaluates one **present table's assertions**. `F` and `Table` are
+installed field and natural binding arguments; the static asset parameter is
+the Bundle's canonical SHA-256. The compiler retains the Bundle in the
+[Entry package](../formats/entry.md). The Host independently admits its body
+and preflights every reachable reference, including untaken branches.
+
+All public slots and the selected table's groups and assertion results must
+have field `F`. Needed arena nodes may also use its base field through explicit
+embedding. This view does not promote base-field trace columns to extension
+values. The native provider supports KoalaBear and Ext8; the relation carrier
+itself remains independent of that provider.
+
+Each vector concatenates groups of its authority in declaration order, with
+each group stored row-major. `public_data` starts with all Bundle public slots,
+followed by the selected table's public groups. If their aggregate widths are
+`W`, `C`, `P`, and there are `S` public slots, the exact element counts at
+height `h` are `h*W`, `h*C`, `S+h*P`. The result contains `h*A` elements,
+row-major over the table's `A` assertions. An inactive assertion slot is zero;
+an active slot evaluates its expression using the Bundle's closed bindings.
+Reads and scopes are checked before arithmetic, including reads multiplied
+by zero. Only active assertions' subexpressions are evaluated.
+
+The height must meet the table's fixed or variable policy. The calling
+protocol supplies a configured or instance height from the corresponding
+authority, just as it supplies the three vectors. This kernel checks no
+interaction records and does not decide optional presence or whole-Bundle
+satisfaction. Those obligations remain with its consumer.
+
+Refusals include `relation-table-index`, `relation-table-carrier`,
+`relation-table-witness-shape`, `relation-table-configuration-shape`, and
+`relation-table-public-shape`. The ordinary Bundle height, data, window and
+scope bounds apply. Reference work `h*(nodes+inputs+assertions+1)` is at most
+`2^26` for a nonempty assertion set; results are at most `2^20` elements and
+`2^22` base coordinates. Native execution additionally checks its value/output
+policy and charges `(h+1)*(nodes+inputs+assertions+1)` to the shared ring work
+budget. Only one selected arena is retained during evaluation.
+
+The immutable Host registry verifies the declared content identity and rejects
+missing, duplicate or mismatched assets (`relation-asset-missing`,
+`relation-asset-duplicate`, `relation-asset-identity`). Canonical text and
+decoded metadata, including derived per-output read facts, share a 32 MiB
+registry allowance (`relation-assets-bytes`). Named Entries combine this
+allowance with their Ring assets.
+
 ## Carrier
 
 The exact array form is:

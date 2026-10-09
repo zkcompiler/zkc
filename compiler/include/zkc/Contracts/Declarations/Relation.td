@@ -13,5 +13,5 @@ def OpRelationTableRows : ZKC_Operation<"relation.table_rows",
     [ZKC_Apply<TypeVector, [RelationF]>, ZKC_Apply<TypeVector, [RelationF]>,
      ZKC_Apply<TypeVector, [RelationF]>, ZKC_Apply<TypeIndex, []>],
     [ZKC_Apply<TypeVector, [RelationF]>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
-  let parameters = AssetIdentity;
+  let parameters = RelationAssetIdentity;
 }

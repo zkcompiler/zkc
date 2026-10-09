@@ -24,6 +24,13 @@ BodyChecker::kernelSignature(const Expression &expr,
   bool assetPosition =
       schema &&
       schema->validator == protocol::ParameterValidator::AssetIdentity;
+  StringRef expectedAssetSort;
+  if (assetPosition) {
+    if (schema->assetFormat == "zkc.ring/0")
+      expectedAssetSort = "Ring";
+    else if (schema->assetFormat == "zkc.relation-bundle/0")
+      expectedAssetSort = "Bundle";
+  }
   if (assetPosition && !expr.assetParameters.count(0)) {
     fail("source.asset-reference",
          "operation parameter requires a captured asset term", expr.span);
@@ -39,7 +46,8 @@ BodyChecker::kernelSignature(const Expression &expr,
            "kernel parameter term is not a captured asset", expr.span);
       return {};
     }
-    if (!assetPosition || position != 0 || assetSort(*term) != "Ring") {
+    if (!assetPosition || position != 0 ||
+        assetSort(*term) != expectedAssetSort) {
       fail("source.asset-reference",
            "operation does not accept this asset term", expr.span);
       return {};
