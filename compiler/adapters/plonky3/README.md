@@ -133,10 +133,10 @@ per line, each value in compact JSON. Identities are SHA-256 of that text.
 | `export.json` | `zkc.plonky3-air-export/0` | Candidate relation: arena and its digest, slot bindings, layout and preprocessed values with their digest, assertions in upstream emission order with degree multiples and selectors, node origins, feature inventory and upstream pins. It carries no authority until a verifier configuration selects its identity. |
 | `instance.json` | `zkc.plonky3-air-instance/0` | Verifier statement: selected export identity, height and public values |
 | `witness.json` | `zkc.plonky3-air-witness/0` | Prover main trace |
-| `arena.json`, `ring-assets.json` | `zkc.ring/0`, `zkc.ring-assets/0` | Exact arena text and an evaluator manifest for the Entry CLI's `--evaluators` |
+| `arena.json` | `zkc.ring/0` | Exact arena text, captured by the source compiler with `--asset=export=ring-json=FILE` and retained in the authenticated Entry package |
 | `bundle*.json` | `zkc.relation-bundle/0` and its configuration, instance and witness | Derived relation-bundle carriers |
 | `expected.json` | | Upstream debug-checker failures for the fixture's instance and witness |
-| `source-*.json` | `zkc.entry-run/0` | Recurrence only: requests for the [imported AIR source client](../../../examples/projects/imported-air/README.md) whose vectors the closed view prepares from the export, an instance selecting it and a trace. `source-expected.json` holds direct `Air::eval` values for each. |
+| `source-*.json` | `zkc.entry-run/0` | Recurrence only: requests for the [imported AIR source client](../../../examples/projects/imported-air/README.md). Trace requests keep witness, configuration and public values separate; polynomial requests carry assignments prepared by the closed view. `source-expected.json` holds direct `Air::eval` values for each. |
 
 Slot bindings are `["main", column, offset]`, `["preprocessed", column, offset]`,
 `["public", index]` and `["selector", kind]`. Assertion `i` is upstream

@@ -1,9 +1,9 @@
 //! Entry requests for the maintained `.zkc` source client in
 //! `examples/projects/imported-air`, with direct `Air::eval` expectations.
 //!
-//! Every request vector is prepared here by the closed view, under the
-//! fixture's export identity and an instance that selects it: the adapter, not
-//! the request author, decides which value each arena input receives. The
+//! Trace requests keep witness, configuration and public values separate;
+//! the native Bundle view supplies their read bindings. Polynomial requests
+//! contain prepared assignments under the fixture's selected export. The
 //! expectations come from `Air::eval` through the reference builders, never
 //! from the exported arena. The adapter's arena interpreter and the upstream
 //! debug checker only gate generation.
@@ -130,6 +130,37 @@ where
             "residuals": decimals(&direct),
             "upstream_failures": failures,
         }),
+    ))
+}
+
+/// Actual trace inputs for the Bundle table kernel, without expanded reads or
+/// caller-supplied selector values. The expected residuals come directly from
+/// the AIR under row-indicator semantics.
+fn trace_case<A>(
+    air: &A,
+    export: &Export,
+    instance: &Instance,
+    trace: &RowMajorMatrix<F>,
+) -> Result<(String, Value), Refusal>
+where
+    A: for<'a> Air<RowBuilder<'a>> + for<'a> Air<DebugConstraintBuilder<'a, F>>,
+{
+    let (_, mut expected) = rows_case(air, export, instance, trace, SelectorLaw::RowIndicator)?;
+    expected["entry"] = json!("TraceResiduals");
+    let configuration = export
+        .layout
+        .preprocessed
+        .as_ref()
+        .map(|table| table.values.as_slice())
+        .unwrap_or(&[]);
+    Ok((
+        request(json!({
+            "trace": base_vector(&trace.values),
+            "configuration": base_vector(configuration),
+            "public_data": base_vector(&instance.public_values),
+            "height": trace.height(),
+        })),
+        expected,
     ))
 }
 
@@ -275,6 +306,21 @@ where
     let rows = |instance, trace, law| rows_case(air, export, instance, trace, law);
     let (row_law, two_adic) = (SelectorLaw::RowIndicator, SelectorLaw::TwoAdicLagrange);
     let cases = [
+        (
+            "trace-honest",
+            "source-trace-honest.json",
+            trace_case(air, export, instance, trace)?,
+        ),
+        (
+            "trace-changed-trace",
+            "source-trace-changed-trace.json",
+            trace_case(air, export, instance, &changed_trace)?,
+        ),
+        (
+            "trace-changed-public",
+            "source-trace-changed-public.json",
+            trace_case(air, export, &changed_statement, trace)?,
+        ),
         (
             "rows-honest",
             "source-rows-honest.json",
