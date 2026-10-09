@@ -127,20 +127,27 @@ fn dead_internal_views_release_after_all_consumers_without_requiring_a_codec() {
 }
 
 #[test]
-fn diagonal_memory_limit_is_exact_and_stricter_than_materialization() {
+fn diagonal_fresh_output_limit_does_not_recharge_shared_parents() {
     for d in [false, true] {
         let (_, b) = run(d, false, None, false);
         let dense_charge = b.outputs[0][0].retained_bytes();
         let (_, args) = fixture(d, true);
         let required = args[1].retained_bytes() + args[2].retained_bytes() + 256;
         assert!(required > dense_charge);
-        for limit in [dense_charge, required - 1] {
+        // The new view owns 256 bytes; its two parent allocations are already
+        // live operands. Each later contraction allocates a 512-byte scalar.
+        let (result, b) = run(d, true, Some(255), false);
+        assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
+        assert!(b.outputs.is_empty());
+        for limit in [256, 511] {
             let (result, b) = run(d, true, Some(limit), false);
             assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
-            assert!(b.outputs.is_empty());
+            assert_eq!(b.outputs.len(), 1);
+            assert_eq!(b.outputs[0][0].retained_bytes(), required);
         }
-        let (result, b) = run(d, true, Some(required), false);
+        let (result, b) = run(d, true, Some(512), false);
         assert!(result.is_ok());
+        assert_eq!(b.outputs.len(), 3);
         assert_eq!(b.outputs[0][0].retained_bytes(), required);
     }
 }
