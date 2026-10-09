@@ -283,7 +283,7 @@ const MUTATIONS: &[(&str, &[Edit], &str)] = &[
     (
         "challenge count",
         &[(5, r#"[["5"],["95"]"#, r#"[["5","5"],["95"]"#)],
-        "bundle-public-shape",
+        "staged-slot-shape",
     ),
     (
         "extension challenge as one coordinate",
@@ -439,7 +439,6 @@ fn staged_assignment_mutations() {
             "bundle-duplicate-name",
             "bundle-group-count",
             "bundle-group-shape",
-            "bundle-public-shape",
             "bundle-relation",
             "bundle-scope-height",
             "bundle-table-missing",
@@ -452,6 +451,7 @@ fn staged_assignment_mutations() {
             "staged-presence",
             "staged-program",
             "staged-schema",
+            "staged-slot-shape",
         ],
         "refusal identifiers asserted by the mutation table"
     );
@@ -961,6 +961,11 @@ fn staged_resources_are_bounded_before_values() {
     );
     assert_eq!(
         resource_refusal(&resource_case(KB, 1, 0, Some(4), 0), full),
+        Error("bundle-data-limit"),
+        "the declared challenge also consumes the coordinate budget"
+    );
+    assert_eq!(
+        resource_refusal(&resource_case(KB, 1, 0, Some(4), 0), full - 1),
         Error("bundle-group-shape")
     );
 }

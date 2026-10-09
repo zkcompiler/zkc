@@ -2437,12 +2437,8 @@ pub struct StagedEvaluation {
     pub global: Vec<Columns>,
 }
 
-/// One value per slot; the count is checked like the instance's publics.
-fn read_values(value: &Value, slots: &[Slot]) -> Result<Vec<Columns>> {
-    let values = array(value, "bundle-public-shape")?;
-    if values.len() != slots.len() {
-        return Err(Error("bundle-public-shape"));
-    }
+/// Read values after the caller checks both challenge and claim list shapes.
+fn read_values(values: &[Value], slots: &[Slot]) -> Result<Vec<Columns>> {
     slots
         .iter()
         .zip(values)
@@ -2485,8 +2481,15 @@ impl Staged {
             if tables.len() != phase.tables.len() {
                 return Err(Error("staged-data-schema"));
             }
-            let challenges = read_values(&entry[0], &phase.challenges)?;
-            let claims = read_values(&entry[1], &phase.claims)?;
+            let challenge_values = array(&entry[0], "staged-slot-shape")?;
+            let claim_values = array(&entry[1], "staged-slot-shape")?;
+            if challenge_values.len() != phase.challenges.len()
+                || claim_values.len() != phase.claims.len()
+            {
+                return Err(Error("staged-slot-shape"));
+            }
+            let challenges = read_values(challenge_values, &phase.challenges)?;
+            let claims = read_values(claim_values, &phase.claims)?;
             let mut data = Vec::with_capacity(tables.len());
             for (table, value) in phase.tables.iter().zip(tables) {
                 if value.is_null() {
@@ -2588,6 +2591,12 @@ impl Staged {
             }
             if data.tables.len() != bundle.tables.len() {
                 return Err(Error("staged-data-shape"));
+            }
+            for slot in phase.challenges.iter().chain(&phase.claims) {
+                coordinates += degree(slot.field).ok_or(Error("bundle-field"))? as u64;
+            }
+            if coordinates > COORDINATE_LIMIT {
+                return Err(Error("bundle-data-limit"));
             }
             for (t, (table, groups)) in phase.tables.iter().zip(&data.tables).enumerate() {
                 if admitted.present[t] != groups.is_some() {
