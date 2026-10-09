@@ -365,6 +365,6 @@ impl Backend for NativeBackend {
         }
         self.core.invoke(i, args, &signature)?;
         let outputs = (implementation.handler)(self, i, args)?;
-        self.core.outputs(i, outputs)
+        self.core.outputs(i, args, outputs)
     }
 }

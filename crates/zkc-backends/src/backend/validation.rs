@@ -2,6 +2,7 @@
 use super::EntryPolicy;
 use crate::{Policy, Result, Value, ark, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};
+use std::collections::HashSet;
 use zkc_runtime::interactive::{
     AttributeRule, Frame, FrameKind, Invocation, Type, Value as RuntimeValue,
 };
@@ -388,7 +389,12 @@ impl Core {
         Ok(())
     }
 
-    pub(super) fn outputs(&self, i: &Invocation<'_>, values: Vec<Value>) -> Result<Vec<Value>> {
+    pub(super) fn outputs(
+        &self,
+        i: &Invocation<'_>,
+        args: &[Value],
+        values: Vec<Value>,
+    ) -> Result<Vec<Value>> {
         if values.len() != i.binding.signature().outputs.len()
             || values
                 .iter()
@@ -401,7 +407,27 @@ impl Core {
             n.checked_add(v.retained_bytes())
                 .ok_or_else(|| exhausted("output-bytes"))
         })?;
-        self.policy.output(sum, i.max_output_bytes)?;
+        self.policy.output(sum, usize::MAX)?;
+        // The invocation allowance bounds newly allocated storage. Include
+        // nested operand backings so an accessor returning an existing child
+        // does not need room for a second copy of that child.
+        let mut held = HashSet::new();
+        for argument in args {
+            argument.retained_parts(&mut |backing| held.insert(backing));
+        }
+        let mut fresh = 0u128;
+        for value in &values {
+            let owned = value.retained_parts(&mut |backing| {
+                if !held.insert(backing) {
+                    return false;
+                }
+                fresh += backing.bytes() as u128;
+                true
+            });
+            fresh += owned as u128;
+        }
+        let fresh = usize::try_from(fresh).map_err(|_| exhausted("output-bytes"))?;
+        self.policy.output(fresh, i.max_output_bytes)?;
         Ok(values)
     }
 }

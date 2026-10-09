@@ -1,6 +1,7 @@
 //! Declared operand read extents for kernels that access part of an operand.
 //! The Runner charges every other kernel the full retained bytes of every
-//! operand. Each extent bounds all operand data its implementation reads.
+//! operand. Each extent bounds the kernel body's operand reads. Native nested
+//! admission and backing walks are bounded by the sequence-work ledger.
 use crate::Value;
 
 /// Charge for one scalar, index or handle operand, as for an inline value.

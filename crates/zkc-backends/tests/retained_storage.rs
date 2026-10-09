@@ -128,6 +128,126 @@ fn minimal_live(attempt: impl Fn(usize) -> bool) -> usize {
     high
 }
 
+fn alias_conversions(n: usize, unwrap: bool) -> Vec<u8> {
+    let scalar = spelling(Type::Field, Identity::KoalaBear);
+    let mut body = vec![
+        json!(["op", "fill", "fill", [], ["x", "n"], ["v"]]),
+        json!(["op", "from", "from", [], ["v"], ["fixed"]]),
+    ];
+    if unwrap {
+        body.push(json!(["op", "to", "to", [], ["fixed"], ["alias"]]));
+    }
+    body.push(json!(["return", []]));
+    let fixed = |name: &str, contract: &str| {
+        json!([
+            name,
+            contract,
+            ["koala-bear", n.to_string()],
+            format!("plonky3/{contract}")
+        ])
+    };
+    program(
+        vec![
+            row("fill", "vector.fill", Identity::KoalaBear, "plonky3"),
+            fixed("from", "fixed_vector.from_vector"),
+            fixed("to", "fixed_vector.to_vector"),
+        ],
+        vec![function(
+            "make",
+            json!([["x", scalar], ["n", index()]]),
+            json!([]),
+            json!(body),
+        )],
+        json!([["x", scalar], ["n", index()]]),
+        json!([["local", "make", "make", ["x", "n"], []], ["return", []]]),
+    )
+}
+
+#[test]
+fn alias_kernels_accept_the_exact_live_and_fresh_boundary() {
+    const N: usize = 1 << 16;
+    // Two entry scalars, their local arguments, the vector and its descriptor.
+    let edge = 4 * INLINE + size(N, 4) + 1024;
+    for unwrap in [false, true] {
+        let attempt = |values| {
+            run(
+                &alias_conversions(N, unwrap),
+                backend(N),
+                vec![
+                    Value::KoalaBearField(KoalaBear::new(5)),
+                    Value::Index(N as u64),
+                ],
+                values,
+                WorkBudget::default(),
+            )
+        };
+        let (outcome, usage) = attempt(unbounded());
+        outcome.unwrap();
+        assert_eq!(usage.total_value_bytes, edge);
+        for total in [false, true] {
+            let budget = |bytes| {
+                if total {
+                    ValueBudget {
+                        live_bytes: usize::MAX,
+                        total_bytes: bytes,
+                    }
+                } else {
+                    live(bytes)
+                }
+            };
+            attempt(budget(edge)).0.unwrap();
+            assert_eq!(
+                attempt(budget(edge - 1)).0.unwrap_err(),
+                "exhausted:output-bytes"
+            );
+        }
+    }
+}
+
+#[test]
+fn nested_aliases_need_no_fresh_allowance_but_new_vectors_do() {
+    let n = 4096;
+    let vector = Value::KoalaBearVector(vec![KoalaBear::new(7); n].into());
+    let element = LogicalType::new(Type::Vector, Identity::KoalaBear).unwrap();
+    let sequence = Value::Sequence(
+        zkc_backends::Sequence::new(element.clone(), vec![vector], &Policy::default()).unwrap(),
+    );
+    let mut controlled = support::Controlled::new(backend(n));
+    controlled.output_limit = Some(0);
+    let binding = OperationBinding {
+        contract: "sequence.at".into(),
+        arguments: vec![element.spelling()],
+        implementation: "native/sequence.at".into(),
+    };
+    one(controlled, binding, &[], vec![sequence, Value::Index(0)])
+        .0
+        .unwrap();
+    let binding = OperationBinding {
+        contract: "vector.fill".into(),
+        arguments: vec!["koala-bear".into()],
+        implementation: "plonky3/vector.fill".into(),
+    };
+    for allowance in [size(n, 4) - 1, size(n, 4)] {
+        let mut controlled = support::Controlled::new(backend(n));
+        controlled.output_limit = Some(allowance);
+        let result = one(
+            controlled,
+            binding.clone(),
+            &[],
+            vec![
+                Value::KoalaBearField(KoalaBear::new(7)),
+                Value::Index(n as u64),
+            ],
+        )
+        .0;
+        if allowance < size(n, 4) {
+            assert_eq!(result.unwrap_err(), "exhausted:output-bytes");
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
 // A local function fills three vectors with the same element. `aliased` returns
 // the first vector twice and the second once; otherwise it returns three
 // independently allocated vectors with equal contents. A second call then

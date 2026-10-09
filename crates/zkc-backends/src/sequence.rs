@@ -23,9 +23,10 @@ impl Default for Budget {
 }
 impl Budget {
     pub fn charge(&mut self, args: &[Value]) -> Result<()> {
-        // A conservative three-visit allowance covers operand validation and
-        // construction. Shared subtrees count each occurrence, independently of
-        // Arc refcounts. Charge before the first recursive validation.
+        // Fixed work units proportional to the expanded input bound validation,
+        // construction and backing walks. They do not count literal CPU visits.
+        // Shared subtrees count each occurrence, independently of Arc refcounts.
+        // Charge before the first recursive validation.
         let count = args.iter().try_fold(1usize, |n, v| add(n, nodes(v)?))?;
         let work = u64::try_from(count)
             .ok()

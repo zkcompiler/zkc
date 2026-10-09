@@ -73,7 +73,9 @@ includes the inline storage it holds, such as a collection's element slots.
   operand bytes read and the result bytes newly allocated. Operands are charged
   at their full retained charge at every use, however their storage is shared.
   An installed kernel may declare a smaller read extent; it bounds every operand
-  byte the implementation reads and never exceeds the full charge. The native
+  byte the kernel body reads and never exceeds the full charge. Native operand
+  admission can additionally walk nested values; its sequence-work ledger
+  bounds those walks separately. The native
   row opening declares its row and authentication path; element and handle
   accessors and length queries declare one handle and index.
 

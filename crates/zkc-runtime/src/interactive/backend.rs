@@ -255,10 +255,12 @@ pub trait Backend {
         exit: FrameExit,
         outputs: &[Self::Value],
     ) -> Result<(), BackendError>;
-    /// Upper bound on the operand bytes this installed implementation reads,
+    /// Upper bound on operand bytes read by this installed kernel body,
     /// for kernels that access only part of their operands, such as one opening
     /// of a committed table. The Runner charges it as logical work before
     /// `apply`. `None` charges the full retained bytes of every operand.
+    /// A backend that additionally walks nested operands for admission must
+    /// bound those walks separately.
     fn operand_work(
         &self,
         _invocation: &Invocation<'_>,
