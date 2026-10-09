@@ -1337,3 +1337,6 @@ fn remaining_bundle_refusals() {
         Error("bundle-contribution-limit")
     );
 }
+
+#[path = "relation_staged_tests.rs"]
+mod staged;

@@ -204,6 +204,10 @@ premise. Its assignment carrier is:
   [[challenge_values, claim_values, [null | [group_values, ...], ...]], ...]]
 ```
 
+Each phase entry has one value per challenge and claim slot and, per table,
+`null` exactly when the base table is absent, otherwise the phase's groups at
+the table's admitted height. Staged reads use the base table's read model.
+
 The staged predicate holds when the base data are admitted, every staged
 assertion is zero on its scope and every global output is zero, for the
 supplied actual challenge and claim values. It contains none of the bundle's own

@@ -1570,7 +1570,51 @@ fn interpret<A: Algebra>(
 
 type BalanceKey = (usize, Option<(usize, u32)>, String);
 
+/// Element `(row, column)` of a row-major group of canonical coordinates.
+fn element<A: Algebra>(
+    algebra: &A,
+    field: Identity,
+    width: u32,
+    columns: &[String],
+    row: u32,
+    column: u32,
+) -> Result<A::Value> {
+    let d = degree(field).expect("admitted field");
+    let base = (row as usize * width as usize + column as usize) * d;
+    algebra.value(field, &columns[base..base + d])
+}
+
 impl Bundle {
+    /// Columns of every group of an admitted present table, in group order,
+    /// each from the carrier with authority over it.
+    fn present_groups<'a>(
+        &self,
+        t: usize,
+        config: &'a Configuration,
+        instance: &'a Instance,
+        witness: &'a Witness,
+    ) -> Vec<&'a Columns> {
+        let mut next = [0usize; 3];
+        self.tables[t]
+            .groups
+            .iter()
+            .map(|g| match g.authority {
+                Authority::Config => {
+                    next[0] += 1;
+                    &config.tables[t].1[next[0] - 1]
+                }
+                Authority::Public => {
+                    next[1] += 1;
+                    &instance.tables[t].as_ref().expect("present").1[next[1] - 1]
+                }
+                Authority::Witness => {
+                    next[2] += 1;
+                    &witness.tables[t].as_ref().expect("present")[next[2] - 1]
+                }
+            })
+            .collect()
+    }
+
     /// Admission followed by the reference interpretation of every assertion,
     /// field-weighted balance and natural multiset equality.
     pub fn evaluate<A: Algebra>(
@@ -1600,25 +1644,7 @@ impl Bundle {
                 continue;
             }
             let height = admitted.heights[t];
-            let mut next = [0usize; 3];
-            let groups: Vec<&Columns> = table
-                .groups
-                .iter()
-                .map(|g| match g.authority {
-                    Authority::Config => {
-                        next[0] += 1;
-                        &config.tables[t].1[next[0] - 1]
-                    }
-                    Authority::Public => {
-                        next[1] += 1;
-                        &instance.tables[t].as_ref().expect("present").1[next[1] - 1]
-                    }
-                    Authority::Witness => {
-                        next[2] += 1;
-                        &witness.tables[t].as_ref().expect("present")[next[2] - 1]
-                    }
-                })
-                .collect();
+            let groups = self.present_groups(t, config, instance, witness);
             // Rows split into segments over which the active checks are fixed.
             let mut cuts = BTreeSet::from([0, height]);
             let ranges: Vec<(bool, usize, (u32, u32))> = table
@@ -1675,11 +1701,14 @@ impl Bundle {
                                 column,
                             } => {
                                 let g = &table.groups[group as usize];
-                                let d = degree(g.field).expect("admitted field");
-                                let row_index =
-                                    read_row(table.read_model, height, r, offset) as usize;
-                                let base = (row_index * g.width as usize + column as usize) * d;
-                                algebra.value(g.field, &groups[group as usize][base..base + d])
+                                element(
+                                    algebra,
+                                    g.field,
+                                    g.width,
+                                    groups[group as usize],
+                                    read_row(table.read_model, height, r, offset),
+                                    column,
+                                )
                             }
                         }
                     };
@@ -2371,6 +2400,419 @@ fn staged_offsets(arena: &Expression, inputs: &[StagedInput], output: usize) -> 
             _ => None,
         })
         .collect())
+}
+
+/// Supplied values of one staged phase: the actual challenge and claim
+/// values, and per table `None` exactly when the table is absent, otherwise
+/// the phase's groups for that table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StagedPhaseAssignment {
+    pub challenges: Vec<Columns>,
+    pub claims: Vec<Columns>,
+    pub tables: Vec<Option<Vec<Columns>>>,
+}
+/// `zkc.relation-staged-assignment/0`: one entry per phase of the program it
+/// names.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StagedAssignment {
+    pub program: String,
+    pub phases: Vec<StagedPhaseAssignment>,
+}
+/// Value of a staged assertion's output on one row; `phase` counts from 1.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StagedResidual {
+    pub phase: u32,
+    pub table: usize,
+    pub assertion: usize,
+    pub row: u32,
+    pub value: Columns,
+}
+/// The staged predicate only: staged assertions and global outputs. `work`
+/// counts the staged tables, not the bundle's own checks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StagedEvaluation {
+    pub satisfied: bool,
+    pub work: u64,
+    pub residuals: Vec<StagedResidual>,
+    pub global: Vec<Columns>,
+}
+
+/// One value per slot; the count is checked like the instance's publics.
+fn read_values(value: &Value, slots: &[Slot]) -> Result<Vec<Columns>> {
+    let values = array(value, "bundle-public-shape")?;
+    if values.len() != slots.len() {
+        return Err(Error("bundle-public-shape"));
+    }
+    slots
+        .iter()
+        .zip(values)
+        .map(|(s, v)| {
+            let mut out = Vec::new();
+            read_value(v, s.field, &mut out).map(|()| out)
+        })
+        .collect()
+}
+fn output_field(arena: &Expression, output: usize) -> Identity {
+    arena.facts()[arena.outputs()[output]].field
+}
+/// Materialized result records and their base coordinates.
+fn check_results(records: u64, coordinates: u64) -> Result<()> {
+    if records > RESULT_RECORD_LIMIT || coordinates > RESULT_COORDINATE_LIMIT {
+        return Err(Error("bundle-result-limit"));
+    }
+    Ok(())
+}
+
+impl Staged {
+    /// Exact carrier shape and one coordinate budget across all phases.
+    /// The program identity, presence, heights and canonical values are
+    /// checked by [`Staged::evaluate`].
+    pub fn decode_assignment(&self, value: &Value) -> Result<StagedAssignment> {
+        let root = row(value, 3, "staged-data-schema")?;
+        if root[0].as_str() != Some("zkc.relation-staged-assignment/0") {
+            return Err(Error("staged-data-schema"));
+        }
+        let program = text(&root[1], "staged-data-schema")?;
+        let rows = array(&root[2], "staged-data-schema")?;
+        if rows.len() != self.phases.len() {
+            return Err(Error("staged-data-schema"));
+        }
+        let mut budget = COORDINATE_LIMIT;
+        let mut phases = Vec::with_capacity(rows.len());
+        for (phase, entry) in self.phases.iter().zip(rows) {
+            let entry = row(entry, 3, "staged-data-schema")?;
+            let tables = array(&entry[2], "staged-data-schema")?;
+            if tables.len() != phase.tables.len() {
+                return Err(Error("staged-data-schema"));
+            }
+            let challenges = read_values(&entry[0], &phase.challenges)?;
+            let claims = read_values(&entry[1], &phase.claims)?;
+            let mut data = Vec::with_capacity(tables.len());
+            for (table, value) in phase.tables.iter().zip(tables) {
+                if value.is_null() {
+                    data.push(None);
+                    continue;
+                }
+                let groups = value
+                    .as_array()
+                    .filter(|g| g.len() == table.groups.len())
+                    .ok_or(Error("bundle-group-count"))?;
+                let mut columns = Vec::with_capacity(groups.len());
+                for ((_, field, _), group) in table.groups.iter().zip(groups) {
+                    columns.push(read_group(group, *field, &mut budget)?);
+                }
+                data.push(Some(columns));
+            }
+            phases.push(StagedPhaseAssignment {
+                challenges,
+                claims,
+                tables: data,
+            });
+        }
+        Ok(StagedAssignment { program, phases })
+    }
+
+    pub fn encode_assignment(&self, assignment: &StagedAssignment) -> Value {
+        let values = |v: &[Columns]| -> Vec<Value> { v.iter().map(|c| encode_value(c)).collect() };
+        let tables = self.phases[0].tables.len();
+        let phases: Vec<_> = assignment
+            .phases
+            .iter()
+            .enumerate()
+            .map(|(p, data)| {
+                let encoded: Vec<_> = data
+                    .tables
+                    .iter()
+                    .take(tables)
+                    .enumerate()
+                    .map(|(t, groups)| match groups {
+                        None => Value::Null,
+                        Some(groups) => Value::Array(
+                            groups
+                                .iter()
+                                .enumerate()
+                                .map(|(g, columns)| {
+                                    let field = self
+                                        .phases
+                                        .get(p)
+                                        .and_then(|phase| phase.tables[t].groups.get(g))
+                                        .map_or(Identity::KoalaBear, |group| group.1);
+                                    encode_group(columns, field)
+                                })
+                                .collect(),
+                        ),
+                    })
+                    .collect();
+                json!([values(&data.challenges), values(&data.claims), encoded])
+            })
+            .collect();
+        json!([
+            "zkc.relation-staged-assignment/0",
+            assignment.program,
+            phases
+        ])
+    }
+
+    /// The staged predicate for the supplied actual challenges and claims.
+    /// The base data are admitted first. Shape, presence, windows, work and
+    /// result size are then checked from the declared program and admitted
+    /// heights before any staged value is read. Premises are recorded
+    /// assumptions and are not evaluated; the bundle's own assertions and
+    /// interactions are not part of this predicate.
+    pub fn evaluate<A: Algebra>(
+        &self,
+        bundle: &Bundle,
+        config: &Configuration,
+        instance: &Instance,
+        witness: &Witness,
+        assignment: &StagedAssignment,
+        algebra: &A,
+    ) -> Result<StagedEvaluation> {
+        if bundle.identity != self.relation {
+            return Err(Error("bundle-relation"));
+        }
+        let admitted = bundle.admit(config, instance, witness)?;
+        if assignment.program != self.identity {
+            return Err(Error("staged-program"));
+        }
+        if assignment.phases.len() != self.phases.len() {
+            return Err(Error("staged-data-shape"));
+        }
+        let (mut coordinates, mut work) = (0u64, 0u64);
+        let (mut records, mut result_coordinates) = (0u64, 0u64);
+        for (phase, data) in self.phases.iter().zip(&assignment.phases) {
+            if data.challenges.len() != phase.challenges.len()
+                || data.claims.len() != phase.claims.len()
+            {
+                return Err(Error("staged-slot-shape"));
+            }
+            if data.tables.len() != bundle.tables.len() {
+                return Err(Error("staged-data-shape"));
+            }
+            for (t, (table, groups)) in phase.tables.iter().zip(&data.tables).enumerate() {
+                if admitted.present[t] != groups.is_some() {
+                    return Err(Error("staged-presence"));
+                }
+                let Some(groups) = groups else {
+                    continue;
+                };
+                if groups.len() != table.groups.len() {
+                    return Err(Error("bundle-group-count"));
+                }
+                let height = admitted.heights[t];
+                for ((_, field, width), columns) in table.groups.iter().zip(groups) {
+                    let d = degree(*field).ok_or(Error("bundle-field"))? as u64;
+                    // The declared shape is bounded before data lengths.
+                    let expected = u64::from(height) * u64::from(*width) * d;
+                    coordinates += expected;
+                    if coordinates > COORDINATE_LIMIT {
+                        return Err(Error("bundle-data-limit"));
+                    }
+                    if columns.len() as u64 != expected {
+                        return Err(Error("bundle-group-shape"));
+                    }
+                }
+                let model = bundle.tables[t].read_model;
+                for a in &table.assertions {
+                    window_at(
+                        a.scope,
+                        model,
+                        height,
+                        &staged_offsets(&table.arena, &table.inputs, a.output)?,
+                    )?;
+                }
+                if !table.assertions.is_empty() {
+                    work += u64::from(height)
+                        * (table.arena.nodes().len()
+                            + table.arena.inputs().len()
+                            + table.assertions.len()
+                            + 1) as u64;
+                }
+                if work > WORK_LIMIT {
+                    return Err(Error("bundle-work-limit"));
+                }
+                for a in &table.assertions {
+                    let (lo, hi) = scope_rows(a.scope, height);
+                    let rows = u64::from(hi.saturating_sub(lo));
+                    records += rows;
+                    result_coordinates +=
+                        rows * degree(output_field(&table.arena, a.output)).unwrap_or(1) as u64;
+                }
+                check_results(records, result_coordinates)?;
+            }
+        }
+        let (global, global_inputs, global_outputs) = &self.global;
+        for &output in global_outputs {
+            records += 1;
+            result_coordinates += degree(output_field(global, output)).unwrap_or(1) as u64;
+        }
+        check_results(records, result_coordinates)?;
+        for (phase, data) in self.phases.iter().zip(&assignment.phases) {
+            for (slots, values) in [
+                (&phase.challenges, &data.challenges),
+                (&phase.claims, &data.claims),
+            ] {
+                for (s, v) in slots.iter().zip(values) {
+                    if v.len() != degree(s.field).unwrap_or(0)
+                        || !v.iter().all(|c| canonical(s.field, c))
+                    {
+                        return Err(Error("bundle-value"));
+                    }
+                }
+            }
+            for (table, groups) in phase.tables.iter().zip(&data.tables) {
+                for ((_, field, _), columns) in table.groups.iter().zip(groups.iter().flatten()) {
+                    if !columns.iter().all(|c| canonical(*field, c)) {
+                        return Err(Error("bundle-value"));
+                    }
+                }
+            }
+        }
+        let publics = bundle
+            .publics
+            .iter()
+            .zip(&instance.publics)
+            .map(|(s, v)| algebra.value(s.field, v))
+            .collect::<Result<Vec<_>>>()?;
+        let slot_values = |slots: &[Slot], values: &[Columns]| {
+            slots
+                .iter()
+                .zip(values)
+                .map(|(s, v)| algebra.value(s.field, v))
+                .collect::<Result<Vec<_>>>()
+        };
+        let (mut challenges, mut claims) = (Vec::new(), Vec::new());
+        for (phase, data) in self.phases.iter().zip(&assignment.phases) {
+            challenges.push(slot_values(&phase.challenges, &data.challenges)?);
+            claims.push(slot_values(&phase.claims, &data.claims)?);
+        }
+        // Formation admits reads only in tables and only of phases <= the
+        // reading phase; challenges and claims name phases from 1.
+        let scalar = |input: StagedInput| -> A::Value {
+            match input {
+                StagedInput::Public(index) => publics[index as usize].clone(),
+                StagedInput::Challenge { phase, index } => {
+                    challenges[phase as usize - 1][index as usize].clone()
+                }
+                StagedInput::Claim { phase, index } => {
+                    claims[phase as usize - 1][index as usize].clone()
+                }
+                StagedInput::Read { .. } => unreachable!("formation refuses scalar reads"),
+            }
+        };
+        let mut result = StagedEvaluation {
+            satisfied: true,
+            work,
+            residuals: vec![],
+            global: vec![],
+        };
+        for (p, phase) in self.phases.iter().enumerate() {
+            for (t, table) in phase.tables.iter().enumerate() {
+                if !admitted.present[t] || table.assertions.is_empty() {
+                    continue;
+                }
+                let base = &bundle.tables[t];
+                let height = admitted.heights[t];
+                let base_groups = bundle.present_groups(t, config, instance, witness);
+                // Rows split into segments over which the active assertions
+                // are fixed; each row evaluates their outputs once.
+                let ranges: Vec<_> = table
+                    .assertions
+                    .iter()
+                    .map(|a| scope_rows(a.scope, height))
+                    .collect();
+                let mut cuts = BTreeSet::from([0, height]);
+                for &(lo, hi) in &ranges {
+                    if lo < hi {
+                        cuts.insert(lo);
+                        cuts.insert(hi);
+                    }
+                }
+                let cuts: Vec<_> = cuts.into_iter().collect();
+                let mut residuals: Vec<Vec<StagedResidual>> = vec![vec![]; ranges.len()];
+                for segment in cuts.windows(2) {
+                    let (from, to) = (segment[0], segment[1]);
+                    let active: Vec<usize> = (0..ranges.len())
+                        .filter(|&i| {
+                            ranges[i].0 < ranges[i].1 && ranges[i].0 <= from && to <= ranges[i].1
+                        })
+                        .collect();
+                    if active.is_empty() {
+                        continue;
+                    }
+                    let positions: Vec<usize> = active
+                        .iter()
+                        .map(|&i| table.assertions[i].output)
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect();
+                    let selected = table.arena.select(&positions)?;
+                    let slot =
+                        |output: usize| positions.binary_search(&output).expect("selected output");
+                    for r in from..to {
+                        let mut fetch = |input: usize| -> Result<A::Value> {
+                            let StagedInput::Read {
+                                phase: j,
+                                group,
+                                offset,
+                                column,
+                            } = table.inputs[input]
+                            else {
+                                return Ok(scalar(table.inputs[input]));
+                            };
+                            let read = read_row(base.read_model, height, r, offset);
+                            let group = group as usize;
+                            if j == 0 {
+                                let g = &base.groups[group];
+                                return element(
+                                    algebra,
+                                    g.field,
+                                    g.width,
+                                    base_groups[group],
+                                    read,
+                                    column,
+                                );
+                            }
+                            let (_, field, width) =
+                                &self.phases[j as usize - 1].tables[t].groups[group];
+                            let columns = &assignment.phases[j as usize - 1].tables[t]
+                                .as_ref()
+                                .expect("present")[group];
+                            element(algebra, *field, *width, columns, read, column)
+                        };
+                        let values = interpret(&selected, algebra, &mut fetch)?;
+                        for &i in &active {
+                            let output = table.assertions[i].output;
+                            let value = algebra.coordinates(
+                                output_field(&table.arena, output),
+                                &values[slot(output)],
+                            );
+                            result.satisfied &= is_zero(&value);
+                            residuals[i].push(StagedResidual {
+                                phase: p as u32 + 1,
+                                table: t,
+                                assertion: i,
+                                row: r,
+                                value,
+                            });
+                        }
+                    }
+                }
+                result.residuals.extend(residuals.into_iter().flatten());
+            }
+        }
+        if !global_outputs.is_empty() {
+            let values = interpret(global, algebra, &mut |input| {
+                Ok(scalar(global_inputs[input]))
+            })?;
+            for &output in global_outputs {
+                let value = algebra.coordinates(output_field(global, output), &values[output]);
+                result.satisfied &= is_zero(&value);
+                result.global.push(value);
+            }
+        }
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
