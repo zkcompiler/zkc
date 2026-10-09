@@ -112,7 +112,8 @@ let
         "Cargo.lock"
         "rust-toolchain.toml"
         "crates"
-        # Native relation tests consume the maintained adapter fixtures.
+        # Native relation tests consume the maintained compiler and adapter fixtures.
+        "compiler/test/fixtures/relation/polynomial-chunks.json"
         "compiler/adapters/plonky3/fixtures/recurrence/bundle.json"
         "compiler/adapters/plonky3/fixtures/recurrence/bundle-configuration.json"
         "compiler/adapters/plonky3/fixtures/recurrence/bundle-instance.json"
