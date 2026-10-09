@@ -219,7 +219,14 @@ this edge, as for `local.realize`.
 
 Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
 before freezing local definitions. An application inside a local region remains
-inside that region; it is not hoisted to protocol mathematics. Subsequent common preparation,
+inside that region; it is not hoisted to protocol mathematics. Occurrence names
+encode the ordered call-site/callee pairs and leaf site with length prefixes.
+An encoding longer than 128 bytes uses `lc_h_` followed by its SHA-256 digest;
+the provenance map retains the full path. Existing shorter names retain their
+encoding. Generated site collisions are refused by ordinary local formation,
+and the expansion checker independently checks the expected name. Encoding work
+has a cumulative 16 MiB byte limit, charged before construction and separately
+by expansion and its checker (`algorithm-origin-limit`). Subsequent common preparation,
 projection, participant simplification and lowering preserve those bodies and their
 binding declarations. Physical selection may change representations and insert
 checked storage releases under the selected execution contract. An authored

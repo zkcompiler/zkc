@@ -95,6 +95,66 @@ int main() {
                                                                   *expanded)),
             "valid expansion refused");
   });
+  cases.run("bounded local occurrence names", [&] {
+    uint64_t bytes = 1024;
+    auto shortName = protocol::algorithmSite({{"a", "b"}}, "s", bytes);
+    require(bool(shortName) && *shortName == "lc_1_a_1_b_1_s",
+            "short occurrence encoding changed");
+    protocol::Assignments path{{std::string(80, 'a'), std::string(80, 'b')}};
+    auto longName = protocol::algorithmSite(path, "s", bytes);
+    require(bool(longName) && StringRef(*longName).starts_with("lc_h_") &&
+                longName->size() == 69,
+            "long occurrence was not compacted");
+    path[0].second.back() = 'c';
+    auto other = protocol::algorithmSite(path, "s", bytes);
+    require(bool(other) && *other != *longName, "different local paths alias");
+    uint64_t exhausted = 0;
+    auto refused = protocol::algorithmSite(path, "s", exhausted);
+    require(!refused, "origin bytes were not bounded before construction");
+    require(llvm::toString(refused.takeError()) == "algorithm-origin-limit",
+            "wrong origin budget refusal");
+  });
+  std::string longText = algorithm.str();
+  const std::string originalOrigin = "logical_origin=[\"both\",[]]";
+  const std::string longDefinition(100, 'b');
+  longText.replace(longText.find(originalOrigin), originalOrigin.size(),
+                   "logical_origin=[\"" + longDefinition + "\",[]]");
+  const std::string wrapper = "local.func @outer(%x:i1,%y:i1) -> i1 attributes "
+                              "{logical_origin=[\"outer\",[]]} {\n"
+                              " %r = apply @both(%x,%y) {site=\"" +
+                              std::string(40, 'c') +
+                              "\"} : (i1,i1)->i1\n return %r : i1\n }\n";
+  longText.insert(longText.find(" \"protocol.func\""), wrapper);
+  auto longSource = parseSourceString<ModuleOp>(longText, &context);
+  require(bool(longSource), "long local fixture refused");
+  auto longExpanded = copy(*longSource);
+  cases.run("long local paths retain provenance and correspondence", [&] {
+    std::vector<protocol::AlgorithmOrigin> origins;
+    require(succeeded(protocol::expandAlgorithms(*longExpanded, &origins)),
+            "long helper path refused");
+    require(succeeded(protocol::verifyAlgorithmExpansionPreserved(
+                *longSource, *longExpanded)),
+            "long helper correspondence refused");
+    auto op = primitive(function(*longExpanded, "outer"), "bool.and");
+    auto site = op->getAttrOfType<StringAttr>("site").getValue();
+    require(site.starts_with("lc_h_"), "expected compact occurrence");
+    require(llvm::any_of(origins,
+                         [&](const auto &origin) {
+                           return origin.function == "outer" &&
+                                  origin.site == site &&
+                                  origin.path == protocol::Assignments{
+                                                     {std::string(40, 'c'),
+                                                      longDefinition}};
+                         }),
+            "full local path was lost");
+  });
+  negative(
+      "forged compact local occurrence", *longSource, *longExpanded,
+      [&](ModuleOp module) {
+        auto op = primitive(function(module, "outer"), "bool.and");
+        op->setAttr("site", StringAttr::get(&context, "lc_h_forged"));
+      },
+      protocol::verifyAlgorithmExpansionPreserved, "algorithm-correspondence");
   negative(
       "wrong helper substitution", *source, *expanded,
       [&](ModuleOp module) {

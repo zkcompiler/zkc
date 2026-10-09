@@ -18,6 +18,7 @@ class AlgorithmCorrespondence {
   using Values = llvm::DenseMap<Value, Value>;
   SymbolTable symbols;
   unsigned remaining = 1000000;
+  uint64_t originBytes = 16 * 1024 * 1024;
 
   LogicalResult refuse(Operation *op, StringRef reason) {
     return diagnostics::emit(op->emitOpError(), "algorithm-correspondence",
@@ -101,7 +102,7 @@ class AlgorithmCorrespondence {
         return refuse(&actual, "operation identity");
       NamedAttrList attributes(op.getAttrs());
       if (encode && op.hasAttr("site")) {
-        auto site = algorithmSite(path, attr(&op, "site"));
+        auto site = algorithmSite(path, attr(&op, "site"), originBytes);
         if (!site)
           return diagnostics::emit(actual.emitOpError(), site.takeError());
         attributes.set("site", StringAttr::get(op.getContext(), *site));

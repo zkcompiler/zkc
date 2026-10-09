@@ -12,9 +12,11 @@ struct AlgorithmOrigin {
   std::string function, site, definition, originalSite;
   protocol::Assignments path;
 };
-/// Canonical encoding of a local occurrence. Bounded by source site limits.
+/// Canonical encoding of a local occurrence. Long encodings use a digest;
+/// full paths remain in AlgorithmOrigin. Charge bytes before constructing it.
 llvm::Expected<std::string> algorithmSite(const protocol::Assignments &path,
-                                          llvm::StringRef site);
+                                          llvm::StringRef site,
+                                          uint64_t &remainingBytes);
 /// Independently compare actual local expansion by virtual source substitution.
 /// Refuses unrecognized rewrites and bounds work; does not emit a candidate.
 mlir::LogicalResult verifyAlgorithmExpansionPreserved(mlir::ModuleOp before,
