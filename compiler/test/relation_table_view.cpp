@@ -1,7 +1,8 @@
 // Derived facts, exact layout and preflight of one bundle table viewed
-// through the installed relation.table_rows kernel. The actual recurrence
-// bundle fixture and separately authored finite and cyclic bundles are
-// exercised; evaluation itself belongs to the native runtime and backend.
+// through the installed relation.table_rows kernel, and the static premises
+// of the polynomial table kernels. The actual recurrence bundle fixture and
+// separately authored finite and cyclic bundles are exercised; evaluation
+// itself belongs to the native runtime and backend.
 #include "support/NativeCases.h"
 #include "zkc/Relation/Bundle.h"
 #include "zkc/Support/Json.h"
@@ -25,6 +26,11 @@ std::string read(StringRef name) {
 }
 Bundle bundle(StringRef text) { return take(readBundleText(text)); }
 json::Value carrier(StringRef text) { return take(readBundleDataJson(text)); }
+Expected<bool> accepted(Error error) {
+  if (error)
+    return std::move(error);
+  return true;
+}
 
 /// One finite table with a public slot and a two-column witness: first,
 /// last, interior, interval and all scopes, and a product with zero over a
@@ -338,5 +344,77 @@ int main(int argc, char **argv) {
     refuses(bundleTableLengths(single, singleView, 1048576),
             "bundle-work-limit");
   });
+  cases.run(
+      "polynomial premises lift base tables and keep extensions exact", [] {
+        auto recurrence = bundle(read("bundle.json"));
+        for (StringRef field : {StringRef(KB), StringRef(EXT)})
+          take(accepted(checkBundlePolynomialTable(recurrence, 0, field)));
+        refuses(accepted(checkBundlePolynomialTable(recurrence, 1, EXT)),
+                "relation-table-index");
+        refuses(
+            accepted(checkBundlePolynomialTable(recurrence, 0, "bls12-381.g1")),
+            "relation-table-carrier");
+        refuses(
+            accepted(checkBundlePolynomialTable(recurrence, 0, "bls12-381.fr")),
+            "relation-table-carrier");
+        // A base-field slot or group is substituted in its extension; an
+        // extension slot, group or arena is never narrowed.
+        auto mixedSlot = bundle(cyclic(EXT));
+        take(accepted(checkBundlePolynomialTable(mixedSlot, 0, EXT)));
+        refuses(accepted(checkBundlePolynomialTable(mixedSlot, 0, KB)),
+                "relation-table-carrier");
+        auto extension = bundle(cyclic("", EXT));
+        take(accepted(checkBundlePolynomialTable(extension, 0, EXT)));
+        refuses(accepted(checkBundlePolynomialTable(extension, 0, KB)),
+                "relation-table-carrier");
+        auto embedded = bundle(R"(["zkc.relation-bundle/0",[],[],
+      [["e","required",["fixed",2],"finite",
+        [["w","witness","koala-bear",1]],
+        ["zkc.ring/0",["koala-bear"],
+         [["input",0],["embed","koala-bear.ext8-binomial3",0]],[1]],
+        [["read",0,"0",0]],[[0,["all"]]],[]]]])");
+        take(accepted(checkBundlePolynomialTable(embedded, 0, EXT)));
+        refuses(accepted(checkBundlePolynomialTable(embedded, 0, KB)),
+                "relation-table-carrier");
+        // An extension output used only by an interaction is not evaluated.
+        auto interaction = bundle(R"(["zkc.relation-bundle/0",[],
+      [["c","field-balance",["koala-bear.ext8-binomial3"],"koala-bear"]],
+      [["i","required",["fixed",4],"finite",
+        [["w","witness","koala-bear",2]],
+        ["zkc.ring/0",["koala-bear","koala-bear"],
+         [["input",0],["input",1],["embed","koala-bear.ext8-binomial3",1],
+          ["constant","koala-bear","1"]],[0,2,3]],
+        [["read",0,"0",0],["read",0,"0",1]],[[0,["all"]]],
+        [["field-balance",0,["global"],["all"],[1],2,null]]]]])");
+        take(accepted(checkBundlePolynomialTable(interaction, 0, KB)));
+        take(accepted(checkBundlePolynomialTable(interaction, 0, EXT)));
+        // Some power of two of at least 2 must satisfy the height policy.
+        for (StringRef height :
+             {R"(["fixed",1])", R"(["fixed",3])", R"(["instance",1,1,false])",
+              R"(["instance",5,7,false])"})
+          refuses(accepted(checkBundlePolynomialTable(bundle(chain(1, height)),
+                                                      0, KB)),
+                  "bundle-polynomial-two-adic");
+        for (StringRef height : {R"(["fixed",2])", R"(["instance",1,2,false])",
+                                 R"(["instance",5,8,false])"})
+          take(accepted(
+              checkBundlePolynomialTable(bundle(chain(1, height)), 0, KB)));
+        // Each installed kernel keeps its own reference rule.
+        refuses(accepted(checkBundleTableReference(
+                    recurrence, "relation.table_rows", 0, EXT)),
+                "relation-table-carrier");
+        for (StringRef contract :
+             {"relation.table_shape", "relation.table_input",
+              "relation.table_scope", "relation.table_point"}) {
+          take(accepted(
+              checkBundleTableReference(recurrence, contract, 0, EXT)));
+          refuses(accepted(checkBundleTableReference(
+                      bundle(chain(1, R"(["fixed",3])")), contract, 0, KB)),
+                  "bundle-polynomial-two-adic");
+        }
+        refuses(accepted(
+                    checkBundleTableReference(recurrence, "ring.point", 0, KB)),
+                "relation-table-contract");
+      });
   return cases.result();
 }

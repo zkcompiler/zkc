@@ -146,7 +146,7 @@ fn field_compatible(expression: &Expression, carrier: Identity) -> Result<()> {
 /// Scalar and packed substitution use this same arithmetic schedule. Base-field
 /// variables may be assigned extension values after a bind or at an OOD point.
 /// `embed` is then the compatible algebra map, which is the identity in E or E[X].
-fn scalar<S: PrimeCharacteristicRing>(
+pub(crate) fn scalar<S: PrimeCharacteristicRing>(
     expression: &Expression,
     mut input: impl FnMut(usize) -> S,
     values: &mut Vec<S>,
@@ -164,7 +164,7 @@ fn scalar<S: PrimeCharacteristicRing>(
         values.push(value);
     }
 }
-fn fresh<T>(n: usize) -> Result<Vec<T>> {
+pub(crate) fn fresh<T>(n: usize) -> Result<Vec<T>> {
     let mut result = Vec::new();
     result
         .try_reserve_exact(n)

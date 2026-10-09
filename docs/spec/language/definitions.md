@@ -293,7 +293,10 @@ takes a literal refuses. The compiler writes the closed term's canonical
 identity into the emitted parameter when the body closes, retains the asset for
 the Entry package, and checks the family's reference rules. Ring substitution
 admits the carrier field and its base field; a Bundle table view checks the
-table index and exact declared column fields. Source comparison compares the closed body's identities
+table index and exact declared column fields. The Bundle
+[polynomial view](../domains/relation-bundles.md#compiler-visible-polynomial-view)
+also admits the carrier's base field and requires a height policy that admits
+a power of two of at least 2. Source comparison compares the closed body's identities
 with the original MLIR, so a changed digest is a correspondence failure.
 
 Generic checking uses completed capability bounds, inherent Field/Group facts and

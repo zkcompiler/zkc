@@ -142,6 +142,105 @@ with its formal model. The cyclic wrap rule has no Lean model; its evidence is
 the bounded coefficient check of the recurrence fixture recorded in the
 [native validation map](../../../tests/native.md).
 
+## Compiler-visible polynomial view
+
+Four kernels describe one present table to a source library that constructs
+its own polynomial protocol. Each has roots `<F, Table>` like
+`relation.table_rows`, the same Bundle asset parameter, and the installed
+KoalaBear or Ext8 provider. They derive facts from the admitted Bundle and
+substitute its existing arena. They select no domain shift, challenge,
+quotient combination, commitment or proof, and they check no interaction.
+
+| Contract | Data operands | Results |
+|---|---|---|
+| `relation.table_shape<F, Table>` | `height` | `(witness_width, config_width, public_width, public_slots, inputs, assertions, quotient_chunks)` |
+| `relation.table_input<F, Table>` | `height`, `input` | `(kind, column, rotation)` |
+| `relation.table_scope<F, Table>` | `height`, `assertion` | `(begin, end)` |
+| `relation.table_point<F, Table>` | one value per arena input | one value per assertion, in assertion order |
+
+**Domain.** A table of height `h` is interpreted on the multiplicative
+subgroup of order `h`: row `r` is `g^r` for a generator `g`, and each column
+polynomial has degree at most `h - 1`. The height must be a power of two of
+at least 2 (`bundle-polynomial-two-adic`) and must meet the table's policy
+(`bundle-height`). As for `relation.table_rows`, the calling protocol supplies
+a configured or instance height from that authority. A read at signed offset
+`o` is the shifted polynomial `T(g^o X)`. Because `g` has order `h`, this is
+exactly a cyclic read. A finite read agrees with it on every row where its
+window is defined. Every assertion's window is checked at the height
+(`bundle-scope-height`, `bundle-window`). A domain larger than the height is
+not this view.
+
+**Shape.** Widths sum the element widths of each authority's groups.
+Each authority forms one combined matrix, row-major over the sum of its group
+widths in declaration order. Column `c` of group `g` is combined column
+`offset_g + c`, where `offset_g` sums the widths of earlier groups of the same
+authority. This layout deliberately differs from `relation.table_rows`, whose
+operands concatenate each group's own row-major array. A source adapter owns
+any packing between the two. `public_slots` counts every Bundle public slot;
+`inputs` and `assertions` count the arena inputs and the table's assertions.
+
+`quotient_chunks` counts chunks of length `h`. Suppose an assertion has derived
+degree `d` and a nonempty set `A` of active rows. Its interpretation has degree
+at most `d(h-1)`. When `d(h-1) >= |A|`, its quotient by `Z_A` has degree at
+most `d(h-1) - |A|` and fits in `floor((d(h-1) - |A|) / h) + 1` chunks.
+Otherwise exact divisibility forces the interpretation to be zero
+([finite scopes](constraints.md#polynomial-interpretation-of-finite-scopes)).
+The result is the maximum over assertions and at least 1, including for a
+table without assertions. It bounds each quotient and therefore any fixed
+linear combination; it is not a claim about random batching.
+
+The shape also bounds three quantities. The table's declared data at this
+height, together with every public slot, is at most `2^22` base coordinates
+(`bundle-data-limit`). When there are assertions,
+`h * (nodes + inputs + assertions + 1)` is at most `2^26`
+(`bundle-work-limit`). `quotient_chunks * h` is at most `2^24`
+(`bundle-polynomial-limit`). The checks run in this order: two-adic height,
+height policy, windows, data, work and quotient size.
+`relation.table_input` and `relation.table_scope` apply the same checks at
+their height before they read an index.
+
+**Inputs.** There is one descriptor per ordered arena input
+(`relation-table-input-index`). Kind 0 is a Bundle public slot, with `column`
+equal to the slot and `rotation` 0. Kinds 1, 2 and 3 are witness,
+configuration and public-group reads. A read's `column` is in the combined
+matrix of its authority, and `rotation` is its signed offset reduced modulo
+`h`: offset `-1` at height 8 is rotation 7.
+
+**Scopes.** `relation.table_scope` returns the active rows `[begin, end)` of
+an assertion's scope, as in [rows and windows](#rows-and-windows). An empty
+interior scope is `(0, 0)`; an empty interval keeps its start
+(`relation-table-assertion-index`).
+
+**Points.** `relation.table_point` takes exactly one value per arena input
+(`relation-table-point-shape`). It substitutes them through the shared ring
+substitution and returns the assertion outputs in assertion order, repeating
+an output that two assertions share. It applies no row mask, selector,
+vanishing polynomial or division, and it claims no satisfaction. Under an
+Ext8 carrier a KoalaBear table is interpreted in Ext8: inputs, constants and
+operations lift to the extension, substitution points may be any extension
+values and results keep every coordinate. An Ext8 table admits only its Ext8
+carrier; nothing is narrowed or coerced from another field.
+
+**Carrier and interactions.** Every Bundle public slot, every group of the
+table and every arena node an assertion needs has field `F` or, when `F` is
+Ext8, KoalaBear (`relation-table-carrier`). An output used only by
+interactions is neither checked nor evaluated. An input it alone uses keeps
+its descriptor, and `relation.table_point` ignores that input's value. The
+kernels claim nothing about interactions, presence or whole-Bundle
+satisfaction; a consumer must exclude or separately discharge them.
+
+When a body closes, the compiler checks the table index, the carrier rule and
+that the height policy admits some power of two of at least 2. Table and
+height failures report `source.asset-table`; carrier failures report
+`source.asset-carrier`. The Host repeats these checks for every reachable
+reference before execution. Height-dependent checks happen during execution.
+Every invocation charges
+`nodes + inputs + groups + public slots + assertions + assertion reads + 1`
+units to the shared ring work budget, where assertion reads count the derived
+read facts of each assertion's output. `relation.table_point` adds
+`nodes + inputs + assertions + 1`. No charge or allocation grows with the
+height.
+
 ## Carrier
 
 The exact array form is:

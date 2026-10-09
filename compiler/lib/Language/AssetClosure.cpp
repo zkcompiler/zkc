@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Relation/Bundle.h"
+#include "zkc/Support/Refusal.h"
 #include <functional>
 
 using namespace llvm;
@@ -82,7 +83,8 @@ Error closeAssets(const CheckedProject &project, ClosedStorage &closed,
             if (index >= bundle->tables().size())
               return failure("source.asset-table",
                              "table index is out of range", operation.span);
-            const auto key = carrier.domain + ":" + std::to_string(index);
+            const auto key = primitive->contract + ":" + carrier.domain + ":" +
+                             std::to_string(index);
             if (checked.emplace(identity, key).second) {
               const auto &definition = bundle->tables()[index];
               if (auto error = work.charge(definition.arena.nodes().size() +
@@ -90,11 +92,22 @@ Error closeAssets(const CheckedProject &project, ClosedStorage &closed,
                                                bundle->publics().size() + 1,
                                            operation.span))
                 return error;
-              auto view =
-                  relation::bundleTableView(*bundle, index, carrier.domain);
-              if (!view)
-                return failure("source.asset-carrier",
-                               toString(view.takeError()), operation.span);
+              // The Relation owner states each kernel's reference rule.
+              StringRef code = "source.asset-carrier";
+              std::string message;
+              handleAllErrors(
+                  relation::checkBundleTableReference(
+                      *bundle, primitive->contract, index, carrier.domain),
+                  [&](const zkc::Refusal &refusal) {
+                    if (refusal.code != "relation-table-carrier")
+                      code = "source.asset-table";
+                    message = refusal.message();
+                  },
+                  [&](const ErrorInfoBase &other) {
+                    message = other.message();
+                  });
+              if (!message.empty())
+                return failure(code, message, operation.span);
             }
           }
           retained.emplace(identity, found->second);

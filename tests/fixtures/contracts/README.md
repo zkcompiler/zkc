@@ -12,7 +12,7 @@ permissions, implementation alternatives and malformed requests. Independent
 signature witnesses and deliberate `field.add` resolver drift controls guard
 against agreement caused only by a shared inventory mistake.
 
-`attribute-admission.json` is an independently authored set of 81 input/outcome
+`attribute-admission.json` is an independently authored set of 94 input/outcome
 witnesses. It is not generated from TableGen, either registry, or a production
 validator. The C++ driver calls the binding overload of `checkParameters`; the
 Rust tools example constructs one retained local operation in `zkc.program/0` and

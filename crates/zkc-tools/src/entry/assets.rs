@@ -12,7 +12,7 @@ use super::{Interface, Package};
 use std::sync::Arc;
 use zkc_backends::{relation::Registry as RelationRegistry, ring::Registry};
 use zkc_runtime::{
-    interactive::{Admitted, AssetReference, Type},
+    interactive::{Admitted, AssetReference, Identity, Type},
     relation::Bundle,
     ring::Expression,
 };
@@ -181,6 +181,34 @@ fn check(
                 .ok_or("entry-asset-contract")?;
             relations
                 .table_reference(&reference.identity, table, carrier)
+                .map(|_| ())
+                .map_err(|e| match e.code.as_str() {
+                    "refused:relation-asset-missing" => "entry-asset-missing".into(),
+                    "refused:relation-table-carrier" => "entry-asset-carrier".into(),
+                    _ => e.to_string(),
+                })
+        }
+        // The polynomial kernels take the carrier from their field argument:
+        // only `relation.table_point` has a field-valued operand.
+        "relation.table_shape"
+        | "relation.table_input"
+        | "relation.table_scope"
+        | "relation.table_point" => {
+            let declaration = reference.binding.declaration();
+            let (Some(carrier), Some(table)) = (
+                declaration
+                    .arguments
+                    .first()
+                    .and_then(|field| Identity::parse(field).ok()),
+                declaration
+                    .arguments
+                    .get(1)
+                    .and_then(|index| index.parse().ok()),
+            ) else {
+                return Err("entry-asset-contract".into());
+            };
+            relations
+                .polynomial_reference(&reference.identity, table, carrier)
                 .map(|_| ())
                 .map_err(|e| match e.code.as_str() {
                     "refused:relation-asset-missing" => "entry-asset-missing".into(),
