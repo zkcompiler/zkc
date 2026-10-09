@@ -1,0 +1,14 @@
+module zkc::polynomial;
+use zkc::vector::{Vector};
+
+// Runtime univariate coefficients, distinct from formal polynomial expressions.
+pub type Polynomial<F: Field> = builtin("polynomial", F);
+pub fn from_coefficients<F: Field>(values: Vector<F>) -> Polynomial<F> {
+  return kernel<F>("poly.from_coefficients", values);
+}
+pub fn evaluate<F: Field>(value: Polynomial<F>, point: F) -> F {
+  return kernel<F>("poly.univariate_evaluate", value, point);
+}
+pub fn boundary<F: Field>(value: Polynomial<F>) -> F {
+  return kernel<F>("poly.univariate_boundary", value);
+}

@@ -21,10 +21,12 @@ def request(directory, name, value):
 
 def build(toolchain, journal, directory, project, entry, flags):
     package = directory / f'{entry}.entry'
+    modules = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
+               for name in ('vector', 'boolean')] if project == 'sumcheck' else []
     report = json.loads(journal.run([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
         f'--module={project}={ROOT}/libraries/{project}/lib.zkc',
         f'--module=example={ROOT}/examples/projects/{project}/main.zkc',
-        f'--entry=example::{entry}', f'--output={package}', *flags]))
+        f'--entry=example::{entry}', f'--output={package}', *modules, *flags]))
     return package, report['package_sha256']
 
 

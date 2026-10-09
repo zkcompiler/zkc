@@ -20,6 +20,8 @@ From the repository root, with built tools on `PATH`:
 
 ```sh
 zkc compile --module=sumcheck=libraries/sumcheck/lib.zkc \
+  --module=zkc::vector=libraries/zkc/vector.zkc \
+  --module=zkc::boolean=libraries/zkc/boolean.zkc \
   --module=example=examples/projects/sumcheck/main.zkc \
   --entry=example::Proof --output=sumcheck.entry
 zkc prove sumcheck.entry EXPECTED_SHA256 examples/projects/sumcheck/prover.json sumcheck.proof

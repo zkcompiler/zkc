@@ -32,6 +32,8 @@ def build(toolchain, journal, directory, entry, flags=(), arena=None):
     report = json.loads(journal.run([
         toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
         f'--module=expression_sumcheck={ROOT}/libraries/sumcheck/expression.zkc',
+        f'--module=zkc::vector={ROOT}/libraries/zkc/vector.zkc',
+        f'--module=zkc::polynomial={ROOT}/libraries/zkc/polynomial.zkc',
         f'--module=example={PROJECT}/main.zkc', f'--entry=example::{entry}',
         f'--asset=product=ring-json={arena}',
         f'--output={package}', *flags]))

@@ -1,0 +1,13 @@
+module zkc::boolean;
+
+// Both arguments are evaluated. These functions do not short-circuit.
+pub math fn both(left: bool, right: bool) -> bool {
+  return intrinsic("bool.and", left, right);
+}
+pub math fn either(left: bool, right: bool) -> bool {
+  return intrinsic("bool.or", left, right);
+}
+pub math fn different(left: bool, right: bool) -> bool {
+  return intrinsic("bool.xor", left, right);
+}
+pub math fn negate(value: bool) -> bool { return value == false; }

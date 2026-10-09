@@ -23,6 +23,7 @@ add_zkc_test(language_interface Compiler language-interface)
 add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_expression_assets Language language-expression-assets)
 target_compile_definitions(zkc-language_expression_assets-test PRIVATE
+  ZKC_MATH_LIBRARIES="${PROJECT_SOURCE_DIR}/../libraries/zkc"
   ZKC_SUMCHECK_LIBRARY="${PROJECT_SOURCE_DIR}/../libraries/sumcheck/expression.zkc"
   ZKC_EXPRESSION_SUMCHECK_PROJECT="${PROJECT_SOURCE_DIR}/../examples/projects/expression-sumcheck")
 add_zkc_test(language_asset_ir Compiler language-asset-ir)

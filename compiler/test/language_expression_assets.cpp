@@ -388,9 +388,14 @@ int main() {
     auto library = file(ZKC_SUMCHECK_LIBRARY);
     auto client = file(ZKC_EXPRESSION_SUMCHECK_PROJECT "/main.zkc");
     auto compile = [&](AssetBuffer asset) -> Expected<ClosedEntry> {
-      auto captured = capture({{"example", client, "main.zkc"},
-                               {"expression_sumcheck", library, "library.zkc"}},
-                              {std::move(asset)}, {});
+      auto captured = capture(
+          {{"example", client, "main.zkc"},
+           {"expression_sumcheck", library, "library.zkc"},
+           {"zkc::vector", file(ZKC_MATH_LIBRARIES "/vector.zkc"),
+            "vector.zkc"},
+           {"zkc::polynomial", file(ZKC_MATH_LIBRARIES "/polynomial.zkc"),
+            "polynomial.zkc"}},
+          {std::move(asset)}, {});
       if (!captured)
         return captured.takeError();
       auto checked = analyze(*captured).checkedProject();

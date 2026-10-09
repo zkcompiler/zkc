@@ -18,3 +18,6 @@ Each project owns its concrete domains, Entries and invocation inputs. Keep asse
 used by only one project alongside that project; shared relation-ingress samples
 live in [`relations/`](../relations/README.md). Assets and requests an adapter
 derives stay beside the export it checks them against.
+
+[Mathematics](mathematics/README.md) compares formal polynomials with runtime
+vector folding through the shared source libraries.

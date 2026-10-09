@@ -1,0 +1,18 @@
+module example;
+use zkc::vector::{Vector, fold, sum};
+use zkc::symbolic::{pack, mle, evaluate};
+domain F = field("bls12-381.fr");
+
+// Runtime vectors are local computations; formal polynomials remain math.
+math fn symbolic(a: F, b: F, point: F) {
+  let polynomial = mle<F, 1>(pack([a, b]));
+  return evaluate(polynomial, [point]);
+}
+fn dynamic(values: Vector<F>, point: F) { return sum(fold(values, point)); }
+protocol Compare roles(P)(a: F @P, b: F @P, values: Vector<F> @P, point: F @P)
+    -> (formal_result: F @P, runtime_result: F @P) {
+  let formal_result = symbolic(a, b, point);
+  let runtime_result = dynamic(values, point);
+  return (formal_result = formal_result, runtime_result = runtime_result);
+}
+entry Run = Compare;

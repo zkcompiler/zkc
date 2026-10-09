@@ -1,5 +1,6 @@
 module example;
-use expression_sumcheck::{Vector, Sumcheck};
+use expression_sumcheck::{Sumcheck};
+use zkc::vector::{Vector};
 domain Base = field("koala-bear");
 domain Extension = field("koala-bear.ext8-binomial3");
 

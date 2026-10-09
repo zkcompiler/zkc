@@ -27,6 +27,8 @@ Compile from the repository root:
 
 ```sh
 zkc compile --entry=example::BaseProof \
+  --module=zkc::vector=libraries/zkc/vector.zkc \
+  --module=zkc::polynomial=libraries/zkc/polynomial.zkc \
   --module=example=examples/projects/expression-sumcheck/main.zkc \
   --module=expression_sumcheck=libraries/sumcheck/expression.zkc \
   --asset=product=ring-json=examples/projects/expression-sumcheck/product.ring.json \
