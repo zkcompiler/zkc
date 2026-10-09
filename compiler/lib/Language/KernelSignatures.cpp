@@ -10,7 +10,7 @@ namespace zkc::language::detail {
 std::optional<Semantics::CallSignature>
 Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
                            ArrayRef<std::string> attributes, Span span,
-                           const Declaration *context) {
+                           const Declaration *context, bool closedParameters) {
   auto stage = protocol::authoringStage(contract);
   if (stage != protocol::AuthoringStage::Source &&
       stage != protocol::AuthoringStage::Construction) {
@@ -126,7 +126,9 @@ Semantics::kernelSignature(StringRef contract, ArrayRef<Type> arguments,
   const Type *literalField = parameterSchema && parameterSchema->fieldTerm
                                  ? &terms[*parameterSchema->fieldTerm]
                                  : nullptr;
-  if (literalField && symbolic(*literalField)) {
+  if (!closedParameters) {
+    // An open asset term has no identity yet; closure writes and checks it.
+  } else if (literalField && symbolic(*literalField)) {
     if (!validate(protocol::checkGenericParameters(contract, attributes)))
       return {};
   } else if (!validate(protocol::checkParameters(

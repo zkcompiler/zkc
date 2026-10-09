@@ -4,7 +4,7 @@
 |---|---|---|
 | [Schnorr](schnorr/README.md) | Generic group protocol, discrete-log relation and concrete Entry | Interactive exchange or independent transcript-derived proofs |
 | [Sumcheck](sumcheck/README.md) | Generic public-table protocol and bounded-round Entry | Actual receives, repeated state and direct terminal evaluation |
-| [Expression Sumcheck](expression-sumcheck/README.md) | Expression component, shared ring asset and KoalaBear/Ext8 Entries | Exact round coefficients, extension-field challenges and public-table terminal evaluation |
+| [Expression Sumcheck](expression-sumcheck/README.md) | Generic Sumcheck over a captured ring asset with KoalaBear/Ext8 Entries | Exact round coefficients, extension-field challenges and public-table terminal evaluation |
 | [Imported AIR](imported-air/README.md) | Arena exported from a Plonky3 AIR, bound by identity in run Entries | Row, coefficient and Ext8 point residuals of adapter-prepared assignments |
 
 The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Compile

@@ -4,11 +4,13 @@
 #include "llvm/ADT/ScopeExit.h"
 using namespace llvm;
 namespace zkc::language::detail {
-Semantics::Semantics(const std::vector<Declaration> &declarations, Work &work,
+Semantics::Semantics(const std::vector<Declaration> &declarations,
+                     ArrayRef<Asset> assets, Work &work,
                      std::function<bool(DeclarationId)> complete)
     : work(work), naturals(work.limits.work, work.limits.naturalTerms,
                            work.limits.naturalFactors),
-      declarations(declarations), complete(std::move(complete)) {
+      declarations(declarations), assets(assets),
+      complete(std::move(complete)) {
   for (const auto &decl : declarations) {
     indexDeclaration(decl);
     for (unsigned i = 0; i < decl.parameters.size(); ++i)
@@ -27,6 +29,8 @@ Type parameterType(const Parameter &p) {
   using K = Type::Kind;
   Type value = p.sort == Parameter::Sort::Domain
                    ? domainType(p.domainSort, p.atom)
+               : p.sort == Parameter::Sort::Asset
+                   ? assetType(p.domainSort, p.atom)
                    : Type(p.sort == Parameter::Sort::Natural     ? K::Natural
                           : p.sort == Parameter::Sort::Component ? K::Component
                                                                  : K::Parameter,
@@ -132,10 +136,38 @@ std::optional<Type> Semantics::substitute(const Type &input,
     arg = std::move(*t);
   }
   if (!result.dimension.isClosed()) {
+    // A projection of a bound asset atom is decided here, from the captured
+    // asset or by renaming, before the polynomial is normalized.
+    std::map<std::pair<std::string, std::string>, Natural> projections;
+    for (const auto &[factors, coefficient] : result.dimension.terms()) {
+      (void)coefficient;
+      if (!charge(factors.size() + 1, span))
+        return {};
+      for (const auto &factor : factors) {
+        if (factor.kind != Natural::Factor::Kind::Projection)
+          continue;
+        auto found = bindings.find(factor.name);
+        if (found == bindings.end())
+          continue;
+        auto key = std::make_pair(factor.name, factor.member);
+        if (projections.count(key))
+          continue;
+        auto value = assetProjection(found->second, factor.member, span);
+        if (!value)
+          return {};
+        projections.emplace(std::move(key), std::move(value->dimension));
+      }
+    }
     auto before = naturals.remainingWork();
     auto n = naturals.substitute(
-        result.dimension, [&](StringRef name) -> const Natural * {
-          auto found = bindings.find(name.str());
+        result.dimension,
+        [&](const Natural::Factor &factor) -> const Natural * {
+          if (factor.kind == Natural::Factor::Kind::Projection) {
+            auto found =
+                projections.find(std::make_pair(factor.name, factor.member));
+            return found == projections.end() ? nullptr : &found->second;
+          }
+          auto found = bindings.find(factor.name);
           return found != bindings.end() &&
                          found->second.kind == Type::Kind::Natural
                      ? &found->second.dimension
@@ -190,6 +222,8 @@ std::optional<Type> Semantics::associated(const Type &base, StringRef member,
     }
     return current;
   }
+  if (base.kind == Type::Kind::Asset)
+    return assetProjection(base, member, span);
   if (!domainSort(base).empty()) {
     auto result = domainMember(base, member);
     if (!result) {
@@ -262,6 +296,9 @@ bool Semantics::checkArguments(const Declaration &target, ArrayRef<Type> args,
     switch (p.sort) {
     case Parameter::Sort::Domain:
       kind = domainSort(a) == p.domainSort;
+      break;
+    case Parameter::Sort::Asset:
+      kind = assetSort(a) == p.domainSort;
       break;
     case Parameter::Sort::Natural:
       kind = a.kind == Type::Kind::Natural;

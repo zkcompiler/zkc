@@ -9,11 +9,15 @@ The [ingress guide](../compiler/relations.md) owns compiler adapters, and
 ## Capture and bind
 
 `.zkc` compilation accepts explicit `--asset=NAME=FORMAT=FILE` inputs, with
-`r1cs-json`, `r1cs-binary` and `air-json` formats. Bounded native readers validate
-the captured data, including unused assets. File names locate input; canonical
-contents and layout identify the relation. See the
+`r1cs-json`, `r1cs-binary`, `air-json`, `ring-json` and `relation-bundle-json`
+formats. Bounded native readers validate the captured data, including unused
+assets. File names locate input; canonical contents and layout identify the
+relation. See the
 [source profile](../spec/language/definitions.md#capture-and-names)
-for the exact capture interface.
+for the exact capture interface. Ring expressions and relation bundles are
+named in source through
+[asset domains](../spec/language/definitions.md#asset-domains-and-projections),
+whose projections give libraries the asset's dimensions as static naturals.
 
 Capture alone does not attach a relation to a protocol, add runtime inputs,
 generate a prover or check satisfaction. Source relation declarations and their

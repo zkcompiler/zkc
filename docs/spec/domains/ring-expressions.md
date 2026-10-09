@@ -149,11 +149,16 @@ parameter is exactly 64 lowercase hexadecimal digits. It is part of the program;
 the Host separately admits the referenced arena into an immutable registry.
 No proof message installs or changes an evaluator.
 
-The compiler admits and retains captured arena contents, checks closed field
-compatibility, and includes required bodies in the Entry package. The Host
-independently admits those bodies and checks references before execution.
-Structural sharing operates on the shared arena representation described above;
-the arena is not expanded into a second arithmetic representation in MLIR.
+Source names an arena through a captured asset domain or a generic `Ring`
+parameter ([asset terms](../language/definitions.md#asset-domains-and-projections)),
+never through a literal digest. The compiler admits the arena, derives its
+input count, output count and unit-weight degree as static naturals, writes the
+canonical identity into the parameter when the body closes, checks the carrier
+field, and retains the arena for the Entry package. The Host independently
+admits the packaged arena under that identity and checks references before
+execution. Structural sharing operates on the shared arena representation
+described above; the arena is not expanded into a second arithmetic
+representation in MLIR.
 
 | Contract | Data operands | Result layout |
 |---|---|---|

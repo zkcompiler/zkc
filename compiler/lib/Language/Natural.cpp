@@ -18,7 +18,16 @@ Expected<Natural> Natural::atom(StringRef name) {
   if (name.empty() || name.size() > 4096 || name.contains('\0'))
     return error("source.natural", "invalid natural atom identity");
   Natural value;
-  value.polynomial.emplace(Monomial{{Factor::Kind::Atom, name.str()}}, 1);
+  value.polynomial.emplace(Monomial{{Factor::Kind::Atom, name.str(), {}}}, 1);
+  return value;
+}
+Expected<Natural> Natural::projection(StringRef atom, StringRef member) {
+  if (atom.empty() || atom.size() > 4096 || atom.contains('\0') ||
+      member.empty() || member.size() > 4096 || member.contains('\0'))
+    return error("source.natural", "invalid natural projection identity");
+  Natural value;
+  value.polynomial.emplace(
+      Monomial{{Factor::Kind::Projection, atom.str(), member.str()}}, 1);
   return value;
 }
 bool Natural::isClosed() const {
@@ -40,9 +49,14 @@ std::string Natural::spelling() const {
       out << "+";
     first = false;
     out << coefficient;
-    for (const auto &factor : factors)
-      out << (factor.kind == Factor::Kind::Atom ? "*a" : "*p")
+    for (const auto &factor : factors) {
+      out << (factor.kind == Factor::Kind::Atom         ? "*a"
+              : factor.kind == Factor::Kind::PowerOfTwo ? "*p"
+                                                        : "*j")
           << factor.name.size() << ":" << factor.name;
+      if (factor.kind == Factor::Kind::Projection)
+        out << factor.member.size() << ":" << factor.member;
+    }
   }
   return result;
 }
@@ -57,7 +71,7 @@ Error NaturalArithmetic::insert(Natural &into, const Natural::Monomial &key,
   if (auto e = charge(key.size() + 1))
     return e;
   for (auto &factor : key)
-    if (auto e = charge(factor.name.size() + 1))
+    if (auto e = charge(factor.name.size() + factor.member.size() + 1))
       return e;
   if (!coefficient)
     return Error::success();
@@ -98,7 +112,7 @@ Expected<Natural> NaturalArithmetic::multiply(const Natural &a,
         return error("source.natural", "natural coefficient overflow");
       for (auto *terms : {&left, &right})
         for (auto &factor : *terms)
-          if (auto e = charge(factor.name.size() + 1))
+          if (auto e = charge(factor.name.size() + factor.member.size() + 1))
             return std::move(e);
       Natural::Monomial factors;
       std::merge(left.begin(), left.end(), right.begin(), right.end(),
@@ -132,7 +146,7 @@ Expected<Natural> NaturalArithmetic::powerOfTwo(const Natural &exponent) {
     if (auto e = charge(count * identityCost))
       return std::move(e);
     factors.insert(factors.end(), count,
-                   {Natural::Factor::Kind::PowerOfTwo, term[0].name});
+                   {Natural::Factor::Kind::PowerOfTwo, term[0].name, {}});
   }
   Natural result;
   if (auto e = insert(result, factors, coefficient))
@@ -142,24 +156,29 @@ Expected<Natural> NaturalArithmetic::powerOfTwo(const Natural &exponent) {
 Expected<Natural>
 NaturalArithmetic::substitute(const Natural &input,
                               const std::map<std::string, Natural> &bindings) {
-  return substitute(input, [&](StringRef name) -> const Natural * {
-    auto found = bindings.find(name.str());
-    return found == bindings.end() ? nullptr : &found->second;
-  });
+  return substitute(input,
+                    [&](const Natural::Factor &factor) -> const Natural * {
+                      if (factor.kind == Natural::Factor::Kind::Projection)
+                        return nullptr;
+                      auto found = bindings.find(factor.name);
+                      return found == bindings.end() ? nullptr : &found->second;
+                    });
 }
-Expected<Natural>
-NaturalArithmetic::substitute(const Natural &input,
-                              function_ref<const Natural *(StringRef)> lookup) {
+Expected<Natural> NaturalArithmetic::substitute(
+    const Natural &input,
+    function_ref<const Natural *(const Natural::Factor &)> lookup) {
   Natural result;
   for (const auto &[factors, coefficient] : input.terms()) {
     Natural term = Natural::constant(coefficient);
     for (const auto &factor : factors) {
-      if (auto e = charge(factor.name.size() + 1))
+      if (auto e = charge(factor.name.size() + factor.member.size() + 1))
         return std::move(e);
-      const Natural *replacement = lookup(factor.name);
+      const Natural *replacement = lookup(factor);
       std::optional<Natural> atom;
       if (!replacement) {
-        auto identity = Natural::atom(factor.name);
+        auto identity = factor.kind == Natural::Factor::Kind::Projection
+                            ? Natural::projection(factor.name, factor.member)
+                            : Natural::atom(factor.name);
         if (!identity)
           return identity.takeError();
         atom = std::move(*identity);

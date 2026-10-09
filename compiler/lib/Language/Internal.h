@@ -17,14 +17,13 @@ struct SyntaxType {
     Builtin,
     Formal,
     Natural,
-    AssetProperty,
     Add,
     Multiply,
     PowerOfTwo,
     Array,
     Tuple
   } kind = Kind::Name;
-  std::string name, assetName;
+  std::string name;
   Span span;
   // Parser-maintained height also bounds left-associated syntax and its
   // cleanup.
@@ -89,7 +88,8 @@ struct Expression {
   Span span;
   std::vector<SyntaxType> arguments;
   std::vector<std::string> labels;
-  std::map<unsigned, std::string> assetParameters;
+  /// Kernel parameter positions written as asset terms instead of literals.
+  std::map<unsigned, SyntaxType> assetParameters;
   std::vector<std::string> captures;
   std::vector<std::string> services;
   std::vector<std::optional<std::vector<std::string>>> carriedRoles;
@@ -166,7 +166,10 @@ struct SyntaxProofEntry {
 };
 struct SyntaxDeclaration {
   Declaration::Kind kind;
+  /// A domain declaration's target is its sort word; its domain is the
+  /// installed identity or, for an asset domain, the captured asset name.
   std::string name, domain, target;
+  bool assetDomain = false;
   bool isPublic = false;
   bool completes = false;
   Span span;

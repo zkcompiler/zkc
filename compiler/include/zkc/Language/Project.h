@@ -180,6 +180,12 @@ struct Projection {
   ValueId input;
   std::vector<unsigned> path;
 };
+/// A kernel parameter position that is written from an asset term rather than
+/// a literal. The closed term's identity becomes the parameter at closure.
+struct AssetReference {
+  unsigned position;
+  Type term;
+};
 struct LocalPrimitive {
   std::string contract;
   std::vector<ValueId> operands;
@@ -187,6 +193,8 @@ struct LocalPrimitive {
   std::vector<Type> staticArguments;
   /// Explicit installed contract roots, independent of literal parameters.
   std::optional<std::vector<Type>> bindingArguments;
+  /// Typed asset terms, closed separately from the natural static arguments.
+  std::vector<AssetReference> assetReferences;
   LocalPrimitive(std::string contract, std::vector<ValueId> operands,
                  std::vector<std::string> parameters,
                  std::vector<Type> statics = {})
@@ -229,8 +237,9 @@ struct Body {
   std::vector<std::vector<unsigned>> formationRequirements;
 };
 struct Parameter {
-  enum class Sort { Type, Natural, Component, Domain } sort;
+  enum class Sort { Type, Natural, Component, Domain, Asset } sort;
   std::string name, atom;
+  /// Catalog sort of a Domain parameter or asset sort of an Asset parameter.
   std::string domainSort;
   Permissions permissions;
   std::optional<DeclarationId> interface;
@@ -344,6 +353,8 @@ struct Declaration {
   std::string name, qualifiedName, symbol;
   bool isPublic = false;
   Span span;
+  /// A domain declaration's catalog or asset term; a definition's elaborated
+  /// representation.
   Type domain;
   std::vector<Parameter> parameters;
   std::vector<NaturalBound> bounds;

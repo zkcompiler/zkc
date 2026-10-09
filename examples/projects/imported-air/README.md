@@ -31,8 +31,10 @@ Each value the Host substitutes is fixed by a separate step:
    Each `source-*.json` request carries this fully expanded vector. The adapter
    prepares it under the selected export and instance. A witness does not choose
    what an input means.
-4. [`main.zkc`](main.zkc) names the arena by its SHA-256 as a static kernel
-   parameter, so the identity is part of the compiled package.
+4. [`main.zkc`](main.zkc) declares `domain Export = ring(asset export)` over
+   the captured `arena.json` and passes `Export` to both kernels. The compiler
+   writes the arena's canonical SHA-256 into the static kernel parameter, so
+   the identity is part of the compiled package.
 5. The Host admits arena bytes from `--evaluators` only under that identity;
    the [manifest](../../../compiler/adapters/plonky3/fixtures/recurrence/ring-assets.json)
    lists the fixture's `arena.json`.
@@ -88,7 +90,8 @@ and the nonzero row cells equal the failures the upstream debug checker reports.
 `regenerate.py check` rebuilds every request and expectation from the pinned
 upstream AIR byte for byte. The arena, manifest and requests therefore stay
 beside the export rather than in this directory. A change to the export changes
-its arena identity; `main.zkc` must then name the new identity.
+its arena identity; recompiling against the new `arena.json` changes the
+compiled package without editing `main.zkc`.
 
 ## Run
 
@@ -97,6 +100,7 @@ From the repository root, where the manifest's relative paths resolve:
 ```sh
 zkc compile --entry=imported_air::RowResiduals \
   --module=imported_air=examples/projects/imported-air/main.zkc \
+  --asset=export=ring-json=compiler/adapters/plonky3/fixtures/recurrence/arena.json \
   --output=rows.entry
 zkc run rows.entry EXPECTED_SHA256 \
   compiler/adapters/plonky3/fixtures/recurrence/source-rows-changed-trace.json \

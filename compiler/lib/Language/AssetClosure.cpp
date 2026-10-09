@@ -20,45 +20,54 @@ Error closeAssets(const CheckedProject &project, ClosedStorage &closed,
         return error;
       if (const auto *primitive =
               std::get_if<LocalPrimitive>(&operation.action)) {
-        if (!StringRef(primitive->contract).starts_with("ring."))
-          continue;
-        if (primitive->parameters.size() != 1 || !primitive->bindingArguments ||
-            primitive->bindingArguments->size() != 1)
-          return failure("source.asset-reference", "invalid evaluator binding",
-                         operation.span);
-        const auto &identity = primitive->parameters.front();
-        auto found = available.find(identity);
-        if (found == available.end() || !found->second->ring())
-          return failure("source.asset-reference",
-                         "required captured ring expression is absent",
-                         operation.span);
-        const auto &carrier = primitive->bindingArguments->front();
-        if (carrier.kind != Type::Kind::Field || carrier.symbolic)
-          return failure("source.asset-carrier",
-                         "evaluator field is not closed", operation.span);
-        if (checked.emplace(identity, carrier.domain).second) {
-          const auto &arena = *found->second->ring();
-          if (auto error =
-                  work.charge(arena.inputs().size() + arena.facts().size() + 1,
-                              operation.span))
+        for (const auto &reference : primitive->assetReferences) {
+          if (auto error = work.charge(1, operation.span))
             return error;
-          auto accepts = [&](StringRef field) {
-            return field == carrier.domain ||
-                   field == protocol::installedDomains().associatedIdentity(
-                                carrier.domain, "BaseField");
-          };
-          for (const auto &input : arena.inputs())
-            if (!accepts(input.field))
+          const auto &identity = reference.term.domain;
+          auto found = available.find(identity);
+          if (reference.term.kind != Type::Kind::Asset ||
+              reference.term.symbolic || found == available.end() ||
+              reference.position >= primitive->parameters.size() ||
+              primitive->parameters[reference.position] != identity)
+            return failure("source.asset-reference",
+                           "closed kernel parameter does not name a captured "
+                           "asset",
+                           operation.span);
+          if (const auto *arena = found->second->ring()) {
+            // Every ring kernel substitutes the arena in one carrier field;
+            // the arena's fields must be that carrier or embed into it.
+            if (!primitive->bindingArguments ||
+                primitive->bindingArguments->size() != 1)
+              return failure("source.asset-reference",
+                             "invalid evaluator binding", operation.span);
+            const auto &carrier = primitive->bindingArguments->front();
+            if (carrier.kind != Type::Kind::Field || carrier.symbolic)
               return failure("source.asset-carrier",
-                             "expression input field differs from carrier",
-                             operation.span);
-          for (const auto &fact : arena.facts())
-            if (!accepts(fact.field))
-              return failure("source.asset-carrier",
-                             "expression node field differs from carrier",
-                             operation.span);
+                             "evaluator field is not closed", operation.span);
+            if (checked.emplace(identity, carrier.domain).second) {
+              if (auto error = work.charge(arena->inputs().size() +
+                                               arena->facts().size() + 1,
+                                           operation.span))
+                return error;
+              auto accepts = [&](StringRef field) {
+                return field == carrier.domain ||
+                       field == protocol::installedDomains().associatedIdentity(
+                                    carrier.domain, "BaseField");
+              };
+              for (const auto &input : arena->inputs())
+                if (!accepts(input.field))
+                  return failure("source.asset-carrier",
+                                 "expression input field differs from carrier",
+                                 operation.span);
+              for (const auto &fact : arena->facts())
+                if (!accepts(fact.field))
+                  return failure("source.asset-carrier",
+                                 "expression node field differs from carrier",
+                                 operation.span);
+            }
+          }
+          retained.emplace(identity, found->second);
         }
-        retained.emplace(identity, found->second);
       } else if (const auto *control =
                      std::get_if<LocalControl>(&operation.action)) {
         for (const auto &region : control->regions)

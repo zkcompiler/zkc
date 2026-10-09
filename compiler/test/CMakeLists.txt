@@ -22,6 +22,11 @@ add_zkc_test(asset_sharing Compiler asset-sharing)
 add_zkc_test(language_interface Compiler language-interface)
 add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_expression_assets Language language-expression-assets)
+target_compile_definitions(zkc-language_expression_assets-test PRIVATE
+  ZKC_SUMCHECK_LIBRARY="${PROJECT_SOURCE_DIR}/../libraries/sumcheck/expression.zkc"
+  ZKC_EXPRESSION_SUMCHECK_PROJECT="${PROJECT_SOURCE_DIR}/../examples/projects/expression-sumcheck")
+add_zkc_test(language_asset_ir Compiler language-asset-ir)
+mlir_target_link_libraries(zkc-language_asset_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_specifications Language language-specifications)
 add_zkc_test(language_entries Language language-entries)
 add_zkc_test(language_entry_ir Compiler)

@@ -371,7 +371,8 @@ Expected<ClosedEntry> closeEntry(const CheckedProject &project, StringRef name,
       auto storage = std::make_shared<detail::ClosedStorage>();
       storage->declarations.assign(project.declarations().begin(),
                                    project.declarations().end());
-      if (auto error = detail::specialize(storage->declarations, work, decl.id))
+      if (auto error = detail::specialize(storage->declarations,
+                                          project.assets(), work, decl.id))
         return error;
       storage->protocol = *storage->declarations[decl.id.index].target;
       if (auto error = detail::closeAssets(project, *storage, work))

@@ -42,8 +42,6 @@ public:
                       const SyntaxProofEntry &);
 
 private:
-  std::optional<Type> assetProperty(const Declaration &, const SyntaxType &,
-                                    unsigned);
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
                                     unsigned);
   std::vector<SyntaxModule> syntax;

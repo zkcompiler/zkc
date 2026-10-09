@@ -1,12 +1,14 @@
 # Sumcheck over a shared expression
 
 This client computes the sum of `x * y` over a public table of factor values.
-The ordinary [Sumcheck library](../../../libraries/sumcheck/expression.zkc)
-receives a statically selected `Expression` component. That component binds
-the [product arena](product.ring.json) through the captured name `product`.
-The compiler derives its input width and round degree from the admitted
-contents and retains those contents in the Entry package. The component uses
-the same native evaluator available to AIR consumers.
+It declares `domain Product = ring(asset product)` over the captured
+[product arena](product.ring.json) and applies the generic
+[Sumcheck library](../../../libraries/sumcheck/expression.zkc) as
+`Sumcheck<Extension, 16, Product>`. The library derives the table width and
+the round-polynomial degree from the arena; the compiler retains the admitted
+contents in the Entry package. A different arena, such as a three-factor
+product, changes the compiled rounds without editing the client or the library.
+The kernels are the same native evaluator available to AIR consumers.
 
 `BaseRun` and `BaseProof` accept KoalaBear values and explicitly embed them in
 Ext8 before the first round. `ExtensionRun` and `Proof` accept Ext8 values.

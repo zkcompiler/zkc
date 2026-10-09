@@ -54,7 +54,7 @@ for optimized in (0, 1):
 with case('Entry packages retain exact source, interface and artifact bytes'):
     package_bytes = commands.run([compiler, 'language-package', *options])
     package = json.loads(package_bytes)
-    assert set(package) == {'format', 'original', 'interface', 'artifact', 'options'}
+    assert set(package) == {'format', 'original', 'interface', 'artifact', 'assets', 'options'}
     assert package['format'] == 'zkc.entry/0'
     assert package['original'] == commands.run([compiler, 'language-emit', *options])
     assert json.loads(package['interface']) == interface

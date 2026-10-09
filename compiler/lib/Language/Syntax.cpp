@@ -266,25 +266,7 @@ private:
     if (!bounded(depth))
       return false;
     out.span = current().span;
-    if (take("asset")) {
-      out.kind = SyntaxType::Kind::AssetProperty;
-      if (!expect("(") || current().kind != TokenKind::String)
-        return fail("source.syntax", "asset property requires a captured name");
-      out.assetName = text().drop_front().drop_back().str();
-      advance();
-      if (!expect(",") || current().kind != TokenKind::String)
-        return fail("source.syntax", "asset property requires a property name");
-      out.name = text().drop_front().drop_back().str();
-      advance();
-      while (take(",")) {
-        SyntaxType argument;
-        if (!type(argument, depth + 1))
-          return false;
-        out.arguments.push_back(std::move(argument));
-      }
-      if (!expect(")"))
-        return false;
-    } else if (take("pow2")) {
+    if (take("pow2")) {
       out.kind = SyntaxType::Kind::PowerOfTwo;
       SyntaxType exponent;
       if (!expect("(") || !type(exponent, depth + 1) || !expect(")"))
@@ -783,12 +765,21 @@ private:
       }
       d.target = text().str();
       advance();
-      if (!expect("(") || current().kind != TokenKind::String) {
+      if (!expect("("))
+        return {};
+      // An asset domain names captured bytes; a catalog domain names an
+      // installed identity.
+      d.assetDomain = d.target == "ring" || d.target == "bundle";
+      if (d.assetDomain) {
+        if (!expect("asset") || !path(d.domain))
+          return {};
+      } else if (current().kind != TokenKind::String) {
         fail("source.syntax", "expected installed domain identity string");
         return {};
+      } else {
+        d.domain = text().drop_front().drop_back().str();
+        advance();
       }
-      d.domain = text().drop_front().drop_back().str();
-      advance();
       if (!expect(")") || !expect(";"))
         return {};
     } else if (take("relation")) {
@@ -1118,21 +1109,21 @@ private:
       }
       if (take(";")) {
         do {
-          if (value.kind == Expression::Kind::Kernel && take("asset")) {
-            std::string asset;
-            if (!path(asset))
-              return {};
-            value.assetParameters.emplace(value.labels.size(),
-                                          std::move(asset));
-            value.labels.emplace_back();
-          } else {
-            if (current().kind != TokenKind::String) {
-              fail("source.syntax", "operation parameters require literal "
-                                    "strings or captured assets");
-              return {};
-            }
+          if (current().kind == TokenKind::String) {
             value.labels.push_back(text().drop_front().drop_back().str());
             advance();
+          } else if (value.kind == Expression::Kind::Kernel) {
+            // A kernel parameter can be a static asset term; its identity is
+            // written when the enclosing body closes.
+            SyntaxType term;
+            if (!type(term, depth + 1))
+              return {};
+            value.assetParameters.emplace(value.labels.size(), std::move(term));
+            value.labels.emplace_back();
+          } else {
+            fail("source.syntax",
+                 "intrinsic parameters must be literal strings");
+            return {};
           }
         } while (take(","));
       }

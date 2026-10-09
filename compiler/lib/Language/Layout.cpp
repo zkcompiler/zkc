@@ -138,7 +138,8 @@ Expected<std::shared_ptr<const Layout>> Layouts::get(const Type &type) {
         if (auto e = charge(parameter.atom.size() + 1))
           return std::move(e);
     }
-    state->types.emplace(state->declarations, state->work);
+    // Layouts see closed types only; no asset projection remains to resolve.
+    state->types.emplace(state->declarations, ArrayRef<Asset>(), state->work);
   }
   return build(type, 1);
 }

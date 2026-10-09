@@ -9,7 +9,8 @@ namespace zkc::language::detail {
 std::optional<Semantics::CallSignature>
 BodyChecker::kernelSignature(const Expression &expr,
                              std::vector<Type> &arguments,
-                             std::vector<std::string> &parameters) {
+                             std::vector<std::string> &parameters,
+                             std::vector<AssetReference> &references) {
   for (const auto &syntax : expr.arguments) {
     auto type = checker.type(decl, syntax);
     if (!type)
@@ -17,29 +18,41 @@ BodyChecker::kernelSignature(const Expression &expr,
     arguments.push_back(std::move(*type));
   }
   parameters = expr.labels;
-  for (const auto &parameter : expr.assetParameters) {
-    auto position = parameter.first;
-    const auto &name = parameter.second;
-    if (!checker.types.charge(checker.output.assets.size() + name.size() + 1,
-                              expr.span))
+  // The installed parameter contract decides which position takes an asset
+  // term; an asset-identity parameter is never spelled as a literal digest.
+  const auto *schema = protocol::parameterContract(expr.text);
+  bool assetPosition =
+      schema &&
+      schema->validator == protocol::ParameterValidator::AssetIdentity;
+  if (assetPosition && !expr.assetParameters.count(0)) {
+    fail("source.asset-reference",
+         "operation parameter requires a captured asset term", expr.span);
+    return {};
+  }
+  bool closedParameters = true;
+  for (const auto &[position, syntax] : expr.assetParameters) {
+    auto term = checker.type(decl, syntax);
+    if (!term)
       return {};
-    auto found = llvm::find_if(checker.output.assets, [&](const auto &asset) {
-      return asset.name() == name;
-    });
-    if (found == checker.output.assets.end()) {
-      fail("source.asset-reference", "captured asset is absent", expr.span);
-      return {};
-    }
-    if (!StringRef(expr.text).starts_with("ring.") || position != 0 ||
-        !found->ring()) {
+    if (term->kind != Type::Kind::Asset) {
       fail("source.asset-reference",
-           "operation does not accept this asset kind", expr.span);
+           "kernel parameter term is not a captured asset", expr.span);
       return {};
     }
-    parameters[position] = found->identity().str();
+    if (!assetPosition || position != 0 || assetSort(*term) != "Ring") {
+      fail("source.asset-reference",
+           "operation does not accept this asset term", expr.span);
+      return {};
+    }
+    if (term->symbolic) {
+      closedParameters = false;
+      parameters[position].clear();
+    } else
+      parameters[position] = term->domain;
+    references.push_back({position, std::move(*term)});
   }
   return checker.types.kernelSignature(expr.text, arguments, parameters,
-                                       expr.span, &decl);
+                                       expr.span, &decl, closedParameters);
 }
 
 std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
@@ -51,7 +64,8 @@ std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
   }
   std::vector<Type> arguments;
   std::vector<std::string> parameters;
-  auto signature = kernelSignature(expr, arguments, parameters);
+  std::vector<AssetReference> references;
+  auto signature = kernelSignature(expr, arguments, parameters, references);
   if (!signature)
     return {};
   if (expr.children.size() != signature->inputs.size()) {
@@ -69,6 +83,7 @@ std::optional<ValueId> BodyChecker::kernel(const Expression &expr,
   LocalPrimitive primitive{expr.text, std::move(operands),
                            std::move(parameters)};
   primitive.bindingArguments = std::move(arguments);
+  primitive.assetReferences = std::move(references);
   // The installed local envelope does not certify totality.
   body.mayStop = true;
   return emit(std::move(primitive), result, {}, expr.span);

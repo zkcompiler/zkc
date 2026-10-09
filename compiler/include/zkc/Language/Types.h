@@ -17,10 +17,10 @@ struct Permissions {
            (!b.wire || wire);
   }
 };
-/// A resolved source term. Natural, Domain and Component are static sorts and
-/// cannot form runtime values. Parameters carry declaration-qualified atom
-/// identities. Nominal arguments include phantom parameters; representation is
-/// not identity.
+/// A resolved source term. Natural, Domain, Asset and Component are static
+/// sorts and cannot form runtime values. Parameters carry
+/// declaration-qualified atom identities. Nominal arguments include phantom
+/// parameters; representation is not identity.
 struct Type {
   enum class Kind {
     Boolean,
@@ -38,11 +38,16 @@ struct Type {
     Component,
     Builtin,
     Formal,
-    Domain
+    Domain,
+    /// A capture-local immutable asset (a ring arena or a relation bundle).
+    /// The domain is the canonical asset identity when closed and the
+    /// parameter atom when symbolic; the sort is Ring or Bundle.
+    Asset
   };
   Kind kind = Kind::Boolean;
   std::string domain;
-  /// Catalog sort for static-only domains; Field and Group use their own kinds.
+  /// Catalog sort for static-only domains and asset sort for assets; Field and
+  /// Group use their own kinds.
   std::string sort;
   std::vector<Type> arguments;
   Natural dimension;
@@ -61,9 +66,16 @@ struct Type {
   bool operator!=(const Type &b) const { return !(*this == b); }
 };
 /// Canonical source term for an admitted catalog domain sort and identity.
-/// Only this constructor sets Type::sort, and only for Kind::Domain.
+/// Only this constructor and assetType set Type::sort.
 Type domainType(llvm::StringRef sort, llvm::StringRef identity);
 llvm::StringRef domainSort(const Type &);
+/// Asset sorts name captured mathematics, never installed catalog identities.
+bool isAssetSort(llvm::StringRef);
+/// Canonical source term for a captured asset of the given sort. The identity
+/// is the canonical definition identity of the captured asset.
+Type assetType(llvm::StringRef sort, llvm::StringRef identity);
+/// The asset sort of an asset term; empty for every other kind.
+llvm::StringRef assetSort(const Type &);
 bool isStaticOnly(const Type &);
 llvm::StringRef typeKindName(Type::Kind);
 std::string spelling(const Type &);

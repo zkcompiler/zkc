@@ -1,4 +1,4 @@
-#include "Checker.h"
+#include "Semantics.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Relation/Bundle.h"
 #include "llvm/ADT/STLExtras.h"
@@ -6,92 +6,82 @@
 
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<Type> Checker::assetProperty(const Declaration &context,
-                                           const SyntaxType &syntax,
-                                           unsigned depth) {
-  auto refuse = [&](StringRef detail) -> std::optional<Type> {
-    types.fail("source.asset-property", detail, syntax.span);
+namespace {
+bool ringProjection(StringRef member) {
+  return member == "Inputs" || member == "Outputs" || member == "Degree";
+}
+bool bundleProjection(StringRef member) {
+  return member == "Tables" || member == "Publics";
+}
+} // namespace
+const Asset *Semantics::capturedAsset(const Type &term, Span span) {
+  if (term.kind != Type::Kind::Asset || term.symbolic) {
+    fail("source.asset-reference", "expected a closed asset term", span);
+    return nullptr;
+  }
+  if (!charge(assets.size() + 1, span))
+    return nullptr;
+  auto found = llvm::find_if(assets, [&](const Asset &asset) {
+    return asset.identity() == term.domain;
+  });
+  if (found == assets.end()) {
+    fail("source.asset-reference", "captured asset is absent", span);
+    return nullptr;
+  }
+  return &*found;
+}
+std::optional<Type> Semantics::assetProjection(const Type &base,
+                                               StringRef member, Span span) {
+  auto refuse = [&](const Twine &detail) -> std::optional<Type> {
+    fail("source.asset-projection", detail, span);
     return {};
   };
-  if (!types.charge(output.assets.size() + syntax.assetName.size() + 1,
-                    syntax.span))
+  if (base.kind != Type::Kind::Asset)
+    return refuse("projection requires an asset term");
+  if (!charge(member.size() + 1, span))
     return {};
-  auto found = llvm::find_if(output.assets, [&](const auto &asset) {
-    return asset.name() == syntax.assetName;
-  });
-  if (found == output.assets.end())
-    return refuse("captured asset is absent");
-  std::vector<uint32_t> arguments;
-  for (const auto &argument : syntax.arguments) {
-    auto value = elaborateType(context, argument, depth + 1);
-    if (!value)
-      return {};
-    if (value->kind != Type::Kind::Natural || !value->dimension.isClosed() ||
-        value->dimension.closedValue() > ring::Limits::degree)
-      return refuse("asset query arguments require bounded closed naturals");
-    arguments.push_back(value->dimension.closedValue());
+  bool ring = assetSort(base) == "Ring";
+  if (ring ? !ringProjection(member) : !bundleProjection(member))
+    return refuse("unknown " + assetSort(base) + " projection: " + member);
+  Type result(Type::Kind::Natural);
+  if (base.symbolic) {
+    // Bundle facts stay concrete until a bundle-generic consumer exists.
+    if (!ring)
+      return refuse("bundle projections require a closed bundle term");
+    auto factor = Natural::projection(base.domain, member);
+    if (!factor)
+      return accept(factor.takeError(), span), std::optional<Type>{};
+    result.dimension = std::move(*factor);
+    result.symbolic = true;
+    return result;
   }
-  uint64_t result = 0;
-  if (const auto *arena = found->ring()) {
-    if (!types.charge(arena->nodes().size() + arena->inputs().size() +
-                          arena->outputs().size() + 1,
-                      syntax.span))
+  const auto *asset = capturedAsset(base, span);
+  if (!asset)
+    return {};
+  uint64_t value = 0;
+  if (const auto *arena = asset->ring()) {
+    if (!charge(arena->outputs().size() + 1, span))
       return {};
-    if (syntax.name == "input-field" || syntax.name == "output-field") {
-      if (arguments.size() != 1)
-        return refuse("field query requires one valid slot index");
-      auto index = arguments.front();
-      if (syntax.name == "input-field" && index < arena->inputs().size())
-        return Type(Type::Kind::Field, arena->inputs()[index].field);
-      if (syntax.name == "output-field" && index < arena->outputs().size())
-        return Type(Type::Kind::Field,
-                    arena->facts()[arena->outputs()[index]].field);
-      return refuse("field query slot is out of range");
-    }
-    if (syntax.name == "inputs" && arguments.empty())
-      result = arena->inputs().size();
-    else if (syntax.name == "outputs" && arguments.empty())
-      result = arena->outputs().size();
-    else if (syntax.name == "degree") {
-      if (arguments.empty())
-        arguments.assign(arena->inputs().size(), 1);
-      if (arguments.size() != arena->inputs().size())
-        return refuse("degree query requires one weight per declared input");
-      auto degrees = arena->degrees(arguments);
-      if (!degrees) {
-        types.accept(degrees.takeError(), syntax.span);
-        return {};
-      }
-      for (auto output : arena->outputs())
-        result = std::max<uint64_t>(result, (*degrees)[output]);
-    } else
-      return refuse("unknown ring property or incorrect query arguments");
-  } else if (const auto *bundle = found->bundle()) {
-    if (syntax.name == "tables" && arguments.empty())
-      result = bundle->tables().size();
-    else if (syntax.name == "publics" && arguments.empty())
-      result = bundle->publics().size();
+    if (member == "Inputs")
+      value = arena->inputs().size();
+    else if (member == "Outputs")
+      value = arena->outputs().size();
     else {
-      if (arguments.size() != 1 || arguments.front() >= bundle->tables().size())
-        return refuse("table query requires one valid table index");
-      const auto &table = bundle->tables()[arguments.front()];
-      if (syntax.name == "inputs")
-        result = table.arena.inputs().size();
-      else if (syntax.name == "outputs")
-        result = table.arena.outputs().size();
-      else if (syntax.name == "degree") {
-        const auto &facts = bundle->facts()[arguments.front()];
-        if (!types.charge(facts.size() + 1, syntax.span))
-          return {};
-        for (const auto &fact : facts)
-          result = std::max<uint64_t>(result, fact.degree);
-      } else
-        return refuse("unknown relation bundle property");
+      // Unit-weight output degrees are formation facts, saturated one above
+      // the arena limit; a saturated fact is not a number.
+      for (auto output : arena->outputs())
+        value = std::max<uint64_t>(value, arena->facts()[output].degree);
+      if (value > ring::Limits::degree)
+        return refuse("expression degree exceeds the arena limit");
     }
-  } else
-    return refuse("asset kind has no expression properties");
-  Type value(Type::Kind::Natural);
-  value.dimension = Natural::constant(result);
-  return value;
+  } else {
+    const auto *bundle = asset->bundle();
+    if (!bundle)
+      return refuse("asset kind has no projections");
+    value =
+        member == "Tables" ? bundle->tables().size() : bundle->publics().size();
+  }
+  result.dimension = Natural::constant(value);
+  return result;
 }
 } // namespace zkc::language::detail

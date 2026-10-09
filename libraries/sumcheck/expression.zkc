@@ -3,18 +3,19 @@ module expression_sumcheck;
 pub type Vector<F: Field> = builtin("vector", F);
 pub type Polynomial<F: Field> = builtin("polynomial", F);
 
-// An implementation fixes one closed expression and its ordered factor slots.
-// Values are row-major assignments. Round returns the exact coefficient sum
-// over affine pairs; evaluate substitutes the terminal factor values.
-pub interface Expression<F: Field> {
-  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F>;
-  fn evaluate(values: Vector<F>) -> F;
-}
-
-fn round<F: Field, Width: nat, E: Expression<F>>(values: Vector<F>) -> Vector<F> {
+// The captured arena A fixes one closed expression and its ordered factor
+// slots. Values are row-major assignments with A::Inputs columns. Round
+// returns the exact coefficient sum over affine pairs; terminal substitutes
+// the final factor values and reads the single output.
+fn round<F: Field, A: Ring>(values: Vector<F>) -> Vector<F> {
   let halves = kernel<F>("vector.split", values);
-  let rows = kernel("index.div", kernel<F>("vector.length", halves.0), index<Width>());
-  return E::round(halves.0, halves.1, rows);
+  let rows = kernel("index.div", kernel<F>("vector.length", halves.0),
+                    index<A::Inputs>());
+  return kernel<F>("ring.affine_sum", halves.0, halves.1, rows; A);
+}
+fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
+  let result = kernel<F>("ring.point", values; A);
+  return kernel<F>("vector.at", result; "0");
 }
 fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
   let halves = kernel<F>("vector.split", values);
@@ -37,20 +38,23 @@ fn evaluate<F: Field>(value: Polynomial<F>, point: F) -> F {
 fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
 
 // Public factor tables, MSB-first variable order. The verifier folds the public
-// factors and checks the exact terminal expression. A commitment/opening
-// protocol can replace this direct terminal evaluation in a separate library.
-pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, Width: nat, Degree: nat,
-                      E: Expression<F>> roles(P,V)
+// factors and checks the exact terminal expression. The table width and the
+// round-polynomial degree are derived from the captured arena: each round
+// carries A::Degree + 1 coefficients and the terminal row has A::Inputs
+// factors. A commitment/opening protocol can replace this direct terminal
+// evaluation in a separate library.
+pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, A: Ring> roles(P,V)
     (prover_values: Vector<F> @P, verifier_values: Vector<F> @V,
      claim: F @V, rounds: index @(P,V))
-    using(challenges: Random<F> @V) -> (accepted: bool @V) {
+    using(challenges: Random<F> @V) -> (accepted: bool @V)
+    where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
   let (lastP, lastV, final_claim) = repeat roles(P,V)(i < rounds, max Max)
       carry(tableP = prover_values, tableV = verifier_values, current = claim @V)
       capture() using(challenges) {
-    local P let proposed = round<F,Width,E>(tableP);
+    local P let proposed = round<F,A>(tableP);
     let received = send P -> V(proposed);
     local V let actual = polynomial(received);
-    local V let size_ok = has_length<F,Degree+1>(received);
+    local V let size_ok = has_length<F,A::Degree+1>(received);
     guard @V size_ok;
     local V let total = boundary(actual);
     local V let sum_ok = equal(current, total);
@@ -62,9 +66,9 @@ pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, Width: nat, Degree: nat,
     local V let nextClaim = evaluate(actual, cv);
     yield (tableP = nextP, tableV = nextV, current = nextClaim);
   };
-  local V let size_ok = has_length<F,Width>(lastV);
+  local V let size_ok = has_length<F,A::Inputs>(lastV);
   guard @V size_ok;
-  local V let evaluated = E::evaluate(lastV);
+  local V let evaluated = terminal<F,A>(lastV);
   local V let accepted = equal(evaluated, final_claim);
   return (accepted = accepted);
 }
