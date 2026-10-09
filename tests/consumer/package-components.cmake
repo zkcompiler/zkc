@@ -72,7 +72,10 @@ list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}" "${MLIR_CMAKE_DIR}")
 include(TableGen)
 include(AddLLVM)
 include(AddMLIR)
-if(NOT COMMAND mlir_tablegen OR NOT TARGET ${MLIR_TABLEGEN_EXE})
+# Installed MLIR may resolve its tool variable to an absolute executable path
+# while retaining a separately named imported target (for example mlir-tblgen).
+if(NOT COMMAND mlir_tablegen OR
+   (NOT TARGET "${MLIR_TABLEGEN_EXE}" AND NOT EXISTS "${MLIR_TABLEGEN_EXE}"))
   message(FATAL_ERROR "native discovery did not expose upstream dialect build tools")
 endif()
 ]=])
