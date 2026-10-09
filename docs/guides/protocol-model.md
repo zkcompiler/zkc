@@ -30,8 +30,8 @@ For example, fresh interaction and a specified Fiat–Shamir construction
 have different state and probability obligations even when they return the
 same field type. [Formal support](../../formal/SUPPORT.md) lists the
 construction connections that exist and their scopes; the
-[rationale](../rationale/semantic-abstraction.md) explains why a construction is
-an interpretation and not a compiler stage.
+[formal design](../../formal/design/semantics.md#interpretation-and-representations)
+explains why an interpretation does not require another compiler stage.
 
 ## 3. Typed operations and interaction legality
 
@@ -106,7 +106,8 @@ cannot establish its premises for an actual external implementation.
 
 Dependent syntax establishes typed scope; algebraic effects separate bodies
 from interpretation; phase and input refinements add different obligations.
-Rationale records explain why [control is common while operations are
-supplied](../rationale/operation-vocabulary.md), why there is
-[no total choreography projector](../rationale/participant-generation.md) and why
-the direct plan is [a profile, not a mandatory second IR](../rationale/direct-plan-profile.md). [Theory](../theory.md) maps the broader methods and sources.
+The formal design explains why [control is common while operations are
+supplied](../../formal/design/semantics.md#bodies-and-operations). Other choices are
+[conservative participant generation](../rationale/participant-generation.md)
+and keeping the [direct plan as a reference profile](../../formal/design/semantics.md#direct-plans).
+[Theory](../theory.md) maps the broader methods and sources.

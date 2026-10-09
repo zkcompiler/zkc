@@ -33,6 +33,5 @@ actual implementation to which it applies.
 
 Build commands and maintenance belong in [development](development/README.md).
 The [test guide](../tests/README.md) selects checks. Documentation changes follow
-[the writing and placement guide](development/documentation.md) and the
-[organization decision](rationale/documentation-structure.md). Review logs,
+[the writing and placement guide](development/documentation.md). Review logs,
 private research records and superseded guides do not belong in this reference.

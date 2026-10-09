@@ -126,9 +126,14 @@ mechanized theorem or an implementation guarantee.
 A disagreement is adjudicated against the intended subject, its mathematics and
 actual evidence. Neither an implementation's convenience nor a theorem about
 a different object decides the intended semantics. The
-[writing rules](writing.md) give the editorial rules. The
-[profile grouping rationale](../rationale/profile-grouping.md)
-explains the grouped profile structure.
+[writing rules](writing.md) give the editorial rules.
+
+Common chapters own laws that hold across choices; profiles own concrete
+vocabularies, algorithms and experiments. Keeping those choices separate prevents
+one codec or degree restriction from reading as a universal requirement. Group
+by independent parameters and conclusions, rather than one whole protocol per
+profile, and keep a general law outside its first consumer. This is document
+organization, not an additional IR stage.
 
 This specification and its Formal correspondence do not establish native
 protocol support; the [status page](../status.md) states what is implemented.

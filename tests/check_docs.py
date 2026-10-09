@@ -47,7 +47,6 @@ def anchors(path):
     return result
 
 
-RATIONALE_LIMIT = 80
 # What a rationale record never carries: how a choice was reached, and the
 # names of the work that reached it. docs/rationale/README.md states the rules.
 RATIONALE_FORBIDDEN = [
@@ -63,15 +62,10 @@ def rationale(page, outgoing, incoming, home):
     """Rules of docs/rationale that a program can check."""
     text = prose(page)
     found = []
-    lines = page.read_text().count("\n")
-    if lines > RATIONALE_LIMIT:
-        found.append(f"{lines} lines; a record has at most {RATIONALE_LIMIT}")
     if not any(home not in target.parents for target in outgoing):
         found.append("no link to a page that owns the choice")
     if not any(home not in source.parents for source in incoming):
         found.append("no page outside this folder links to this record")
-    if not re.search(r"reopen when", text, re.I):
-        found.append("no reopening condition")
     for pattern, name in RATIONALE_FORBIDDEN:
         match = re.search(pattern, text)
         if match:

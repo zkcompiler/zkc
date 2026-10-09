@@ -21,13 +21,15 @@ level of detail and link to the owner of the underlying rule.
 | Explanations of protocol meaning, execution, composition, properties and realization | `docs/guides/` |
 | Compiler representations, analyses and lowering | `docs/compiler/` |
 | Execution, backend use and concrete formats | `docs/runtime/`; exact representation laws in `docs/spec/realization/` |
-| A design choice and its alternatives | `docs/rationale/`, following the [record rules](../rationale/README.md) |
+| A consequential implementation choice and its alternatives | `docs/rationale/`, following the [record rules](../rationale/README.md); short reasons stay with the owner |
+| Independent Lean model choices | `formal/design/`, linked from the [formal guide](../../formal/README.md#design-choices) |
 | A component's API or a campaign's procedure | Its adjacent README, linked from the relevant guide |
 
 Documentation follows reader tasks and semantic subjects; it need not mirror
-the source tree. The [organization rationale](../rationale/documentation-structure.md)
-explains this choice. Research notes, review logs, session history and backup
-copies stay outside the public reference. Their durable results become the
+the source tree. A source directory can serve several reader tasks; duplicating
+its layout in the reference would split one explanation across those tasks.
+Research notes, review logs, session history and backup copies stay outside the
+public reference. Their durable results become the
 appropriate definition, design, support statement or measurement summary.
 
 ## Keep claims and commands current

@@ -151,8 +151,8 @@ A retained ordered list alone does not model asynchronous delivery or rollback.
 
 ### 8. Theory choices and formal coverage
 
-The [effect-tree rationale](../rationale/effect-tree-bodies.md) compares effect
-trees with concrete IR semantics, opaque monadic actions and coinductive
+The [formal design](../../formal/design/semantics.md) compares finite effect
+bodies with concrete IR semantics, opaque monadic actions and coinductive
 interaction trees. The
 [correspondence map](../spec/correspondence/core.md) distinguishes
 mathematical definitions, generic theorems and actual adapter obligations.

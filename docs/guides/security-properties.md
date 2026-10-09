@@ -14,8 +14,8 @@ owns reductions and terminal contracts. [Probability](../spec/properties/probabi
 [disclosure](../spec/properties/disclosure.md) and [continuations](../spec/profiles/services/accepted-continuations.md)
 complete those contracts. This chapter explains their use; the
 [correspondence](../spec/correspondence/properties.md) gives their Formal scope.
-A preserved property is claimed [for a stated observer](../rationale/target-contexts.md),
-and a requested claim is [carried as its named experiment](../rationale/claim-scope.md).
+A preserved property selects its
+[observer and experiment](../../formal/design/observations.md#state-the-experiment-and-context).
 
 A property is attached to an actual interpreted experiment: source, public
 statement mapping, strategies and their information, joint initialization,
@@ -108,8 +108,9 @@ coverage of unresolved alternatives.
 
 ### 4. Theory and scope
 
-Rationale records explain [semantic framing](../rationale/semantic-footprints.md)
-and [candidate checking](../rationale/candidate-checking.md); conservative analysis
+The formal design explains [state framing](../../formal/design/analysis.md#state-framing)
+and [candidate checking](../../formal/design/compiler-connection.md#checking-in-the-current-formal-model);
+conservative analysis
 follows the [merge condition](../spec/verification/analysis.md#merging-descriptions). Additional proof
 search or constraint solvers can produce evidence for the same judgment.
 The [correspondence](../spec/correspondence/transformations.md) lists
@@ -194,7 +195,7 @@ controls distinguish the relevant assumptions.
 [PROB-08](../spec/properties/probability.md#attempts-and-extensions)
 requires the actual enclosing experiment for retries and the appropriate laws
 for computational or oracle-model claims. The [randomized release law](../../formal/Zkc/Probability/Disclosure.lean)
-uses [one coupling of the whole released pair](../rationale/joint-release-coupling.md); it does not confer
+uses [one coupling of the whole released pair](../../formal/design/observations.md#prove-the-joint-release); it does not confer
 ZK on a protocol or verify its native implementation.
 
 ## Relation-bearing results and terminal verification

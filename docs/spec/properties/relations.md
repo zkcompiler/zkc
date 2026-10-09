@@ -75,8 +75,13 @@ Connected(left,connect,right) :=
 The predicates retain their actual statement, configuration and domain
 parameters. A component predicate can hide its local relation witness using
 `Valid`; a boundary used by another component remains free until connection.
-A connector over shared events
-[carries the order in which they happened](../../rationale/connection-ordering.md).
+A connector over shared events retains their order. An unordered collection can
+admit a read before the write that justifies it. Encoding positions and events
+needs injectivity on the admitted domain; reducing unbounded natural positions
+modulo a finite field can merge different orders. A compressed encoding needs
+that injectivity argument or a separate probabilistic loss. Omitting order
+requires a law showing it irrelevant to the connected predicates.
+
 Different components need not expose the same tuple or storage layout. For
 example, a proof can expose a key and commitment, a signature a key and message,
 and the connector relate their keys. Each component still binds its other

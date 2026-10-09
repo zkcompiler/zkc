@@ -36,7 +36,7 @@ ordered actions and dynamic occurrence coordinates.
 ## Mathematics and ordered work
 
 Total mathematics stays in ordinary SSA so simplification can see dependencies.
-[Flat mathematical SSA](../rationale/flat-mathematical-ssa.md) explains that choice.
+[Flat mathematical SSA](../rationale/mathematical-ir.md) explains that choice.
 Ordered local calls, service queries, guards and resource transitions retain their
 execution order and failure behavior. Demand lowering realizes mathematics at
 its consuming action; a kernel recipe must preserve its complete contract.
@@ -64,7 +64,8 @@ execution. See [runtime](../runtime/README.md).
 
 Each lowering has its own selected relation and premises. Generic MLIR legality
 or retained origin metadata cannot establish source correspondence. The
-[semantic abstraction rationale](../rationale/semantic-abstraction.md) explains
-why mathematical interpretation is broader than a fixed compiler pipeline.
+[formal design](../../formal/design/semantics.md#interpretation-and-representations)
+explains why mathematical interpretation is broader than a fixed compiler
+pipeline.
 Independent Lean models can specify obligations for these transitions; their
 existing source/direct-plan theorems are not native implementation proofs.

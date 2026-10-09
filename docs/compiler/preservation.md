@@ -12,7 +12,7 @@ implemented checks from their remaining interpretation assumptions.
 
 ## Checking boundaries
 
-The [external-candidate decision](../rationale/external-candidate-checking.md)
+The [validation rationale](../rationale/validation.md)
 explains why acceptance must cover the actual artifact supplied to the consumer.
 
 A compilation retains its original input and checks the candidate of each step

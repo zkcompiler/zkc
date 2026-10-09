@@ -4,7 +4,8 @@ Evidence for [domain values](../domains/values.md),
 [tables and polynomials](../domains/polynomials.md),
 [Sumcheck profile](../profiles/README.md#sumcheck-components) and
 [captured/service profiles](../profiles/README.md#service-components), with the table choices in the
-[table-expression rationale](../../rationale/table-expression-meaning.md). `D` denotes an inspected definition,
+[quadratic profile](../profiles/sumcheck/quadratic.md#why-the-compiler-is-partial).
+`D` denotes an inspected definition,
 `T` a theorem under its actual hypotheses, and `O` an adapter/policy obligation.
 Root names and optional names are separated below.
 

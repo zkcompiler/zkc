@@ -215,12 +215,19 @@ validity and the same external state.
 These are contextual execution laws under this interface: the caller receives
 prepared values and actual external replies, but cannot inspect the cache or
 accounting to choose its next operation. Because every policy satisfies them,
-which one a compiler installs is
-[a cost question, and a repeated preparation is first removed as an ordinary repetition](../../rationale/preparation-reuse.md). An observer of costs, addresses or
-timing requires its own relation. Equal protocol observations do not establish
+which one a compiler installs is a cost question. An observer of costs, addresses
+or timing requires its own relation. Equal protocol observations do not establish
 profitability. The pure provider is total and cannot inspect mutable state;
 allocation failure inside preparation, concurrent cache access, reentrancy or
 cache-dependent scheduling require additional contracts.
+
+For statically identical immutable inputs, ordinary elimination can remove
+repeated preparation without a runtime cache. Passing a prepared value is another
+option when separate compilation hides that repetition. Runtime memoization is
+useful when equality is discovered only during execution and saved work pays for
+lookup. Its key includes every input determining the prepared value; storage
+limits and lifetime remain part of its contract. The laws above grant no
+profitability claim.
 
 Event emission is an external signature with unit replies, a unit state and
 one event per call. Its specialized embedding retains the adaptive preparation

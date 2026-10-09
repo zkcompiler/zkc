@@ -135,5 +135,5 @@ does not supply distributed knowledge of a later choice, general asynchronous
 delivery, recursive stored source, fairness, interruptions within one atomic
 handler call, or a measure on infinite interactive traces. Those require their
 own transition and observation laws. The
-[design rationale](../../rationale/finite-bodies-under-iteration.md) states when
+[design rationale](../../../formal/design/semantics.md#finite-bodies-and-outer-iteration) states when
 a broader recursive calculus would be warranted.

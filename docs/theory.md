@@ -31,7 +31,7 @@ Interpretation can itself produce another program. An interpreter comparison
 proves composition and execution fusion in the existing process calculus, plus
 rewrite transport under explicit model laws. Interaction Trees [15] supplies a
 related event-translation method, including richer coinductive behavior outside
-the present scope. The [abstraction decision](rationale/semantic-abstraction.md)
+the present scope. The [abstraction decision](../formal/design/semantics.md#interpretation-and-representations)
 therefore retains interpretation-based semantics while requiring structured
 compiler forms where analyses and transformations consume them.
 

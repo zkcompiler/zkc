@@ -5,8 +5,9 @@ The [representation specification](../spec/realization/representations.md),
 [binding specification](../spec/realization/artifacts.md) own these contracts. This guide
 connects them to mathematical adapter examples and the obligations of the
 current [runtime design](../runtime/design.md).
-Rationale records explain the [representation relation](../rationale/representation-relation.md)
-and the [relations of identity](../rationale/identity-purposes.md);
+The design choices behind
+[complete-result relations](../../formal/design/observations.md#relate-complete-results)
+and [identity](../rationale/identity-purposes.md) explain the alternatives;
 [correspondence](../spec/correspondence/realization.md) states proof scope.
 
 ## 1. Data and complete-result relation

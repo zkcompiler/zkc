@@ -358,6 +358,18 @@ point. They establish neither a native decoding theorem nor knowledge, zero
 knowledge, a polynomial-commitment terminal, a larger degree profile or
 Fiat–Shamir security.
 
-The [direct-terminal decision](../../../rationale/sumcheck-direct-terminal.md)
-explains why this formal profile evaluates the original polynomial at the actual
-challenge point rather than trusting a caller-supplied terminal value.
+## Why evaluate the original polynomial
+
+A completed round yields a residual claim; it does not establish the terminal
+relation to the original statement. This profile evaluates that polynomial at
+the actual ordered challenge point instead of trusting a caller-supplied scalar.
+The verifier needs the tables or an adequate retained representation, so this
+profile promises no sublinear verifier for an arbitrary private table. Avoiding
+dense coefficients may preserve evaluation; omitting the terminal cannot.
+
+A commitment opening requires its own contract and security argument. The
+[committed formal experiment](../../../../formal/design/committed-sumcheck.md)
+relates acceptance to the direct terminal outside its false-opening event and
+adds that loss. Likewise, replacing the complete coefficient root with a digest
+changes the framed query and observer. Private captures in another workload do
+not become public merely because this profile uses an explicit statement.

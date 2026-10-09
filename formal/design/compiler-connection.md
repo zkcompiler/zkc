@@ -139,6 +139,29 @@ Failing to certify does not establish that a transformation is incorrect. Final
 diagnostic codes are an implementation decision; this semantic distinction is
 required now.
 
+### Checking in the current formal model
+
+The [checked transformation](../../docs/spec/verification/refinement.md#checking-the-actual-candidate)
+takes a retained source, a consumer-resolved sound rule, its certificate and the
+actual candidate. It applies the rule and compares the returned plan's erasure
+with the candidate. The theorem covers that exact plan and source. A candidate
+cannot choose an operation interpretation merely by giving it a familiar name.
+The direct-plan checker admits only its exact direct lowering; another
+transformation needs its own rule and checking contract.
+
+This keeps heuristic proposal search outside the theorem. A general solver is
+optional, and unsupported candidates may still be correct. A rule with an empty
+initial domain proves nothing about an actual invocation; the consumer must
+establish the initial relation for its real environment and state. These are
+formal checking laws, not proofs of the native validators.
+
+Phase admission also needs its own argument. Suppose `tick` is legal only after
+a Boolean call returns `true`. A source that ticks only on `true` and a candidate
+that always ticks agree under an always-true handler. The candidate still
+violates the policy on the legal reply `false`. Execution equality under that
+handler cannot transport source conformance to every reply. Target admission,
+an applicable admission-transport law or a stronger denotation theorem is needed.
+
 ## 4. Analysis checking instead of reimplementing optimizer search
 
 For an analysis domain `A`, define `Means : A → ConcreteState → Prop`. A candidate

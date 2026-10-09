@@ -69,9 +69,9 @@ assumptions remain separately visible.
 
 ### 6. Theory choices and remaining interpretation work
 
-Two rationale records compare
-[semantic footprints with separation logic](../rationale/semantic-footprints.md) and
-[candidate checking with verifying the optimizer](../rationale/candidate-checking.md).
+The formal design explains
+[footprints and separation logic](../../formal/design/analysis.md#state-framing)
+and the [candidate-checking rule](../../formal/design/compiler-connection.md#checking-in-the-current-formal-model).
 The smaller interfaces suffice
 for the selected logical worlds. More precise native ownership or solver
 machinery must imply these consumer laws rather than replace them by labels.
@@ -146,7 +146,7 @@ cache observer distinguishes them.
 
 ### 6. Theory choices and limits
 
-Unary fact meaning, [state framing](../rationale/semantic-footprints.md) and
+Unary fact meaning, [state framing](../../formal/design/analysis.md#state-framing) and
 [relational replacement](../spec/core/contracts.md#satisfaction-and-replacement)
 remain separate. The
 [worked transformation](adding-a-transformation.md) applies them to

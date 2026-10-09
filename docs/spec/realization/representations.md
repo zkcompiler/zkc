@@ -209,8 +209,15 @@ The one-direction [reduction contract](../properties/relations.md#soundness-dire
 remains appropriate for reductions with residual obligations and bad events;
 it is not strengthened to exact acceptance realization.
 
-The [acceptance-target decision](../../rationale/acceptance-targets.md) explains
-why a realization states whether it acts on decoded values or actual bytes.
+A decoded-value target is sufficient only when received bytes affect no part of
+the statement beyond decoding. A malformed scalar encoding can reduce to an
+accepted value while the actual receiver rejects those bytes. Transcript, hash,
+commitment and canonical-encoding claims therefore retain the actual byte/value
+binding. Expanding acceptance into operations, checking a total arithmetic subset
+or invoking a separately specified component can each be valid; the chosen route
+still needs adequacy for its actual inputs, domain and representation, or an
+explicitly declared assumption. A component's name and signature cannot establish
+the predicate it enforces.
 
 ## Source-selected adapters
 

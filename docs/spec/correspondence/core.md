@@ -2,7 +2,7 @@
 
 [Execution](../core/execution.md) and
 [Observations](../core/observations.md) own the definitions; the
-[effect-tree rationale](../../rationale/effect-tree-bodies.md) explains the
+[formal design](../../../formal/design/semantics.md#bodies-and-operations) explains the
 alternatives. This map records exact support and limits;
 it does not supply semantics by listing a declaration name.
 

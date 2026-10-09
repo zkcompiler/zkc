@@ -110,8 +110,6 @@ protocol libraries or backend kernels at the appropriate owner. A whole-protocol
 runtime callback would hide the computation the compiler needs to analyze.
 New formats, codecs, services and transformations need explicit contracts and
 actual admission/behavior checks. The [extension guide](development/extensions.md)
-explains the workflow. The [system-boundary rationale](rationale/system-boundaries.md)
-and [runtime-language decision](rationale/runtime-language.md) explain the split.
-
-The [deferred-boundary decision](rationale/deferred-boundaries.md) identifies
-which cross-component contracts must be fixed before postponing an extension.
+explains the workflow and when to settle cross-component contracts. The
+[system-boundary rationale](rationale/architecture.md) explains the language and
+component split.

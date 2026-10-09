@@ -33,6 +33,18 @@ laws preserve operation contracts and encoded occurrence structure. These are
 not raw-normalizer adequacy, native correctness or Fiat–Shamir security proofs.
 Ordinary `Zkc` library clients do not need to import the tool implementation.
 
+## Design choices
+
+The independent model's rationale is grouped by the question it answers:
+
+- [Semantics](design/semantics.md): effect bodies, common control, interpretations,
+  outer iteration and direct plans.
+- [Analysis](design/analysis.md): precision, representation cost and state framing.
+- [Observations](design/observations.md): complete results, claim scope and joint
+  disclosure.
+- [Candidate checking](design/compiler-connection.md#checking-in-the-current-formal-model):
+  the established formal rule and the separate native connection.
+
 ## Use
 
 The main Lake package depends on pinned Mathlib. External protocol proofs live

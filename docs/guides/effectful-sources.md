@@ -82,7 +82,7 @@ also requires its actual framing and distribution laws.
 
 Structural source laws, explicit effects and whole-tree dependency analysis
 supply the reusable connections. [Theory](../theory.md) records their broader
-context; the [table-expression rationale](../rationale/table-expression-meaning.md)
-explains the ordered-table bridge and its alternatives. The
+context; the [quadratic profile](../spec/profiles/sumcheck/quadratic.md#why-the-compiler-is-partial)
+explains why its table compiler accepts a subset of the expression language. The
 [correspondence map](../spec/correspondence/domains.md) distinguishes
 root laws, optional probability results and remaining native adapter obligations.

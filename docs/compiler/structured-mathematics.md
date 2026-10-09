@@ -239,7 +239,7 @@ no performance gain. Another executable representation needs a concrete consumer
 ## Polynomial expression admission
 
 This formal-polynomial subset admits flat expressions and static finite data. Retain the
-[flat SSA decision](../rationale/flat-mathematical-ssa.md). Generic collection regions, `tensor.generate`, authored `linalg` and higher-order
+[flat SSA decision](../rationale/mathematical-ir.md). Generic collection regions, `tensor.generate`, authored `linalg` and higher-order
 polynomial functions remain outside this subset. Dynamic tensors and structured
 control have their own [foundation contracts](../spec/profiles/compiler/structured-iteration.md). A universal `compute` wrapper or `at<T,A>` type is not
 required by the selected subset.

@@ -21,6 +21,12 @@ Read the [contribution guide](../../.github/CONTRIBUTING.md),
 A whole-protocol callback would erase the computations the compiler is intended
 to inspect. Compose ordinary operations and installed primitives instead.
 
+Resolve a cross-component contract before an extension discards semantic
+information, moves ownership or changes an existing claim. Leave implementation
+choices open until a concrete consumer exercises them. An extension point is
+useful when that consumer can use it without rewriting generic binding or
+checking; an interface description or refusal alone does not demonstrate support.
+
 ## Logical contracts and source exports
 
 [Operation contracts](../compiler/operation-contracts.md) own signatures, static

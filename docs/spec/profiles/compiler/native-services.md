@@ -173,5 +173,11 @@ Nested return releases frame state without releasing entry authority. Final stop
 return or cancellation retains completed service state and releases the entry
 lease. All these rules use the same closed program carrier.
 
-The [port representation rationale](../../../rationale/service-query-ports.md)
-explains why projected service references use separate named ports.
+## Why separate ports
+
+Entry-bound service references project to named ports and visible query cuts.
+Since operations cannot produce or dynamically select references, ordinary value
+flow would extend value and physical-type consumers without serving this
+contract. A copyable reference type could also preserve token discipline; it
+becomes useful when a concrete composition needs reference results or dynamic
+selection. Hiding queries in ordinary local helpers would hide scheduler cuts.

@@ -47,7 +47,7 @@ component-selective transformation.
 
 This flat representation permits ordinary SSA transformations without an
 isolated region around each expression. The choice and its alternatives are
-explained in [the rationale](../../../rationale/flat-mathematical-ssa.md).
+explained in [the rationale](../../../rationale/mathematical-ir.md).
 No intermediate located common program is required by this profile.
 
 ## Total mathematics and helpers

@@ -126,6 +126,20 @@ list feed both source meaning and compilation.
 Deduplicating the occurrence or extending the pointwise square table instead
 gives `2`. Boolean-point agreement would miss this error.
 
+### Why the compiler is partial
+
+The expression meaning admits every finite factor list; this compiler selects a
+quadratic subset. Restricting the general source to that subset would make one
+verifier's degree limit universal. Counting factor occurrences is sufficient but
+not exact: repeated identifiers count repeatedly, while three disjoint-coordinate
+factors can be refused even when their per-coordinate degree fits.
+
+The dense `3^n` coefficient object connects expression meaning to the reference
+terminal; it is not a required native table representation or a cost bound.
+Residual/table implementations can refine the same meaning directly. A more
+general algebra or degree analysis is useful when a concrete consumer needs it,
+with its own compilation and terminal laws.
+
 ## Ordered coefficient encoding
 
 The logical flattened coefficient list is:
