@@ -28,7 +28,10 @@ The binary reader supports a bounded R1CS v1 container and admitted exact field
 moduli; it never reinterprets BN254 constants as BLS Fr. `.zkc`
 [Assets](../language/relations.md) capture explicit relation formats.
 The optional [LLZK adapter](../../compiler/adapters/llzk/README.md) owns its separate
-source subset and compatible toolchain. Successful import cannot detect a
+source subset and compatible toolchain. The optional
+[Plonky3 AIR adapter](../../compiler/adapters/plonky3/README.md) captures AIRs on a
+pinned Plonky3 release into shared ring-expression views with a feature inventory
+and refuses features it does not represent. Successful import cannot detect a
 constraint already lost by an external frontend.
 
 ## Declaration and binding

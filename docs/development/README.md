@@ -94,9 +94,10 @@ The owning flake and test manifests define the exact checks.
 
 Lean has separate build, control and reproduction commands in the
 [formal guide](../../formal/README.md). Its tools and models do not validate the
-native executable merely by being built. Optional ArkLib and generic
-[LLZK](../../compiler/adapters/llzk/README.md) integrations keep their own
-manifests and toolchains. LLZK remains separate from the main compiler process.
+native executable merely by being built. Optional ArkLib, generic
+[LLZK](../../compiler/adapters/llzk/README.md) and pinned
+[Plonky3 AIR](../../compiler/adapters/plonky3/README.md) integrations keep their
+own manifests and toolchains. LLZK remains separate from the main compiler process.
 
 ## Contributor references
 
