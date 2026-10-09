@@ -5,6 +5,7 @@ checks cover execution and rejection obligations; they are not a proximity or
 Fiat-Shamir soundness proof.
 """
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,14 @@ ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / 'libraries/fri/lib.zkc'
 EXAMPLE = ROOT / 'examples/projects/fri/main.zkc'
 SHIFT = [3, 1, 0, 0, 0, 0, 0, 0]
+# The guards of LowDegree in source order, each named by its owner and the
+# number of loops around it. A test names a guard this way rather than by its
+# generated site, which is renumbered whenever a source line changes.
+GUARDS = [('schedule', 'V', 0), ('input', 'P', 0), ('final_degree', 'V', 0),
+          ('low', 'V', 2), ('high', 'V', 2), ('chain', 'V', 2), ('terminal', 'V', 1)]
+# A degree-seven word with every coefficient nonzero. A constant word folds to
+# itself under any beta, so it cannot expose a wrong fold at all.
+FULL_DEGREE = [[i + 1, i * i, 0, 0, 0, 0, 0, 1] for i in range(8)]
 
 
 def wire(values, *, scalar=False):
@@ -39,16 +48,58 @@ def word(coefficients, log_size, shift=SHIFT):
 
 
 def compile_entry(toolchain, journal, directory, *, log_size=5, terminal_log=0,
-                  rounds=3, queries=8, flags=(), entry='Proof'):
-    source = EXAMPLE.read_text().replace('LowDegree<Rows,5,0,3,8>',
-                f'LowDegree<Rows,{log_size},{terminal_log},{rounds},{queries}>')
+                  rounds=3, queries=8, flags=(), entry='Proof', library=LIBRARY, text=None):
+    source = (EXAMPLE.read_text() if text is None else text).replace(
+        'LowDegree<Rows,5,0,3,8>', f'LowDegree<Rows,{log_size},{terminal_log},{rounds},{queries}>')
     path = directory / 'fri.zkc'
     path.write_text(source)
     package = directory / f'{entry}.entry'
     report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={path}', f'--module=fri={LIBRARY}',
+                           f'--module=example={path}', f'--module=fri={library}',
                            f'--entry=example::{entry}', f'--output={package}', *flags])
     return package, report['package_sha256']
+
+
+def guard_sites(toolchain, journal, directory, *, entry='Proof', library=LIBRARY, flags=()):
+    """The generated site of every LowDegree guard, read from the emitted program.
+
+    The emitted program of the sources just compiled lists the guards in
+    source order with their owners inside the loops that enclose them. That
+    shape must be the library's, which also shows that a prover-only variant
+    left the verifier's checks in place.
+    """
+    emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
+                           f'--entry=example::{entry}', f'--module=example={directory / "fri.zkc"}',
+                           f'--module=fri={library}', *flags])
+    regions, found = [], []
+    for line in emitted.splitlines():
+        text = line.strip()
+        guard = re.search(r'"protocol\.guard"\(%\d+\) <\{owner = "(\w+)", site = "(s\d+)"\}>', text)
+        if guard:
+            found.append((guard.group(1), guard.group(2), regions.count('repeat')))
+        if text.endswith('({'):
+            regions.append('repeat' if '"protocol.repeat"' in text else 'other')
+        elif text.startswith('})'):
+            regions.pop()
+    assert not regions
+    assert [(owner, depth) for owner, _, depth in found] == [(owner, depth) for _, owner, depth in GUARDS]
+    return {name: site for (name, _, _), (_, site, _) in zip(GUARDS, found)}
+
+
+def stop_guard(stop, sites):
+    """The guard whose false branch a stop record left, and the loop iterations around it."""
+    path = stop['origin'][4]
+    assert path[-1] == ['if', 'guard_control', 'else'], path
+    names = {site: name for name, site in sites.items()}
+    return names[stop['site'].rsplit('_', 1)[-1]], [frame[2] for frame in path if frame[0] == 'loop']
+
+
+def rejected(report, sites):
+    """The guard and loop iterations at which V stopped a refused verification."""
+    stop = report['execution']['stop']
+    assert report['status'] == 'refused' and stop['role'] == 'V'
+    assert stop['kind'] == 'Explicit("reject")', stop
+    return stop_guard(stop, sites)
 
 
 def request(journal, name, values=None, *, shift=SHIFT, rounds=3, queries=8):
@@ -70,10 +121,38 @@ def messages(proof):
     return result
 
 
-def replace_message(proof, index, payload):
+def replace_messages(proof, changes):
     frames = messages(proof)
-    frames[index] = payload
+    for index, payload in changes.items():
+        frames[index] = payload
     return proof[:40] + b''.join(len(x).to_bytes(8, 'little') + x for x in frames)
+
+
+def positions(encoded):
+    """The indices in a returned Positions value."""
+    raw = bytes.fromhex(encoded)
+    assert raw[:6] == b'ZKCV\x00\x44'
+    count = int.from_bytes(raw[6:10], 'little')
+    assert len(raw) == 10 + 8 * count
+    return [int.from_bytes(raw[10 + 8 * i:18 + 8 * i], 'little') for i in range(count)]
+
+
+def decode(encoded):
+    """The bounded logical tree encoding: tag 0 is a string, tag 1 a list."""
+    def node(at):
+        tag, count = encoded[at], int.from_bytes(encoded[at + 1:at + 9], 'little')
+        at += 9
+        if tag == 0:
+            return encoded[at:at + count].decode(), at + count
+        assert tag == 1
+        items = []
+        for _ in range(count):
+            item, at = node(at)
+            items.append(item)
+        return items, at
+    tree, end = node(0)
+    assert end == len(encoded)
+    return tree
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
@@ -99,120 +178,260 @@ def test_fri_polynomials_prove_and_verify(toolchain, journal, directory, flags, 
 
 def test_fri_rejects_altered_commitments_openings_and_terminal(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory)
-    producer = request(journal, 'producer', word([ONE, ONE, SHIFT], 5))
+    sites = guard_sites(toolchain, journal, directory)
+    # No committed layer is constant, so the two halves of a pair never share
+    # a row or a path.
+    producer = request(journal, 'producer', word(FULL_DEGREE, 5))
     verifier = request(journal, 'verifier')
     proof = directory / 'honest.bin'
     journal.run([toolchain.runtime, 'prove', package, pin, producer, proof])
     original = proof.read_bytes()
     frames = messages(original)
+    rounds, queries = 3, 8
+    assert len(frames) == rounds + 1 + 4 * rounds * queries
 
-    def reject(name, changed, reason='artifact-stopped'):
+    def opening(query, round_index, side):
+        """The row frame of one opened half; its path is the next frame."""
+        return 4 + 4 * (query * rounds + round_index) + 2 * side
+
+    def flipped(index):
+        changed = bytearray(frames[index])
+        changed[-1] ^= 1
+        return bytes(changed)
+
+    def incremented(index):
+        changed = bytearray(frames[index])
+        assert changed[:6] == b'ZKCV\x00\x1b'
+        old = int.from_bytes(changed[10:14], 'little')
+        changed[10:14] = ((old + 1) % P).to_bytes(4, 'little')
+        return bytes(changed)
+
+    def reject(name, changes, *outcomes, reason='artifact-stopped'):
+        """Verification refuses, stopping at one of the named guards and iterations."""
         path = directory / f'{name}.bin'
-        path.write_bytes(changed)
-        journal.run([toolchain.runtime, 'verify', package, pin, verifier, path], refuses=reason)
+        path.write_bytes(changes if isinstance(changes, bytes) else replace_messages(original, changes))
+        said = journal.run([toolchain.runtime, 'verify', package, pin, verifier, path], refuses=reason)
+        if outcomes:
+            assert rejected(json.loads(said), sites) in outcomes
 
-    # Every round root is used. All queries are drawn before any opening;
-    # changing an opening cannot change the positions being checked.
-    for round_index in range(3):
-        root = bytearray(frames[round_index])
-        root[-1] ^= 1
-        reject(f'root-{round_index}', replace_message(original, round_index, root))
-        for side in (0, 1):
-            row_index = 4 + 4 * round_index + 2 * side
-            row = bytearray(frames[row_index])
-            assert row[:6] == b'ZKCV\x00\x1b'
-            old = int.from_bytes(row[10:14], 'little')
-            row[10:14] = ((old + 1) % P).to_bytes(4, 'little')
-            reject(f'row-{round_index}-{side}', replace_message(original, row_index, row))
-            path = bytearray(frames[row_index + 1])
-            path[-1] ^= 1
-            reject(f'path-{round_index}-{side}', replace_message(original, row_index + 1, path))
-
-    terminal = bytearray(frames[3])
-    assert terminal[:6] == b'ZKCV\x00\x1b'
-    old = int.from_bytes(terminal[10:14], 'little')
-    terminal[10:14] = ((old + 1) % P).to_bytes(4, 'little')
-    reject('terminal-value', replace_message(original, 3, terminal))
+    # Every round root and the terminal are absorbed before the positions are
+    # drawn. Changing one moves the positions, so the first query's first
+    # opening no longer authenticates. One time in thirty-two the first query
+    # keeps its pair, and the changed message then fails where it is used.
+    for round_index in range(rounds):
+        reject(f'root-{round_index}', {round_index: flipped(round_index)},
+               ('low', ['0', '0']), ('low', ['0', str(round_index)]))
+    reject('terminal-value', {3: incremented(3)}, ('low', ['0', '0']), ('terminal', ['0']))
     # A canonical but degree-one terminal polynomial violates the constant bound.
-    reject('terminal-degree', replace_message(original, 3, bytes.fromhex(wire([ONE, ONE]))))
-    reject('truncated', original[:-1], 'proof-truncated')
-    reject('trailing', original + b'\x00', 'proof-trailing')
+    reject('terminal-degree', {3: bytes.fromhex(wire([ONE, ONE]))}, ('final_degree', []))
+    # All queries are drawn before any opening; changing an opening cannot
+    # change the positions being checked, so each one fails where it is used.
+    for query, round_index in [(0, 0), (0, 1), (0, 2), (7, 2)]:
+        where = [str(query), str(round_index)]
+        for side, guard in [(0, 'low'), (1, 'high')]:
+            row = opening(query, round_index, side)
+            reject(f'row-{query}-{round_index}-{side}', {row: incremented(row)}, (guard, where))
+            reject(f'path-{query}-{round_index}-{side}', {row + 1: flipped(row + 1)}, (guard, where))
+    # Each half authenticates at its own position: the two openings of a pair
+    # cannot be exchanged.
+    low, high = opening(7, 2, 0), opening(7, 2, 1)
+    assert frames[low] != frames[high] and frames[low + 1] != frames[high + 1]
+    reject('swapped-7-2', {low: frames[high], low + 1: frames[high + 1],
+                           high: frames[low], high + 1: frames[low + 1]}, ('low', ['7', '2']))
+    reject('truncated', original[:-1], reason='proof-truncated')
+    reject('trailing', original + b'\x00', reason='proof-trailing')
+
+
+DISHONEST = [
+    # A wrong folding challenge first separates layer one from the verifier's
+    # expectation, which is checked in round one.
+    ('fold-beta', 'let next @P = fold(current, current_shift, betaP);',
+     'let next @P = fold(current, current_shift, betaP + 1);', 'chain', ['0', '1']),
+    # Layer one is folded with the right shift; the cubed shift first spoils
+    # layer two, which is checked in round two.
+    ('fold-shift', 'current_shift = current_shift * current_shift;',
+     'current_shift = current_shift * current_shift * current_shift;', 'chain', ['0', '2']),
+    # Honest folds with a wrong constant pass every chain check and fail where
+    # the terminal polynomial is evaluated, after the first query's rounds.
+    ('terminal-constant', 'let proposed @P = interpolate_coefficients(current, current_shift);',
+     'let proposed @P = append(empty<C::ValueField>(), '
+     'first(interpolate_coefficients(current, current_shift)) + 1);', 'terminal', ['0']),
+]
+
+
+@pytest.mark.parametrize('name,old,new,guard,loops', DISHONEST, ids=[case[0] for case in DISHONEST])
+def test_fri_rejects_dishonest_folds_and_terminal(toolchain, journal, directory, name, old, new,
+                                                  guard, loops):
+    # Altering a transmitted message moves the drawn positions, so a mutated
+    # proof fails authentication before the fold chain or the terminal is
+    # checked. Only a prover whose committed layers are self-consistent reaches
+    # those guards. Each variant replaces exactly one prover-only line of the
+    # library; the emitted guards keep the library's shape, and the proof is
+    # verified with its own package because the binding carries the source
+    # digest. The transcript fixes the queried points, so the failing round is
+    # fixed for this word: a wrong fold shows wherever the layer's odd part is
+    # nonzero at the queried point, and a wrong terminal shows at every point.
+    source = LIBRARY.read_text()
+    assert source.count(old) == 1
+    library = directory / 'dishonest-lib.zkc'
+    library.write_text(source.replace(old, new))
+    package, pin = compile_entry(toolchain, journal, directory, library=library)
+    sites = guard_sites(toolchain, journal, directory, library=library)
+    producer = request(journal, 'producer', word(FULL_DEGREE, 5))
+    verifier = request(journal, 'verifier')
+    proof = directory / f'{name}.bin'
+    made = journal.json([toolchain.runtime, 'prove', package, pin, producer, proof])
+    assert made['status'] == 'produced'
+    checked = journal.json([toolchain.runtime, 'verify', package, pin, verifier, proof],
+                           refuses='artifact-stopped')
+    assert rejected(checked, sites) == (guard, loops)
+
+
+def test_fri_transcript_events_follow_source_order(toolchain, journal, directory):
+    source = directory / 'fri.zkc'
+    source.write_text(EXAMPLE.read_text())
+    bundle = journal.json([toolchain.compiler, 'language-bundle', '--source-format=zkc',
+                           '--entry=example::Proof', f'--module=example={source}',
+                           f'--module=fri={LIBRARY}'])
+    descriptor = bundle[2]
+    assert descriptor[0] == 'zkc.native-proof-descriptor/0' and descriptor[2] == 'zkc.native-origin/0'
+    policy = descriptor[1]
+    assert policy[0] == 'zkc.native-proof-policy/0' and policy[2:4] == ['P', 'V']
+    # Every verifier data input is public: the shift and both counts.
+    assert policy[7] == ['1', '2', '3']
+    events = []
+    for kind, origin, *bound in descriptor[3]:
+        template = decode(bytes.fromhex(origin))
+        assert template[0] == 'zkc.native-origin-template/0' and template[3] == []
+        steps, event = template[2], template[4]
+        assert steps[0][0] == 'apply' and all(step[0] == 'repeat' for step in steps[1:])
+        events.append((kind, tuple(step[2] for step in steps[1:]), event, bound))
+    # The round loop: root, challenge draw, challenge delivery. The final
+    # coefficients. The query loop: position draw and delivery. Then the four
+    # openings in the round loop of each query.
+    assert [(kind, len(loops)) for kind, loops, _, _ in events] == [
+        ('message', 1), ('query', 1), ('message', 1), ('message', 0),
+        ('index', 1), ('message', 1)] + [('message', 2)] * 4
+    assert [event[4:6] for kind, _, event, _ in events if kind == 'message'] == [
+        ['P', 'V'], ['V', 'P'], ['P', 'V'], ['V', 'P']] + [['P', 'V']] * 4
+    assert events[1][2][5:7] == ['draw', 'V'] and events[4][2][5:7] == ['index', 'V']
+    assert events[1][3] == [] and events[4][3] == ['32']
+    loops = [loops for _, loops, _, _ in events]
+    assert loops[0] == loops[1] == loops[2] and loops[4] == loops[5] and loops[6:] == [loops[6]] * 4
+    assert loops[0] != loops[4] and loops[4] != loops[6][:1] and loops[0] != loops[6][1:]
+    # The construction derives exactly the challenge and the position draws,
+    # each delivered by the message that follows it.
+    draws = policy[8]
+    assert len(draws) == 2
+    for (query, delivery), at in zip(draws, (1, 4)):
+        assert query.endswith('_' + events[at][2][2]) and delivery.endswith('_' + events[at + 1][2][2])
 
 
 def test_fri_checks_schedule_shape_and_degree(toolchain, journal, directory):
     package, pin = compile_entry(toolchain, journal, directory)
+    sites = guard_sites(toolchain, journal, directory)
     values = word([ONE, SHIFT], 5)
     honest = request(journal, 'producer', values)
     proof = directory / 'honest.bin'
     journal.run([toolchain.runtime, 'prove', package, pin, honest, proof])
-    for name, change in [('zero-rounds', {'rounds': 0}), ('fewer-rounds', {'rounds': 2}),
-                         ('zero-queries', {'queries': 0}), ('fewer-queries', {'queries': 7}),
-                         ('zero-shift', {'shift': ZERO})]:
-        producer = request(journal, name, values, **change)
+
+    def malformed(name, producer, change, guard, refusal='artifact-stopped'):
         # Proving drives only P; V owns the schedule predicate, so a malformed
         # public schedule may produce a proof but verification must refuse.
         candidate = directory / f'{name}.bin'
         completed = journal.attempt([toolchain.runtime, 'prove', package, pin, producer, candidate])
         if completed.returncode == 0:
             verifier = request(journal, name + '-verify', **change)
-            journal.run([toolchain.runtime, 'verify', package, pin, verifier, candidate],
-                        refuses='artifact-stopped')
+            said = journal.run([toolchain.runtime, 'verify', package, pin, verifier, candidate],
+                               refuses='artifact-stopped')
+            assert rejected(json.loads(said), sites) == (guard, [])
         else:
             assert completed.returncode == 1
             report = json.loads(completed.stdout)
             assert report['status'] == 'refused' and report['phase'] == 'execution'
-            expected = 'refused:coset-zero-shift' if name == 'zero-shift' else 'artifact-stopped'
-            assert report['code'] == expected or report['code'].startswith(expected + ':')
+            assert report['code'] == refusal or report['code'].startswith(refusal + ':')
             assert not candidate.exists()
+
+    for name, change in [('zero-rounds', {'rounds': 0}), ('fewer-rounds', {'rounds': 2}),
+                         ('zero-queries', {'queries': 0}), ('fewer-queries', {'queries': 7}),
+                         ('zero-shift', {'shift': ZERO})]:
+        refusal = 'refused:coset-zero-shift' if name == 'zero-shift' else 'artifact-stopped'
+        malformed(name, request(journal, name, values, **change), change, 'schedule', refusal)
     for name, altered in [('short', values[:-1]), ('empty', []),
                           ('degree-too-high', word([ZERO] * 8 + [ONE], 5))]:
-        producer = request(journal, name, altered)
-        candidate = directory / f'{name}.bin'
-        completed = journal.attempt([toolchain.runtime, 'prove', package, pin, producer, candidate])
-        if completed.returncode == 0:
-            verifier = request(journal, name + '-verify')
-            journal.run([toolchain.runtime, 'verify', package, pin, verifier, candidate],
-                        refuses='artifact-stopped')
-        else:
-            assert completed.returncode == 1
-            report = json.loads(completed.stdout)
-            assert report['status'] == 'refused' and report['phase'] == 'execution'
-            expected = 'refused:coset-zero-shift' if name == 'zero-shift' else 'artifact-stopped'
-            assert report['code'] == expected or report['code'].startswith(expected + ':')
-            assert not candidate.exists()
+        malformed(name, request(journal, name, altered), {}, 'final_degree')
+
+    # V folds and evaluates with its own shift. A prover on another coset
+    # commits layers that authenticate but do not chain, so V stops at the
+    # first fold check.
+    run_package, run_pin = compile_entry(toolchain, journal, directory, entry='Run')
+    run_sites = guard_sites(toolchain, journal, directory, entry='Run')
+    counts = {'round_count': 3, 'query_count': 8}
+    inputs = journal.write('mismatched-shift.json', {
+        'format': 'zkc.entry-run/0', 'session': 'fri_shift_mismatch',
+        'roles': {'P': {'inputs': counts | {'shift': wire([SHIFT], scalar=True), 'word': wire(values)}},
+                  'V': {'inputs': counts | {'shift': wire([[5, 2, 0, 0, 0, 0, 0, 0]], scalar=True)}}},
+    })
+    report = journal.json([toolchain.runtime, 'run', run_package, run_pin, inputs],
+                          refuses='entry-run-incomplete')
+    after = {role['role']: role['after'] for role in report['execution']['roles']}
+    assert after['V'][0] == 'stopped' and after['V'][1]['cause'][0] == 'explicit'
+    assert stop_guard(after['V'][1], run_sites) == ('chain', ['0', '1'])
 
 
 def test_fri_returns_exact_authenticated_query_values(toolchain, journal, directory):
-    source = EXAMPLE.read_text().replace('use fri::{Vector, LowDegree};',
-                                        'use fri::{Vector, Positions, LowDegree};')
-    source = source.replace('-> (accepted: bool @V)',
-                            '-> (accepted: bool @V, positions: Positions @V, values: Vector<E> @V)')
-    source = source.replace('let (accepted, _, _, _)', 'let (accepted, _, positions, values)')
-    source = source.replace('return (accepted = accepted);',
-                            'return (accepted = accepted, positions = positions, values = values);')
-    path = directory / 'observed.zkc'
-    path.write_text(source)
-    package = directory / 'observed.entry'
-    report = journal.json([toolchain.runtime, 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={path}', f'--module=fri={LIBRARY}',
-                           '--entry=example::Run', f'--output={package}'])
-    values = word([[i + 1, i, 0, 1, 0, 0, 0, 0] for i in range(8)], 5)
+    text = EXAMPLE.read_text()
+    for old, new in [
+            ('use fri::{Vector, LowDegree};', 'use fri::{Vector, Positions, LowDegree};'),
+            ('-> (accepted: bool @V)', '-> (accepted: bool @V, prover_positions: Positions @P, '
+                                      'positions: Positions @V, values: Vector<E> @V)'),
+            ('let (accepted, _, _, _)', 'let (accepted, prover_positions, positions, values)'),
+            ('return (accepted = accepted);', 'return (accepted = accepted, prover_positions = '
+                                             'prover_positions, positions = positions, values = values);')]:
+        assert text.count(old) == 1
+        text = text.replace(old, new)
     shared = {'shift': wire([SHIFT], scalar=True), 'round_count': 3, 'query_count': 8}
+    cubic = word([[i + 1, i, 0, 1, 0, 0, 0, 0] for i in range(8)], 5)
+
+    def exact(result, values):
+        """The returned values are the word's entries at the returned positions."""
+        assert result['accepted'] is True
+        selected = positions(result['positions'])
+        assert len(selected) == 8 and all(0 <= i < 32 for i in selected)
+        assert result['values'] == wire([values[i] for i in selected])
+        return selected
+
+    # Interactive execution draws positions from the host's entropy.
+    package, pin = compile_entry(toolchain, journal, directory, entry='Run', text=text)
     inputs = journal.write('run.json', {
         'format': 'zkc.entry-run/0', 'session': 'fri_query_binding',
-        'roles': {'P': {'inputs': shared | {'word': wire(values)}},
-                  'V': {'inputs': shared}},
+        'roles': {'P': {'inputs': shared | {'word': wire(cubic)}}, 'V': {'inputs': shared}},
     })
     outputs = directory / 'outputs.json'
-    report = journal.json([toolchain.runtime, 'run', package, report['package_sha256'],
-                           inputs, f'--results={outputs}'])
+    report = journal.json([toolchain.runtime, 'run', package, pin, inputs, f'--results={outputs}'])
     assert report['status'] == 'executed'
-    result = json.loads(outputs.read_text())['roles']['V']
-    assert result['accepted'] is True
-    positions = bytes.fromhex(result['positions'])
-    assert positions[:6] == b'ZKCV\x00\x44'
-    count = int.from_bytes(positions[6:10], 'little')
-    selected = [int.from_bytes(positions[10 + 8 * i:18 + 8 * i], 'little')
-                for i in range(count)]
-    assert count == 8 and all(0 <= i < 32 for i in selected)
-    assert result['values'] == wire([values[i] for i in selected])
+    exact(json.loads(outputs.read_text())['roles']['V'], cubic)
+
+    # Fiat-Shamir derives the positions from the transcript, so the same word
+    # selects the same positions every time. Two words together reach both
+    # halves of a pair, which a run from host entropy may miss. Both roles
+    # return the same positions.
+    package, pin = compile_entry(toolchain, journal, directory, text=text)
+    halves = set()
+    for name, values in [('cubic', cubic), ('linear', word([ONE, ONE, SHIFT], 5))]:
+        producer = request(journal, name, values)
+        verifier = request(journal, name + '-verify')
+        proof = directory / f'{name}.bin'
+        prover_results = directory / f'{name}-prover-results.json'
+        verifier_results = directory / f'{name}-verifier-results.json'
+        made = journal.json([toolchain.runtime, 'prove', package, pin, producer, proof,
+                             f'--results={prover_results}'])
+        assert made['status'] == 'produced'
+        checked = journal.json([toolchain.runtime, 'verify', package, pin, verifier, proof,
+                                f'--results={verifier_results}'])
+        assert checked['status'] == 'accepted'
+        result = json.loads(verifier_results.read_text())['values']
+        assert set(result) == {'accepted', 'positions', 'values'}
+        assert json.loads(prover_results.read_text())['values'] == {'prover_positions': result['positions']}
+        halves |= {i >= 16 for i in exact(result, values)}
+    assert halves == {False, True}

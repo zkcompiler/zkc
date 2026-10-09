@@ -95,11 +95,14 @@ exceed `2^TerminalLog`.
 
 The result contains the acceptance Boolean, query positions at both roles and
 the authenticated first-layer values at V. A caller consumes these to check its
-own polynomial-opening equations at exactly those positions. The library does
-not attach a relation to an arbitrary word. The [client](../examples/projects/fri/README.md)
-and independent-reference tests cover execution, compilation options, profiles,
-malformed schedules, degree violations and mutated proof messages. No proximity
-or Fiat–Shamir soundness theorem is established by these tests.
+own polynomial-opening equations at exactly those positions. Successful return
+means every verifier check passed; `accepted` is then `true`, and a stopped
+verifier returns no result. The library does not attach a relation to an
+arbitrary word. The [client](../examples/projects/fri/README.md) and independent
+reference tests cover execution, compilation options, profiles, malformed
+schedules, degree violations, mutated proof messages, dishonest prover folds
+and terminals, and transcript event order. These tests establish no proximity
+or Fiat–Shamir soundness theorem.
 
 ## Use a module
 
