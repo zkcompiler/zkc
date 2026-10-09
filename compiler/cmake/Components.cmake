@@ -63,6 +63,7 @@ add_zkc_component(Language
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
+  lib/Language/RelationABI.cpp
   lib/Language/Entries.cpp
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp

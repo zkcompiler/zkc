@@ -8,7 +8,10 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Language/Builtins.h"
+#include "zkc/Language/RelationABI.h"
 #include "zkc/Relation/AIR.h"
+#include "zkc/Relation/Bundle.h"
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/FramedHash.h"
 #include "zkc/Support/Refusal.h"
@@ -745,6 +748,47 @@ class Reader {
         return fail("captured relation data shape differs from its asset");
       result.kind = *kind == "r1cs" ? RelationDefinition::Kind::R1CS
                                     : RelationDefinition::Kind::AIR;
+      result.asset = *found;
+    } else if (*kind == "bundle") {
+      if (!object(*definitionValue, {"kind", "asset"}))
+        return false;
+      auto identity = text(*definition, "asset");
+      if (!identity)
+        return false;
+      if (!hash(*identity) || result.key != *identity ||
+          result.revision != "0" ||
+          result.externalKind != "zkc.relation.bundle/0")
+        return fail("captured relation identity differs");
+      if (!charge(assets.size() + 1))
+        return false;
+      auto found = llvm::find_if(assets, [&](const auto &asset) {
+        return asset.identity() == *identity;
+      });
+      if (found == assets.end() || !found->bundle())
+        return fail("captured relation requires its admitted immutable asset");
+      // The admitted bundle alone derives the formals; the decoded record and
+      // the native declaration must both spell exactly that list.
+      auto derived = bundleRelationFormals(*found->bundle());
+      if (!charge(derived.size() + 1))
+        return false;
+      if (result.inputs.size() != derived.size() ||
+          types.size() != derived.size())
+        return fail("bundle relation formal count differs from its asset ABI");
+      for (unsigned i = 0; i < derived.size(); ++i) {
+        auto native = builtinLayout(derived[i].type);
+        if (!native) {
+          consumeError(native.takeError());
+          return fail("captured asset domain is not installed");
+        }
+        const auto &input = result.inputs[i];
+        if (input.purpose != derived[i].purpose ||
+            input.schema->kind != derived[i].type.kind ||
+            input.native.size() != 1 ||
+            input.schema->leaves !=
+                std::vector<std::string>{native->spelling()})
+          return fail("bundle relation formal differs from its asset ABI");
+      }
+      result.kind = RelationDefinition::Kind::Bundle;
       result.asset = *found;
     } else
       return fail("unknown relation definition kind");

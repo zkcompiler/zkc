@@ -279,7 +279,7 @@ struct Effects {
 };
 enum class RelationPurpose { Parameter, Statement, Witness };
 struct RelationDefinition {
-  enum class Kind { Formula, Opaque, R1CS, AIR } kind = Kind::Formula;
+  enum class Kind { Formula, Opaque, R1CS, AIR, Bundle } kind = Kind::Formula;
   std::vector<RelationPurpose> purposes;
   std::string externalKind, key, revision;
   std::optional<unsigned> asset;

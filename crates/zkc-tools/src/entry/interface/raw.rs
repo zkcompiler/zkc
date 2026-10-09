@@ -225,6 +225,7 @@ pub(in crate::entry) enum Definition {
     Opaque {},
     R1cs { asset: String },
     Air { asset: String },
+    Bundle { asset: String },
 }
 
 crate::entry::decode::objects!(

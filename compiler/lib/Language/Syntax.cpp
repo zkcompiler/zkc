@@ -819,8 +819,11 @@ private:
             d.relation->kind = RelationDefinition::Kind::R1CS;
           else if (take("air"))
             d.relation->kind = RelationDefinition::Kind::AIR;
+          else if (take("bundle"))
+            d.relation->kind = RelationDefinition::Kind::Bundle;
           else {
-            fail("source.relation", "expected opaque, r1cs or air definition");
+            fail("source.relation",
+                 "expected opaque, r1cs, air or bundle definition");
             return {};
           }
           if (!expect("(") || !expect("asset") || !path(d.relation->asset) ||

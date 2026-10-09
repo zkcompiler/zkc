@@ -299,6 +299,70 @@ fn conflicting_same_identity_and_unearned_permissions_are_refused() {
     value["protocols"][0]["inputs"][0]["schema"]["permissions"] = json!(["Copy", "Drop", "Share"]);
     assert!(read(&value).is_ok());
 }
+/// A bundle relation whose formals have the four derived shapes: a field
+/// slot, a height index, a presence Boolean and a group vector.
+fn bundle_document() -> Value {
+    let mut value = document();
+    let field = schema("field", "koala-bear", json!(["field:koala-bear"]));
+    let index = schema("index", "index", json!(["index"]));
+    let boolean = schema("boolean", "bool", json!(["bool"]));
+    let vector = schema("builtin", "vector:koala-bear", json!(["vector:koala-bear"]));
+    value["relations"] = json!([{"symbol":"Machine","inputs":[
+        {"name":"x0","purpose":"statement","native":[0],"schema":field},
+        {"name":"height","purpose":"parameter","native":[1],"schema":index},
+        {"name":"present","purpose":"statement","native":[2],"schema":boolean},
+        {"name":"trace","purpose":"witness","native":[3],"schema":vector}],
+        "definition":{"kind":"bundle","asset":digest("bundle")}}]);
+    value["protocols"][0]["clauses"] = json!([]);
+    value["job"]["target"] = Value::Null;
+    value
+}
+#[test]
+fn bundle_definitions_are_recognized_with_single_leaf_formals() {
+    read(&bundle_document()).unwrap();
+    for (path, replacement, error) in [
+        (
+            "/relations/0/definition/asset",
+            json!("not-a-digest"),
+            InterfaceError::Schema,
+        ),
+        (
+            "/relations/0/definition/asset",
+            json!("A".repeat(64)),
+            InterfaceError::Schema,
+        ),
+        (
+            "/relations/0/definition",
+            json!({"kind":"bundle"}),
+            InterfaceError::Format,
+        ),
+        (
+            "/relations/0/definition",
+            json!({"kind":"bundle","asset":digest("bundle"),"extra":1}),
+            InterfaceError::Format,
+        ),
+        (
+            "/relations/0/inputs/3/schema",
+            schema("builtin", "matrix:koala-bear", json!(["matrix:koala-bear"])),
+            InterfaceError::Schema,
+        ),
+    ] {
+        let mut value = bundle_document();
+        *value.pointer_mut(path).unwrap() = replacement;
+        assert_eq!(read(&value).unwrap_err(), error, "{path}");
+    }
+    // A product formal, even over admitted leaves, is not a derived shape.
+    let mut value = bundle_document();
+    let boolean = schema("boolean", "bool", json!(["bool"]));
+    let mut product = schema("tuple", "(bool,bool)", json!(["bool", "bool"]));
+    product["fields"] = json!([
+        {"name":"0","offset":0,"schema":boolean.clone()},
+        {"name":"1","offset":1,"schema":boolean}
+    ]);
+    value["relations"][0]["inputs"][3] =
+        json!({"name":"trace","purpose":"witness","native":[3,4],"schema":product});
+    assert_eq!(read(&value).unwrap_err(), InterfaceError::Schema);
+}
 fn run_with(input: Value) -> Value {
     let mut v = document();
     v["job"] = json!({"kind":"run"});

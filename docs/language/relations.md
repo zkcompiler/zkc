@@ -19,6 +19,14 @@ named in source through
 [asset domains](../spec/language/definitions.md#asset-domains-and-projections),
 whose projections give libraries the asset's dimensions as static naturals.
 
+A relation declaration binds a captured asset by name: `r1cs(asset name)`,
+`air(asset name)` or `bundle(asset name)`. The asset fixes the signature. A
+bundle's formals are derived from its public slots, tables and column groups,
+one formal per slot, presence choice, height and group, each with the purpose
+its authority implies; the
+[protocol contract](../spec/language/protocols.md#bundle-declarations) defines
+that derivation and what an assignment of the formals means.
+
 Capture alone does not attach a relation to a protocol, add runtime inputs,
 generate a prover or check satisfaction. Source relation declarations and their
 actual application bindings select what a clause means. The

@@ -28,6 +28,7 @@ target_compile_definitions(zkc-language_expression_assets-test PRIVATE
 add_zkc_test(language_asset_ir Compiler language-asset-ir)
 mlir_target_link_libraries(zkc-language_asset_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_specifications Language language-specifications)
+add_zkc_test(language_bundle_relations Compiler language-bundle-relations)
 add_zkc_test(language_entries Language language-entries)
 add_zkc_test(language_entry_ir Compiler)
 mlir_target_link_libraries(zkc-language_entry_ir-test PRIVATE MLIRParser)

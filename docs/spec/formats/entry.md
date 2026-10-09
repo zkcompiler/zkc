@@ -39,7 +39,8 @@ Offsets are relative to their product or alternative payload.
 A relation record has `symbol`, `inputs` and `definition`. Each formal has `name`,
 `purpose`, ordered `native` indices and `schema`. Definition records have exactly
 `{kind, function}` for a formula, `{kind}` for an opaque declaration, or
-`{kind, asset}` for R1CS/AIR. Their identity triple comes from the actual native
+`{kind, asset}` for a captured R1CS, AIR or bundle, with `kind` spelled `r1cs`,
+`air` or `bundle`. Their identity triple comes from the actual native
 declaration. Formula kind is `zkc.language.formula/0`, key is the closed relation
 symbol, and revision is a lowercase SHA-256 representation digest. Its material is
 length-framed in this order: kind, predicate helper symbol, decimal logical input
@@ -66,9 +67,18 @@ nonempty body with the declaration's signature and no executable references, the
 checks polynomial observations on bounded detached clones using the original
 helper table. The supplied original is unchanged; limits remain `source.limit`
 and invalid observations are `target.admission` with source attribution.
-Captured kinds are `zkc.relation.r1cs/0` and `zkc.relation.air/0`, with canonical
-asset identity as key and `0` as revision. The reader requires the matching
-immutable admitted `RelationAsset` handles, supplied outside this small JSON.
+Captured kinds are `zkc.relation.r1cs/0`, `zkc.relation.air/0` and
+`zkc.relation.bundle/0`, with canonical asset identity as key and `0` as
+revision. The reader requires the matching immutable admitted asset handles,
+supplied outside this small JSON. For a bundle it derives the formal list from
+the admitted bundle, as the
+[protocol contract](../language/protocols.md#bundle-declarations) defines, and
+requires the record to spell exactly that count, each purpose, each logical
+kind and each single native leaf. A relation-only bundle is not a package
+asset: the digest in the definition record is its only package-level reference.
+The Rust Host reader recognizes `bundle` and checks the digest form and that
+every formal is one native field, Boolean, index or vector leaf. It holds no
+bundle, derives nothing from one and evaluates no relation.
 
 Each clause has `name`, `kind`, `subject`, `residual` and `decision`; absent optional
 fields are JSON null. An application has a relation symbol and ordered `operands`.
