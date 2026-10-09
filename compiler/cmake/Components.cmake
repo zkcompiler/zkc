@@ -117,6 +117,7 @@ add_zkc_component(IR
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
+  lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
   lib/Dialect/Kernels.cpp
   lib/Dialect/MathematicalInterfaces.cpp
