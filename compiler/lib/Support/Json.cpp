@@ -115,9 +115,13 @@ Expected<json::Value> parseNaturalJson(StringRef text, size_t byteLimit,
 }
 Expected<json::Value> parseJson(StringRef text,
                                 std::optional<size_t> *invalidStringOffset) {
+  return parseJson(text, 1024 * 1024, invalidStringOffset);
+}
+Expected<json::Value> parseJson(StringRef text, size_t byteLimit,
+                                std::optional<size_t> *invalidStringOffset) {
   if (invalidStringOffset)
     invalidStringOffset->reset();
-  if (text.size() > 1024 * 1024)
+  if (text.size() > byteLimit)
     return error("byte-limit");
   std::string translated;
   unsigned depth = 0;

@@ -10,8 +10,9 @@ namespace {
 /// The same traversal checks UTF-8, bounded containers and non-serializable
 /// combinations that a programmatic author could otherwise create.
 class Structure {
-  static constexpr size_t byteLimit = 1024 * 1024;
+  static constexpr size_t byteLimit = artifactByteLimit;
   std::string problem;
+  size_t nodes = 0;
   bool projected = false;
   bool nativeIR = false;
 
@@ -26,7 +27,12 @@ class Structure {
     }
     return a + b;
   }
+  void node() {
+    if (++nodes > artifactNodeLimit)
+      fail("source-limit");
+  }
   size_t text(StringRef value) {
+    node();
     if (!json::isUTF8(value))
       fail("source-string");
     size_t bytes = 2;
@@ -43,12 +49,14 @@ class Structure {
     return bytes;
   }
   size_t fields(std::initializer_list<size_t> values) {
+    node();
     size_t bytes = 2 + (values.size() ? values.size() - 1 : 0);
     for (size_t value : values)
       bytes = add(bytes, value);
     return bytes;
   }
   template <typename T, typename F> size_t list(const T &values, F f) {
+    node();
     if (values.size() > 32768) {
       fail("source-limit");
       return byteLimit + 1;
@@ -86,7 +94,11 @@ class Structure {
       return std::visit(
           [&](const auto &op) -> size_t {
             using T = std::decay_t<decltype(op)>;
-            size_t tag = text(i.kind());
+            size_t tag = 0;
+            if constexpr (std::is_same_v<T, For>)
+              tag = text(op.conditional ? "for_while" : "for");
+            else
+              tag = text(i.kind());
             if constexpr (std::is_same_v<T, Return> ||
                           std::is_same_v<T, Yield> ||
                           std::is_same_v<T, Release>)
@@ -101,6 +113,7 @@ class Structure {
                              names(op.attributes), names(op.inputs),
                              names(op.outputs)});
             } else if constexpr (std::is_same_v<T, BooleanConstant>) {
+              node();
               return fields(
                   {tag, text(i.site), text(op.output), op.value ? 4u : 5u});
             } else if constexpr (std::is_same_v<T, ServiceQuery>) {
@@ -141,9 +154,8 @@ class Structure {
                              names(op.captures), body(op.thenBody, depth + 1),
                              body(op.elseBody, depth + 1), names(op.outputs)});
             else if constexpr (std::is_same_v<T, For>) {
-              return fields({text(op.conditional ? "for_while" : "for"),
-                             text(i.site), text(op.induction), text(op.lower),
-                             text(op.upper), pairs(op.carried),
+              return fields({tag, text(i.site), text(op.induction),
+                             text(op.lower), text(op.upper), pairs(op.carried),
                              names(op.captures), body(op.body, depth + 1),
                              names(op.outputs)});
             } else {

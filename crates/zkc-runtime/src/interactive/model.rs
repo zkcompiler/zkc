@@ -4,14 +4,14 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 /// Admission and execution ceilings, plus explicitly documented policy defaults.
 pub struct Limits;
 impl Limits {
-    pub const ARTIFACT_BYTES: usize = 1024 * 1024;
+    pub const ARTIFACT_BYTES: usize = 4 * 1024 * 1024;
     /// Conservative installed descriptor charge across distinct physical spellings
     /// and each resolved binding signature. Parsing scratch has separate bounds.
     pub const TYPE_BYTES: usize = 64 * 1024 * 1024;
     pub const JSON_DEPTH: usize = 64;
     pub const ARRAY_LENGTH: usize = 32_768;
     pub const PARAMETER: u64 = 1_048_576;
-    pub const JSON_NODES: usize = 200_000;
+    pub const JSON_NODES: usize = 400_000;
     pub const STRING_BYTES: usize = 4096;
     pub const DEFINITIONS: usize = 4096;
     pub const PORTS: usize = 1024;

@@ -581,8 +581,9 @@ once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
 
 Requests can lower these ceilings, never raise them. Checks refuse before charged
 work or recursive-depth budgets are exceeded; no truncated result is returned.
-Definition checking, specialization, layouts, emission, comparison, predicate admission
-and interface serialization each have a work budget. The capture-wide specification
+Capture lexing, parsing and definition checking share one work budget.
+Specialization, layouts, emission, comparison, predicate admission and interface
+serialization each have a separate work budget. The capture-wide specification
 inventory has a separate phase budget from per-Entry interface comparison. The interface writer bounds traversal even when repeated empty types
 have no native leaves; its result must also pass the bounded interface reader.
 
@@ -596,10 +597,14 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Declarations; source or emitted operations | 10,000; 100,000 |
 | Static instances; aggregate leaves/array length | 4096; 1024 |
 | Natural monomials; factors per monomial | 1024; 64 |
-| Charged work per phase | 1,000,000 |
+| Charged work per phase | 4,000,000 |
 | Emitted MLIR; interface JSON | 16 MiB; 4 MiB |
 | Encoded symbol; diagnostic path bytes | 4096 each |
 | Location records, five 64-bit coordinates each | 16 MiB |
+
+The work ceiling accommodates composed source libraries while preserving charges
+for each traversal. File, type, instance, operation and output ceilings remain
+independent; a higher work allowance does not admit a larger type or deeper call.
 
 Parse depth bounds both recursive parsing and constructed type/natural syntax
 trees, including operator chains.

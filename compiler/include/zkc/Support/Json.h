@@ -31,6 +31,11 @@ bool validStringEncoding(llvm::StringRef quotedSpelling);
 llvm::Expected<llvm::json::Value>
 parseJson(llvm::StringRef text,
           std::optional<size_t> *invalidStringOffset = nullptr);
+/// The same array grammar with a byte ceiling supplied by its format owner.
+/// The ordinary overload retains its 1 MiB ceiling.
+llvm::Expected<llvm::json::Value>
+parseJson(llvm::StringRef text, size_t byteLimit,
+          std::optional<size_t> *invalidStringOffset = nullptr);
 std::string printJson(const llvm::json::Value &value);
 llvm::Expected<std::string> natural(const llvm::json::Value &value);
 llvm::json::Value naturalValue(llvm::StringRef digits);

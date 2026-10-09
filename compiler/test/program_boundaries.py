@@ -50,7 +50,7 @@ for label, mutate, code in [
     ("malformed function origin",
      lambda p: p[2][0].__setitem__(5, []), "binding-logical-origin"),
     ("overlimit input string",
-     lambda p: p[2][0].__setitem__(1, "x" * (1024 * 1024)), "byte-limit"),
+     lambda p: p[2][0].__setitem__(1, "x" * (4 * 1024 * 1024)), "byte-limit"),
 ]:
     with case(label):
         candidate = copy.deepcopy(original)

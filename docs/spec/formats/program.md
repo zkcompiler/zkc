@@ -45,6 +45,23 @@ Only the exact `zkc.program/0` tag and specified record shapes are admitted.
 Unknown tags and wrong record arities refuse independently. See the
 [public interface overview](../../status.md#current-public-interfaces).
 
+## Carrier size
+
+Raw participant JSON and its compact encoding are each bounded to 4 MiB.
+C++ `program::parse` applies this ceiling before array parsing, and
+`program::checkStructure` checks compact size and the 400,000-node ceiling
+for programmatic producers.
+Rust admission independently checks raw size and a 400,000-node JSON ceiling
+before decoding. Arrays, strings and Boolean literals each count as one node. The native
+proof producer and joint Host use the same participant ceiling; their outer
+file and proof limits remain separate. Node, array, definition, instruction,
+name and depth bounds still apply independently.
+
+The byte allowance supports composition of protocol libraries whose specialized
+local definitions remain within those structural bounds. It changes capacity,
+not the program grammar or instruction meanings. Generic array-JSON consumers
+retain their own default 1 MiB ceiling.
+
 ## Local domain binding
 
 Local operation domain bytes are the compact UTF-8 JSON encoding of:

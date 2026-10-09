@@ -590,6 +590,25 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn program_json_node_ceiling_is_inclusive() {
+        let mut text = String::from("[");
+        for n in 0..super::Limits::JSON_NODES - 1 {
+            if n != 0 {
+                text.push(',');
+            }
+            text.push_str("[]");
+        }
+        text.push(']');
+        assert!(super::preflight(text.as_bytes()).is_ok());
+        text.pop();
+        text.push_str(",[]]");
+        assert_eq!(
+            super::preflight(text.as_bytes()).unwrap_err().code,
+            super::ErrorCode::Limit
+        );
+    }
+
     use super::*;
     use serde_json::json;
     fn nested(nominal: &str) -> String {

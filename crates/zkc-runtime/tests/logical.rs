@@ -116,7 +116,7 @@ fn public_root_strings_have_separate_tree_ceiling() {
     let bytes = encode_tree(&root).unwrap();
     assert_eq!(decode_tree(&bytes).unwrap(), root);
     assert_eq!(Limits::STRING_BYTES, 4096);
-    assert_eq!(Limits::ARTIFACT_BYTES, 1024 * 1024);
+    assert_eq!(Limits::ARTIFACT_BYTES, 4 * 1024 * 1024);
     // An individual string may approach the whole 16 MiB budget, but its
     // nine-byte tag/length header is included in the total ceiling.
     let largest = json!("x".repeat(TreeLimits::BYTES - 9));
