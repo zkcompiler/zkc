@@ -166,7 +166,11 @@
       "relation.table_input",
       "relation.table_scope",
       "relation.table_point",
-      "relation.table_points"
+      "relation.table_points",
+      "relation.table_policy",
+      "relation.table_interactions",
+      "relation.table_interaction",
+      "relation.table_record_points"
     ],
     "transcript": [
       "transcript.native.indexed.challenge",

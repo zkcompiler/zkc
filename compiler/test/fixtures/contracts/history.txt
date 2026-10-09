@@ -9,6 +9,10 @@ relation.table_input 0
 relation.table_scope 0
 relation.table_point 0
 relation.table_points 0
+relation.table_policy 0
+relation.table_interactions 0
+relation.table_interaction 0
+relation.table_record_points 0
 bool.not 0
 bool.or 0
 commitments.append 0

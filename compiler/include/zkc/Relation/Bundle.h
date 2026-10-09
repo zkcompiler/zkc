@@ -321,8 +321,8 @@ sliceBundleTableData(const Bundle &, const BundleTableView &,
 
 /// The static reference rule of an installed Bundle kernel contract: the
 /// dense table view for `relation.table_rows`, `checkBundlePolynomialTable`
-/// (BundlePolynomial.h) for the polynomial kernels, and
-/// `relation-table-contract` otherwise.
+/// (BundlePolynomial.h) for the polynomial kernels, `admitBundleTableCarrier`
+/// for the interaction kernels, and `relation-table-contract` otherwise.
 llvm::Error checkBundleTableReference(const Bundle &, llvm::StringRef contract,
                                       uint32_t table, llvm::StringRef carrier);
 

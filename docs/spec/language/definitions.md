@@ -133,9 +133,11 @@ permissions. Instance keys include the asset identity.
 Projections derive naturals from the asset, never from the author. A ring term
 `A` has `A::Inputs`, the ordered input count; `A::Outputs`, the output count;
 and `A::Degree`, the largest output degree with every input weighted one. A
-bundle term `B` has `B::Tables`, `B::Publics` and `B::Channels` for a closed term only. A
-closed term yields the constant at once. A generic term yields a distinct
-natural factor that closure substitutes: inference never solves a parameter
+bundle term `B` has `B::Tables`, `B::Publics` and `B::Channels`, its table,
+public slot and channel counts. A
+closed term yields the constant at once. A generic term of either sort yields a
+distinct natural factor that closure substitutes from the captured asset, also
+through a renamed parameter: inference never solves a parameter
 through a projection, and `pow2` of a projection is unsupported. A degree above
 the arena limit is saturated and refuses when it is requested, at definition
 checking for a closed term and at closure for a generic one. Projections take
@@ -296,7 +298,10 @@ admits the carrier field and its base field; a Bundle table view checks the
 table index and exact declared column fields. The Bundle
 [polynomial view](../domains/relation-bundles.md#compiler-visible-polynomial-view)
 also admits the carrier's base field and requires a height policy that admits
-a power of two `n >= 2` whose root of order `n` the carrier installs. Source comparison compares the closed body's identities
+a power of two `n >= 2` whose root of order `n` the carrier installs. The
+[interaction view](../domains/relation-bundles.md#compiler-visible-interaction-view)
+extends that carrier check to every interaction output; its policy kernel
+needs no such height. Source comparison compares the closed body's identities
 with the original MLIR, so a changed digest is a correspondence failure.
 
 Generic checking uses completed capability bounds, inherent Field/Group facts and

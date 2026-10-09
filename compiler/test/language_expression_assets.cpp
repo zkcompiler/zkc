@@ -52,22 +52,34 @@ AssetBuffer saturated(StringRef name = "product") {
     nodes.push_back(Node::mul(i, i));
   return arena(name, {"koala-bear"}, std::move(nodes), {21});
 }
-/// One cyclic witness column whose single assertion is the cell itself.
-AssetBuffer bundle(StringRef name = "recurrence") {
+/// Tables of one cyclic witness column whose single assertion is the cell
+/// itself, with `publics` public slots and `channels` unused channels.
+AssetBuffer bundle(StringRef name = "recurrence", unsigned count = 1,
+                   unsigned publics = 0, unsigned channels = 0) {
   using namespace zkc::relation;
-  BundleTable table{"main",
-                    false,
-                    {BundleHeightAuthority::Fixed, 2, 2, false},
-                    BundleReadModel::Cyclic,
-                    {{"w", BundleAuthority::Witness, "koala-bear", 1}},
-                    take(zkc::ring::Expression::create({{"koala-bear"}},
-                                                       {Node::slot(0)}, {0})),
-                    {BundleInput::read(0, 0, 0)},
-                    {{0, {}}},
-                    {}};
   std::vector<BundleTable> tables;
-  tables.push_back(std::move(table));
-  auto value = take(Bundle::create({}, {}, std::move(tables)));
+  for (unsigned i = 0; i < count; ++i)
+    tables.push_back({"main" + std::to_string(i),
+                      false,
+                      {BundleHeightAuthority::Fixed, 2, 2, false},
+                      BundleReadModel::Cyclic,
+                      {{"w", BundleAuthority::Witness, "koala-bear", 1}},
+                      take(zkc::ring::Expression::create({{"koala-bear"}},
+                                                         {Node::slot(0)}, {0})),
+                      {BundleInput::read(0, 0, 0)},
+                      {{0, {}}},
+                      {}});
+  std::vector<BundleSlot> slots;
+  for (unsigned i = 0; i < publics; ++i)
+    slots.push_back({"s" + std::to_string(i), "koala-bear"});
+  std::vector<BundleChannel> lines;
+  for (unsigned i = 0; i < channels; ++i)
+    lines.push_back({"c" + std::to_string(i),
+                     BundleChannelKind::Multiset,
+                     {"koala-bear"},
+                     "koala-bear"});
+  auto value = take(
+      Bundle::create(std::move(slots), std::move(lines), std::move(tables)));
   return {name.str(), "relation-bundle-json", zkc::printJson(value.encode()),
           "/missing"};
 }
@@ -248,7 +260,7 @@ int main() {
                "fn fixed() -> index {"
                " return index<Recurrence::Tables +"
                " Recurrence::Publics + Recurrence::Channels>(); }\n");
-    refuses(check(bundled, {product(), bundle()}), "source.asset-projection");
+    take(check(bundled, {product(), bundle()}));
     auto closedBundle = rewrite(bundled, "index<B::Tables>()", "index<1>()");
     auto entry = take(close(closedBundle, {product(), bundle()}));
     require(indexConstants(entry) == std::vector<std::string>({"2", "3"}),
@@ -260,6 +272,53 @@ int main() {
     refuses(check(rewrite(source(), "A::Degree + 1", "pow2(A::Degree)"),
                   {product()}),
             "source.natural");
+  });
+  cases.run("generic bundle projections are substituted at closure", [] {
+    const std::string text = R"(module sample;
+domain F = field("koala-bear");
+domain Recurrence = bundle(asset recurrence);
+type Vector<T: Field> = builtin("vector", T);
+fn facts<B: Bundle>() -> index {
+  return index<B::Tables * 10000 + B::Publics * 100 + B::Channels>();
+}
+fn forwarded<C: Bundle>() -> index where C::Tables <= 1 {
+  return facts<C>();
+}
+protocol Count<B: Bundle> roles(E)(v: Vector<F>@E)->(n: index@E)
+    where B::Tables <= 1, B::Channels <= 0 {
+  let n @E = forwarded<B>();
+  return (n=n);
+}
+entry Demo = Count<Recurrence>;
+)";
+    // A generic term's facts reach the body as constants of the captured
+    // bundle, through a renamed parameter, and bounds entail each other.
+    auto one = take(close(text, {bundle("recurrence", 1, 7)}));
+    require(indexConstants(one) == std::vector<std::string>({"10700"}),
+            "generic projections did not close to the captured facts");
+    // The protocol's bound is checked against each captured bundle.
+    for (auto asset : {bundle("recurrence", 2), bundle("recurrence", 1, 0, 1)})
+      refuses(close(text, {asset}), "source.bound");
+    auto relaxed = rewrite(rewrite(text, "where C::Tables <= 1", ""),
+                           "where B::Tables <= 1, B::Channels <= 0", "");
+    auto three = take(close(relaxed, {bundle("recurrence", 3, 2, 5)}));
+    require(indexConstants(three) == std::vector<std::string>({"30205"}),
+            "a second bundle did not specialize the generic consumer");
+    // The callee's bound must be entailed by the caller's.
+    refuses(check(rewrite(text, "where B::Tables <= 1, B::Channels <= 0",
+                          "where B::Channels <= 0"),
+                  {bundle()}),
+            "source.bound");
+    // Bundle terms have only bundle facts, and pow2 of a projection is not
+    // a natural the language normalizes.
+    refuses(check(rewrite(text, "B::Publics", "B::Inputs"), {bundle()}),
+            "source.asset-projection");
+    refuses(check(rewrite(text, "B::Publics * 100", "pow2(B::Publics)"),
+                  {bundle()}),
+            "source.natural");
+    refuses(check(rewrite(text, "fn facts<B: Bundle>", "fn facts<B: Ring>"),
+                  {bundle()}),
+            "source.asset-projection");
   });
   cases.run("a saturated degree refuses only when it is requested", [] {
     refuses(close(source(), {saturated()}), "source.asset-projection");

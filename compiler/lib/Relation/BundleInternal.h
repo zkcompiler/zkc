@@ -161,6 +161,9 @@ struct AnalysisBudget {
 /// by interactions are not visited.
 llvm::Error checkAssertionFields(const BundleTable &, llvm::StringRef carrier,
                                  llvm::StringRef base);
+/// The same visit for every node any output needs, assertion or interaction.
+llvm::Error checkOutputFields(const BundleTable &, llvm::StringRef carrier,
+                              llvm::StringRef base);
 
 /// Re-home a refusal with a diagnostic location, keeping its identifier.
 llvm::Error withDetail(llvm::Error, llvm::StringRef detail);

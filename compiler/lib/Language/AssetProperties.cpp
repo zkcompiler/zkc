@@ -45,9 +45,8 @@ std::optional<Type> Semantics::assetProjection(const Type &base,
     return refuse("unknown " + assetSort(base) + " projection: " + member);
   Type result(Type::Kind::Natural);
   if (base.symbolic) {
-    // Bundle facts stay concrete until a bundle-generic consumer exists.
-    if (!ring)
-      return refuse("bundle projections require a closed bundle term");
+    // A generic term's fact is a distinct factor that closure substitutes
+    // from the captured asset; both sorts use the same mechanism.
     auto factor = Natural::projection(base.domain, member);
     if (!factor)
       return accept(factor.takeError(), span), std::optional<Type>{};

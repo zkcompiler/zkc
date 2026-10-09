@@ -59,3 +59,45 @@ def OpRelationTablePoints : ZKC_Operation<"relation.table_points",
     [ZKC_Apply<TypeVector, [RelationF]>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
   let parameters = RelationAssetIdentity;
 }
+// Interaction view of one table. These operations expose the declared height
+// policy and the interaction records; they apply no scope, multiplicity range,
+// balance, challenge or reduction, and claim no satisfaction.
+// Optional flag, height authority, minimum, maximum and power-of-two flag of
+// the declared policy, independent of presence and of any height.
+def OpRelationTablePolicy : ZKC_Operation<"relation.table_policy",
+    [RelationF, RelationTable], [],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
+  let parameters = RelationAssetIdentity;
+}
+// Interaction count and record row width at a height admitted by the declared policy.
+def OpRelationTableInteractions : ZKC_Operation<"relation.table_interactions",
+    [RelationF, RelationTable], [ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Holds<CapabilityField, [RelationF]>]> {
+  let parameters = RelationAssetIdentity;
+}
+// Kind, channel, side, locality flag and key, active rows, arity, bound flag
+// and bound, tuple degree and count degree of one interaction.
+def OpRelationTableInteraction : ZKC_Operation<"relation.table_interaction",
+    [RelationF, RelationTable],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>,
+     ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Holds<CapabilityField, [RelationF]>]> {
+  let parameters = RelationAssetIdentity;
+}
+// Interaction records at `rows` row-major assignments of every arena input:
+// per row, each interaction's tuple outputs and then its count output, in
+// interaction order. No scope or multiplicity range is applied.
+def OpRelationTableRecordPoints : ZKC_Operation<"relation.table_record_points",
+    [RelationF, RelationTable],
+    [ZKC_Apply<TypeVector, [RelationF]>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeVector, [RelationF]>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
+  let parameters = RelationAssetIdentity;
+}

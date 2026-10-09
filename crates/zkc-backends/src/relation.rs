@@ -1,5 +1,6 @@
-//! Admitted deterministic Bundle assets, actual-column assertion evaluation
-//! and the polynomial view's descriptors and point substitutions.
+//! Admitted deterministic Bundle assets, actual-column assertion evaluation,
+//! the polynomial view's descriptors and point substitutions, and the
+//! interaction view's policy, descriptors and record substitutions.
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
@@ -8,7 +9,10 @@ use zkc_runtime::{
         AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, OperationBinding,
         Type,
     },
-    relation::{Algebra, Bundle, Error, PolynomialView, TableView},
+    relation::{
+        Algebra, Bundle, ChannelKind, Error, HeightAuthority, InteractionView, PolynomialArena,
+        PolynomialView, Side, TableView,
+    },
     ring::Expression,
 };
 
@@ -97,6 +101,24 @@ impl Registry {
             )
             .map_err(|e| refused(e.0))
     }
+    /// The static premises of the interaction kernels for one program
+    /// reference. Every interaction kernel uses the same whole-table carrier
+    /// admission. The check allocates nothing.
+    pub fn interaction_reference(
+        &self,
+        identity: &str,
+        table: u64,
+        carrier: Identity,
+    ) -> Result<InteractionView<'_>> {
+        let bundle = self
+            .assets
+            .get(identity)
+            .ok_or_else(|| refused("relation-asset-missing"))?;
+        let table = usize::try_from(table).map_err(|_| refused("relation-table-index"))?;
+        bundle
+            .interaction_view(table, carrier)
+            .map_err(|e| refused(e.0))
+    }
 }
 
 /// Decoded bytes charged per arena node, input and output at admission. They
@@ -118,6 +140,19 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("plonky3/relation.table_scope", "relation.table_scope"),
     ("plonky3/relation.table_point", "relation.table_point"),
     ("plonky3/relation.table_points", "relation.table_points"),
+    ("plonky3/relation.table_policy", "relation.table_policy"),
+    (
+        "plonky3/relation.table_interactions",
+        "relation.table_interactions",
+    ),
+    (
+        "plonky3/relation.table_interaction",
+        "relation.table_interaction",
+    ),
+    (
+        "plonky3/relation.table_record_points",
+        "relation.table_record_points",
+    ),
 ];
 
 /// The backend advertises its own exact signature; it does not call the
@@ -146,7 +181,12 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "relation.table_shape" => (vec![index.clone()], vec![index; 7]),
         "relation.table_input" => (vec![index.clone(); 2], vec![index; 3]),
         "relation.table_scope" => (vec![index.clone(); 2], vec![index; 2]),
-        "relation.table_points" => (vec![vector.clone(), index], vec![vector]),
+        "relation.table_points" | "relation.table_record_points" => {
+            (vec![vector.clone(), index], vec![vector])
+        }
+        "relation.table_policy" => (vec![], vec![index; 5]),
+        "relation.table_interactions" => (vec![index.clone()], vec![index; 2]),
+        "relation.table_interaction" => (vec![index.clone(); 2], vec![index; 12]),
         _ => (vec![vector.clone()], vec![vector]),
     };
     Some(KernelSignature {
@@ -225,16 +265,77 @@ fn rows<S: crate::ring::Carrier + BasedVectorSpace<KoalaBear>>(
     )
     .map_err(|e| refused(e.0))
 }
-/// Assertion expressions at `rows` row-major assignments of every arena input,
-/// row-major with one column per assertion in assertion order. One row is
-/// `relation.table_point`. The shared ring schedule interprets KoalaBear nodes
-/// in Ext8 when the carrier is Ext8; values keep every extension coordinate.
+/// A view whose selected outputs a point batch substitutes: assertions of a
+/// polynomial view, or interaction records of an interaction view.
+trait Substitution {
+    fn field(&self) -> Identity;
+    fn arena(&self) -> &Expression;
+    fn input_count(&self) -> usize;
+    /// Values emitted per row.
+    fn width(&self) -> usize;
+    fn work(&self) -> u64;
+    fn point_work(&self) -> u64;
+    fn prepare(&self) -> std::result::Result<PolynomialArena, Error>;
+}
+impl Substitution for PolynomialView<'_> {
+    fn field(&self) -> Identity {
+        PolynomialView::field(self)
+    }
+    fn arena(&self) -> &Expression {
+        &self.definition().arena
+    }
+    fn input_count(&self) -> usize {
+        PolynomialView::input_count(self)
+    }
+    fn width(&self) -> usize {
+        self.assertion_count()
+    }
+    fn work(&self) -> u64 {
+        PolynomialView::work(self)
+    }
+    fn point_work(&self) -> u64 {
+        PolynomialView::point_work(self)
+    }
+    fn prepare(&self) -> std::result::Result<PolynomialArena, Error> {
+        PolynomialView::prepare(self)
+    }
+}
+impl Substitution for InteractionView<'_> {
+    fn field(&self) -> Identity {
+        InteractionView::field(self)
+    }
+    fn arena(&self) -> &Expression {
+        &self.definition().arena
+    }
+    fn input_count(&self) -> usize {
+        InteractionView::input_count(self)
+    }
+    fn width(&self) -> usize {
+        self.record_width()
+    }
+    fn work(&self) -> u64 {
+        InteractionView::work(self)
+    }
+    fn point_work(&self) -> u64 {
+        InteractionView::point_work(self)
+    }
+    fn prepare(&self) -> std::result::Result<PolynomialArena, Error> {
+        InteractionView::prepare(self)
+    }
+}
+
+/// The view's selected outputs at `rows` row-major assignments of every arena
+/// input, row-major with `width` columns per row: assertions in assertion
+/// order (one row is `relation.table_point`), or each interaction's tuple and
+/// count in interaction order. The shared ring schedule interprets KoalaBear
+/// nodes in Ext8 when the carrier is Ext8; values keep every extension
+/// coordinate.
 ///
-/// Shape, storage and the full work charge are checked before the assertion
+/// Shape, storage and the full work charge are checked before the selected
 /// sub-DAG is prepared; every row shares that preparation and its scratch.
 #[allow(clippy::too_many_arguments)] // Keep shape and execution limits explicit at this boundary.
 fn points<S: crate::ring::Carrier>(
-    view: &PolynomialView<'_>,
+    view: &impl Substitution,
     assignments: &[S],
     rows: u64,
     packed: bool,
@@ -252,22 +353,22 @@ fn points<S: crate::ring::Carrier>(
         return Err(refused("relation-table-point-shape"));
     };
     let count = rows
-        .checked_mul(view.assertion_count())
+        .checked_mul(view.width())
         .ok_or_else(|| exhausted("element-limit"))?;
     let size = std::mem::size_of::<S>();
     policy.vector_width(count, size)?;
     policy.output(crate::value::size(count, size)?, available)?;
     // The result, node scratch and prepared sub-DAG are live together. The
     // sub-DAG is bounded by the admitted arena's charge plus one output per
-    // assertion; scratch by the arena's node count.
-    let t = view.definition();
-    let cells = crate::ring::scratch_cells::<S>(t.arena.nodes().len(), packed)?
+    // emitted slot; scratch by the arena's node count.
+    let arena = view.arena();
+    let cells = crate::ring::scratch_cells::<S>(arena.nodes().len(), packed)?
         .checked_add(count)
         .ok_or_else(|| exhausted("element-limit"))?;
     policy.vector_width(cells, size)?;
     policy.output(
         crate::value::size(cells, size)?
-            .checked_add(arena_bytes(&t.arena) + t.assertions.len() * OUTPUT_BYTES)
+            .checked_add(arena_bytes(arena) + view.width() * OUTPUT_BYTES)
             .ok_or_else(|| exhausted("output-bytes"))?,
         usize::MAX,
     )?;
@@ -292,6 +393,74 @@ fn points<S: crate::ring::Carrier>(
 fn indices(values: impl IntoIterator<Item = u64>) -> Vec<Value> {
     values.into_iter().map(Value::Index).collect()
 }
+/// The interaction view's kernels. Flags are 0 or 1; an absent key or bound
+/// is 0 beside a zero flag.
+#[allow(clippy::too_many_arguments)] // The polynomial dispatch's context plus its resolved carrier.
+fn interaction(
+    registry: &Registry,
+    budget: &mut crate::ring::Budget,
+    args: &[Value],
+    i: &Invocation<'_>,
+    policy: &Policy,
+    digest: &str,
+    table: u64,
+    carrier: Identity,
+) -> Result<Vec<Value>> {
+    let contract = i.binding.declaration().contract.as_str();
+    let view = registry.interaction_reference(digest, table, carrier)?;
+    let available = i.max_output_bytes;
+    match (contract, args) {
+        ("relation.table_policy", []) => {
+            budget.charge(view.work())?;
+            let (optional, height) = view.policy();
+            Ok(indices([
+                u64::from(optional),
+                match height.authority {
+                    HeightAuthority::Fixed => 0,
+                    HeightAuthority::Config => 1,
+                    HeightAuthority::Instance => 2,
+                },
+                u64::from(height.min),
+                u64::from(height.max),
+                u64::from(height.power_of_two),
+            ]))
+        }
+        ("relation.table_interactions", [Value::Index(height)]) => {
+            budget.charge(view.work())?;
+            let (count, width) = view.interactions(*height).map_err(|e| refused(e.0))?;
+            Ok(indices([count, width]))
+        }
+        ("relation.table_interaction", [Value::Index(height), Value::Index(index)]) => {
+            budget.charge(view.work())?;
+            let d = view
+                .interaction(*height, *index)
+                .map_err(|e| refused(e.0))?;
+            Ok(indices([
+                u64::from(d.kind == ChannelKind::Multiset),
+                d.channel,
+                u64::from(d.side == Some(Side::Pull)),
+                u64::from(d.local.is_some()),
+                d.local.map_or(0, u64::from),
+                d.begin,
+                d.end,
+                d.arity,
+                u64::from(d.bound.is_some()),
+                d.bound.unwrap_or(0),
+                d.tuple_degree,
+                d.count_degree,
+            ]))
+        }
+        ("relation.table_record_points", [Value::KoalaBearVector(v), Value::Index(rows)]) => {
+            points(&view, v, *rows, true, policy, budget, available)
+                .map(|values| vec![Value::KoalaBearVector(values.into())])
+        }
+        ("relation.table_record_points", [Value::KoalaBearExt8Vector(v), Value::Index(rows)]) => {
+            points(&view, v, *rows, true, policy, budget, available)
+                .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
+        }
+        _ => Err(refused("kernel-operands")),
+    }
+}
 fn polynomial(
     registry: &Registry,
     budget: &mut crate::ring::Budget,
@@ -311,6 +480,15 @@ fn polynomial(
         .ok_or_else(|| refused("relation-table-carrier"))?;
     // The static check allocates nothing and visits at most what `work`
     // charges; every kernel charges before its height profile or preparation.
+    if matches!(
+        contract,
+        "relation.table_policy"
+            | "relation.table_interactions"
+            | "relation.table_interaction"
+            | "relation.table_record_points"
+    ) {
+        return interaction(registry, budget, args, i, policy, digest, table, carrier);
+    }
     let view = registry.polynomial_reference(digest, table, carrier)?;
     let available = i.max_output_bytes;
     match (contract, args) {
@@ -396,6 +574,8 @@ pub(crate) fn apply(
     Err(refused("kernel-operands"))
 }
 
+#[cfg(test)]
+mod interaction_tests;
 #[cfg(test)]
 mod polynomial_tests;
 #[cfg(test)]
