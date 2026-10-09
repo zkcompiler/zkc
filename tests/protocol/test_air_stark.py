@@ -156,6 +156,7 @@ def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, dir
             journal.run([toolchain.runtime, 'verify', package, pin, v, candidate],
                         refuses='artifact-stopped')
         else:
+            assert made.returncode > 0
             code = json.loads(made.stdout)['code']
             if name == 'short-trace':
                 assert code == 'refused:vector-shape'
@@ -166,7 +167,7 @@ def test_stark_checks_statement_trace_schedule_and_shape(toolchain, journal, dir
             # Statement binding also rejects an honest proof replayed against
             # changed public data, even before any AIR equation is checked.
             replay = journal.attempt([toolchain.runtime, 'verify', package, pin, v, honest_proof])
-            assert replay.returncode != 0
+            assert replay.returncode > 0
             assert json.loads(replay.stdout)['status'] == 'refused'
 
 
