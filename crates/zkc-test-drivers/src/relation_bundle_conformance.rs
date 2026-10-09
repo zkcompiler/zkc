@@ -1,10 +1,11 @@
-//! Bounded test transport for independent bundle admission and native field arithmetic.
+//! Bounded test transport for independent bundle and staged-program admission
+//! and evaluation with native field arithmetic.
 use p3_field::{BasedVectorSpace, PrimeField32};
 use serde_json::{Value, json};
 use std::io::{self, Read};
 use zkc_backends::{KoalaBear, KoalaBearExt8, plonky3};
 use zkc_runtime::interactive::Identity;
-use zkc_runtime::relation::{self, Algebra, Bundle, ChannelKind, Error};
+use zkc_runtime::relation::{self, Algebra, Bundle, ChannelKind, Error, Staged};
 
 type Result<T> = std::result::Result<T, Error>;
 struct Native;
@@ -63,11 +64,14 @@ fn scalar(values: &[String]) -> Value {
         json!(values)
     }
 }
+/// `[bundle, configuration, instance, witness]` reports the bundle relation;
+/// `[..., staged, assignment]` also reports the separate staged predicate
+/// over the same base data.
 fn evaluate(text: &str) -> Result<Value> {
     let input = relation::parse_json(text, 1024 * 1024, "bundle-data-schema", "bundle-data-limit")?;
     let rows = input
         .as_array()
-        .filter(|a| a.len() == 4)
+        .filter(|a| a.len() == 4 || a.len() == 6)
         .ok_or(Error("test-schema"))?;
     let bundle = Bundle::decode(&rows[0])?;
     let config = bundle.decode_configuration(&rows[1])?;
@@ -99,11 +103,27 @@ fn evaluate(text: &str) -> Result<Value> {
             }
         })
         .collect();
-    Ok(
-        json!({"accepted":true, "identity":bundle.identity(), "bundle":bundle.encode(),
+    let mut report = json!({"accepted":true, "identity":bundle.identity(), "bundle":bundle.encode(),
         "result":{"satisfied":result.satisfied, "work":result.work, "residuals":residuals,
-            "balances":balances, "range_failures":result.range_failures}}),
-    )
+            "balances":balances, "range_failures":result.range_failures}});
+    if rows.len() == 6 {
+        let staged = Staged::decode(&bundle, &rows[4])?;
+        let assignment = staged.decode_assignment(&rows[5])?;
+        let result =
+            staged.evaluate(&bundle, &config, &instance, &witness, &assignment, &Native)?;
+        let residuals: Vec<_> = result
+            .residuals
+            .iter()
+            .map(|r| json!([r.phase, r.table, r.assertion, r.row, scalar(&r.value)]))
+            .collect();
+        let global: Vec<_> = result.global.iter().map(|v| scalar(v)).collect();
+        report["staged_identity"] = json!(staged.identity());
+        report["staged"] = staged.encode();
+        report["assignment"] = staged.encode_assignment(&assignment);
+        report["staged_result"] = json!({"satisfied":result.satisfied, "work":result.work,
+            "residuals":residuals, "global":global});
+    }
+    Ok(report)
 }
 fn main() {
     let mut line = Vec::new();
