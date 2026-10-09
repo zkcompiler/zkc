@@ -42,6 +42,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "relation_bundle_conformance"
+path = "src/relation_bundle_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "backend_contract_conformance"
 path = "src/backend_contract_conformance.rs"
 test = false
