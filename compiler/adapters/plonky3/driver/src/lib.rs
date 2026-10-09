@@ -108,7 +108,7 @@ pub fn import_violations(
     let view = ClosedView::bind(&export, &instance)?;
     let inputs = view.row_inputs(&witness.trace, SelectorLaw::RowIndicator)?;
     Ok(violations(
-        &view.residuals(&inputs),
+        &view.residuals(&inputs)?,
         export.assertions.len(),
     ))
 }

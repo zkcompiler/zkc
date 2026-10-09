@@ -28,6 +28,22 @@ pub enum SelectorLaw {
     TwoAdicLagrange,
 }
 
+/// Materialization and reference-evaluation limits. These do not restrict
+/// the mathematical AIR; callers can use point substitution for larger domains.
+pub const MAX_VIEW_CELLS: usize = 1 << 22;
+pub const MAX_REFERENCE_WORK: usize = 1 << 28;
+pub const MAX_COEFFICIENT_HEIGHT: usize = 256;
+
+fn bounded_product(a: usize, b: usize, limit: usize) -> Result<usize> {
+    let count = a.checked_mul(b);
+    ensure(
+        count.is_some_and(|n| n <= limit),
+        "plonky3-view-limit",
+        || format!("{a} * {b} exceeds {limit}"),
+    )?;
+    Ok(count.unwrap())
+}
+
 /// Values of every main and preprocessed column at an evaluation point `x`
 /// (`current`) and at `g x` (`next`).
 #[derive(Clone, Debug)]
@@ -40,16 +56,17 @@ pub struct Openings {
 
 #[derive(Clone, Debug)]
 pub struct ClosedView<'a> {
-    pub export: &'a Export,
-    pub height: usize,
-    pub log_height: usize,
-    pub generator: F,
-    pub public_values: Vec<F>,
+    pub(crate) export: &'a Export,
+    pub(crate) height: usize,
+    log_height: usize,
+    pub(crate) generator: F,
+    pub(crate) public_values: Vec<F>,
 }
 
 impl<'a> ClosedView<'a> {
     /// The instance must select exactly this export and supply its full statement.
     pub fn bind(export: &'a Export, instance: &Instance) -> Result<Self> {
+        export.validate()?;
         ensure(
             instance.export_sha256 == export.sha256(),
             "plonky3-export-identity",
@@ -137,6 +154,12 @@ impl<'a> ClosedView<'a> {
     pub fn row_inputs(&self, trace: &RowMajorMatrix<F>, law: SelectorLaw) -> Result<Vec<F>> {
         self.check_trace(trace)?;
         let (n, slots) = (self.height, &self.export.slots);
+        let cells = bounded_product(n, slots.len(), MAX_VIEW_CELLS)?;
+        bounded_product(
+            n,
+            self.export.arena.nodes().len() + self.export.assertions.len() + slots.len() + 1,
+            MAX_REFERENCE_WORK,
+        )?;
         let width = self.export.layout.main_width;
         let fixed = self.preprocessed();
         let fixed_width = self
@@ -145,7 +168,7 @@ impl<'a> ClosedView<'a> {
             .preprocessed
             .as_ref()
             .map_or(0, |p| p.width);
-        let mut inputs = Vec::with_capacity(n * slots.len());
+        let mut inputs = Vec::with_capacity(cells);
         for row in 0..n {
             for slot in slots {
                 inputs.push(match *slot {
@@ -203,7 +226,14 @@ impl<'a> ClosedView<'a> {
     pub fn coefficient_inputs(&self, trace: &RowMajorMatrix<F>) -> Result<(Vec<F>, usize)> {
         self.check_trace(trace)?;
         let n = self.height;
+        ensure(
+            n <= MAX_COEFFICIENT_HEIGHT,
+            "plonky3-coefficient-limit",
+            || format!("reference interpolation height {n} exceeds {MAX_COEFFICIENT_HEIGHT}"),
+        )?;
         let width = n.max(2);
+        let cells = bounded_product(width, self.export.slots.len(), MAX_VIEW_CELLS)?;
+        bounded_product(n * n, self.export.slots.len(), MAX_REFERENCE_WORK)?;
         let g = self.generator;
         let column = |values: &[F], stride: usize, column: usize| -> Vec<F> {
             let points: Vec<F> = (0..n).map(|r| values[r * stride + column]).collect();
@@ -224,7 +254,7 @@ impl<'a> ClosedView<'a> {
             .as_ref()
             .map_or(0, |p| p.width);
         let a = g.inverse();
-        let mut result = Vec::with_capacity(width * self.export.slots.len());
+        let mut result = Vec::with_capacity(cells);
         for slot in &self.export.slots {
             let mut polynomial = match *slot {
                 Slot::Main { offset, column: c } => {
@@ -250,16 +280,26 @@ impl<'a> ClosedView<'a> {
 
     /// Residuals of all assertions on every row with the adapter's own arena
     /// interpreter, row-major.
-    pub fn residuals(&self, inputs: &[F]) -> Vec<F> {
+    pub fn residuals(&self, inputs: &[F]) -> Result<Vec<F>> {
         let slots = self.export.slots.len();
-        (0..self.height)
+        let cells = bounded_product(self.height, slots, MAX_VIEW_CELLS)?;
+        ensure(inputs.len() == cells, "plonky3-view-shape", || {
+            format!("{} input cells, expected {cells}", inputs.len())
+        })?;
+        bounded_product(self.height, self.export.assertions.len(), MAX_VIEW_CELLS)?;
+        bounded_product(
+            self.height,
+            self.export.arena.nodes().len() + self.export.assertions.len() + slots + 1,
+            MAX_REFERENCE_WORK,
+        )?;
+        Ok((0..self.height)
             .flat_map(|row| self.export.arena.evaluate(|s| inputs[row * slots + s]))
-            .collect()
+            .collect())
     }
 }
 
 /// Ascending coefficients of the polynomial through `(g^i, values[i])`.
-pub fn inverse_dft(values: &[F], generator: F) -> Vec<F> {
+fn inverse_dft(values: &[F], generator: F) -> Vec<F> {
     let n = values.len();
     let n_inverse = F::from_u32(n as u32).inverse();
     let g_inverse = generator.inverse();

@@ -40,7 +40,9 @@ fn imported_violations(
     let export = Export::parse(text).unwrap();
     let view = bind(&export, HEIGHT, publics);
     violations(
-        &view.residuals(&view.row_inputs(trace, SelectorLaw::RowIndicator).unwrap()),
+        &view
+            .residuals(&view.row_inputs(trace, SelectorLaw::RowIndicator).unwrap())
+            .unwrap(),
         export.assertions.len(),
     )
 }
@@ -353,7 +355,9 @@ fn instances_bind_one_export_height_and_statement() {
     let view = bind(&export, HEIGHT, &wrong);
     assert_eq!(
         violations(
-            &view.residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap()),
+            &view
+                .residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap())
+                .unwrap(),
             9
         ),
         [(7, 7)]

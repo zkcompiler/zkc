@@ -115,8 +115,9 @@ fn row_indicator_law_matches_direct_evaluation_and_the_upstream_debug_checker() 
         let height = trace.height();
         for (name, trace, publics) in cases(&trace, &publics) {
             let view = bind(&export, height, &publics);
-            let adapter =
-                view.residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap());
+            let adapter = view
+                .residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap())
+                .unwrap();
             let direct = row_residuals(&air, &trace, &publics, SelectorLaw::RowIndicator).unwrap();
             assert_eq!(adapter, direct, "height {height}, {name}: residual values");
             let failures = upstream_failures(&air, &trace, &publics);
@@ -148,19 +149,22 @@ fn two_adic_law_has_the_row_law_zero_locus_with_different_values() {
         let height = trace.height();
         for (name, trace, publics) in cases(&trace, &publics) {
             let view = bind(&export, height, &publics);
-            let point_law = view.residuals(
-                &view
-                    .row_inputs(&trace, SelectorLaw::TwoAdicLagrange)
-                    .unwrap(),
-            );
+            let point_law = view
+                .residuals(
+                    &view
+                        .row_inputs(&trace, SelectorLaw::TwoAdicLagrange)
+                        .unwrap(),
+                )
+                .unwrap();
             let direct =
                 row_residuals(&air, &trace, &publics, SelectorLaw::TwoAdicLagrange).unwrap();
             assert_eq!(
                 point_law, direct,
                 "height {height}, {name}: two-adic residual values"
             );
-            let row_law =
-                view.residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap());
+            let row_law = view
+                .residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap())
+                .unwrap();
             assert_eq!(
                 violations(&point_law, 9),
                 violations(&row_law, 9),
@@ -295,8 +299,9 @@ fn cyclic_reads_wrap_and_a_finite_reading_would_accept_a_rejected_trace() {
         for (air, expected) in [(&unguarded, vec![(height - 1, 0)]), (&guarded, vec![])] {
             let export = zkc_plonky3_air::export(air, "counter").unwrap();
             let view = bind(&export, height, &[]);
-            let residuals =
-                view.residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap());
+            let residuals = view
+                .residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap())
+                .unwrap();
             assert_eq!(upstream_failures(air, &trace, &[]), expected);
             assert_eq!(violations(&residuals, 1), expected);
             // Without wraparound, only rows with a successor are checked.
@@ -307,11 +312,13 @@ fn cyclic_reads_wrap_and_a_finite_reading_would_accept_a_rejected_trace() {
     let (air, export, trace, publics) = recurrence(3);
     let mutated = perturb(&trace, 0, 0);
     let view = bind(&export, 8, &publics);
-    let residuals = view.residuals(
-        &view
-            .row_inputs(&mutated, SelectorLaw::RowIndicator)
-            .unwrap(),
-    );
+    let residuals = view
+        .residuals(
+            &view
+                .row_inputs(&mutated, SelectorLaw::RowIndicator)
+                .unwrap(),
+        )
+        .unwrap();
     assert!(violations(&residuals, 9).contains(&(7, 8)));
     assert_eq!(
         violations(&residuals, 9),
@@ -354,13 +361,16 @@ fn guard_products_negations_and_bare_selectors_are_admitted() {
             RowMajorMatrix::new((0..height as u32).map(F::from_u32).collect(), 1),
         ] {
             let view = bind(&export, height, &[]);
-            let row_law =
-                view.residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap());
-            let point_law = view.residuals(
-                &view
-                    .row_inputs(&trace, SelectorLaw::TwoAdicLagrange)
-                    .unwrap(),
-            );
+            let row_law = view
+                .residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap())
+                .unwrap();
+            let point_law = view
+                .residuals(
+                    &view
+                        .row_inputs(&trace, SelectorLaw::TwoAdicLagrange)
+                        .unwrap(),
+                )
+                .unwrap();
             assert_eq!(
                 violations(&row_law, 4),
                 upstream_failures(&Guards, &trace, &[])
@@ -406,7 +416,9 @@ fn a_large_trace_agrees_with_direct_evaluation_and_upstream() {
         ("honest", trace.clone()),
         ("middle", perturb(&trace, height / 2, 1)),
     ] {
-        let adapter = view.residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap());
+        let adapter = view
+            .residuals(&view.row_inputs(&trace, SelectorLaw::RowIndicator).unwrap())
+            .unwrap();
         assert_eq!(
             adapter,
             row_residuals(&air, &trace, &publics, SelectorLaw::RowIndicator).unwrap(),
