@@ -86,6 +86,7 @@ class ZKC_Parameters<string value, int min, int max> : ZKC_Declaration {
   string name = value;
   int minimum = min;
   int maximum = max; // -1 means variadic.
+  string assetFormat = "";
 }
 def NoParameters : ZKC_Parameters<"None", 0, 0>;
 def NaturalParameter : ZKC_Parameters<"Natural", 1, 1>;
@@ -94,7 +95,12 @@ def FieldLiteral : ZKC_Parameters<"FieldLiteral", 1, 1>;
 def FieldLiterals : ZKC_Parameters<"FieldLiterals", 0, -1>;
 def MatrixShape : ZKC_Parameters<"MatrixShape", 2, 2>;
 def MatrixIdentity : ZKC_Parameters<"MatrixIdentity", 1, 1>;
-def AssetIdentity : ZKC_Parameters<"AssetIdentity", 1, 1>;
+def RingAssetIdentity : ZKC_Parameters<"AssetIdentity", 1, 1> {
+  let assetFormat = "zkc.ring/0";
+}
+def RelationAssetIdentity : ZKC_Parameters<"AssetIdentity", 1, 1> {
+  let assetFormat = "zkc.relation-bundle/0";
+}
 def MatrixVector : ZKC_Parameters<"MatrixVector", 3, 3>;
 def GatherIndices : ZKC_Parameters<"GatherIndices", 0, -1>;
 def ScatterIndices : ZKC_Parameters<"ScatterIndices", 1, -1>;

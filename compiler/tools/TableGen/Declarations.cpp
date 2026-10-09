@@ -417,6 +417,12 @@ void Model::validateOperation(const Record *op) {
                   std::make_pair(parameters->getValueAsInt("minimum"),
                                  parameters->getValueAsInt("maximum")),
           op, "unsupported parameter validator or bounds");
+  const auto assetFormat = parameters->getValueAsString("assetFormat");
+  require(name(parameters) == "AssetIdentity"
+              ? (assetFormat == "zkc.ring/0" ||
+                 assetFormat == "zkc.relation-bundle/0")
+              : assetFormat.empty(),
+          op, "asset parameter requires its mathematical carrier format");
   auto *field = optionalDef(op, "parameterField");
   const bool literals =
       name(parameters) == "FieldLiteral" || name(parameters) == "FieldLiterals";
@@ -825,7 +831,7 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << (field ? std::to_string(
                        termIndex(op->getValueAsListOfDefs("scope"), field))
                  : "std::nullopt")
-       << "}},\n";
+       << ", " << quote(p->getValueAsString("assetFormat")) << "}},\n";
   }
   os << "}; for (const auto &v : values) if (v.name == name) return &v; return "
         "nullptr; }\n}\n"
@@ -952,6 +958,9 @@ json::Object inventory(const Model &m) {
     if (auto *field = optionalDef(op, "parameterField"))
       object["parameters"].getAsObject()->try_emplace("fieldTerm",
                                                       termIndex(scope, field));
+    if (!p->getValueAsString("assetFormat").empty())
+      object["parameters"].getAsObject()->try_emplace(
+          "assetFormat", p->getValueAsString("assetFormat"));
     for (auto field : {"inputs", "outputs", "requirements"}) {
       json::Array apps;
       for (const auto *a : op->getValueAsListOfDefs(field)) {

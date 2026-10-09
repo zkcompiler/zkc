@@ -526,6 +526,7 @@ std::string installedCatalogIdentity() {
       detail::frame(value, parameters->fieldTerm
                                ? std::to_string(*parameters->fieldTerm)
                                : "none");
+      detail::frame(value, parameters->assetFormat);
     }
     rows.push_back(std::move(value));
   }
