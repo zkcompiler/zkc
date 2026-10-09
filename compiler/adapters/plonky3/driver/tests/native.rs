@@ -191,7 +191,7 @@ fn native_rows_match_direct_evaluation_and_upstream_under_both_laws() {
                 let native = native_rows(&expression, &inputs, height);
                 assert_eq!(
                     native,
-                    view.residuals(&inputs),
+                    view.residuals(&inputs).unwrap(),
                     "height {height}, {name}, {law:?}: adapter"
                 );
                 assert_eq!(

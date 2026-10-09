@@ -7,11 +7,11 @@ pub type Polynomial<F: Field> = builtin("polynomial", F);
 // Values are row-major assignments. Round returns the exact coefficient sum
 // over affine pairs; evaluate substitutes the terminal factor values.
 pub interface Expression<F: Field> {
-  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Polynomial<F>;
+  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F>;
   fn evaluate(values: Vector<F>) -> F;
 }
 
-fn round<F: Field, Width: nat, E: Expression<F>>(values: Vector<F>) -> Polynomial<F> {
+fn round<F: Field, Width: nat, E: Expression<F>>(values: Vector<F>) -> Vector<F> {
   let halves = kernel<F>("vector.split", values);
   let rows = kernel("index.div", kernel<F>("vector.length", halves.0), index<Width>());
   return E::round(halves.0, halves.1, rows);
@@ -21,9 +21,6 @@ fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
   let low = kernel<F>("vector.scale", halves.0, 1 - challenge);
   let high = kernel<F>("vector.scale", halves.1, challenge);
   return kernel<F>("vector.add", low, high);
-}
-fn coefficients<F: Field>(value: Polynomial<F>) -> Vector<F> {
-  return kernel<F>("poly.coefficients", value);
 }
 fn polynomial<F: Field>(value: Vector<F>) -> Polynomial<F> {
   return kernel<F>("poly.from_coefficients", value);
@@ -51,8 +48,7 @@ pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, Width: nat, Degree: nat,
       carry(tableP = prover_values, tableV = verifier_values, current = claim @V)
       capture() using(challenges) {
     local P let proposed = round<F,Width,E>(tableP);
-    local P let encoded = coefficients(proposed);
-    let received = send P -> V(encoded);
+    let received = send P -> V(proposed);
     local V let actual = polynomial(received);
     local V let size_ok = has_length<F,Degree+1>(received);
     guard @V size_ok;

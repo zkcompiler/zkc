@@ -7,6 +7,7 @@ import Zkc.Algebra.FiniteVectors
 import Zkc.Algebra.LinearCombination
 import Zkc.Algebra.MultisetFingerprint
 import Zkc.Algebra.Representations
+import Zkc.Algebra.RingExpression
 import Zkc.Compiler.Admission
 import Zkc.Compiler.Analysis.FactorMerge
 import Zkc.Compiler.Analysis.FactorReuse
@@ -249,6 +250,7 @@ import Zkc.Realization.Simulation
 import Zkc.Relation.AIR.Embedding
 import Zkc.Relation.AIR.Polynomial
 import Zkc.Relation.AIR.ProductConnection
+import Zkc.Relation.AIR.RingExpression
 import Zkc.Relation.AIR
 import Zkc.Relation.Encoding
 import Zkc.Relation.Padding
@@ -443,6 +445,7 @@ import Tests.Requirements
 import Tests.ResourceUnit
 import Tests.ResourceView
 import Tests.ResultBundle
+import Tests.RingExpression
 import Tests.RoleDriver
 import Tests.RoleIsolation
 import Tests.RoleProjection
@@ -494,6 +497,7 @@ import Tests.TheoryReview
 import Tests.Transformation
 import Tests.TypeInstantiation
 import Tests.TypedLocal
+import Tests.UniformIndex
 import Tests.Variant
 import Tests.VectorReference
 import Tests.VectorResources

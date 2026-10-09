@@ -32,14 +32,17 @@ same field. Embedding requires the target's installed `ExtensionField` fact and
 exact `BaseField` association; equal characteristics alone do not justify a cast.
 Degree analysis accepts a separate vector of input weights. Negation and embedding
 preserve degree; addition takes the maximum, multiplication adds degrees, and
-constants have degree zero. Formation uses weight one for every input. A closed
-view derives the weights for its selected substitution. All nodes must be reachable from an
+constants have degree zero. Formation records unit-weight degrees saturated at
+1,048,577; that sentinel means the bound was exceeded, not an exact degree or
+upper bound. It does not restrict admission. A closed view derives the weights
+for its selected substitution; its degree analysis refuses bounds above
+1,048,576. All nodes must be reachable from an
 output. Unused declared inputs are permitted; their binding obligations belong to
 the consumer. The ordered output list may contain repeated nodes. Empty outputs are permitted
 when the node list is empty, including a relation with no assertions.
 
 The arena admits at most 65,536 nodes and inputs, 4,096 outputs, depth 1,024,
-degree 1,048,576 and 8 MiB of canonical encoding. Text ingress checks bytes and
+and 8 MiB of canonical encoding. Text ingress checks bytes and
 nesting before JSON parsing and rejects duplicate keys, malformed Unicode and
 noncanonical numeric tokens. Exact row arities reject unknown fields. Structural
 identity is SHA-256 of the canonical encoding, including input sorts and ordered outputs. Equality of meanings is a separate claim.
@@ -58,12 +61,15 @@ Scalar interpretation alone does not establish them. A coefficient provider must
 check the supplied degrees and preserve every resulting coefficient. Truncating
 nonzero high-degree terms is not an implementation of this contract.
 
-A caller selects output **positions**. Only nodes and inputs needed by those
+A caller can select output **positions**. Only nodes and inputs needed by those
 outputs are evaluated, and each used input is fetched once. Values must describe
 one immutable assignment. A closed AIR view must establish that each selected
 read is defined on its assertion scope before arithmetic simplification; an
 unused output does not require its reads. Range checks and source authority are
 properties of that view, not facts supplied by this arena.
+
+The installed bulk kernels evaluate all outputs. A selected subexpression must
+be admitted as its own asset for use through those kernels.
 
 Products remain products after substitution. In particular, the product of two
 multilinear extensions is generally different away from the Boolean cube from

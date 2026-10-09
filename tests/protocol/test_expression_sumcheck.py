@@ -15,12 +15,12 @@ def write(directory, name, value):
     return path
 
 
-def values(extension=True, claim=100, rounds=2):
+def values(extension=True, claim=100, rounds=2, table=tuple(range(1, 9))):
     # Independent wire construction, with four row-major assignments to x*y.
     def scalar(n):
         return n.to_bytes(4, 'little') + (bytes(28) if extension else b'')
     vector = (b'ZKCV\0' + bytes([27 if extension else 20])
-              + (8).to_bytes(4, 'little') + b''.join(scalar(n) for n in range(1, 9)))
+              + len(table).to_bytes(4, 'little') + b''.join(scalar(n) for n in table))
     field = b'ZKCV\0' + bytes([26 if extension else 19]) + scalar(claim)
     return {'values': vector.hex(), 'claim': field.hex(), 'rounds': rounds}
 
@@ -71,6 +71,18 @@ def test_expression_sumcheck_interactive_fields(toolchain, journal, directory, e
                                    assets, f'--results={output}']))
     assert result['status'] == 'executed'
     assert json.loads(output.read_text())['roles']['V']['accepted'] is True
+
+
+@pytest.mark.parametrize('extension', [False, True])
+@pytest.mark.parametrize('table,claim', [([1, 2, 3, 4, 1, 2, 3, 4], 28), ([0] * 8, 0)])
+def test_expression_sumcheck_retains_zero_coefficients(toolchain, journal, directory, extension, table, claim):
+    package, pin, assets = build(toolchain, journal, directory, 'Proof' if extension else 'BaseProof')
+    request = write(directory, 'request.json', {'format': 'zkc.entry-proof/0',
+        'public': values(extension=extension, table=table, claim=claim)})
+    proof = directory / 'proof.bin'
+    journal.run([toolchain.runtime, 'prove', package, pin, request, proof, assets])
+    checked = json.loads(journal.run([toolchain.runtime, 'verify', package, pin, request, proof, assets]))
+    assert checked['status'] == 'accepted'
 
 
 @pytest.mark.parametrize('claim,rounds', [(101, 2), (100, 1), (100, 3)])

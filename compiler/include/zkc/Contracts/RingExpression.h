@@ -37,6 +37,7 @@ struct Node {
 
 struct Fact {
   std::string field;
+  /// Unit-weight degree, saturated at Limits::degree + 1 (not a bound there).
   uint32_t degree, depth;
 };
 
@@ -55,7 +56,8 @@ public:
   llvm::ArrayRef<Fact> facts() const { return facts_; }
   /// Per-node degree bounds for a particular substitution. The closed view
   /// derives weights from its bindings. Formation facts use weight one for
-  /// every input; public/constant bindings can use weight zero.
+  /// every input and saturate at Limits::degree + 1. They do not restrict
+  /// admission; public/constant bindings can use weight zero.
   llvm::Expected<std::vector<uint32_t>>
   degrees(llvm::ArrayRef<uint32_t> inputWeights) const;
   /// Sorted input indices actually used by the selected output positions.

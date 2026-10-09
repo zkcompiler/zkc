@@ -444,7 +444,9 @@ where
     let assertions = export.assertions.len();
     let bundle = BundleView::derive(export).unwrap();
     let view = bind(export, height, publics);
-    let row_law = view.residuals(&view.row_inputs(trace, SelectorLaw::RowIndicator).unwrap());
+    let row_law = view
+        .residuals(&view.row_inputs(trace, SelectorLaw::RowIndicator).unwrap())
+        .unwrap();
     let on_scope = bundle.residuals(export, trace, publics);
     let mut covered = vec![false; row_law.len()];
     for (row, assertion, value) in &on_scope {

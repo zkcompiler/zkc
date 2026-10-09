@@ -46,9 +46,9 @@ def test_ring_admission_and_identity_agree(toolchain, journal):
             else:
                 nodes.append([rng.choice(['add', 'mul']), rng.randrange(i), rng.randrange(i)])
         add(['zkc.ring/0', [field, field], nodes, list(range(len(nodes)))])
-    for count in [20, 21]:
+    for count in [20, 21, 80]:
         nodes = [['input', 0]] + [['mul', i-1, i-1] for i in range(1, count+1)]
-        add(['zkc.ring/0', [field], nodes, [count]], count == 20)
+        add(['zkc.ring/0', [field], nodes, [count]])
     for count in [1023, 1024]:
         nodes = [['input', 0]] + [['neg', i-1] for i in range(1, count+1)]
         add(['zkc.ring/0', [field], nodes, [count]], count == 1023)

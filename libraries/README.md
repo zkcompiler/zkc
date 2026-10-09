@@ -50,10 +50,13 @@ of the rows, so the first challenge fixes the most significant Boolean coordinat
 
 The `Expression` component supplies round-polynomial coefficients and terminal
 evaluation. Its `round` method must return exactly the coefficients of
-`sum_i P(low_i + (high_i - low_i) X)`, padded to `Degree + 1`; `evaluate` must
+`sum_i P(low_i + (high_i - low_i) X)` as a vector padded to `Degree + 1`;
+the vector preserves trailing zeros before transmission. `evaluate` must
 interpret the same expression. V checks the coefficient count and round sum,
 folds its own table, and checks the terminal value. These component laws and
 the degree bound are mathematical premises; the frontend checks their types.
+For the native ring component, `Width` must equal the arena's input count and
+`Degree` its derived degree with every input assigned weight one.
 
 The [maintained client](../examples/projects/expression-sumcheck/README.md)
 uses the shared [ring evaluator](../docs/spec/domains/ring-expressions.md)

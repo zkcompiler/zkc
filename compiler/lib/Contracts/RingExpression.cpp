@@ -126,7 +126,8 @@ Expected<Expression> Expression::create(std::vector<Input> inputs,
       fact.degree =
           node.kind == Kind::Add
               ? std::max(facts[node.left].degree, facts[node.right].degree)
-              : facts[node.left].degree + facts[node.right].degree;
+              : std::min(Limits::degree + 1,
+                         facts[node.left].degree + facts[node.right].degree);
       break;
     case Kind::Neg:
     case Kind::Embed:
@@ -145,8 +146,6 @@ Expected<Expression> Expression::create(std::vector<Input> inputs,
     default:
       return zkc::error("ring-node-shape");
     }
-    if (fact.degree > Limits::degree)
-      return zkc::error("ring-degree");
     if (fact.depth > Limits::depth)
       return zkc::error("ring-depth");
     facts.push_back(std::move(fact));

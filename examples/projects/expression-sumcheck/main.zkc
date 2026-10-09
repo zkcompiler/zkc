@@ -1,15 +1,14 @@
 module example;
-use expression_sumcheck::{Expression, Vector, Polynomial, Sumcheck};
+use expression_sumcheck::{Expression, Vector, Sumcheck};
 domain Base = field("koala-bear");
 domain Extension = field("koala-bear.ext8-binomial3");
 
 // This component fixes the separately captured product.ring.json. The protocol
 // is generic over the component; the compiler has no Sumcheck-specific branch.
 component Product<F: Field>: Expression<F> {
-  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Polynomial<F> {
-    let coefficients = kernel<F>("ring.affine_sum", low, high, rows;
+  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F> {
+    return kernel<F>("ring.affine_sum", low, high, rows;
       "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
-    return kernel<F>("poly.from_coefficients", coefficients);
   }
   fn evaluate(values: Vector<F>) -> F {
     let result = kernel<F>("ring.point", values;

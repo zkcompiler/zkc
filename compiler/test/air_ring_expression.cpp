@@ -117,5 +117,20 @@ int main() {
   auto plan = cancel.compile(4);
   require(!plan && toString(plan.takeError()) == "air-window-out-of-range",
           "algebraic cancellation does not erase illegal AIR reads");
+  std::vector<N> highPublic{N::publicInput(0)};
+  for (uint32_t i = 0; i < 40; ++i)
+    highPublic.push_back(N::mul(i, i));
+  highPublic.push_back(N::read(0, 0));
+  highPublic.push_back(N::mul(40, 41));
+  auto high = value(
+      AIR::create("koala-bear", 1, 1,
+                  {{{AIRScopeKind::Every, 0}, std::move(highPublic), {}, {}}}));
+  auto highView = value(high.expressionView(0));
+  require(high.facts()[0].degree == 1 &&
+              value(highView.expression.degrees({0, 1})).back() == 1,
+          "large powers of public constants preserve the AIR degree");
+  auto nonconstant = highView.expression.degrees({1, 1});
+  require(!nonconstant && toString(nonconstant.takeError()) == "ring-degree",
+          "the selected polynomial substitution enforces its degree limit");
   outs() << "finite AIR and shared ring interpretation agree\n";
 }

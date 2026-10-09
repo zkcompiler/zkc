@@ -211,7 +211,7 @@ impl Expression {
                     Fact {
                         field: a.field,
                         degree: if matches!(node, Node::Mul(..)) {
-                            a.degree.checked_add(b.degree).ok_or(Error("ring-degree"))?
+                            (a.degree + b.degree).min(DEGREE_LIMIT + 1)
                         } else {
                             a.degree.max(b.degree)
                         },
@@ -233,9 +233,6 @@ impl Expression {
                     f
                 }
             };
-            if fact.degree > DEGREE_LIMIT {
-                return Err(Error("ring-degree"));
-            }
             if fact.depth > DEPTH_LIMIT {
                 return Err(Error("ring-depth"));
             }
@@ -387,6 +384,19 @@ impl Expression {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn large_unit_degree_does_not_restrict_a_constant_substitution() {
+        let mut nodes = vec![Node::Input(0)];
+        for i in 0..80 {
+            nodes.push(Node::Mul(i, i));
+        }
+        nodes.push(Node::Input(1));
+        nodes.push(Node::Mul(80, 81));
+        let expression = Expression::new(vec![Identity::KoalaBear; 2], nodes, vec![82]).unwrap();
+        assert_eq!(expression.facts()[82].degree, DEGREE_LIMIT + 1);
+        assert_eq!(expression.degrees(&[0, 1]).unwrap()[82], 1);
+        assert_eq!(expression.degrees(&[1, 1]), Err(Error("ring-degree")));
+    }
     #[test]
     fn independent_schema_and_weighted_analysis() {
         let text = r#"["zkc.ring/0",["koala-bear","koala-bear.ext8-binomial3"],[["input",0],["embed","koala-bear.ext8-binomial3",0],["input",1],["mul",1,2]],[3,2]]"#;

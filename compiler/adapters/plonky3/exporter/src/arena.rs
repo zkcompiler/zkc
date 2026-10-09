@@ -15,6 +15,7 @@ pub const FORMAT: &str = "zkc.ring/0";
 pub const NODE_LIMIT: usize = 65_536;
 pub const OUTPUT_LIMIT: usize = 4_096;
 pub const DEPTH_LIMIT: u32 = 1_024;
+/// Bound on the captured view's declared constraint degree, not arena formation.
 pub const DEGREE_LIMIT: u64 = 1_048_576;
 pub const BYTE_LIMIT: usize = 8 * 1024 * 1024;
 
@@ -102,12 +103,6 @@ impl Arena {
                 format!("node {dead} is not reachable from an output"),
             );
         }
-        let formation = arena.degrees(&vec![1; inputs])?;
-        ensure(
-            formation.iter().all(|d| *d <= DEGREE_LIMIT),
-            "plonky3-arena-limit",
-            || "formation degree".into(),
-        )?;
         ensure(
             arena.canonical().len() <= BYTE_LIMIT,
             "plonky3-arena-limit",
