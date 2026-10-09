@@ -1,6 +1,7 @@
 use p3_air::{Air, AirBuilder, BaseAir, WindowAccess};
 use p3_field::PrimeCharacteristicRing;
 use p3_matrix::dense::RowMajorMatrix;
+use zkc_plonky3_air::bundle::BundleView;
 use zkc_plonky3_air::{ClosedView, Instance, SelectorLaw, Slot, export, field::F};
 use zkc_plonky3_air_client::CounterAir;
 
@@ -93,5 +94,38 @@ fn binding_rechecks_a_modified_candidate_before_interpretation() {
     assert_eq!(
         ClosedView::bind(&captured, &statement).unwrap_err().id,
         "plonky3-slot"
+    );
+    assert_eq!(
+        BundleView::derive(&captured).unwrap_err().id,
+        "plonky3-slot"
+    );
+}
+
+#[test]
+fn derived_bundle_checks_shape_and_work_before_evaluation() {
+    let captured = export(&PublicSum, "public-sum").unwrap();
+    let bundle = BundleView::derive(&captured).unwrap();
+    let publics = vec![F::ZERO; 4096];
+    let trace = RowMajorMatrix::new(vec![F::ZERO; 32768], 1);
+    assert_eq!(
+        bundle.residuals(&trace, &publics).unwrap_err().id,
+        "plonky3-view-limit"
+    );
+    let small = RowMajorMatrix::new(vec![F::ZERO; 8], 1);
+    assert_eq!(
+        bundle.residuals(&small, &[]).unwrap_err().id,
+        "plonky3-public-values"
+    );
+    let wrong_width = RowMajorMatrix::new(vec![F::ZERO; 16], 2);
+    assert_eq!(
+        bundle.residuals(&wrong_width, &publics).unwrap_err().id,
+        "plonky3-trace-width"
+    );
+    assert!(
+        bundle
+            .residuals(&small, &publics)
+            .unwrap()
+            .iter()
+            .all(|(_, _, v)| *v == F::ZERO)
     );
 }

@@ -447,7 +447,7 @@ where
     let row_law = view
         .residuals(&view.row_inputs(trace, SelectorLaw::RowIndicator).unwrap())
         .unwrap();
-    let on_scope = bundle.residuals(export, trace, publics);
+    let on_scope = bundle.residuals(trace, publics).unwrap();
     let mut covered = vec![false; row_law.len()];
     for (row, assertion, value) in &on_scope {
         assert_eq!(
@@ -519,6 +519,7 @@ fn bundle_translation_refuses_combined_selectors_and_oversized_fixed_tables() {
     let (_, mut large, _, _) = recurrence(3);
     let p = large.layout.preprocessed.as_mut().unwrap();
     p.height = 1 << 21;
+    p.values.resize(p.height * p.width, F::ZERO);
     assert_eq!(
         BundleView::derive(&large).unwrap_err().id,
         "plonky3-bundle-height"

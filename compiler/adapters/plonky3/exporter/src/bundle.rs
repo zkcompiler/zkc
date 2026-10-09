@@ -12,8 +12,8 @@
 //! rows where the original residual is identically zero. Assertions with two
 //! different selector kinds refuse rather than rely on height-dependent scopes.
 //!
-//! The carrier layout follows draft 2 of the relation-bundle design and its
-//! reader's encodings (signed offsets as decimal strings). The export remains
+//! The carrier uses the relation-bundle contract, including signed offsets as
+//! decimal strings. The export remains
 //! the source artifact; the bundle is downstream of it.
 
 use crate::arena::{Arena, Node, hex_sha256};
@@ -21,6 +21,7 @@ use crate::artifact::{Instance, Witness};
 use crate::field::{F, FIELD_IDENTITY, decimal};
 use crate::model::{Export, SelectorKind, Slot};
 use crate::refusal::{Result, ensure, refuse};
+use crate::view::{ClosedView, MAX_REFERENCE_WORK, MAX_VIEW_CELLS, bounded_product};
 use p3_matrix::Matrix;
 use serde_json::{Value, json};
 
@@ -66,15 +67,17 @@ impl Scope {
 
 /// The derived bundle view of an export: one cyclic table, selector-free arena.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BundleView {
-    pub arena: Arena,
+pub struct BundleView<'a> {
+    export: &'a Export,
+    arena: Arena,
     /// Export slot of each bundle input; selectors are not inputs.
-    pub inputs: Vec<Slot>,
-    pub scopes: Vec<Scope>,
+    inputs: Vec<Slot>,
+    scopes: Vec<Scope>,
 }
 
-impl BundleView {
-    pub fn derive(export: &Export) -> Result<Self> {
+impl<'a> BundleView<'a> {
+    pub fn derive(export: &'a Export) -> Result<Self> {
+        export.validate()?;
         let mut scopes = Vec::with_capacity(export.assertions.len());
         for (position, assertion) in export.assertions.iter().enumerate() {
             scopes.push(match assertion.selectors[..] {
@@ -117,21 +120,46 @@ impl BundleView {
             .collect();
         let arena = Arena::new(inputs.len(), nodes, export.arena.outputs().to_vec())?;
         Ok(Self {
+            export,
             arena,
             inputs,
             scopes,
         })
     }
 
+    pub fn arena(&self) -> &Arena {
+        &self.arena
+    }
+
+    pub fn inputs(&self) -> &[Slot] {
+        &self.inputs
+    }
+
     /// Bundle residuals on scope rows, as `(row, assertion, value)`, with
     /// cyclic reads, the bundle's configuration and the instance's publics.
     pub fn residuals(
         &self,
-        export: &Export,
         trace: &p3_matrix::dense::RowMajorMatrix<F>,
         public_values: &[F],
-    ) -> Vec<(usize, usize, F)> {
+    ) -> Result<Vec<(usize, usize, F)>> {
+        let export = self.export;
+        let instance = Instance {
+            export_sha256: export.sha256(),
+            height: trace.height(),
+            public_values: public_values.to_vec(),
+        };
+        let closed = ClosedView::bind(export, &instance)?;
+        closed.check_trace(trace)?;
         let (height, width) = (trace.height(), trace.width());
+        ensure(height <= HEIGHT_LIMIT, "plonky3-bundle-height", || {
+            height.to_string()
+        })?;
+        bounded_product(height, self.arena.outputs().len(), MAX_VIEW_CELLS)?;
+        bounded_product(
+            height,
+            self.arena.nodes().len() + self.inputs.len() + self.scopes.len() + 1,
+            MAX_REFERENCE_WORK,
+        )?;
         let (fixed, fixed_width) = export
             .layout
             .preprocessed
@@ -157,7 +185,7 @@ impl BundleView {
                 }
             }
         }
-        result
+        Ok(result)
     }
 }
 

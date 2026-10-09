@@ -34,7 +34,7 @@ pub const MAX_VIEW_CELLS: usize = 1 << 22;
 pub const MAX_REFERENCE_WORK: usize = 1 << 28;
 pub const MAX_COEFFICIENT_HEIGHT: usize = 256;
 
-fn bounded_product(a: usize, b: usize, limit: usize) -> Result<usize> {
+pub(crate) fn bounded_product(a: usize, b: usize, limit: usize) -> Result<usize> {
     let count = a.checked_mul(b);
     ensure(
         count.is_some_and(|n| n <= limit),

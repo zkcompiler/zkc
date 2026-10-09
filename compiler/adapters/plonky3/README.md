@@ -144,7 +144,7 @@ bound by the export identity; it fixes the trace height. Binding an instance
 checks its export identity, a power-of-two height up to 2^24 that matches any
 preprocessed height, and the exact public value count.
 
-The relation-bundle carriers follow draft 2 of the relation-bundle design and are
+The relation-bundle carriers follow the [native bundle contract](../../../docs/spec/domains/relation-bundles.md) and are
 derived from the export, which remains the source artifact. The bundle has
 scopes, not selector inputs. From the checked guard form, each selector is
 replaced by the constant one and the assertion is restricted to the selector's
@@ -188,6 +188,12 @@ Arena bounds follow the shared contract. The adapter additionally bounds widths
 and public counts at 4,096, preprocessed cells at 2^22, upstream nodes visited at
 2^22, export text at 64 MiB and witness cells at 2^22. Native providers apply
 their own work and element limits.
+
+Closed views revalidate a candidate before binding it. Row materialization and
+reference results are limited to 2^22 cells, and reference evaluation to 2^28
+work units. The direct inverse DFT reference is limited to height 256 with its
+quadratic work checked before interpolation. Bundle reference views borrow the
+validated export, check input shapes, and apply the same result/work limits.
 
 `Air::eval` is arbitrary host code. An export records what the selected source
 asserted for its declared layout on the pinned upstream, checked against the same

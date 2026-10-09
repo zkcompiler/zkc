@@ -501,7 +501,7 @@ fn derived_bundle_arenas_are_admitted_and_evaluate_natively() {
     for log_height in [0, 3, 6] {
         let (_, export, trace, publics) = recurrence(log_height);
         let bundle = BundleView::derive(&export).unwrap();
-        let text = bundle.arena.canonical();
+        let text = bundle.arena().canonical();
         let expression = Expression::parse(&text).unwrap();
         assert_eq!(expression.canonical(), text);
         let height = trace.height();
@@ -517,7 +517,7 @@ fn derived_bundle_arenas_are_admitted_and_evaluate_natively() {
                 .map(|(r, s)| inputs[r * export.slots.len() + s])
                 .collect();
             let native = native_rows(&expression, &bundle_inputs, height);
-            for (row, assertion, value) in bundle.residuals(&export, &trace, &publics) {
+            for (row, assertion, value) in bundle.residuals(&trace, &publics).unwrap() {
                 assert_eq!(native[row * 9 + assertion], value, "{name}");
             }
         }
