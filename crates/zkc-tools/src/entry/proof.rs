@@ -1,7 +1,8 @@
 //! Independent named proof calls over the admitted common native deployment.
 use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
 use super::{
-    Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments, setups, value,
+    EntryAssets, Interface, NamedValues, Package, RoleInputs, SetupAuthority, arguments, setups,
+    value,
 };
 use crate::execution::Capacity;
 use crate::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
@@ -65,9 +66,13 @@ pub struct ProofRequest {
     pub transcript_budget: Option<u64>,
     pub setups: BTreeMap<String, Vec<u8>>,
 }
+/// An authenticated package, checked interface, admitted deployment and the
+/// package's admitted expression assets, which are the deployment's only
+/// evaluator source.
 pub struct ProofEntry {
     package: Package,
     interface: Interface,
+    assets: EntryAssets,
     native: NativeDeployment,
     scope: BindingScope,
     completion: Option<usize>,
@@ -104,10 +109,6 @@ impl ProofReport {
     }
 }
 impl ProofEntry {
-    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
-        self.native = self.native.with_ring_assets(assets);
-        self
-    }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
         self.native = self.native.with_ring_work_limit(limit)?;
         Ok(self)
@@ -143,11 +144,16 @@ impl ProofEntry {
         interface
             .check_proof(&native)
             .map_err(|e| E::new(P::Binding, e))?;
+        let assets =
+            EntryAssets::admit(&package, native.entry().admitted(), native.entry().entry())
+                .map_err(|e| E::new(P::Assets, e))?;
+        let native = native.with_ring_assets(assets.registry().clone());
         Ok(Self {
             completion,
             roles,
             package,
             interface,
+            assets,
             native,
             scope,
         })
@@ -157,6 +163,9 @@ impl ProofEntry {
     }
     pub fn interface(&self) -> &Interface {
         &self.interface
+    }
+    pub fn assets(&self) -> &EntryAssets {
+        &self.assets
     }
     pub fn binding_scope(&self) -> BindingScope {
         self.scope

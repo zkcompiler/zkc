@@ -4,11 +4,10 @@ pub(crate) use arguments::Arguments;
 use arguments::{Command, OptionSpec as Opt};
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
-const EVALUATORS: Opt = Opt::new("--evaluators=ASSETS");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
 const HEADER: Opt = Opt::new("--allow-header-only");
 const RESULTS: Opt = Opt::new("--results=FILE");
-const PROOF: &str = "INPUTS is a zkc.entry-proof/0 request. Verification supplies no prover witness.\nAuthored jobs require --allow-header-only. Returned values require --results.";
+const PROOF: &str = "INPUTS is a zkc.entry-proof/0 request. Verification supplies no prover witness.\nAuthored jobs require --allow-header-only. Returned values require --results.\nExpression assets come from the package; no evaluator manifest is accepted.";
 const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-header-only.";
 const COMMANDS: &[Command] = &[
     Command {
@@ -37,14 +36,8 @@ const COMMANDS: &[Command] = &[
         name: "run",
         summary: "Run a source Entry with named inputs",
         positional: "PACKAGE EXPECTED_SHA256 INPUTS",
-        options: &[
-            SETUPS,
-            EVALUATORS,
-            CAPACITY,
-            Opt::new("--limits=LIMITS"),
-            RESULTS,
-        ],
-        description: "INPUTS is a zkc.entry-run/0 request. --limits reads zkc.bundle-limits/0.\nReturned values require --results. All roles are prepared before execution.",
+        options: &[SETUPS, CAPACITY, Opt::new("--limits=LIMITS"), RESULTS],
+        description: "INPUTS is a zkc.entry-run/0 request. --limits reads zkc.bundle-limits/0.\nReturned values require --results. All roles are prepared before execution.\nExpression assets come from the package; no evaluator manifest is accepted.",
     },
     Command {
         name: "prove",
@@ -52,7 +45,6 @@ const COMMANDS: &[Command] = &[
         positional: "PACKAGE EXPECTED_SHA256 INPUTS PROOF",
         options: &[
             SETUPS,
-            EVALUATORS,
             CAPACITY,
             HEADER,
             Opt::new("--attempts=COUNT").unsigned(),
@@ -64,7 +56,7 @@ const COMMANDS: &[Command] = &[
         name: "verify",
         summary: "Verify a proof with independent named public inputs",
         positional: "PACKAGE EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, EVALUATORS, CAPACITY, HEADER, RESULTS],
+        options: &[SETUPS, CAPACITY, HEADER, RESULTS],
         description: PROOF,
     },
     Command {
@@ -234,6 +226,21 @@ mod tests {
                 .positional,
             ["-p", "h"]
         );
+    }
+    #[test]
+    fn evaluator_manifests_are_not_accepted_on_the_entry_path() {
+        for (name, positional) in [
+            ("run", vec!["p", "h", "i"]),
+            ("prove", vec!["p", "h", "i", "o"]),
+            ("verify", vec!["p", "h", "i", "o"]),
+        ] {
+            assert!(!command(name).unwrap().help().contains("--evaluators"));
+            let mut values = positional;
+            values.push("--evaluators=assets.json");
+            let report = run(name, &args(&values));
+            assert_eq!(report["code"], "cli-option", "{name}");
+            assert_eq!(report["phase"], "arguments");
+        }
     }
     #[test]
     fn compile_requires_selection_and_allows_repeated_sources() {

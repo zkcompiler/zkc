@@ -163,18 +163,37 @@ retain its original numeric spelling.
 ## Published Entry package
 
 `packageEntry` accepts only an owned `CompiledEntry`. It emits `zkc.entry/0`
-with exactly `format`, `original`, `interface`, `artifact`, and `options`.
-Original MLIR, interface JSON and native run bundle or proof deployment are exact
-strings. Options contain Boolean `simplify` and `release_storage`. The job kind
-and complete source interface remain in the retained interface, avoiding a second
-name or participant table. Package SHA-256 covers the exact emitted bytes,
-including source capture, selected Entry, toolchain and compilation options.
-Complete Entry aliases can share executable bytes while naming different packages.
+with exactly `format`, `original`, `interface`, `artifact`, `options` and
+`assets`. Original MLIR, interface JSON and native run bundle or proof
+deployment are exact strings. Options contain Boolean `simplify` and
+`release_storage`. The job kind and complete source interface remain in the
+retained interface, avoiding a second name or participant table. Package SHA-256
+covers the exact emitted bytes, including source capture, selected Entry,
+toolchain, compilation options and assets. Complete Entry aliases can share
+executable bytes while naming different packages.
+
+`assets` carries the compiler-visible expression assets the native artifact
+references. It is an array of pairs `[expected_sha256, body]`: the lowercase
+SHA-256 of the body's canonical encoding and that exact canonical text. Every
+body is a [`zkc.ring/0` arena](../domains/ring-expressions.md). The compiler
+includes each arena a reachable `ring.*` operation names, in strictly
+ascending digest order, so duplicates cannot occur. The package names no
+asset paths or asset names; the digest in the program is the only reference.
+An empty array is the exact form when the program names no asset. The member
+is required: a package without it is not `zkc.entry/0`.
 
 The whole escaped package is bounded to 64 MiB; callers may lower this limit.
-The original, interface and artifact retain their own component limits. The
-`language-package` command writes exact package bytes without a trailing newline.
-Package identity is distinct from the original identity used by native proof
-binding. A consumer must obtain its expected package identity independently;
-internal hashes do not authenticate a supplied package. Retaining MLIR does not
-require the Host to recompile it or establish a security theorem.
+The original, interface and artifact retain their own component limits. Assets
+number at most 256, each body is at most the arena's 8 MiB, and all bodies
+together are at most the Host registry's 32 MiB. The Rust reader refuses a
+descending or repeated digest, a digest that is not 64 lowercase hexadecimal
+digits, or a pair of another shape with `entry-package-format`, and an
+exceeded count or byte bound with `entry-package-limit`. Reading checks only
+those bounds as a precheck on text; the Host admits each body and the
+program's references when an Entry is admitted, and the registry's own charge
+of canonical bytes plus decoded metadata decides the aggregate bound there. The `language-package` command writes exact package bytes
+without a trailing newline. Package identity is distinct from the original
+identity used by native proof binding. A consumer must obtain its expected
+package identity independently; internal hashes do not authenticate a supplied
+package. Retaining MLIR does not require the Host to recompile it or establish
+a security theorem.

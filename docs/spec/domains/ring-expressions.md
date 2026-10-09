@@ -182,18 +182,16 @@ to inputs, outputs and scratch. Sharing an asset or input cannot remove an
 arithmetic work charge. The asset registry separately bounds canonical bytes
 plus decoded metadata to 32 MiB; one arena is at most 8 MiB.
 
-The Entry CLI accepts `--evaluators=PATH` for `run`, `prove`, and `verify`:
-
-```text
-["zkc.ring-assets/0", [["expected_sha256", "path/to/arena.json"], ...]]
-```
-
-Paths are resolved from the invocation's working directory. The manifest is at
-most 64 KiB with at most 256 entries. Each asset must match its expected digest;
-duplicates and missing references refuse. Configuration files are protected
-against output publication to the same path. This registry authenticates arena
-content. Relation authority, input binding and polynomial degree premises remain
-the responsibility of the closed consuming view.
+A source Entry carries its arenas in the authenticated package's
+[`assets` member](../formats/entry.md#published-entry-package), as canonical
+text under the digests its program references. The named Hosts admit those
+bodies into the registry and check every reachable reference
+[before any invocation](../runtime/entries.md#packaged-expression-assets); the
+Entry CLI accepts no separate evaluator manifest. Direct native programs supply
+a registry through the native Host and backend constructors. Either way the
+registry authenticates arena content only. Relation authority, input binding
+and polynomial degree premises remain the responsibility of the closed
+consuming view.
 
 ## Maintained clients and formal laws
 

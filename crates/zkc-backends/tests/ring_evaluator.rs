@@ -519,3 +519,70 @@ fn an_active_frame_cannot_replace_the_expression_registry() {
         "refused:ring-active-backend"
     );
 }
+
+#[test]
+fn registry_preflight_reports_missing_assets_and_incompatible_carriers() {
+    let base = product();
+    let extension = Expression::new(
+        vec![Identity::KoalaBearExt8],
+        vec![Node::Input(0), Node::Mul(0, 0)],
+        vec![1],
+    )
+    .unwrap();
+    let mut registry = Registry::default();
+    assert_eq!(registry.identities().len(), 0);
+    let digests: Vec<_> = [&base, &extension]
+        .into_iter()
+        .map(|e| {
+            let text = e.canonical();
+            let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+            registry.insert(&digest, &text).unwrap();
+            digest
+        })
+        .collect();
+    let mut sorted = digests.clone();
+    sorted.sort();
+    assert_eq!(registry.identities().collect::<Vec<_>>(), sorted);
+    assert_eq!(
+        registry.expression(&digests[0]).unwrap().canonical(),
+        base.canonical()
+    );
+    assert!(registry.expression(&"0".repeat(64)).is_none());
+    assert!(
+        registry
+            .check_reference(&digests[0], Identity::KoalaBear)
+            .is_ok()
+    );
+    assert!(
+        registry
+            .check_reference(&digests[0], Identity::KoalaBearExt8)
+            .is_ok(),
+        "base inputs promote into the extension carrier"
+    );
+    assert!(
+        registry
+            .check_reference(&digests[1], Identity::KoalaBearExt8)
+            .is_ok()
+    );
+    assert_eq!(
+        registry
+            .check_reference(&digests[1], Identity::KoalaBear)
+            .unwrap_err()
+            .code,
+        "refused:ring-carrier"
+    );
+    assert_eq!(
+        registry
+            .check_reference(&digests[0], Identity::Bls12381Fr)
+            .unwrap_err()
+            .code,
+        "refused:ring-carrier"
+    );
+    assert_eq!(
+        registry
+            .check_reference(&"0".repeat(64), Identity::KoalaBear)
+            .unwrap_err()
+            .code,
+        "refused:ring-asset-missing"
+    );
+}

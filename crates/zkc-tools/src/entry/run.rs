@@ -1,7 +1,7 @@
 //! Named source calls adapt to the common native Host. There is no source
 //! evaluator here: the bound interface supplies names and product/sum layouts.
 use super::errors::{EntryError as E, EntryPhase as P, EntryResult};
-use super::{Interface, Package, SetupAuthority, Value, arguments, setups, value};
+use super::{EntryAssets, Interface, Package, SetupAuthority, Value, arguments, setups, value};
 use crate::run::{self as native, HostLimits, HostReport, Outcome, RunHost};
 use std::collections::BTreeMap;
 
@@ -22,17 +22,16 @@ pub struct RunRequest {
     pub setups: BTreeMap<String, Vec<u8>>,
 }
 
-/// An authenticated package, checked interface and admitted native run artifact.
+/// An authenticated package, checked interface, admitted native run artifact
+/// and the package's admitted expression assets. The assets are the Host's
+/// only evaluator source; no caller-supplied registry can replace them.
 pub struct RunEntry {
     package: Package,
     interface: Interface,
+    assets: EntryAssets,
     native: RunHost,
 }
 impl RunEntry {
-    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
-        self.native = self.native.with_ring_assets(assets);
-        self
-    }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
         self.native = self.native.with_ring_work_limit(limit)?;
         Ok(self)
@@ -56,9 +55,17 @@ impl RunEntry {
         interface
             .check_run(&native)
             .map_err(|e| E::new(P::Binding, e))?;
+        let assets = EntryAssets::admit(
+            &package,
+            native.bundle().admitted(),
+            native.bundle().entry(),
+        )
+        .map_err(|e| E::new(P::Assets, e))?;
+        let native = native.with_ring_assets(assets.registry().clone());
         Ok(Self {
             package,
             interface,
+            assets,
             native,
         })
     }
@@ -67,6 +74,9 @@ impl RunEntry {
     }
     pub fn interface(&self) -> &Interface {
         &self.interface
+    }
+    pub fn assets(&self) -> &EntryAssets {
+        &self.assets
     }
     pub fn limits(&self) -> HostLimits {
         self.native.limits()

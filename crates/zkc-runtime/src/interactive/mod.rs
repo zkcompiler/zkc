@@ -28,7 +28,7 @@ mod native_proof;
 mod program;
 mod retention;
 pub use native_proof::{NativeProofEntry, NativeProofError, NativeTranscriptEvent};
-pub use program::{ProgramAction, ProgramCut, ProgramRole, ProgramState};
+pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
 pub use retention::Backing;
 mod runner;
 mod transport;

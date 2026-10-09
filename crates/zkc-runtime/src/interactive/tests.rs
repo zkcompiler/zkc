@@ -2138,3 +2138,127 @@ fn resource_child(_failing: bool) -> Json {
         ]),
     )
 }
+
+#[test]
+fn asset_references_cover_called_functions_and_every_local_region() {
+    let vector = PhysicalType::default_for(LogicalType::parse("vector:koala-bear").unwrap())
+        .unwrap()
+        .spelling();
+    let index = PhysicalType::default_for(LogicalType::parse("index").unwrap())
+        .unwrap()
+        .spelling();
+    let boolean = fixture_type("bool");
+    let digest = |n: u8| format!("{n:0>64}");
+    let function = |name: &str, body: Json| {
+        json!([
+            "function",
+            name,
+            [["x", vector], ["flag", boolean]],
+            [vector],
+            body,
+            [name, []]
+        ])
+    };
+    let program = json!([
+        "zkc.program/0",
+        [["ring", "ring.point", ["koala-bear"], "plonky3/ring.point"]],
+        [
+            function(
+                "evaluate",
+                json!([
+                    [
+                        "if",
+                        "branch",
+                        "flag",
+                        ["x"],
+                        [
+                            ["op", "hidden", "ring", [digest(2)], ["x"], ["t"]],
+                            ["yield", ["t"]]
+                        ],
+                        [["yield", ["x"]]],
+                        ["chosen"]
+                    ],
+                    ["op", "evaluate", "ring", [digest(1)], ["chosen"], ["r"]],
+                    ["return", ["r"]]
+                ])
+            ),
+            function(
+                "inner",
+                json!([
+                    ["op", "inner", "ring", [digest(3)], ["x"], ["r"]],
+                    ["return", ["r"]]
+                ])
+            ),
+            function(
+                "unused",
+                json!([
+                    ["op", "unused", "ring", [digest(4)], ["x"], ["r"]],
+                    ["return", ["r"]]
+                ])
+            )
+        ],
+        [[
+            "participant",
+            "p",
+            "root",
+            "P",
+            [["x", vector], ["flag", boolean], ["n", index]],
+            [vector],
+            [
+                ["local", "evaluate", "evaluate", ["x", "flag"], ["r"]],
+                [
+                    "loop",
+                    "rounds",
+                    ["value", "n", "8", "i"],
+                    [],
+                    ["x", "flag"],
+                    [
+                        ["local", "inner", "inner", ["x", "flag"], ["r2"]],
+                        ["yield", []]
+                    ],
+                    []
+                ],
+                ["return", ["r"]]
+            ],
+            []
+        ]],
+        [["entry", "main", [["P", "p"]]]]
+    ]);
+    let admitted = admitted(&program);
+    let references = admitted.asset_references("main").unwrap();
+    assert_eq!(
+        references
+            .iter()
+            .map(|r| (r.function.as_str(), r.site.as_str(), r.identity.clone()))
+            .collect::<Vec<_>>(),
+        [
+            ("evaluate", "hidden", digest(2)),
+            ("evaluate", "evaluate", digest(1)),
+            ("inner", "inner", digest(3)),
+        ],
+        "both branches and loop-only functions are reported; uncalled functions are not"
+    );
+    for reference in &references {
+        assert_eq!(reference.binding.declaration().contract, "ring.point");
+        assert_eq!(
+            reference.binding.signature().attributes,
+            AttributeRule::AssetIdentity
+        );
+        assert_eq!(
+            reference.binding.signature().inputs[0].logical().identity(),
+            Identity::KoalaBear
+        );
+    }
+    assert_eq!(
+        admitted.asset_references("absent").unwrap_err().code,
+        ErrorCode::Record
+    );
+    assert!(admitted.asset_references("main").unwrap().len() == 3);
+    assert!(
+        admitted
+            .program_entry("main")
+            .unwrap()
+            .iter()
+            .all(|role| role.actions.len() == 5)
+    );
+}

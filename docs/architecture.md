@@ -89,9 +89,10 @@ binds the authorized bytes and invocation context. No normalized identity policy
 is supplied by this implementation.
 
 Hosts prepare inputs and setup material before issuing execution resources.
-The `--evaluators` manifest supplies application-authorized ring arenas; each
-arena is admitted and matched to the content digest fixed by the program.
-Arena bodies remain Host assets, outside the compiler's current IR analysis.
+The authenticated Entry package carries the ring arenas its program references;
+each arena is admitted and matched to the content digest fixed by the program
+before any invocation. Arena bodies remain Host assets, outside the compiler's
+current IR analysis.
 They retain actual message contents, reached failures, resource consumption and
 cleanup outcomes. A validator's acceptance comes from its selected decision,
 not from producer completion. Entry input associations and the Host registry

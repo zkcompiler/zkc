@@ -42,8 +42,10 @@ Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
 
 An authenticated `zkc.entry/0` package retains the original, source interface,
-compilation choices and selected artifact. The Host binds named logical inputs
-and results to the independently admitted program. It trusts compiler publication
+compilation choices, selected artifact and the expression assets the artifact
+references. The Host binds named logical inputs and results to the independently
+admitted program and checks every reachable asset reference before any
+invocation. It trusts compiler publication
 for source correspondence; it does not interpret retained MLIR. Maintained
 [Schnorr and Sumcheck projects](../examples/projects/README.md) exercise this path.
 

@@ -6,6 +6,12 @@ const PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const ORIGINAL_BYTES: usize = 16 * 1024 * 1024;
 pub(super) const INTERFACE_BYTES: usize = 4 * 1024 * 1024;
 const ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
+/// Packaged expression assets share the ring arena's per-item byte bound and
+/// the Host registry's aggregate bound, so a package cannot name more than the
+/// Host can admit.
+pub(super) const ASSET_COUNT: usize = 256;
+const ASSET_BYTES: usize = zkc_runtime::ring::BYTE_LIMIT;
+const ASSETS_BYTES: usize = zkc_backends::ring::REGISTRY_BYTE_LIMIT;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, remote = "Self")]
@@ -39,9 +45,34 @@ struct Frame {
     interface: String,
     artifact: String,
     options: CompileOptions,
+    assets: Vec<(String, String)>,
 }
 
 super::decode::objects!(CompileOptions, Frame);
+
+/// One compiler-visible asset body retained with its expected content identity.
+/// The package carries no asset names or paths: the digest is the only
+/// reference the native program can make, and the body is the exact canonical
+/// text whose SHA-256 that digest must equal once the body is admitted.
+#[derive(Clone, Debug)]
+pub struct PackagedAsset {
+    expected_sha256: Arc<str>,
+    body: Arc<str>,
+}
+impl PackagedAsset {
+    pub fn expected_sha256(&self) -> &str {
+        &self.expected_sha256
+    }
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+}
+fn digest_syntax(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
 
 /// Immutable authenticated container. This is not native program admission or
 /// a check of the compiler's source correspondence. The application must trust
@@ -55,6 +86,7 @@ pub struct Package {
     artifact: Arc<str>,
     artifact_identity: [u8; 32],
     options: CompileOptions,
+    assets: Arc<[PackagedAsset]>,
 }
 /// A view can only originate from a captured Package. Its borrowed immutable
 /// bytes remain covered by the package pin; its digest is diagnostic identity,
@@ -99,8 +131,24 @@ impl Package {
         if frame.original.len() > ORIGINAL_BYTES
             || frame.interface.len() > INTERFACE_BYTES
             || frame.artifact.len() > ARTIFACT_BYTES
+            || frame.assets.len() > ASSET_COUNT
         {
             return Err(PackageError::Limit);
+        }
+        // Assets are ordered strictly by digest, which also excludes duplicates.
+        // Bodies are only bounded here; the Entry admits their contents later
+        // through the independent ring reader and registry.
+        let mut total = 0usize;
+        let mut previous: Option<&str> = None;
+        for (expected, body) in &frame.assets {
+            if !digest_syntax(expected) || previous.is_some_and(|p| p >= expected.as_str()) {
+                return Err(PackageError::Format);
+            }
+            previous = Some(expected);
+            total = total.saturating_add(body.len());
+            if body.len() > ASSET_BYTES || total > ASSETS_BYTES {
+                return Err(PackageError::Limit);
+            }
         }
         Ok(Self {
             bytes: bytes.into(),
@@ -110,6 +158,14 @@ impl Package {
             artifact_identity: Sha256::digest(frame.artifact.as_bytes()).into(),
             artifact: frame.artifact.into(),
             options: frame.options,
+            assets: frame
+                .assets
+                .into_iter()
+                .map(|(expected_sha256, body)| PackagedAsset {
+                    expected_sha256: expected_sha256.into(),
+                    body: body.into(),
+                })
+                .collect(),
         })
     }
     pub fn bytes(&self) -> &[u8] {
@@ -136,6 +192,11 @@ impl Package {
     pub fn options(&self) -> CompileOptions {
         self.options
     }
+    /// Packaged asset bodies in digest order. Retention is not admission: an
+    /// Entry admits each body and checks the program's references separately.
+    pub fn assets(&self) -> &[PackagedAsset] {
+        &self.assets
+    }
 }
 
 #[cfg(test)]
@@ -146,11 +207,19 @@ mod tests {
     fn frame() -> String {
         json!({"format":"zkc.entry/0","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
-            "options":{"simplify":true,"release_storage":false}})
+            "options":{"simplify":true,"release_storage":false},"assets":[]})
         .to_string()
     }
     fn capture(bytes: &[u8]) -> Result<Package, PackageError> {
         Package::capture(bytes, &Sha256::digest(bytes).into(), Package::MAX_BYTES)
+    }
+    fn with_assets(assets: serde_json::Value) -> Result<Package, PackageError> {
+        let mut value: serde_json::Value = serde_json::from_str(&frame()).unwrap();
+        value["assets"] = assets;
+        capture(value.to_string().as_bytes())
+    }
+    fn digest(seed: u8) -> String {
+        format!("{:x}", Sha256::digest([seed]))
     }
     #[test]
     fn exact_bytes_and_components_are_retained() {
@@ -215,9 +284,73 @@ mod tests {
         }
     }
     #[test]
+    fn assets_are_required_bounded_and_strictly_ordered_by_digest() {
+        let original = frame();
+        assert!(matches!(
+            capture(original.replace(",\"assets\":[]", "").as_bytes()),
+            Err(PackageError::Format)
+        ));
+        let (a, b) = (digest(1), digest(2));
+        let (low, high) = if a < b { (a, b) } else { (b, a) };
+        let package = with_assets(json!([[low, "one"], [high, "two"]])).unwrap();
+        assert_eq!(
+            package
+                .assets()
+                .iter()
+                .map(|a| (a.expected_sha256().to_owned(), a.body().to_owned()))
+                .collect::<Vec<_>>(),
+            [(low.clone(), "one".into()), (high.clone(), "two".into())]
+        );
+        assert!(package.clone().assets().len() == 2);
+        for (name, assets) in [
+            ("descending", json!([[high, "two"], [low, "one"]])),
+            ("duplicate", json!([[low, "one"], [low, "one"]])),
+            ("uppercase", json!([[low.to_uppercase(), "one"]])),
+            ("short", json!([[&low[..63], "one"]])),
+            ("object", json!([{"digest":low,"body":"one"}])),
+            ("triple", json!([[low, "one", "extra"]])),
+            ("single", json!([[low]])),
+            ("number", json!([[low, 1]])),
+            ("string", json!("none")),
+        ] {
+            assert!(
+                matches!(with_assets(assets), Err(PackageError::Format)),
+                "{name}"
+            );
+        }
+    }
+    #[test]
+    fn asset_count_item_and_aggregate_bytes_are_bounded() {
+        let digests: Vec<_> = (0..=ASSET_COUNT as u16)
+            .map(|i| format!("{:x}", Sha256::digest(i.to_le_bytes())))
+            .collect();
+        let mut sorted = digests.clone();
+        sorted.sort();
+        let full: Vec<_> = sorted[..ASSET_COUNT]
+            .iter()
+            .map(|d| json!([d, ""]))
+            .collect();
+        assert!(with_assets(json!(full)).is_ok());
+        let over: Vec<_> = sorted.iter().map(|d| json!([d, ""])).collect();
+        assert!(matches!(with_assets(json!(over)), Err(PackageError::Limit)));
+        let item = "a".repeat(ASSET_BYTES);
+        assert!(with_assets(json!([[sorted[0], item]])).is_ok());
+        let over = "a".repeat(ASSET_BYTES + 1);
+        assert!(matches!(
+            with_assets(json!([[sorted[0], over]])),
+            Err(PackageError::Limit)
+        ));
+        // Four full items reach the aggregate bound exactly; a fifth byte exceeds it.
+        let four: Vec<_> = sorted[..4].iter().map(|d| json!([d, item])).collect();
+        assert!(with_assets(json!(four)).is_ok());
+        let mut five = four;
+        five.push(json!([sorted[4], "a"]));
+        assert!(matches!(with_assets(json!(five)), Err(PackageError::Limit)));
+    }
+    #[test]
     fn carrier_records_require_objects() {
         assert!(matches!(
-            capture(br#"["zkc.entry/0","o","i","a",[true,false]]"#),
+            capture(br#"["zkc.entry/0","o","i","a",[true,false],[]]"#),
             Err(PackageError::Format)
         ));
         let value = frame().replace(
