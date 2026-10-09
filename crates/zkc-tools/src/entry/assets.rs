@@ -95,9 +95,14 @@ impl EntryAssets {
         for reference in &references {
             let binding = reference.binding.declaration();
             // Reachability can repeat one immutable reference many times.
-            // Scan its asset once per contract and closed binding arguments.
+            // Scan its asset once per reference rule and closed binding
+            // arguments; the polynomial kernels share one rule.
+            let rule = match binding.contract.as_str() {
+                contract if POLYNOMIAL.contains(&contract) => POLYNOMIAL[0],
+                contract => contract,
+            };
             if checked.insert((
-                binding.contract.as_str(),
+                rule,
                 binding.arguments.as_slice(),
                 reference.identity.as_str(),
             )) {
@@ -136,6 +141,15 @@ impl EntryAssets {
         &self.relations
     }
 }
+
+/// Contracts of the Bundle polynomial view, which share one reference rule.
+const POLYNOMIAL: &[&str] = &[
+    "relation.table_shape",
+    "relation.table_input",
+    "relation.table_scope",
+    "relation.table_point",
+    "relation.table_points",
+];
 
 /// Each asset family owns its reference rule. A ring operation substitutes its
 /// arena over the field of its first vector operand, so that field is the
@@ -189,11 +203,9 @@ fn check(
                 })
         }
         // The polynomial kernels take the carrier from their field argument:
-        // only `relation.table_point` has a field-valued operand.
-        "relation.table_shape"
-        | "relation.table_input"
-        | "relation.table_scope"
-        | "relation.table_point" => {
+        // only the point substitutions have field-valued operands. The check
+        // allocates nothing.
+        contract if POLYNOMIAL.contains(&contract) => {
             let declaration = reference.binding.declaration();
             let (Some(carrier), Some(table)) = (
                 declaration

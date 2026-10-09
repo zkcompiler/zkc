@@ -319,21 +319,10 @@ sliceBundleTableData(const Bundle &, const BundleTableView &,
                      const BundleConfiguration &, const BundleInstance &,
                      const BundleWitness &);
 
-/// Static premises of one table viewed through the installed polynomial
-/// kernels `relation.table_shape`, `relation.table_input`,
-/// `relation.table_scope` and `relation.table_point`. Every bundle public
-/// slot, every group of the table and every arena node an assertion needs
-/// has the carrier field or, for an extension carrier, its base field; a
-/// base-field table is then substituted in the extension. Interaction-only
-/// outputs are neither checked nor evaluated. The height policy must admit a
-/// power of two of at least 2 (`relation-table-index`,
-/// `relation-table-carrier`, `bundle-polynomial-two-adic`). Windows, limits
-/// and quotient chunks depend on the height and are execution checks.
-llvm::Error checkBundlePolynomialTable(const Bundle &, uint32_t table,
-                                       llvm::StringRef carrier);
 /// The static reference rule of an installed Bundle kernel contract: the
-/// dense table view for `relation.table_rows`, the polynomial premises for
-/// the polynomial kernels, and `relation-table-contract` otherwise.
+/// dense table view for `relation.table_rows`, `checkBundlePolynomialTable`
+/// (BundlePolynomial.h) for the polynomial kernels, and
+/// `relation-table-contract` otherwise.
 llvm::Error checkBundleTableReference(const Bundle &, llvm::StringRef contract,
                                       uint32_t table, llvm::StringRef carrier);
 

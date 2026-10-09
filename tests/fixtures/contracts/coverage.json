@@ -165,7 +165,8 @@
       "relation.table_shape",
       "relation.table_input",
       "relation.table_scope",
-      "relation.table_point"
+      "relation.table_point",
+      "relation.table_points"
     ],
     "transcript": [
       "transcript.native.indexed.challenge",

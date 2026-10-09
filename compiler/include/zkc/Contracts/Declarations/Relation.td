@@ -51,3 +51,11 @@ def OpRelationTablePoint : ZKC_Operation<"relation.table_point",
     [ZKC_Apply<TypeVector, [RelationF]>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
   let parameters = RelationAssetIdentity;
 }
+// The same substitution at `rows` row-major assignments of every arena input:
+// row-major results with one column per assertion, in assertion order.
+def OpRelationTablePoints : ZKC_Operation<"relation.table_points",
+    [RelationF, RelationTable],
+    [ZKC_Apply<TypeVector, [RelationF]>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeVector, [RelationF]>], [ZKC_Holds<CapabilityField, [RelationF]>]> {
+  let parameters = RelationAssetIdentity;
+}

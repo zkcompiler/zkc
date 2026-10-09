@@ -44,8 +44,10 @@ struct BundlePolynomialView {
   std::string relation; // Bundle identity.
   uint32_t table = 0;
   std::string name;
-  std::string field; // Carrier; every subject has this field.
-  unsigned coordinates = 1;
+  /// Carrier. Each group keeps its declared field, which is the carrier or,
+  /// below an extension carrier, its base field interpreted in it.
+  std::string field;
+  unsigned coordinates = 1; // Base coordinates per carrier element.
   bool optional = false;
   BundleHeight heightPolicy;
   BundleReadModel readModel = BundleReadModel::Finite;
@@ -64,7 +66,10 @@ struct BundlePolynomialView {
   std::optional<uint64_t> maxQuotientDegree;
   /// Coefficient chunks of length domainSize sufficient for each individual
   /// active quotient, and hence for any linear combination of them. This is
-  /// not a soundness assertion about random assertion batching.
+  /// not a soundness assertion about random assertion batching. Zero means
+  /// no active assertion has a quotient; `relation.table_shape` at height n
+  /// reports max(1, quotientChunks) of the analysis at
+  /// twoAdicPolynomialParameters(n).
   uint64_t quotientChunks = 0;
   /// Identity of the table arena, the one subject every assertion output
   /// refers to. The arena itself stays borrowed from the admitted Bundle.
@@ -78,18 +83,40 @@ struct BundlePolynomialView {
 llvm::Expected<AIRPolynomialParameters>
 twoAdicPolynomialParameters(uint32_t height);
 
-/// Table index and carrier homogeneity as for `bundleTableView`, then the
-/// shared parameter law, the table's height policy (`bundle-height`), the
-/// domain rule and every assertion window at the height
-/// (`bundle-scope-height`, `bundle-window`), in that order. A cyclic table
-/// needs the wrap law T(g^k X) on every row, so it requires height ==
-/// domainSize with a two-adic height admitted by the carrier
+/// Carrier admission of one table's polynomial interpretation, shared by
+/// analyzeBundlePolynomials and checkBundlePolynomialTable: the table index,
+/// then every Bundle public slot, every group of the table and every arena
+/// node an assertion needs has the carrier field or, for an extension
+/// carrier, its base field, interpreted in the extension
+/// (`relation-table-index`, `relation-table-carrier`). Outputs used only by
+/// interactions are not visited. It fixes no domain or execution profile.
+/// The actual-row `bundleTableView` instead requires exact declared fields.
+/// Returns the carrier's base coordinates per element.
+llvm::Expected<unsigned> admitBundlePolynomialCarrier(const Bundle &,
+                                                      uint32_t table,
+                                                      llvm::StringRef carrier);
+
+/// The carrier admission, then the shared parameter law, the table's height
+/// policy (`bundle-height`), the domain rule and every assertion window at
+/// the height (`bundle-scope-height`, `bundle-window`), in that order. A
+/// cyclic table needs the wrap law T(g^k X) on every row, so it requires
+/// height == domainSize with a two-adic height admitted by the carrier
 /// (`bundle-polynomial-domain`); a finite table may pad the domain beyond its
 /// height, which never adds active rows. Work is bounded by the Bundle's
 /// retained facts, independent of the height.
 llvm::Expected<BundlePolynomialView>
 analyzeBundlePolynomials(const Bundle &, uint32_t table,
                          llvm::StringRef carrier, AIRPolynomialParameters);
+
+/// Static reference rule of the installed polynomial kernels
+/// `relation.table_shape`, `relation.table_input`, `relation.table_scope`,
+/// `relation.table_point` and `relation.table_points`: the carrier
+/// admission, then the selected TwoAdicNatural profile at some height the
+/// policy admits, a power of two n >= 2 whose root of order n the carrier
+/// installs (`bundle-polynomial-two-adic`). Windows, limits and quotient
+/// chunks depend on the height and are execution checks.
+llvm::Error checkBundlePolynomialTable(const Bundle &, uint32_t table,
+                                       llvm::StringRef carrier);
 
 /// The viewed table's arena, re-derived from the admitted Bundle. A view of
 /// another bundle or table is refused (`bundle-polynomial-relation`); the

@@ -146,7 +146,7 @@ fn field_compatible(expression: &Expression, carrier: Identity) -> Result<()> {
 /// Scalar and packed substitution use this same arithmetic schedule. Base-field
 /// variables may be assigned extension values after a bind or at an OOD point.
 /// `embed` is then the compatible algebra map, which is the identity in E or E[X].
-pub(crate) fn scalar<S: PrimeCharacteristicRing>(
+fn scalar<S: PrimeCharacteristicRing>(
     expression: &Expression,
     mut input: impl FnMut(usize) -> S,
     values: &mut Vec<S>,
@@ -164,7 +164,7 @@ pub(crate) fn scalar<S: PrimeCharacteristicRing>(
         values.push(value);
     }
 }
-pub(crate) fn fresh<T>(n: usize) -> Result<Vec<T>> {
+fn fresh<T>(n: usize) -> Result<Vec<T>> {
     let mut result = Vec::new();
     result
         .try_reserve_exact(n)
@@ -204,24 +204,42 @@ pub fn rows<S: Carrier>(
         expression.nodes().len() + columns + expression.outputs().len() + 1,
     )?;
     budget.charge(work as u64)?;
-    let width = if packed { S::Packing::WIDTH } else { 1 };
-    // Scratch is allocated once per call. Packing uses a temporary lane gather,
-    // never a different table interpolation or a transposed mathematical view.
     let packed_nodes = if packed { expression.nodes().len() } else { 0 };
     output_cells::<S::Packing>(packed_nodes, policy, usize::MAX)?;
-    let scratch_width = if packed { width + 1 } else { 1 };
     output_cells::<S>(
-        expression
-            .nodes()
-            .len()
-            .checked_mul(scratch_width)
-            .and_then(|n| n.checked_add(count))
+        scratch_cells::<S>(expression.nodes().len(), packed)?
+            .checked_add(count)
             .ok_or_else(|| exhausted("ring-scratch"))?,
         policy,
         usize::MAX,
     )?;
-    let mut result = fresh(count)?;
-    let mut packed_values = fresh::<S::Packing>(packed_nodes)?;
+    substitute_rows(expression, expression.outputs(), input, row_count, packed)
+}
+/// Scalar node values plus, when packing, a lane gather of `Packing::WIDTH`
+/// cells per node, as cells of the carrier.
+pub(crate) fn scratch_cells<S: Carrier>(nodes: usize, packed: bool) -> Result<usize> {
+    let width = if packed { S::Packing::WIDTH + 1 } else { 1 };
+    nodes
+        .checked_mul(width)
+        .ok_or_else(|| exhausted("ring-scratch"))
+}
+/// The row schedule shared by `ring.rows` and Bundle point batches. For each
+/// row of `input`, row-major with one column per input slot, it appends the
+/// values of the `emit` nodes in order. Callers check shapes and the combined
+/// scratch and result allocation, and charge work, before calling.
+pub(crate) fn substitute_rows<S: Carrier>(
+    expression: &Expression,
+    emit: &[usize],
+    input: &[S],
+    row_count: usize,
+    packed: bool,
+) -> Result<Vec<S>> {
+    let columns = expression.inputs().len();
+    let width = if packed { S::Packing::WIDTH } else { 1 };
+    // Scratch is allocated once per call. Packing uses a temporary lane gather,
+    // never a different table interpolation or a transposed mathematical view.
+    let mut result = fresh(checked_product(row_count, emit.len())?)?;
+    let mut packed_values = fresh::<S::Packing>(if packed { expression.nodes().len() } else { 0 })?;
     let mut scalar_values = fresh::<S>(expression.nodes().len())?;
     let mut row = 0;
     if packed {
@@ -232,7 +250,7 @@ pub fn rows<S: Carrier>(
                 &mut packed_values,
             );
             for lane in 0..width {
-                for node in expression.outputs() {
+                for node in emit {
                     result.push(packed_values[*node].as_slice()[lane]);
                 }
             }
@@ -245,7 +263,7 @@ pub fn rows<S: Carrier>(
             |slot| input[row * columns + slot],
             &mut scalar_values,
         );
-        for node in expression.outputs() {
+        for node in emit {
             result.push(scalar_values[*node]);
         }
         row += 1;

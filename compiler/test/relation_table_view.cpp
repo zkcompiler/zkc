@@ -4,7 +4,7 @@
 // separately authored finite and cyclic bundles are exercised; evaluation
 // itself belongs to the native runtime and backend.
 #include "support/NativeCases.h"
-#include "zkc/Relation/Bundle.h"
+#include "zkc/Relation/BundlePolynomial.h"
 #include "zkc/Support/Json.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <string>
@@ -405,7 +405,8 @@ int main(int argc, char **argv) {
                 "relation-table-carrier");
         for (StringRef contract :
              {"relation.table_shape", "relation.table_input",
-              "relation.table_scope", "relation.table_point"}) {
+              "relation.table_scope", "relation.table_point",
+              "relation.table_points"}) {
           take(accepted(
               checkBundleTableReference(recurrence, contract, 0, EXT)));
           refuses(accepted(checkBundleTableReference(

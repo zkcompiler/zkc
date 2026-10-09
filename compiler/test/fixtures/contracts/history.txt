@@ -8,6 +8,7 @@ relation.table_shape 0
 relation.table_input 0
 relation.table_scope 0
 relation.table_point 0
+relation.table_points 0
 bool.not 0
 bool.or 0
 commitments.append 0

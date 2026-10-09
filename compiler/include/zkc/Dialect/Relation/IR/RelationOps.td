@@ -44,12 +44,13 @@ def R1CSRelationOp : Op<RelationDialect, "r1cs", [Symbol]> {
 // parameter; the compiler checks the contract and the digest reference.
 def TableRowsOp : KernelOp<RelationDialect, "exec.table_rows", [OpRelationTableRows]>;
 // Polynomial view of one present table of an admitted relation bundle asset:
-// derived shape, input descriptors, assertion scopes and point substitution.
+// derived shape, input descriptors, assertion scopes and point substitutions.
 // The compiler checks the static table, carrier and height premises.
 def TableShapeOp : KernelOp<RelationDialect, "exec.table_shape", [OpRelationTableShape]>;
 def TableInputOp : KernelOp<RelationDialect, "exec.table_input", [OpRelationTableInput]>;
 def TableScopeOp : KernelOp<RelationDialect, "exec.table_scope", [OpRelationTableScope]>;
 def TablePointOp : KernelOp<RelationDialect, "exec.table_point", [OpRelationTablePoint]>;
+def TablePointsOp : KernelOp<RelationDialect, "exec.table_points", [OpRelationTablePoints]>;
 
 // A supplied predicate contract. It has no callable interface or body.
 def DeclareOp : Op<RelationDialect, "declare", [Symbol]> {

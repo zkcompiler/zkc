@@ -222,5 +222,6 @@ set_tests_properties(relation-table-view PROPERTIES LABELS native)
 
 add_zkc_test(relation_bundle_polynomial Relation)
 add_test(NAME relation-bundle-polynomial COMMAND zkc-relation_bundle_polynomial-test
-  "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence")
+  "${PROJECT_SOURCE_DIR}/adapters/plonky3/fixtures/recurrence"
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/relation/polynomial-chunks.json")
 set_tests_properties(relation-bundle-polynomial PROPERTIES LABELS native)

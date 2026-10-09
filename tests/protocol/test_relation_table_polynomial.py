@@ -283,3 +283,139 @@ def test_host_preflight_checks_every_polynomial_reference(
     client.repackage(package)
     result = client.run(mutation, inputs(), refuses=code)
     assert result['phase'] == 'admission'
+
+
+BATCH = '''
+module polynomial_view;
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+domain Recurrence = bundle(asset recurrence);
+type Vector<F: Field> = builtin("vector", F);
+
+// The batch substitution, the same substitution one row at a time, and the
+// dense residuals of the actual columns.
+fn points_of<F: Field, Table: nat, B: Bundle>(assignments: Vector<F>, rows: index)
+    -> Vector<F> {
+  return kernel<F,Table>("relation.table_points", assignments, rows; B);
+}
+fn point_of<F: Field, Table: nat, B: Bundle>(assignments: Vector<F>) -> Vector<F> {
+  return kernel<F,Table>("relation.table_point", assignments; B);
+}
+fn rows_of<F: Field, Table: nat, B: Bundle>(w: Vector<F>, c: Vector<F>, p: Vector<F>,
+    h: index) -> Vector<F> {
+  return kernel<F,Table>("relation.table_rows", w, c, p, h; B);
+}
+
+protocol Batch roles(Evaluator)
+    (subgroup: Vector<Base> @Evaluator, subgroup_rows: index @Evaluator,
+     ood: Vector<Extension> @Evaluator, ood_rows: index @Evaluator,
+     single: Vector<Extension> @Evaluator, witness: Vector<Base> @Evaluator,
+     configuration: Vector<Base> @Evaluator, public_data: Vector<Base> @Evaluator,
+     height: index @Evaluator)
+    -> (subgroup_values: Vector<Base> @Evaluator,
+        ood_values: Vector<Extension> @Evaluator,
+        single_values: Vector<Extension> @Evaluator,
+        dense: Vector<Base> @Evaluator) {
+  let s @Evaluator = points_of<Base,0,Recurrence>(subgroup, subgroup_rows);
+  let o @Evaluator = points_of<Extension,0,Recurrence>(ood, ood_rows);
+  let p @Evaluator = point_of<Extension,0,Recurrence>(single);
+  let d @Evaluator = rows_of<Base,0,Recurrence>(witness, configuration, public_data, height);
+  return (subgroup_values = s, ood_values = o, single_values = p, dense = d);
+}
+entry Polynomial = Batch;
+'''
+
+# The recurrence fixture's honest data: one witness group of width 4, one
+# configuration group of width 1 and three public slots.
+WITNESS = [int(v) for v in json.loads((RECURRENCE / 'bundle-witness.json').read_text())[2][0][0]]
+CONFIGURATION = [int(v) for v in
+                 json.loads((RECURRENCE / 'bundle-configuration.json').read_text())[2][0][1][0]]
+PUBLICS = [int(v) for v in json.loads((RECURRENCE / 'bundle-instance.json').read_text())[2]]
+
+
+def subgroup_assignments(witness, height=8):
+    """Row-major assignments of every arena input on the subgroup of order 8,
+    read through the hand-derived descriptors."""
+    matrices = {1: (witness, 4), 2: (CONFIGURATION, 1)}
+    values = []
+    for row in range(height):
+        for kind, column, rotation in INPUTS:
+            if kind == 0:
+                values.append(PUBLICS[column])
+            else:
+                matrix, width = matrices[kind]
+                values.append(matrix[((row + rotation) % height) * width + column])
+    return values
+
+
+def batch_inputs(witness=WITNESS, ood=None, **change):
+    ood = points(70, 5 * 11) if ood is None else ood
+    request = {'subgroup': frame(subgroup_assignments(witness)), 'subgroup_rows': 8,
+               'ood': frame(ood, extension=True), 'ood_rows': len(ood) // 11,
+               'single': frame(ood[33:44], extension=True), 'witness': frame(witness),
+               'configuration': frame(CONFIGURATION), 'public_data': frame(PUBLICS),
+               'height': 8}
+    return {**request, **change}
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_batches_match_points_dense_rows_and_the_integer_model(
+        toolchain, journal, directory, changed):
+    client = Client(toolchain, journal, directory, BATCH)
+    witness = list(WITNESS)
+    if changed:
+        witness[0] = 3  # Nonzero residuals on the first and, wrapping, last row.
+    actual = client.run('batch', batch_inputs(witness))
+    assignments = subgroup_assignments(witness)
+    batch = unframe(actual['subgroup_values'])
+    expected = [value[0] for row in range(8)
+                for value in reference([base(n) for n in assignments[row * 11:(row + 1) * 11]])]
+    journal.check('subgroup batch equals the integer model', batch == expected)
+    dense, nonzero = unframe(actual['dense']), 0
+    for assertion, (begin, end) in enumerate(SCOPES):
+        for row in range(begin, end):
+            at = row * 9 + assertion
+            journal.check(f'assertion {assertion} row {row} equals the dense residual',
+                          batch[at] == dense[at])
+            nonzero += dense[at] != 0
+    journal.check('changed data has nonzero scoped residuals', (nonzero > 0) == changed)
+    ood = points(70, 5 * 11)
+    values = unframe(actual['ood_values'], extension=True)
+    journal.check('Ext8 batch equals the integer model', values == [
+        value for row in range(5) for value in reference(ood[row * 11:(row + 1) * 11])])
+    journal.check('one row of the batch equals the scalar point',
+                  unframe(actual['single_values'], extension=True) == values[27:36])
+
+
+def test_empty_batches_and_shape_refusals(toolchain, journal, directory):
+    client = Client(toolchain, journal, directory, BATCH)
+    actual = client.run('empty', batch_inputs(
+        ood=[], subgroup=frame([]), subgroup_rows=0,
+        single=frame(points(5, 11), extension=True)))
+    journal.check('zero rows give empty results',
+                  unframe(actual['subgroup_values']) == []
+                  and unframe(actual['ood_values'], extension=True) == [])
+    for name, change in [('long', {'subgroup': frame([0] * 89)}),
+                         ('short-rows', {'ood_rows': 6}),
+                         ('huge-rows', {'ood_rows': 2**40})]:
+        report = client.run(name, batch_inputs(**change), refuses='entry-run-incomplete')
+        journal.check(f'{name}: point shape',
+                      stopped(report) == 'refused:relation-table-point-shape')
+
+
+def test_host_preflight_checks_batch_references(toolchain, journal, directory):
+    client = Client(toolchain, journal, directory, BATCH)
+    package = json.loads(client.package.read_text())
+    artifact = json.loads(package['artifact'])
+    program = json.loads(artifact['candidate'])
+    changed = 0
+    for binding in program[1]:
+        if binding[1] == 'relation.table_points':
+            binding[2][1] = '1'
+            changed += 1
+    assert changed
+    artifact['candidate'] = json.dumps(program, separators=(',', ':'))
+    package['artifact'] = json.dumps(artifact, separators=(',', ':'))
+    client.repackage(package)
+    result = client.run('points-table', batch_inputs(), refuses='relation-table-index')
+    assert result['phase'] == 'admission'

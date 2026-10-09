@@ -14,7 +14,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 mod polynomial;
 mod table;
-pub use polynomial::{POLYNOMIAL_SIZE_LIMIT, PolynomialInput, PolynomialShape, PolynomialView};
+pub use polynomial::{
+    POLYNOMIAL_SIZE_LIMIT, PolynomialArena, PolynomialInput, PolynomialShape, PolynomialView,
+};
 pub use table::{TableData, TableLengths, TableView};
 
 pub const BYTE_LIMIT: usize = 8 * 1024 * 1024;

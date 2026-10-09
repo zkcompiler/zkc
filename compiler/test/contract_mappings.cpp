@@ -42,6 +42,7 @@ constexpr ExpectedMapping expected[] = {
     {"relation.table_input", "relation.exec.table_input"},
     {"relation.table_scope", "relation.exec.table_scope"},
     {"relation.table_point", "relation.exec.table_point"},
+    {"relation.table_points", "relation.exec.table_points"},
     {"transcript.native.indexed.challenge",
      "crypto.exec.indexed_transcript_challenge"},
     {"transcript.native.indexed.observe.data",

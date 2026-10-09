@@ -64,6 +64,7 @@ constexpr ContractRow contractRows[] = {
     {"relation.table_input", Plonky3},
     {"relation.table_scope", Plonky3},
     {"relation.table_point", Plonky3},
+    {"relation.table_points", Plonky3},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},

@@ -155,6 +155,13 @@ struct AnalysisBudget {
                       uint64_t retainedOutputs);
 };
 
+/// Every arena node the table's assertions need has field `carrier` or, when
+/// `base` is nonempty, `base` (`relation-table-carrier`). Nodes are visited
+/// in the arena's own evaluation order, without arithmetic; outputs used only
+/// by interactions are not visited.
+llvm::Error checkAssertionFields(const BundleTable &, llvm::StringRef carrier,
+                                 llvm::StringRef base);
+
 /// Re-home a refusal with a diagnostic location, keeping its identifier.
 llvm::Error withDetail(llvm::Error, llvm::StringRef detail);
 /// Every declared input must be used and every output must be referenced.

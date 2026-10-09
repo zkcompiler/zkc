@@ -3,8 +3,10 @@
 // bound shared with the finite AIR analysis. The pinned recurrence fixture is
 // analyzed under the two-adic profile and checked against an independent
 // coefficient interpolation of its honest data; separately authored finite,
-// cyclic, optional and extension tables exercise the remaining rules. Nothing
-// here is a soundness claim about batching, commitments or a proof protocol.
+// cyclic, optional, lifted, extension and general-field tables exercise the
+// remaining rules. A fixture shared with the runtime backend tests pins the
+// zero-chunk encoding. Nothing here is a soundness claim about batching,
+// commitments or a proof protocol.
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Relation/BundlePolynomial.h"
@@ -22,7 +24,7 @@ using zkc::test::take;
 
 namespace {
 const std::string KB = "koala-bear", EXT = "koala-bear.ext8-binomial3";
-std::string fixtureDirectory;
+std::string fixtureDirectory, chunkFixture;
 
 std::string read(StringRef name) {
   auto buffer = MemoryBuffer::getFile(fixtureDirectory + "/" + name.str());
@@ -31,6 +33,11 @@ std::string read(StringRef name) {
 }
 Bundle bundle(StringRef text) { return take(readBundleText(text)); }
 json::Value carrier(StringRef text) { return take(readBundleDataJson(text)); }
+Expected<bool> accepted(Error error) {
+  if (error)
+    return std::move(error);
+  return true;
+}
 AIRPolynomialParameters twoAdic(uint32_t n) {
   return take(twoAdicPolynomialParameters(n));
 }
@@ -289,8 +296,10 @@ struct PolynomialAlgebra {
 } // namespace
 
 int main(int argc, char **argv) {
-  require(argc == 2, "usage: relation_bundle_polynomial FIXTURE_DIRECTORY");
+  require(argc == 3, "usage: relation_bundle_polynomial FIXTURE_DIRECTORY "
+                     "CHUNK_FIXTURE");
   fixtureDirectory = argv[1];
+  chunkFixture = argv[2];
   zkc::test::Cases cases;
 
   cases.run("two-adic profile parameters", [] {
@@ -387,8 +396,6 @@ int main(int argc, char **argv) {
     auto recurrence = bundle(read("bundle.json"));
     refuses(analyzeBundlePolynomials(recurrence, 1, KB, twoAdic(8)),
             "relation-table-index");
-    refuses(analyzeBundlePolynomials(recurrence, 0, EXT, twoAdic(8)),
-            "relation-table-carrier");
     refuses(analyzeBundlePolynomials(recurrence, 0, "bls12-381.fr", twoAdic(8)),
             "relation-table-carrier");
     refuses(analyzeBundlePolynomials(recurrence, 0, KB, {7, 7, 6}),
@@ -694,6 +701,122 @@ int main(int argc, char **argv) {
             "an extension carrier keeps its prime subfield's two-adic domain");
     refuses(analyzeBundlePolynomials(extension, 0, KB, twoAdic(2)),
             "relation-table-carrier");
+  });
+
+  cases.run("an extension carrier lifts base tables; rows stay exact", [] {
+    auto recurrence = bundle(read("bundle.json"));
+    auto base = take(analyzeBundlePolynomials(recurrence, 0, KB, twoAdic(8)));
+    auto lifted =
+        take(analyzeBundlePolynomials(recurrence, 0, EXT, twoAdic(8)));
+    require(lifted.field == EXT && lifted.coordinates == 8 &&
+                lifted.profile == BundlePolynomialProfile::TwoAdicNatural &&
+                lifted.groups[0].field == KB && lifted.groups[1].field == KB,
+            "a KoalaBear table is interpreted with every Ext8 coordinate");
+    require(quotients(lifted) == quotients(base) &&
+                lifted.reads == base.reads && lifted.publics == base.publics &&
+                lifted.quotientChunks == base.quotientChunks &&
+                lifted.arena == base.arena,
+            "lifting changes no degree, subject or arena");
+    require(zkc::printJson(lifted.encode()).find("\"coordinates\":8") !=
+                std::string::npos,
+            "the encoding records the carrier's coordinates");
+    // The actual-row evaluator and the polynomial kernels keep their own
+    // static rules over one admission.
+    refuses(bundleTableView(recurrence, 0, EXT), "relation-table-carrier");
+    take(bundleTableView(recurrence, 0, KB));
+    take(accepted(checkBundlePolynomialTable(recurrence, 0, EXT)));
+    // Base nodes embedded into an Ext8 output need the extension carrier;
+    // an Ext8 public slot is never narrowed either.
+    Arena e;
+    e.out(e.embed(EXT, e.mul(e.read(0, 0, 0), e.read(0, 0, 0))));
+    auto x =
+        table("e", e, {{"w", BundleAuthority::Witness, KB, 1}}, fixedHeight(4));
+    x.assertions = {{0, scope(BundleScopeKind::All)}};
+    auto embedded = single(std::move(x));
+    require(take(analyzeBundlePolynomials(embedded, 0, EXT, twoAdic(4)))
+                    .assertions[0]
+                    .degree == 2,
+            "an embedded base product keeps its degree");
+    refuses(analyzeBundlePolynomials(embedded, 0, KB, twoAdic(4)),
+            "relation-table-carrier");
+    refuses(bundleTableView(embedded, 0, KB), "relation-table-carrier");
+    Arena s;
+    s.out(s.sub(s.embed(EXT, s.read(0, 0, 0)), s.pub(0, EXT)));
+    auto y =
+        table("s", s, {{"w", BundleAuthority::Witness, KB, 1}}, fixedHeight(4));
+    y.assertions = {{0, scope(BundleScopeKind::First)}};
+    auto slot = single(std::move(y), {{"p", EXT}});
+    refuses(analyzeBundlePolynomials(slot, 0, KB, twoAdic(4)),
+            "relation-table-carrier");
+  });
+
+  cases.run("general fields and parameters keep the general profile", [] {
+    // x * x' on interior(0, 1) over a prime field without and with the
+    // installed two-adic capability.
+    auto quadratic = [](const std::string &field, BundleReadModel model) {
+      Arena a;
+      a.out(a.mul(a.read(0, 0, 0, field), a.read(0, 1, 0, field)));
+      auto t = table("q", a, {{"w", BundleAuthority::Witness, field, 1}},
+                     instanceHeight(2, 64), model);
+      t.assertions = {{0, scope(BundleScopeKind::Interior, 0, 1)}};
+      return single(std::move(t));
+    };
+    const std::string BLS = "bls12-381.fr", BN = "bn254.fr";
+    auto finite = quadratic(BLS, BundleReadModel::Finite);
+    auto padded = take(analyzeBundlePolynomials(finite, 0, BLS, {5, 8, 7}));
+    require(padded.profile == BundlePolynomialProfile::General &&
+                padded.coordinates == 1 &&
+                quotients(padded) == std::vector<uint64_t>{10},
+            "a finite table over any presented prime field is analyzed");
+    require(
+        take(analyzeBundlePolynomials(finite, 0, BLS, twoAdic(8))).profile ==
+            BundlePolynomialProfile::General,
+        "without a two-adic root the natural parameters are general");
+    refuses(analyzeBundlePolynomials(quadratic(BLS, BundleReadModel::Cyclic), 0,
+                                     BLS, twoAdic(8)),
+            "bundle-polynomial-domain");
+    refuses(accepted(checkBundlePolynomialTable(finite, 0, BLS)),
+            "bundle-polynomial-two-adic");
+    // The kernels' profile is a capability rule; only KoalaBear and Ext8
+    // providers implement them.
+    auto cyclic = quadratic(BN, BundleReadModel::Cyclic);
+    require(take(analyzeBundlePolynomials(cyclic, 0, BN, twoAdic(8))).profile ==
+                BundlePolynomialProfile::TwoAdicNatural,
+            "a two-adic prime field has the natural profile");
+    take(accepted(checkBundlePolynomialTable(cyclic, 0, BN)));
+    refuses(analyzeBundlePolynomials(cyclic, 0, KB, twoAdic(8)),
+            "relation-table-carrier");
+  });
+
+  cases.run("quotient chunk encoding against the runtime shape", [] {
+    // The analysis encodes "no active quotient" as zero chunks. The runtime
+    // backend test reads this same fixture and expects
+    // relation.table_shape at height n to report max(1, chunks).
+    auto buffer = MemoryBuffer::getFile(chunkFixture);
+    require(bool(buffer), "chunk fixture is unreadable");
+    auto fixture = take(json::parse((*buffer)->getBuffer()));
+    unsigned checked = 0, zeros = 0;
+    for (const auto &entry : *fixture.getAsArray()) {
+      const auto &object = *entry.getAsObject();
+      const std::string name = object.getString("name")->str();
+      auto b = bundle(zkc::printJson(*object.get("bundle")));
+      for (const auto &pair : *object.getArray("chunks")) {
+        const auto &row = *pair.getAsArray();
+        const auto n = uint32_t(*row[0].getAsUINT64());
+        const auto expected = *row[1].getAsUINT64();
+        for (StringRef field : {StringRef(KB), StringRef(EXT)}) {
+          auto view = take(analyzeBundlePolynomials(b, 0, field, twoAdic(n)));
+          require(view.profile == BundlePolynomialProfile::TwoAdicNatural &&
+                      view.quotientChunks == expected,
+                  name + " at height " + Twine(n));
+          checkComplementAgreement(view);
+        }
+        ++checked;
+        zeros += expected == 0;
+      }
+    }
+    require(checked == 14 && zeros == 7,
+            "the fixture covers the zero encoding");
   });
 
   cases.run("coefficient divisibility of the honest recurrence data", [] {

@@ -46,7 +46,7 @@ impl Ext {
     }
 }
 /// Deterministic extension values with every coordinate in use.
-fn points(seed: u64, n: usize) -> Vec<Ext> {
+fn samples(seed: u64, n: usize) -> Vec<Ext> {
     let mut state = seed;
     (0..n)
         .map(|_| {
@@ -189,10 +189,19 @@ fn recurrence_extension_points_match_an_independent_integer_model() {
     for seed in 1..=4 {
         // Out-of-domain points: every substituted input is a full extension
         // element, including the fixed and public columns.
-        let v = points(seed, 11);
+        let v = samples(seed, 11);
         let native: Vec<_> = v.iter().map(|e| e.native()).collect();
         let mut budget = Budget::default();
-        let got = point(&ext, &native, &Policy::default(), &mut budget, usize::MAX).unwrap();
+        let got = points(
+            &ext,
+            &native,
+            1,
+            false,
+            &Policy::default(),
+            &mut budget,
+            usize::MAX,
+        )
+        .unwrap();
         assert_eq!(
             got.into_iter().map(Ext::of).collect::<Vec<_>>(),
             recurrence_reference(&v)
@@ -201,9 +210,11 @@ fn recurrence_extension_points_match_an_independent_integer_model() {
         // Base-field points agree with their embedding in Ext8.
         let small: Vec<_> = v.iter().map(|e| e.0[0]).collect();
         let lifted: Vec<_> = small.iter().map(|n| Ext::base(*n)).collect();
-        let got = point(
+        let got = points(
             &base,
             &kb(&small),
+            1,
+            false,
             &Policy::default(),
             &mut Budget::default(),
             usize::MAX,
@@ -216,11 +227,16 @@ fn recurrence_extension_points_match_an_independent_integer_model() {
             recurrence_reference(&lifted)
         );
     }
-    let short = points(9, 10).iter().map(|e| e.native()).collect::<Vec<_>>();
+    let short = samples(9, 10)
+        .iter()
+        .map(|e| e.native())
+        .collect::<Vec<_>>();
     assert_eq!(
-        code(point(
+        code(points(
             &ext,
             &short,
+            1,
+            false,
             &Policy::default(),
             &mut Budget::default(),
             usize::MAX
@@ -228,9 +244,11 @@ fn recurrence_extension_points_match_an_independent_integer_model() {
         "refused:relation-table-point-shape"
     );
     assert_eq!(
-        code(point(
+        code(points(
             &ext,
             &kb(&[0; 11]),
+            1,
+            false,
             &Policy::default(),
             &mut Budget::default(),
             usize::MAX
@@ -239,8 +257,11 @@ fn recurrence_extension_points_match_an_independent_integer_model() {
     );
 }
 
-#[test]
-fn descriptors_reproduce_dense_residuals_at_every_scope_boundary() {
+/// The recurrence's honest data with a changed first x, as combined witness,
+/// configuration and public-data matrices, and its dense residuals at h = 8.
+/// The change makes residuals nonzero on the first and, through the wrapping
+/// next-row read, the last row.
+fn changed_recurrence() -> (Vec<u64>, Vec<u64>, Vec<u64>, Vec<KoalaBear>) {
     let bundle = recurrence();
     let fixture = |text: &str| -> serde_json::Value { serde_json::from_str(text).unwrap() };
     let c = bundle
@@ -258,8 +279,6 @@ fn descriptors_reproduce_dense_residuals_at_every_scope_boundary() {
             "../../../../compiler/adapters/plonky3/fixtures/recurrence/bundle-witness.json"
         )))
         .unwrap();
-    // A changed first x makes residuals nonzero on the first and, through
-    // the wrapping next-row read, the last row.
     w.tables[0].as_mut().unwrap()[0][0] = "3".into();
     let rows_view = bundle.table_view(0, Identity::KoalaBear).unwrap();
     let data = rows_view.slice(&c, &i, &w).unwrap();
@@ -280,7 +299,36 @@ fn descriptors_reproduce_dense_residuals_at_every_scope_boundary() {
         usize::MAX,
     )
     .unwrap();
-    let view = bundle.polynomial_view(0, Identity::KoalaBearExt8).unwrap();
+    (witness, configuration, public, dense)
+}
+/// One row's assignment of every arena input, read from combined matrices
+/// through the descriptors alone. A public group is the last matrix.
+fn assignment(view: &PolynomialView<'_>, h: u64, row: u64, matrices: [&[u64]; 4]) -> Vec<u64> {
+    let shape = view.shape(h).unwrap();
+    let widths = [shape.witness_width, shape.config_width, shape.public_width];
+    (0..shape.inputs)
+        .map(|slot| {
+            let PolynomialInput {
+                kind,
+                column,
+                rotation,
+            } = view.input(h, slot).unwrap();
+            match kind {
+                0 => matrices[0][column as usize],
+                k => {
+                    let k = k as usize;
+                    matrices[k][(((row + rotation) % h) * widths[k - 1] + column) as usize]
+                }
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn descriptors_reproduce_dense_residuals_at_every_scope_boundary() {
+    let (witness, configuration, public, dense) = changed_recurrence();
+    let bundle = recurrence();
+    let view = &bundle.polynomial_view(0, EXT).unwrap();
     let shape = view.shape(8).unwrap();
     let mut nonzero = 0;
     for a in 0..shape.assertions {
@@ -288,28 +336,16 @@ fn descriptors_reproduce_dense_residuals_at_every_scope_boundary() {
         let mut boundary = vec![begin, end - 1];
         boundary.dedup();
         for row in boundary {
-            let assignment: Vec<_> = (0..shape.inputs)
-                .map(|slot| {
-                    let PolynomialInput {
-                        kind,
-                        column,
-                        rotation,
-                    } = view.input(8, slot).unwrap();
-                    let at = |matrix: &[u64], width: u64| {
-                        matrix[(((row + rotation) % 8) * width + column) as usize]
-                    };
-                    Ext::base(match kind {
-                        0 => public[column as usize],
-                        1 => at(&witness, shape.witness_width),
-                        2 => at(&configuration, shape.config_width),
-                        _ => unreachable!("no public groups"),
-                    })
-                    .native()
-                })
-                .collect();
-            let values = point(
-                &view,
+            let assignment: Vec<_> =
+                assignment(view, 8, row, [&public, &witness, &configuration, &[]])
+                    .into_iter()
+                    .map(|n| Ext::base(n).native())
+                    .collect();
+            let values = points(
+                view,
                 &assignment,
+                1,
+                false,
                 &Policy::default(),
                 &mut Budget::default(),
                 usize::MAX,
@@ -503,7 +539,7 @@ fn combined_authority_matrices_reproduce_dense_per_group_residuals() {
     let bundle = layered(ReadModel::Finite, configured_height(2, 64)).unwrap();
     let h = 8u64;
     let values =
-        |seed: u64, n: usize| -> Vec<u64> { points(seed, n).iter().map(|e| e.0[0]).collect() };
+        |seed: u64, n: usize| -> Vec<u64> { samples(seed, n).iter().map(|e| e.0[0]).collect() };
     // Group values, each row-major: a (2), k (1), b (3), q (1), m (2), slot s.
     let (a, k, b, q, m, s) = (
         values(11, 16),
@@ -557,9 +593,11 @@ fn combined_authority_matrices_reproduce_dense_per_group_residuals() {
                     .native()
                 })
                 .collect();
-            let got = point(
+            let got = points(
                 &view,
                 &assignment,
+                1,
+                false,
                 &Policy::default(),
                 &mut Budget::default(),
                 usize::MAX,
@@ -579,7 +617,7 @@ fn combined_authority_matrices_reproduce_dense_per_group_residuals() {
 fn points_follow_assertion_order_and_ignore_interaction_only_inputs() {
     let bundle = layered(ReadModel::Finite, configured_height(2, 64)).unwrap();
     let view = bundle.polynomial_view(0, EXT).unwrap();
-    let v = points(7, 7);
+    let v = samples(7, 7);
     let [b1, a0, s, m1, q, k, _b2] = v.clone().try_into().unwrap();
     let out0 = a0.mul(b1).sub(s);
     let out1 = m1.add(k.mul(q));
@@ -587,9 +625,11 @@ fn points_follow_assertion_order_and_ignore_interaction_only_inputs() {
     let expected = vec![out1, out4, out0, out1, out0, out4, out1];
     let evaluate = |v: &[Ext]| {
         let native: Vec<_> = v.iter().map(|e| e.native()).collect();
-        point(
+        points(
             &view,
             &native,
+            1,
+            false,
             &Policy::default(),
             &mut Budget::default(),
             usize::MAX,
@@ -601,7 +641,7 @@ fn points_follow_assertion_order_and_ignore_interaction_only_inputs() {
     };
     assert_eq!(evaluate(&v), expected);
     let mut changed = v.clone();
-    changed[6] = points(8, 1)[0];
+    changed[6] = samples(8, 1)[0];
     assert_eq!(evaluate(&changed), expected);
     // The interaction output is Ext8, so the dense KoalaBear view rejects
     // nothing either; only assertion sub-DAGs are carrier checked.
@@ -688,11 +728,13 @@ fn static_premises_refuse_carriers_and_heights_without_a_two_adic_domain() {
         "relation-table-carrier"
     );
     let view = extension.polynomial_view(0, EXT).unwrap();
-    let x = points(3, 1)[0];
+    let x = samples(3, 1)[0];
     assert_eq!(
-        point(
+        points(
             &view,
             &[x.native()],
+            1,
+            false,
             &Policy::default(),
             &mut Budget::default(),
             usize::MAX
@@ -748,15 +790,17 @@ fn empty_assertion_lists_still_charge_and_report_one_chunk() {
     // Nodes 3, inputs 2, groups 1, publics 2, assertions 0, reads 0, plus 1;
     // the substitution adds nodes 3, inputs 2 and 1.
     assert_eq!((view.work(), view.point_work()), (9, 6));
-    let assignment = points(5, 2).iter().map(|e| e.native()).collect::<Vec<_>>();
+    let assignment = samples(5, 2).iter().map(|e| e.native()).collect::<Vec<_>>();
     let mut budget = Budget {
         limit: 14,
         spent: 0,
     };
     assert_eq!(
-        code(point(
+        code(points(
             &view,
             &assignment,
+            1,
+            false,
             &Policy::default(),
             &mut budget,
             usize::MAX
@@ -766,9 +810,11 @@ fn empty_assertion_lists_still_charge_and_report_one_chunk() {
     assert_eq!(budget.spent, 0);
     budget.limit = 15;
     assert!(
-        point(
+        points(
             &view,
             &assignment,
+            1,
+            false,
             &Policy::default(),
             &mut budget,
             usize::MAX
@@ -888,13 +934,349 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
         }
     }
     for field in ["koala-bear", "koala-bear.ext8-binomial3"] {
-        let binding = OperationBinding {
-            contract: "relation.table_point".into(),
-            arguments: vec![field.into(), "0".into()],
-            implementation: "plonky3/relation.table_point".into(),
-        };
-        let got = signature(&binding).unwrap();
-        assert_eq!((got.inputs.len(), got.outputs.len()), (1, 1));
-        assert_eq!(got, binding.signature().unwrap());
+        for (contract, inputs) in [("relation.table_point", 1), ("relation.table_points", 2)] {
+            let binding = OperationBinding {
+                contract: contract.into(),
+                arguments: vec![field.into(), "0".into()],
+                implementation: format!("plonky3/{contract}"),
+            };
+            let got = signature(&binding).unwrap();
+            assert_eq!((got.inputs.len(), got.outputs.len()), (inputs, 1));
+            assert_eq!(got.inputs[0], got.outputs[0]);
+            assert_eq!(got.inputs.get(1), (inputs == 2).then_some(&index));
+            assert_eq!(got, binding.signature().unwrap());
+        }
     }
+}
+
+/// A batch and its rows one at a time; the batch charges the static work once
+/// and one point per row.
+fn batch_and_rows<S: crate::ring::Carrier>(
+    view: &PolynomialView<'_>,
+    matrix: &[S],
+    rows: usize,
+) -> (Vec<S>, Vec<S>) {
+    let inputs = view.input_count();
+    let mut budget = Budget::default();
+    let batch = points(
+        view,
+        matrix,
+        rows as u64,
+        true,
+        &Policy::default(),
+        &mut budget,
+        usize::MAX,
+    )
+    .unwrap();
+    assert_eq!(budget.spent, view.work() + rows as u64 * view.point_work());
+    let singles = (0..rows)
+        .flat_map(|r| {
+            points(
+                view,
+                &matrix[r * inputs..(r + 1) * inputs],
+                1,
+                false,
+                &Policy::default(),
+                &mut Budget::default(),
+                usize::MAX,
+            )
+            .unwrap()
+        })
+        .collect();
+    (batch, singles)
+}
+
+#[test]
+fn batches_match_scalar_points_and_dense_rows_on_the_subgroup() {
+    let (witness, configuration, public, dense) = changed_recurrence();
+    let bundle = recurrence();
+    let view = bundle.polynomial_view(0, KB).unwrap();
+    let matrix: Vec<u64> = (0..8)
+        .flat_map(|row| assignment(&view, 8, row, [&public, &witness, &configuration, &[]]))
+        .collect();
+    let (batch, singles) = batch_and_rows(&view, &kb(&matrix), 8);
+    assert_eq!(batch, singles);
+    // Dense rows are zero outside a scope; the substitution is unmasked.
+    let mut nonzero = 0;
+    for a in 0..9 {
+        let (begin, end) = view.scope(8, a).unwrap();
+        for row in begin..end {
+            let at = (row * 9 + a) as usize;
+            assert_eq!(batch[at], dense[at]);
+            nonzero += usize::from(dense[at] != KoalaBear::ZERO);
+        }
+    }
+    assert!(nonzero >= 2);
+    // The same rows lifted into Ext8 give the embedded values.
+    let ext = bundle.polynomial_view(0, EXT).unwrap();
+    let lifted: Vec<_> = kb(&matrix).into_iter().map(KoalaBearExt8::from).collect();
+    let (extended, singles) = batch_and_rows(&ext, &lifted, 8);
+    assert_eq!(extended, singles);
+    assert_eq!(
+        extended,
+        batch
+            .into_iter()
+            .map(KoalaBearExt8::from)
+            .collect::<Vec<_>>()
+    );
+}
+
+/// The recurrence over Ext8 slots, groups, inputs and constants.
+fn extension_recurrence() -> Bundle {
+    Bundle::parse(
+        &include_str!("../../../../compiler/adapters/plonky3/fixtures/recurrence/bundle.json")
+            .replace("\"koala-bear\"", "\"koala-bear.ext8-binomial3\""),
+    )
+    .unwrap()
+}
+
+#[test]
+fn extension_batches_keep_every_coordinate() {
+    let bundle = extension_recurrence();
+    assert_eq!(
+        bundle.polynomial_view(0, KB).unwrap_err().0,
+        "relation-table-carrier"
+    );
+    let view = bundle.polynomial_view(0, EXT).unwrap();
+    // Thirteen rows exercise both the packed lanes and the scalar tail.
+    let rows: Vec<Vec<Ext>> = (0..13).map(|r| samples(100 + r, 11)).collect();
+    let matrix: Vec<_> = rows.iter().flatten().map(|e| e.native()).collect();
+    let (batch, singles) = batch_and_rows(&view, &matrix, 13);
+    assert_eq!(batch, singles);
+    let expected: Vec<_> = rows.iter().flat_map(|v| recurrence_reference(v)).collect();
+    assert_eq!(batch.into_iter().map(Ext::of).collect::<Vec<_>>(), expected);
+}
+
+#[test]
+fn batches_keep_input_numbering_and_assertion_order() {
+    let bundle = layered(ReadModel::Finite, configured_height(2, 64)).unwrap();
+    let view = bundle.polynomial_view(0, EXT).unwrap();
+    let rows: Vec<Vec<Ext>> = (0..3).map(|r| samples(40 + r, 7)).collect();
+    let expected: Vec<_> = rows
+        .iter()
+        .flat_map(|v| {
+            let [b1, a0, s, m1, q, k, _b2] = v.clone().try_into().unwrap();
+            let (out0, out1) = (a0.mul(b1).sub(s), m1.add(k.mul(q)));
+            let out4 = a0.mul(a0).mul(a0);
+            [out1, out4, out0, out1, out0, out4, out1]
+        })
+        .collect();
+    let run = |rows: &[Vec<Ext>]| {
+        let matrix: Vec<_> = rows.iter().flatten().map(|e| e.native()).collect();
+        let (batch, singles) = batch_and_rows(&view, &matrix, rows.len());
+        assert_eq!(batch, singles);
+        batch.into_iter().map(Ext::of).collect::<Vec<_>>()
+    };
+    assert_eq!(run(&rows), expected);
+    // The interaction-only input keeps its column, and its value is unused.
+    let mut changed = rows.clone();
+    for (r, row) in changed.iter_mut().enumerate() {
+        row[6] = samples(60 + r as u64, 1)[0];
+    }
+    assert_eq!(run(&changed), expected);
+    // Without the unused column the shape is refused.
+    let short: Vec<_> = rows
+        .iter()
+        .flat_map(|v| v[..6].iter().map(|e| e.native()))
+        .collect();
+    assert_eq!(
+        code(points(
+            &view,
+            &short,
+            3,
+            true,
+            &Policy::default(),
+            &mut Budget::default(),
+            usize::MAX
+        )),
+        "refused:relation-table-point-shape"
+    );
+}
+
+#[test]
+fn batch_shape_storage_and_work_are_checked_before_preparation() {
+    let bundle = recurrence();
+    let view = bundle.polynomial_view(0, KB).unwrap();
+    let (static_work, unit) = (view.work(), view.point_work());
+    let run = |values: &[KoalaBear], rows: u64, policy: &Policy, budget: &mut Budget, available| {
+        points(&view, values, rows, true, policy, budget, available)
+    };
+    // No rows: nothing is prepared, and only the static work is charged.
+    let mut budget = Budget::default();
+    assert!(
+        run(&[], 0, &Policy::default(), &mut budget, usize::MAX)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(budget.spent, static_work);
+    let values = kb(&[1; 33]);
+    for (rows, length) in [(2, 33), (3, 32), (u64::MAX, 0), (u64::MAX / 4, 33)] {
+        assert_eq!(
+            code(run(
+                &values[..length],
+                rows,
+                &Policy::default(),
+                &mut Budget::default(),
+                usize::MAX
+            )),
+            "refused:relation-table-point-shape"
+        );
+    }
+    // The full charge is atomic.
+    let mut budget = Budget {
+        limit: static_work + 3 * unit - 1,
+        spent: 0,
+    };
+    assert_eq!(
+        code(run(&values, 3, &Policy::default(), &mut budget, usize::MAX)),
+        "exhausted:ring-work"
+    );
+    assert_eq!(budget.spent, 0);
+    budget.limit += 1;
+    assert_eq!(
+        run(&values, 3, &Policy::default(), &mut budget, usize::MAX)
+            .unwrap()
+            .len(),
+        27
+    );
+    // The result alone must fit the allowance.
+    let result = crate::value::size(27, 4).unwrap();
+    for (available, accepted) in [(result - 1, false), (result, true)] {
+        let got = run(
+            &values,
+            3,
+            &Policy::default(),
+            &mut Budget::default(),
+            available,
+        );
+        assert_eq!(got.is_ok(), accepted);
+    }
+    // Result, scratch and the prepared sub-DAG together must fit the policy.
+    let t = view.definition();
+    let cells = crate::ring::scratch_cells::<KoalaBear>(t.arena.nodes().len(), true).unwrap() + 27;
+    let peak = crate::value::size(cells, 4).unwrap() + arena_bytes(&t.arena) + 9 * OUTPUT_BYTES;
+    for (bytes, accepted) in [(peak - 1, false), (peak, true)] {
+        let policy = Policy {
+            max_value_bytes: bytes,
+            ..Policy::default()
+        };
+        let got = run(&values, 3, &policy, &mut Budget::default(), usize::MAX);
+        assert_eq!(
+            got.map(|v| v.len()).map_err(|e| e.code),
+            if accepted {
+                Ok(27)
+            } else {
+                Err("exhausted:output-bytes".into())
+            }
+        );
+    }
+    let policy = Policy {
+        max_table_elements: cells - 1,
+        ..Policy::default()
+    };
+    assert_eq!(
+        code(run(&values, 3, &policy, &mut Budget::default(), usize::MAX)),
+        "exhausted:element-limit"
+    );
+    // Without inputs any row count has a shape: results and work bound it.
+    let none: &[KoalaBear] = &[];
+    let constant = Bundle::parse(
+        r#"["zkc.relation-bundle/0",[],[],[["c","required",["fixed",2],"finite",[],
+        ["zkc.ring/0",[],[["constant","koala-bear","5"]],[0]],[],[[0,["all"]]],[]]]]"#,
+    )
+    .unwrap();
+    let view = constant.polynomial_view(0, KB).unwrap();
+    assert_eq!(
+        points(
+            &view,
+            none,
+            3,
+            true,
+            &Policy::default(),
+            &mut Budget::default(),
+            usize::MAX
+        )
+        .unwrap(),
+        kb(&[5, 5, 5])
+    );
+    for rows in [1 << 40, u64::MAX] {
+        assert_eq!(
+            code(points(
+                &view,
+                none,
+                rows,
+                true,
+                &Policy::default(),
+                &mut Budget::default(),
+                usize::MAX
+            )),
+            "exhausted:element-limit"
+        );
+    }
+    // Without inputs or assertions only the work charge bounds the count.
+    let silent = Bundle::parse(
+        r#"["zkc.relation-bundle/0",[],[["c","multiset",["koala-bear"],"koala-bear"]],
+        [["k","required",["fixed",2],"finite",[],
+        ["zkc.ring/0",[],[["constant","koala-bear","1"]],[0]],[],[],
+        [["multiset",0,["global"],["all"],"pull",[0],0,1]]]]]"#,
+    )
+    .unwrap();
+    let view = silent.polynomial_view(0, KB).unwrap();
+    let mut budget = Budget::default();
+    assert!(
+        points(
+            &view,
+            none,
+            1 << 20,
+            true,
+            &Policy::default(),
+            &mut budget,
+            usize::MAX
+        )
+        .unwrap()
+        .is_empty()
+    );
+    assert_eq!(budget.spent, view.work() + (1 << 20) * view.point_work());
+    for rows in [1 << 40, u64::MAX] {
+        assert_eq!(
+            code(points(
+                &view,
+                none,
+                rows,
+                true,
+                &Policy::default(),
+                &mut Budget::default(),
+                usize::MAX
+            )),
+            "exhausted:ring-work"
+        );
+    }
+}
+
+#[test]
+fn shapes_report_at_least_one_chunk_of_the_shared_analysis_fixture() {
+    // The C++ analysis reads this file and expects exactly these chunks; the
+    // runtime shape reports max(1, chunks), so zero becomes one.
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../compiler/test/fixtures/relation/polynomial-chunks.json"
+    ))
+    .unwrap();
+    let mut checked = 0;
+    for entry in fixture.as_array().unwrap() {
+        let bundle = Bundle::parse(&entry["bundle"].to_string()).unwrap();
+        for pair in entry["chunks"].as_array().unwrap() {
+            let (height, chunks) = (pair[0].as_u64().unwrap(), pair[1].as_u64().unwrap());
+            for carrier in [KB, EXT] {
+                let shape = bundle.polynomial_view(0, carrier).unwrap().shape(height);
+                assert_eq!(
+                    shape.unwrap().quotient_chunks,
+                    chunks.max(1),
+                    "{} at {height}",
+                    entry["name"]
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 14);
 }

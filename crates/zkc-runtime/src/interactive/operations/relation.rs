@@ -1,6 +1,6 @@
 //! One present table of an immutable Bundle asset: assertion residuals over
 //! actual columns, and the polynomial view's shape, input descriptors, scopes
-//! and point substitution.
+//! and point substitutions.
 use super::*;
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
@@ -50,6 +50,15 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
             ),
         )
         .implemented_by(&["plonky3/relation.table_point"]),
+        Contract::new(
+            "relation.table_points",
+            (
+                &[Type::Vector, Type::Index],
+                &[Type::Vector],
+                AttributeRule::AssetIdentity,
+            ),
+        )
+        .implemented_by(&["plonky3/relation.table_points"]),
     ],
     resolve,
     select: support::select_nominal,

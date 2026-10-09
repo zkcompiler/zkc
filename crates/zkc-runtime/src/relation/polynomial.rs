@@ -1,8 +1,9 @@
 //! A polynomial view of one present table on the multiplicative subgroup whose
 //! order is the table's own height. The immutable Bundle owns the bindings and
 //! degree facts; this view derives the descriptors a consuming library needs
-//! and the ordered assertion arena. It selects no quotient combination,
-//! challenge, commitment or proof, and claims nothing about interactions.
+//! and prepares the ordered assertion arena for substitution. It selects no
+//! quotient combination, challenge, commitment or proof, and claims nothing
+//! about interactions.
 use super::*;
 
 /// Bound on `quotient_chunks * height`, the coefficients a consumer of the
@@ -46,83 +47,71 @@ fn kind(authority: Authority) -> u64 {
 }
 
 /// Borrowing the admitted Bundle prevents a view from being used with a
-/// different definition. Nothing here grows with the height.
-#[derive(Clone, Debug)]
+/// different definition. The view owns nothing: descriptors are derived on
+/// demand, and only `prepare` allocates.
+#[derive(Clone, Copy, Debug)]
 pub struct PolynomialView<'a> {
     bundle: &'a Bundle,
     table: usize,
     field: Identity,
-    arena: Expression,      // Sub-DAG of the assertion outputs.
-    assertions: Vec<usize>, // Assertion -> position in `arena`'s outputs.
-    widths: [u64; 3],       // Witness, configuration, public groups.
-    columns: Vec<u64>,      // First combined column of each group.
-    reads: u64,             // Syntactic reads over assertion outputs.
+}
+/// The assertion sub-DAG of one table, prepared for substitution. It keeps
+/// the table's input numbering.
+#[derive(Clone, Debug)]
+pub struct PolynomialArena {
+    arena: Expression,
+    outputs: Vec<usize>,
+}
+impl PolynomialArena {
+    pub fn arena(&self) -> &Expression {
+        &self.arena
+    }
+    /// For each assertion in order, the node of its output in `arena()`.
+    pub fn outputs(&self) -> &[usize] {
+        &self.outputs
+    }
 }
 impl Bundle {
-    /// Static premises shared by the four polynomial kernels: table index,
-    /// carrier compatibility of every public slot, table group and node an
-    /// assertion needs, and a power-of-two height of at least 2 admitted by
-    /// the height policy. Interaction-only outputs are not selected.
+    /// Static premises shared by the polynomial kernels: table index, an
+    /// installed carrier, carrier compatibility of every public slot, table
+    /// group and assertion output, and a power-of-two height of at least 2
+    /// admitted by the height policy. Interaction-only outputs are not
+    /// checked. Nothing is allocated.
     pub fn polynomial_view(&self, table: usize, field: Identity) -> Result<PolynomialView<'_>> {
         let t = self
             .tables
             .get(table)
             .ok_or(Error("relation-table-index"))?;
-        if degree(field).is_none()
+        // Arena formation admits add and mul only of equal fields and only the
+        // KoalaBear-to-Ext8 embedding. Every node an output needs therefore has
+        // the output's field or, below Ext8, KoalaBear: checking each assertion
+        // output checks its whole sub-DAG.
+        if !matches!(field, Identity::KoalaBear | Identity::KoalaBearExt8)
             || self.publics.iter().any(|p| !lifts(p.field, field))
             || t.groups.iter().any(|g| !lifts(g.field, field))
+            || t.assertions
+                .iter()
+                .any(|a| !lifts(self.facts[table][a.output].field, field))
         {
-            return Err(Error("relation-table-carrier"));
-        }
-        let positions: Vec<_> = t
-            .assertions
-            .iter()
-            .map(|a| a.output)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        let arena = t.arena.select(&positions)?;
-        if arena.facts().iter().any(|f| !lifts(f.field, field)) {
             return Err(Error("relation-table-carrier"));
         }
         // On the subgroup of order h, rotation by `offset mod h` realizes a
         // cyclic read exactly and a finite read wherever its window is defined.
+        // KoalaBear has two-adicity 24, so every power-of-two height up to
+        // HEIGHT_LIMIT has that subgroup.
         if u64::from(t.height.min.max(2)).next_power_of_two() > u64::from(t.height.max) {
             return Err(Error("bundle-polynomial-two-adic"));
         }
-        let mut widths = [0; 3];
-        let columns = t
-            .groups
-            .iter()
-            .map(|g| {
-                let width = &mut widths[kind(g.authority) as usize - 1];
-                let first = *width;
-                *width += u64::from(g.width);
-                first
-            })
-            .collect();
         Ok(PolynomialView {
             bundle: self,
             table,
             field,
-            assertions: t
-                .assertions
-                .iter()
-                .map(|a| positions.binary_search(&a.output).expect("selected"))
-                .collect(),
-            arena,
-            widths,
-            columns,
-            reads: t
-                .assertions
-                .iter()
-                .map(|a| self.facts[table][a.output].reads.len() as u64)
-                .sum(),
         })
     }
 }
 impl PolynomialView<'_> {
-    fn definition(&self) -> &Table {
+    /// The viewed table's definition in the admitted Bundle.
+    pub fn definition(&self) -> &Table {
         &self.bundle.tables[self.table]
     }
     pub fn field(&self) -> Identity {
@@ -132,37 +121,52 @@ impl PolynomialView<'_> {
         self.definition().inputs.len()
     }
     pub fn assertion_count(&self) -> usize {
-        self.assertions.len()
+        self.definition().assertions.len()
     }
-    /// The selected assertion sub-DAG. It keeps the table's input numbering;
-    /// its outputs are the distinct assertion outputs in arena order.
-    pub fn arena(&self) -> &Expression {
-        &self.arena
-    }
-    /// For each assertion in order, its position in `arena().outputs()`.
-    pub fn assertion_outputs(&self) -> &[usize] {
-        &self.assertions
-    }
-    /// Units charged by every polynomial kernel: the static reference check
-    /// and the height profile, both independent of the height.
+    /// Units charged by every polynomial kernel, before its height profile or
+    /// any preparation: nodes, inputs, groups, public slots, assertions, the
+    /// read facts of each assertion's output, and 1. None grows with height.
     pub fn work(&self) -> u64 {
         let t = self.definition();
+        let reads: u64 = t
+            .assertions
+            .iter()
+            .map(|a| self.bundle.facts[self.table][a.output].reads.len() as u64)
+            .sum();
         (t.arena.nodes().len()
             + t.inputs.len()
             + t.groups.len()
             + self.bundle.publics.len()
             + t.assertions.len()
             + 1) as u64
-            + self.reads
+            + reads
     }
-    /// Additional units of one point substitution, with its preparation.
+    /// Additional units of one substituted point: nodes, inputs, assertions
+    /// and 1. A batch charges this once per row.
     pub fn point_work(&self) -> u64 {
         let t = self.definition();
         (t.arena.nodes().len() + t.inputs.len() + t.assertions.len() + 1) as u64
     }
+    /// The sub-DAG of the distinct assertion outputs and each assertion's
+    /// node in it. Callers bound its storage, which never exceeds the table
+    /// arena plus a few indices per assertion, and charge its work before
+    /// preparing.
+    pub fn prepare(&self) -> Result<PolynomialArena> {
+        let t = self.definition();
+        let mut positions: Vec<_> = t.assertions.iter().map(|a| a.output).collect();
+        positions.sort_unstable();
+        positions.dedup();
+        let arena = t.arena.select(&positions)?;
+        let outputs = t
+            .assertions
+            .iter()
+            .map(|a| arena.outputs()[positions.binary_search(&a.output).expect("selected")])
+            .collect();
+        Ok(PolynomialArena { arena, outputs })
+    }
     /// The height profile shared by `shape`, `input` and `scope`: two-adic
     /// height, height policy, every assertion window, then the data, work and
-    /// quotient bounds. Nothing is allocated in proportion to the height.
+    /// quotient bounds. Nothing is allocated.
     fn profile(&self, height: u64) -> Result<(u32, PolynomialShape)> {
         let t = self.definition();
         if height < 2 || !height.is_power_of_two() {
@@ -174,25 +178,29 @@ impl PolynomialView<'_> {
             .ok_or(Error("bundle-height"))?;
         let facts = &self.bundle.facts[self.table];
         for a in &t.assertions {
-            let offsets: Vec<_> = facts[a.output].reads.iter().map(|r| r.1).collect();
-            window_at(a.scope, t.read_model, h, &offsets)?;
+            // A window is an interval condition: the extreme offsets decide it.
+            let offsets = facts[a.output].reads.iter().map(|r| r.1);
+            let extremes = [offsets.clone().min(), offsets.max()];
+            window_at(a.scope, t.read_model, h, &extremes.map(|o| o.unwrap_or(0)))?;
         }
+        // Below HEIGHT_LIMIT, 256 groups of width 2^16 and 2^16 slots of eight
+        // coordinates, these products and sums cannot overflow.
         let element = |field| degree(field).expect("admitted field") as u64;
-        let coordinates = self
+        let mut widths = [0; 3];
+        let mut coordinates = self
             .bundle
             .publics
             .iter()
             .map(|s| element(s.field))
-            .sum::<u64>()
-            + t.groups
-                .iter()
-                .map(|g| height * u64::from(g.width) * element(g.field))
-                .sum::<u64>();
+            .sum::<u64>();
+        for g in &t.groups {
+            widths[kind(g.authority) as usize - 1] += u64::from(g.width);
+            coordinates += height * u64::from(g.width) * element(g.field);
+        }
         if coordinates > COORDINATE_LIMIT {
             return Err(Error("bundle-data-limit"));
         }
-        let scan = (t.arena.nodes().len() + t.inputs.len() + t.assertions.len() + 1) as u64;
-        if !t.assertions.is_empty() && height * scan > WORK_LIMIT {
+        if !t.assertions.is_empty() && height * self.point_work() > WORK_LIMIT {
             return Err(Error("bundle-work-limit"));
         }
         // Read polynomials have degree at most h-1. A nonzero quotient of an
@@ -215,9 +223,9 @@ impl PolynomialView<'_> {
         Ok((
             h,
             PolynomialShape {
-                witness_width: self.widths[0],
-                config_width: self.widths[1],
-                public_width: self.widths[2],
+                witness_width: widths[0],
+                config_width: widths[1],
+                public_width: widths[2],
                 public_slots: self.bundle.publics.len() as u64,
                 inputs: t.inputs.len() as u64,
                 assertions: t.assertions.len() as u64,
@@ -246,11 +254,19 @@ impl PolynomialView<'_> {
                 group,
                 offset,
                 column,
-            } => PolynomialInput {
-                kind: kind(t.groups[group as usize].authority),
-                column: self.columns[group as usize] + u64::from(column),
-                rotation: i64::from(offset).rem_euclid(height as i64) as u64,
-            },
+            } => {
+                let authority = t.groups[group as usize].authority;
+                let first: u64 = t.groups[..group as usize]
+                    .iter()
+                    .filter(|g| g.authority == authority)
+                    .map(|g| u64::from(g.width))
+                    .sum();
+                PolynomialInput {
+                    kind: kind(authority),
+                    column: first + u64::from(column),
+                    rotation: i64::from(offset).rem_euclid(height as i64) as u64,
+                }
+            }
         })
     }
     /// Active rows `[begin, end)` of one assertion, after the height profile.

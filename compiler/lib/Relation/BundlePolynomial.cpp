@@ -47,13 +47,56 @@ Expected<AIRPolynomialParameters> twoAdicPolynomialParameters(uint32_t height) {
   return AIRPolynomialParameters{height, height, height - 1};
 }
 
+Expected<unsigned> admitBundlePolynomialCarrier(const Bundle &bundle,
+                                                uint32_t table,
+                                                StringRef carrier) {
+  if (table >= bundle.tables().size())
+    return zkc::error("relation-table-index");
+  auto shape = presentation(carrier);
+  if (!shape) {
+    consumeError(shape.takeError());
+    return zkc::error("relation-table-carrier", carrier);
+  }
+  const StringRef base = shape->degree == 1 ? StringRef() : shape->prime;
+  auto lifts = [&](StringRef field) {
+    return field == carrier || (!base.empty() && field == base);
+  };
+  const auto &t = bundle.tables()[table];
+  for (const auto &slot : bundle.publics())
+    if (!lifts(slot.field))
+      return zkc::error("relation-table-carrier", slot.name);
+  for (const auto &group : t.groups)
+    if (!lifts(group.field))
+      return zkc::error("relation-table-carrier", t.name + "." + group.name);
+  if (auto error = checkAssertionFields(t, carrier, base))
+    return std::move(error);
+  return shape->degree;
+}
+
+Error checkBundlePolynomialTable(const Bundle &bundle, uint32_t table,
+                                 StringRef carrier) {
+  if (auto coordinates = admitBundlePolynomialCarrier(bundle, table, carrier);
+      !coordinates)
+    return coordinates.takeError();
+  // The least power of two of at least 2 in the policy decides: when it
+  // exceeds the maximum or has no root of its order, so does every larger one.
+  const auto &t = bundle.tables()[table];
+  const uint64_t least = PowerOf2Ceil(std::max<uint64_t>(t.height.min, 2));
+  auto shape = presentation(carrier);
+  if (!shape)
+    return shape.takeError();
+  if (least > t.height.max || !twoAdicDomain(carrier, *shape, uint32_t(least)))
+    return zkc::error("bundle-polynomial-two-adic", t.name);
+  return Error::success();
+}
+
 Expected<BundlePolynomialView>
 analyzeBundlePolynomials(const Bundle &bundle, uint32_t table,
                          StringRef carrier,
                          AIRPolynomialParameters parameters) {
-  auto checked = bundleTableView(bundle, table, carrier);
-  if (!checked)
-    return checked.takeError();
+  auto coordinates = admitBundlePolynomialCarrier(bundle, table, carrier);
+  if (!coordinates)
+    return coordinates.takeError();
   if (auto error = checkAIRPolynomialParameters(parameters))
     return error;
   const auto &t = bundle.tables()[table];
@@ -85,7 +128,7 @@ analyzeBundlePolynomials(const Bundle &bundle, uint32_t table,
   view.table = table;
   view.name = t.name;
   view.field = carrier.str();
-  view.coordinates = checked->coordinates;
+  view.coordinates = *coordinates;
   view.optional = t.optional;
   view.heightPolicy = policy;
   view.readModel = t.readModel;
