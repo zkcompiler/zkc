@@ -1895,21 +1895,32 @@ impl Staged {
             &parse_json(text, BYTE_LIMIT, "staged-schema", "staged-limit")?,
         )
     }
+    /// Carrier shapes in reading order before formation: the root, then per
+    /// phase its slots and per table its arena, bindings, groups and
+    /// assertions, then the global arena and premises.
     pub fn decode(bundle: &Bundle, value: &Value) -> Result<Self> {
         let root = row(value, 5, "staged-schema")?;
         if root[0].as_str() != Some("zkc.relation-staged/0") {
             return Err(Error("staged-schema"));
         }
-        if root[1].as_str() != Some(bundle.identity()) {
-            return Err(Error("bundle-relation"));
-        }
-        let (phases, premises) = (
+        let relation = root[1].as_str().ok_or(Error("staged-schema"))?;
+        let (phases, g, premises) = (
             array(&root[2], "staged-schema")?,
+            row(&root[3], 3, "staged-schema")?,
             array(&root[4], "staged-schema")?,
         );
+        if relation != bundle.identity() {
+            return Err(Error("bundle-relation"));
+        }
         if phases.len() > PHASE_LIMIT || premises.len() > PREMISE_LIMIT {
             return Err(Error("staged-limit"));
         }
+        // A non-string field is a carrier shape error; an unknown one is a
+        // formation refusal.
+        let staged_field = |v: &Value| {
+            v.as_str().ok_or(Error("staged-schema"))?;
+            field(v)
+        };
         let slots = |v: &Value| -> Result<Vec<Slot>> {
             let a = array(v, "staged-schema")?;
             if a.len() > SLOT_LIMIT {
@@ -1920,7 +1931,7 @@ impl Staged {
                     let s = row(s, 2, "staged-schema")?;
                     Ok(Slot {
                         name: text(&s[0], "staged-schema")?,
-                        field: field(&s[1])?,
+                        field: staged_field(&s[1])?,
                     })
                 })
                 .collect()
@@ -1929,22 +1940,35 @@ impl Staged {
             .iter()
             .map(|p| {
                 let p = row(p, 3, "staged-schema")?;
-                let tables = array(&p[2], "staged-schema")?
+                let tables = array(&p[2], "staged-schema")?;
+                if tables.len() > TABLE_LIMIT {
+                    return Err(Error("staged-schema"));
+                }
+                let (challenges, claims) = (slots(&p[0])?, slots(&p[1])?);
+                let tables = tables
                     .iter()
                     .map(|t| {
                         let t = row(t, 4, "staged-schema")?;
-                        let groups = array(&t[0], "staged-schema")?
+                        let (groups, assertions) = (
+                            array(&t[0], "staged-schema")?,
+                            array(&t[3], "staged-schema")?,
+                        );
+                        if groups.len() > GROUP_LIMIT || assertions.len() > CHECK_LIMIT {
+                            return Err(Error("staged-schema"));
+                        }
+                        let (arena, inputs) = (Expression::decode(&t[1])?, staged_inputs(&t[2])?);
+                        let groups = groups
                             .iter()
                             .map(|g| {
                                 let g = row(g, 3, "staged-schema")?;
                                 Ok((
                                     text(&g[0], "staged-schema")?,
-                                    field(&g[1])?,
+                                    staged_field(&g[1])?,
                                     natural(&g[2], WIDTH_LIMIT.into(), "staged-schema")? as u32,
                                 ))
                             })
                             .collect::<Result<_>>()?;
-                        let assertions = array(&t[3], "staged-schema")?
+                        let assertions = assertions
                             .iter()
                             .map(|x| {
                                 let x = row(x, 2, "staged-schema")?;
@@ -1957,20 +1981,19 @@ impl Staged {
                             .collect::<Result<_>>()?;
                         Ok(StagedTable {
                             groups,
-                            arena: Expression::decode(&t[1])?,
-                            inputs: staged_inputs(&t[2])?,
+                            arena,
+                            inputs,
                             assertions,
                         })
                     })
                     .collect::<Result<_>>()?;
                 Ok(StagedPhase {
-                    challenges: slots(&p[0])?,
-                    claims: slots(&p[1])?,
+                    challenges,
+                    claims,
                     tables,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let g = row(&root[3], 3, "staged-schema")?;
         let global = (
             Expression::decode(&g[0])?,
             staged_inputs(&g[1])?,
@@ -1985,7 +2008,7 @@ impl Staged {
                 };
                 Ok(match (tag(p), a.len()) {
                     (Some("characteristic-exceeds"), 3) => Premise::CharacteristicExceeds {
-                        field: field(&a[1])?,
+                        field: field(&a[1]).map_err(|_| Error("staged-premise"))?,
                         bound: a[2].as_u64().ok_or(Error("staged-premise"))?,
                     },
                     (Some("boolean"), 5) => Premise::Boolean {

@@ -405,6 +405,50 @@ const MUTATIONS: &[(&str, &[Edit], &str)] = &[
         &[(4, r#"[["z","koala-bear",1]]"#, r#"[["x","koala-bear",1]]"#)],
         "bundle-duplicate-name",
     ),
+    // Reader shapes: a value of the wrong JSON kind is a staged schema
+    // refusal; an unknown field name is a formation refusal.
+    (
+        "relation not a string",
+        &[(
+            4,
+            r#""7f75e6710866e343e7024511e815e371f5d8bff2be4448f4e104bea92e54e0dc""#,
+            "7",
+        )],
+        "staged-schema",
+    ),
+    (
+        "slot field not a string",
+        &[(4, r#"["alpha","koala-bear"]"#, r#"["alpha",7]"#)],
+        "staged-schema",
+    ),
+    (
+        "group field not a string",
+        &[(4, r#"[["z","koala-bear",1]]"#, r#"[["z",7,1]]"#)],
+        "staged-schema",
+    ),
+    (
+        "slot field not installed",
+        &[(4, r#"["alpha","koala-bear"]"#, r#"["alpha","bn254.g1"]"#)],
+        "bundle-field",
+    ),
+    (
+        "premise field not installed",
+        &[(
+            4,
+            r#"["characteristic-exceeds","koala-bear",64]"#,
+            r#"["characteristic-exceeds","bn254.g1",64]"#,
+        )],
+        "staged-premise",
+    ),
+    (
+        "premise field not a string",
+        &[(
+            4,
+            r#"["characteristic-exceeds","koala-bear",64]"#,
+            r#"["characteristic-exceeds",7,64]"#,
+        )],
+        "staged-premise",
+    ),
 ];
 
 fn outcome(texts: &[String; 6]) -> String {
@@ -437,6 +481,7 @@ fn staged_assignment_mutations() {
         [
             "bundle-data-shape",
             "bundle-duplicate-name",
+            "bundle-field",
             "bundle-group-count",
             "bundle-group-shape",
             "bundle-relation",
@@ -454,6 +499,38 @@ fn staged_assignment_mutations() {
             "staged-slot-shape",
         ],
         "refusal identifiers asserted by the mutation table"
+    );
+}
+
+#[test]
+fn staged_reader_bounds_lists_before_formation() {
+    // Oversized lists are carrier shape refusals while reading, before the
+    // table count or formation limits are compared.
+    let program: Value = serde_json::from_str(&program()).unwrap();
+    let bundle = Bundle::parse(BUNDLE).unwrap();
+    let edit = |change: &dyn Fn(&mut Value)| {
+        let mut changed = program.clone();
+        change(&mut changed);
+        Staged::decode(&bundle, &changed).unwrap_err()
+    };
+    let table = program[2][0][2][2].clone();
+    assert_eq!(
+        edit(&|p| p[2][0][2] = Value::Array(vec![table.clone(); TABLE_LIMIT + 1])),
+        Error("staged-schema")
+    );
+    assert_eq!(
+        edit(&|p| p[2][0][2].as_array_mut().unwrap().pop().map(drop).unwrap()),
+        Error("staged-tables")
+    );
+    let group = json!(["g", KB, 1]);
+    assert_eq!(
+        edit(&|p| p[2][0][2][2][0] = Value::Array(vec![group.clone(); GROUP_LIMIT + 1])),
+        Error("staged-schema")
+    );
+    let assertion = json!([0, ["all"]]);
+    assert_eq!(
+        edit(&|p| p[2][0][2][2][3] = Value::Array(vec![assertion.clone(); CHECK_LIMIT + 1])),
+        Error("staged-schema")
     );
 }
 
