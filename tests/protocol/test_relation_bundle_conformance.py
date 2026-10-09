@@ -174,6 +174,11 @@ def test_staged_assignments_agree(toolchain, journal):
         original = staged_case(extension)
         label = 'extension' if extension else 'base'
         cases.append((f'{label}: two actual phases', original, True))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][3] = [
+            [0, ['first']], [1, ['last']], [0, ['interior', 1, 1]],
+            [0, ['interval', 0, 0]], [0, ['all']], [0, ['interior', 3, 3]]]
+        cases.append((f'{label}: overlapping and empty scopes', bind_staged(changed), True))
         for name, part in [('challenge', 0), ('claim', 1), ('auxiliary row', 2)]:
             changed = deepcopy(original)
             values = changed[5][2][0][part]
@@ -211,6 +216,28 @@ def test_staged_assignments_agree(toolchain, journal):
         changed = deepcopy(original)
         changed[5][1] = '0' * 64
         cases.append((f'{label}: assignment identity', changed, 'staged-program'))
+        changed = deepcopy(original)
+        changed[4][1] = None
+        changed[5][1] = identity(changed[4])
+        cases.append((f'{label}: relation identity shape', changed, 'staged-schema'))
+        changed = deepcopy(original)
+        changed[4][2][0][0][0][1] = 0
+        cases.append((f'{label}: challenge field shape', bind_staged(changed), 'staged-schema'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][0][0][1] = 0
+        cases.append((f'{label}: group field shape', bind_staged(changed), 'staged-schema'))
+        changed = deepcopy(original)
+        changed[4][4] = [['characteristic-exceeds', 'unknown-field', 1]]
+        cases.append((f'{label}: premise field refusal', bind_staged(changed), 'staged-premise'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][0] *= 257
+        cases.append((f'{label}: group schema bound', bind_staged(changed), 'staged-schema'))
+        changed = deepcopy(original)
+        changed[4][2][0][2][0][3] *= 2049
+        cases.append((f'{label}: assertion schema bound', bind_staged(changed), 'staged-schema'))
+        changed = deepcopy(original)
+        changed[4][2][0][2] *= 257
+        cases.append((f'{label}: table schema bound', bind_staged(changed), 'staged-schema'))
         changed = deepcopy(original)
         changed[2][3][0] = ['absent']
         changed[3][2][0] = None

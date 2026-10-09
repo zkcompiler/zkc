@@ -2538,6 +2538,7 @@ impl Staged {
         Ok(StagedAssignment { program, phases })
     }
 
+    /// Encode an assignment admitted for this program and its base data.
     pub fn encode_assignment(&self, assignment: &StagedAssignment) -> Value {
         let values = |v: &[Columns]| -> Vec<Value> { v.iter().map(|c| encode_value(c)).collect() };
         let tables = self.phases[0].tables.len();

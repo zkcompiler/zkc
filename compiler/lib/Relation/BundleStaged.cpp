@@ -780,15 +780,38 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
       const auto &table = phases_[p].tables[t];
       if (!state.present || table.assertions.empty())
         continue;
-      for (uint32_t a = 0; a < table.assertions.size(); ++a) {
-        const auto &assertion = table.assertions[a];
+      // Evaluate the union of active outputs once per row. Evaluating each
+      // assertion separately would multiply arena work by the assertion count
+      // while the preflight charges the arena only once.
+      std::vector<std::pair<uint32_t, uint32_t>> ranges;
+      std::set<uint32_t> boundaries{0, state.height};
+      for (const auto &assertion : table.assertions) {
         auto [lo, hi] = scopeRows(assertion.scope, state.height);
-        auto field =
-            table.arena.facts()[table.arena.outputs()[assertion.output]].field;
-        auto arithmetic = fields.get(field);
-        if (!arithmetic)
-          return arithmetic.takeError();
-        for (uint32_t r = lo; r < hi; ++r) {
+        ranges.emplace_back(lo, hi);
+        if (lo < hi)
+          boundaries.insert({lo, hi});
+      }
+      std::vector<std::vector<StagedEvaluation::Residual>> residuals(
+          table.assertions.size());
+      std::vector<uint32_t> cuts(boundaries.begin(), boundaries.end());
+      for (size_t s = 0; s + 1 < cuts.size(); ++s) {
+        uint32_t from = cuts[s], to = cuts[s + 1];
+        std::vector<uint32_t> active;
+        std::set<uint32_t> needed;
+        for (uint32_t a = 0; a < ranges.size(); ++a) {
+          auto [lo, hi] = ranges[a];
+          if (lo >= hi || lo > from || hi < to)
+            continue;
+          active.push_back(a);
+          needed.insert(table.assertions[a].output);
+        }
+        if (active.empty())
+          continue;
+        std::vector<uint32_t> positions(needed.begin(), needed.end());
+        auto slot = [&](uint32_t output) {
+          return llvm::lower_bound(positions, output) - positions.begin();
+        };
+        for (uint32_t r = from; r < to; ++r) {
           auto fetch = [&](uint32_t index) -> Expected<Scalar> {
             const auto &input = table.inputs[index];
             if (input.kind != StagedInput::Kind::Read)
@@ -811,15 +834,26 @@ StagedProgram::evaluate(const Bundle &bundle, const BundleConfiguration &config,
                 input.column);
           };
           RowAlgebra algebra{fields, fetch, constants};
-          auto values =
-              table.arena.evaluate<Scalar>({assertion.output}, algebra);
+          auto values = table.arena.evaluate<Scalar>(positions, algebra);
           if (!values)
             return values.takeError();
-          result.satisfied &= (*arithmetic)->isZero(values->front());
-          result.residuals.push_back(
-              {p + 1, t, a, r, (*arithmetic)->print(values->front())});
+          for (uint32_t a : active) {
+            auto output = table.assertions[a].output;
+            auto field =
+                table.arena.facts()[table.arena.outputs()[output]].field;
+            auto arithmetic = fields.get(field);
+            if (!arithmetic)
+              return arithmetic.takeError();
+            const auto &value = (*values)[slot(output)];
+            result.satisfied &= (*arithmetic)->isZero(value);
+            residuals[a].push_back(
+                {p + 1, t, a, r, (*arithmetic)->print(value)});
+          }
         }
       }
+      for (auto &rows : residuals)
+        for (auto &row : rows)
+          result.residuals.push_back(std::move(row));
     }
   }
   if (!global_.assertions.empty()) {

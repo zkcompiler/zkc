@@ -350,6 +350,7 @@ llvm::Expected<StagedProgram> readStagedProgram(const Bundle &,
 llvm::Expected<StagedAssignment>
 readStagedAssignment(const Bundle &, const StagedProgram &,
                      const llvm::json::Value &);
+/// Encode an assignment admitted for this bundle and staged program.
 llvm::json::Value encodeStagedAssignment(const Bundle &, const StagedProgram &,
                                          const StagedAssignment &);
 
