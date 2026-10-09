@@ -33,6 +33,10 @@ struct ExpectedMapping {
 // boundOperationName, operationSupportsContract, or C++ operation classes.
 // Contract spelling and IR mnemonic intentionally differ in several families.
 constexpr ExpectedMapping expected[] = {
+    {"ring.point", "algebra.exec.ring_point"},
+    {"ring.rows", "algebra.exec.ring_rows"},
+    {"ring.coefficients", "algebra.exec.ring_coefficients"},
+    {"ring.affine_sum", "algebra.exec.ring_affine_sum"},
     {"transcript.native.indexed.challenge",
      "crypto.exec.indexed_transcript_challenge"},
     {"transcript.native.indexed.observe.data",

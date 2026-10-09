@@ -526,6 +526,7 @@ void installedBindings() {
             : sort == "Nat" ? "4"
             : sort == "Field" &&
                     (twoAdic ||
+                     StringRef(operation.name).starts_with("ring.") ||
                      StringRef(operation.name).starts_with("fixed_vector."))
                 ? "koala-bear"
                 : roots.at(sort));

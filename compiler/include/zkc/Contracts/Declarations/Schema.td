@@ -94,6 +94,7 @@ def FieldLiteral : ZKC_Parameters<"FieldLiteral", 1, 1>;
 def FieldLiterals : ZKC_Parameters<"FieldLiterals", 0, -1>;
 def MatrixShape : ZKC_Parameters<"MatrixShape", 2, 2>;
 def MatrixIdentity : ZKC_Parameters<"MatrixIdentity", 1, 1>;
+def AssetIdentity : ZKC_Parameters<"AssetIdentity", 1, 1>;
 def MatrixVector : ZKC_Parameters<"MatrixVector", 3, 3>;
 def GatherIndices : ZKC_Parameters<"GatherIndices", 0, -1>;
 def ScatterIndices : ZKC_Parameters<"ScatterIndices", 1, -1>;

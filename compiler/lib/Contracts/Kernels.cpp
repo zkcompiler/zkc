@@ -47,7 +47,8 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
   if (parameters.size() < schema->minimum ||
       (schema->maximum && parameters.size() > *schema->maximum))
     return error("interactive-kernel-parameters");
-  if (validator == ParameterValidator::MatrixIdentity) {
+  if (validator == ParameterValidator::MatrixIdentity ||
+      validator == ParameterValidator::AssetIdentity) {
     StringRef digest = parameters.front();
     if (digest.size() != 64 || !all_of(digest, [](char c) {
           return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');

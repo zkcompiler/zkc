@@ -10,6 +10,7 @@ mod kernels;
 pub mod matrix;
 pub mod oracle;
 mod resource;
+pub mod ring;
 mod sampling;
 pub mod services;
 mod setups;

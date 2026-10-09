@@ -55,6 +55,10 @@ struct ContractRow {
   StringRef domain = {};
 };
 constexpr ContractRow contractRows[] = {
+    {"ring.point", Plonky3},
+    {"ring.rows", Plonky3},
+    {"ring.coefficients", Plonky3},
+    {"ring.affine_sum", Plonky3},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},

@@ -9,7 +9,7 @@ examples are informative.
 | Subject | Chapters |
 |---|---|
 | Complete execution | [Execution](core/execution.md), [iteration](core/iteration.md), [observations](core/observations.md) |
-| Interpretation and contracts | [Interpretations](core/interpretations.md), [contracts](core/contracts.md) |
+| Interpretation and contracts | [Interpretations](core/interpretations.md), [contracts](core/contracts.md), [ring expressions](core/ring-expressions.md) |
 | Typed source and interaction | [Programs](language/programs.md), [inputs](language/inputs.md), [interaction](language/interaction.md) |
 | Experiments and release | [Probability](properties/probability.md), [experiments](properties/experiments.md), [disclosure](properties/disclosure.md) |
 | Concrete model choices | [Profiles](profiles/README.md): source, plans, realization, providers, Sumcheck and services |

@@ -58,6 +58,14 @@ observations for future transitions.
 
 ## Maintained APIs and actual consumers
 
+Shared [ring-expression laws](spec/core/ring-expressions.md) establish input
+locality, substitution, ring-homomorphism transport, pointwise lane evaluation,
+and exact polynomial evaluation with structural degree bounds. The existing
+finite-AIR expression embedding preserves evaluation and degree weights.
+[The transitive axiom audit](../Tests/RingExpression.lean) covers both modules.
+Native DAG admission, JSON encoding and the KoalaBear/Ext8 provider are checked
+separately and are not subjects of these theorems.
+
 The [source-role connection](design/role-execution.md), scoped source-cut and
 resource laws, and [committed Sumcheck connection](design/committed-sumcheck.md)
 state typed mathematical results. `Tools.Interactive` is a separate executable

@@ -88,6 +88,7 @@ enum class ParameterValidator {
   FieldLiterals,
   MatrixShape,
   MatrixIdentity,
+  AssetIdentity,
   MatrixVector,
   GatherIndices,
   ScatterIndices,

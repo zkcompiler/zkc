@@ -46,6 +46,8 @@ pub(crate) struct RoleMap {
 /// Immutable deployment admitted against an independently supplied digest.
 #[derive(Clone, Debug)]
 pub struct NativeDeployment {
+    ring_assets: zkc_backends::ring::Registry,
+    ring_work_limit: u64,
     publication: String,
     choices: [bool; 2],
     external_work_limit: u64,
@@ -308,6 +310,8 @@ impl NativeDeployment {
         )
         .map_err(|e| e.to_string())?;
         Ok(Self {
+            ring_assets: Default::default(),
+            ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
             publication: expected_sha256.to_owned(),
             choices: [choices[0] == "true", choices[1] == "true"],
             external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
@@ -328,6 +332,17 @@ impl NativeDeployment {
     }
     pub fn capacity(&self) -> Capacity {
         self.capacity
+    }
+    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
+        self.ring_assets = assets;
+        self
+    }
+    pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
+        if limit > zkc_backends::ring::DEFAULT_WORK_LIMIT {
+            return Err("native-proof-ring-work-limit".into());
+        }
+        self.ring_work_limit = limit;
+        Ok(self)
     }
     pub fn entry(&self) -> &NativeProofEntry {
         &self.entry
@@ -508,6 +523,8 @@ impl NativeDeployment {
             attempt_policy: attempts.as_ref().map(|plan| plan.policy.identity()),
             usage: Default::default(),
             external_work: 0,
+            ring_work: 0,
+            ring_work_limit: self.ring_work_limit,
             external_work_limit: self.external_work_limit,
             cleanup_errors: Vec::new(),
         };
@@ -596,6 +613,7 @@ impl NativeDeployment {
         }
         report.instructions = report.usage.instructions;
         report.external_work = backend.external_work_spent();
+        report.ring_work = backend.ring_work_spent();
         retire_resources(&mut backend, &registry, &resources, &services, &mut report);
         Ok(report)
     }
@@ -682,6 +700,8 @@ pub struct NativeProofReport {
     pub stop: Option<zkc_runtime::interactive::Stop>,
     pub usage: zkc_runtime::interactive::Usage,
     pub external_work: u64,
+    pub ring_work: u64,
+    pub ring_work_limit: u64,
     pub external_work_limit: u64,
     /// Cleanup failures remain separate from the primary body failure.
     pub cleanup_errors: Vec<String>,
@@ -711,6 +731,8 @@ impl NativeProofReport {
         report["stop"] = json!(self.stop.as_ref().map(stop_json));
         report["cleanup_errors"] = json!(self.cleanup_errors);
         report["external_work"] = json!(self.external_work);
+        report["ring_work"] = json!(self.ring_work);
+        report["ring_work_limit"] = json!(self.ring_work_limit);
         report["external_work_limit"] = json!(self.external_work_limit);
         report["iterations"] = json!(self.usage.iterations);
         report["total_value_bytes"] = json!(self.usage.total_value_bytes);
@@ -721,6 +743,7 @@ impl NativeProofReport {
             "instructions":r.usage.instructions,"iterations":r.usage.iterations,
             "total_value_bytes":r.usage.total_value_bytes,"transcript":r.transcript,
             "external_work":r.external_work,
+            "ring_work":r.ring_work,
             "return_at":r.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s})),
             "stop":r.stop.as_ref().map(stop_json)
         })).collect::<Vec<_>>());

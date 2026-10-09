@@ -4,6 +4,7 @@
 |---|---|---|
 | [Schnorr](schnorr/README.md) | Generic group protocol, discrete-log relation and concrete Entry | Interactive exchange or independent transcript-derived proofs |
 | [Sumcheck](sumcheck/README.md) | Generic public-table protocol and bounded-round Entry | Actual receives, repeated state and direct terminal evaluation |
+| [Expression Sumcheck](expression-sumcheck/README.md) | Expression component, shared ring asset and KoalaBear/Ext8 Entries | Exact round coefficients, extension-field challenges and public-table terminal evaluation |
 
 The [walkthrough](../../docs/getting-started.md) runs the Schnorr project. Compile
 explicit `--module=NAME=FILE` mappings, then invoke the selected package through

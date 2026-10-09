@@ -57,6 +57,7 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Capability | Support and boundary |
 |---|---|
 | Scalar, tensor and polynomial mathematics | Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
+| Shared expression evaluation | Independently admitted [ring arenas](spec/domains/ring-expressions.md), closed asset references and KoalaBear/Ext8 point, packed-row, coefficient and affine-sum kernels. The [source Sumcheck client](../examples/projects/expression-sumcheck/README.md) uses the common compiler and Host; it is a public-table client without a PCS or native security theorem. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; affine sequence elements are excluded. |
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |

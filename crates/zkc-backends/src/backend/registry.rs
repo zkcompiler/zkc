@@ -147,6 +147,7 @@ pub(super) fn installed() -> Result<&'static Registry> {
     REGISTRY
         .get_or_init(|| {
             let mut r = Registry::default();
+            r.shaped(crate::ring::CONTRACTS, ring)?;
             r.shaped(super::execute::CONTRACTS, basic)?;
             r.shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
             r.shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
@@ -214,6 +215,9 @@ fn field(i: &Invocation<'_>) -> Option<Identity> {
         .iter()
         .chain(&i.binding.signature().outputs)
         .find_map(|t| t.logical().identity().scalar_field())
+}
+fn ring(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::ring::apply(&b.ring_assets, &mut b.ring_work, args, i, &b.core.policy)
 }
 pub(crate) fn basic(
     b: &mut NativeBackend,

@@ -259,6 +259,7 @@ pub enum AttributeRule {
     MatrixShape,
     MatrixDimensions,
     MatrixIdentity,
+    AssetIdentity,
     NativeMessageTemplate,
     NativeChallengeTemplate,
 }

@@ -15,6 +15,8 @@ use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
 /// explicit values owned by the caller/runtime, never held in a backend map.
 /// Configure a verifier key to decode peer PCS bytes.
 pub struct NativeBackend {
+    ring_assets: crate::ring::Registry,
+    ring_work: crate::ring::Budget,
     sequence_work: crate::sequence::Budget,
     external_work: crate::external_kernels::Budget,
     core: Core,
@@ -22,6 +24,20 @@ pub struct NativeBackend {
     implementations: &'static registry::Registry,
 }
 impl NativeBackend {
+    pub fn with_ring_assets(mut self, assets: crate::ring::Registry) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("ring-active-backend"));
+        }
+        self.ring_assets = assets;
+        Ok(self)
+    }
+    pub fn with_ring_work_limit(mut self, limit: u64) -> Self {
+        self.ring_work.limit = limit;
+        self
+    }
+    pub fn ring_work_spent(&self) -> u64 {
+        self.ring_work.spent
+    }
     /// Validate data and entry constraints without entering a frame. Pending
     /// RNG/nonce/transcript slots may be None; all ordinary values must exist.
     pub fn check_entry_values(
@@ -106,6 +122,8 @@ impl NativeBackend {
     pub fn new(policy: Policy, entry: EntryPolicy, setups: crate::SetupRegistry) -> Result<Self> {
         setups.validate(&policy)?;
         Ok(Self {
+            ring_assets: crate::ring::Registry::default(),
+            ring_work: crate::ring::Budget::default(),
             sequence_work: crate::sequence::Budget::default(),
             external_work: crate::external_kernels::Budget::default(),
             implementations: registry::installed()?,

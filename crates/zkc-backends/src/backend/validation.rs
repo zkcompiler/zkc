@@ -339,7 +339,7 @@ impl Core {
                     let _ = crate::plonky3::parse_decimal(literal)?;
                 }
             }
-            AttributeRule::MatrixIdentity
+            AttributeRule::MatrixIdentity | AttributeRule::AssetIdentity
                 if i.attributes.len() == 1
                     && i.attributes[0].len() == 64
                     && i.attributes[0]

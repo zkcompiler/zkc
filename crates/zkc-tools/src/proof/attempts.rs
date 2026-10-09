@@ -33,6 +33,8 @@ pub struct AttemptRecord {
     /// Primitive work consumed by this attempt, including discarded trials and
     /// work completed before a fatal stop. Sum equals the invocation report.
     pub external_work: u64,
+    /// Ring arithmetic work for this attempt; the backend budget is cumulative.
+    pub ring_work: u64,
     pub transcript: Option<Json>,
     /// Successful entry-return coordinate; absent for the ordinary final return.
     pub return_at: Option<(zkc_runtime::interactive::Origin, String)>,
@@ -236,6 +238,7 @@ impl Session<'_> {
     ) -> Executed {
         let mut cleanup = Vec::new();
         let external_work_before = backend.external_work_spent();
+        let ring_work_before = backend.ring_work_spent();
         let mut cancelled = false;
         let mut invocation_inputs = inputs.to_vec();
         let mut transcript = None;
@@ -246,6 +249,7 @@ impl Session<'_> {
             messages: 0,
             bytes: 0,
             external_work: 0,
+            ring_work: 0,
             transcript: None,
             return_at: None,
             stop: None,
@@ -408,6 +412,7 @@ impl Session<'_> {
             }
         });
         record.external_work = backend.external_work_spent() - external_work_before;
+        record.ring_work = backend.ring_work_spent() - ring_work_before;
         record.decision = result
             .as_ref()
             .map(|(complete, _)| *complete)

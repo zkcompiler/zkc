@@ -36,6 +36,12 @@ zkc-tools = { workspace = true, features = ["test-utils"] }
 workspace = true
 
 [[bin]]
+name = "ring_conformance"
+path = "src/ring_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "backend_contract_conformance"
 path = "src/backend_contract_conformance.rs"
 test = false

@@ -93,6 +93,8 @@ impl HostLimits {
 /// Exact byte identity is supplied independently of invocation and bundle data.
 /// Native admission proves supplied structure, not source-order correspondence.
 pub struct RunHost {
+    ring_assets: zkc_backends::ring::Registry,
+    ring_work_limit: u64,
     bundle: Bundle,
     identity: String,
     limits: HostLimits,
@@ -140,6 +142,8 @@ impl RunHost {
     ) -> Result<Self> {
         authority.check(&bundle)?;
         Ok(Self {
+            ring_assets: Default::default(),
+            ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
             bundle,
             identity: hex(identity),
             limits,
@@ -154,6 +158,17 @@ impl RunHost {
     }
     pub fn limits(&self) -> HostLimits {
         self.limits
+    }
+    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
+        self.ring_assets = assets;
+        self
+    }
+    pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
+        if limit > zkc_backends::ring::DEFAULT_WORK_LIMIT {
+            return Err("bundle-ring-work-limit".into());
+        }
+        self.ring_work_limit = limit;
+        Ok(self)
     }
     /// Positional interface. Candidate SSA and generated service names are not
     /// configuration keys; the authenticated bundle determines each position.

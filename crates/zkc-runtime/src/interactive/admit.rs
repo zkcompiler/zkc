@@ -262,7 +262,7 @@ fn attributes(
             }
             Ok(())
         }
-        AttributeRule::MatrixIdentity
+        AttributeRule::MatrixIdentity | AttributeRule::AssetIdentity
             if attrs.len() == 1
                 && attrs[0].len() == 64
                 && attrs[0]
