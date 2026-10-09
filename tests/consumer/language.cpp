@@ -32,7 +32,7 @@ int main() {
       return kernel<F>("poly.domain_root",n);
     }
     protocol Run roles(P)(x:Pair<bool>@P)->(r:Pair<bool>@P){
-      local P let r=swap(x);return(r=r);
+      let r @P =swap(x);return(r=r);
     }
     entry Demo=Run;)",
         "consumer.zkc"}},

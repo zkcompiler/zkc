@@ -8,13 +8,13 @@ protocol Step<F: Field + Share> roles(A, B)(x: F @(A,B), y: F @(A,B))
 protocol Observe roles(P, V)() -> () { return (); }
 protocol Segment<F: Field + Share> roles(P, V)(x: F @(P,V), y: F @(P,V))
     -> (p: F @P, v: F @V) {
-  let (atV, atP) = apply Step<F> roles(V,P)(x, y);
-  let () = apply Observe();
+  let (atV, atP) = Step<F> roles(V,P)(x, y);
+  let () = Observe();
   return (p = atP, v = atV);
 }
 protocol Run roles(P, V)(x: Fr @(P,V), y: Fr @(P,V))
     -> (p: Fr @P, v: Fr @V) {
-  let (a, b) = apply Segment(x, y);
+  let (a, b) = Segment(x, y);
   return (p = a, v = b);
 }
 entry Demo = Run;

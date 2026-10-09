@@ -30,7 +30,7 @@ fn work(a:E, b:E, xs:Vector<E>, m:Matrix<E>) -> (E,E,Vector<E>,E,Vector<E>,Vecto
 }
 protocol Run roles(P)(a:E@P, b:E@P, xs:Vector<E>@P, m:Matrix<E>@P)
   -> (result:(E,E,Vector<E>,E,Vector<E>,Vector<E>,E)@P) {
-  local P let result = work(a,b,xs,m);
+  let result @P = work(a,b,xs,m);
   return (result=result);
 }
 entry Demo = Run;

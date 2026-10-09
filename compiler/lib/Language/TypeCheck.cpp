@@ -54,6 +54,12 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
   }
   using S = SyntaxType::Kind;
   using K = Type::Kind;
+  if (s.kind == S::Hole) {
+    types.fail("source.inference",
+               "a static hole is allowed only as a whole call argument",
+               s.span);
+    return {};
+  }
   if (s.kind == S::Builtin || s.kind == S::Formal) {
     std::vector<Type> arguments;
     for (const auto &syntax : s.arguments) {

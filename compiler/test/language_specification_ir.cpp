@@ -213,16 +213,16 @@ int main() {
       {let ok@B=true;return(a=x,b=y,ok=ok);}
       protocol Run roles(P,V)(x:Fr@P,y:Fr@V,z:K@P,w:K@V,n:index@(P,V))
       ->(a:Fr@P,b:Fr@V) {
-        let (a,b,ok)=apply Step<Fr> roles(P,V)(x,y);
-        let (c,d,ok2)=apply Step<Fr> roles(V,P)(y,x);
-        let (e,f,ok3)=apply Step<K> roles(P,V)(z,w);
-        let (u,v)=repeat roles(P,V)(i<n,max 2) carry(u=x,v=y) capture(n) {
-          let (r,s)=repeat roles(P,V)(j<n,max 2) carry(r=u,s=v) capture() {
-            let (a,b,ok)=apply Step<Fr> roles(P,V)(r,s);
-            yield(r=a,s=b);
-          };
-          yield(u=r,v=s);
-        };
+        let (a,b,ok)=Step<Fr> roles(P,V)(x,y);
+        let (c,d,ok2)=Step<Fr> roles(V,P)(y,x);
+        let (e,f,ok3)=Step<K> roles(P,V)(z,w);
+        let mut u=x;let mut v=y;
+        for _ in 0..n roles(P,V) max 2 {
+          for _ in 0..n roles(P,V) max 2 {
+            let (a,b,ok)=Step<Fr> roles(P,V)(u,v);
+            u=a;v=b;
+          }
+        }
         return(a=u,b=v);
       }entry Demo=Run;)")));
         unsigned calls = 0, nested = 0;

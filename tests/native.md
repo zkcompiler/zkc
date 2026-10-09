@@ -37,6 +37,7 @@ or external prover/verifier compatibility.
 | Boundary | Controls |
 |---|---|
 | Named source Entries | [Language Host](protocol/test_language_host.py), [CLI walkthroughs](protocol/test_developer_commands.py) |
+| Source inference and contracts | [Definition completion, annotations, static holes, service arguments and limits](../compiler/test/language_inference.cpp) |
 | Mathematics and changing state | [Composition](../compiler/test/native_composition.py), [carried state](../compiler/test/native_composed_state.py), [nested data](../compiler/test/native_nested_data.py) |
 | Relation identity and terminals | [Relation bindings](../compiler/test/native_relation_bindings.py) |
 | Proof messages and construction | [Structured proofs](../compiler/test/native_structured_proofs.py), [iteration](../compiler/test/native_iterated_proofs.py), [authored transcripts](../compiler/test/native_authored_transcripts.py) |

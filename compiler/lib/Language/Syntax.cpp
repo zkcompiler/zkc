@@ -266,7 +266,9 @@ private:
     if (!bounded(depth))
       return false;
     out.span = current().span;
-    if (take("pow2")) {
+    if (take("_")) {
+      out.kind = SyntaxType::Kind::Hole;
+    } else if (take("pow2")) {
       out.kind = SyntaxType::Kind::PowerOfTwo;
       SyntaxType exponent;
       if (!expect("(") || !type(exponent, depth + 1) || !expect(")"))
@@ -381,6 +383,9 @@ private:
   bool requirements(SyntaxDeclaration &decl) {
     if (!take("where"))
       return true;
+    decl.explicitRequirements = true;
+    if (take("("))
+      return expect(")");
     do {
       SyntaxRequirement req;
       req.span = current().span;
@@ -977,18 +982,24 @@ private:
         return {};
       if (!ports(d.inputs, protocol))
         return {};
-      if (take("using")) {
-        if (!protocol || !ports(d.services, true)) {
-          fail("source.service", "managed ports require protocol mode");
-          return {};
+      if (protocol) {
+        auto ports = std::move(d.inputs);
+        d.inputs.clear();
+        for (auto &port : ports) {
+          bool service = port.type.kind == SyntaxType::Kind::Name &&
+                         port.type.name == "Random";
+          auto &selected = service ? d.services : d.inputs;
+          d.inputOrder.push_back({service
+                                      ? Declaration::InputSlot::Kind::Service
+                                      : Declaration::InputSlot::Kind::Data,
+                                  unsigned(selected.size())});
+          selected.push_back(std::move(port));
         }
       }
-      if (!expect("->"))
-        return {};
       if (protocol) {
-        if (!ports(d.outputs, true))
+        if (!expect("->") || !ports(d.outputs, true))
           return {};
-      } else {
+      } else if (take("->")) {
         SyntaxPort p;
         p.name = "result";
         p.span = current().span;
@@ -996,6 +1007,9 @@ private:
           return {};
         p.span.end = previousEnd;
         d.outputs.push_back(std::move(p));
+      } else if (abstract) {
+        fail("source.inference", "abstract functions require a result type");
+        return {};
       }
       if (take("completes")) {
         if (!protocol) {
@@ -1034,43 +1048,15 @@ private:
     return expect(")");
   }
   std::optional<uint32_t> expression(SyntaxDeclaration &decl,
-                                     unsigned depth = 1, unsigned minimum = 0) {
+                                     unsigned depth = 1, unsigned minimum = 0,
+                                     bool records = true,
+                                     bool statementStart = false) {
     if (!bounded(depth))
       return {};
     Span span = current().span;
     Expression value;
     value.span = span;
-    if (at("apply") && tokens[cursor + 1].kind == TokenKind::Word) {
-      advance();
-      value.kind = Expression::Kind::Apply;
-      SyntaxType target;
-      if (!type(target, depth + 1))
-        return {};
-      if (target.kind != SyntaxType::Kind::Name) {
-        fail("source.syntax", "application requires a named protocol");
-        return {};
-      }
-      value.text = std::move(target.name);
-      value.arguments = std::move(target.arguments);
-      if (take("roles")) {
-        value.roles.emplace();
-        if (!names(*value.roles))
-          return {};
-      }
-      if (!expect("("))
-        return {};
-      if (!at(")"))
-        do {
-          auto argument = expression(decl, depth + 1);
-          if (!argument)
-            return {};
-          value.children.push_back(*argument);
-        } while (take(",") && !at(")"));
-      if (!expect(")"))
-        return {};
-      if (take("using") && !names(value.services))
-        return {};
-    } else if (at("kernel") || at("intrinsic")) {
+    if (at("kernel") || at("intrinsic")) {
       value.kind = take("intrinsic") ? Expression::Kind::Intrinsic
                                      : Expression::Kind::Kernel;
       if (value.kind == Expression::Kind::Kernel)
@@ -1132,74 +1118,50 @@ private:
         } while (take(",") && !at(")"));
       if (!expect(")"))
         return {};
-    } else if (take("repeat")) {
-      value.kind = Expression::Kind::Repeat;
-      value.roles.emplace();
-      if (!expect("roles") || !roleList(*value.roles, true) || !expect("(") ||
-          !name(value.text) || !expect("<"))
-        return {};
-      auto count = expression(decl, depth + 1);
-      SyntaxType maximum;
-      if (!count || !expect(",") || !expect("max") ||
-          !type(maximum, depth + 1) || !expect(")") || !expect("carry") ||
-          !expect("("))
-        return {};
-      value.children.push_back(*count);
-      value.arguments.push_back(std::move(maximum));
-      if (!at(")"))
-        do {
-          std::string n;
-          if (!name(n) || !expect("="))
-            return {};
-          auto initial = expression(decl, depth + 1);
-          if (!initial)
-            return {};
-          value.labels.push_back(std::move(n));
-          value.children.push_back(*initial);
-          std::optional<std::vector<std::string>> roles;
-          if (take("@")) {
-            roles.emplace();
-            if (!roleList(*roles))
-              return {};
-          }
-          value.carriedRoles.push_back(std::move(roles));
-        } while (take(",") && !at(")"));
-      if (!expect(")") || !expect("capture") || !names(value.captures))
-        return {};
-      if (take("using") && !names(value.services))
-        return {};
-      auto region = body(decl, true, true, depth + 1);
-      if (!region)
-        return {};
-      value.regions.push_back(*region);
     } else if (take("if")) {
       value.kind = Expression::Kind::If;
-      auto condition = expression(decl, depth + 1);
+      auto condition = expression(decl, depth + 1, 0, false);
       if (!condition)
         return {};
       value.children.push_back(*condition);
-      if (!expect("capture") || !names(value.captures))
-        return {};
       auto first = body(decl, false, true, depth + 1);
-      if (!first || !expect("else"))
+      if (!first)
         return {};
-      auto second = body(decl, false, true, depth + 1);
-      if (!second)
-        return {};
-      value.regions = {*first, *second};
+      value.regions.push_back(*first);
+      if (take("else")) {
+        auto second = body(decl, false, true, depth + 1);
+        if (!second)
+          return {};
+        value.regions.push_back(*second);
+      } else {
+        SyntaxBody empty;
+        empty.region = true;
+        empty.span = span;
+        value.regions.push_back(decl.bodies.size());
+        decl.bodies.push_back(std::move(empty));
+      }
     } else if (take("match")) {
       value.kind = Expression::Kind::Match;
-      auto subject = expression(decl, depth + 1);
+      auto subject = expression(decl, depth + 1, 0, false);
       if (!subject)
         return {};
       value.children.push_back(*subject);
-      if (!expect("capture") || !names(value.captures) || !expect("{"))
+      if (!expect("{"))
         return {};
       if (!at("}"))
         do {
           std::string label;
-          std::vector<std::string> payload;
-          if (!name(label) || !names(payload) || !expect("=>"))
+          std::vector<Pattern> payload;
+          if (!name(label) || !expect("("))
+            return {};
+          if (!at(")"))
+            do {
+              auto item = pattern(depth + 1);
+              if (!item)
+                return {};
+              payload.push_back(std::move(*item));
+            } while (take(",") && !at(")"));
+          if (!expect(")") || !expect("=>"))
             return {};
           auto arm = body(decl, false, true, depth + 1);
           if (!arm)
@@ -1212,29 +1174,34 @@ private:
         return {};
     } else if (take("for")) {
       value.kind = Expression::Kind::For;
-      if (!name(value.text) || !expect("in"))
+      value.index.span = current().span;
+      if (!name(value.index.name) || !expect("in"))
         return {};
-      auto lower = expression(decl, depth + 1);
+      value.index.kind =
+          value.index.name == "_" ? Pattern::Kind::Ignore : Pattern::Kind::Name;
+      auto lower = expression(decl, depth + 1, 0, false);
       if (!lower || !expect(".."))
         return {};
-      auto upper = expression(decl, depth + 1);
-      if (!upper || !expect("carry") || !expect("("))
+      auto upper = expression(decl, depth + 1, 0, false);
+      if (!upper)
         return {};
       value.children = {*lower, *upper};
-      if (!at(")"))
-        do {
-          std::string n;
-          if (!name(n) || !expect("="))
-            return {};
-          auto initial = expression(decl, depth + 1);
-          if (!initial)
-            return {};
-          value.labels.push_back(std::move(n));
-          value.children.push_back(*initial);
-        } while (take(",") && !at(")"));
-      if (!expect(")") || !expect("capture") || !names(value.captures))
+      if (take("roles")) {
+        value.roles.emplace();
+        SyntaxType maximum;
+        if (!roleList(*value.roles, true) || !expect("max") ||
+            !type(maximum, depth + 1))
+          return {};
+        value.arguments.push_back(std::move(maximum));
+      }
+      auto region = body(decl, value.roles.has_value(), true, depth + 1);
+      if (!region)
         return {};
-      auto region = body(decl, false, true, depth + 1);
+      value.regions.push_back(*region);
+    } else if (at("{")) {
+      value.kind = Expression::Kind::Block;
+      auto region =
+          body(decl, decl.kind == Declaration::Kind::Protocol, true, depth + 1);
       if (!region)
         return {};
       value.regions.push_back(*region);
@@ -1251,7 +1218,8 @@ private:
       if (!expect(")"))
         return {};
       if (value.children.size() == 1 && !comma)
-        return postfix(decl, value.children.front(), span, depth, minimum);
+        return postfix(decl, value.children.front(), span, depth, minimum,
+                       records);
     } else if (take("[")) {
       value.kind = Expression::Kind::Array;
       if (!at("]"))
@@ -1288,6 +1256,11 @@ private:
         if (!expect(">"))
           return {};
       }
+      if (records && take("roles")) {
+        value.roles.emplace();
+        if (!names(*value.roles))
+          return {};
+      }
       if (take("(")) {
         value.kind = Expression::Kind::Call;
         if (!at(")"))
@@ -1299,14 +1272,25 @@ private:
           } while (take(",") && !at(")"));
         if (!expect(")"))
           return {};
-      } else if (take("{")) {
+      } else if (records && take("{")) {
         value.kind = Expression::Kind::Record;
         if (!at("}"))
           do {
             std::string label;
-            if (!name(label) || !expect(":"))
+            Span fieldSpan = current().span;
+            if (!name(label))
               return {};
-            auto x = expression(decl, depth + 1);
+            std::optional<uint32_t> x;
+            if (take(":"))
+              x = expression(decl, depth + 1);
+            else {
+              Expression shorthand;
+              shorthand.kind = Expression::Kind::Name;
+              shorthand.text = label;
+              shorthand.span = fieldSpan;
+              x = decl.expressions.size();
+              decl.expressions.push_back(std::move(shorthand));
+            }
             if (!x)
               return {};
             value.labels.push_back(std::move(label));
@@ -1322,11 +1306,18 @@ private:
     }
     value.span.end = previousEnd;
     auto left = uint32_t(decl.expressions.size());
+    bool blockLike = value.kind == Expression::Kind::Block ||
+                     value.kind == Expression::Kind::If ||
+                     value.kind == Expression::Kind::Match ||
+                     value.kind == Expression::Kind::For;
     decl.expressions.push_back(std::move(value));
-    return postfix(decl, left, span, depth, minimum);
+    if (statementStart && blockLike)
+      return left;
+    return postfix(decl, left, span, depth, minimum, records);
   }
   std::optional<uint32_t> postfix(SyntaxDeclaration &decl, uint32_t left,
-                                  Span span, unsigned depth, unsigned minimum) {
+                                  Span span, unsigned depth, unsigned minimum,
+                                  bool records) {
     while (take(".") || take("[")) {
       bool bracket = source.text[previousEnd - 1] == '[';
       Expression projection;
@@ -1377,7 +1368,7 @@ private:
                               : Expression::Kind::Multiply;
       equality |= precedence == 1;
       advance();
-      auto right = expression(decl, depth + 1, precedence + 1);
+      auto right = expression(decl, depth + 1, precedence + 1, records);
       if (!right)
         return {};
       binary.children = {left, *right};
@@ -1387,6 +1378,71 @@ private:
     }
     return left;
   }
+  std::optional<Pattern> pattern(unsigned depth) {
+    if (!bounded(depth))
+      return {};
+    Pattern result;
+    result.span = current().span;
+    if (take("_")) {
+      result.kind = Pattern::Kind::Ignore;
+    } else if (take("(")) {
+      result.kind = Pattern::Kind::Tuple;
+      bool comma = false;
+      if (!at(")"))
+        do {
+          auto child = pattern(depth + 1);
+          if (!child)
+            return {};
+          result.children.push_back(std::move(*child));
+        } while ((comma = take(",")) && !at(")"));
+      if (!expect(")"))
+        return {};
+      if (result.children.empty())
+        result.kind = Pattern::Kind::Unit;
+      else if (result.children.size() == 1 && !comma)
+        return std::move(result.children.front());
+    } else {
+      SyntaxType term;
+      if (!type(term, depth))
+        return {};
+      if (term.kind != SyntaxType::Kind::Name) {
+        fail("source.binding", "expected a binding name or record pattern");
+        return {};
+      }
+      result.name = term.name;
+      if (take("{")) {
+        result.kind = Pattern::Kind::Record;
+        result.type = std::move(term);
+        if (!at("}"))
+          do {
+            Span fieldSpan = current().span;
+            std::string label;
+            if (!name(label))
+              return {};
+            std::optional<Pattern> child;
+            if (take(":"))
+              child = pattern(depth + 1);
+            else {
+              child.emplace();
+              child->name = label;
+              child->span = fieldSpan;
+            }
+            if (!child)
+              return {};
+            result.labels.push_back(std::move(label));
+            result.children.push_back(std::move(*child));
+          } while (take(",") && !at("}"));
+        if (!expect("}"))
+          return {};
+      } else if (!term.arguments.empty() ||
+                 term.name.find("::") != std::string::npos) {
+        fail("source.binding", "type path requires a record pattern");
+        return {};
+      }
+    }
+    result.span.end = previousEnd;
+    return result;
+  }
   std::optional<uint32_t> body(SyntaxDeclaration &decl, bool protocol,
                                bool region, unsigned depth) {
     if (!bounded(depth) || !expect("{"))
@@ -1395,38 +1451,90 @@ private:
     decl.bodies.emplace_back();
     SyntaxBody b;
     b.span = current().span;
-    while (!at("return") && !at("yield") && !at("stop") && !atEnd() &&
-           !at("}")) {
+    b.region = region;
+    while (!atEnd() && !at("}")) {
+      if (take("stop")) {
+        if (protocol || current().kind != TokenKind::String) {
+          fail("source.mode", "local stop requires a reason string");
+          return {};
+        }
+        b.stopped = true;
+        b.stopReason = text().drop_front().drop_back().str();
+        advance();
+        if (!expect(";"))
+          return {};
+        break;
+      }
+      if (take("return")) {
+        b.returned = true;
+        if (region) {
+          fail("source.return", "nested blocks use a final expression");
+          return {};
+        }
+        bool named = protocol && at("(") &&
+                     (decl.outputs.size() != 1 ||
+                      (cursor + 2 < tokens.size() &&
+                       StringRef(source.text)
+                               .slice(tokens[cursor + 2].span.begin,
+                                      tokens[cursor + 2].span.end) == "="));
+        if (named) {
+          advance();
+          if (!at(")"))
+            do {
+              Span itemSpan = current().span;
+              std::string n;
+              if (!name(n))
+                return {};
+              std::optional<uint32_t> value;
+              if (take("="))
+                value = expression(decl, depth);
+              else {
+                Expression shorthand;
+                shorthand.kind = Expression::Kind::Name;
+                shorthand.text = n;
+                shorthand.span = itemSpan;
+                value = decl.expressions.size();
+                decl.expressions.push_back(std::move(shorthand));
+              }
+              if (!value)
+                return {};
+              b.results.emplace_back(std::move(n), *value);
+            } while (take(",") && !at(")"));
+          if (!expect(")"))
+            return {};
+        } else {
+          auto value = expression(decl, depth);
+          if (!value)
+            return {};
+          b.results.emplace_back(protocol ? std::string{} : "result", *value);
+        }
+        if (!expect(";"))
+          return {};
+        break;
+      }
       Statement s;
       s.span = current().span;
-      if (take("local")) {
-        std::string owner;
-        if (!protocol || !name(owner)) {
-          fail("source.mode", "owned local statements require protocol mode");
-          return {};
-        }
-        s.owner = std::move(owner);
-      }
-      if (take("using")) {
-        s.kind = Statement::Kind::Alias;
-        if (!name(s.name) || !expect("="))
-          return {};
-      } else if (take("guard")) {
-        if (s.owner) {
-          fail("source.mode", "guard declares its own owner");
-          return {};
-        }
-        s.kind = Statement::Kind::Guard;
-        s.owner.emplace();
-        if (!expect("@") || !name(*s.owner))
-          return {};
-      } else if (take("let")) {
-        if (at("(")) {
-          s.resultNames.emplace();
-          if (!names(*s.resultNames))
+      if (take("require")) {
+        s.kind = Statement::Kind::Require;
+        if (take("@")) {
+          s.owner.emplace();
+          if (!protocol) {
+            fail("source.roles", "require owner belongs to protocol mode");
             return {};
-        } else if (!name(s.name))
+          }
+          if (!name(*s.owner))
+            return {};
+        }
+      } else if (take("let")) {
+        s.mutableBinding = take("mut");
+        auto p = pattern(depth);
+        if (!p)
           return {};
+        s.pattern = std::move(*p);
+        if (s.mutableBinding && s.pattern.kind != Pattern::Kind::Name) {
+          fail("source.binding", "let mut requires one binding name");
+          return {};
+        }
         if (take(":")) {
           SyntaxType t;
           if (!type(t))
@@ -1442,72 +1550,61 @@ private:
         }
         if (!expect("="))
           return {};
-        if (take("send")) {
-          if (!protocol || s.owner) {
-            fail("source.send", "send requires a protocol binding");
-            return {};
-          }
-          std::string from, to;
-          if (!name(from) || !expect("->") || !name(to) || !expect("("))
-            return {};
-          s.exchange = std::make_pair(std::move(from), std::move(to));
-        }
       } else if (take("drop"))
         s.kind = Statement::Kind::Drop;
       else if (take("consume"))
         s.kind = Statement::Kind::Consume;
-      else if (take("require"))
-        s.kind = Statement::Kind::Require;
-      else {
-        fail("source.syntax",
-             "expected let, drop, consume, require, or body terminator");
-        return {};
+      else if (current().kind == TokenKind::Word &&
+               cursor + 1 < tokens.size() &&
+               StringRef(source.text)
+                       .slice(tokens[cursor + 1].span.begin,
+                              tokens[cursor + 1].span.end) == "=") {
+        s.kind = Statement::Kind::Assign;
+        s.pattern.span = current().span;
+        if (!name(s.pattern.name) || !expect("="))
+          return {};
+      } else
+        s.kind = Statement::Kind::Expression;
+      if (take("send")) {
+        if (!protocol || (s.kind != Statement::Kind::Let &&
+                          s.kind != Statement::Kind::Assign &&
+                          s.kind != Statement::Kind::Expression)) {
+          fail("source.send", "send requires a protocol statement");
+          return {};
+        }
+        std::string from, to;
+        if (!name(from) || !expect("->") || !name(to) || !expect("("))
+          return {};
+        s.exchange = std::make_pair(std::move(from), std::move(to));
       }
-      auto expr = expression(decl, depth);
+      auto expr =
+          expression(decl, depth, 0, true,
+                     s.kind == Statement::Kind::Expression && !s.exchange);
       if (!expr)
         return {};
       s.expression = *expr;
       if (s.exchange && !expect(")"))
         return {};
-      if (!expect(";"))
-        return {};
+      s.terminated = take(";");
+      auto kind = decl.expressions[*expr].kind;
+      bool blockLike =
+          kind == Expression::Kind::Block || kind == Expression::Kind::If ||
+          kind == Expression::Kind::Match || kind == Expression::Kind::For;
+      if (!s.terminated) {
+        if (region && at("}") && s.kind == Statement::Kind::Expression &&
+            !s.exchange) {
+          b.results.emplace_back("result", *expr);
+          break;
+        }
+        if (s.kind != Statement::Kind::Expression || !blockLike) {
+          fail("source.syntax", "expected ';' or a block result");
+          return {};
+        }
+      }
       s.span.end = previousEnd;
       b.statements.push_back(std::move(s));
     }
-    if (take("stop")) {
-      if (protocol || current().kind != TokenKind::String) {
-        fail("source.mode", "local stop requires a reason string");
-        return {};
-      }
-      b.stopped = true;
-      b.stopReason = text().drop_front().drop_back().str();
-      advance();
-    } else {
-      if (!expect(region ? "yield" : "return"))
-        return {};
-      if (protocol) {
-        if (!expect("("))
-          return {};
-        if (!at(")"))
-          do {
-            std::string n;
-            if (!name(n) || !expect("="))
-              return {};
-            auto value = expression(decl, depth);
-            if (!value)
-              return {};
-            b.results.emplace_back(std::move(n), *value);
-          } while (take(",") && !at(")"));
-        if (!expect(")"))
-          return {};
-      } else {
-        auto value = expression(decl, depth);
-        if (!value)
-          return {};
-        b.results.emplace_back("result", *value);
-      }
-    }
-    if (!expect(";") || !expect("}"))
+    if (!expect("}"))
       return {};
     b.span.end = previousEnd;
     decl.bodies[id] = std::move(b);

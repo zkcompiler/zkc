@@ -57,6 +57,8 @@ bool Checker::conformance(DeclarationId id) {
                           "associated permissions exceed representation",
                           provided->span);
     } else {
+      if (!body(provided->id, 1))
+        return false;
       if (required.inputs.size() != provided->inputs.size() ||
           required.outputs.size() != provided->outputs.size())
         return types.fail("source.conformance", "member arity differs",
@@ -174,6 +176,11 @@ bool Checker::conformance(DeclarationId id) {
                             provided->span);
       } else
         mutableProvided.effectAllowance = allowance;
+      if ((provided->body->mayStop && !allowance.mayStop) ||
+          (provided->body->opaque && !allowance.opaque))
+        return types.fail("source.effect",
+                          "body exceeds its interface effect allowance",
+                          provided->span);
     }
   }
   return true;
