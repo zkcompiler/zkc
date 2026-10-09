@@ -12,8 +12,9 @@
 //! rows where the original residual is identically zero. Assertions with two
 //! different selector kinds refuse rather than rely on height-dependent scopes.
 //!
-//! The carrier layout follows draft 2 of the relation-bundle design. The
-//! export remains the source artifact; the bundle is downstream of it.
+//! The carrier layout follows draft 2 of the relation-bundle design and its
+//! reader's encodings (signed offsets as decimal strings). The export remains
+//! the source artifact; the bundle is downstream of it.
 
 use crate::arena::{Arena, Node, hex_sha256};
 use crate::artifact::{Instance, Witness};
@@ -192,8 +193,11 @@ pub fn bundle(export: &Export) -> Result<Value> {
         .inputs
         .iter()
         .map(|slot| match *slot {
-            Slot::Main { offset, column } => json!(["read", 0, offset, column]),
-            Slot::Preprocessed { offset, column } => json!(["read", 1, offset, column]),
+            // Signed offsets are decimal strings in the bundle carrier.
+            Slot::Main { offset, column } => json!(["read", 0, offset.to_string(), column]),
+            Slot::Preprocessed { offset, column } => {
+                json!(["read", 1, offset.to_string(), column])
+            }
             Slot::Public(i) => json!(["public", i]),
             Slot::Selector(_) => unreachable!("selectors are not bundle inputs"),
         })
