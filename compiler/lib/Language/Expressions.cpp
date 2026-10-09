@@ -30,14 +30,11 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
     return Type{};
   if (expr.kind == K::Decimal)
     return {};
-  if (expr.kind == K::Name) {
-    auto p = place(id, depth);
-    return p ? std::optional<Type>(body.values[p->first.index].type)
-             : std::nullopt;
-  }
-  if (expr.kind == K::Projection) {
-    auto p = place(id, depth);
-    return p ? projected(body.values[p->first.index].type, p->second, expr.span)
+  if (expr.kind == K::Name || expr.kind == K::Projection) {
+    // Hints describe the fixed binding type. Earlier operands may restore a
+    // moved binding before this operand is evaluated.
+    auto p = sourcePlace(id, depth);
+    return p ? projected(bindings.at(p->first).type, p->second, expr.span)
              : std::nullopt;
   }
   if (expr.kind == K::Tuple) {
@@ -119,8 +116,7 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
                                     expr.span);
   }
   if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For ||
-      expr.kind == K::Apply || expr.kind == K::Repeat ||
-      expr.kind == K::FinishIf)
+      expr.kind == K::Block || expr.kind == K::FinishIf)
     return {};
   for (auto child : expr.children) {
     auto result = hint(child, depth + 1);
@@ -131,7 +127,21 @@ std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
 }
 std::optional<ValueId> BodyChecker::expression(uint32_t id,
                                                std::optional<Type> expected,
-                                               unsigned depth) {
+                                               unsigned depth,
+                                               bool allowUntypedStop) {
+  auto result = evaluate(id, expected, depth, allowUntypedStop);
+  const auto &expr = syntax.expressions[id];
+  if (!result && body.stopped && !checker.types.diagnostic &&
+      expr.kind != Expression::Kind::Block &&
+      expr.kind != Expression::Kind::If && expr.kind != Expression::Kind::Match)
+    fail("source.unreachable", "operation follows an operand that always stops",
+         expr.span);
+  return result;
+}
+std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
+                                             std::optional<Type> expected,
+                                             unsigned depth,
+                                             bool allowUntypedStop) {
   const auto &expr = syntax.expressions[id];
   if (depth > checker.work.limits.expressionDepth ||
       !checker.types.charge(1, expr.span)) {
@@ -142,8 +152,7 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   using K = Expression::Kind;
   using T = Type::Kind;
   std::optional<ValueId> result;
-  if (expr.kind == K::Apply || expr.kind == K::Repeat ||
-      expr.kind == K::FinishIf) {
+  if (expr.kind == K::FinishIf) {
     fail("source.mode", "protocol action requires a complete let statement",
          expr.span);
     return {};
@@ -165,12 +174,10 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
     const auto &port = body.services[root->index];
     result = emit(ServiceQuery{*root}, port.field, {port.owner}, expr.span);
   } else if (expr.kind == K::Name) {
-    auto found = bindings.find(expr.text);
-    if (found == bindings.end()) {
-      fail("source.name", "unknown local value: " + expr.text, expr.span);
+    auto p = place(id, depth);
+    if (!p)
       return {};
-    }
-    result = found->second;
+    result = p->first;
   } else if (expr.kind == K::Projection) {
     auto p = place(id, depth);
     if (!p)
@@ -241,8 +248,13 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
   else if (expr.kind == K::Tuple || expr.kind == K::Array ||
            expr.kind == K::Record)
     result = construct(expr, expected, depth);
-  else if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For)
-    result = control(expr, expected, depth);
+  else if (expr.kind == K::Block)
+    result = block(expr, expected, allowUntypedStop);
+  else if (expr.kind == K::For && protocol()) {
+    if (repeat(expr))
+      result = pack({}, expr.span);
+  } else if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For)
+    result = control(expr, expected, depth, allowUntypedStop);
   else {
     bool equal = expr.kind == K::Equal;
     auto operand = equal ? std::optional<Type>{} : expected;
@@ -352,25 +364,14 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       }
       type = *expected;
     }
-    for (unsigned i = 0; i < expr.children.size(); ++i) {
-      std::optional<Type> field;
-      if (expected && i < expected->arguments.size())
-        field = expected->arguments[i];
-      else
-        field = hint(expr.children[i], depth + 1);
-      if (!field) {
-        if (!checker.types.diagnostic)
-          fail("source.inference", "tuple element needs a type", expr.span);
-        return {};
-      }
-      fields.push_back({std::to_string(i), *field, true, expr.span});
-      if (!expected)
-        type.arguments.push_back(*field);
-    }
+    if (!expected)
+      type.arguments.resize(expr.children.size());
     if (type.arguments.size() != expr.children.size()) {
       fail("source.type", "tuple arity differs", expr.span);
       return {};
     }
+    for (unsigned i = 0; i < type.arguments.size(); ++i)
+      fields.push_back({std::to_string(i), type.arguments[i], true, expr.span});
   } else if (expr.kind == E::Array) {
     type = Type(T::Array);
     type.dimension = Natural::constant(expr.children.size());
@@ -444,9 +445,17 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       fail("source.duplicate", "duplicate constructor field", expr.span);
       return {};
     }
-    auto v = expression(expr.children[i], fields[index].type, depth + 1);
+    // Infer each unconstrained tuple element while checking it once, in source
+    // order. Lexical blocks need no separate speculative type-checking path.
+    const bool inferred = expr.kind == E::Tuple && !expected;
+    auto v = expression(expr.children[i],
+                        inferred ? std::nullopt
+                                 : std::optional<Type>(fields[index].type),
+                        depth + 1);
     if (!v || !use(*v, expr.span))
       return {};
+    if (inferred)
+      type.arguments[index] = body.values[v->index].type;
     values[index] = *v;
   }
   auto caps = checker.types.permissions(type, expr.span, &decl);

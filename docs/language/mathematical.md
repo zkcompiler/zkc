@@ -86,17 +86,17 @@ struct Pair<T: Type> { pub left: T, pub right: T }
 math fn square<F: Field>(x: F) -> F { return x * x; }
 fn choose(x: Fr, go: bool) -> Pair<Fr> {
   let squared = square(x);
-  let selected = if go capture(x, squared) {
-    yield squared;
+  let selected = if go {
+    squared
   } else {
-    yield x;
+    x
   };
   return Pair<Fr>{left: x, right: selected};
 }
 protocol Transfer roles(P, V)(x: Fr @P, go: bool @P) -> (result: Pair<Fr> @V) {
-  local P let pair = choose(x, go);
+  let pair @P = choose(x, go);
   let received = send P -> V(pair);
-  return (result = received);
+  return received;
 }
 entry Demo = Transfer;
 ```
@@ -112,8 +112,21 @@ parameter promises none. These permissions are independent. Components select
 interface implementations statically and can seal an associated representation.
 Library clients need neither its representation nor a runtime dispatch table.
 
-Use explicit captures in local `if` and `match`; use `carry` for changing state or
-affine resources in a `for` loop. Defined functions infer effects. Write `!{}` only
+Blocks use lexical names. `if` and `match` produce their final expression;
+`let mut` and whole-name assignment describe changing state. The compiler derives
+captures and loop state, including resource checks. For example:
+
+```text
+let mut sum: Fr = 0;
+for _ in 0..n {
+  sum = sum + x;
+}
+```
+
+Protocol loops additionally spell `roles(P, V) max N`. Protocol calls use ordinary
+call syntax, such as `let result = Round(x) using(coins);`. `using` passes managed
+service references; `let alias = coins;` gives the same service another name.
+Defined functions infer effects. Write `!{}` only
 when an effect-free interface is an intended contract. Local owner inference,
 nonlinear dimension inference and arbitrary inequality solving are not required.
 

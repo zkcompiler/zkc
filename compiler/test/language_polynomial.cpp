@@ -297,10 +297,10 @@ int main(int argc, char **argv) {
               changed += R"(
             protocol Nested roles(P)(n:index@P,a:Fr@P,b:Fr@P,x:Fr@P)
                 ->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
-              let r=repeat roles(P)(i<n,max 2)
-                  carry(v=(a,a,a,a,a,a)@P) capture(a,b,x){
-                yield(v=calculate(a,b,x));
-              };
+              let mut r@P=(a,a,a,a,a,a);
+              for _ in 0..n roles(P) max 2 {
+                r=calculate(a,b,x);
+              }
               return(r=r);
             }entry NestedDemo=Nested;
           )";

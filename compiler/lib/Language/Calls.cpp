@@ -129,6 +129,12 @@ BodyChecker::actuals(const Declaration &callee, const Expression &expr,
 std::optional<ValueId> BodyChecker::call(const Expression &expr,
                                          std::optional<Type> expected,
                                          unsigned depth) {
+  if (expr.roles || !expr.services.empty()) {
+    fail("source.call",
+         "role mappings and managed arguments belong to protocol calls",
+         expr.span);
+    return {};
+  }
   if (expr.text == "index") {
     if (!local() || expr.arguments.size() != 1 || !expr.children.empty()) {
       fail("source.call",
@@ -276,11 +282,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     return {};
   }
   bool ordered = callee.kind == Declaration::Kind::Local;
-  if ((ordered && math()) || (ordered && protocol() && !owner) ||
-      (!ordered && owner)) {
+  if (!ordered)
+    owner.reset();
+  if ((ordered && math()) || (ordered && protocol() && !owner)) {
     fail("source.mode",
-         "ordered protocol calls require an explicit local owner; math calls "
-         "cannot have one",
+         "ordered protocol calls require a whole binding or assignment RHS at "
+         "an explicit singleton owner",
          expr.span);
     return {};
   }

@@ -2,43 +2,87 @@
 
 This native contract defines participant-local bodies, communication and control.
 
-## Ordered control
+## Bindings and local control
 
 ```text
 fn accumulate(x: Fr, n: index, go: bool) -> Fr {
-  let zero: Fr = 0;
-  let sum = for i in 0..n carry(s = zero) capture(x) {
-    yield s + x;
-  };
-  return if go capture(sum) {
-    yield sum;
+  let mut sum: Fr = 0;
+  for _ in 0..n {
+    sum = sum + x;
+  }
+  return if go {
+    sum
   } else {
     stop "reject";
   };
 }
 ```
 
-`if`, exhaustive `match`, and `for` are expressions in local functions. Regions
-are isolated: they see explicit `capture(...)` values, loop carries and indices,
-or a selected variant's payload. All arms are checked. Continuing arms must yield
-the same logical type. `match v capture(...) { Some(x) => {...}, None() => {...} }`
-covers each declared alternative exactly once. A stopped arm needs no result.
+`let pattern = expression;` introduces immutable bindings. `let mut name =
+expression;` introduces an assignable binding; `name = expression;` replaces its
+whole value after evaluating the RHS. Type and protocol role set remain fixed.
+There is no assignment to individual fields. Each authored binding and assigned
+successor retains its own resource obligations, including empty values.
+Overwriting an unused value without `Drop` refuses.
 
-A `for i in lower..upper carry(name = initial, ...) capture(...)` loop preserves
-carry types. Zero iterations return the initial carries. One carry returns that
-value; multiple carries return a tuple; no carries return unit. Captures require
-`Copy`; affine resources travel through carries. Each continuing iteration retains
-the exact captures at the backedge. `require condition;` stops on false. `stop`
-uses a native reason: `reject`, `abort`, `exhausted`, `incomplete` or `refused`.
-Target execution limits remain independent of source effects and typing.
+Blocks have lexical scope. A new binding's initializer sees the previous binding;
+same-scope rebinding and inner immutable shadowing are allowed. Nested bindings
+cannot shadow an outer mutable binding or a managed service. Declaration names
+remain reserved against local shadowing. A plain block adds no runtime control
+operation. A final expression is its result; no tail means unit. `return` ends a
+declaration body and cannot occur in a nested block. A continuing declaration
+requires `return`; a declaration whose final statement always stops needs none.
+Statements or terminators after a guaranteed stop are rejected, including code
+after an all-stopped control. An operand that always stops must be expressed as
+a whole block/control result, not embedded in an unreachable enclosing operation.
+
+Patterns include names, `_`, `()`, tuples and complete named records, such as
+`let (x, _) = pair;` or `let Point{x, y: ordinate} = point;`. Wildcards and discarded
+expression statements require `Drop`. Record patterns preserve field privacy;
+opening a restricted record requires local mode and constructor authority.
+Record construction supports same-name fields, such as `Point{x, y}`.
+
+`if` and exhaustive `match` are local expressions. All arms are checked, including
+statically unselected arms, and continuing arms have one common result type.
+`match choice { Some(x) => { x }, None() => { stop "reject"; } }` covers every
+alternative once. A missing `else` supplies an empty block. A block-like statement
+without a semicolon must produce unit. Header conditions, scrutinees and bounds
+containing record literals require parentheses. A value expression whose every
+arm stops needs an expected type or a discarded statement context. Nested stopped
+arms do not constrain the result inferred from continuing arms. A stopped path has
+no resource obligations.
+
+Free places are reads before assignment on some continuing path, preserving
+projection privacy and partial moves. Capturing one field does not move its affine siblings.
+A noncopyable immutable branch capture transfers custody; return it explicitly to
+retain access. Mutable state is joined only when wholly available on every
+continuing arm. Otherwise it becomes unavailable; each residual must be consumed
+or permit `Drop`. Assignment can restore an unavailable binding. A partially moved
+root may supply its remaining fields, but cannot supply a whole value. Inferred
+`Copy` inputs do not create authored obligations: for values without `Drop`, only
+uses guaranteed on every continuing arm discharge the corresponding outer places.
+A later outer use remains valid; explicit aliases still require their own use.
+
+Local `for i in lower..upper { ... }` evaluates both `index` bounds once, in written
+order, and produces unit. Outer assignments and referenced, wholly available
+noncopyable mutable roots become loop state. Every state slot needs a whole initial
+value and a whole successor on every continuing iteration; zero iterations retain
+the initial value. Local state may replace a resource with a newly constructed one.
+Invariant places require `Copy`. A possibly empty loop does not discharge an outer
+invariant's no-`Drop` obligation: it still needs a use outside the loop. Managed
+services are unavailable inside local functions.
+
+`require condition;` stops on false. `stop` uses a native reason: `reject`, `abort`,
+`exhausted`, `incomplete` or `refused`. Target execution limits remain independent
+of source effects and typing.
 
 ## Participant meaning
 
 ```text
 protocol Transfer roles(P, V)(x: Fr @P, n: index @P, go: bool @P) -> (result: Fr @V) {
-  local P let payload = accumulate(x, n, go);
+  let payload @P = accumulate(x, n, go);
   let received = send P -> V(payload);
-  return (result = received);
+  return received;
 }
 entry Demo = Transfer;
 ```
@@ -56,11 +100,17 @@ input may accept disjoint roles, but an unused sum of both inputs still requires
 a common participant. Abstract mathematical members conservatively depend on all
 inputs for both result availability and formation, including unused calls.
 
-`local P let value = helper(args);` explicitly owns an ordered call at P. It creates
-no communication. Multi-role values require `Copy + Drop + Share`; affine values
-stay at one role. Narrowing availability requires `Drop`. Protocol returns use
-`(port = expression, ...)`: expressions evaluate in written order and operands are
-then placed in declared port order. Missing, repeated and unknown outputs refuse.
+`let value @P = helper(args);` owns an ordered local call at P, without
+communication. An assignment to an existing singleton-role binding supplies the
+same owner context. The call must occupy the whole RHS; nested ordered calls are
+not inferred from their arguments. Mathematical calls need no owner selection.
+Narrowing availability requires `Drop`; multi-role values require `Share` in
+addition to each operation's own permissions.
+
+A sole protocol output accepts `return expression;`. Multiple outputs use
+`return (port = expression, ...);`, with same-name shorthand `return (port, ...);`.
+Expressions evaluate in written order, then operands are placed in declared port
+order. Missing, repeated and unknown outputs refuse.
 
 Send occupies a whole binding RHS. It requires distinct declared roles, sender
 availability, and `Copy + Drop + Share + Wire`. Its result denotes the actual
@@ -74,13 +124,13 @@ delivery nor equality of participant components.
 
 ```text
 protocol Draw<F: Field> roles(V)() using(coins: Random<F> @V) -> (r: F @V) {
-  using alias = coins;
+  let alias = coins;
   let r = alias.draw();
   return (r = r);
 }
 protocol Run roles(V)(go: bool @V) using(coins: Random<Fr> @V) -> (r: Fr @V) {
   guard @V go;
-  let r = apply Draw<Fr>() using(coins);
+  let r = Draw<Fr>() using(coins);
   return (r = r);
 }
 ```
@@ -91,7 +141,7 @@ random-service contract for that field; analysis can retain a generic declaratio
 before that selection. The installed catalog includes service contracts in its
 identity.
 
-`using alias = coins;` borrows the same root. Aliases introduce no query, reset or
+`let alias = coins;` names the same root. The alias is immutable and unannotated. Aliases introduce no query, reset or
 independence assumption. `coins.draw()` is ordered protocol work: its result is
 available only at the service owner, and an unused result does not remove the
 query. Services cannot enter ordinary types, aggregate fields, messages, local
@@ -118,16 +168,18 @@ protocol Pair roles(A, B)(x: Fr @(A,B), y: Fr @(A,B))
 }
 protocol Use roles(P, V)(x: Fr @(P,V), y: Fr @(P,V))
     -> (p: Fr @P, v: Fr @V) {
-  let (atV, atP) = apply Pair roles(V,P)(x, y);
+  let (atV, atP) = Pair roles(V,P)(x, y);
   return (p = atP, v = atV);
 }
 ```
 
-`apply` occupies a whole protocol `let` RHS. Bindings follow the callee's declared
-output order. Each result retains its own type and participant set; the binding
-list does not construct a tuple with shared availability. A sole result can use
-`let value = apply ...`; a resultless application uses `let () = apply ...`.
-Applications remain ordered even when their results are unused.
+Calls resolve by declaration kind. A protocol call occupies a whole `let` RHS,
+assignment RHS or expression statement. Results follow the callee's declared port
+order and retain independent types and role sets; a multi-result tuple pattern
+does not construct a tuple value. One result accepts an ordinary pattern. Multiple
+results require one pattern per port, without a combined type or role annotation.
+A zero-result call can be written `Observe();` or `let () = Observe();`.
+Discarded outputs require `Drop`; calls remain ordered when their results are unused.
 
 `roles(...)` maps the callee's ordered roster to distinct caller roles. Omitting
 it selects identically named roles, which must all exist in the caller. An explicit
@@ -139,45 +191,48 @@ Static arguments follow the same inference and bound checks as helper calls.
 Applications lower directly to `protocol.apply`. Its native static expansion
 preserves nested sites and explicit participant boundaries before projection.
 The combined helper/application graph must be acyclic and obey source and native
-expansion limits. No additional runtime call stack is introduced. `apply` is
-contextual here; library members can still be named `apply`.
+expansion limits. No additional runtime call stack is introduced.
 
 ## Distributed repetition
 
 ```text
-let (af, bf) = repeat roles(P,V)(i < n, max N)
-    carry(a = initialP @P, b = initialV @V) capture(go) using(coins) {
+let mut a = initialP;
+let mut b = initialV;
+for i in 0..n roles(P, V) max N {
   guard @V go;
-  let (x, y) = apply Round(a, b) using(coins);
-  yield (a = x, b = y);
-};
+  let (x, y) = Round(a, b) using(coins);
+  a = x;
+  b = y;
+}
 ```
 
-A protocol `repeat` is an ordered, isolated region. Its runtime `index` count must
-be available at every listed participant. Its static natural maximum closes to
-at most 1,048,576. Each participant checks its local count before body work. A
-joint host additionally checks count agreement among live participants; source
-availability alone does not prove equal counts.
+A protocol `for` requires literal lower bound `0`, explicit `roles(...)` and a
+static natural `max`. Its runtime `index` count is evaluated once and must be
+available at every listed participant. The maximum closes to at most 1,048,576.
+Each participant checks its local count before body work. A joint Host also checks
+count agreement among live participants; availability alone does not prove equality.
 
-Carries have separate types and role sets. An optional carry annotation selects
-a nonempty subset of both the initial availability and loop roles; otherwise it
-uses their intersection. Narrowing requires `Drop`; shared carries require
-`Copy + Drop + Share`. The named yield supplies every carry exactly once, with
-matching type and availability. Result bindings follow carry declaration order.
-Zero iterations return the initial values. Affine carries must preserve each
-input's exact native root at the backedge, including through helper applications.
+The compiler infers mutable state, invariant data and managed service references
+from the body, including nested regions. State slots retain their types and full
+role sets: every state participant must be in the loop roster. Narrow a binding
+before the loop when necessary. Zero iterations return initial values. Each
+continuing iteration supplies a whole successor. Affine protocol state must
+preserve each input's exact native root, including through helper calls; equal
+types or swapping same-typed resources do not suffice.
 
-Data captures require `Copy`. Managed captures borrow the same roots and require
-their owners inside the loop. Nested actions may use only loop participants;
-nested regions need their own explicit captures. Total mathematics retains its
-ordinary component semantics. Results cannot hide per-role values in a tuple.
-The native repeat carries flattened data while keeping managed captures separate
-from source data layouts. Source correspondence checks the maximum, roles,
-operands, region signature, nested operations and named yield.
+Invariant data places require `Copy`; their selected availability is the nonempty
+intersection with loop roles, with narrowing allowed only under `Drop`. A
+copyable mutable binding with no assignment can be an invariant. Managed aliases
+capture their common root once and require its owner inside the loop. Nested
+actions use only active loop participants. Mathematical component semantics remain
+unchanged; separate participant states are never bundled into a common-role tuple.
 
-A conditional service query can use a one-role repeat with maximum one. An owned
-local helper computes its zero-or-one count. The query executes only in the
-reached iteration; it is never hoisted or evaluated speculatively.
+The checked graph and native `protocol.repeat` retain explicit state, data
+captures, managed references, region inputs and successors. Source comparison
+checks those operands, the maximum, roles, signature and nested operations.
+A conditional query can use a one-role loop with maximum one. An owned local
+helper computes its zero-or-one count; the draw executes only in the reached
+iteration and is never hoisted or evaluated speculatively.
 
 ## Conditional participant completion
 
@@ -190,7 +245,7 @@ protocol Run roles(V)(go: bool @V, x: Fr @V) -> (result: Fr @V) completes {
 
 `completes` declares an Entry-only protocol: applying it as a reusable component
 refuses, including when its body has no current completion action. `finish_if`
-requires that marker and occupies a complete unannotated `let` RHS. Its Boolean
+requires that marker and occupies a complete unannotated immutable `let` RHS. Its Boolean
 condition and named outputs must be available at its owner. The named list
 supplies exactly that owner's declared protocol outputs. Expressions evaluate in
 written order; native operands follow output declaration order.

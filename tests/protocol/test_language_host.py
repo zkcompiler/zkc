@@ -347,7 +347,7 @@ def test_bindings_refuse_outputs_without_host_export(toolchain, journal, directo
     source.write_text('module sample; struct Restricted:Drop{pub b:bool}'
                       'fn make()->Restricted{return Restricted{b:true};}'
                       'protocol Run roles(P)()->(r:Restricted@P){'
-                      'local P let r=make();return(r=r);}entry Demo=Run;')
+                      'let r @P =make();return(r=r);}entry Demo=Run;')
     package, pin = compile_entry(toolchain, journal, directory, 'Demo', source)
     bindings = directory / 'bindings.rs'
     bindings.write_bytes(b'unchanged')
@@ -455,7 +455,7 @@ domain Fr=field("bls12-381.fr");
 type Vector<F:Field>=builtin("vector",F);
 fn filled(x:Fr)->Vector<Fr>{let n:index=3;return kernel<Fr>("vector.fill",x,n);}
 protocol Run roles(P,V)(done:bool@P)->(large:Vector<Fr>@P,accepted:bool@V){
-  local P let large=filled(1);
+  let large @P =filled(1);
   let actual=send P->V(done);
   return(large=large,accepted=actual);
 }

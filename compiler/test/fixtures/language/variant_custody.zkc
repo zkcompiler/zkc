@@ -1,26 +1,24 @@
 module sample;
 domain Fr = field("bls12-381.fr");
 enum Choice:Drop { A(Fr), B(), C(Fr, Fr), unpack() }
-fn make(x:Fr, y:Fr, a:bool, b:bool)->Choice {
-  return if a capture(x, y, b) {
-    yield if b capture(x) {yield Choice::unpack();} else {yield Choice::A(x);};
+fn make(x: Fr, y: Fr, a: bool, b: bool) -> Choice {
+  return if a {
+    if b { Choice::unpack() } else { Choice::A(x) }
   } else {
-    yield if b capture(x, y) {
-      yield Choice::C(x, y);
-    } else { yield Choice::B(); };
+    if b { Choice::C(x, y) } else { Choice::B() }
   };
 }
-fn read(choice:Choice, fallback:Fr)->Fr {
-  return match choice capture(fallback) {
-    C(x,y) => {yield y;},
-    unpack() => {yield fallback + fallback;},
-    B() => {yield fallback;},
-    A(x) => {yield x;}
+fn read(choice: Choice, fallback: Fr) -> Fr {
+  return match choice {
+    C(x, y) => { y },
+    unpack() => { fallback + fallback },
+    B() => { fallback },
+    A(x) => { x }
   };
 }
 protocol Run roles(P)(x:Fr@P, y:Fr@P, fallback:Fr@P, a:bool@P, b:bool@P)->(result:Fr@P) {
-  local P let choice = make(x, y, a, b);
-  local P let result = read(choice, fallback);
+  let choice @P = make(x, y, a, b);
+  let result @P = read(choice, fallback);
   return(result=result);
 }
 entry Demo = Run;

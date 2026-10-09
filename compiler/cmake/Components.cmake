@@ -64,6 +64,10 @@ add_zkc_component(Language
   lib/Language/Capabilities.cpp
   lib/Language/Permissions.cpp
   lib/Language/Conformance.cpp
+  lib/Language/Resolution.cpp
+  lib/Language/ResourceUsage.cpp
+  lib/Language/Bindings.cpp
+  lib/Language/Regions.cpp
   lib/Language/BodyCheck.cpp
   lib/Language/Expressions.cpp
   lib/Language/Calls.cpp

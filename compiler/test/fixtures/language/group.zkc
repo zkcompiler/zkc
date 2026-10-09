@@ -10,7 +10,7 @@ fn work<H:Group>(point:H, scalar:H::Scalar)->H {
 }
 protocol Run<H:Group+Share+Wire> roles(P,V)(point:H@P, scalar:H::Scalar@P)->(result:H@V)
 where Share(H::Scalar), Wire(H::Scalar) {
-  local P let result = work(point, scalar);
+  let result @P = work(point, scalar);
   let received = send P->V(result);
   return(result=received);
 }

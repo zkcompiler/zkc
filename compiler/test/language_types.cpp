@@ -117,7 +117,7 @@ enum Choice{Some(Fr),None()}
   auto emitted = original(prefix + R"(
 struct Secret{value:Fr}
 fn make()->Secret{return Secret{value:1};}
-protocol Run roles(P)()->(r:Secret@P){local P let x=make();return(r=x);}
+protocol Run roles(P)()->(r:Secret@P){let x @P =make();return(r=x);}
 entry Demo=Run;
 )");
   auto schema = must(json::parse(emitted.interfaceJson()));
@@ -154,14 +154,13 @@ void typing() {
             "source.permission"},
            {"fn bad(x:Fr)->bool !{} {require true;return true;}",
             "source.effect"},
-           {"fn bad(x:Fr)->Fr {let y=if true capture(){yield x;}else{yield "
-            "x;};return y;}",
+           {"fn bad(x:Fr)->Fr {let y=if true { missing}else{ x};return y;}",
             "source.name"},
            {"enum Choice {A(Fr),B()} fn bad(v:Choice)->Fr {return match v "
-            "capture(){A(x)=>{yield x;}};}",
+            "{A(x)=>{ x}};}",
             "source.match"},
            {"enum Choice {A(Fr),B()} fn bad(v:Choice)->Fr {return match v "
-            "capture(){A(x)=>{yield x;},A(x)=>{yield x;}};}",
+            "{A(x)=>{ x},A(x)=>{ x}};}",
             "source.match"},
            {"struct Pair {pub left:Fr,pub right:Fr} fn bad(x:Fr)->Pair{return "
             "Pair{left:x,left:x};}",
@@ -174,10 +173,10 @@ void typing() {
            {"struct Token:Copy {} fn bad(t:Token)->(){drop t;return ();}",
             "source.drop"},
            {"struct Token:Share {} fn bad(t:Token,go:bool)->Token{return if go "
-            "capture(t){yield t;}else{yield Token{};};}",
+            "{ t}else{ Token{}};}",
             "source.drop"},
-           {"struct Token:Drop {} fn bad(t:Token,n:index)->(){let x=for i in "
-            "0..n carry() capture(t){yield ();};return ();}",
+           {"struct Token:Drop {} fn bad(t:Token,n:index)->(){for _ in 0..n "
+            "{consume t;}return ();}",
             "source.permission"},
            {"struct Token:Drop {} struct Pair {pub a:Token,pub b:Token} fn "
             "bad(p:Pair)->Pair{let a=p.a;return p;}",
@@ -359,9 +358,8 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
 interface I<G:Group>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar);}
 component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){return x;}}
 )");
-  refuses(prefix + "protocol Run roles(P)()->(r:bool@P){local P let "
-                   "r=true;return(r=r);}entry Demo=Run;",
-          "source.mode");
+  check(prefix + "protocol Run roles(P)()->(r:bool@P){let r @P "
+                 "=true;return(r=r);}entry Demo=Run;");
   refuses(prefix + "fn f(x:Fr)->Fr{return x;}protocol Run "
                    "roles(P)(x:Fr@P)->(r:Fr@P){return(r=f(x));}entry Demo=Run;",
           "source.mode");
@@ -382,7 +380,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
                                       {"m", prefix + R"(
         use lib::{Boxed,Box};
         fn work<C:Boxed<Fr>>(x:Fr)->Fr{let state=C::make(x);return C::open(state);}
-        protocol Run roles(P)(x:Fr@P)->(r:Fr@P){local P let r=work<Box<Fr>>(x);return(r=r);}entry Demo=Run;
+        protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let r @P =work<Box<Fr>>(x);return(r=r);}entry Demo=Run;
       )",
                                        "m.zkc"}}));
   auto libraryProject = must(analyze(libraryCapture).checkedProject());
@@ -393,7 +391,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
       {{"lib", "module lib;pub enum Ticket:Drop{Valid(bool)}", "lib.zkc"},
        {"m",
         "module m;use lib::{Ticket};fn peek(t:Ticket)->bool{return match t "
-        "capture(){Valid(x)=>{yield x;}};}",
+        "{Valid(x)=>{ x}};}",
         "m.zkc"}}));
   auto privateMatch = analyze(variantPrivacy).checkedProject();
   require(!privateMatch, "restricted variant payload crossed module authority");
@@ -427,7 +425,7 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
                  "second=t;return second;}");
   check(prefix +
         "struct Token:Share {}fn forward(t:Token,go:bool)->Token{return if go "
-        "capture(t){yield t;}else{stop \"reject\";};}");
+        "{ t}else{stop \"reject\";};}");
   check(prefix +
         "math fn first<F:Field,N:nat,M:nat>(a:[F;N+M])->[F;M+N]{return a;}");
   refuses(
@@ -436,37 +434,35 @@ component C<G:Group>:I<G>{fn f(x:G::Scalar)->G::Scalar where Wire(G::Scalar){ret
       "source.type");
   auto indexed = original(
       prefix + "fn count<N:nat>()->index{return index<N+1>();}protocol Run "
-               "roles(P)()->(r:index@P){local P let "
-               "r=count<2>();return(r=r);}entry Demo=Run;");
+               "roles(P)()->(r:index@P){let r @P "
+               "=count<2>();return(r=r);}entry Demo=Run;");
   must(compileEntry(indexed));
   auto nestedConstructor = original(
-      prefix +
-      "enum Choice{A(Fr)}fn get(v:Choice)->Fr{return match v "
-      "capture(){A(x)=>{yield x;}};}fn nested(x:Fr)->Fr{return "
-      "get(Choice::A(x));}protocol Run roles(P)(x:Fr@P)->(r:Fr@P){local P let "
-      "r=nested(x);return(r=r);}entry Demo=Run;");
+      prefix + "enum Choice{A(Fr)}fn get(v:Choice)->Fr{return match v {A(x)=>{ "
+               "x}};}fn nested(x:Fr)->Fr{return get(Choice::A(x));}protocol "
+               "Run roles(P)(x:Fr@P)->(r:Fr@P){let r @P "
+               "=nested(x);return(r=r);}entry Demo=Run;");
   must(compileEntry(nestedConstructor));
   refuses(prefix +
               "enum Secret:Copy+Drop+Share+Wire {A(bool)}protocol Run "
               "roles(P)(x:Secret@P)->(r:Secret@P){return(r=x);}entry Demo=Run;",
           "source.permission");
   refuses(prefix + "struct Copy {}", "source.name");
-  refuses(
-      prefix +
-          "enum Secret:Copy+Drop+Share+Wire {A(bool)}fn make()->Secret{return "
-          "Secret::A(true);}protocol Run roles(P,V)()->(){local P let "
-          "x=make();let y=send P->V(x);return();}",
-      "source.permission");
+  refuses(prefix +
+              "enum Secret:Copy+Drop+Share+Wire {A(bool)}fn "
+              "make()->Secret{return Secret::A(true);}protocol Run "
+              "roles(P,V)()->(){let x @P =make();let y=send P->V(x);return();}",
+          "source.permission");
   refuses(prefix + "struct Token:Drop+Share+Wire {}fn make()->Token{return "
-                   "Token{};}protocol Run roles(P,V)()->(){local P let "
-                   "x=make();let y=send P->V(x);return();}",
+                   "Token{};}protocol Run roles(P,V)()->(){let x @P "
+                   "=make();let y=send P->V(x);return();}",
           "source.permission");
   auto nestedAssociated = original(prefix + R"(
 interface I{type Out;fn make()->Out;fn finish(x:Out)->();}
 component C:I{type Out=();fn make()->Out{return Out(());}fn finish(x:Out)->(){consume x;return ();}}
 struct Holder<A:I>{pub item:A::Out}
 fn forward<A:I>()->(){let h=Holder<A>{item:A::make()};return A::finish(h.item);}
-protocol Run roles(P)()->(){local P let done=forward<C>();return();}entry Demo=Run;
+protocol Run roles(P)()->(){let done @P =forward<C>();return();}entry Demo=Run;
 )");
   must(compileEntry(nestedAssociated));
   check(prefix + R"(
@@ -476,8 +472,8 @@ fn read<G:Group>(x:Wrapped<G>)->G::Scalar where Wire(G::Scalar){return need(x.x)
 )");
   auto emptyArray =
       original(prefix + "struct Token:Share {}fn empty()->[Token;0]{return "
-                        "[];}protocol Run roles(P)()->(r:[Token;0]@P){local P "
-                        "let r=empty();return(r=r);}entry Demo=Run;");
+                        "[];}protocol Run roles(P)()->(r:[Token;0]@P){let r @P "
+                        "=empty();return(r=r);}entry Demo=Run;");
   auto emptySchema = must(json::parse(emptyArray.interfaceJson()));
   auto *emptyPort = emptySchema.getAsObject()
                         ->getArray("protocols")
@@ -570,23 +566,23 @@ entry Demo=Run;)");
   auto local = original(prefix + R"(
 math fn twice<F:Field>(x:F)->F{return x+x;}
 math fn outer(x:Fr)->Fr{return twice(x);}
-fn choose(x:Fr,go:bool)->Fr {let y=outer(x);return if go capture(x,y){yield y;}else{yield x;};}
-protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){local P let r=choose(outer(x),go);return(r=r);}entry Demo=Run;)");
+fn choose(x:Fr,go:bool)->Fr {let y=outer(x);return if go { y}else{ x};}
+protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){let r @P =choose(outer(x),go);return(r=r);}entry Demo=Run;)");
   must(compileEntry(local));
   auto sharedMath = original(prefix + R"(
     enum Choice { Some(Fr), None() }
     math fn pair(x:Fr)->(Fr,Fr) { return (x,x+1); }
     fn choose(x:Fr,b:bool)->Fr {
-      let value=if b capture(x) { let p=pair(x); yield Choice::Some(p.1); }
-                else { yield Choice::None(); };
-      return match value capture(x) {
-        Some(y)=>{let p=pair(y); yield p.0;},
-        None()=>{let p=pair(x); yield p.1;}
+      let value=if b  { let p=pair(x);  Choice::Some(p.1) }
+                else {  Choice::None() };
+      return match value  {
+        Some(y)=>{let p=pair(y);  p.0},
+        None()=>{let p=pair(x);  p.1}
       };
     }
     protocol Run roles(P)(x:Fr@P,b:bool@P)->(a:Fr@P,c:Fr@P) {
       let a=pair(x);
-      local P let c=choose(x,b);
+      let c @P =choose(x,b);
       return(a=a.1,c=c);
     }
     entry Demo=Run;
@@ -643,8 +639,8 @@ protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){local P let r=choose(outer(x),
   auto variant = original(prefix + R"(
 enum Choice{A(Fr),B(Fr)}
 fn make(x:Fr)->Choice{return Choice::A(x);}
-fn get(v:Choice)->Fr{return match v capture(){A(x)=>{yield x;},B(x)=>{yield x;}};}
-protocol Run roles(P)(x:Fr@P)->(r:Fr@P){local P let v=make(x);local P let y=get(v);return(r=y);}entry Demo=Run;)");
+fn get(v:Choice)->Fr{return match v {A(x)=>{ x},B(x)=>{ x}};}
+protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);return(r=y);}entry Demo=Run;)");
   mutation(variant, [](auto module) {
     first(module, "local.variant_inject")
         ->setAttr("alternative",
@@ -674,11 +670,11 @@ interface Algebra {type Scalar:Field;}
 component BLS:Algebra {type Scalar:Field=Fr;}
 struct Box<C:Algebra> {pub value:C::Scalar}
 fn get<C:Algebra>(box:Box<C>)->C::Scalar {return box.value;}
-protocol Run roles(P)(box:Box<BLS>@P)->(r:Fr@P){local P let r=get<BLS>(box);return(r=r);}entry Demo=Run;)");
+protocol Run roles(P)(box:Box<BLS>@P)->(r:Fr@P){let r @P =get<BLS>(box);return(r=r);}entry Demo=Run;)");
   must(compileEntry(associatedLayout));
   auto loop = original(prefix + R"(
-fn count(n:index,x:Fr)->Fr{let z:Fr=0;return for i in 0..n carry(s=z) capture(x){yield s+x;};}
-protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){local P let r=count(n,x);return(r=r);}entry Demo=Run;)");
+fn count(n:index,x:Fr)->Fr{let mut s:Fr=0;for _ in 0..n{s=s+x;}return s;}
+protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let r @P =count(n,x);return(r=r);}entry Demo=Run;)");
   mutation(loop, [](auto module) {
     auto *op = first(module, "local.for");
     auto low = op->getOperand(0), high = op->getOperand(1);
@@ -687,13 +683,13 @@ protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){local P let r=count(n,x);retur
   });
   auto guard = original(prefix + R"(
 fn guarded(go:bool)->(){require go;return ();}
-protocol Run roles(P)(go:bool@P)->(){local P let ignored=guarded(go);return();}entry Demo=Run;)");
+protocol Run roles(P)(go:bool@P)->(){let ignored @P =guarded(go);return();}entry Demo=Run;)");
   mutation(guard,
            [](auto module) { first(module, "protocol.local_call")->erase(); });
   auto custodyVariant = original(prefix + R"(
 enum Choice:Drop {unpack(), Other(Fr)}
-fn get()->Fr{let v=Choice::unpack();return match v capture(){Other(x)=>{yield x;},unpack()=>{let zero:Fr=0;yield zero;}};}
-protocol Run roles(P)()->(r:Fr@P){local P let r=get();return(r=r);}entry Demo=Run;)");
+fn get()->Fr{let v=Choice::unpack();return match v {Other(x)=>{ x},unpack()=>{let zero:Fr=0; zero}};}
+protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}entry Demo=Run;)");
   must(compileEntry(custodyVariant));
   mutation(custodyVariant, [](auto module) {
     first(module, "local.exec.resource_unit_consume")->erase();
@@ -703,13 +699,13 @@ struct Tok<N:nat>:Drop {}
 struct Holder<N:nat>{pub token:Tok<N+1>}
 fn wrap()->Holder<1>{return Holder<1>{token:Tok<2>{}};}
 fn finish(h:Holder<1>)->(){let t=h.token;consume t;return ();}
-protocol Run roles(P)()->(){local P let h=wrap();local P let done=finish(h);return();}entry Demo=Run;)");
+protocol Run roles(P)()->(){let h @P =wrap();let done @P =finish(h);return();}entry Demo=Run;)");
   must(compileEntry(nominal));
   auto resource = original(prefix + R"(
 interface I{type State;fn make()->State;fn done(x:State)->();}
 component C:I{type State=();fn make()->State{return State(());}fn done(x:State)->(){consume x;return ();}}
 fn forward<T:I>()->(){let x=T::make();return T::done(x);}
-protocol Run roles(P)()->(){local P let r=forward<C>();return();}entry Demo=Run;)");
+protocol Run roles(P)()->(){let r @P =forward<C>();return();}entry Demo=Run;)");
   require(resource.bytes().contains("resource_unit"),
           "empty associated resource lost custody");
   must(compileEntry(resource));
@@ -735,11 +731,10 @@ void sourceNotation() {
   refuses("module m;fn halt()->(){stop \"unknown\";}", "source.mode");
   for (StringRef reason :
        {"reject", "abort", "exhausted", "incomplete", "refused"})
-    must(compileEntry(original(
-        ("module m;fn halt()->bool{stop \"" + reason +
-         "\";}protocol Run roles(P)()->(r:bool@P){local P let x=halt();"
-         "return(r=x);}entry Demo=Run;")
-            .str())));
+    must(compileEntry(original(("module m;fn halt()->bool{stop \"" + reason +
+                                "\";}protocol Run roles(P)()->(r:bool@P){let x "
+                                "@P =halt();return(r=x);}entry Demo=Run;")
+                                   .str())));
 }
 void bounds() {
   Limits termLimits;
@@ -818,7 +813,7 @@ void staticDomains() {
       t:TranscriptValues<Transcript>@P,c:Configured<KzgScheme>@P)
       ->(a:Fr@V,b:Fr@P,d:Fr@P){
       let a=send P->V(doubleValue<Kzg>(x.value));
-      local P let b=total<Kzg>(v);local P let d=configured(c);
+      let b @P =total<Kzg>(v);let d @P =configured(c);
       return(a=a,b=b,d=d);
     }entry Demo=Run;
   )");
@@ -895,8 +890,8 @@ void staticDomains() {
     protocol Run<C:Commitment> roles(P)(x:Box<C>@P,
       c:Configured<Forward<C>>@P)->(r:C::ValueField@P)
       where Wire(C::ValueField){
-      local P let a=extract(x);local P let b=invoke<C,Selected<C>>(a);
-      local P let d=configured(c);return(r=b+d);
+      let a @P =extract(x);let b @P =invoke<C,Selected<C>>(a);
+      let d @P =configured(c);return(r=b+d);
     }entry Demo=Run<Kzg>;
   )")));
   std::string longPath = "Bn";
@@ -943,9 +938,9 @@ void nativeData() {
       return kernel<F>("vector.sub",a,b);
     }
     protocol Run roles(P,V)(a:Vector<Fr>@P,b:Vector<Fr>@P)->(r:Fr@V){
-      local P let d=difference(a,b);
+      let d @P =difference(a,b);
       let v=send P->V(d);
-      local V let r=sum(v);
+      let r @V =sum(v);
       return(r=r);
     }
     entry Demo=Run;
@@ -980,8 +975,8 @@ void nativeData() {
       return kernel<F>("matrix.dimension",a;"1");
     }
     protocol Run roles(P)(a:Vector<Fr>@P,m:Matrix<Fr>@P)->(r:Fr@P,n:index@P){
-      local P let p=parts(a);local P let s=sum(p.0);
-      local P let dims=length(m);return(r=s,n=dims);
+      let p @P =parts(a);let s @P =sum(p.0);
+      let dims @P =length(m);return(r=s,n=dims);
     }entry Demo=Run;
   )")));
   must(compileEntry(original(prefix + R"(
@@ -992,8 +987,8 @@ void nativeData() {
     }
     fn first(xs:Values)->Fr{return kernel<Fr>("sequence.at",xs,0);}
     protocol Run roles(P,V)(x:Fr@P)->(r:Fr@V){
-      local P let xs=singleton(x);let ys=send P->V(xs);
-      local V let r=first(ys);return(r=r);
+      let xs @P =singleton(x);let ys=send P->V(xs);
+      let r @V =first(ys);return(r=r);
     }entry Demo=Run;
   )")));
   for (const auto &body : {"math fn bad<F:Field>(v:Vector<F>)->F{return "
@@ -1026,7 +1021,7 @@ void nativeData() {
   must(compileEntry(original(prefix + R"(
     domain K=field("koala-bear");
     fn root(n:index)->K{return kernel<K>("poly.domain_root",n);}
-    protocol Run roles(P)(n:index@P)->(r:K@P){local P let r=root(n);return(r=r);}
+    protocol Run roles(P)(n:index@P)->(r:K@P){let r @P =root(n);return(r=r);}
     entry Demo=Run;
   )")));
   refuses(prefix + "type Bad=builtin(\"vector\",index);" + unit,
@@ -1076,7 +1071,7 @@ void nativeData() {
     math fn identity<T:Type+Copy+Drop>(v:T)->T{return v;}
     fn work(v:Data)->Data{return identity(v);}
     protocol Run roles(P)(v:Data@P)->(r:Data@P){
-      local P let r=work(v);return(r=r);
+      let r @P =work(v);return(r=r);
     }entry Demo=Run;
   )",
                  "source.mode");
@@ -1097,7 +1092,7 @@ void nativeData() {
           "native Type argument erased its application");
   auto constant = original(prefix + R"(
     fn literal()->Fr{return kernel<Fr>("field.constant";"7");}
-    protocol Run roles(P)()->(r:Fr@P){local P let r=literal();return(r=r);}
+    protocol Run roles(P)()->(r:Fr@P){let r @P =literal();return(r=r);}
     entry Demo=Run;
   )");
   must(compileEntry(constant));

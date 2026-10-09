@@ -68,5 +68,6 @@ private:
   bool conformance(DeclarationId);
   bool requirements(Declaration &);
 };
+bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
 } // namespace zkc::language::detail
 #endif

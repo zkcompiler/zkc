@@ -11,8 +11,8 @@ protocol Draw<F: Field + Share + Wire> roles(P, V)()
 protocol Run roles(P, V)(go: bool @V) using(coins: Random<Fr> @V)
     -> (p: Fr @P, v: Fr @V) {
   guard @V go;
-  using alias = coins;
-  let (p, v) = apply Draw<Fr>() using(alias, coins);
+  let alias = coins;
+  let (p, v) = Draw<Fr>() using(alias, coins);
   return (p = p, v = v);
 }
 entry Demo = Run;

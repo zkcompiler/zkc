@@ -44,7 +44,7 @@ int main() {
       domain K=field("koala-bear");
       protocol Run<F:Field> roles(P)(n:index@P)->(r:F@P)
           where zkc::algebra::TwoAdicField(F) {
-        local P let r=root<F>(n);return(r=r);
+        let r @P =root<F>(n);return(r=r);
       }
       entry Demo=Run<K>;
     )")
@@ -103,7 +103,7 @@ int main() {
       domain Fr=field("bls12-381.fr");
       protocol Run<F:Field> roles(P)(n:index@P)->(r:F@P)
           where zkc::algebra::TwoAdicField(F) {
-        local P let r=root<F>(n);return(r=r);
+        let r @P =root<F>(n);return(r=r);
       } entry Demo=Run<Fr>;
     )")
                       .str()),
@@ -281,7 +281,7 @@ int main() {
       }
       protocol Run<C:Commitment> roles(P,V)(a:Commit<C>@P,b:Commit<C>@V)->(accepted:bool@V)
           where zkc::pcs::MultilinearOpening(C) {
-        let sent=send P->V(a);local V let ok=equal<C>(sent,b);return(accepted=ok);
+        let sent=send P->V(a);let ok @V =equal<C>(sent,b);return(accepted=ok);
       } entry Demo=Run<Kzg>{setup pcs{a,b};}
     )");
         take(compileEntry(take(prepareOriginal(entry))));

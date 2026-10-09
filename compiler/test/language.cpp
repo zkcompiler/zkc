@@ -26,7 +26,7 @@ void require(bool ok, StringRef message) {
 }
 template <typename T> T must(Expected<T> value) {
   if (!value) {
-    errs() << toString(value.takeError()) << '\n';
+    errs() << stage << ": " << toString(value.takeError()) << '\n';
     std::exit(1);
   }
   return std::move(*value);
@@ -63,7 +63,11 @@ void sourceRefuses(StringRef source, StringRef code,
   if (result)
     errs() << "unexpectedly accepted source (" << code << "): " << source
            << '\n';
-  refuses(std::move(result), code);
+  require(!result, "expected source refusal");
+  auto message = toString(result.takeError());
+  if (!StringRef(message).contains(code))
+    errs() << "expected " << code << " for:\n" << source << '\n';
+  require(StringRef(message).contains(code), message);
 }
 CheckedOriginal original(StringRef source) {
   return must(prepareOriginal(must(closeEntry(check(source), "m::Demo"))));
@@ -123,7 +127,7 @@ void sourceControls() {
                     "5243587517512619047944774050818596583769055250052763782260"
                     "3658699938581184513;"),
             "source.literal"},
-           {replace(basic.str(), "let a", "let x"), "source.shadow"},
+           {replace(basic.str(), "let a", "let x"), "source.name"},
            {replace(basic.str(), "let a", "let Fr"), "source.shadow"},
            {replace(basic.str(), "send P -> V", "send P -> P"), "source.send"},
            {replace(basic.str(), "send P -> V", "send V -> P"), "source.roles"},
@@ -131,7 +135,7 @@ void sourceControls() {
                     "return (r = received, r = received)"),
             "source.return"},
            {replace(basic.str(), "return (r = received)", "return ()"),
-            "source.return"},
+            "source.type"},
            {replace(basic.str(), "return (r = received)",
                     "return (other = received)"),
             "source.return"},
@@ -147,7 +151,7 @@ void sourceControls() {
            {basic.str() + "math fn unused(x: Fr) -> Fr { return missing; }",
             "source.name"},
            {replace(basic.str(), "let a = x + c", "let a = Run(x,c)"),
-            "source.call"},
+            "source.cycle"},
        })
     sourceRefuses(entry.first, entry.second);
   auto unknown = capture({{"m", "module m;", {}}}, CaptureOptions{"json", {}});
@@ -272,16 +276,15 @@ void specializationSnapshotBounds() {
   // Many static instances copy the same nested literal payload. Closure must
   // refuse a budget smaller than that payload, even if checking fit it.
   constexpr unsigned instances = 64, literals = 64, digits = 76;
-  std::string source = "module m;domain Fr=field(\"bls12-381.fr\");"
-                       "fn f<N:nat>(go:bool)->Fr{return if go capture(){";
+  std::string source = "module m;domain Fr=field(\"bls12-381.fr\");fn "
+                       "f<N:nat>(go:bool)->Fr{return if go {";
   for (unsigned i = 0; i < literals; ++i)
     source +=
         "let x" + std::to_string(i) + ":Fr=" + std::string(digits, '1') + ";";
-  source += "yield x63;}else{yield 0;};}"
-            "protocol Run roles(P)(go:bool@P)->(){";
+  source += " x63}else{ 0};}protocol Run roles(P)(go:bool@P)->(){";
   for (unsigned i = 0; i < instances; ++i)
-    source += "local P let v" + std::to_string(i) + "=f<" + std::to_string(i) +
-              ">(go);";
+    source +=
+        "let v" + std::to_string(i) + "@P=f<" + std::to_string(i) + ">(go);";
   source += "return();}entry Demo=Run;";
   auto project = check(source);
   must(closeEntry(project, "m::Demo"));
@@ -537,18 +540,16 @@ void protocolApplications() {
   sourceRefuses(replace(source, "roles(V,P)(x, y)", "roles(Unknown,P)(x, y)"),
                 "source.roles");
   sourceRefuses(replace(source, "let (atV, atP)", "let (atV, atV)"),
-                "source.shadow");
-  sourceRefuses(replace(source, "let (atV, atP)", "let atV"), "source.call");
+                "source.binding");
+  sourceRefuses(replace(replace(source, "p = atP", "p = atV"), "let (atV, atP)",
+                        "let atV"),
+                "source.binding");
   sourceRefuses(replace(source, "p = atP, v = atV", "p = atV, v = atP"),
                 "source.roles");
   sourceRefuses(replace(source, "x: Fr @(P,V)", "x: Fr @P"), "source.roles");
-  sourceRefuses(replace(source, "apply Segment(x, y)", "apply Run(x, y)"),
-                "source.cycle");
-  sourceRefuses(replace(source, "apply Segment(x, y)", "apply Segment(x)"),
-                "source.call");
-  sourceRefuses(replace(source, "let (a, b) = apply Segment(x, y);",
-                        "let (a, b) = (x, y);"),
-                "source.binding");
+  sourceRefuses(replace(source, "Segment(x, y)", "Run(x, y)"), "source.cycle");
+  sourceRefuses(replace(source, "Segment(x, y)", "Segment(x)"), "source.call");
+  check(replace(source, "let (a, b) = Segment(x, y);", "let (a, b) = (x, y);"));
   auto limits = Limits{};
   limits.callDepth = 2;
   sourceRefuses(source, "source.limit", limits);
@@ -658,14 +659,15 @@ void participantCompletion() {
     sourceRefuses(replace(source, from, to), code);
   sourceRefuses(source + R"(
 protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V))using(coins:Random<Fr>@V)->(result:Fr@(P,V)){
- let result=apply Run(go,x)using(coins);return(result=result);
+ let result=Run(go,x)using(coins);return(result=result);
 })",
                 "source.completion");
   auto affine =
       replace(read("completion_affine.zkc"), "module sample;", "module m;");
-  sourceRefuses(replace(affine, "yield (s = next)", "yield (s = s)"),
+  sourceRefuses(replace(affine, "state = next;", "state = state;"),
                 "source.move");
-  sourceRefuses(replace(affine, "let next = finish_if", "let () = finish_if"),
+  sourceRefuses(replace(replace(affine, "state = next;", ""),
+                        "let next = finish_if", "let () = finish_if"),
                 "source.binding");
   must(compileEntry(original(R"(module m;domain Fr=field("bls12-381.fr");
 protocol Run<T:Type>roles(P)(x:T@P,go:bool@P)->(value:T@P)completes {
@@ -694,18 +696,19 @@ void distributedRepetition() {
   for (const auto &[from, to, code] :
        std::vector<std::tuple<std::string, std::string, std::string>>{
            {"n: index @(P,V)", "n: index @V", "source.roles"},
-           {"vb = b @V", "vb = b @P", "source.roles"},
-           {"yield (pa = x, vb = y)", "yield (pa = y, vb = x)", "source.roles"},
-           {"capture(go)", "capture(go, go)", "source.duplicate"},
-           {"capture(go)", "capture()", "source.name"},
-           {"using(coins) {", "using() {", "source.service"},
+           {"let mut vb = b", "let mut vb @P = b", "source.roles"},
+           {"pa = x;", "pa = y;", "source.roles"},
+           {"guard @V go;", "guard @V missing;", "source.name"},
+           {"using(coins);", "using();", "source.service"},
            {"max N", "max Fr", "source.bound"},
            {"max N", "max 1048577", "source.bound"},
-           {"let (af, bf)", "let af", "source.binding"},
-           {"let (af, bf)", "let (af, af)", "source.shadow"},
-           {"i < n", "pa < n", "source.duplicate"},
+           {"let (x, y)", "let (x, x)", "source.binding"},
+           {"for _ in", "for pa in", "source.shadow"},
        })
     sourceRefuses(replace(source, from, to), code);
+  sourceRefuses(
+      replace(replace(source, "vb = y;", "vb = x;"), "let (x, y)", "let x"),
+      "source.binding");
   auto generic = check(source + "entry Large = Run<1048577>;");
   must(prepareOriginal(must(closeEntry(generic, "m::Demo"))));
   refuses(closeEntry(generic, "m::Large"), "source.bound");
@@ -732,40 +735,39 @@ struct State:Drop {} fn make()->State{return State{};}
 fn identity(x:State)->State{return x;}
 fn consume_state(x:State)->(){consume x;return ();}
 protocol Run roles(P)(n:index@P)->(){
- local P let state=make();
- let final=repeat roles(P)(i<n,max 4) carry(s=state) capture(){
-   local P let next=identity(s);yield(s=next);
- };
- local P let done=consume_state(final);return();
+ let mut state@P=make();
+ for _ in 0..n roles(P) max 4 { state=identity(state); }
+ let done@P=consume_state(state);return();
 }entry Demo=Run;
 )";
   must(compileEntry(original(affine)));
-  sourceRefuses(replace(affine, "capture(){", "capture(state){"),
-                "source.permission");
-  auto subset = replace(source, "roles(P,V)(i < n", "roles(V)(i < n");
+  sourceRefuses(replace(affine, "let mut state", "let state"),
+                "source.assignment");
+  auto subset = replace(source, "0..n roles(P, V)", "0..n roles(V)");
   sourceRefuses(subset, "source.roles");
   auto empty = original(R"(module m;
 fn truth()->bool{return true;}
 protocol Run roles(P,V)(n:index@V)->(){
- let ()=repeat roles(V)(i<n,max 2)carry()capture(){local V let x=truth();yield();};return();
+ for _ in 0..n roles(V) max 2 {let x@V=truth();}return();
 }entry Demo=Run;
 )");
   must(compileEntry(empty));
   auto restricted = R"(module m;
 math fn truth()->bool{return true;}
 protocol Run roles(P,V)(n:index@V)->(){
- let ()=repeat roles(V)(i<n,max 2)carry()capture(){
-   let literal@V=true;let constant@V=truth();yield();
- };return();
+ for _ in 0..n roles(V) max 2 {
+   let literal@V=true;let constant@V=truth();
+ }return();
 }entry Demo=Run;)";
   must(compileEntry(original(restricted)));
   sourceRefuses(replace(restricted, "literal@V", "literal@P"), "source.roles");
   sourceRefuses(replace(restricted, "constant@V", "constant@P"),
                 "source.roles");
   auto nonparticipant = R"(module m;fn truth()->bool{return true;}
-protocol Run roles(P,V)(n:index@V)->(){let ()=repeat roles(V)(i<n,max 2)carry()capture(){local P let x=truth();yield();};return();}entry Demo=Run;)";
+protocol Run roles(P,V)(n:index@V)->(){for _ in 0..n roles(V) max 2{let x@P=truth();}return();}entry Demo=Run;)";
   sourceRefuses(nonparticipant, "source.roles");
 }
+
 void managedServices() {
   auto source = replace(read("services.zkc"), "module sample;", "module m;");
   auto checked = original(source);
@@ -783,13 +785,13 @@ void managedServices() {
   for (const auto &[from, to, code] :
        std::vector<std::tuple<std::string, std::string, std::string>>{
            {"using(alias, coins)", "using(alias)", "source.service"},
-           {"using(alias, coins)", "using(unknown, coins)", "source.service"},
+           {"using(alias, coins)", "using(unknown, coins)", "source.name"},
            {"using(alias, coins)", "using(go, coins)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @(P,V)", "source.service"},
            {"Random<Fr> @V", "Random<Fr> @P", "source.service"},
            {"Random<Fr>", "Random<bool>", "source.service"},
-           {"using alias = coins", "using go = coins", "source.shadow"},
-           {"using alias = coins", "using alias = go", "source.service"},
+           {"let alias = coins", "let go = coins", "source.shadow"},
+           {"let alias = coins", "let alias = go", "source.service"},
            {"let unused = first.draw()", "let unused = first.draw(true)",
             "source.service"},
            {"let unused = first.draw()", "let unused = first.other()",
@@ -800,7 +802,7 @@ void managedServices() {
             "source.name"},
            {"guard @V go", "guard @P go", "source.roles"},
            {"let unused = first.draw()", "let unused = send V -> P(first)",
-            "source.name"},
+            "source.service"},
            {"entry Demo = Run;",
             "entry Demo = Run;fn bad(x:Random<Fr>)->(){return ();}",
             "source.name"},
@@ -854,9 +856,9 @@ void selectedClosure() {
   auto privateState = original(R"(module m;
     struct State:Drop {} fn make()->State{return State{};}
     fn discard(state:State)->(){consume state;return ();}
-    protocol Create roles(P)()->(state:State@P){local P let state=make();return(state=state);}
-    protocol Consume roles(P)(state:State@P)->(){local P let done=discard(state);return();}
-    protocol Run roles(P)()->(){let state=apply Create();let ()=apply Consume(state);return();}
+    protocol Create roles(P)()->(state:State@P){let state @P =make();return(state=state);}
+    protocol Consume roles(P)(state:State@P)->(){let done @P =discard(state);return();}
+    protocol Run roles(P)()->(){let state=Create();let ()=Consume(state);return();}
     entry Demo=Run;
   )");
   must(compileEntry(privateState));

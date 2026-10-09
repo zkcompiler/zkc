@@ -11,7 +11,7 @@ protocol Run roles(P,V)(go: bool @V)
     using(first: Random<Fr> @V, second: Random<Fr> @V) -> (p: Fr @P, v: Fr @V) {
   let before = first.draw();
   guard @V go;
-  let (p, v) = apply Draw roles(P,V)() using(first,second);
+  let (p, v) = Draw roles(P,V)() using(first,second);
   let after = first.draw();
   return (p = p, v = before + v + after);
 }

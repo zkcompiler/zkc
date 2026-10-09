@@ -8,11 +8,6 @@ bool BodyChecker::fail(StringRef code, const Twine &message, Span span) {
   return checker.types.fail(code, message, span);
 }
 
-namespace {
-bool prefix(ArrayRef<unsigned> a, ArrayRef<unsigned> b) {
-  return a.size() <= b.size() && std::equal(a.begin(), a.end(), b.begin());
-}
-} // namespace
 BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
                          const SyntaxDeclaration &syntax, Body &body,
                          unsigned depth)
@@ -35,46 +30,44 @@ std::vector<unsigned> BodyChecker::allRoles() const {
 bool BodyChecker::data(const Type &type, Span span) {
   return checker.types.mathematicalData(type, span, &decl);
 }
-bool BodyChecker::addService(const ServicePort &port) {
-  if (!protocol() || !checker.bindingName(decl, port.name, port.span) ||
-      !checker.types.chargeType(port.field, port.span))
+bool BodyChecker::addService(BindingId id, const ServicePort &port) {
+  if (!protocol() || !checker.types.chargeType(port.field, port.span))
     return false;
-  if (bindings.count(port.name) ||
-      !services.emplace(port.name, ServiceId{uint32_t(body.services.size())})
-           .second)
-    return fail("source.shadow", "duplicate service or data binding",
-                port.span);
+  services.emplace(id, ServiceId{uint32_t(body.services.size())});
   body.services.push_back(port);
   return true;
 }
 std::optional<ServiceId> BodyChecker::service(const Expression &expr) {
-  if (expr.kind != Expression::Kind::Name) {
+  if (expr.kind != Expression::Kind::Name || !expr.binding) {
     fail("source.service", "service reference must name a managed binding",
          expr.span);
     return {};
   }
-  auto found = services.find(expr.text);
+  auto found = services.find(*expr.binding);
   if (found == services.end()) {
     fail("source.service", "unknown managed service: " + expr.text, expr.span);
     return {};
   }
   return found->second;
 }
-bool BodyChecker::addInput(StringRef name, const Type &type,
-                           std::vector<unsigned> components, Span span) {
-  if (!math() && !checker.types.executableType(type, span))
-    return false;
-  if (!checker.bindingName(decl, name, span) ||
+std::optional<ValueId> BodyChecker::input(const Type &type,
+                                          std::vector<unsigned> components,
+                                          Span span) {
+  if ((!math() && !checker.types.executableType(type, span)) ||
       !checker.types.chargeType(type, span))
-    return false;
-  if (services.count(name.str()))
-    return fail("source.shadow", "data binding shadows a service", span);
-  if (!bindings.emplace(name.str(), ValueId{uint32_t(body.values.size())})
-           .second)
-    return fail("source.duplicate", "duplicate local input or capture", span);
+    return {};
+  ValueId value{uint32_t(body.values.size())};
   body.values.push_back({type, std::move(components), span});
   uses.emplace_back();
   ++body.inputs;
+  return value;
+}
+bool BodyChecker::addInput(BindingId id, const Type &type,
+                           std::vector<unsigned> components, Span span) {
+  auto value = input(type, components, span);
+  if (!value)
+    return false;
+  bindings.emplace(id, BindingState{type, std::move(components), *value, {}});
   return true;
 }
 std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
@@ -150,187 +143,90 @@ std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {
   return checker.types.projectedType(decl, std::move(type), path, span);
 }
-bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
-  if (!checker.types.charge(path.size() + 1, span))
-    return false;
-  auto type = projected(body.values[value.index].type, path, span);
-  if (!type)
-    return false;
-  auto caps = checker.types.permissions(*type, span, &decl);
-  if (!caps)
-    return false;
-  auto &state = uses[value.index];
-  for (auto &moved : state.moved) {
-    if (!checker.types.charge(moved.size() + 1, span))
-      return false;
-    if (prefix(moved, path) || prefix(path, moved))
-      return fail("source.move", "value or overlapping field was already moved",
-                  span);
-  }
-  state.used.emplace_back(path.begin(), path.end());
-  if (!caps->copy)
-    state.moved.emplace_back(path.begin(), path.end());
-  return true;
-}
-bool BodyChecker::finish(Span span) {
-  if (body.stopped)
-    return true;
-  for (unsigned i = 0; i < body.values.size(); ++i) {
-    auto &state = uses[i];
-    std::function<bool(const Type &, std::vector<unsigned>, unsigned)> check =
-        [&](const Type &t, std::vector<unsigned> path, unsigned depth) {
-          if (depth > checker.work.limits.typeDepth ||
-              !checker.types.charge(1, span))
-            return checker.types.diagnostic
-                       ? false
-                       : fail("source.limit", "resource obligation depth",
-                              span);
-          auto caps = checker.types.permissions(t, span, &decl);
-          if (!caps)
-            return false;
-          if (caps->drop)
-            return true;
-          for (auto &used : state.used) {
-            if (!checker.types.charge(used.size() + 1, span))
-              return false;
-            if (prefix(used, path))
-              return true;
-          }
-          if (!restricted(t) &&
-              (t.kind == Type::Kind::Record || t.kind == Type::Kind::Tuple ||
-               (t.kind == Type::Kind::Array && t.dimension.isClosed()))) {
-            auto fs = checker.types.fields(t, span);
-            if (!fs)
-              return false;
-            if (!fs->empty()) {
-              for (unsigned j = 0; j < fs->size(); ++j) {
-                auto child = path;
-                child.push_back(j);
-                if (!check((*fs)[j].type, std::move(child), depth + 1))
-                  return false;
-              }
-              return true;
-            }
-          }
-          return fail("source.drop",
-                      "value without Drop remains unused on a continuing path",
-                      body.values[i].span);
-        };
-    if (!check(body.values[i].type, {}, 1))
-      return false;
-  }
-  return true;
-}
-std::optional<std::pair<ValueId, std::vector<unsigned>>>
-BodyChecker::place(uint32_t id, unsigned depth) {
-  if (depth > checker.work.limits.expressionDepth) {
-    fail("source.limit", "place depth limit", syntax.expressions[id].span);
-    return {};
-  }
-  auto &expr = syntax.expressions[id];
-  if (expr.kind == Expression::Kind::Name) {
-    auto found = bindings.find(expr.text);
-    if (found == bindings.end()) {
-      fail("source.name", "unknown local value: " + expr.text, expr.span);
-      return {};
-    }
-    return std::make_pair(found->second, std::vector<unsigned>{});
-  }
-  if (expr.kind != Expression::Kind::Projection) {
-    fail("source.place", "field access requires a named place", expr.span);
-    return {};
-  }
-  auto base = place(expr.children.front(), depth + 1);
-  if (!base)
-    return {};
-  auto type =
-      projected(body.values[base->first.index].type, base->second, expr.span);
-  if (!type)
-    return {};
-  if (expr.bracket != (type->kind == Type::Kind::Array)) {
-    fail("source.index", "use brackets for arrays and dots for product fields",
-         expr.span);
-    return {};
-  }
-  auto index = checker.types.fieldIndex(decl, *type, expr.text, expr.span);
-  if (!index)
-    return {};
-  base->second.push_back(*index);
-  if (!projected(body.values[base->first.index].type, base->second, expr.span))
-    return {};
-  return base;
-}
-bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
-                      bool isProtocol) {
-  for (auto &s : source.statements) {
+bool BodyChecker::statements(const SyntaxBody &source) {
+  for (const auto &s : source.statements) {
+    if (body.stopped)
+      return fail("source.unreachable", "statement follows a guaranteed stop",
+                  s.span);
     owner.reset();
-    std::optional<unsigned> guardOwner;
-    if (s.kind == Statement::Kind::Alias) {
-      if (!protocol() || s.owner || !checker.bindingName(decl, s.name, s.span))
-        return checker.types.diagnostic
-                   ? false
-                   : fail("source.mode",
-                          "service aliases require protocol mode", s.span);
-      auto root = service(syntax.expressions[s.expression]);
+    const auto &expr = syntax.expressions[s.expression];
+    if (s.kind == Statement::Kind::Let && expr.kind == Expression::Kind::Name &&
+        expr.binding && syntax.bindings[expr.binding->index].service) {
+      auto root = service(expr);
       if (!root)
         return false;
-      if (bindings.count(s.name) || !services.emplace(s.name, *root).second)
-        return fail("source.shadow",
-                    "service alias shadows an existing binding", s.span);
+      services.emplace(*s.pattern.binding, *root);
       ++statement;
       continue;
     }
-    if (syntax.expressions[s.expression].kind == Expression::Kind::FinishIf) {
-      if (!complete(s))
-        return false;
-      ++statement;
-      continue;
-    }
-    if (syntax.expressions[s.expression].kind == Expression::Kind::Repeat) {
-      if (!repeat(s))
+    if (expr.kind == Expression::Kind::FinishIf) {
+      auto results = complete(s);
+      if (!results || !bindResults(s, *results))
         return false;
       ++statement;
       continue;
     }
-    if (syntax.expressions[s.expression].kind == Expression::Kind::Apply) {
-      if (!application(s))
+    if (expr.kind == Expression::Kind::Call) {
+      auto target = checker.resolve(decl, expr.text, expr.span, false);
+      if (checker.types.diagnostic)
         return false;
-      ++statement;
-      continue;
+      if (target && checker.output.declarations[target->index].kind ==
+                        Declaration::Kind::Protocol) {
+        if (s.exchange || (s.kind != Statement::Kind::Let &&
+                           s.kind != Statement::Kind::Assign &&
+                           s.kind != Statement::Kind::Expression))
+          return fail("source.mode",
+                      "protocol application requires a complete statement",
+                      s.span);
+        auto results = application(expr);
+        if (!results || !bindResults(s, *results))
+          return false;
+        ++statement;
+        continue;
+      }
     }
-    if (s.resultNames)
-      return fail(
-          "source.binding",
-          "multiple bindings require a protocol application or control action",
-          s.span);
-    if (s.owner) {
-      auto selected = checker.roles(decl, {*s.owner}, s.span);
-      if (!selected)
-        return false;
-      if (!active(*selected, s.span))
-        return false;
-      if (s.kind == Statement::Kind::Guard)
-        guardOwner = selected->front();
-      else
-        owner = selected->front();
-    }
-    if (s.kind == Statement::Kind::Let &&
-        !checker.bindingName(decl, s.name, s.span))
-      return false;
-    if (s.kind == Statement::Kind::Let &&
-        (bindings.count(s.name) || services.count(s.name)))
-      return fail("source.shadow", "binding shadows an existing local", s.span);
     std::optional<Type> expected;
+    std::optional<std::vector<unsigned>> selected;
     if (s.type) {
       expected = checker.type(decl, *s.type);
       if (!expected)
         return false;
     }
+    if (s.roles) {
+      selected = checker.roles(decl, *s.roles, s.span);
+      if (!selected || !active(*selected, s.span))
+        return false;
+    }
+    if (s.kind == Statement::Kind::Assign) {
+      auto found = bindings.find(*s.pattern.binding);
+      if (found == bindings.end())
+        return fail("source.assignment",
+                    "assignment target is not in this region", s.span);
+      expected = found->second.type;
+      selected = found->second.roles;
+    }
+    if (protocol() && expr.kind == Expression::Kind::Call && !s.exchange &&
+        selected && selected->size() == 1)
+      owner = selected->front();
+    std::optional<unsigned> guardOwner;
+    if (s.kind == Statement::Kind::Guard) {
+      auto roles = checker.roles(decl, {*s.owner}, s.span);
+      if (!roles || !active(*roles, s.span))
+        return false;
+      guardOwner = roles->front();
+    }
     if (s.kind == Statement::Kind::Require || s.kind == Statement::Kind::Guard)
       expected = Type{};
-    auto value = expression(s.expression, expected);
-    if (!value)
-      return false;
+    if (s.kind == Statement::Kind::Expression && !s.terminated)
+      expected = Type(Type::Kind::Unit);
+    auto value = expression(s.expression, expected, 1,
+                            s.kind == Statement::Kind::Expression);
+    owner.reset();
+    if (!value) {
+      if (!body.stopped || checker.types.diagnostic)
+        return false;
+      continue;
+    }
     if (s.kind == Statement::Kind::Guard) {
       if (!protocol() || !guardOwner ||
           !llvm::is_contained(body.values[value->index].components,
@@ -343,16 +239,6 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       body.mayStop = true;
       ++statement;
       continue;
-    }
-    if (s.owner) {
-      const auto *call =
-          body.operations.empty()
-              ? nullptr
-              : std::get_if<HelperCall>(&body.operations.back().action);
-      if (!call || !call->owner || body.operations.back().results.size() != 1 ||
-          body.operations.back().results.front().index != value->index)
-        return fail("source.mode",
-                    "owned statement requires a local function call", s.span);
     }
     if (s.exchange) {
       auto sender = checker.roles(decl, {s.exchange->first}, s.span),
@@ -381,45 +267,10 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
       if (!value)
         return false;
     }
-    if (s.roles) {
-      auto selected = checker.roles(decl, *s.roles, s.span);
-      if (!selected || !active(*selected, s.span))
+    if (s.kind == Statement::Kind::Let || s.kind == Statement::Kind::Assign ||
+        s.kind == Statement::Kind::Expression) {
+      if (!bindResults(s, {*value}))
         return false;
-      auto before = body.values[value->index];
-      if (!std::includes(before.components.begin(), before.components.end(),
-                         selected->begin(), selected->end()))
-        return fail("source.roles",
-                    "binding cannot gain participant availability", s.span);
-      if (*selected != before.components) {
-        if (!checker.types.executableType(before.type, s.span))
-          return false;
-        auto caps = checker.types.permissions(before.type, s.span, &decl);
-        if (!caps)
-          return false;
-        if (!caps->drop)
-          return fail("source.permission",
-                      "restriction cannot discard a component without Drop",
-                      s.span);
-        if (!use(*value, s.span))
-          return false;
-        value = emit(Restriction{*value, *selected}, before.type, *selected,
-                     s.span);
-        if (!value)
-          return false;
-      }
-    }
-    if (s.kind == Statement::Kind::Let) {
-      // A binding transfers the expression's value to a fresh logical place.
-      // Copy/Drop obligations attach to that place even when its layout is
-      // empty.
-      auto before = body.values[value->index];
-      if (!use(*value, s.span))
-        return false;
-      auto alias =
-          emit(Projection{*value, {}}, before.type, before.components, s.span);
-      if (!alias)
-        return false;
-      bindings.emplace(s.name, *alias);
     } else if (s.kind == Statement::Kind::Require) {
       if (!local())
         return fail("source.mode",
@@ -467,6 +318,10 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     ++statement;
   }
   owner.reset();
+  if (body.stopped &&
+      (source.returned || source.stopped || !source.results.empty()))
+    return fail("source.unreachable", "terminator follows a guaranteed stop",
+                source.span);
   if (source.stopped) {
     if (!local())
       return fail("source.mode", "stop requires ordered local mode",
@@ -478,60 +333,92 @@ bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
     body.stopped = true;
     body.stopReason = source.stopReason;
     body.mayStop = true;
-  } else {
-    std::vector<Port> inferred;
-    if (!isProtocol && outputs.empty()) {
-      if (source.results.size() != 1)
-        return fail("source.return", "local region requires one logical result",
-                    source.span);
-      auto type = hint(source.results.front().second);
-      if (!type) {
-        if (!checker.types.diagnostic)
-          fail("source.inference", "region result needs an explicit context",
-               source.span);
-        return false;
-      }
-      inferred.push_back({"result", *type, {}, source.span});
-      outputs = inferred;
-    }
-    std::map<std::string, unsigned> names;
-    for (unsigned i = 0; i < outputs.size(); ++i)
-      names.emplace(outputs[i].name, i);
-    std::set<unsigned> seen;
-    body.results.resize(outputs.size());
-    for (auto &[name, id] : source.results) {
-      auto found = names.find(name);
-      if (found == names.end())
-        return fail("source.return", "unknown return port", source.span);
-      if (!seen.insert(found->second).second)
-        return fail("source.return", "duplicate return port", source.span);
-      auto &port = outputs[found->second];
-      auto value = expression(id, port.type);
-      if (!value)
-        return false;
-      if (isProtocol) {
-        auto &available = body.values[value->index].components;
-        if (!std::includes(available.begin(), available.end(),
-                           port.roles.begin(), port.roles.end()))
-          return fail("source.roles", "result unavailable at output roles",
-                      syntax.expressions[id].span);
-        if (available != port.roles) {
-          auto caps = checker.types.permissions(port.type, port.span, &decl);
-          if (!caps)
-            return false;
-          if (!caps->drop)
-            return fail("source.permission",
-                        "return cannot discard components without Drop",
-                        port.span);
-        }
-      }
-      if (!use(*value, syntax.expressions[id].span))
-        return false;
-      body.results[found->second] = *value;
-    }
-    if (seen.size() != outputs.size())
-      return fail("source.return", "missing return port", source.span);
   }
+  return true;
+}
+std::optional<ValueId> BodyChecker::tail(const SyntaxBody &source,
+                                         std::optional<Type> expected,
+                                         bool allowUntypedStop) {
+  if (!statements(source) || body.stopped)
+    return {};
+  if (source.results.empty()) {
+    if (expected && expected->kind != Type::Kind::Unit) {
+      fail("source.type", "block without a tail has unit type", source.span);
+      return {};
+    }
+    return pack({}, source.span);
+  }
+  if (source.results.size() != 1) {
+    fail("source.return", "block requires one logical result", source.span);
+    return {};
+  }
+  return expression(source.results.front().second, expected, 1,
+                    allowUntypedStop);
+}
+std::optional<ValueId> BodyChecker::block(const Expression &expr,
+                                          std::optional<Type> expected,
+                                          bool allowUntypedStop) {
+  auto value =
+      tail(syntax.bodies[expr.regions.front()], expected, allowUntypedStop);
+  if (!value && body.stopped && !expected && !allowUntypedStop &&
+      !checker.types.diagnostic)
+    fail("source.inference", "stopped value block needs an expected type",
+         expr.span);
+  return value;
+}
+bool BodyChecker::run(const SyntaxBody &source, ArrayRef<Port> outputs,
+                      bool isProtocol) {
+  if (!statements(source))
+    return false;
+  if (body.stopped)
+    return finish(source.span);
+  if (!source.returned)
+    return fail("source.return",
+                "continuing declaration requires an explicit return",
+                source.span);
+  std::map<std::string, unsigned> names;
+  for (unsigned i = 0; i < outputs.size(); ++i)
+    names.emplace(outputs[i].name, i);
+  std::set<unsigned> seen;
+  body.results.resize(outputs.size());
+  for (const auto &[name, id] : source.results) {
+    auto found = names.find(name);
+    if (isProtocol && name.empty() && outputs.size() == 1)
+      found = names.begin();
+    if (found == names.end())
+      return fail("source.return",
+                  "unknown return port; several ports require names",
+                  source.span);
+    if (!seen.insert(found->second).second)
+      return fail("source.return", "duplicate return port", source.span);
+    const auto &port = outputs[found->second];
+    auto value = expression(id, port.type);
+    if (!value) {
+      if (body.stopped)
+        body.results.clear();
+      return body.stopped && !checker.types.diagnostic && finish(source.span);
+    }
+    if (isProtocol) {
+      const auto &available = body.values[value->index].components;
+      if (!std::includes(available.begin(), available.end(), port.roles.begin(),
+                         port.roles.end()))
+        return fail("source.roles", "result unavailable at output roles",
+                    syntax.expressions[id].span);
+      if (available != port.roles) {
+        auto caps = checker.types.permissions(port.type, port.span, &decl);
+        if (!caps ||
+            (!caps->drop &&
+             !fail("source.permission",
+                   "return cannot discard components without Drop", port.span)))
+          return false;
+      }
+    }
+    if (!use(*value, syntax.expressions[id].span))
+      return false;
+    body.results[found->second] = *value;
+  }
+  if (seen.size() != outputs.size())
+    return fail("source.return", "missing return port", source.span);
   return finish(source.span);
 }
 bool Checker::body(DeclarationId id, unsigned depth) {
@@ -553,6 +440,8 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                     ? Body::Mode::Math
                 : decl.kind == Declaration::Kind::Local ? Body::Mode::Local
                                                         : Body::Mode::Protocol;
+  if (!resolveBindings(*this, decl, *sources[id.index]))
+    return false;
   BodyChecker check(*this, decl, *sources[id.index], result, depth);
   for (unsigned i = 0; i < decl.inputs.size(); ++i) {
     auto &p = decl.inputs[i];
@@ -567,15 +456,16 @@ bool Checker::body(DeclarationId id, unsigned depth) {
         return types.fail("source.permission",
                           "shared input requires Copy, Drop and Share", p.span);
     }
-    if (!check.addInput(p.name, p.type,
+    if (!check.addInput(sources[id.index]->inputBindings[i], p.type,
                         result.mode == Body::Mode::Math
                             ? std::vector<unsigned>{i}
                             : p.roles,
                         p.span))
       return false;
   }
-  for (const auto &service : decl.services)
-    if (!check.addService(service))
+  for (unsigned i = 0; i < decl.services.size(); ++i)
+    if (!check.addService(sources[id.index]->serviceBindings[i],
+                          decl.services[i]))
       return false;
   for (auto &p : decl.outputs) {
     auto caps = types.permissions(p.type, p.span, &decl);

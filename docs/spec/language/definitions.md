@@ -14,7 +14,8 @@ members are exposed through their owner; associated representations retain their
 constructor privacy. A declaration can be named
 through `use module::{Name, Other};` or by its qualified path when its module
 is captured. Imports never discover files. Imports, declarations, static parameters
-and local bindings cannot shadow visible names. Imports, types and call graphs
+and local bindings cannot shadow visible declarations. Lexical binding rules are
+defined in [protocol bodies](protocols.md#bindings-and-local-control). Imports, types and call graphs
 must be acyclic. Every declaration is checked, including unused generic bodies.
 
 Capture accepts named assets as explicit bytes alongside modules. Formats are
@@ -407,7 +408,9 @@ local signatures default to allowing both; math signatures allow neither. An emp
 effect allowance never turns ordered code into a total mathematical function.
 Opaque runtime intrinsics are not exposed by this profile.
 
-Bodies contain immutable `let` bindings and one final `return`. Arithmetic uses
+Bodies use lexical `let` and `let mut` bindings, whole-name assignment, nested
+block expressions and a final `return`. [Body semantics](protocols.md#bindings-and-local-control)
+define scopes, patterns and resource joins. Arithmetic uses
 `*`, `+`, `-`, `==`, parentheses and field/group contracts; operator precedence is
 multiplication, addition/subtraction, then equality. Chained equality needs
 parentheses. No implicit field conversion occurs. Field literals need a unique

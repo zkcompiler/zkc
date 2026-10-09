@@ -8,12 +8,15 @@ protocol Round<F: Field + Share + Wire> roles(P, V)(a: F @P, b: F @V)
 }
 protocol Run<N: nat> roles(P, V)(n: index @(P,V), a: Fr @P, b: Fr @V, go: bool @V)
     using(coins: Random<Fr> @V) -> (p: Fr @P, v: Fr @V) {
-  let (af, bf) = repeat roles(P,V)(i < n, max N)
-      carry(pa = a @P, vb = b @V) capture(go) using(coins) {
+  let mut pa = a;
+  let mut vb = b;
+  for _ in 0..n roles(P, V) max N {
     guard @V go;
-    let (x, y) = apply Round<Fr>(pa, vb) using(coins);
-    yield (pa = x, vb = y);
-  };
-  return (p = af, v = bf);
+    let (x, y) = Round<Fr>(pa, vb) using(coins);
+    pa = x;
+    vb = y;
+  }
+  return (p = pa, v = vb);
 }
+
 entry Demo = Run<4>;

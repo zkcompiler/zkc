@@ -40,7 +40,7 @@ protocol Run roles(P)(a:Fr@P,b:Fr@P,x:Fr@P)->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
   return(r=calculate(a,b,x));
 }
 protocol Local roles(P)(a:Fr@P,b:Fr@P,x:Fr@P)->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
-  local P let r=local_calculate(a,b,x);
+  let r @P =local_calculate(a,b,x);
   return(r=r);
 }
 entry Demo=Run;

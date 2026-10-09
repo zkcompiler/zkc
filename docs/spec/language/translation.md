@@ -4,8 +4,11 @@ This native contract defines source emission, comparison and retained interfaces
 
 ## Translation and retained interface
 
-The source model has Math, Local and Protocol body modes, checked types, explicit
-regions and static arguments. Closing an Entry substitutes already checked bodies;
+Source names resolve to lexical binding identities. Typed elaboration derives
+explicit region inputs, mutable state successors and resource joins, producing
+an immutable checked graph with Math, Local and Protocol body modes. Mutable
+source bindings become immutable checked values; no runtime variable store or
+additional public IR is introduced. Closing an Entry substitutes already checked bodies;
 it never reparses templates. Closed instances are memoized by declaration, mode
 and exact static type identity. Only closed definitions enter original MLIR.
 
@@ -40,7 +43,8 @@ Before simplification, the compiler reparses exact emitted bytes, verifies the
 whole native module and independently compares actual SSA with checked source.
 It consumes every definition and operation, including unused work, and checks
 layouts, operands, bindings, modes, helper targets, roles, sites, captures, carry,
-variant arms, custody and returns. The comparison never calls emission. An equivalent
+variant arms, custody and returns. The comparison never calls emission. Both consume the checked graph; this
+comparison does not independently establish lexical elaboration correctness. An equivalent
 but differently structured rewrite can refuse. Inputs, receives, restrictions,
 queries, owned calls and protocol results retain exact role sets. Derived math
 and aggregate leaves may have wider native availability than the conservative

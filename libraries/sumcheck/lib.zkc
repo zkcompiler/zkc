@@ -22,19 +22,19 @@ fn terminal<F: Field>(values: Vector<F>, claim: F) -> bool {
 pub protocol Sumcheck<F: Field+Share+Wire, Max: nat> roles(P, V)
     (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V))
     using(challenges: Random<F> @V) -> (accepted: bool @V) {
-  let (lastP, lastV, final_claim) = repeat roles(P,V)(i < rounds, max Max)
-      carry(tableP = values @P, tableV = values @V, current = claim @V)
-      capture() using(challenges) {
-    local P let parts = sums(tableP);
+  let mut tableP @P = values;
+  let mut tableV @V = values;
+  let mut current = claim;
+  for _ in 0..rounds roles(P, V) max Max {
+    let parts @P = sums(tableP);
     let actual = send P -> V(parts);
     guard @V current == actual.0 + actual.1;
     let cv = challenges.draw();
     let cp = send V -> P(cv);
-    local P let nextP = fold(tableP, cp);
-    local V let nextV = fold(tableV, cv);
-    yield (tableP = nextP, tableV = nextV,
-           current = (1 - cv) * actual.0 + cv * actual.1);
-  };
-  local V let accepted = terminal(lastV, final_claim);
-  return (accepted = accepted);
+    tableP = fold(tableP, cp);
+    tableV = fold(tableV, cv);
+    current = (1 - cv) * actual.0 + cv * actual.1;
+  }
+  let accepted @V = terminal(tableV, current);
+  return accepted;
 }

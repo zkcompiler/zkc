@@ -3,15 +3,16 @@ domain Fr = field("bls12-381.fr");
 fn count() -> index { return 2; }
 protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V))
     using(coins: Random<Fr> @V) -> (result: Fr @(P,V)) completes {
-  local V let n = count();
-  let result = repeat roles(V)(i < n, max 2) carry(a = x @V) capture(n,go) using(coins) {
-    let next = repeat roles(V)(j < n, max 2) carry(b = a) capture(go) using(coins) {
-      let () = finish_if @V(go) (result = b);
+  let n @V = count();
+  let mut state @V = x;
+  for _ in 0..n roles(V) max 2 {
+    for _ in 0..n roles(V) max 2 {
+      let () = finish_if @V(go) (result = state);
       let unused = coins.draw();
-      yield (b = b);
-    };
-    yield (a = next);
-  };
-  return (result = x + x);
+      state = state;
+    }
+  }
+  return x + x;
 }
+
 entry Demo = Run;
