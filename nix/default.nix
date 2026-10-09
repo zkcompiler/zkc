@@ -112,6 +112,11 @@ let
         "Cargo.lock"
         "rust-toolchain.toml"
         "crates"
+        # Native relation tests consume the maintained adapter fixtures.
+        "compiler/adapters/plonky3/fixtures/recurrence/bundle.json"
+        "compiler/adapters/plonky3/fixtures/recurrence/bundle-configuration.json"
+        "compiler/adapters/plonky3/fixtures/recurrence/bundle-instance.json"
+        "compiler/adapters/plonky3/fixtures/recurrence/bundle-witness.json"
         "tests/run.py"
         "examples"
         "libraries"
