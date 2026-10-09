@@ -80,6 +80,50 @@ work or trace size. Each evaluator provider has additional explicit limits and
 failure behavior. Admission or a reference interpreter does not prove native
 backend correspondence or the security of a consuming protocol.
 
+## Structural sharing
+
+A sharing map from an admitted arena `A` to an admitted arena `B` is a function
+`m` from the node indices of `A` to the node indices of `B` such that:
+
+- `B` declares exactly the inputs of `A`, in the same order and with the same
+  fields, including inputs no output uses;
+- each node `A[i]` and its image `B[m(i)]` have the same kind, field, literal
+  and input slot;
+- the operands of `B[m(i)]` are the images of the operands of `A[i]`, in the
+  same operand order;
+- the output list of `B` is the image of the output list of `A` position by
+  position, so it has the same length and repeats where `A` repeats.
+
+Nothing else is required; in particular `B` need not have fewer nodes, and no
+node of `B` outside the image is constrained beyond `B`'s own admission.
+
+Under a sharing map every node of `A` denotes the same formal expression as its
+image, because both unfold to the same tree. Consequently the field fact of each
+node, its degree under every vector of input weights, the inputs used by each
+output position, and every substitution of the selected outputs agree between
+`A` and `B`, and each used input is still fetched once. The map is syntactic:
+`x * 0` is not related to `0`, `1 + 2` is not related to `3`, `a + b` is not
+related to `b + a`, equal literals of different fields are different nodes, and
+a declared input cannot disappear or change position. A relation's definedness
+obligations are therefore the same before and after sharing.
+
+The shared form of `A` walks its nodes in index order and reuses the first node
+with the same kind, field, literal, input slot and already-shared operands,
+recording the reuse in `m`. It is a sharing map whose target contains no two
+identical nodes; it depends only on the node order, costs one ordered lookup
+per node within the formation limits, and sharing a shared arena returns the
+identity map. When any node is reused the shared form has a different canonical
+encoding and therefore a different structural identity. A consumer that
+replaces an arena by its shared form refers to that new identity; the sharing
+map itself is an in-process value and not part of any exchanged format.
+
+A sharing judgment checks the four conditions above directly against the two
+arenas and the map, without reproducing the walk, and refuses on the first
+condition that fails. The compiler's `ring::shareExpression` produces the shared
+form with its map, and `ring::checkSharing` is that judgment, with refusals
+`ring-sharing-inputs`, `ring-sharing-map`, `ring-sharing-node` and
+`ring-sharing-outputs`.
+
 ## Native bulk substitution
 
 Four ordered algebra kernels use one SHA-256 asset parameter and the installed
@@ -171,6 +215,11 @@ authorized instance and a trace; the source program checks shapes and the arena
 identity, not that an assignment is such a view.
 
 `Zkc.Algebra.RingExpression` states tree substitution, homomorphism and exact
-polynomial evaluation/degree laws. `Zkc.Relation.AIR.RingExpression` preserves
+polynomial evaluation/degree laws. `Zkc.Algebra.RingExpression.Sharing` proves
+that a label-preserving node map between untyped arenas unfolds every node and
+every ordered output to the same tree, which is the law behind the sharing
+judgment; field identities and embeddings are outside that model.
+`Zkc.Relation.AIR.RingExpression` preserves
 finite-AIR expression evaluation and its public/read degree weights. Those
-independent models do not yet prove the native DAG decoder or provider correct.
+independent models do not yet prove the native DAG decoder, the native sharing
+checker or the provider correct.

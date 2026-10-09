@@ -39,6 +39,7 @@ add_zkc_component(Contracts
   lib/Contracts/Operations.cpp
   lib/Contracts/Mathematical.cpp
   lib/Contracts/RingExpression.cpp
+  lib/Contracts/RingSharing.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
   lib/Contracts/NativePolicy.cpp
