@@ -207,6 +207,8 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
   uint64_t remaining = limits.work;
   if (auto error = mathematical::checkFormulaDefinitions(*module, remaining))
     return located(std::move(error));
+  if (auto error = mathematical::checkMapFormulas(*module, remaining))
+    return located(std::move(error));
   auto storage = std::make_shared<CheckedOriginal::Storage>(entry);
   storage->limits = limits;
   storage->original = original.str();

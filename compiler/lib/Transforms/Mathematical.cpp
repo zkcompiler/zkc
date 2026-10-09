@@ -797,7 +797,8 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify) {
   }
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   if (failed(expandPolynomialRecipes(*candidate)) ||
-      failed(expandMathRealizations(*candidate)))
+      failed(expandMathRealizations(*candidate)) ||
+      failed(expandMapRealizations(*candidate)))
     return {};
   // Algorithm expansion either leaves admitted IR untouched or returns a
   // verified candidate; static application analysis relies on that contract.

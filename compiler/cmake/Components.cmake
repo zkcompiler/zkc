@@ -117,10 +117,12 @@ add_zkc_component(IR
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
+  lib/Dialect/Algebra/IR/Maps.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
   lib/Dialect/Kernels.cpp
   lib/Dialect/MathematicalInterfaces.cpp
+  lib/Dialect/PreparationCallable.cpp
   lib/Dialect/LinearContraction.cpp
   lib/Dialect/Algebra/IR/Types.cpp
   lib/Dialect/Polynomial/IR/Types.cpp
@@ -174,6 +176,7 @@ add_zkc_component(Transforms
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
+  lib/Transforms/MapRealizations.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
   lib/Transforms/PolynomialLowering.cpp

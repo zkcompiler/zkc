@@ -133,6 +133,7 @@ private:
   std::optional<ValueId> evaluate(uint32_t, std::optional<Type>, unsigned,
                                   bool allowUntypedStop);
   std::optional<ValueId> call(const Expression &, unsigned);
+  std::optional<ValueId> bulk(const Expression &, unsigned);
   std::optional<ValueId> control(const Expression &, std::optional<Type>,
                                  unsigned, bool allowUntypedStop);
   std::optional<ValueId> construct(const Expression &, std::optional<Type>,

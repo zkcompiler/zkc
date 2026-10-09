@@ -316,6 +316,36 @@ not move those calls into Entry setup. Kernels cannot occur in `math fn` or dire
 in protocol expressions. Protocols call library wrappers with an explicit local
 owner. These bindings install no new backend, mathematical identity or provider.
 
+## Checked pointwise maps
+
+```text
+math fn affine<F: Field>(low: F, high: F, r: F) -> F {
+  return low + (high - low) * r;
+}
+fn fold<F: Field>(low: Vector<F>, high: Vector<F>, r: F) -> Vector<F> {
+  return map affine(each low, each high, r);
+}
+```
+
+`map helper<...>(arguments...)` applies one static, defined `math fn` at every
+row of runtime vectors; `map` and `each` are keywords. `each` marks an argument
+read one row at a time, which must be a native `vector` of the helper's field.
+Other arguments are scalars shared by every row, and at least one is marked.
+After replacing each marked vector by its element type, the arguments match the
+helper's parameters exactly. Every parameter and the single result use one scalar
+field `F`; the map returns a vector of `F`. Static arguments are inferred or
+written as for calls. There are no function values, closures, interface members
+or dynamic dispatch, and every argument remains an ordinary operand for use,
+capture and effect checking.
+
+`map` occurs only in ordinary local functions; protocols call a local wrapper.
+It is checked execution with the [pointwise meaning](../domains/vectors.md#pointwise-maps):
+unequal row counts stop it, so its caller infers `stop`. The helper's expanded
+body may use only field constants, `+`, `-` and `*`; the
+[IR realization](../ir/protocols.md#checked-pointwise-maps) refuses anything else
+with `algebra-map-formula`. Source refusals of a map use `source.map`; a map
+outside local code uses `source.mode`.
+
 ## Boolean formulas
 
 Total Boolean operations use the same mathematical helper path as field and

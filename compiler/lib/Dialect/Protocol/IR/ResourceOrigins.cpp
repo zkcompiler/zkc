@@ -220,8 +220,13 @@ LogicalResult ResourceOrigins::block(Block &body, bool local, unsigned depth,
     } else if (isa<local::CallOp, local::ApplyOp, protocol_ir::LocalCallOp,
                    protocol_ir::ApplyOp>(op)) {
       // Common execution ignores role-local continuation and needs a summary
-      // only if this call could supply an affine result.
-      if (!local &&
+      // only if this call could supply an affine result. A preparation-time
+      // declaration has no body yet; its profile admits only data ports.
+      auto name = op->getAttrOfType<FlatSymbolRefAttr>("callee");
+      bool prepared = isa<local::ApplyOp>(op) && name &&
+                      isa_and_nonnull<PreparationCallableOpInterface>(
+                          symbols.lookupNearestSymbolFrom(op, name));
+      if ((!local || prepared) &&
           none_of(op->getResults(), [&](Value v) { return affine(v); }))
         continue;
       const Summary *callee;

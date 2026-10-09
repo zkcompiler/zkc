@@ -712,6 +712,19 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       remainingRealizations -= summary->expandedOperations;
       // The local-definition reader independently checks data-only native
       // ports.
+    } else if (auto map = dyn_cast<algebra::MapRealizeOp>(op)) {
+      // Admitted explicitly: its preparation-callable interface grants
+      // nothing. Its realization checks the expanded scalar formula.
+      const HelperSummary *summary;
+      auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
+          map, map.getHelperAttr());
+      if (failed(helpers.get(helper, summary)))
+        return failure();
+      if (summary->expandedOperations > remainingRealizations)
+        return diagnostics::emit(
+            map.emitOpError(), "mathematical-analysis-limit",
+            "realized helpers exceed the shared expansion budget");
+      remainingRealizations -= summary->expandedOperations;
     } else if (isa<local::FuncOp, local::OperationBindingOp, poly::RecipeOp,
                    poly::RealizeOp>(op)) {
       // Whole executable admission below checks even unused definitions.

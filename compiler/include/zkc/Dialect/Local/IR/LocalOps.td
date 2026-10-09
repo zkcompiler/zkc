@@ -10,6 +10,7 @@ include "zkc/Dialect/Kernels.td"
 include "mlir/IR/OpAsmInterface.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
+include "zkc/Interfaces/PreparationCallable.td"
 
 class LocalControlOp<string name> : Op<LocalDialect, name,
     [IsolatedFromAbove, SingleBlock,
@@ -209,13 +210,15 @@ class ExecutableCallOp<string name> : Op<LocalDialect, name,
 // Preparation realizes this total helper as an ordered, data-only local body.
 // The Protocol profile owns helper admission and prohibits executable escape.
 def Local_RealizeOp : Op<LocalDialect, "realize",
-    [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+    [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
+     PreparationCallableOpInterface]> {
   let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$helper,
     TypeAttrOf<FunctionType>:$function_type);
   let assemblyFormat = "$sym_name `=` $helper attr-dict `:` $function_type";
 }
 
 // Source-local application is expanded under canonical-expanded-locals/1.
+// Its callee is a local.func or a preparation-callable declaration.
 def Local_ApplyOp : ExecutableCallOp<"apply"> { let hasVerifier = 1; }
 
 // One ordered invocation in an endpoint; it retains stop and resource effects.

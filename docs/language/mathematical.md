@@ -156,6 +156,12 @@ fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
 `first` infers result `T` and condition `1 <= N`; the call infers its `_` as `T`.
 An explicit result type remains useful for literals and stable library interfaces.
 
+Local code can apply a scalar helper to whole vectors without writing a loop:
+`map affine(each low, each high, r)` checks that `low` and `high` have equal
+lengths, then computes every row with bulk vector operations. `r` is shared by
+all rows. The [map contract](../spec/language/definitions.md#checked-pointwise-maps)
+states the admitted helpers and refusals.
+
 Type information also flows through nested expressions:
 
 ```zkc

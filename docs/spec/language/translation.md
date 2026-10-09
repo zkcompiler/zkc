@@ -27,7 +27,10 @@ body and receives a data-only `local.realize` declaration. The local call is an
 ordered `local.apply` occurrence; native preparation realizes the helper through
 the common polynomial and calculation lowerers before expanding that call.
 Formal intermediates never become local runtime values. Inline arithmetic
-written directly inside `fn` remains an ordered primitive.
+written directly inside `fn` remains an ordered primitive. A `map` emits one
+`algebra.map_realize` per helper instance and row mask, named from both, and an
+ordered `local.apply`; comparison checks the helper, mask, signature and site and
+accounts for every declaration.
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use
 existing executable bindings. No additional protocol interpreter is introduced.

@@ -10,6 +10,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Helper dependency analysis and availability replay | 1,000,000 words/indices within their separate budgets |
 | Role expansion | 100,000 operation/port visits |
 | Exact resource-origin analysis | 100,000 shared work units and 64 call/region levels |
+| Pointwise map formulas and correspondence | Shared helper expansion budget and Ring view limits (65,536 nodes); 1,000,000 matcher steps |
 | Native R1CS reduction adapter | BLS Fr; at most 8 rows, 128 columns and 1,024 nonzero terms |
 
 Source expansion, runtime value capacity, wire size and execution work have

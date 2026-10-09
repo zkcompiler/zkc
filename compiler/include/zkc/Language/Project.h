@@ -128,6 +128,16 @@ struct HelperCall {
   std::optional<Type> component;
   std::optional<unsigned> owner;
 };
+/// A checked pointwise application of a static scalar math helper in local
+/// code. Each operand is either a whole vector of the helper's field, one row
+/// per element (`mapped`), or one scalar shared by every row. Row counts are
+/// checked when it executes; it is not a total mathematical value.
+struct BulkApplication {
+  DeclarationId callee;
+  std::vector<ValueId> operands;
+  std::vector<Type> arguments;
+  std::vector<bool> mapped;
+};
 struct ProtocolApplication {
   DeclarationId callee;
   std::vector<ValueId> operands;
@@ -214,8 +224,8 @@ struct LocalControl {
   unsigned carried = 0;
 };
 struct Operation {
-  std::variant<MathValue, HelperCall, Exchange, Restriction, Construct,
-               Projection, LocalPrimitive, Consume, LocalControl,
+  std::variant<MathValue, HelperCall, BulkApplication, Exchange, Restriction,
+               Construct, Projection, LocalPrimitive, Consume, LocalControl,
                ProtocolApplication, ServiceQuery, Require, ProtocolRepeat,
                ProtocolCompletion>
       action;

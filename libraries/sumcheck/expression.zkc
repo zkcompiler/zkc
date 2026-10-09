@@ -17,11 +17,15 @@ fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
   let result = kernel<F>("ring.point", values; A);
   return kernel<F>("vector.at", result; "0");
 }
+// One row of a fold: the affine line through low and high, at r.
+math fn interpolate<F: Field>(low: F, high: F, r: F) -> F {
+  return low + (high - low) * r;
+}
+// Fixes the most significant Boolean coordinate at the challenge. The map is
+// checked bulk vector work over both halves, not an interpolated polynomial.
 fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
   let halves = kernel<F>("vector.split", values);
-  let low = kernel<F>("vector.scale", halves.0, 1 - challenge);
-  let high = kernel<F>("vector.scale", halves.1, challenge);
-  return kernel<F>("vector.add", low, high);
+  return map interpolate(each halves.0, each halves.1, challenge);
 }
 fn polynomial<F: Field>(value: Vector<F>) -> Polynomial<F> {
   return kernel<F>("poly.from_coefficients", value);

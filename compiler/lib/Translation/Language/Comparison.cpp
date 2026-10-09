@@ -51,8 +51,8 @@ class Comparator {
   mlir::ModuleOp module;
   const Limits &limits;
   Layouts layouts;
-  std::map<std::string, mlir::Operation *> realizations;
-  std::set<mlir::Operation *> usedRealizations;
+  std::map<std::string, mlir::Operation *> realizations, maps;
+  std::set<mlir::Operation *> usedRealizations, usedMaps;
   Error failure = Error::success();
   Correspondence report;
   uint64_t remaining;
@@ -532,6 +532,37 @@ class Comparator {
                        !string(*actual, "role", decl.roles[*call->owner]))))
           return fail("call target, mode, owner or site differs");
         result = Values(actual->getResults());
+      } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
+        auto &target = project.declarations()[bulk->callee.index];
+        if (source.mode != Body::Mode::Local ||
+            target.kind != Declaration::Kind::Math)
+          return fail("map mode or helper kind differs");
+        auto *actual = next(block, cursor, op.span, "local.apply",
+                            flatten(bulk->operands), leaves.size());
+        if (!actual)
+          return false;
+        auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
+        auto found = callee ? maps.find(callee.getValue().str()) : maps.end();
+        if (found == maps.end())
+          return fail("missing map realization");
+        auto *definition = found->second;
+        auto helper =
+            definition->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
+        auto type = definition->getAttrOfType<mlir::TypeAttr>("function_type");
+        auto rowwise =
+            definition->getAttrOfType<mlir::DenseBoolArrayAttr>("rowwise");
+        auto signature =
+            type ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
+                 : mlir::FunctionType();
+        if (!helper || helper.getValue() != target.symbol || !signature ||
+            !rowwise || !llvm::equal(rowwise.asArrayRef(), bulk->mapped) ||
+            actual->getOperandTypes() != signature.getInputs() ||
+            actual->getResultTypes() != signature.getResults() ||
+            !attributes(*actual, {"callee", "site"}) ||
+            !string(*actual, "site", site))
+          return fail("map helper, rows, signature or site differs");
+        usedMaps.insert(definition);
+        result = Values(actual->getResults());
       } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
         const auto &port = source.services[query->service.index];
         SmallVector<mlir::Value> operands{services[query->service.index]};
@@ -831,6 +862,7 @@ public:
     SmallVector<mlir::Operation *> functions;
     std::map<std::string, relation::DeclareOp> relations;
     std::set<std::string> realizedHelpers;
+    std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
     for (auto &op : native.getBody().front()) {
       if (auto declaration = mlir::dyn_cast<relation::DeclareOp>(op)) {
         if (!relations.emplace(declaration.getSymName().str(), declaration)
@@ -852,6 +884,21 @@ public:
             !realizations.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence",
                        "invalid or duplicate realization");
+      } else if (op.getName().getStringRef() == "algebra.map_realize") {
+        auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
+        auto helper = op.getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
+        auto rowwise = op.getAttrOfType<mlir::DenseBoolArrayAttr>("rowwise");
+        if (!name || !helper || !rowwise ||
+            !mappedHelpers
+                 .emplace(helper.getValue().str(),
+                          std::vector<bool>(rowwise.asArrayRef().begin(),
+                                            rowwise.asArrayRef().end()))
+                 .second ||
+            !attributes(op,
+                        {"sym_name", "helper", "function_type", "rowwise"}) ||
+            op.getNumOperands() || op.getNumResults() || op.getNumRegions() ||
+            !maps.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence", "invalid or duplicate map");
       } else
         functions.push_back(&op);
     }
@@ -1046,7 +1093,8 @@ public:
     if (!relations.empty())
       return error("source.correspondence", "extra relation declaration");
     if (index != functions.size() || usedBindings.size() != bindings.size() ||
-        usedRealizations.size() != realizations.size())
+        usedRealizations.size() != realizations.size() ||
+        usedMaps.size() != maps.size())
       return error("source.correspondence",
                    "extra definition or unused binding");
     llvm::sort(report.locations, [](auto &a, auto &b) {

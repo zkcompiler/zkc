@@ -81,6 +81,7 @@ struct Expression {
     Call,
     Kernel,
     Intrinsic,
+    Map,
     MethodCall,
     FinishIf,
     Add,
@@ -109,6 +110,8 @@ struct Expression {
   std::vector<std::vector<Pattern>> payloads;
   std::optional<BindingId> binding;
   Pattern index;
+  /// For `map`, whether each argument was marked `each`.
+  std::vector<bool> each;
 };
 struct Statement {
   enum class Kind {

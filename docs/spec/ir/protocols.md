@@ -166,6 +166,57 @@ on this edge; these checks are not an independent proof of their
 arithmetic semantics. Resource exhaustion remains a possible runtime failure, as
 with other realized total calculations.
 
+### Checked pointwise maps
+
+The protocol profile also declares a checked [pointwise map](../domains/vectors.md#pointwise-maps)
+of a total helper:
+
+```mlir
+algebra.map_realize @rows = @scalar_helper [true, false] : (tensor<?xF>, F) -> tensor<?xF>
+```
+
+Algebra owns this declaration and its validation. The helper is private, defined
+and has the exact signature `(F, ..., F) -> F` for one installed field `F`.
+`rowwise[i]` marks input `i` as a dynamic vector of `F`, read one element per row;
+other inputs are scalars of `F` shared by every row. At least one input is rowwise
+and the single result is a vector of `F`. Like `local.realize`, it is invoked only
+by `local.apply`, has no body or runtime provider and is forbidden after
+preparation. Both declarations implement the preparation-callable interface read
+by `local.apply`; the interface grants no admission, and this profile admits both
+operations explicitly. Formation refuses with `algebra-map-signature` or
+`algebra-map-helper`.
+
+Preparation clones the helper, expands its callees with bounded helper expansion
+and admits the detached formula with the shared
+[Ring view](../domains/ring-expressions.md): every operation, used or not, is a
+field constant, addition, subtraction or multiplication; anything else refuses
+with `algebra-map-formula`. Admission of a source original runs the same check.
+The resulting `local.func` keeps the declaration's symbol and signature, and its
+logical origin names the helper. Its body:
+
+1. applies `vector.length` to every rowwise input, then compares each later one
+   with the first through `index.equal` and `control.require`, including inputs
+   the formula never reads, before any arithmetic;
+2. evaluates live scalar subexpressions with `field.*` operations;
+3. combines rows with `vector.add`, `vector.sub` and `vector.mul`, uses
+   `vector.scale` when one factor is scalar, and broadcasts a scalar addend
+   with one `vector.fill(x, rows)` immediately before its first use;
+4. broadcasts a scalar result the same way.
+
+The body has O(formula) operations, independent of runtime row counts. Empty
+equal-length inputs succeed. A mismatch is a local backend stop of this checked
+operation, like a vector kernel's own shape check. The application is ordered
+and has no purity grant, so an unused result still checks shapes.
+
+The independent map matcher derives the formula again from the retained original
+and walks the actual generated body: guards, operand modes, broadcasts, field and
+vector operations, literals, the returned value and bindings. It also requires
+every other declaration to be retained unchanged and refuses with
+`algebra-map-correspondence`. It establishes equal values and equal shape
+refusals under the declared vector contracts and sufficient resources, not equal
+resource exhaustion against another realization. Helper expansion is trusted on
+this edge, as for `local.realize`.
+
 Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
 before freezing local definitions. An application inside a local region remains
 inside that region; it is not hoisted to protocol mathematics. Subsequent common preparation,

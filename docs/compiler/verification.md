@@ -22,7 +22,7 @@ own admission boundary; it does not acquire source correspondence from its label
 
 | Boundary | Required comparison | Current implementation |
 |---|---|---|
-| Original to prepared protocol | Application/helper substitutions, folds, action operands, statements, role maps and repeat interfaces; admit every definition before erasure | Separate algorithm and polynomial-recipe checks, virtual helper/application substitution and bounded mathematical value comparison |
+| Original to prepared protocol | Application/helper substitutions, folds, action operands, statements, role maps and repeat interfaces; admit every definition before erasure | Separate algorithm, polynomial-recipe and pointwise-map checks, virtual helper/application substitution and bounded mathematical value comparison |
 | Prepared protocol to participants | Role-indexed SSA correspondence, actual receives, action inputs/results, loop captures/yields and outputs | The actual retained prepared object is compared with the actual projected candidate; restrictions are interpreted per role |
 | Participant rewrites | Action operands under supported mathematical laws, unchanged ordered effects and custody | Shared transient value comparison for simplification, fixing and elimination; independent Boolean and polynomial laws |
 | Participant to exec | Demand at the consuming action, captures, recipes, result order and partial-call placement | Separate closed recipe/demand validator |
@@ -202,6 +202,7 @@ still pins the actual selected bytes.
 | Mathematical values | Four million charged steps; structural equality first; independent Boolean decisions over at most 12 differing leaves, with conservative shared-subterm fallback; polynomial recursion 128 and interpolation at most 64 points. Work exhaustion reports `mathematical-correspondence-limit`; an unrecognized law reports `mathematical-correspondence`. |
 | Algorithm expansion | One million charged steps and depth 64; `algorithm-correspondence` or `algorithm-correspondence-limit`. Capture deduplication uses value-indexed lookup. |
 | Polynomial recipes | One million steps, within the admitted recipe slot/degree/operation bounds; `polynomial-recipe-correspondence` with the failed obligation. |
+| Pointwise maps | One million steps, with the formula rederived under the shared helper-expansion budget; `algebra-map-correspondence` with the failed obligation. |
 | Physical materialization and storage | Fresh validated selection, full module admission, bounded traversal and exact retained computation; `binding-materialization-correspondence` and `storage-correspondence` diagnostics. |
 | Executable bytes and construction | Program admission bounds, one million checker steps, body depth 64; `artifact-correspondence`, `native-transcript-correspondence` and their separate subject/limit refusals. |
 | Outer bytes and schedules | At most 16 MiB, 250,000 JSON nodes and depth 256 before parsing; exact unsigned numbers, scalar Unicode and unique decoded keys. Source schedules have depth 64 and one million comparison steps. `artifact-json[-limit]`, `run-correspondence[-limit]` and `native-deployment-correspondence` distinguish these boundaries. |

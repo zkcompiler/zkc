@@ -118,9 +118,12 @@ class ExpressionInference {
     }
     return true;
   }
+  /// `rows` lifts the marked data inputs and every result of a pointwise map
+  /// to native vectors of the helper's scalar types.
   std::vector<Variable> application(uint32_t id, const Declaration &callee,
                                     std::optional<Type> component,
-                                    unsigned depth) {
+                                    unsigned depth,
+                                    const std::vector<bool> &rows = {}) {
     const auto &expr = syntax.expressions[id];
     if (!callee.abstract) {
       if (!checker.body(callee.id, owner.callDepth + 1))
@@ -174,13 +177,55 @@ class ExpressionInference {
         auto parameter = types.instantiate(callee.inputs[slot.index].type,
                                            parameters, expr.span);
         auto argument = expression(expr.children[i], depth + 1);
+        if (!rows.empty()) {
+          // Report a missing or extra `each` before unifying the two modes.
+          if (!types.allows(argument.type, rows[i] ? T::Builtin : T::Field)) {
+            fail("source.map",
+                 rows[i] ? "an each argument requires a native vector"
+                         : "an argument without each requires a scalar field",
+                 expr.span);
+            return {};
+          }
+          if (rows[i])
+            parameter = vectorOf(parameter, expr.span);
+        }
         types.equal(parameter, argument.type, expr.span);
       }
     }
     std::vector<Variable> results;
-    for (const auto &port : callee.outputs)
-      results.push_back(types.instantiate(port.type, parameters, expr.span));
+    for (const auto &port : callee.outputs) {
+      auto result = types.instantiate(port.type, parameters, expr.span);
+      results.push_back(rows.empty() ? result : vectorOf(result, expr.span));
+    }
     return results;
+  }
+  Variable vectorOf(Variable element, Span span) {
+    return types.shape(Type(T::Builtin, "vector"), {element}, span);
+  }
+  void map(uint32_t id, unsigned depth, Result result) {
+    const auto &expr = syntax.expressions[id];
+    auto target = owner.callable(expr);
+    if (!target)
+      return;
+    const auto &callee = checker.output.declarations[target->first.index];
+    if (callee.kind != Declaration::Kind::Math || callee.abstract ||
+        target->second) {
+      fail("source.map", "map selects a static, defined math fn", expr.span);
+      return;
+    }
+    if (expr.children.size() != callee.inputs.size()) {
+      fail("source.map", "map argument count differs from the helper",
+           expr.span);
+      return;
+    }
+    if (!llvm::is_contained(expr.each, true)) {
+      fail("source.map", "map requires at least one each argument", expr.span);
+      return;
+    }
+    types.equal(
+        result.type,
+        packed(application(id, callee, {}, depth, expr.each), expr.span),
+        expr.span);
   }
   void bind(const Pattern &pattern, Variable value, unsigned depth) {
     if (checker.types.diagnostic)
@@ -559,6 +604,9 @@ class ExpressionInference {
     case K::Record:
     case K::Call:
       call(id, depth, result);
+      break;
+    case K::Map:
+      map(id, depth, result);
       break;
     case K::FinishIf: {
       constrain(child(0), Type{}, expr.span);

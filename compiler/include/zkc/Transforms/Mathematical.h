@@ -36,6 +36,25 @@ mlir::LogicalResult expandMathRealizations(mlir::ModuleOp module);
 mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
                                                     mlir::ModuleOp candidate);
 
+/// Replace each algebra.map_realize with an ordinary local.func of the same
+/// signature. The helper is expanded into a detached scalar formula and
+/// admitted by the shared Ring view, including unused operations. The body
+/// checks every rowwise input's length against the first before arithmetic,
+/// then applies the live formula with O(formula) checked vector operations.
+/// Calls remain ordered local.apply occurrences.
+mlir::LogicalResult expandMapRealizations(mlir::ModuleOp module);
+/// Independent pattern check of each generated body against the formula
+/// derived again from the retained original: shape guards, operand modes,
+/// broadcasts, field operations, return value, bindings and the declaration
+/// inventory. It claims equal values and shape refusals under sufficient
+/// resources under the declared primitive contracts, not equal resource
+/// exhaustion.
+mlir::LogicalResult verifyMapRealizationsPreserved(mlir::ModuleOp original,
+                                                   mlir::ModuleOp candidate);
+/// Admission of every map formula on an immutable original, using bounded
+/// scratch expansion. Refusals keep their algebra-map identifiers.
+llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
+
 // Closed, bounded checks on actual source/candidate pairs. Keep the original
 // frozen and verify both subjects before calling. Preparation and projection
 // use virtual substitutions and role-indexed value terms; participant rewrites

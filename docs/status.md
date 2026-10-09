@@ -41,7 +41,8 @@ state/captures, statement-scoped participant inference, nested ordered calls,
 helper result inference, expression-wide structural type constraints, partial
 static arguments, inferred catalog/natural
 preconditions with explicit contract checking, unified data/service arguments,
-source rejection with `require`, formal polynomial intrinsics, local control,
+source rejection with `require`, formal polynomial intrinsics, checked
+pointwise `map` of scalar helpers over vectors, local control,
 messages, services, static protocol composition, bounded repetition and conditional completion.
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
@@ -68,6 +69,7 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Scalar, tensor and polynomial mathematics | Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/README.md#expression-sumcheck) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |
 | Source clients of imported AIR | The [imported AIR client](../examples/projects/imported-air/README.md) uses a captured Bundle to bind actual trace, configuration and public values under the declared read model and scopes. It also demonstrates a disclosed-trace proof and separate prepared coefficient/Ext8 views. The native [table evaluator](spec/domains/relation-bundles.md#compiler-visible-table-evaluation) checks one table's assertions; whole-Bundle interactions and a complete STARK remain later work. |
+| Pointwise vector maps | Source `map` applies one static scalar `math fn` over KoalaBear, Ext8 or other installed field vectors through [checked bulk vector operations](spec/ir/protocols.md#checked-pointwise-maps): shapes first, O(formula) code and an independent body matcher. Formulas are field constants, addition, subtraction and multiplication; there is no dedicated row kernel, backend ABI or first-class function value. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; affine sequence elements are excluded. |
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |

@@ -185,6 +185,22 @@ prefix-product computation is not itself a permutation argument: its challenge
 ordering, linkage to committed traces, and terminal equality are separate
 protocol obligations.
 
+## Pointwise maps
+
+Let `f : F^k -> F` be a ring expression over one field and let a mask select its
+rowwise inputs. For rowwise inputs `v_j : Vector F n` and scalar inputs `x_j : F`,
+the checked map has length `n` and
+
+```text
+map(f)(...)[i] = f(..., v_j[i], ..., x_j, ...)
+```
+
+Every rowwise input must have the same length, which may be zero. A mismatch
+refuses, including for an input that `f` does not read; nothing is truncated or
+padded. This is elementwise arithmetic on vectors. It is not substitution into
+formal polynomials: a pointwise product of two tables is not the table of the
+product of their multilinear or univariate interpretations.
+
 ## Representation and execution
 
 A diagonal representation may retain immutable factors and original values
