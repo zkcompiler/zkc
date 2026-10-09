@@ -153,6 +153,23 @@ fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
 
 `first` infers result `T` and condition `1 <= N`; the call infers its `_` as `T`.
 An explicit result type remains useful for literals and stable library interfaces.
+
+Type information also flows through nested expressions:
+
+```zkc
+fn identity<T: Type>(x: T) -> T { return x; }
+fn choose<F: Field>(x: F, b: bool) {
+  return identity(if b { 0 } else { x });
+}
+fn samples<F: Field>(x: F) {
+  return identity([0, x]);
+}
+```
+
+`choose` infers result `F`; `samples` infers `[F; 2]`. Reversing the branches or
+array elements does not affect type inference. A statement still needs enough
+information on its own: write `let zero: F = 0;` when no expression supplies the
+field type. A later use of `zero` does not determine that earlier declaration.
 Component choices, protocol role remapping and ambiguous owners stay explicit.
 
 The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/array.zkc),

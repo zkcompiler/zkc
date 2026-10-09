@@ -143,6 +143,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     arm.checker = std::make_unique<BodyChecker>(checker, decl, syntax,
                                                 *arm.body, callDepth);
     auto &nested = *arm.checker;
+    nested.inference = inference;
     if (loop) {
       auto value = nested.input(Type(Type::Kind::Index), {}, expr.index.span);
       if (!value)

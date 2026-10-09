@@ -50,8 +50,10 @@ without a semicolon must produce unit. Header conditions, scrutinees and bounds
 containing record literals require parentheses. A value expression whose every
 arm stops needs an expected type or a discarded statement context. Nested stopped
 arms do not constrain the result inferred from continuing arms. A stopped path has
-no resource obligations. Result inference uses the expected type or the first
-continuing arm; annotate numeric literals when that context is insufficient.
+no resource obligations. The expected type and all continuing arms contribute
+type constraints, including partial tuple and array structure. Arm order does
+not select a result type. If those constraints leave the result undetermined,
+an explicit type is required.
 
 Free places are reads before assignment on some continuing path, preserving
 projection privacy and partial moves. Capturing one field does not move its affine siblings.

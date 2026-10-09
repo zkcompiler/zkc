@@ -27,6 +27,117 @@ void compile(StringRef source) {
 } // namespace
 int main() {
   zkc::test::Cases cases;
+  const std::string identity = "fn id<T:Type>(x:T)->T{return x;}";
+  for (StringRef value : {"x", "{x}", "{{x}}", "if b{x}else{x}", "{let y=x;y}",
+                          "id({x})", "if b{stop \"reject\";}else{x}"})
+    cases.run("generic argument composition: " + value, [&] {
+      auto project = take(check(identity + "fn f(x:bool,b:bool){return id(" +
+                                value.str() + ");}"));
+      require(declaration(project, "m::f").outputs.front().type == Type{},
+              "composed result did not infer bool");
+    });
+  for (StringRef value :
+       {"if b{0}else{x}", "if b{x}else{0}", "id(if b{0}else{x})", "id([0,x])",
+        "id([x,0])", "id([(0,x),(x,0)])", "id(if b{(0,x)}else{(x,0)})",
+        "id((0+0)*x)", "id(id(0)*x)"}) {
+    cases.run("symmetric aggregate inference: " + value, [&] {
+      take(check(identity + "fn f<F:Field>(x:F,b:bool){return " + value.str() +
+                 ";}"));
+    });
+  }
+  cases.run("nested calls share partial type structure", [&] {
+    take(check(identity + R"(
+      fn pair<T:Type+Drop>(a:T,b:T)->T{return a;}
+      fn f<F:Field>(x:F){return pair(id((0,x)),id((x,0)));}
+      fn g<F:Field>(x:F)->(F,F){return id((id(0),x));}
+      fn empty<F:Field>(x:[F;0]){return pair([],x);}
+      fn lengths<N:nat>(x:[bool;N]){return id(x);}
+    )"));
+    take(check(identity + R"(
+      fn f(x:bool,n:index){return (id(x),id(n));}
+      fn pair<A:Type,B:Type>(a:A,b:B){return (a,b);}
+      fn g<F:Field>(x:F){return pair<_,F>(true,0);}
+    )"));
+    refuses(check(identity + "fn f<T:Type>(x:T)->bool{return id(x);}"),
+            "source.type");
+  });
+  cases.run("match payloads and lexical bindings supply types", [&] {
+    compile(identity + R"(
+      domain F=field("bls12-381.fr");
+      enum Choice{Some(F),None()}
+      fn f(c:Choice){return id(match c{None()=>{0},Some(x)=>{{x}}});}
+      fn run(x:F){return f(Choice::Some(x));}
+      protocol Run roles(P)(x:F@P)->(r:F@P){
+        return run(x);
+      }entry Demo=Run;
+    )");
+  });
+  cases.run(
+      "inference preserves authored statement and definition boundaries", [&] {
+        refuses(check(identity + "fn f()->index{let x=id(0);return x;}"),
+                "source.inference");
+        refuses(check(identity + "fn f()->index{return id({let x=0;x});}"),
+                "source.inference");
+        refuses(check(identity + "fn f(){return id(0);}"), "source.inference");
+        refuses(check(identity + "fn f(){return id([]);}"), "source.inference");
+        refuses(check(identity + R"(
+      fn f(b:bool)->bool{
+        return id({let x=if b{stop "reject";}else{stop "abort";};});
+      }
+    )"),
+                "source.inference");
+        refuses(check(identity + "fn f(x:bool){return id([x,()]);}"),
+                "source.type");
+        refuses(
+            check(identity + "fn f(b:bool){return id(if b{true}else{()});}"),
+            "source.type");
+      });
+  cases.run(
+      "static equations are structural and associations only normalize forward",
+      [] {
+        take(check(R"(
+      fn grow<N:nat>(xs:[bool;N+1]){return xs;}
+      fn f(xs:[bool;4]){return grow<3>(xs);}
+      fn both<N:nat>(x:[bool;N],y:[bool;N+1]){return (x,y);}
+      fn g(x:[bool;2],y:[bool;3]){return both(x,y);}
+    )"));
+        refuses(check(R"(
+      fn grow<N:nat>(xs:[bool;N+1]){return xs;}
+      fn f(xs:[bool;4]){return grow(xs);}
+    )"),
+                "source.inference");
+        refuses(check(R"(
+      fn grow<N:nat>(xs:[bool;N+1]){return xs;}
+      fn f(xs:[bool;4]){return grow<2>(xs);}
+    )"),
+                "source.type");
+        refuses(check(R"(
+      interface A{type Item:Copy+Drop;}
+      fn get<C:A>(x:C::Item){return x;}
+      fn f(x:bool){return get(x);}
+    )"),
+                "source.inference");
+      });
+  cases.run("type lookahead does not move values or execute effects", [&] {
+    compile(identity + R"(
+      struct Token:Drop {value:bool}
+      fn f(x:Token,b:bool){
+        return id(if b{x}else{x});
+      }
+      fn run(b:bool){
+        let Token{value}=f(Token{value:b},b);return value;
+      }
+      protocol Run roles(P)(b:bool@P)->(r:bool@P){return run(b);}
+      entry Demo=Run;
+    )");
+    refuses(check(identity + R"(
+      struct Token:Drop {}
+      fn f(x:Token,b:bool){
+        let y=id(if b{x}else{x});return (y,x);
+      }
+    )"),
+            "source.move");
+  });
   cases.run("helper contracts complete before use, independent of order", [] {
     for (bool reverse : {false, true}) {
       std::string leaf = "math fn leaf<F:Field>(x:F){return x+x;}";
@@ -242,6 +353,17 @@ int main() {
     limits = {};
     limits.callDepth = 2;
     refuses(check(source, limits), "source.limit");
+  });
+  cases.run("independent statements do not rescan earlier bindings", [&] {
+    auto work = [&](unsigned count) {
+      std::string source = identity + "fn f(x:bool){";
+      for (unsigned i = 0; i < count; ++i)
+        source += "let v" + std::to_string(i) + "=id(x);";
+      source += "return x;}";
+      return take(check(source)).checkedWork();
+    };
+    require(work(400) < 3 * work(200),
+            "type inference work grew with all previously bound names");
   });
   return cases.result();
 }

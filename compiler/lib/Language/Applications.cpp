@@ -53,10 +53,12 @@ BodyChecker::application(const Expression &expr) {
     llvm::sort(roles);
     return roles;
   };
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  TypeScope types(*this, id, {});
+  if (!types)
+    return {};
   std::vector<uint32_t> data;
   std::vector<ServiceId> managed;
-  std::vector<Type> serviceFields;
-  std::vector<std::optional<Type>> hints;
   for (unsigned i = 0; i < expr.children.size(); ++i) {
     auto child = expr.children[i];
     if (callee.inputOrder[i].kind == Declaration::InputSlot::Kind::Service) {
@@ -64,18 +66,14 @@ BodyChecker::application(const Expression &expr) {
       if (!root)
         return {};
       managed.push_back(*root);
-      serviceFields.push_back(body.services[root->index].field);
     } else {
       data.push_back(child);
-      hints.push_back(hint(child));
     }
     if (checker.types.diagnostic)
       return {};
   }
-  auto arguments = actuals(callee, expr, hints, {}, {}, serviceFields);
-  if (!arguments)
-    return {};
-  auto substitution = checker.types.substitution(callee, *arguments);
+  const auto &arguments = inference->arguments.at(id);
+  auto substitution = checker.types.substitution(callee, arguments);
   for (unsigned i = 0; i < managed.size(); ++i) {
     const auto &actual = body.services[managed[i].index];
     const auto &expected = callee.services[i];
@@ -115,7 +113,7 @@ BodyChecker::application(const Expression &expr) {
     results.push_back({*type, mappedRoles(port), expr.span});
   }
   auto emitted = emitResults(
-      ProtocolApplication{callee.id, operands, *arguments, mapping, managed},
+      ProtocolApplication{callee.id, operands, arguments, mapping, managed},
       std::move(results), expr.span);
   if (emitted)
     placement->applications.push_back(body.operations.size() - 1);

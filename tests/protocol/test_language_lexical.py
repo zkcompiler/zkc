@@ -10,6 +10,36 @@ from entry import Entry
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+def test_composed_type_inference_preserves_values_and_evaluation_order(
+    toolchain, journal, directory, flags,
+):
+    source = '''module sample;
+fn id<T:Type>(x:T)->T{return x;}
+fn work(x:index,b:bool){
+  let mut state=x;
+  let pair=id(if b{(0,x)}else{(x,0)});
+  let array=id([(0,x),(x,0)]);
+  let a=id({state=state+1;if b{0}else{state}});
+  let z=id({state=state+1;state});
+  return (pair.0+pair.1,array[0].1+array[1].0,a,z,state);
+}
+protocol Run roles(P)(x:index@P,b:bool@P)
+  ->(sum:index@P,double:index@P,selected:index@P,last:index@P,state:index@P){
+  let (sum,double,selected,last,state)=work(x,b);
+  return(sum,double,selected,last,state);
+}
+entry Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, flags)
+    for x in (0, 7):
+        for b in (False, True):
+            assert entry.run(f'{x}-{b}', {'x': x, 'b': b}) == {
+                'sum': x, 'double': 2 * x, 'selected': 0 if b else x + 1,
+                'last': x + 2, 'state': x + 2,
+            }
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_inferred_calls_use_independent_participant_components(
     toolchain, journal, directory, flags,
 ):

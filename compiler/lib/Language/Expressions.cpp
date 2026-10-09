@@ -4,136 +4,17 @@
 #include <cassert>
 using namespace llvm;
 namespace zkc::language::detail {
-std::optional<Type> BodyChecker::hint(uint32_t id, unsigned depth) {
-  auto &expr = syntax.expressions[id];
-  if (depth > checker.work.limits.expressionDepth ||
-      !checker.types.charge(1, expr.span)) {
-    if (!checker.types.diagnostic)
-      fail("source.limit", "expression depth limit exceeded", expr.span);
-    return {};
-  }
-  using K = Expression::Kind;
-  if (expr.kind == K::Kernel || expr.kind == K::Intrinsic) {
-    std::vector<Type> arguments;
-    auto signature = expr.kind == K::Kernel
-                         ? kernelSignature(expr, arguments)
-                         : intrinsicSignature(expr, arguments);
-    if (!signature)
-      return {};
-    return signature->resultType();
-  }
-  if (expr.kind == K::MethodCall) {
-    auto root = service(syntax.expressions[expr.children.front()]);
-    return root ? std::optional<Type>(body.services[root->index].field)
-                : std::nullopt;
-  }
-  if (expr.kind == K::Boolean || expr.kind == K::Equal)
-    return Type{};
-  if (expr.kind == K::Decimal)
-    return {};
-  if (expr.kind == K::Name || expr.kind == K::Projection) {
-    // Hints describe the fixed binding type. Earlier operands may restore a
-    // moved binding before this operand is evaluated.
-    auto p = sourcePlace(id, depth);
-    return p ? projected(bindings.at(p->first).type, p->second, expr.span)
-             : std::nullopt;
-  }
-  if (expr.kind == K::Tuple) {
-    Type result(expr.children.empty() ? Type::Kind::Unit : Type::Kind::Tuple);
-    for (auto child : expr.children) {
-      auto t = hint(child, depth + 1);
-      if (!t)
-        return {};
-      result.arguments.push_back(*t);
-    }
-    return result;
-  }
-  if (expr.kind == K::Array) {
-    if (expr.children.empty())
-      return {};
-    auto t = hint(expr.children.front(), depth + 1);
-    if (!t)
-      return {};
-    Type result(Type::Kind::Array);
-    result.arguments = {*t};
-    result.dimension = Natural::constant(expr.children.size());
-    return result;
-  }
-  if (expr.kind == K::Call || expr.kind == K::Record) {
-    // Constructor and generic call result inference is performed by expression
-    // checking; hints never choose an implementation or consume an argument.
-    if (expr.kind == K::Record) {
-      SyntaxType term;
-      term.name = expr.text;
-      term.arguments = expr.arguments;
-      term.span = expr.span;
-      return checker.type(decl, term);
-    }
-    if (expr.text == "index")
-      return Type(Type::Kind::Index);
-    if (expr.text == "unpack")
-      return {};
-    auto parts = StringRef(expr.text).rsplit("::");
-    if (!parts.second.empty()) {
-      auto saved = checker.types.diagnostic;
-      auto target = checker.resolve(decl, parts.first, expr.span);
-      if (!target)
-        checker.types.diagnostic = saved;
-      else if (checker.output.declarations[target->index].kind ==
-               Declaration::Kind::Variant) {
-        SyntaxType term;
-        term.name = parts.first.str();
-        term.arguments = expr.arguments;
-        term.span = expr.span;
-        return checker.type(decl, term);
-      }
-    }
-    auto target = callable(expr);
-    if (!target)
-      return {};
-    auto &callee = checker.output.declarations[target->first.index];
-    if (callee.kind != Declaration::Kind::Math &&
-        callee.kind != Declaration::Kind::Local)
-      return {};
-    std::vector<std::optional<Type>> inputs;
-    for (auto child : expr.children)
-      inputs.push_back(hint(child, depth + 1));
-    if (checker.types.diagnostic)
-      return {};
-    auto args = actuals(callee, expr, inputs, {}, target->second);
-    if (!args) {
-      // A missing call context may be supplied during expression checking.
-      // A definition's own inference error cannot: preserve it and its origin.
-      if ((callee.abstract || callee.body) && checker.types.diagnostic &&
-          checker.types.diagnostic->code == "source.inference")
-        checker.types.diagnostic.reset();
-      return {};
-    }
-    auto sub = checker.types.substitution(callee, *args);
-    if (target->second && callee.parent)
-      sub.emplace(
-          "self:" +
-              checker.output.declarations[callee.parent->index].qualifiedName,
-          *target->second);
-    return checker.types.substitute(callee.outputs.front().type, sub,
-                                    expr.span);
-  }
-  if (expr.kind == K::If || expr.kind == K::Match || expr.kind == K::For ||
-      expr.kind == K::Block || expr.kind == K::FinishIf)
-    return {};
-  for (auto child : expr.children) {
-    auto result = hint(child, depth + 1);
-    if (result || checker.types.diagnostic)
-      return result;
-  }
-  return {};
-}
 std::optional<ValueId> BodyChecker::expression(uint32_t id,
                                                std::optional<Type> expected,
                                                unsigned depth,
                                                bool allowUntypedStop) {
   assert((!protocol() || placement) &&
          "protocol expression requires a statement inference scope");
+  TypeScope types(*this, id, expected);
+  if (!types)
+    return {};
+  if (!expected)
+    expected = inferredType(id);
   auto result = evaluate(id, expected, depth, allowUntypedStop);
   const auto &expr = syntax.expressions[id];
   if (!result && body.stopped && !checker.types.diagnostic &&
@@ -250,7 +131,7 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
                       expr.span);
     }
   } else if (expr.kind == K::Call)
-    result = call(expr, expected, depth);
+    result = call(expr, depth);
   else if (expr.kind == K::Tuple || expr.kind == K::Array ||
            expr.kind == K::Record)
     result = construct(expr, expected, depth);
@@ -266,7 +147,7 @@ std::optional<ValueId> BodyChecker::evaluate(uint32_t id,
     auto operand = equal ? std::optional<Type>{} : expected;
     if (!operand)
       for (auto child : expr.children) {
-        operand = hint(child, depth + 1);
+        operand = inferredType(child);
         if (checker.types.diagnostic)
           return {};
         if (operand)
@@ -385,7 +266,7 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       element = type.arguments.front();
     } else
       for (auto child : expr.children) {
-        element = hint(child, depth + 1);
+        element = inferredType(child);
         if (element || checker.types.diagnostic)
           break;
       }
@@ -449,8 +330,7 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       fail("source.duplicate", "duplicate constructor field", expr.span);
       return {};
     }
-    // Infer each unconstrained tuple element while checking it once, in source
-    // order. Lexical blocks need no separate speculative type-checking path.
+    // Evaluate each field exactly once, in source order.
     const bool inferred = expr.kind == E::Tuple && !expected;
     auto v = expression(expr.children[i],
                         inferred ? std::nullopt

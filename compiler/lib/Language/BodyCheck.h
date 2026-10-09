@@ -2,6 +2,7 @@
 #define ZKC_LANGUAGE_BODYCHECK_H
 #include "Checker.h"
 #include "Placement.h"
+#include "TypeInference.h"
 namespace zkc::language::detail {
 class BodyChecker {
 public:
@@ -12,6 +13,7 @@ public:
   bool addInput(BindingId, const Type &, std::vector<unsigned>, Span);
 
 private:
+  friend class ExpressionInference;
   Checker &checker;
   Declaration &decl;
   const SyntaxDeclaration &syntax;
@@ -19,6 +21,18 @@ private:
   unsigned callDepth;
   uint32_t statement = 0;
   Placement *placement = nullptr;
+  const ExpressionTypes *inference = nullptr;
+  struct TypeScope {
+    BodyChecker &checker;
+    const ExpressionTypes *outer;
+    std::optional<ExpressionTypes> state;
+    bool valid;
+    TypeScope(BodyChecker &, uint32_t, std::optional<Type>);
+    TypeScope(const TypeScope &) = delete;
+    TypeScope &operator=(const TypeScope &) = delete;
+    ~TypeScope();
+    explicit operator bool() const { return valid; }
+  };
   struct StatementPlacement {
     BodyChecker &checker;
     Placement *outer;
@@ -110,14 +124,14 @@ private:
   bool data(const Type &, Span);
   bool restricted(const Type &);
   std::optional<Type> projected(Type, llvm::ArrayRef<unsigned>, Span);
-  std::optional<Type> hint(uint32_t, unsigned = 1);
+  std::optional<ExpressionTypes> inferExpression(uint32_t, std::optional<Type>);
+  std::optional<Type> inferredType(uint32_t) const;
   std::optional<ValueId> expression(uint32_t, std::optional<Type> = {},
                                     unsigned = 1,
                                     bool allowUntypedStop = false);
   std::optional<ValueId> evaluate(uint32_t, std::optional<Type>, unsigned,
                                   bool allowUntypedStop);
-  std::optional<ValueId> call(const Expression &, std::optional<Type>,
-                              unsigned);
+  std::optional<ValueId> call(const Expression &, unsigned);
   std::optional<ValueId> control(const Expression &, std::optional<Type>,
                                  unsigned, bool allowUntypedStop);
   std::optional<ValueId> construct(const Expression &, std::optional<Type>,
@@ -126,11 +140,6 @@ private:
                                                                  unsigned = 1);
   std::optional<std::pair<DeclarationId, std::optional<Type>>>
   callable(const Expression &);
-  bool infer(const Type &, const Type &, Substitution &, Span);
-  std::optional<std::vector<Type>>
-  actuals(const Declaration &, const Expression &,
-          llvm::ArrayRef<std::optional<Type>>, std::optional<Type>,
-          std::optional<Type>, llvm::ArrayRef<Type> serviceFields = {});
 };
 } // namespace zkc::language::detail
 #endif

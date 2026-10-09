@@ -414,6 +414,24 @@ need a type context; a function with no continuing result needs an explicit
 result type. Abstract members require result types. Protocols retain named,
 typed output ports with explicit participant sets.
 
+Within an expression, type equations connect operands, call parameters and
+results, aggregate fields, block tails and all continuing branch results. Type
+information flows in both directions: `id(if b { x } else { x })` infers the
+same result as binding that conditional before calling `id`. An array's elements
+and a conditional's continuing arms constrain one another regardless of order;
+`[0, x]` and `[x, 0]` have the same element type when `x` supplies a field context.
+Partial aggregate information is retained, so `[(0, x), (x, 0)]` also has a
+determined type. Numeric literals restrict their type to a field or local index;
+they never select a default domain.
+
+Each authored statement must resolve before the next. A block's preceding
+statements have their own scopes of inference; its tail participates in the
+enclosing expression. Thus `id({ x })` can use the call's expected type, but a
+later use cannot resolve `let x = 0;`. Inference does not execute expressions,
+consume resources or choose participants. Resource checks and evaluation remain
+in source order; participant inference follows its
+[own statement constraints](protocols.md#participant-meaning).
+
 Helper and protocol calls infer bare static parameters from data argument types,
 managed-service fields and expected helper results. Omit the entire static list,
 or write one slot per parameter and use `_` for selected holes, as in
@@ -422,6 +440,10 @@ have one consistent solution; there are no default types, dimensions or componen
 implementations. Holes are whole call slots, not nested type syntax or kernel,
 intrinsic, constructor or Entry arguments. There is no global instance search,
 runtime component dispatch or inference through noninjective associations.
+Each call has fresh inference variables; the enclosing definition's parameters
+remain fixed. Associated types and compound natural expressions normalize
+forward after their inputs are known, without inferring those inputs from a
+result. Group scaling likewise does not infer a group from its scalar field.
 
 An interface declares associated types/domains and math/local member signatures.
 A component selects one interface and defines every member exactly once. Associated

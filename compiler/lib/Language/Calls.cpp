@@ -34,118 +34,7 @@ BodyChecker::callable(const Expression &expr) {
   }
   return std::make_pair(*id, std::optional<Type>{});
 }
-bool BodyChecker::infer(const Type &pattern, const Type &actual,
-                        Substitution &bindings, Span span) {
-  if (!checker.types.charge(1, span))
-    return false;
-  if (pattern.symbolic && pattern.kind != Type::Kind::Associated) {
-    // Only a bare parameter is inferred. Associations and natural equations do
-    // not have unique inverses and are never solved here.
-    auto *parameter = checker.types.parameter(pattern.domain);
-    if (parameter &&
-        (pattern.kind != Type::Kind::Natural ||
-         pattern.dimension == cantFail(Natural::atom(pattern.domain)))) {
-      auto [it, inserted] = bindings.emplace(pattern.domain, actual);
-      return inserted || it->second == actual ||
-             fail("source.inference", "conflicting static argument inference",
-                  span);
-    }
-  }
-  if (pattern.kind == actual.kind && pattern.domain == actual.domain &&
-      pattern.arguments.size() == actual.arguments.size()) {
-    for (unsigned i = 0; i < pattern.arguments.size(); ++i)
-      if (!infer(pattern.arguments[i], actual.arguments[i], bindings, span))
-        return false;
-    if (pattern.kind == Type::Kind::Array && !pattern.dimension.isClosed()) {
-      for (auto &[factors, coefficient] : pattern.dimension.terms())
-        if (pattern.dimension.terms().size() == 1 && coefficient == 1 &&
-            factors.size() == 1 &&
-            factors.front().kind == Natural::Factor::Kind::Atom) {
-          Type p(Type::Kind::Natural, factors.front().name);
-          p.symbolic = true;
-          p.dimension = pattern.dimension;
-          Type a(Type::Kind::Natural);
-          a.dimension = actual.dimension;
-          a.symbolic = !a.dimension.isClosed();
-          if (!infer(p, a, bindings, span))
-            return false;
-        }
-    }
-  }
-  return true;
-}
-std::optional<std::vector<Type>> BodyChecker::actuals(
-    const Declaration &callee, const Expression &expr,
-    ArrayRef<std::optional<Type>> inputs, std::optional<Type> expected,
-    std::optional<Type> component, ArrayRef<Type> serviceFields) {
-  // A definition's contract is independent of this call's arguments or expected
-  // type. Complete it before consulting its result or requirements.
-  if (!callee.abstract) {
-    if (!checker.body(callee.id, callDepth + 1))
-      return {};
-    checker.bodyHeights[decl.id.index] =
-        std::max(checker.bodyHeights[decl.id.index],
-                 checker.bodyHeights[callee.id.index] + 1);
-  }
-  Substitution bindings;
-  if (component && callee.parent) {
-    auto &interface = checker.output.declarations[callee.parent->index];
-    bindings = checker.types.substitution(interface, component->arguments);
-    bindings.emplace("self:" + interface.qualifiedName, *component);
-  }
-  unsigned inherited =
-      component && callee.parent
-          ? checker.output.declarations[callee.parent->index].parameters.size()
-          : 0;
-  if (!expr.arguments.empty()) {
-    if (expr.arguments.size() + inherited != callee.parameters.size()) {
-      fail("source.generic", "static argument count differs", expr.span);
-      return {};
-    }
-    for (unsigned i = 0; i < expr.arguments.size(); ++i) {
-      if (expr.arguments[i].kind == SyntaxType::Kind::Hole)
-        continue;
-      auto t = checker.type(decl, expr.arguments[i]);
-      if (!t)
-        return {};
-      bindings.emplace(callee.parameters[inherited + i].atom, *t);
-    }
-  }
-  if (expr.arguments.empty() ||
-      llvm::any_of(expr.arguments, [](const auto &argument) {
-        return argument.kind == SyntaxType::Kind::Hole;
-      })) {
-    for (unsigned i = 0; i < inputs.size() && i < callee.inputs.size(); ++i)
-      if (inputs[i] &&
-          !infer(callee.inputs[i].type, *inputs[i], bindings, expr.span))
-        return {};
-    for (unsigned i = 0; i < serviceFields.size(); ++i)
-      if (!infer(callee.services[i].field, serviceFields[i], bindings,
-                 expr.span))
-        return {};
-    if (expected && callee.outputs.size() == 1 &&
-        !infer(callee.outputs.front().type, *expected, bindings, expr.span))
-      return {};
-  }
-  std::vector<Type> result;
-  for (auto &p : callee.parameters) {
-    auto it = bindings.find(p.atom);
-    if (it == bindings.end()) {
-      fail("source.inference", "static argument cannot be inferred: " + p.name,
-           expr.span);
-      return {};
-    }
-    result.push_back(it->second);
-  }
-  if (!checker.types.checkArguments(callee, result, expr.span, &decl, bindings))
-    return {};
-  for (auto &bound : callee.bounds)
-    if (!checker.types.assumptions(decl, bound, bindings, expr.span))
-      return {};
-  return result;
-}
 std::optional<ValueId> BodyChecker::call(const Expression &expr,
-                                         std::optional<Type> expected,
                                          unsigned depth) {
   if (expr.roles) {
     fail("source.call", "role mappings belong to protocol calls", expr.span);
@@ -307,16 +196,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
     fail("source.call", "helper argument count mismatch", expr.span);
     return {};
   }
-  std::vector<std::optional<Type>> hints;
-  for (auto child : expr.children) {
-    hints.push_back(hint(child, depth + 1));
-    if (checker.types.diagnostic)
-      return {};
-  }
-  auto staticArgs = actuals(callee, expr, hints, expected, target->second);
-  if (!staticArgs)
-    return {};
-  auto subst = checker.types.substitution(callee, *staticArgs);
+  const auto id = uint32_t(&expr - syntax.expressions.data());
+  const auto &staticArgs = inference->arguments.at(id);
+  auto subst = checker.types.substitution(callee, staticArgs);
   if (target->second && callee.parent)
     subst.emplace(
         "self:" +
@@ -382,12 +264,9 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
       return {};
     resultComponents = *available;
   }
-  auto result = emit(HelperCall{callee.id,
-                                std::move(args),
-                                std::move(*staticArgs),
-                                target->second,
-                                {}},
-                     *resultType, std::move(resultComponents), expr.span);
+  auto result = emit(
+      HelperCall{callee.id, std::move(args), staticArgs, target->second, {}},
+      *resultType, std::move(resultComponents), expr.span);
   if (result && variable)
     placement->calls.emplace_back(body.operations.size() - 1, *variable);
   return result;

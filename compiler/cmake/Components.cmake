@@ -72,6 +72,8 @@ add_zkc_component(Language
   lib/Language/Placement.cpp
   lib/Language/BodyPlacement.cpp
   lib/Language/Expressions.cpp
+  lib/Language/TypeInference.cpp
+  lib/Language/ExpressionInference.cpp
   lib/Language/Calls.cpp
   lib/Language/Builtins.cpp
   lib/Language/Kernels.cpp
