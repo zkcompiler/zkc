@@ -1,6 +1,7 @@
 #ifndef ZKC_RELATION_AIR_H
 #define ZKC_RELATION_AIR_H
 
+#include "zkc/Contracts/RingExpression.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -81,6 +82,17 @@ struct AIREvaluation {
   std::vector<AIRResidual> residuals;
   llvm::json::Value encode() const;
 };
+/// Closed input binding for an AIR expression. Public values have degree zero;
+/// relative trace reads have degree one. Scope/window checks remain in AIR.
+struct AIRExpressionInput {
+  enum class Kind { Public, Read } kind;
+  uint32_t publicIndex = 0;
+  AIRCell cell;
+};
+struct AIRExpressionView {
+  ring::Expression expression;
+  std::vector<AIRExpressionInput> inputs;
+};
 class AIRPlan;
 
 /// Finite arithmetic AIR, aligned with Zkc.Relation.AIR's noncyclic semantics.
@@ -102,6 +114,11 @@ public:
   /// SHA256 of the exact canonical relation descriptor.
   std::string identity() const;
   llvm::json::Value analysis() const;
+  /// The selected constraint's actual expression in the shared ring core.
+  /// Input maps contain only referenced public coordinates and relative reads.
+  llvm::Expected<AIRExpressionView> expressionView(uint32_t constraint) const;
+  /// All constraints as ordered outputs, sharing identical public/read inputs.
+  llvm::Expected<AIRExpressionView> expressionView() const;
   llvm::Expected<AIRPlan> compile(uint32_t height) const;
   /// Dense admission checks every field value, including unused coordinates.
   /// scheduledReads counts only subsequent selective evaluation fetches.

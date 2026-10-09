@@ -1,6 +1,8 @@
 #ifndef ZKC_LIB_COMPILER_NATIVE_PROOF_VERIFICATION_H
 #define ZKC_LIB_COMPILER_NATIVE_PROOF_VERIFICATION_H
 #include "zkc/Compiler/NativeProof.h"
+#include <cstdint>
+#include <optional>
 namespace zkc::detail {
 /// Source-admitted occurrence facts. The checker reads actual helper bodies;
 /// generated helper names are not evidence of their meaning.
@@ -9,6 +11,9 @@ struct NativeTranscriptEvent {
   mlir::Type payload;
   bool query;
   unsigned depth = 0;
+  /// The static UniformIndex domain of an index query; absent for field draws
+  /// and message observations.
+  std::optional<uint64_t> bound;
 };
 llvm::Error verifyNativeEntrySelection(mlir::ModuleOp prepared,
                                        mlir::ModuleOp selected,

@@ -69,13 +69,21 @@ test-rust: build
 test-lean: build-lean
     python3 tests/run.py lean
 
-# Fetch pinned main or ArkLib dependency objects for development.
+# Fetch pinned main, ArkLib or Clean dependency objects for development.
 fetch-lean deps="main":
     python3 scripts/develop.py fetch-lean --deps "$1"
 
 # Build and check the optional ArkLib integration.
 test-lean-integration: (fetch-lean "arklib")
     python3 scripts/develop.py lean-integration
+
+# Build the optional Clean integration and check its committed native control.
+test-lean-clean: (fetch-lean "clean")
+    python3 scripts/develop.py lean-clean
+
+# Test the optional AIR adapter, including independent native comparisons.
+test-plonky3:
+    cargo test --locked --manifest-path compiler/adapters/plonky3/Cargo.toml --workspace --all-features
 
 # Rebuild Lean packages without prior project or dependency objects.
 test-lean-fresh:

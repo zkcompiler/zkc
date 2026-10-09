@@ -11,6 +11,7 @@ concrete domains, Entries and transcript constructions in
 |---|---|---|
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`sumcheck`](sumcheck/lib.zkc) | `Vector<F>`, `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
+| [`expression_sumcheck`](sumcheck/expression.zkc) | `Expression<F>`, `Sumcheck<F, Max, Width, Degree, E>` | Sumcheck for an expression in public multilinear tables, using a statically selected evaluator |
 
 ### Schnorr
 
@@ -38,6 +39,31 @@ V retains and folds its public table for the terminal check. This library does
 not hide the polynomial or use a commitment. The field requires `Field`, `Share`
 and `Wire` with the selected vector kernels installed. The example uses
 BLS12-381 Fr. Local `sums`, `fold`, `both` and `terminal` helpers remain private.
+
+### Expression Sumcheck
+
+The expression-based `Sumcheck` takes separate prover and verifier tables, a verifier claim,
+and a shared round count. Tables contain `Width` columns in row-major order.
+Both roles must use the same table, column order, expression component and
+round count for honest execution. Each round pairs the first and second halves
+of the rows, so the first challenge fixes the most significant Boolean coordinate.
+
+The `Expression` component supplies round-polynomial coefficients and terminal
+evaluation. Its `round` method must return exactly the coefficients of
+`sum_i P(low_i + (high_i - low_i) X)` as a vector padded to `Degree + 1`;
+the vector preserves trailing zeros before transmission. `evaluate` must
+interpret the same expression. V checks the coefficient count and round sum,
+folds its own table, and checks the terminal value. These component laws and
+the degree bound are mathematical premises; the frontend checks their types.
+For the native ring component, `Width` must equal the arena's input count and
+`Degree` its derived degree with every input assigned weight one.
+
+The [maintained client](../examples/projects/expression-sumcheck/README.md)
+uses the shared [ring evaluator](../docs/spec/domains/ring-expressions.md)
+over KoalaBear tables promoted to Ext8, or Ext8 tables directly. It exercises
+interactive and Fiat-Shamir execution with extension-field challenges. The
+verifier holds the tables, so this client supplies neither a commitment scheme
+nor a security theorem for hidden tables.
 
 ## Use a module
 
@@ -69,6 +95,7 @@ through the common compiler and Host. With built tools, run:
 
 ```sh
 uv run --no-sync --locked pytest tests/protocol/test_source_projects.py
+uv run --no-sync --locked pytest tests/protocol/test_expression_sumcheck.py
 ```
 
 These checks cover interactive and separate proof execution, compilation options,

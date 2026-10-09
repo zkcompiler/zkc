@@ -33,7 +33,7 @@ own version rules.
 | Boundary | Owner |
 |---|---|
 | Main LLVM/MLIR and C++ packages | Compiler CMake requirements and Nix inputs |
-| Rust workspace | Cargo manifests, lockfile and toolchain selection |
+| Rust workspace | Cargo manifests, lockfile, toolchain selection and `nix/rust.nix` vendor hash |
 | Python tooling | `pyproject.toml` and `uv.lock` |
 | Independent Lean package | `formal/lean-toolchain`, Lake manifests and lockfiles |
 | Optional integrations | Their own manifests, source pins and compatible toolchains |
@@ -41,11 +41,22 @@ own version rules.
 LLZK remains a generic optional relation adapter with a separate LLVM process.
 Do not link incompatible LLVM versions into the main compiler. Formal source
 builds, reached-axiom audits and optional ArkLib consumers retain their own scopes;
-they are not default native execution prerequisites.
+they are not default native execution prerequisites. `scripts/update-lean-pins.py`
+selects revisions from ArkLib only. The Clean integration's manifest must keep the
+main package's shared revisions and toolchain, which `formal/checks/check_library.py`
+checks; after a Lean or Mathlib change, update it by hand and rerun
+`just test-lean-clean`.
 
 ## Upgrade and validate
 
-Update the owning pin and its resolved lock/hash together. Inspect API, schema,
+Update the owning pin and its resolved lock/hash together. A root `Cargo.lock`
+change also requires recalculating `cargoHash` in `nix/rust.nix`, even when it
+only adds an existing dependency to another workspace member. The vendor hash
+covers the lockfile as well as downloaded sources. Verify the package with
+`nix build .#tools .#test-drivers --no-link`; a direct Cargo build does not check
+this boundary.
+
+Inspect API, schema,
 codec and behavior changes at actual consumers. Reconfigure fresh build trees
 when compiler ABI or toolchain identity changes. Run affected native tests,
 installed static/shared consumers and package checks according to the change.

@@ -42,6 +42,14 @@ pub(crate) fn apply(
             let (v, t) = r.transcript_challenge_value(i.frame, t, &origin)?;
             Ok(vec![v, Transcript(t)])
         }
+        ("transcript.native.indexed.index", [Transcript(t), Index(bound), Indices(indices)]) => {
+            p.output(1024, i.max_output_bytes)?;
+            let origin =
+                zkc_runtime::logical::indexed_native_origin(i.attributes, "query", indices)
+                    .map_err(|_| refused("transcript-origin"))?;
+            let (v, t) = r.transcript_index(i.frame, t, &origin, *bound)?;
+            Ok(vec![v, Transcript(t)])
+        }
         ("transcript.native.indexed.observe.data", [Transcript(t), v, Indices(indices)]) => {
             p.output(512, i.max_output_bytes)?;
             let origin =
@@ -125,6 +133,13 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "plonky3/transcript.native.indexed.challenge",
             "spongefish/transcript.native.indexed.challenge",
         ]),
+        transcript::challenge(
+            "transcript.native.indexed.index",
+            &[Transcript, Index, Indices],
+            &[Index, Transcript],
+            AttributeRule::NativeIndexTemplate,
+        )
+        .implemented_by(&["plonky3/transcript.native.indexed.index"]),
         curve::operation(
             "curve.commit",
             &[Groups, Nonce],

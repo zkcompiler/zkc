@@ -66,8 +66,10 @@ V-only bound inputs are accepted and explicitly reported as unavailable at P.
 The entry has exactly the two distinct specified roles. Its selected result is
 Boolean and available at V. The designated service is an exclusively V-owned
 installed [random-service](../runtime/services.md) entry port. Every query in the expanded entry uses that
-port. Query sites equal the requirement's list in source order; ordinary native
-admission checks the exact `draw` signature. There is at least one query.
+port and uses `draw`; other methods, including `index`, refuse with
+`public-coin-service`. Query sites equal the requirement's list in source order;
+ordinary native admission checks each method's signature. There is at least one
+query. This field-draw profile does not describe UniformIndex distributions.
 
 Every V→P exchange is the unique designated delivery of the pending draw. Its
 operand must be that query's result, optionally through `restrict_roles`.

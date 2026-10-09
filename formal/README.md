@@ -13,7 +13,9 @@ for other capabilities. The [architecture](docs/architecture.md) describes areas
 and dependencies, and [support](docs/support.md) locates APIs by their claims.
 
 External-dependent proofs live in the optional [ArkLib package](integrations/arklib/README.md).
-Main-library imports never require that package or its build objects.
+The optional [Clean package](integrations/clean/README.md) proves the export of
+a lookup-free, channel-free Clean flat AIR fragment into the finite AIR model.
+Main-library imports never require either package or its build objects.
 [Downstream clients](clients) demonstrate use from a separate Lake package.
 The model-specific [artifact](docs/design/artifact-reference.md) and
 [interactive](docs/design/interactive-reference.md) tools have their own admitted
@@ -40,6 +42,7 @@ just fetch-lean          # prepare the main package's pinned dependencies
 just build-lean          # lake build: every library and executable the package declares
 just test-lean           # the structural, tool and consumer checks over it
 just test-lean-integration   # the optional ArkLib package and its consumers
+just test-lean-clean         # the optional Clean package and its native control
 ```
 
 What `lake build` builds is `lakefile.toml`'s default targets, and
@@ -49,9 +52,10 @@ runs is discovered by [the shared test driver](../tests/run.py) from
 `checks/*.py` and `consumers/*/check.py`, with fixture-helper controls supplied
 by the driver. The recipe builds the formal prerequisites before running it.
 
-Build the optional library separately from `formal/integrations/arklib` with
-`lake build`. The main build checks every maintained library/test/example module;
-public root imports do not determine audit coverage. The declaration audit
+Build each optional library separately from `formal/integrations/arklib` or
+`formal/integrations/clean` with `lake build`. The main build checks every
+maintained library/test/example module; public root imports do not determine
+audit coverage. The declaration audit
 inspects types and proof/definition bodies, including private and generated
 versions, and permits only `propext`, `Classical.choice` and `Quot.sound`.
 The independent `Tools.Interactive` and `Tools.Artifact` consumers, including their
@@ -82,6 +86,9 @@ python3 reproduce.py --dependency-cache .lake/packages --output /tmp/zkc-main
 python3 reproduce.py --with-arklib --dependency-cache .lake/packages \
   --integration-dependency-cache integrations/arklib/.lake/packages \
   --output /tmp/zkc-with-arklib
+python3 reproduce.py --with-clean --dependency-cache .lake/packages \
+  --integration-dependency-cache integrations/clean/.lake/packages \
+  --output /tmp/zkc-with-clean
 ```
 
 The copied foundation builds without external package imports or prior objects.

@@ -49,16 +49,25 @@ impl ServiceContract {
         .find(|contract| contract.field() == field)
     }
     pub fn signature(self, method: &str) -> Option<ServiceSignature> {
-        (method == "draw").then(|| ServiceSignature {
-            inputs: vec![],
-            outputs: vec![
-                PhysicalType::default_for(
-                    super::LogicalType::new(super::Type::Field, self.field())
-                        .expect("installed field"),
-                )
-                .expect("installed representation"),
-            ],
-        })
+        let physical = |kind, identity| {
+            PhysicalType::default_for(
+                super::LogicalType::new(kind, identity).expect("installed type"),
+            )
+            .expect("installed representation")
+        };
+        match method {
+            "draw" => Some(ServiceSignature {
+                inputs: vec![],
+                outputs: vec![physical(super::Type::Field, self.field())],
+            }),
+            // UniformIndex(bound) masks one uniform 64-bit word to a
+            // power-of-two bound. Only the octic field's root offers it.
+            "index" if self == Self::RandomExtensionField => Some(ServiceSignature {
+                inputs: vec![physical(super::Type::Index, super::Identity::None)],
+                outputs: vec![physical(super::Type::Index, super::Identity::None)],
+            }),
+            _ => None,
+        }
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

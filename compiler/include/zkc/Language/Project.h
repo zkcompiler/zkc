@@ -138,6 +138,9 @@ struct ProtocolApplication {
 };
 struct ServiceQuery {
   ServiceId service;
+  /// The static UniformIndex domain size of an `index` query; absent for
+  /// `draw`. Closed values are powers of two no greater than 2^63.
+  std::optional<Natural> bound;
 };
 struct Require {
   ValueId condition;

@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
         query ? query.getResult(0).getType() : exchange.getInput().getType();
     auto origin = (*(*sequence)[i++].getAsArray())[1].getAsString()->str();
     events.push_back({op->getAttrOfType<StringAttr>("site").str(), origin,
-                      payload, bool(query), 0});
+                      payload, bool(query), 0, std::nullopt});
   });
   Cases cases;
   cases.run("independent transcript wiring", [&] {
@@ -279,7 +279,7 @@ int main(int argc, char **argv) {
       facts.push_back(
           {op->getAttrOfType<StringAttr>("site").str(), origin,
            query ? query.getResult(0).getType() : exchange.getInput().getType(),
-           bool(query), depth});
+           bool(query), depth, std::nullopt});
     });
     require(facts.size() == 3 && facts.front().depth == 2,
             "nested event coordinates");

@@ -399,11 +399,17 @@ void Model::validateOperation(const Record *op) {
   }
   const auto *parameters = op->getValueAsDef("parameters");
   static const std::map<std::string, std::pair<int64_t, int64_t>> schemas = {
-      {"None", {0, 0}},           {"Natural", {1, 1}},
-      {"Extent", {1, 1}},         {"FieldLiteral", {1, 1}},
-      {"FieldLiterals", {0, -1}}, {"MatrixShape", {2, 2}},
-      {"MatrixIdentity", {1, 1}}, {"MatrixVector", {3, 3}},
-      {"GatherIndices", {0, -1}}, {"ScatterIndices", {1, -1}},
+      {"None", {0, 0}},
+      {"Natural", {1, 1}},
+      {"Extent", {1, 1}},
+      {"FieldLiteral", {1, 1}},
+      {"FieldLiterals", {0, -1}},
+      {"MatrixShape", {2, 2}},
+      {"MatrixIdentity", {1, 1}},
+      {"AssetIdentity", {1, 1}},
+      {"MatrixVector", {3, 3}},
+      {"GatherIndices", {0, -1}},
+      {"ScatterIndices", {1, -1}},
       {"NativeOrigin", {1, 1}}};
   auto found = schemas.find(name(parameters).str());
   require(found != schemas.end() &&

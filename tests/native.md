@@ -29,6 +29,7 @@ the producer's routine do not supply these independent comparisons.
 | Composition and relation binding | Original-input arithmetic references, same-shaped relation substitutions and actual terminal decisions |
 | Proof framing and setup | Independent producer/validator processes, malformed frames, public-context changes and unauthorized material |
 | Attempts | Retained provider state, failed prefixes, cumulative work and publication controls |
+| Retained storage and work | Aliases against equal independent allocations, views retaining parents, multiwidth base/extension commitments and stated budgets at 65,536 rows and 64 openings |
 
 Representative controls are linked below; their assertions define the exact
 cases checked. Arithmetic examples do not imply complete argument libraries
@@ -40,8 +41,12 @@ or external prover/verifier compatibility.
 | Source inference and contracts | [Definition completion, annotations, static holes, service arguments and limits](../compiler/test/language_inference.cpp) |
 | Mathematics and changing state | [Composition](../compiler/test/native_composition.py), [carried state](../compiler/test/native_composed_state.py), [nested data](../compiler/test/native_nested_data.py) |
 | Relation identity and terminals | [Relation bindings](../compiler/test/native_relation_bindings.py) |
+| Relation bundles | [C++ reference](../compiler/test/relation_bundle.cpp), [Rust reference](../crates/zkc-runtime/src/relation_tests.rs) and [cross-language controls](protocol/test_relation_bundle_conformance.py) compare identities, residuals, balances and refusal identifiers on imported AIRs and staged assignments over KoalaBear/Ext8. Resource controls bound declared data and expanded results before evaluation. |
 | Proof messages and construction | [Structured proofs](../compiler/test/native_structured_proofs.py), [iteration](../compiler/test/native_iterated_proofs.py), [authored transcripts](../compiler/test/native_authored_transcripts.py) |
+| UniformIndex sampling | [Source, formation and construction](../compiler/test/native_index_sampling.py), [independent transcript replay](../crates/zkc-test-drivers/src/native_index_sampling.rs), [spot-check client](protocol/test_index_sampling.py) |
 | Retry and completion | [Attempt lifecycle](../compiler/test/native_attempts.py), [participant completion](../compiler/test/native_entry_completion.py) |
+| Retained storage and logical work | [Proof-scale openings](protocol/test_retained_storage.py), [native ledgers](../crates/zkc-backends/tests/retained_storage.rs), [Runner ledgers](../crates/zkc-runtime/src/interactive/tests/storage.rs) |
+| External relation export | [Clean export against finite AIR and ring providers](protocol/test_clean_air_conformance.py) |
 
 ## Independent references and trust
 

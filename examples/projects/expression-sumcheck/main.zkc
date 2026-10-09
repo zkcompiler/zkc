@@ -1,0 +1,61 @@
+module example;
+use expression_sumcheck::{Expression, Vector, Sumcheck};
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+
+// This component fixes the separately captured product.ring.json. The protocol
+// is generic over the component; the compiler has no Sumcheck-specific branch.
+component Product<F: Field>: Expression<F> {
+  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F> {
+    return kernel<F>("ring.affine_sum", low, high, rows;
+      "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
+  }
+  fn evaluate(values: Vector<F>) -> F {
+    let result = kernel<F>("ring.point", values;
+      "1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4");
+    return kernel<F>("vector.at", result; "0");
+  }
+}
+fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
+  return kernel<Extension>("vector.embed", values);
+}
+fn embed_scalar(value: Base) -> Extension {
+  return kernel<Extension>("field.embed", value);
+}
+protocol BaseSumcheck roles(P,V)
+    (values: Vector<Base> @(P,V), claim: Base @V, rounds: index @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let prover_values @P = embed_vector(values);
+  let verifier_values @V = embed_vector(values);
+  let expected @V = embed_scalar(claim);
+  let accepted = Sumcheck<Extension,16,2,2,Product<Extension>>
+    (prover_values, verifier_values, expected, rounds, challenges);
+  return (accepted = accepted);
+}
+protocol ExtensionSumcheck roles(P,V)
+    (values: Vector<Extension> @(P,V), claim: Extension @V, rounds: index @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let accepted = Sumcheck<Extension,16,2,2,Product<Extension>>
+    (values, values, claim, rounds, challenges);
+  return (accepted = accepted);
+}
+entry BaseRun = BaseSumcheck;
+entry ExtensionRun = ExtensionSumcheck;
+entry BaseProof = BaseSumcheck {
+  prover P;
+  verifier V;
+  public { values, claim, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
+    derive challenges;
+  }
+}
+entry Proof = ExtensionSumcheck {
+  prover P;
+  verifier V;
+  public { values, claim, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0") {
+    derive challenges;
+  }
+}

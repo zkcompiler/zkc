@@ -209,6 +209,18 @@ analyze(cancelled, shadow_req, "public-coin-unbound-input")
 assert analyze(cancelled, {**shadow_req, "bound_inputs": [0]})[
     "decision_dependencies"
 ] == [0]
+# UniformIndex is a valid native service method, but this view records field
+# draws only. Refuse rather than mislabel an index anchor as a field draw.
+index_service = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'
+index_body = f'''%bound = "data.index"() {{value = "8"}} : () -> ui64
+%position = "protocol.query"(%s, %bound) {{method = "index", owner = "Checker", site = "draw"}} : ({index_service}, ui64) -> ui64
+%delivered = "protocol.exchange"(%position) {{sender = "Checker", receiver = "Prover", site = "coin"}} : (ui64) -> ui64
+%ok = algebra.field_equal %x, %x : ({F}, {F}) -> i1
+'''
+indexed = small(index_body).replace(S, index_service)
+commands.verified(indexed, None)
+analyze(indexed, {**shadow_req, "bound_inputs": [0]}, "public-coin-service")
+
 # Exact edge, order, and service failures on otherwise admitted programs.
 changed = (
     query()

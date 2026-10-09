@@ -529,7 +529,17 @@ std::string installedCatalogIdentity() {
     rows.push_back(std::move(value));
   }
   for (const auto &service : protocol::randomServices)
-    row({"service", service.contract, "draw", service.field});
+    for (StringRef method : {"draw", "index"})
+      if (auto signature = protocol::serviceMethod(service.contract, method)) {
+        std::string value;
+        for (StringRef field :
+             {StringRef("service"), StringRef(service.contract), method})
+          detail::frame(value, field);
+        for (const auto &input : signature->inputs)
+          detail::frame(value, input);
+        detail::frame(value, signature->output);
+        rows.push_back(std::move(value));
+      }
   std::sort(rows.begin(), rows.end());
   std::string bytes;
   detail::frame(bytes, "zkc.language-catalog");

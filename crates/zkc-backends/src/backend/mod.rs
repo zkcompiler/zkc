@@ -4,6 +4,7 @@ mod policy;
 pub(crate) mod registry;
 mod resource_unit;
 mod validation;
+mod work;
 use crate::SetupRegistry;
 use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
 pub use policy::{EntryPolicy, PortConstraint};
@@ -15,6 +16,8 @@ use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
 /// explicit values owned by the caller/runtime, never held in a backend map.
 /// Configure a verifier key to decode peer PCS bytes.
 pub struct NativeBackend {
+    ring_assets: crate::ring::Registry,
+    ring_work: crate::ring::Budget,
     sequence_work: crate::sequence::Budget,
     external_work: crate::external_kernels::Budget,
     core: Core,
@@ -22,6 +25,20 @@ pub struct NativeBackend {
     implementations: &'static registry::Registry,
 }
 impl NativeBackend {
+    pub fn with_ring_assets(mut self, assets: crate::ring::Registry) -> Result<Self> {
+        if self.active_frames() != 0 {
+            return Err(crate::refused("ring-active-backend"));
+        }
+        self.ring_assets = assets;
+        Ok(self)
+    }
+    pub fn with_ring_work_limit(mut self, limit: u64) -> Self {
+        self.ring_work.limit = limit;
+        self
+    }
+    pub fn ring_work_spent(&self) -> u64 {
+        self.ring_work.spent
+    }
     /// Validate data and entry constraints without entering a frame. Pending
     /// RNG/nonce/transcript slots may be None; all ordinary values must exist.
     pub fn check_entry_values(
@@ -106,6 +123,8 @@ impl NativeBackend {
     pub fn new(policy: Policy, entry: EntryPolicy, setups: crate::SetupRegistry) -> Result<Self> {
         setups.validate(&policy)?;
         Ok(Self {
+            ring_assets: crate::ring::Registry::default(),
+            ring_work: crate::ring::Budget::default(),
             sequence_work: crate::sequence::Budget::default(),
             external_work: crate::external_kernels::Budget::default(),
             implementations: registry::installed()?,
@@ -260,17 +279,21 @@ impl Backend for NativeBackend {
             FrameKind::Entry | FrameKind::Loop { .. }
         ) || !invocation.frame.services().contains(invocation.port)
             || crate::services::support(invocation.port.contract, invocation.method).is_none()
-            || !arguments.is_empty()
             || invocation.max_output_bytes < 512
         {
             return Err(crate::refused("service-query-context"));
         }
         self.core.policy.output(512, invocation.max_output_bytes)?;
-        self.services
+        let services = self
+            .services
             .as_ref()
-            .ok_or_else(|| crate::refused("service-bindings"))?
-            .draw(&invocation.port.name)
-            .map(|value| vec![value])
+            .ok_or_else(|| crate::refused("service-bindings"))?;
+        match (invocation.method, arguments) {
+            ("draw", []) => services.draw(&invocation.port.name),
+            ("index", [Value::Index(bound)]) => services.index(&invocation.port.name, *bound),
+            _ => Err(crate::refused("service-query-context")),
+        }
+        .map(|value| vec![value])
     }
     fn reject_service_reply(
         &mut self,
@@ -322,6 +345,9 @@ impl Backend for NativeBackend {
         }
         validation.and(cleanup)
     }
+    fn operand_work(&self, i: &Invocation<'_>, args: &[Value]) -> Option<u64> {
+        work::operand_work(&i.binding.declaration().contract, args)
+    }
     fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
         self.core.resources.active(i.frame)?;
         let implementation = self
@@ -339,6 +365,6 @@ impl Backend for NativeBackend {
         }
         self.core.invoke(i, args, &signature)?;
         let outputs = (implementation.handler)(self, i, args)?;
-        self.core.outputs(i, outputs)
+        self.core.outputs(i, args, outputs)
     }
 }

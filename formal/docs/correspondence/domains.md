@@ -50,6 +50,31 @@ without changing PIR execution or requiring every protocol to use constraints.
 | ONE and public slots | `RankOne.embed_extract`, `bound_iff`, `System.encoding`, `System.family_reorder` | A bijective complete layout; reconstruction of arbitrary bound assignments, not just honest generator outputs |
 | Executable relation checking | `Reference.products_check`, `check_correct`, `Binding.layout_bound` | Typed admitted sparse systems and exact inputs; raw field/JSON decoding and native execution are separate |
 | AIR locality and degree | `AIR.Expr.eval_local`, `polynomial_eval`, `polynomial_degree`, `used_read_in_range` | Derived finite reads and conservative trace-variable degree; selector/domain/quotient obligations remain external |
+| [Relation bundles](../../../docs/spec/domains/relation-bundles.md) | D: `Zkc.Relation.Bundle`, `Bundle.Holds`, `Bundle.Table.Holds`, `Bundle.FieldBalanced`, `Bundle.MultisetHolds`, `Bundle.resolve`; T: `Bundle.fieldBalanced_iff`, `Bundle.multisetHolds_iff`, `Bundle.fieldContribution_origin`, `Bundle.fieldContribution_local_key` | One commutative ring for every value; read definedness, scope definedness and authority are inside satisfaction; the canonical natural of a multiplicity is a parameter (`ZMod.val` in the controls). Typed native fields, extension embeddings and native admission are not modelled |
+| Finite AIR as a bundle | D: `Bundle.FiniteAIR.bundle`, `Bundle.FiniteAIR.data`; T: `Bundle.FiniteAIR.holds_iff`, `Bundle.FiniteAIR.assertion_iff`, `Bundle.FiniteAIR.term_inputs_defined` | Whole-relation equivalence for every height `h + 1 <= maxHeight`, through the shared `AIR.Expr.toRing` translation; not a proof of the native `embedAIR` |
+| Staged challenge-indexed predicate | D: `Bundle.Staged.Holds`, `Bundle.Staged.PhaseTableHolds`; T: `Bundle.Staged.phaseTableHolds_local` | A phase's predicate depends only on challenges, claims and groups of earlier or equal phases; premises and reductions to the bundle relation are not modelled |
+
+The bundle model and native admission have different boundaries. An undefined
+finite read or scope makes the Lean predicate false; native admission refuses
+it. Native configuration heights must obey their policy even for an absent
+optional table, while Lean checks that policy only for present tables.
+For a zero-column AIR, the formal embedding has one width-zero group and the
+native embedding has no groups. The finite-AIR theorem relates formal
+predicates; it does not assert equality of these carrier shapes.
+
+The optional [Clean package](../../integrations/clean/README.md) maps one Clean
+flat AIR component into `AIR.family` with every-row, current-row constraints.
+`ZkcClean.export_expression` equates expression evaluation, `ZkcClean.holds_iff`
+and `table_holds_iff` prove both directions of the relation, and `row_spec` and
+`table_spec` conclude the component's specification under its actual
+assumptions. They require a successful export (no lookup or interaction at any
+depth, in-range variables) and import, a nonempty trace of the exported width
+and one `Environment.data`. `ZkcClean.component_ring` composes the expression law
+with `AIR.Expr.toRing_eval`, and `component_native_ring` states the emitted
+relation arena's ring trees under an explicit prime presentation. No native
+importer or evaluator is proved; the
+[native comparison](../../../tests/protocol/test_clean_air_conformance.py) is a
+checked comparison on fixed rows.
 
 `Zkc.Relation.Encoding.valid_iff`, `comp` and `terminal_sound` connect actual
 source/target families using both witness directions. The latter preserves the

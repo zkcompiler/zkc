@@ -16,6 +16,7 @@ use std::{process::Command, time::Duration};
 
 type Result<T> = std::result::Result<T, String>;
 struct Options {
+    evaluators: zkc_backends::ring::Registry,
     setups: super::SetupAuthority,
     proof: ProofOptions,
     run: HostLimits,
@@ -26,6 +27,7 @@ struct Options {
 impl Options {
     fn parse(args: &Arguments<'_>) -> Result<Self> {
         let mut options = Self {
+            evaluators: Default::default(),
             setups: Default::default(),
             proof: Default::default(),
             run: Default::default(),
@@ -35,10 +37,27 @@ impl Options {
         };
         for &(key, value) in &args.options {
             let value = value.unwrap_or("");
-            if matches!(key, "--setups" | "--capacity" | "--limits") {
+            if matches!(key, "--setups" | "--capacity" | "--limits" | "--evaluators") {
                 options.configuration.push(value.into());
             }
             match key {
+                "--evaluators" => {
+                    let bytes = read(value, 64 * 1024)?;
+                    let row: (String, Vec<(String, String)>) =
+                        serde_json::from_slice(&bytes).map_err(|_| "ring-assets-format")?;
+                    if row.0 != "zkc.ring-assets/0" || row.1.len() > 256 {
+                        return Err("ring-assets-format".into());
+                    }
+                    for (digest, path) in row.1 {
+                        let bytes = read(&path, zkc_runtime::ring::BYTE_LIMIT)?;
+                        let text = std::str::from_utf8(&bytes).map_err(|_| "ring-assets-utf8")?;
+                        options
+                            .evaluators
+                            .insert(&digest, text)
+                            .map_err(|e| e.to_string())?;
+                        options.configuration.push(path);
+                    }
+                }
                 "--setups" => options.setups = files::authority(&read(value, 64 * 1024)?)?,
                 "--capacity" => {
                     let capacity = crate::execution::Capacity::parse(&read(value, 4096)?)?;
@@ -124,7 +143,8 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             return Ok(());
         }
         if command == "run" {
-            let host = RunEntry::admit(package, options.run, options.setups.clone())?;
+            let host = RunEntry::admit(package, options.run, options.setups.clone())?
+                .with_ring_assets(options.evaluators.clone());
             report["entry"] = json!(host.interface().entry());
             report["capacity"] = host.limits().capacity.record();
             report["phase"] = json!("inputs");
@@ -166,7 +186,8 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
             report["status"] = json!("executed");
         } else if command == "prove" || command == "verify" {
             let producer = command == "prove";
-            let host = ProofEntry::admit(package, options.proof, options.setups.clone())?;
+            let host = ProofEntry::admit(package, options.proof, options.setups.clone())?
+                .with_ring_assets(options.evaluators.clone());
             report["entry"] = json!(host.interface().entry());
             report["binding_scope"] = json!(match host.binding_scope() {
                 BindingScope::Transcript => "transcript",

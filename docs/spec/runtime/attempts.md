@@ -12,16 +12,17 @@ deployment. It is not supplied by a candidate proof or inferred from its header:
 ["zkc.native-attempt-policy/0", completion_original_result,
  [[rng_original_input, rng_original_result], ...],
  [attempt_limit, proof_byte_limit],
- [instruction_limit, iteration_limit],
+ [instruction_limit, iteration_limit, logical_work_limit],
  [live_payload_limit, total_payload_limit]]
 ```
 
 Every number is a canonical unsigned decimal string. Parsing is bounded to
 64 KiB and the existing logical JSON tree limits. Port indices are below 1024;
 attempts are 1 through 1024. Proof bytes cannot exceed 16 MiB; instruction,
-iteration and payload limits cannot exceed the corresponding interpreter
-hard ceilings. Zero work, payload or proof budgets are deliberate execution
-refusals, not unbounded values. The proof cap includes the framing header.
+iteration, logical-work and payload limits cannot exceed the corresponding
+interpreter hard ceilings or the selected [capacity](capacity.md). Zero work,
+payload or proof budgets are deliberate execution refusals, not unbounded values.
+The proof cap includes the framing header.
 
 The completion port must name a producer Boolean result. True completes; false
 requests retry. RNG pairs are a bijection over producer RNG input/result ports,
@@ -36,9 +37,10 @@ and actual provider state across entry leases.
 Each attempt issues a fresh selected-suite transcript with the same invocation
 root, then retires it after runner cleanup. The host does not reset RNG/service
 state or external primitive-work charge. Remaining interpreter instruction/call/
-iteration and total payload allowances are passed into each runner; initialization
-failure retains reached charges. Live payload and transcript-transition limits
-are per attempt. Transcript initialization reabsorbs the bounded invocation root
+iteration, logical-work and total payload allowances are passed into each runner;
+initialization failure retains reached charges. Each attempt's runner charges its
+entry inputs again, even when their storage is shared with a previous attempt.
+Live payload and transcript-transition limits are per attempt. Transcript initialization reabsorbs the bounded invocation root
 once per attempt, outside interpreter and external-work charges. The proof
 writer enforces the per-attempt byte cap before extending its buffer. Terminal
 execution and cleanup failures prevent retry and publication. Cleanup diagnostics

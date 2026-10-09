@@ -9,6 +9,8 @@ pub struct NativeTranscriptEvent {
     pub contract: String,
     pub origin: String,
     pub payload: Option<super::LogicalType>,
+    /// The static UniformIndex domain of an index transition.
+    pub bound: Option<u64>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NativeProofError(pub &'static str);
@@ -61,6 +63,7 @@ fn helper<'a>(
                 if !matches!(
                     name,
                     "transcript.native.indexed.challenge"
+                        | "transcript.native.indexed.index"
                         | "transcript.native.indexed.observe.data"
                 ) || native.is_some()
                 {
@@ -89,11 +92,15 @@ fn helper<'a>(
         unreachable!()
     };
     let contract = binding.declaration().contract.as_str();
-    let challenge = contract == "transcript.native.indexed.challenge";
-    let encoded = crate::logical::native_origin_template(
-        attributes,
-        if challenge { "query" } else { "message" },
-    )
+    let index = contract == "transcript.native.indexed.index";
+    // Both query transitions return a sample; the origin's service method
+    // must name the same distribution as the transition contract.
+    let challenge = index || contract == "transcript.native.indexed.challenge";
+    let encoded = if challenge {
+        crate::logical::native_query_template(attributes, if index { "index" } else { "draw" })
+    } else {
+        crate::logical::native_origin_template(attributes, "message")
+    }
     .map_err(|_| refuse("native-proof-origin"))?;
     let origin =
         crate::logical::decode_tree(&encoded).map_err(|_| refuse("native-proof-origin"))?;
@@ -124,7 +131,7 @@ fn helper<'a>(
         || function.outputs.len() != if challenge { 2 } else { 1 }
         || function.inputs[0].1 != *state
         || function.outputs.last() != Some(state)
-        || inputs.len() != ordinary + 1
+        || inputs.len() != ordinary + usize::from(index) + 1
         || outputs.len() != function.outputs.len()
         || !inputs[..ordinary]
             .iter()
@@ -143,13 +150,41 @@ fn helper<'a>(
     let mut coordinates: Option<&str> = None;
     let mut coordinate = 0;
     let mut transition = false;
+    // An index helper first materializes its static domain, so both roles
+    // absorb the same deployment-fixed bound.
+    let mut bound: Option<(&str, u64)> = None;
     for operation in function.body.iter() {
         match operation {
             LocalInstruction::Op { .. } if std::ptr::eq(operation, instruction) && !transition => {
-                if coordinates != inputs.last().map(String::as_str) || coordinate != loops.len() {
+                if coordinates != inputs.last().map(String::as_str)
+                    || coordinate != loops.len()
+                    || index && bound.map(|b| b.0) != inputs.get(1).map(String::as_str)
+                {
                     return Err(refuse("native-proof-helper-coordinates"));
                 }
                 transition = true;
+            }
+            LocalInstruction::Op {
+                binding,
+                attributes,
+                inputs,
+                outputs,
+                ..
+            } if index
+                && !transition
+                && bound.is_none()
+                && coordinates.is_none()
+                && binding.declaration().contract == "index.constant" =>
+            {
+                let [value] = attributes.as_slice() else {
+                    return Err(refuse("native-proof-index-bound"));
+                };
+                let value = crate::logical::uniform_index_bound(value)
+                    .map_err(|_| refuse("native-proof-index-bound"))?;
+                if !inputs.is_empty() || outputs.len() != 1 {
+                    return Err(refuse("native-proof-index-bound"));
+                }
+                bound = Some((&outputs[0], value));
             }
             LocalInstruction::Op {
                 binding,
@@ -205,6 +240,7 @@ fn helper<'a>(
             } else {
                 Some(function.inputs[1].1.logical())
             },
+            bound: bound.map(|b| b.1),
         },
         function,
     }))

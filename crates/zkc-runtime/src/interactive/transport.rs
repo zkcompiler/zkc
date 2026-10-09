@@ -239,14 +239,24 @@ pub struct Usage {
     pub instructions: u64,
     pub iterations: u64,
     pub live_values: usize,
+    /// Distinct live retained bytes: each shared immutable allocation once,
+    /// including parents retained by views, plus each binding's owned storage.
     pub live_value_bytes: usize,
+    /// Cumulative fresh allocation: shared allocations when first produced,
+    /// plus owned storage at every binding. Release never refunds it.
     pub total_value_bytes: usize,
+    /// Cumulative logical work: kernel and service operand bytes read and
+    /// result bytes allocated, charged at every use regardless of sharing.
+    pub logical_bytes: u64,
 }
 
-/// Host policy for conservative retained-payload accounting. These charges
-/// count every binding, including aliases; they are not allocator/RSS metrics.
-/// Individual values, native kernels, wire decoding and structural execution
-/// retain their independent hard limits. A protocol cannot change this policy.
+/// Host policy for conservative retained-payload accounting. Live bytes count
+/// each shared immutable allocation once while any binding retains it; total
+/// bytes count each allocation once when produced and owned storage at every
+/// binding. Equal but separately created allocations are counted separately.
+/// These are retained-payload charges, not allocator/RSS metrics. Individual
+/// values, native kernels, wire decoding and structural execution retain
+/// their independent hard limits. A protocol cannot change this policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValueBudget {
     pub live_bytes: usize,
@@ -268,12 +278,15 @@ impl Default for ValueBudget {
 pub struct WorkBudget {
     pub instructions: u64,
     pub iterations: u64,
+    /// Cumulative logical work in bytes; sharing an allocation never reduces it.
+    pub logical_bytes: u64,
 }
 impl Default for WorkBudget {
     fn default() -> Self {
         Self {
             instructions: Limits::INSTRUCTIONS,
             iterations: Limits::ITERATIONS,
+            logical_bytes: Limits::LOGICAL_BYTES,
         }
     }
 }

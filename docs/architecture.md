@@ -29,7 +29,7 @@ Lean: independently formalized semantic models and proofs
 Source Assets capture immutable relation data. They do not install a relation
 checker or infer proof obligations merely by appearing in a project. The
 [relation ingress guide](compiler/relations.md) distinguishes data import,
-relation declarations and the bounded native R1CS adapter.
+relation declarations, library-level multi-table bundles and external adapters.
 
 ## Representation and checking
 
@@ -54,9 +54,9 @@ judgment.
 
 | Owner | Home and responsibility |
 |---|---|
-| Support and Contracts | `compiler/include/zkc/Support` and `Contracts`: diagnostics, closed types, domains, operations, effects and implementations |
+| Support and Contracts | `compiler/include/zkc/Support` and `Contracts`: diagnostics, closed types, domains, ring expressions, operations, effects and implementations |
 | Language | `compiler/include/zkc/Language`: explicit modules/Assets, checked definitions, static application and Entry closure |
-| Relation | `compiler/include/zkc/Relation`: R1CS/AIR data, normalization and evaluation |
+| Relation | `compiler/include/zkc/Relation`: R1CS/AIR data, relation bundles, staged predicates, normalization and evaluation |
 | Program | `compiler/include/zkc/Program`: executable model, codec and structural admission |
 | IR | `compiler/include/zkc/Dialect`: mathematical dialects, interfaces and mandatory profile verification |
 | Translation | `compiler/include/zkc/Translation`: Language emission/comparison, relation import and checked program export |
@@ -89,6 +89,9 @@ binds the authorized bytes and invocation context. No normalized identity policy
 is supplied by this implementation.
 
 Hosts prepare inputs and setup material before issuing execution resources.
+The `--evaluators` manifest supplies application-authorized ring arenas; each
+arena is admitted and matched to the content digest fixed by the program.
+Arena bodies remain Host assets, outside the compiler's current IR analysis.
 They retain actual message contents, reached failures, resource consumption and
 cleanup outcomes. A validator's acceptance comes from its selected decision,
 not from producer completion. Entry input associations and the Host registry

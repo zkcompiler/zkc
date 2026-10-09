@@ -48,9 +48,11 @@ transcript. Resource mappings describe correspondence; transcript generations
 need not equal source RNG generations.
 
 The construction has one validator random service port. A direct
-query takes exactly that service reference, no data arguments, and returns one
-field. Its sole delivery uses that exact SSA result: derived values and
-`protocol.restrict_roles` wrappers refuse. Pairing is checked in the same source
+query takes exactly that service reference and is either a `draw`, with no data
+arguments and one field result, or an `index`, whose only data argument is its
+constant UniformIndex bound and whose result is one index. Its sole delivery uses
+that exact SSA result: derived values and `protocol.restrict_roles` wrappers
+refuse. Pairing is checked in the same source
 block after unsimplified static expansion, retaining the authored call path.
 There is no intervening query or producer-to-validator message. Two outstanding
 draws, batched/derived delivery and undelivered private coins refuse this profile.
@@ -101,7 +103,9 @@ determine transcript identity. Occurrence resolution precedes optimization.
 
 Each inserted transition is top-level in a straight-line local helper containing
 only its coordinate construction, transition, complete return and admitted
-storage releases. The helper executes at one static participant site per role;
+storage releases. A UniformIndex helper additionally begins with exactly one
+`index.constant` whose parameter is the event's bound and whose result is the
+transition's bound operand. The helper executes at one static participant site per role;
 an enclosing participant loop may reach that site repeatedly. Local conditional
 or repeated execution of the transition inside the helper refuses.
 
@@ -146,6 +150,35 @@ not live affine capability snapshots. Its exact upstream inputs do not acquire
 zkc transcript prefixes. Trial copies consume actual work; their reachability,
 publication and live witness check remain obligations of the authored program
 and host.
+
+## UniformIndex transitions
+
+A selected `index` query becomes `transcript.native.indexed.index`:
+
+```text
+(Transcript<T>, index bound, indices) -> (index, Transcript<T>)
+```
+
+It requires the suite fact `IndexTranscript(T)`; the installed suite with that fact
+is `merlin3.koala-bear.ext8-binomial3.rejection31le/0`. The bound must be a power of
+two from 1 through 2^63; otherwise the transition refuses before consuming the
+state. Otherwise it consumes the state and, in order:
+
+1. absorbs the dynamic occurrence bytes under the suite's `origin` label;
+2. absorbs the bound as eight little-endian bytes under the label `bound`;
+3. squeezes 64 bytes under the label `index`;
+4. returns the [UniformIndex sample](../runtime/services.md#uniformindex-realization)
+   of those bytes and the successor state.
+
+Both roles derive the same sample at the same ordered occurrence: the validator
+replaces its query and the producer replaces its receive of that delivery, after
+which both observe the erased delivery as an ordinary message occurrence. The
+bound is part of the deployment and of the transcript prefix before the squeeze.
+Field challenges and index transitions are separated by the occurrence's
+service method (`draw` or `index`), which every admission path checks against the
+transition contract, and by their distinct static labels. The exact-uniformity
+statement is conditional on uniform squeeze bytes; this construction supplies no
+random-oracle or Fiat–Shamir theorem.
 
 ## Checking and analysis inputs
 
@@ -192,8 +225,9 @@ Names are nonempty printable ASCII (bytes 33 through 126), at most 128 bytes.
 Paths have at most 64 steps. The encoded template is at most 2048 bytes and is
 carried as exactly one lowercase, even-length hex attribute, at most 4096
 characters. Its coordinate array must be empty. Unknown tags, alternate shapes,
-noncanonical hex and trailing bytes refuse. Challenges require query events;
-observations require message events. These checks establish syntax, not source
+noncanonical hex and trailing bytes refuse. Field challenges require query events
+with method `draw`, UniformIndex transitions require query events with method
+`index`, and observations require message events. These checks establish syntax, not source
 correspondence or unique execution.
 
 The dynamic operation takes an explicit `indices` value. Its entries are the
@@ -212,9 +246,9 @@ draw when executed by the producer. Zero trips perform no body transition.
 The existing suite framing absorbs the dynamic bytes under its static `origin`
 label, so dynamic instances introduce no dynamically interned Merlin labels.
 
-The generated contracts are `transcript.native.indexed.challenge` and
-`transcript.native.indexed.observe.data`. They retain the affine transcript,
-sampling/observation/history facets and
+The generated contracts are `transcript.native.indexed.challenge`,
+`transcript.native.indexed.index` and `transcript.native.indexed.observe.data`.
+They retain the affine transcript, sampling/observation/history facets and
 resource transitions. The final kernel operand is `indices`. A generated local
 helper instead receives one scalar index argument per enclosing loop, constructs
 that vector with exactly one `indices.empty` followed by ordered

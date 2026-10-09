@@ -47,7 +47,8 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
   if (parameters.size() < schema->minimum ||
       (schema->maximum && parameters.size() > *schema->maximum))
     return error("interactive-kernel-parameters");
-  if (validator == ParameterValidator::MatrixIdentity) {
+  if (validator == ParameterValidator::MatrixIdentity ||
+      validator == ParameterValidator::AssetIdentity) {
     StringRef digest = parameters.front();
     if (digest.size() != 64 || !all_of(digest, [](char c) {
           return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
@@ -55,9 +56,13 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
       return error("interactive-kernel-parameters");
     return Error::success();
   }
-  if (validator == ParameterValidator::NativeOrigin)
-    return checkNativeOrigin(parameters.front(),
-                             key.ends_with(".challenge") ? "query" : "message");
+  if (validator == ParameterValidator::NativeOrigin) {
+    if (key.ends_with(".challenge"))
+      return checkNativeOrigin(parameters.front(), "query", "draw");
+    if (key.ends_with(".index"))
+      return checkNativeOrigin(parameters.front(), "query", "index");
+    return checkNativeOrigin(parameters.front(), "message");
+  }
   for (const auto &parameter : parameters) {
     StringRef n = parameter;
     auto code = (validator == ParameterValidator::FieldLiteral ||

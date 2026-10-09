@@ -274,3 +274,80 @@ fn indexed_native_origins_require_explicit_coordinates_and_template_format() {
         assert!(native_origin_template(&[text], "query").is_err());
     }
 }
+
+#[test]
+fn query_templates_name_their_method_and_index_bounds_are_canonical() {
+    use zkc_runtime::interactive::{LogicalType, PhysicalType, ServiceContract};
+    use zkc_runtime::logical::{native_query_template, uniform_index_bound};
+    let template = |method: &str| {
+        let bytes = encode_tree(&json!([
+            "zkc.native-origin-template/0",
+            "main",
+            [],
+            [],
+            [
+                "query",
+                "Round",
+                "sample",
+                "input_0",
+                "random.koala-bear.ext8-binomial3/0",
+                method,
+                "V"
+            ]
+        ]))
+        .unwrap();
+        (
+            bytes.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            bytes,
+        )
+    };
+    let (draw, draw_bytes) = template("draw");
+    let (index, index_bytes) = template("index");
+    assert_eq!(
+        native_query_template(std::slice::from_ref(&draw), "draw").unwrap(),
+        draw_bytes
+    );
+    assert_eq!(
+        native_query_template(std::slice::from_ref(&index), "index").unwrap(),
+        index_bytes
+    );
+    assert!(native_query_template(std::slice::from_ref(&draw), "index").is_err());
+    assert!(native_query_template(std::slice::from_ref(&index), "draw").is_err());
+
+    for (text, bound) in [
+        ("1", 1),
+        ("2", 2),
+        ("32", 32),
+        ("9223372036854775808", 1 << 63),
+    ] {
+        assert_eq!(uniform_index_bound(text).unwrap(), bound);
+    }
+    for text in [
+        "",
+        "0",
+        "3",
+        "032",
+        "+8",
+        "8 ",
+        "9223372036854775809",
+        "18446744073709551615",
+        "18446744073709551616",
+    ] {
+        assert!(uniform_index_bound(text).is_err(), "{text:?}");
+    }
+
+    let index_type = PhysicalType::default_for(LogicalType::parse("index").unwrap()).unwrap();
+    let signature = ServiceContract::RandomExtensionField
+        .signature("index")
+        .unwrap();
+    assert_eq!(signature.inputs, vec![index_type.clone()]);
+    assert_eq!(signature.outputs, vec![index_type]);
+    for contract in [
+        ServiceContract::RandomBls12381Field,
+        ServiceContract::RandomBn254Field,
+        ServiceContract::RandomRistrettoField,
+    ] {
+        assert!(contract.signature("index").is_none());
+        assert!(contract.signature("draw").is_some());
+    }
+}

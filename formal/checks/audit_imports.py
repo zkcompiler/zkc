@@ -50,16 +50,27 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
             root / tests / "Audit.lean": audit}
 
 
+# Each optional integration package: its library, its tests and its audit marker.
+INTEGRATIONS = {
+    "arklib": ("ZkcArkLib", "TestsArkLib", "ARKLIB-INTEGRATION-AUDIT-PASS"),
+    "clean": ("ZkcClean", "TestsClean", "CLEAN-INTEGRATION-AUDIT-PASS"),
+}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
-    parser.add_argument("--main-only", action="store_true")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--main-only", action="store_true")
+    selection.add_argument("--integration", action="append", choices=sorted(INTEGRATIONS),
+                           help="check only the named optional packages (default: all)")
     args = parser.parse_args()
     outputs = expected(ROOT, "Zkc", "Tests", ["Examples"],
                        ["Tools/Interactive", "Tools/Artifact", "Tools/Crypto", "Tools/RequirementChecker"])
-    if not args.main_only:
-        outputs.update(expected(ROOT / "integrations/arklib", "ZkcArkLib", "TestsArkLib",
-                                marker="ARKLIB-INTEGRATION-AUDIT-PASS"))
+    selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
+    for name in selected:
+        library, tests, marker = INTEGRATIONS[name]
+        outputs.update(expected(ROOT / "integrations" / name, library, tests, marker=marker))
     for path, text in outputs.items():
         if args.write:
             path.write_text(text)

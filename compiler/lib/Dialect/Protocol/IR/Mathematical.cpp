@@ -5,6 +5,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
@@ -545,20 +546,44 @@ public:
           }
         } else if (auto query = dyn_cast<zkc::protocol_ir::QueryOp>(op)) {
           auto reference = dyn_cast<BlockArgument>(query.getReference());
-          auto field = protocol::randomServiceField(
-              cast<protocol_ir::ServiceReferenceType>(
-                  query.getReference().getType())
-                  .getContract());
+          auto method =
+              protocol::serviceMethod(cast<protocol_ir::ServiceReferenceType>(
+                                          query.getReference().getType())
+                                          .getContract(),
+                                      query.getMethod());
           int owner = role(query.getOwnerAttr());
+          auto spelling = [](Type type) {
+            auto logical = protocol::encodeBoundType(type, false);
+            if (!logical) {
+              consumeError(logical.takeError());
+              return std::string();
+            }
+            return logical->spelling();
+          };
           if (!reference || reference.getOwner() != &block || owner < 0 ||
               !env.values.lookup(reference).test(owner) ||
-              env.values.lookup(reference).count() != 1 || field.empty() ||
-              query.getMethod() != "draw" || !query.getInputs().empty() ||
+              env.values.lookup(reference).count() != 1 || !method ||
+              query.getInputs().size() != method->inputs.size() ||
               query.getNumResults() != 1 ||
-              query.getResult(0).getType() !=
-                  zkc::algebra::FieldType::get(op->getContext(), field))
+              spelling(query.getResult(0).getType()) != method->output ||
+              any_of(
+                  zip(query.getInputs(), method->inputs),
+                  [&](auto pair) {
+                    auto [input, expected] = pair;
+                    return spelling(input.getType()) != expected ||
+                           !env.values.lookup(input).test(owner);
+                  }))
             return refuse(op, "query requires its singleton owner and the "
                               "installed service signature");
+          // The domain is fixed before sampling: a prover message or other
+          // runtime value cannot choose the UniformIndex bound.
+          if (query.getMethod() == "index") {
+            auto bound =
+                query.getInputs().front().getDefiningOp<data::IndexOp>();
+            if (!bound || !protocol::parseUniformIndexBound(bound.getValue()))
+              return refuse(op, "index query requires a constant power-of-two "
+                                "bound no greater than 2^63");
+          }
           BitVector available(count);
           available.set(owner);
           env.values[query.getResult(0)] = std::move(available);

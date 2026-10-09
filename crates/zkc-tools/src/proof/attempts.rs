@@ -16,9 +16,9 @@ pub struct AttemptPolicy {
     /// Every RNG input and its returned successor output, exactly once.
     pub rng: Vec<(usize, usize)>,
     pub limits: AttemptLimits,
-    /// Cumulative interpreter work across all attempts.
+    /// Cumulative interpreter and logical work across all attempts.
     pub work: WorkBudget,
-    /// Live payload limit per attempt; cumulative allocation charge per session.
+    /// Live payload limit per attempt; cumulative fresh allocation per session.
     pub values: ValueBudget,
 }
 
@@ -33,6 +33,8 @@ pub struct AttemptRecord {
     /// Primitive work consumed by this attempt, including discarded trials and
     /// work completed before a fatal stop. Sum equals the invocation report.
     pub external_work: u64,
+    /// Ring arithmetic work for this attempt; the backend budget is cumulative.
+    pub ring_work: u64,
     pub transcript: Option<Json>,
     /// Successful entry-return coordinate; absent for the ordinary final return.
     pub return_at: Option<(zkc_runtime::interactive::Origin, String)>,
@@ -55,7 +57,7 @@ impl AttemptPolicy {
             return Err("native-attempt-policy".into());
         }
         let limits = array(&row[3], 2)?;
-        let work = array(&row[4], 2)?;
+        let work = array(&row[4], 3)?;
         let values = array(&row[5], 2)?;
         let size = |v: &Json| {
             usize::try_from(natural(v)?).map_err(|_| String::from("native-attempt-limits"))
@@ -80,6 +82,7 @@ impl AttemptPolicy {
             work: WorkBudget {
                 instructions: natural(&work[0])?,
                 iterations: natural(&work[1])?,
+                logical_bytes: natural(&work[2])?,
             },
             values: ValueBudget {
                 live_bytes: size(&values[0])?,
@@ -103,7 +106,8 @@ impl AttemptPolicy {
             ],
             [
                 self.work.instructions.to_string(),
-                self.work.iterations.to_string()
+                self.work.iterations.to_string(),
+                self.work.logical_bytes.to_string()
             ],
             [
                 self.values.live_bytes.to_string(),
@@ -118,6 +122,7 @@ impl AttemptPolicy {
             || self.limits.proof_bytes > super::MAX_PROOF_BYTES
             || self.work.instructions > deployment.capacity.work.instructions
             || self.work.iterations > deployment.capacity.work.iterations
+            || self.work.logical_bytes > deployment.capacity.work.logical_bytes
             || self.values.live_bytes > deployment.capacity.values.live_bytes
             || self.values.total_bytes > deployment.capacity.values.total_bytes
         {
@@ -204,6 +209,7 @@ fn accumulate(total: &mut Usage, used: Usage) {
     total.instructions += used.instructions;
     total.iterations += used.iterations;
     total.total_value_bytes += used.total_value_bytes;
+    total.logical_bytes += used.logical_bytes;
     total.live_values = used.live_values;
     total.live_value_bytes = used.live_value_bytes;
 }
@@ -236,6 +242,7 @@ impl Session<'_> {
     ) -> Executed {
         let mut cleanup = Vec::new();
         let external_work_before = backend.external_work_spent();
+        let ring_work_before = backend.ring_work_spent();
         let mut cancelled = false;
         let mut invocation_inputs = inputs.to_vec();
         let mut transcript = None;
@@ -246,6 +253,7 @@ impl Session<'_> {
             messages: 0,
             bytes: 0,
             external_work: 0,
+            ring_work: 0,
             transcript: None,
             return_at: None,
             stop: None,
@@ -301,6 +309,12 @@ impl Session<'_> {
                         .work
                         .iterations
                         .saturating_sub(used.iterations),
+                    logical_bytes: self
+                        .plan
+                        .policy
+                        .work
+                        .logical_bytes
+                        .saturating_sub(used.logical_bytes),
                 };
                 let values = ValueBudget {
                     live_bytes: self.plan.policy.values.live_bytes,
@@ -408,6 +422,7 @@ impl Session<'_> {
             }
         });
         record.external_work = backend.external_work_spent() - external_work_before;
+        record.ring_work = backend.ring_work_spent() - ring_work_before;
         record.decision = result
             .as_ref()
             .map(|(complete, _)| *complete)
@@ -525,7 +540,7 @@ mod tests {
     use super::*;
     #[test]
     fn attempt_policy_ingress_is_bounded_and_canonical() {
-        let valid = br#"["zkc.native-attempt-policy/0","1",[["2","2"]],["4","1024"],["100","10"],["4096","8192"]]"#;
+        let valid = br#"["zkc.native-attempt-policy/0","1",[["2","2"]],["4","1024"],["100","10","65536"],["4096","8192"]]"#;
         let p = AttemptPolicy::parse(valid).unwrap();
         assert_eq!(p.rng, [(2, 2)]);
         assert_eq!(p.identity(), hash(valid));
@@ -549,10 +564,12 @@ mod tests {
             AttemptPolicy::parse(unknown_format.as_bytes()).unwrap_err(),
             "native-attempt-policy"
         );
-        let triple = String::from_utf8(valid.to_vec())
-            .unwrap()
-            .replace("[\"100\",\"10\"]", "[\"100\",\"0\",\"10\"]");
-        assert!(AttemptPolicy::parse(triple.as_bytes()).is_err());
+        for work in ["[\"100\",\"10\"]", "[\"100\",\"0\",\"10\",\"65536\"]"] {
+            let changed = String::from_utf8(valid.to_vec())
+                .unwrap()
+                .replace("[\"100\",\"10\",\"65536\"]", work);
+            assert!(AttemptPolicy::parse(changed.as_bytes()).is_err());
+        }
         let mut changed = p.clone();
         changed.completion = 2;
         assert_ne!(p.identity(), changed.identity());

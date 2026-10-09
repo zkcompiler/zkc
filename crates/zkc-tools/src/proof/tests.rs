@@ -319,6 +319,8 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         attempt_policy: None,
         usage: Default::default(),
         external_work: 0,
+        ring_work: 0,
+        ring_work_limit: zkc_backends::ring::DEFAULT_WORK_LIMIT,
         external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         cleanup_errors: vec![],
     }

@@ -36,6 +36,24 @@ zkc-tools = { workspace = true, features = ["test-utils"] }
 workspace = true
 
 [[bin]]
+name = "ring_conformance"
+path = "src/ring_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "relation_bundle_conformance"
+path = "src/relation_bundle_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "clean_air_conformance"
+path = "src/clean_air_conformance.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "backend_contract_conformance"
 path = "src/backend_contract_conformance.rs"
 test = false
@@ -116,6 +134,12 @@ bench = false
 [[bin]]
 name = "native_domains"
 path = "src/native_domains.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "native_index_sampling"
+path = "src/native_index_sampling.rs"
 test = false
 bench = false
 

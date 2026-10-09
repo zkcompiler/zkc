@@ -58,6 +58,14 @@ observations for future transitions.
 
 ## Maintained APIs and actual consumers
 
+Shared [ring-expression laws](spec/core/ring-expressions.md) establish input
+locality, substitution, ring-homomorphism transport, pointwise lane evaluation,
+and exact polynomial evaluation with structural degree bounds. The existing
+finite-AIR expression embedding preserves evaluation and degree weights.
+[The transitive axiom audit](../Tests/RingExpression.lean) covers both modules.
+Native DAG admission, JSON encoding and the KoalaBear/Ext8 provider are checked
+separately and are not subjects of these theorems.
+
 The [source-role connection](design/role-execution.md), scoped source-cut and
 resource laws, and [committed Sumcheck connection](design/committed-sumcheck.md)
 state typed mathematical results. `Tools.Interactive` is a separate executable
@@ -83,9 +91,10 @@ adequacy and current native correspondence remain unproved.
 | Portable generic source correspondence | [formation](../Tools/Interactive/GenericSource.lean), [configurations](../Tools/Interactive/Configuration.lean), [shared local relation](../Tools/Interactive/LocalValidation.lean), [whole-source checking](../Tools/Interactive/GenericValidation.lean) | Independent bounded formation and source-owned specialization; exact local conversions and original control are checked against a supplied candidate in the tool's portable format. Returned maps identify shared code and original source ports. Executable structural checking, not a raw-to-typed or native refinement theorem |
 | Generic reference execution | [shared control](../Tools/Interactive/Control.lean), [source interpreter](../Tools/Interactive/GenericReference.lean), [typed local execution](../Tools/Interactive/ReferenceRuntime.lean), [resource services](../Tools/Interactive/ReferenceResources.lean), [controls](../Tests/GenericReference.lean) | Original model source executes independently of candidate participants. Field/polynomial math, RNG consumption, nonce stage transitions, transcript history/canonical origins/field reduction, full nominal types and exact external G1/hash/PCS requests are exercised. PCS custody retains immutable originals; evaluations and key/rank/receiving selection are independently checked. G1/PCS equations and hash bytes are conditional provider evidence; physical accounting is a separate row below |
 | Participant lifecycle reference | [source suspension and schedule](../Tools/Interactive/ReferenceControl.lean), [in-process controls](../Tests/ReferenceLifecycle.lean) | Independent original-source traversal retains each role's iteration allowance and frame lifecycle. Completed roots keep returned units; stopped or cancelled roots retire units, including pre-body ingress failure. Reference-fixture postflight errors do not reopen completed roots. Peer ingress event prefixes can differ on failure; no general scheduler or native resource-store refinement theorem is claimed |
-| Checked physical local execution | [Interpreter](../Tools/Interactive/PhysicalLocal.lean) | Original-source checking precedes selected local execution. The interpreter models mathematical contracts, representation crossings, retained-payload charges, output budgets and consuming failures. Explicit input capacity and successful exact-capacity allocation are premises. Single-root/local/return scope; view counts do not establish frame membership, and no native adequacy theorem is claimed |
+| Checked physical local execution | [Interpreter](../Tools/Interactive/PhysicalLocal.lean) | Original-source checking precedes selected local execution. The interpreter models mathematical contracts, representation crossings, per-binding payload charges, output budgets and consuming failures. Explicit input capacity and successful exact-capacity allocation are premises. Single-root/local/return scope; it does not model native allocation sharing or logical-byte accounting, and no native adequacy theorem is claimed |
 | Physical values in compact regions | [RegionSimulation](../Zkc/Realization/RegionSimulation.lean), [physical table client](../Examples/TablePhysical/README.md) | Generic local-to-region execution refinement with final-state value relations and preservation of all old represented values. The two-field client checks actual lazy/materialized candidates, logical input coverage and both installed local phase policies through call instrumentation. Native allocation/progress, broader endpoint policies and releasing stores remain separate obligations |
 | Checked logical operation folding | [RegionFolding](../Zkc/Compiler/RegionFolding.lean), [table law](../Examples/TableProtocol/Optimization.lean), [controls](../Tests/TableOptimization.lean) | Generic alias traversal and source-relative folded-body comparison preserve complete procedures. Identical-endpoint interpolation composes with physical checking and original-source phase admission for every handler. Guarded reuse, effectful rewrites and native implementation proofs remain separate |
+| Deterministic relation bundles | [Bundle](../Zkc/Relation/Bundle.lean), [finite AIR embedding](../Zkc/Relation/Bundle/AIR.lean), [controls](../Tests/RelationBundle.lean) | Multi-table satisfaction with authority-selected cells, optional presence, signed finite/cyclic reads, field-weighted and natural multiset balance, and a separate challenge-indexed staged predicate. `FiniteAIR.holds_iff` proves whole-relation equivalence with `AIR.family` within the height bound. Single-sorted; native admission, evaluation and typed fields are separate, and no reduction from a staged predicate to a bundle is claimed |
 | Component connections and replacement | [RelationComposition](../Zkc/Semantics/RelationComposition.lean) | [Non-machine component client](../Examples/ComponentConnections.lean) uses different proof/signature boundaries and re-encodes a key; [controls](../Tests/RelationComposition.lean) check incompatible witnesses, missing representation coverage and circular removal of checks. Contextual replacement preserves the connected relation, not complete native execution |
 | Finite obligation closure | [Obligations](../Zkc/Semantics/Obligations.lean) | Ordered multi-premise derivations cover independently supplied source requirements; rules compose through actual available facts and permit reuse. Soundness assumes terminal truth and each rule's law, with explicit bad events. [Controls](../Tests/Obligations.lean) include whole-chain deletion, subject/context substitution, cycles and accepted but unsound rule syntax. These are finite closure laws; native actual-body binding and cryptographic laws remain separate |
 | Application arithmetic boundaries | [BoundedResidues](../Zkc/Algebra/BoundedResidues.lean), [Pedersen](../Zkc/Protocols/Pedersen.lean), [Schnorr](../Zkc/Protocols/Schnorr.lean) | Total bounds recover integer balance and word-addition meaning from field equations. Actual shared openings give the excess identity; different challenges at one nonce give the two-response extraction equation. Controls exhibit modular-wrap and incompatible existential-opening counterexamples. These laws do not prove native ISA adequacy, nonce generation, joint extraction or either complete application's security |
@@ -121,6 +130,7 @@ adequacy and current native correspondence remain unproved.
 | Factor polynomial laws | [Factors](../Zkc/Polynomial/Factors.lean) | Contraction, multiplicity-preserving sums of products, scale hoisting and final pending-challenge application; Boolean equality alone does not justify polynomial replacement |
 | Randomized joint release | [Disclosure](../Zkc/Probability/Disclosure.lean), [controls](../Tests/RandomizedDisclosure.lean) | Actual normalized marginals and one coupling preserving the whole artifact/runtime pair; projection and event transport; independent marginal secrecy is insufficient |
 | Persistent probability | [ProductTape](../Zkc/Probability/ProductTape.lean), [ConditionalTape](../Zkc/Probability/ConditionalTape.lean), [FiniteKernel](../Zkc/Probability/FiniteKernel.lean) | Actual PMF product execution, complete residual state, pre-draw conditional laws and rational joint-kernel inequalities; no scalar-protocol or external-library import |
+| UniformIndex word reduction | [UniformIndex](../Zkc/Probability/UniformIndex.lean) | Among all `w`-bit words, every residue below `N` has the same number of preimages exactly when `N = 2^k` with `k ≤ w`; the 64-bit instance gives `2^(64-k)` preimages for each `k ≤ 63`, and bound three is inexact. A counting statement about the word map only: no transcript, framing, provider uniformity or native correspondence |
 | Finite-event concentration | [Concentration](../Zkc/Probability/Concentration.lean), [EmbeddedRoots](../Zkc/Polynomial/EmbeddedRoots.lean), [one-round application](../Zkc/Protocols/Sumcheck/ProductFamily/OneRound.lean) | Cardinality times point-mass bound and injective-domain polynomial root bound; the scalar application needs a false claim, and probability interpretation needs its actual sampling premises |
 | Execution representations and locality | [InstructionSequence](../Zkc/Realization/InstructionSequence.lean), [simulation](../Zkc/Realization/InstructionSimulation.lean), [AdaptiveClient](../Zkc/Semantics/AdaptiveClient.lean), [Locality](../Zkc/Semantics/Locality.lean), [ByteEncoding](../Zkc/Realization/ByteEncoding.lean) | Instruction and adaptive-client executions embed into `Proc`; common relational transport preserves exact terminal data, state and events. View descent requires fiber constancy and representative premises; endian round trips do not prove protocol codecs |
 | Block analysis and replacement | [Analysis](../Zkc/Compiler/Blocks/Analysis.lean), [Typing](../Zkc/Compiler/Blocks/Typing.lean), [Rewriting](../Zkc/Compiler/Blocks/Rewriting.lean), [StateRefinement](../Zkc/Compiler/Blocks/StateRefinement.lean) | Backward demand, projected whole-block keys, ordered exports, checked arithmetic and interpretation transport; an auxiliary reference block language with explicit observer and algebraic premises |
@@ -449,6 +459,31 @@ Pairing/group validity and SHA256 retain the named external-service assumptions.
 
 Independent Lean direct transforms are bounded to 128 cells. Native relation
 generation and raw elaboration adequacy remain separate.
+
+## External Clean relation export
+
+The optional [Clean package](../integrations/clean/README.md), pinned to Clean
+`b449bf590f93e13827c3c7e747e392d6969aa380`, exports one Clean
+`Air.Flat.Component` into `Zkc.Relation.AIR`. The export refuses lookups and
+channel interactions at any subcircuit depth and variables outside the
+component's width; import checks the field size, canonical constants and
+columns. For a successful export and import, imported expressions evaluate as
+Clean's `Expression.eval`; the AIR relation on a nonempty trace of that width
+holds iff Clean's `Operations.ConstraintsHold` holds on every row, or iff
+upstream `Table.Constraints` holds for a table of that width; and with the
+component's actual `Assumptions`, upstream `weakSoundness` yields its `Spec`.
+The channel-free fragment discharges `FullGuarantees`. Controls refute an
+altered constant, column index and deleted assertion. `export_ring` and
+`component_ring` compose the expression law with
+`Zkc.Relation.AIR.Expr.toRing_eval`, so each imported assertion's shared ring
+tree evaluates to the upstream constraint. Under a `PrimePresentation` (Clean's
+`fromNat` is `Nat.cast`), `component_native_ring` gives the same for each output
+of the emitted relation arena read with residue literals; a field of non-prime
+size has no presentation. These are statements about Lean terms; native import,
+evaluation and DAG decoding are not proved. A
+[maintained comparison](../../tests/protocol/test_clean_air_conformance.py)
+checks native finite-AIR admission/evaluation and the Rust ring provider against
+the producer's residuals on fixed honest, invalid and mutated rows.
 
 ## External representation and schedule boundaries
 

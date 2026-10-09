@@ -47,7 +47,7 @@ void string(std::string &out, StringRef value) {
   out.append(value.data(), value.size());
 }
 } // namespace
-Error checkNativeOrigin(StringRef hex, StringRef kind) {
+Error checkNativeOrigin(StringRef hex, StringRef kind, StringRef method) {
   auto invalid = [] { return error("interactive-native-origin"); };
   if (hex.empty() || hex.size() > 4096 || hex.size() % 2 ||
       !all_of(hex, [](char c) {
@@ -77,7 +77,8 @@ Error checkNativeOrigin(StringRef hex, StringRef kind) {
       !reader.string(value) || value != kind)
     return invalid();
   for (unsigned i = 1; i < fields; ++i) {
-    if (!reader.string(value) || !identifier(value))
+    if (!reader.string(value) || !identifier(value) ||
+        (kind == "query" && i == 5 && !method.empty() && value != method))
       return invalid();
     if (kind == "query" && i == 3) {
       uint64_t port;

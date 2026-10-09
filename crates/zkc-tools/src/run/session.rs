@@ -109,6 +109,7 @@ impl RunLimits {
         work: WorkBudget {
             instructions: Limits::INSTRUCTIONS,
             iterations: Limits::ITERATIONS,
+            logical_bytes: Limits::LOGICAL_BYTES,
         },
     };
     pub fn validate(&self) -> Result<(), Failure> {
@@ -120,6 +121,7 @@ impl RunLimits {
             || self.values.total_bytes > hard.values.total_bytes
             || self.work.instructions > hard.work.instructions
             || self.work.iterations > hard.work.iterations
+            || self.work.logical_bytes > hard.work.logical_bytes
         {
             return Err(Failure::new(FailureKind::Limit, "joint-limits"));
         }

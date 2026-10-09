@@ -28,8 +28,26 @@ The binary reader supports a bounded R1CS v1 container and admitted exact field
 moduli; it never reinterprets BN254 constants as BLS Fr. `.zkc`
 [Assets](../language/relations.md) capture explicit relation formats.
 The optional [LLZK adapter](../../compiler/adapters/llzk/README.md) owns its separate
-source subset and compatible toolchain. Successful import cannot detect a
+source subset and compatible toolchain. The optional
+[Plonky3 AIR adapter](../../compiler/adapters/plonky3/README.md) captures AIRs on a
+pinned Plonky3 release into shared ring-expression views with a feature inventory
+and refuses features it does not represent. Successful import cannot detect a
 constraint already lost by an external frontend.
+
+## Relation bundles
+
+`zkc/Relation/Bundle.h` in `Zkc::Relation` admits the
+[relation bundle](../spec/domains/relation-bundles.md) carriers. `readBundleText`
+forms a `Bundle`; `readBundleConfiguration`, `readBundleInstance` and
+`readBundleWitness` decode the supplied data against it. `Bundle::admit` checks
+authority, presence, heights, every read window and the work bounds before any
+value is parsed; `Bundle::evaluate` adds the reference interpretation and
+reports residuals, balance sums and multiplicity range failures. `embedAIR`
+and `embedAIRData` map a finite AIR and trace into a one-table bundle.
+`StagedProgram` forms and evaluates a challenge-indexed staged program for
+supplied challenges and claims. The Rust `zkc_runtime::relation` module admits
+the same carriers independently and evaluates them through a supplied field
+algebra.
 
 ## Declaration and binding
 

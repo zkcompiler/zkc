@@ -154,6 +154,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
         poly.coefficient_count poly.coset_evaluate poly.coset_interpolate poly.domain_point poly.domain_root
         poly.domain_points poly.even_odd_fold poly.divide_opening poly.opening_quotient poly.equality_weights
         poly.from_coefficients poly.coefficients poly.degree_check poly.univariate_evaluate poly.univariate_boundary
+        ring.point ring.rows ring.coefficients ring.affine_sum
         poly.table_arity poly.product_sum poly.product_round poly.boundary poly.round_evaluate poly.fold poly.evaluate
         poly.empty_point poly.append_point
         curve.neg curve.nonidentity curve.msm curve.scale_each curve.vector_add curve.concat curve.vector_scale
@@ -310,7 +311,12 @@ fn independent_history_classification_matches_installed_inventory() {
     // Native-only contracts have no portable Lean source interpretation. Keep
     // the shared portable inventory unchanged and enumerate this extension.
     let native = "transcript.native.indexed.challenge 1
-transcript.native.indexed.observe.data 1";
+transcript.native.indexed.index 1
+transcript.native.indexed.observe.data 1
+ring.point 0
+ring.rows 0
+ring.coefficients 0
+ring.affine_sum 0";
     let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
     for line in fixture
         .lines()

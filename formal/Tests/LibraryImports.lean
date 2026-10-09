@@ -7,6 +7,7 @@ import Zkc.Algebra.FiniteVectors
 import Zkc.Algebra.LinearCombination
 import Zkc.Algebra.MultisetFingerprint
 import Zkc.Algebra.Representations
+import Zkc.Algebra.RingExpression
 import Zkc.Compiler.Admission
 import Zkc.Compiler.Analysis.FactorMerge
 import Zkc.Compiler.Analysis.FactorReuse
@@ -110,6 +111,7 @@ import Zkc.Probability.FramedMask
 import Zkc.Probability.Iteration
 import Zkc.Probability.Observation
 import Zkc.Probability.ProductTape
+import Zkc.Probability.UniformIndex
 import Zkc.Probability.UniformTape
 import Zkc.Properties.Judgment
 import Zkc.Protocols.AlgebraicRounds.BlockEvaluation
@@ -248,7 +250,10 @@ import Zkc.Realization.Simulation
 import Zkc.Relation.AIR.Embedding
 import Zkc.Relation.AIR.Polynomial
 import Zkc.Relation.AIR.ProductConnection
+import Zkc.Relation.AIR.RingExpression
 import Zkc.Relation.AIR
+import Zkc.Relation.Bundle.AIR
+import Zkc.Relation.Bundle
 import Zkc.Relation.Encoding
 import Zkc.Relation.Padding
 import Zkc.Relation.QuadraticArithmetic
@@ -432,6 +437,7 @@ import Tests.ReferenceTranscript
 import Tests.Regions
 import Tests.RelationAIR
 import Tests.RelationAudit
+import Tests.RelationBundle
 import Tests.RelationComposition
 import Tests.RelationEncoding
 import Tests.RelationReference
@@ -442,6 +448,7 @@ import Tests.Requirements
 import Tests.ResourceUnit
 import Tests.ResourceView
 import Tests.ResultBundle
+import Tests.RingExpression
 import Tests.RoleDriver
 import Tests.RoleIsolation
 import Tests.RoleProjection
@@ -493,6 +500,7 @@ import Tests.TheoryReview
 import Tests.Transformation
 import Tests.TypeInstantiation
 import Tests.TypedLocal
+import Tests.UniformIndex
 import Tests.Variant
 import Tests.VectorReference
 import Tests.VectorResources

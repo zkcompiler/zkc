@@ -21,6 +21,11 @@ from support.lean_headers import HeaderParser
 
 
 ROOT = Path(__file__).resolve().parent
+# Optional packages: owned source directories and a standalone client, if any.
+INTEGRATIONS = {
+    "arklib": (("ZkcArkLib", "TestsArkLib"), "clients/ArkLib.lean"),
+    "clean": (("ZkcClean", "TestsClean"), None),
+}
 
 
 def share_dependencies(main, optional):
@@ -69,7 +74,9 @@ def collect(headers, seeds, search):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--with-arklib", action="store_true")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--with-arklib", action="store_true")
+    selection.add_argument("--with-clean", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lake", default="lake")
@@ -79,19 +86,22 @@ def main():
     except support.lake.Unavailable as absent:
         raise SystemExit(str(absent)) from None
     lake = str(Path(lake).absolute())
+    integration = "arklib" if args.with_arklib else "clean" if args.with_clean else None
     work = ROOT
     raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
-    if args.with_arklib:
-        work = ROOT / "integrations/arklib"
+    if integration:
+        work = ROOT / "integrations" / integration
         share_dependencies(ROOT, work)
         raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
     search = [(work / path).resolve() for path in raw.split(os.pathsep) if path]
     seeds = [ROOT / "Zkc.lean", ROOT / "clients/Main.lean"]
     for directory in ("Zkc", "Tests", "Examples", "Tools"):
         seeds.extend((ROOT / directory).rglob("*.lean"))
-    if args.with_arklib:
-        seeds.append(ROOT / "clients/ArkLib.lean")
-        for directory in ("ZkcArkLib", "TestsArkLib"):
+    if integration:
+        directories, client = INTEGRATIONS[integration]
+        if client:
+            seeds.append(ROOT / client)
+        for directory in directories:
             entry = work / f"{directory}.lean"
             if entry.is_file():
                 seeds.append(entry)
@@ -107,7 +117,7 @@ def main():
              if not Path(path).is_file() or hashlib.sha256(Path(path).read_bytes()).hexdigest() != digest]
     record = {
         "status": "pass" if exit_code == 0 and not drift else "fail",
-        "with_arklib": args.with_arklib, "dry_run": args.dry_run,
+        "with_arklib": args.with_arklib, "with_clean": args.with_clean, "dry_run": args.dry_run,
         "command": command, "mathlib_roots": roots, "parsed_sources": sources,
         "source_drift": drift, "exit_code": exit_code,
         "scope": "cache root selection only; builds and proof audits remain separate",

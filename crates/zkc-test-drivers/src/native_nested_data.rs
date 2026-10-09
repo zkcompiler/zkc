@@ -175,6 +175,14 @@ fn execute(
     inputs: &Json,
     proof: Option<&[u8]>,
 ) -> Result<Vec<u8>, String> {
+    checked(deployment, inputs, proof)?.outcome
+}
+/// Execute once and check that cleanup and service custody completed.
+fn checked(
+    deployment: &NativeDeployment,
+    inputs: &Json,
+    proof: Option<&[u8]>,
+) -> Result<zkc_tools::proof::NativeProofReport, String> {
     let report = zkc_test_drivers::execute(
         deployment,
         inputs,
@@ -192,7 +200,7 @@ fn execute(
             .iter()
             .all(|r| r["kind"] != "service" || r["leased"] == false)
     );
-    report.outcome
+    Ok(report)
 }
 fn replaced(proof: &[u8], payload: &[u8]) -> Vec<u8> {
     assert_eq!(&proof[..8], b"ZKCPRF00");
@@ -383,18 +391,27 @@ fn main() {
         }
         if family == "batched-openings" && !capacity_checked {
             capacity_checked = true;
-            // The cumulative frame-value budget binds before sequence work.
-            // Check the actual composed host boundary, not just container storage.
-            for count in [128, 256] {
+            // The carried batch, opening state and points are charged once however
+            // many iterations borrow them, so 256 openings complete. Each append
+            // still allocates a new element slice; that quadratic fresh allocation
+            // reaches the cumulative ceiling before 1,024 openings, ahead of
+            // sequence and logical work. Check the actual composed host boundary.
+            for count in [256, 1024] {
                 let values = data(family, count, &keys);
                 let p = inputs(&envelope, &values, &keys, &path, true);
                 let v = inputs(&envelope, &values, &keys, &path, false);
-                let outcome = execute(&deployment, &p, None);
-                if count == 128 {
-                    let proof = outcome.unwrap();
+                let report = checked(&deployment, &p, None).unwrap();
+                if count == 256 {
+                    let proof = report.outcome.unwrap();
                     execute(&deployment, &v, Some(&proof)).unwrap();
                 } else {
-                    assert_eq!(outcome.unwrap_err(), "exhausted:output-bytes");
+                    assert_eq!(report.outcome.unwrap_err(), "exhausted:output-bytes");
+                    let ceiling = zkc_runtime::interactive::Limits::TOTAL_VALUE_BYTES;
+                    assert!(report.usage.total_value_bytes > ceiling - (8 << 20));
+                    assert!(
+                        report.usage.logical_bytes
+                            < zkc_runtime::interactive::Limits::LOGICAL_BYTES
+                    );
                 }
             }
         }

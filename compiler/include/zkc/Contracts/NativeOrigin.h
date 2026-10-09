@@ -7,7 +7,10 @@
 #include <string>
 namespace zkc::protocol {
 /// Bounded source occurrence syntax. Does not establish source correspondence.
-llvm::Error checkNativeOrigin(llvm::StringRef hex, llvm::StringRef kind);
+/// A nonempty method also fixes a query event's service method, separating
+/// field challenges from UniformIndex transitions.
+llvm::Error checkNativeOrigin(llvm::StringRef hex, llvm::StringRef kind,
+                              llvm::StringRef method = {});
 llvm::Expected<std::string>
 encodeNativeOriginTemplate(llvm::StringRef entry,
                            llvm::ArrayRef<std::array<std::string, 3>> path,

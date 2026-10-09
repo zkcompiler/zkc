@@ -328,7 +328,7 @@ public:
         continue;
       }
       if (auto query = dyn_cast<pir::QueryOp>(op)) {
-        if (query.getOwner() != r.verifier ||
+        if (query.getMethod() != "draw" || query.getOwner() != r.verifier ||
             query.getReference() != block.getArgument(r.service))
           return error("public-coin-service");
         if (pending || nextDraw >= r.draws.size() ||

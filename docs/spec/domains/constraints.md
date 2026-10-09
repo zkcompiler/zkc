@@ -13,7 +13,9 @@ also does not select a proof protocol, transcript construction or cryptographic
 backend.
 
 This chapter defines two domain views: sparse rank-one constraints and finite
-arithmetic traces. Neither is a mandatory representation for other relations or
+arithmetic traces. [Relation bundles](relation-bundles.md) extend the finite
+trace view with several tables, column authority, presence, cyclic windows and
+interactions. None is a mandatory representation for other relations or
 for directly authored group protocols. [Source encoding adequacy](../relations.md#source-encoding-adequacy)
 is a separate obligation from the meaning of either view.
 
@@ -131,7 +133,9 @@ boundary selectors, vanishing polynomials, quotient construction and authenticat
 openings require additional consumer contracts. Lookups, permutations, cyclic
 traces, challenge phases and preprocessed columns are outside this selected
 finite view. An adapter must preserve them through another explicit view or
-refuse; it cannot discard them when exporting this subset.
+refuse; it cannot discard them when exporting this subset. A
+[relation bundle](relation-bundles.md) is such a view for cyclic windows,
+configuration and public columns, interactions and staged challenge phases.
 
 For example, a consumer with fixed columns must bind the table selected by its
 authorized configuration and statement, then interpret finite reads over the
@@ -139,7 +143,8 @@ ordered join of witness and fixed columns. A prover-selected commitment alone
 does not establish that binding. Fixedness with respect to the witness also does
 not imply degree zero for the column's interpolation polynomial. This specifies
 an obligation on a richer consumer; it adds no preprocessed-column syntax or
-adapter to the installed finite view.
+adapter to the installed finite view. Relation bundles carry such columns as
+configuration groups.
 
 ### Polynomial interpretation of finite scopes
 

@@ -1,0 +1,16 @@
+{
+  "air": "recurrence",
+  "arena": ["zkc.ring/0",["koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear","koala-bear"],[["input",2],["input",0],["input",1],["mul",1,2],["neg",3],["add",0,4],["input",11],["input",8],["neg",7],["add",1,8],["mul",6,9],["input",9],["neg",11],["add",2,12],["mul",6,13],["input",3],["mul",6,15],["input",13],["input",4],["neg",2],["add",18,19],["mul",17,20],["input",5],["input",7],["add",0,23],["constant","koala-bear","123456789"],["add",24,25],["neg",26],["add",22,27],["mul",17,28],["input",6],["mul",0,1],["mul",31,23],["add",15,32],["neg",33],["add",30,34],["mul",17,35],["input",12],["input",10],["neg",38],["add",15,39],["mul",37,40],["add",18,8],["mul",37,42]],[5,10,14,16,21,29,36,41,43]],
+  "arena_sha256": "270642322a3f650cca6455ddee6301e17aab1adc9c36e60fb87efd078dc1fd6d",
+  "assertions": [{"constraint":0,"degree_multiple":2,"selectors":[]},{"constraint":1,"degree_multiple":2,"selectors":["first-row"]},{"constraint":2,"degree_multiple":2,"selectors":["first-row"]},{"constraint":3,"degree_multiple":2,"selectors":["first-row"]},{"constraint":4,"degree_multiple":1,"selectors":["transition"]},{"constraint":5,"degree_multiple":1,"selectors":["transition"]},{"constraint":6,"degree_multiple":3,"selectors":["transition"]},{"constraint":7,"degree_multiple":2,"selectors":["last-row"]},{"constraint":8,"degree_multiple":2,"selectors":["last-row"]}],
+  "exporter": "zkc-plonky3-air 0.0.0",
+  "features": ["add","constant","main-current","main-next","mul","preprocessed-current","public-value","selector-first-row","selector-last-row","selector-transition","sub"],
+  "format": "zkc.plonky3-air-export/0",
+  "layout": {"main":{"next_row_columns":[0,1,2,3],"width":4},"preprocessed":{"height":8,"next_row_columns":[0],"values":["3","11","21","33","47","63","81","101"],"values_sha256":"e5d977b65573092cff5ce0d7c3f534dee36ae921fccbe5d96eb0ba4305a28667","width":1},"public_values":3},
+  "node_origins": ["leaf","leaf","leaf","mul","sub-negation","sub","leaf","leaf","sub-negation","sub","mul","leaf","sub-negation","sub","mul","leaf","mul","leaf","leaf","sub-negation","sub","mul","leaf","leaf","add","leaf","add","sub-negation","sub","mul","leaf","mul","mul","add","sub-negation","sub","mul","leaf","leaf","sub-negation","sub","mul","sub","mul"],
+  "probed_absent": ["extension-constraint","periodic-column","permutation-challenge","permutation-column","permutation-value"],
+  "read_model": "cyclic",
+  "selector_semantics": "guard-only",
+  "slots": [["main",0,0],["main",1,0],["main",2,0],["main",3,0],["main",0,1],["main",1,1],["main",3,1],["preprocessed",0,0],["public",0],["public",1],["public",2],["selector","first-row"],["selector","last-row"],["selector","transition"]],
+  "upstream": {"commit":"45e0ffe4d294816755522dd2cf7c38d6bcd701ce","crates":{"p3-air":"0.5.1","p3-field":"0.5.1","p3-koala-bear":"0.5.1","p3-matrix":"0.5.1"}}
+}

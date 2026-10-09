@@ -4,6 +4,7 @@ pub(crate) use arguments::Arguments;
 use arguments::{Command, OptionSpec as Opt};
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
+const EVALUATORS: Opt = Opt::new("--evaluators=ASSETS");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
 const HEADER: Opt = Opt::new("--allow-header-only");
 const RESULTS: Opt = Opt::new("--results=FILE");
@@ -36,7 +37,13 @@ const COMMANDS: &[Command] = &[
         name: "run",
         summary: "Run a source Entry with named inputs",
         positional: "PACKAGE EXPECTED_SHA256 INPUTS",
-        options: &[SETUPS, CAPACITY, Opt::new("--limits=LIMITS"), RESULTS],
+        options: &[
+            SETUPS,
+            EVALUATORS,
+            CAPACITY,
+            Opt::new("--limits=LIMITS"),
+            RESULTS,
+        ],
         description: "INPUTS is a zkc.entry-run/0 request. --limits reads zkc.bundle-limits/0.\nReturned values require --results. All roles are prepared before execution.",
     },
     Command {
@@ -45,6 +52,7 @@ const COMMANDS: &[Command] = &[
         positional: "PACKAGE EXPECTED_SHA256 INPUTS PROOF",
         options: &[
             SETUPS,
+            EVALUATORS,
             CAPACITY,
             HEADER,
             Opt::new("--attempts=COUNT").unsigned(),
@@ -56,7 +64,7 @@ const COMMANDS: &[Command] = &[
         name: "verify",
         summary: "Verify a proof with independent named public inputs",
         positional: "PACKAGE EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, CAPACITY, HEADER, RESULTS],
+        options: &[SETUPS, EVALUATORS, CAPACITY, HEADER, RESULTS],
         description: PROOF,
     },
     Command {

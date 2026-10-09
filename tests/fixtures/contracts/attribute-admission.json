@@ -1,4 +1,9 @@
 [
+  {"name": "ring-asset-canonical", "contract": "ring.point", "arguments": ["koala-bear"], "implementation": "plonky3/ring.point", "attributes": ["1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4"], "admitted": true},
+  {"name": "ring-asset-extension", "contract": "ring.affine_sum", "arguments": ["koala-bear.ext8-binomial3"], "implementation": "plonky3/ring.affine_sum", "attributes": ["1b02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4"], "admitted": true},
+  {"name": "ring-asset-uppercase", "contract": "ring.point", "arguments": ["koala-bear"], "implementation": "plonky3/ring.point", "attributes": ["AB02fe175b0c9abcfdb134e2b9f4fa52bdfa6714fd77dd8099067394b39360d4"], "admitted": false},
+  {"name": "ring-asset-short", "contract": "ring.rows", "arguments": ["koala-bear"], "implementation": "plonky3/ring.rows", "attributes": ["1234"], "admitted": false},
+  {"name": "ring-asset-missing", "contract": "ring.coefficients", "arguments": ["koala-bear"], "implementation": "plonky3/ring.coefficients", "attributes": [], "admitted": false},
   {"name": "attribute-free", "contract": "field.add", "arguments": ["bls12-381.fr"], "implementation": "arkworks/field.add", "attributes": [], "admitted": true},
   {"name": "extra-attribute", "contract": "field.add", "arguments": ["bls12-381.fr"], "implementation": "arkworks/field.add", "attributes": ["0"], "admitted": false},
   {"name": "constant-missing", "contract": "field.constant", "arguments": ["bls12-381.fr"], "implementation": "arkworks/field.constant", "attributes": [], "admitted": false},

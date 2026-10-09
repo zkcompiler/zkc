@@ -26,6 +26,7 @@ NATIVE_CASES = [
     ('native_entry_completion', 'native_entry_completion'),
     ('native_relation_bindings', 'native_relation_bindings'),
     ('native_domains', 'native_domains'),
+    ('native_index_sampling', 'native_index_sampling'),
     ('native_composition', 'native_composition'),
     ('native_setups', 'native_setups'),
     ('native_composed_state', 'native_composed_state'),
@@ -89,7 +90,7 @@ def check_authored_transcript_commands(toolchain, journal, directory):
 
     attempt_policy = directory / 'prefix.attempts.json'
     attempt_policy.write_text(json.dumps(['zkc.native-attempt-policy/0', '1', [['2', '2']],
-                                          ['3', '1048576'], ['1000000', '100000'],
+                                          ['3', '1048576'], ['1000000', '100000', '4294967296'],
                                           ['1048576', '16777216']]))
     prefix_summaries = {}
     for case in json.loads((directory / 'manifest.json').read_text()):
@@ -278,7 +279,8 @@ def check_native_attempt_commands(toolchain, journal, directory):
             validator = directory / f'{name}.validator.json'
             proof = directory / f'{name}.cli.proof'
             policy = ['zkc.native-attempt-policy/0', '1', [['2', '2']] if family == 'fold' else [],
-                      ['4', '16777216'], ['1000000', '100000'], ['67108864', '268435456']]
+                      ['4', '16777216'], ['1000000', '100000', '4294967296'],
+                      ['67108864', '268435456']]
             policy_path = directory / f'{name}.attempts'
             policy_path.write_text(json.dumps(policy))
             args = [toolchain.runtime, 'prove-bundle', deployment, pin, producer, proof,
@@ -338,7 +340,7 @@ def check_composed_state_commands(toolchain, journal, directory):
             pin = hashlib.sha256(deployment.read_bytes()).hexdigest()
             proof = directory / f'{name}.cli.proof'
             policy = ['zkc.native-attempt-policy/0', '1', [['4', '2']],
-                      ['4', '16777216'], ['1000000', '100000'],
+                      ['4', '16777216'], ['1000000', '100000', '4294967296'],
                       ['67108864', '268435456']]
             attempts = directory / f'{name}.attempts'
             attempts.write_text(json.dumps(policy))
@@ -430,7 +432,7 @@ def check_composition_commands(toolchain, journal, directory):
     import json
 
     capacity = ['zkc.native-capacity/0', '65536', '8192', '16777216', '67108864',
-                ['1000000', '100000'], ['67108864', '268435456']]
+                ['1000000', '100000', '4294967296'], ['67108864', '268435456']]
     path = directory / 'capacity.json'
     for name in ['qap-composition', 'air-composition', 'target-accumulation']:
         deployment = directory / f'{name}.deployment'
@@ -542,7 +544,7 @@ def check_bundle_commands(toolchain, journal, directory):
     invoke('single', options=[f'--limits={limits}'], refusal='bundle-limits')
     capacity = directory / 'bundle.capacity.json'
     capacity.write_text(json.dumps(['zkc.native-capacity/0', '1048577', '0', '0', '0',
-                                    ['0', '0'], ['0', '0']]))
+                                    ['0', '0', '0'], ['0', '0']]))
     invoke('single', options=[f'--capacity={capacity}'], refusal='native-capacity-limit')
     setups = directory / 'bundle.setups.json'
     setups.write_text(json.dumps(['zkc.bundle-setups/0', [], [['Alice', '0', 'missing']]]))

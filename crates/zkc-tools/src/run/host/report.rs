@@ -15,6 +15,8 @@ pub struct HostReport {
 }
 impl HostReport {
     pub(super) fn new(host: &RunHost, session: &str) -> Self {
+        let mut limits = host.limits.record();
+        limits["execution"]["ring_work_per_role"] = json!(host.ring_work_limit);
         Self {
             execution: None,
             unstarted: Vec::new(),
@@ -24,7 +26,7 @@ impl HostReport {
             cleanup_errors: Vec::new(),
             identity: host.identity.clone(),
             session: session.into(),
-            limits: host.limits.record(),
+            limits,
             layout: host.layout(),
         }
     }
@@ -137,15 +139,16 @@ impl HostReport {
                 }).collect::<Vec<_>>();
                 json!({"role":role.role,"before":state(&role.before),"after":state(&role.after),"cancelled":role.cancelled,
                     "usage":role.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
-                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes})),
-                    "external_work":backend.external_work_spent(),"active_frames":backend.active_frames(),
+                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,
+                        "logical_bytes":u.logical_bytes})),
+                    "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),"active_frames":backend.active_frames(),
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&role.outputs),"outputs":if include_outputs {Some(outputs)} else {None},
                     "return_at":role.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s}))})
             }).collect::<Vec<_>>());
         } else {
             result["outcome"] = json!(["setup-failed", self.failure]);
             result["roles"] = json!(self.unstarted.iter().map(|(role,backend)|json!({"role":role,"started":false,
-                "external_work":backend.external_work_spent(),"active_frames":backend.active_frames(),
+                "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),"active_frames":backend.active_frames(),
                 "live_resource_units":backend.live_resource_units()})).collect::<Vec<_>>());
         }
         if !diagnostics.is_empty() {

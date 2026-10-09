@@ -147,6 +147,14 @@ pub fn natural_index(s: &str) -> Result<u64> {
     }
     s.parse().map_err(|_| CodecError("natural-index"))
 }
+/// A canonical UniformIndex bound: a power of two from 1 through 2^63.
+pub fn uniform_index_bound(s: &str) -> Result<u64> {
+    let bound = natural_index(s).map_err(|_| CodecError("index-bound"))?;
+    if !bound.is_power_of_two() {
+        return Err(CodecError("index-bound"));
+    }
+    Ok(bound)
+}
 pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> Result<Vec<u8>> {
     let encoded = native_origin_template(attrs, kind)?;
     let mut tree = decode_tree(&encoded)?;
@@ -165,6 +173,15 @@ pub fn indexed_native_origin(attrs: &[String], kind: &str, indices: &[u64]) -> R
         return Err(CodecError("native-origin-limit"));
     }
     encode_tree(&tree)
+}
+/// A query template naming the source service method. Field challenges and
+/// UniformIndex transitions require `draw` and `index` respectively.
+pub fn native_query_template(attrs: &[String], method: &str) -> Result<Vec<u8>> {
+    let bytes = native_origin_template(attrs, "query")?;
+    if decode_tree(&bytes)?[4][5].as_str() != Some(method) {
+        return Err(CodecError("native-origin"));
+    }
+    Ok(bytes)
 }
 /// A source template contains ordered static apply/repeat steps and no dynamic
 /// coordinates. Coordinates are explicit operands of its indexed transition.

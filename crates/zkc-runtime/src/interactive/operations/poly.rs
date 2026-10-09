@@ -4,6 +4,30 @@ use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::selectable(
+        "ring.point",
+        (&[Vector], &[Vector], AttributeRule::AssetIdentity),
+    )
+    .implemented_by(&["plonky3/ring.point"]),
+    Contract::selectable(
+        "ring.rows",
+        (&[Vector, Index], &[Vector], AttributeRule::AssetIdentity),
+    )
+    .implemented_by(&["plonky3/ring.rows"]),
+    Contract::selectable(
+        "ring.coefficients",
+        (&[Vector, Index], &[Vector], AttributeRule::AssetIdentity),
+    )
+    .implemented_by(&["plonky3/ring.coefficients"]),
+    Contract::selectable(
+        "ring.affine_sum",
+        (
+            &[Vector, Vector, Index],
+            &[Vector],
+            AttributeRule::AssetIdentity,
+        ),
+    )
+    .implemented_by(&["plonky3/ring.affine_sum"]),
+    Contract::selectable(
         "poly.table_arity",
         (&[Table], &[Index], AttributeRule::None),
     )

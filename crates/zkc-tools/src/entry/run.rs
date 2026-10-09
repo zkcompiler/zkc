@@ -29,6 +29,14 @@ pub struct RunEntry {
     native: RunHost,
 }
 impl RunEntry {
+    pub fn with_ring_assets(mut self, assets: zkc_backends::ring::Registry) -> Self {
+        self.native = self.native.with_ring_assets(assets);
+        self
+    }
+    pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
+        self.native = self.native.with_ring_work_limit(limit)?;
+        Ok(self)
+    }
     pub fn admit(
         package: Package,
         limits: HostLimits,

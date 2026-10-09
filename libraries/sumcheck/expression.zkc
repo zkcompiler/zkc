@@ -1,0 +1,73 @@
+module expression_sumcheck;
+
+pub type Vector<F: Field> = builtin("vector", F);
+pub type Polynomial<F: Field> = builtin("polynomial", F);
+
+// An implementation fixes one closed expression and its ordered factor slots.
+// Values are row-major assignments. Round returns the exact coefficient sum
+// over affine pairs; evaluate substitutes the terminal factor values.
+pub interface Expression<F: Field> {
+  fn round(low: Vector<F>, high: Vector<F>, rows: index) -> Vector<F>;
+  fn evaluate(values: Vector<F>) -> F;
+}
+
+fn round<F: Field, Width: nat, E: Expression<F>>(values: Vector<F>) -> Vector<F> {
+  let halves = kernel<F>("vector.split", values);
+  let rows = kernel("index.div", kernel<F>("vector.length", halves.0), index<Width>());
+  return E::round(halves.0, halves.1, rows);
+}
+fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
+  let halves = kernel<F>("vector.split", values);
+  let low = kernel<F>("vector.scale", halves.0, 1 - challenge);
+  let high = kernel<F>("vector.scale", halves.1, challenge);
+  return kernel<F>("vector.add", low, high);
+}
+fn polynomial<F: Field>(value: Vector<F>) -> Polynomial<F> {
+  return kernel<F>("poly.from_coefficients", value);
+}
+fn has_length<F: Field, N: nat>(value: Vector<F>) -> bool {
+  return kernel<F>("vector.length", value) == index<N>();
+}
+fn boundary<F: Field>(value: Polynomial<F>) -> F {
+  return kernel<F>("poly.univariate_boundary", value);
+}
+fn evaluate<F: Field>(value: Polynomial<F>, point: F) -> F {
+  return kernel<F>("poly.univariate_evaluate", value, point);
+}
+fn equal<F: Field>(left: F, right: F) -> bool { return left == right; }
+
+// Public factor tables, MSB-first variable order. The verifier folds the public
+// factors and checks the exact terminal expression. A commitment/opening
+// protocol can replace this direct terminal evaluation in a separate library.
+pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, Width: nat, Degree: nat,
+                      E: Expression<F>> roles(P,V)
+    (prover_values: Vector<F> @P, verifier_values: Vector<F> @V,
+     claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V) {
+  let mut tableP = prover_values;
+  let mut tableV = verifier_values;
+  let mut current = claim;
+  for i in 0..rounds roles(P,V) max Max {
+    let proposed @P = round<F,Width,E>(tableP);
+    let received = send P -> V(proposed);
+    let actual @V = polynomial(received);
+    let size_ok @V = has_length<F,Degree+1>(received);
+    require @V size_ok;
+    let total @V = boundary(actual);
+    let sum_ok @V = equal(current, total);
+    require @V sum_ok;
+    let cv = challenges.draw();
+    let cp = send V -> P(cv);
+    let nextP @P = fold(tableP, cp);
+    let nextV @V = fold(tableV, cv);
+    let nextClaim @V = evaluate(actual, cv);
+    tableP = nextP;
+    tableV = nextV;
+    current = nextClaim;
+  }
+  let size_ok @V = has_length<F,Width>(tableV);
+  require @V size_ok;
+  let evaluated @V = E::evaluate(tableV);
+  let accepted @V = equal(evaluated, current);
+  return (accepted = accepted);
+}

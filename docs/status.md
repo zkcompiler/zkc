@@ -64,13 +64,17 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Capability | Support and boundary |
 |---|---|
 | Scalar, tensor and polynomial mathematics | Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
+| Shared expression evaluation | Independently admitted [ring arenas](spec/domains/ring-expressions.md), closed asset references and KoalaBear/Ext8 point, packed-row, coefficient and affine-sum kernels. The [source Sumcheck client](../examples/projects/expression-sumcheck/README.md) uses the common compiler and Host; it is a public-table client without a PCS or native security theorem. The [imported AIR client](../examples/projects/imported-air/README.md) runs an arena exported from Plonky3 through row, coefficient and Ext8 point kernels on adapter-prepared assignments; it does not check that an assignment comes from a trace. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; affine sequence elements are excluded. |
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematics.md) and [changing numeric state](compiler/mathematics.md). These are not complete Groth16, AIR/FRI or range-proof applications. |
-| Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relations.md), and a [native R1CS reduction adapter](compiler/relations.md). Import does not prove upstream source adequacy. |
+| Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relations.md), a [native R1CS reduction adapter](compiler/relations.md), and an isolated [Plonky3 AIR adapter](../compiler/adapters/plonky3/README.md) checked differentially against its pinned upstream. Import does not prove upstream source adequacy. |
+| Multi-table relations | [Relation bundles](spec/domains/relation-bundles.md) have independent C++ and Rust admission of deterministic, supplied-data, staged-program and staged-assignment carriers, with bounded reference semantics of the bundle relation and of the separate staged predicate, and an embedding of the finite AIR. The Plonky3 adapter emits bundle artifacts. These carriers are library formats; bundles are not yet Assets, MLIR operations or Entry inputs, and no complete proof protocol consumes them. |
+| Clean export comparison | A [pinned Clean flat AIR export](../formal/integrations/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
+| Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
 | Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/construction.md); admission does not prove transcript completeness or snapshot reachability. |
 | Host applications | Named Entry inputs/results, joint bundles, proof jobs, reusable immutable prover material and generated Rust data bindings through the common Hosts; [Entry guide](runtime/entries.md). |
 
@@ -78,7 +82,14 @@ Setup input associations and authorized incoming PCS values follow the
 [setup contract](spec/formats/messages.md#application-authorized-setups).
 The protocol retains an explicit verifier-key-consuming terminal check.
 
-Registered services cover four RNG distributions/providers. Arbitrary user-defined
+Registered services cover four RNG distributions/providers. Each offers field
+`draw`; the KoalaBear octic service also offers [UniformIndex](spec/runtime/services.md#uniformindex-realization)
+sampling over a static power-of-two domain (`coins.index<N>()`), interactively and
+as a typed [derived transcript transition](spec/ir/construction.md#uniformindex-transitions)
+under its Merlin suite. Other fields, runtime or non-power-of-two bounds,
+out-of-domain and rejection sampling, and retries are not supported. Tests check
+prover/verifier agreement and an independent replay of the framing; they make no
+uniformity or Fiat–Shamir security claim. Arbitrary user-defined
 request/reply service families remain an extension. Domain and kernel contributions
 require their own implementation and installation. Constant-time MSM and diagonal
 contractions are supported; automatic contraction selection is an explicit

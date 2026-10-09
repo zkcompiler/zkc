@@ -17,8 +17,9 @@ non-advancing observations. The application host chooses scheduling and transpor
 `NativeProofEntry` checks the restrictions of the current native proof policy;
 proof framing and application acceptance belong to `zkc-tools`.
 
-The runtime contains no cryptography or protocol-specific algorithm. Backend
-operation installation is independent of the runtime's type/binding resolver.
+Protocol algorithms are source libraries; field arithmetic and cryptographic
+operations are supplied by installed backends. The runtime hashes canonical
+relation carriers for identity, independently of backend operation installation.
 Admission establishes executable structure, not compiler correctness or protocol
 security. See [the interpreter contract](src/interactive/README.md).
 
@@ -26,6 +27,10 @@ General helpers retain separate owners:
 
 - `attempt` and `iteration`: bounded generic retry and iteration controllers.
 - `logical`: canonical trees and domain-separated transcript occurrences.
+- `ring`: typed ring-arena admission and degree/read analysis.
+- `relation`: deterministic multi-table and staged relation carriers, admission
+  and bounded reference evaluation through caller-supplied field arithmetic.
+  These are library APIs; they are not Runner instructions or proof checkers.
 
 Run the crate's tests with `cargo test -p zkc-runtime`. Backend and host tests
 exercise the same interfaces with actual native values and cryptographic kernels.

@@ -111,6 +111,11 @@ def MatrixBilinearOp : KernelOp<AlgebraDialect, "exec.matrix_bilinear", [OpMatri
 
 def MatrixIdentityCheckOp : KernelOp<AlgebraDialect, "exec.matrix_identity_check", [OpMatrixIdentityCheck]>;
 
+def RingPointOp : KernelOp<AlgebraDialect, "exec.ring_point", [OpRingPoint]>;
+def RingRowsOp : KernelOp<AlgebraDialect, "exec.ring_rows", [OpRingRows]>;
+def RingCoefficientsOp : KernelOp<AlgebraDialect, "exec.ring_coefficients", [OpRingCoefficients]>;
+def RingAffineSumOp : KernelOp<AlgebraDialect, "exec.ring_affine_sum", [OpRingAffineSum]>;
+
 def MatrixMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMatrixMulVector]>;
 
 def MatrixDimensionOp : KernelOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;

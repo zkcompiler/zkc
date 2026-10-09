@@ -2,6 +2,10 @@
   "profile": "zkc.contract-conformance-coverage",
   "operations": {
     "field": [
+      "ring.point",
+      "ring.rows",
+      "ring.coefficients",
+      "ring.affine_sum",
       "vector.get",
       "vector.slice",
       "vector.length",
@@ -158,7 +162,8 @@
       "fixed_vector.to_vector"
     ],
     "transcript": [
-      "transcript.native.indexed.challenge"
+      "transcript.native.indexed.challenge",
+      "transcript.native.indexed.index"
     ],
     "array": [
       "field_array.from_vector",

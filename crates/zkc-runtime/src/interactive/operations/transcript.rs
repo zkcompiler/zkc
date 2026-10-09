@@ -29,6 +29,16 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "spongefish/transcript.native.indexed.challenge",
     ])
     .history(),
+    Contract::new(
+        "transcript.native.indexed.index",
+        (
+            &[Transcript, Index, Indices],
+            &[Index, Transcript],
+            AttributeRule::NativeIndexTemplate,
+        ),
+    )
+    .implemented_by(&["plonky3/transcript.native.indexed.index"])
+    .history(),
 ];
 
 pub(super) const CONTRIBUTION: Contribution = Contribution {
@@ -71,6 +81,13 @@ fn resolve(
     let primary = support::primary(binding)?;
     let field = primary.scalar_field().ok_or_else(support::failure)?;
     if binding.arguments.len() != 1 || primary.transcript() != Some(primary) {
+        return Err(support::failure());
+    }
+    // UniformIndex transitions exist only for the suite whose challenge field
+    // has index randomness; other suites' byte samplers are not installed.
+    if binding.contract == "transcript.native.indexed.index"
+        && primary != Identity::Merlin3KoalaBearExt8
+    {
         return Err(support::failure());
     }
     support::instantiate(shape, field, |kind| {

@@ -5,7 +5,7 @@ use crate::plonky3::oracle::{self as tree, Digest, Error, Shape};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
 use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
+    AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Type,
 };
 
@@ -62,6 +62,24 @@ impl State {
             Self::Extension(s) => s.shape().retained_bytes::<crate::KoalaBearExt8>(),
         }
         .map_err(failure)
+    }
+    /// The committed table and tree, shared by every handle to this state.
+    pub(crate) fn backing(&self) -> Result<Backing> {
+        let bytes = self.retained_bytes()?;
+        Ok(match self {
+            Self::Base(s) => Backing::of(s, bytes),
+            Self::Extension(s) => Backing::of(s, bytes),
+        })
+    }
+    /// Bytes one opening reads: the selected row and its authentication path.
+    pub(crate) fn opening_bytes(&self) -> Result<usize> {
+        let (shape, element) = match self {
+            Self::Base(s) => (s.shape(), std::mem::size_of::<crate::KoalaBear>()),
+            Self::Extension(s) => (s.shape(), std::mem::size_of::<crate::KoalaBearExt8>()),
+        };
+        size(shape.width(), element)?
+            .checked_add(size(shape.depth(), 32)?)
+            .ok_or_else(|| exhausted("size-overflow"))
     }
 }
 
@@ -157,6 +175,25 @@ pub(crate) fn states_bytes(states: &[State]) -> Result<usize> {
                 .ok_or_else(|| exhausted("size-overflow"))
         },
     )
+}
+/// The list's handle slots, which hold no table data.
+pub(crate) fn states_list(states: &Arc<[State]>) -> Result<Backing> {
+    Ok(Backing::of(
+        states,
+        size(states.len(), std::mem::size_of::<State>())?,
+    ))
+}
+/// Report the list and, when it is newly retained, each distinct opening state.
+pub(crate) fn states_parts(
+    states: &Arc<[State]>,
+    shared: &mut dyn FnMut(Backing) -> bool,
+) -> Result<usize> {
+    if shared(states_list(states)?) {
+        for state in states.iter() {
+            shared(state.backing()?);
+        }
+    }
+    Ok(0)
 }
 
 pub(crate) fn apply(
@@ -306,7 +343,9 @@ pub(crate) fn apply(
                 .checked_add(state.retained_bytes()?)
                 .and_then(|n| n.checked_add(std::mem::size_of::<State>()))
                 .ok_or_else(|| exhausted("size-overflow"))?;
-            policy.output(bytes, available)?;
+            policy.output(bytes, usize::MAX)?;
+            // Existing states are shared; only the new list of handles is allocated.
+            policy.output(size(len, std::mem::size_of::<State>())?, available)?;
             let mut result = crate::kernels::arithmetic::reserve(len)?;
             result.extend_from_slice(states);
             result.push(state.clone());
@@ -325,7 +364,8 @@ pub(crate) fn apply(
             let state = states
                 .get(index(at)?)
                 .ok_or_else(|| refused("oracle-coordinate"))?;
-            policy.output(state.retained_bytes()?, available)?;
+            // The result shares the selected state; nothing new is allocated.
+            policy.output(state.retained_bytes()?, usize::MAX)?;
             vec![Value::OracleState(state.clone())]
         }
         ("commitments.length", [Value::OracleRoots(d, roots)]) if *d == domain => {

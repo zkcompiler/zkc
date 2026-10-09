@@ -38,6 +38,7 @@ add_zkc_component(Contracts
   lib/Contracts/Implementations.cpp
   lib/Contracts/Operations.cpp
   lib/Contracts/Mathematical.cpp
+  lib/Contracts/RingExpression.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/Kernels.cpp
   lib/Contracts/NativePolicy.cpp
@@ -90,6 +91,9 @@ add_zkc_component(Relation
   lib/Relation/R1CSBinary.cpp
   lib/Relation/AIR.cpp
   lib/Relation/AIRPolynomial.cpp
+  lib/Relation/Bundle.cpp
+  lib/Relation/BundleData.cpp
+  lib/Relation/BundleStaged.cpp
   lib/Relation/Matrices.cpp
 )
 add_zkc_component(Program

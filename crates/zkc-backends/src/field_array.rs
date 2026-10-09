@@ -2,7 +2,7 @@
 use crate::{Policy, Result, Scalar, Value, exhausted, refused};
 use std::sync::Arc;
 use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
+    AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Representation, Type,
 };
 
@@ -42,11 +42,23 @@ impl FieldArray {
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
         bytes(self.elements.len())
     }
+    /// Element storage, shared with the vector it was built from; the
+    /// descriptor charge belongs to each binding.
+    pub(crate) fn backing(&self) -> Result<Backing> {
+        Ok(Backing::of(
+            &self.elements,
+            crate::value::size(self.elements.len(), 32)?,
+        ))
+    }
 }
+const DESCRIPTOR_BYTES: usize = 1024;
 pub(crate) fn bytes(length: usize) -> Result<usize> {
     crate::value::size(length, 32)?
-        .checked_add(1024)
+        .checked_add(DESCRIPTOR_BYTES)
         .ok_or_else(|| exhausted("output-bytes"))
+}
+pub(crate) fn owned_bytes() -> usize {
+    DESCRIPTOR_BYTES
 }
 
 /// Independent advertisement. It does not call the runtime contract resolver.
@@ -87,7 +99,9 @@ pub(crate) fn apply(
 ) -> Result<Vec<Value>> {
     let value = match (name, args) {
         ("field_array.from_vector", [Value::Vector(elements)]) => {
-            policy.output(bytes(elements.len())?, invocation.max_output_bytes)?;
+            // The array shares the vector's elements; only its descriptor is new.
+            policy.output(bytes(elements.len())?, usize::MAX)?;
+            policy.output(DESCRIPTOR_BYTES, invocation.max_output_bytes)?;
             Value::FieldArray(FieldArray::new(
                 invocation.binding.signature().outputs[0].logical(),
                 elements.clone(),

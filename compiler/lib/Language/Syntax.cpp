@@ -1325,7 +1325,27 @@ private:
       projection.bracket = bracket;
       projection.children = {left};
       projection.span = span;
-      if (current().kind == TokenKind::Decimal) {
+      // `index` is reserved, so `.index` can only name the managed method,
+      // whose static arguments precede its call.
+      bool method = !bracket && at("index");
+      if (method) {
+        projection.text = "index";
+        advance();
+        if (take("<")) {
+          do {
+            SyntaxType argument;
+            if (!type(argument, depth + 1))
+              return {};
+            projection.arguments.push_back(std::move(argument));
+          } while (take(",") && !at(">"));
+          if (!expect(">"))
+            return {};
+        }
+        if (!at("(")) {
+          fail("source.syntax", "index requires a method call");
+          return {};
+        }
+      } else if (current().kind == TokenKind::Decimal) {
         projection.text = text().str();
         advance();
       } else if (!name(projection.text))

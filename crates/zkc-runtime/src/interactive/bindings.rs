@@ -33,6 +33,34 @@ pub enum Identity {
     Merlin3Ristretto64Le,
 }
 impl Identity {
+    /// Characteristic of an installed field, including nominal extensions.
+    /// A group or service with an associated scalar field is not itself a field.
+    pub(crate) fn field_characteristic(self) -> Option<&'static str> {
+        match self {
+            Self::KoalaBear | Self::KoalaBearExt8 => Some("2130706433"),
+            Self::Bls12381Fr => Some(
+                "52435875175126190479447740508185965837690552500527637822603658699938581184513",
+            ),
+            Self::Bn254Fr => Some(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            ),
+            Self::Ristretto255Scalar => {
+                Some("7237005577332262213973186563042994240857116359379907606001950938285454250989")
+            }
+            _ => None,
+        }
+    }
+    /// Canonical prime-subfield natural literal; never reduces modulo the field.
+    pub(crate) fn canonical_field_literal(self, text: &str) -> bool {
+        let Some(modulus) = self.field_characteristic() else {
+            return false;
+        };
+        !text.is_empty()
+            && text.len() <= modulus.len()
+            && text.bytes().all(|b| b.is_ascii_digit())
+            && (text.len() == 1 || !text.starts_with('0'))
+            && (text.len() < modulus.len() || (text.len() == modulus.len() && text < modulus))
+    }
     /// Closed installation fact for operations that divide by two. Unknown
     /// identities and non-field identities acquire no algebraic capability.
     pub fn has_characteristic_not_two(self) -> bool {

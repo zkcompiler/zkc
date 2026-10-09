@@ -94,5 +94,7 @@ def IndexedTranscriptChallengeOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_challenge", [OpIndexedTranscriptChallenge]>;
 def IndexedTranscriptObserveDataOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_observe_data", [OpIndexedTranscriptObserveData]>;
+def IndexedTranscriptIndexOp : KernelOp<CryptoDialect,
+    "exec.indexed_transcript_index", [OpIndexedTranscriptIndex]>;
 
 #endif

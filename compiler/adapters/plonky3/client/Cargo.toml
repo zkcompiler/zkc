@@ -1,0 +1,16 @@
+[package]
+name = "zkc-plonky3-air-client"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Ordinary Plonky3 AIRs maintained as external clients of the zkc adapter"
+
+[dependencies]
+p3-air.workspace = true
+p3-field.workspace = true
+p3-koala-bear.workspace = true
+p3-matrix.workspace = true
+
+[lints]
+workspace = true

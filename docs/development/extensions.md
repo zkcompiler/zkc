@@ -27,6 +27,34 @@ choices open until a concrete consumer exercises them. An extension point is
 useful when that consumer can use it without rewriting generic binding or
 checking; an interface description or refusal alone does not demonstrate support.
 
+### Applying the boundary to AIR and protocol evaluation
+
+The [relation bundle](../spec/domains/relation-bundles.md) owns deterministic
+statement/witness conditions and the separate staged predicate. Its schema and
+reference evaluator belong to Relation and the independent runtime model.
+External AIR syntax, selectors and source-adequacy checks belong to the adapter.
+Importing a new AIR does not require a protocol-specific dialect operation.
+
+The [ring arena](../spec/domains/ring-expressions.md) owns typed arithmetic and
+substitution. Its reusable bulk operations have domain contracts, ordered
+Algebra dialect operations and backend implementations. Their inputs contain no
+protocol rounds, roles, commitments or acceptance decisions. The
+[Sumcheck library](../../libraries/sumcheck/expression.zkc) composes those
+operations with messages, challenges and checks in ordinary source. The Host's
+`--evaluators` manifest installs their admitted expression bodies; the compiler
+currently checks the operation and digest reference, not the arena's contents.
+
+A new sampling distribution changes the service contract and its realization;
+putting it inside a protocol helper would hide its randomness and transcript
+requirements. Storage sharing belongs to the Runner/backend representation
+boundary, because allocation identity must not become a protocol observation.
+
+Change core semantics when a required value, control behavior or observation
+cannot be represented by the existing model. A new proof system alone does not
+establish that need. First express its scheduling and checks as a library;
+add domain operations for reusable mathematics and backend kernels for its
+physical implementations. Keep concrete Entry configuration in examples.
+
 ## Logical contracts and source exports
 
 [Operation contracts](../compiler/operation-contracts.md) own signatures, static

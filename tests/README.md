@@ -19,6 +19,7 @@ maintains independent research models and checks.
 | Installed CLI | `nix build .#checks.x86_64-linux.application` | Compile, inspect, prove and verify outside the checkout |
 | C++/Rust/Python style | `just lint` | clang-format, Rust formatting, Clippy and Python lint |
 | Broad native integration | `just test` | Compiler, Rust, root integration, installation, docs, lint and demo |
+| Plonky3 AIR adapter | `just test-plonky3` | Pinned upstream adapter and native differential controls |
 | Independent Lean research | `just test-lean` | Optional formal build, controls and consumers |
 
 `just setup` prepares locked Python and Cargo dependencies. `just build` builds
@@ -92,8 +93,13 @@ cases.
 
 Use `nix develop .#formal`, then `just fetch-lean`, `just build-lean` and
 `just test-lean` for the independent package. `just test-lean-integration` checks
-the optional ArkLib integration; `just test-lean-fresh` rebuilds research packages
-without previous project/dependency objects. These can be expensive.
+the optional ArkLib integration. `just test-lean-clean` builds and audits the
+optional Clean integration and requires
+[its native control](fixtures/clean/air-control.json) to be the producer's
+current output; the [native comparison](protocol/test_clean_air_conformance.py)
+of that control runs in `just test-integration` without Lean.
+`just test-lean-fresh` rebuilds research packages without previous
+project/dependency objects. These can be expensive.
 
 Sandboxed optional packages are `.#formal`, `.#formal-checks`, `.#arklib` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.

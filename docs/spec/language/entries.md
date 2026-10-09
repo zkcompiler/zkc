@@ -39,7 +39,9 @@ application must call `prove_attempts` with a larger count to authorize retries.
 A `fiat_shamir` construction names an installed suite and exactly one verifier
 random service with the corresponding field. Other verifier services refuse.
 The native compiler resolves the service's actual ordered query/delivery pairs,
-including static applications and repeated occurrences. It checks exact delivered
+including static applications and repeated occurrences. Both `draw()` and
+`index<N>()` queries of that service are selected; each becomes a transition of
+the same transcript at its occurrence. It checks exact delivered
 values and order through the same admission as an explicit native policy. An
 unused selected service, omitted delivery or transformed challenge refuses; source
 authors do not supply generated site names. These checks establish supported

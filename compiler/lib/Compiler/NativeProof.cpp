@@ -8,6 +8,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
@@ -287,7 +288,8 @@ Expected<Admitted> admit(pir::MathematicalOp source,
     return &found->second;
   };
   auto append = [&](Operation *op, bool query, Type payload,
-                    json::Array &sequence) -> Error {
+                    json::Array &sequence,
+                    std::optional<uint64_t> bound = {}) -> Error {
     auto site = op->getAttrOfType<StringAttr>("site").str();
     auto found = consume(site, query ? "query" : "message");
     if (!found)
@@ -313,8 +315,13 @@ Expected<Admitted> admit(pir::MathematicalOp source,
     admitted.events.push_back(
         {site, *encoded, payload, query,
          static_cast<unsigned>(count_if(
-             origin.steps, [](const auto &s) { return s[0] == "repeat"; }))});
-    sequence.push_back(json::Array{query ? "query" : "message", *encoded});
+             origin.steps, [](const auto &s) { return s[0] == "repeat"; })),
+         bound});
+    if (bound)
+      sequence.push_back(
+          json::Array{"index", *encoded, std::to_string(*bound)});
+    else
+      sequence.push_back(json::Array{query ? "query" : "message", *encoded});
     if (!query) {
       admitted.messages.push_back(
           json::Array{*encoded, type->spelling(), wireCodec(*type).str()});
@@ -394,21 +401,38 @@ Expected<Admitted> admit(pir::MathematicalOp source,
             return origin.takeError();
           continue;
         }
+        // A selected query is a field draw or a UniformIndex query. Both
+        // become transitions of the same transcript at this occurrence.
+        bool index = query.getMethod() == "index";
         if (!policy.service ||
             sourcePort(query.getReference()) !=
                 source.getBody().front().getArgument(*policy.service) ||
-            query.getNumOperands() != 1 || query.getNumResults() != 1 ||
+            query.getNumOperands() != (index ? 2u : 1u) ||
+            query.getNumResults() != 1 ||
             query.getResult(0).getType() !=
-                algebra::FieldType::get(
-                    source.getContext(),
-                    protocol::nativeChallengeField(policy.suite)) ||
-            query.getMethod() != "draw" || draw >= 64 ||
+                (index ? Type(IntegerType::get(source.getContext(), 64,
+                                               IntegerType::Unsigned))
+                       : Type(algebra::FieldType::get(
+                             source.getContext(),
+                             protocol::nativeChallengeField(policy.suite)))) ||
+            (!index && query.getMethod() != "draw") || draw >= 64 ||
             (selection == DrawSelection::Explicit &&
              (draw >= policy.draws.size() ||
               query.getSite() != policy.draws[draw].first)))
           return error("native-proof-draw-selection");
-        if (auto e =
-                append(query, true, query.getResult(0).getType(), sequence))
+        // Formation already fixes an index domain to a power-of-two constant;
+        // its value becomes part of the transcript event. The suite's
+        // IndexTranscript fact is checked when the transition is bound.
+        std::optional<uint64_t> bound;
+        if (index) {
+          auto constant =
+              query.getInputs().front().getDefiningOp<data::IndexOp>();
+          if (!constant ||
+              !(bound = protocol::parseUniformIndexBound(constant.getValue())))
+            return error("native-proof-draw-selection");
+        }
+        if (auto e = append(query, true, query.getResult(0).getType(), sequence,
+                            bound))
           return e;
         pending = query;
       }
@@ -578,9 +602,10 @@ class Emitter {
     auto type = wire(event.payload);
     if (!type)
       return type.takeError();
-    std::string contract = event.query
-                               ? "transcript.native.indexed.challenge"
-                               : "transcript.native.indexed.observe.data";
+    std::string contract =
+        !event.query  ? "transcript.native.indexed.observe.data"
+        : event.bound ? "transcript.native.indexed.index"
+                      : "transcript.native.indexed.challenge";
     SmallVector<Attribute> args{builder.getStringAttr(policy.suite)};
     if (!event.query)
       args.push_back(builder.getStringAttr(type->spelling()));
@@ -605,6 +630,12 @@ class Emitter {
     auto *body = function.addEntryBlock();
     builder.setInsertionPointToEnd(body);
     SmallVector<Value> operands(body->getArguments().take_front(dataInputs));
+    if (event.bound)
+      operands.push_back(
+          kernel("index.constant", binding("index.constant", {}), {},
+                 {event.payload}, "bound",
+                 {builder.getStringAttr(std::to_string(*event.bound))})
+              ->getResult(0));
     {
       auto indices = RankedTensorType::get({ShapedType::kDynamic},
                                            builder.getIntegerType(64, false));

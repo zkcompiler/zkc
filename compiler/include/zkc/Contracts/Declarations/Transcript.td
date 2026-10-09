@@ -9,6 +9,17 @@ def OpIndexedTranscriptChallenge : ZKC_Operation<"transcript.native.indexed.chal
   let facets = [ZKC_Sampling<TranscriptProvider, FieldSample, -1>, ZKC_History<0, 1>];
 }
 
+// UniformIndex(bound) from the same state. The bound is the static
+// power-of-two domain; the transition absorbs it before squeezing.
+def OpIndexedTranscriptIndexT : ZKC_Root<"T", TranscriptDomain>;
+def OpIndexedTranscriptIndex : ZKC_Operation<"transcript.native.indexed.index", [OpIndexedTranscriptIndexT],
+    [ZKC_Apply<TypeTranscript, [OpIndexedTranscriptIndexT]>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeTranscript, [OpIndexedTranscriptIndexT]>], [ZKC_Holds<CapabilityIndexTranscript, [OpIndexedTranscriptIndexT]>]> {
+  let stage = Construction;
+  let parameters = NativeOrigin;
+  let facets = [ZKC_Sampling<TranscriptProvider, IndexSample, 1>, ZKC_History<0, 1>];
+}
+
 // The payload type fixes the codec; it is not peer-selected.
 def IndexedDataTranscript : ZKC_Root<"T", TranscriptDomain>;
 def IndexedDataPayload : ZKC_Root<"D", TypeParameter>;
