@@ -83,6 +83,13 @@ impl<S> SparseCoo<S> {
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
         size(self.entries.len(), std::mem::size_of::<(u32, u32, S)>())
     }
+    /// The shared entry allocation, which holds the whole retained charge.
+    pub(crate) fn backing(&self) -> Result<zkc_runtime::interactive::Backing> {
+        Ok(zkc_runtime::interactive::Backing::of(
+            &self.entries,
+            self.retained_bytes()?,
+        ))
+    }
     pub(crate) fn policy(&self, p: &Policy) -> Result<()> {
         preflight::<S>(self.rows, self.columns, self.entries.len(), p)
     }

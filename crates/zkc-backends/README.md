@@ -65,6 +65,18 @@ resource slots. Setup work is `arity * 2^arity`. Sequence work counts
 External work adds hash calls, hashed bytes, permutations, observes and samples.
 These separate metrics do not bound global peak memory or wall-clock time.
 
+`Value` partitions its retained charge for the Runner's
+[retained-value ledgers](../../docs/spec/runtime/capacity.md#retained-values-and-logical-work).
+Each Arc-held vector, polynomial, path, root list, opening state, table, key,
+proof and sparse matrix is one shared allocation. Sequences, variants,
+opening-state lists and diagonal views report their own allocation and the
+allocations they retain. Field arrays and fixed vectors share their element
+allocation and charge their descriptor per binding. Inline scalars and
+capabilities belong to their binding. Validation reuse is offered only for
+capability-free values. Row openings, element and handle accessors and length
+queries declare their operand read extents; other kernels are charged their
+full operands.
+
 ## Native inputs and wire
 
 `encode_native_value` and `decode_native_value` are the single wire API. The

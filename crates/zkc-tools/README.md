@@ -50,7 +50,7 @@ programs share this model. Deployment admission requires explicit `SetupAuthorit
 operational ceilings, separate from the semantic binding root. Oversized limit
 requests refuse instead of being silently clamped; public limit types expose
 installed hard maxima and document their independent units. Capacity and
-attempt policy use `[instructions, iterations]` work pairs. Setup keys retain
+attempt policy use `[instructions, iterations, logical_bytes]` work triples. Setup keys retain
 authenticated registry authority; this crate does not infer setup authorization
 from source text or wire data.
 

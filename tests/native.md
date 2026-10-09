@@ -29,6 +29,7 @@ the producer's routine do not supply these independent comparisons.
 | Composition and relation binding | Original-input arithmetic references, same-shaped relation substitutions and actual terminal decisions |
 | Proof framing and setup | Independent producer/validator processes, malformed frames, public-context changes and unauthorized material |
 | Attempts | Retained provider state, failed prefixes, cumulative work and publication controls |
+| Retained storage and work | Aliases against equal independent allocations, views retaining parents, multiwidth base/extension commitments and stated budgets at 65,536 rows and 64 openings |
 
 Representative controls are linked below; their assertions define the exact
 cases checked. Arithmetic examples do not imply complete argument libraries
@@ -41,6 +42,7 @@ or external prover/verifier compatibility.
 | Relation identity and terminals | [Relation bindings](../compiler/test/native_relation_bindings.py) |
 | Proof messages and construction | [Structured proofs](../compiler/test/native_structured_proofs.py), [iteration](../compiler/test/native_iterated_proofs.py), [authored transcripts](../compiler/test/native_authored_transcripts.py) |
 | Retry and completion | [Attempt lifecycle](../compiler/test/native_attempts.py), [participant completion](../compiler/test/native_entry_completion.py) |
+| Retained storage and logical work | [Proof-scale openings](protocol/test_retained_storage.py), [native ledgers](../crates/zkc-backends/tests/retained_storage.rs), [Runner ledgers](../crates/zkc-runtime/src/interactive/tests/storage.rs) |
 
 ## Independent references and trust
 

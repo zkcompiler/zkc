@@ -17,9 +17,10 @@ pub struct Capacity {
     pub wire_bytes: usize,
     /// Retained bytes in one native value.
     pub value_bytes: usize,
-    /// Instructions and loop iterations per runner (cumulative for proof retries).
+    /// Instructions, loop iterations and logical work bytes per runner
+    /// (cumulative for proof retries).
     pub work: WorkBudget,
-    /// Live retained payload and cumulative allocation charge, in bytes.
+    /// Live retained payload and cumulative fresh allocation, in bytes.
     pub values: ValueBudget,
 }
 impl Default for Capacity {
@@ -45,6 +46,7 @@ impl Capacity {
         work: WorkBudget {
             instructions: Limits::INSTRUCTIONS,
             iterations: Limits::ITERATIONS,
+            logical_bytes: Limits::LOGICAL_BYTES,
         },
         values: ValueBudget {
             live_bytes: Limits::VALUE_BYTES,
@@ -58,6 +60,7 @@ impl Capacity {
             || self.value_bytes > Self::HARD_MAX.value_bytes
             || self.work.instructions > Self::HARD_MAX.work.instructions
             || self.work.iterations > Self::HARD_MAX.work.iterations
+            || self.work.logical_bytes > Self::HARD_MAX.work.logical_bytes
             || self.values.live_bytes > Self::HARD_MAX.values.live_bytes
             || self.values.total_bytes > Self::HARD_MAX.values.total_bytes
         {
@@ -92,7 +95,8 @@ impl Capacity {
             self.value_bytes.to_string(),
             [
                 self.work.instructions.to_string(),
-                self.work.iterations.to_string()
+                self.work.iterations.to_string(),
+                self.work.logical_bytes.to_string()
             ],
             [
                 self.values.live_bytes.to_string(),
@@ -109,7 +113,7 @@ impl Capacity {
         }
         let size =
             |v| usize::try_from(natural(v)?).map_err(|_| String::from("native-capacity-limit"));
-        let work = array(&row[5], 2)?;
+        let work = array(&row[5], 3)?;
         let values = array(&row[6], 2)?;
         let result = Self {
             elements: size(&row[1])?,
@@ -119,6 +123,7 @@ impl Capacity {
             work: WorkBudget {
                 instructions: natural(&work[0])?,
                 iterations: natural(&work[1])?,
+                logical_bytes: natural(&work[2])?,
             },
             values: ValueBudget {
                 live_bytes: size(&values[0])?,

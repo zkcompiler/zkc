@@ -62,14 +62,18 @@ stronger than a trip-count limit and is not the mathematical meaning of index.
 The native machine permits at most 100,000 total entered iterations across
 protocol and local loops and 1,000,000 executed instructions. Each executed
 operation, conditional, loop, yield and return costs one instruction. Each entered
-local region creates a backend child frame and charges its explicit inputs;
-a loop also charges its induction index. The native runner validates every
+local region creates a backend child frame and charges its explicit inputs under
+the [retained-value ledgers](../runtime/capacity.md#retained-values-and-logical-work):
+inputs that share storage with their parent add none. A loop also charges its
+induction index. The native runner validates every
 backend-created induction value against the installed index representation
 before entering the body. An untaken arm or zero-trip body creates
 no frame. Region cleanup releases its retained charges, and returned values are
 charged at the enclosing result bindings. Physical `release` has no instruction
-cost and retains the existing ghost-accounting rule. These are retained-payload
-charges, not measurements of actual allocator memory or constant-time execution.
+cost and retains the ghost-accounting rule: released storage stays charged until
+region cleanup, although a later allocation at a freed address is new storage.
+These are retained-payload charges, not measurements of actual allocator memory
+or constant-time execution.
 
 Native local calls and nested regions use the same frame
 lifecycle. A body stop remains primary when frame cleanup also fails; cleanup

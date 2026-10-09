@@ -2,6 +2,7 @@
 //! views; factors and values retain their complete immutable Arc slices.
 use crate::{Result, exhausted, refused, value::size};
 use std::sync::Arc;
+use zkc_runtime::interactive::Backing;
 #[derive(Clone, Debug)]
 pub struct Diagonal<S, B> {
     factors: Arc<[S]>,
@@ -23,10 +24,28 @@ impl<S, B> Diagonal<S, B> {
     pub(crate) fn retained_bytes(&self) -> Result<usize> {
         size(self.factors.len(), std::mem::size_of::<S>())?
             .checked_add(size(self.backing.len(), std::mem::size_of::<B>())?)
-            .and_then(|n| n.checked_add(256))
+            .and_then(|n| n.checked_add(VIEW_BYTES))
             .ok_or_else(|| exhausted("size-overflow"))
     }
+    /// The view's own allocation; it retains both parent slices in full.
+    pub(crate) fn view(view: &Arc<Self>) -> Backing {
+        Backing::of(view, VIEW_BYTES)
+    }
+    /// Report the view and, when it is newly retained, both parents.
+    pub(crate) fn retained_parts(
+        view: &Arc<Self>,
+        shared: &mut dyn FnMut(Backing) -> bool,
+    ) -> Result<usize> {
+        let factors = size(view.factors.len(), std::mem::size_of::<S>())?;
+        let backing = size(view.backing.len(), std::mem::size_of::<B>())?;
+        if shared(Self::view(view)) {
+            shared(Backing::of(&view.factors, factors));
+            shared(Backing::of(&view.backing, backing));
+        }
+        Ok(0)
+    }
 }
+const VIEW_BYTES: usize = 256;
 
 pub(crate) fn apply(
     i: &zkc_runtime::interactive::Invocation<'_>,
@@ -43,7 +62,9 @@ pub(crate) fn apply(
         ("arkworks-diagonal/vector.mul", [Vector(f), Vector(b)]) => {
             equal_len(f.len(), b.len())?;
             let d = Diagonal::new(f.clone(), b.clone())?;
-            p.output(d.retained_bytes()?, i.max_output_bytes)?;
+            // The view shares both operands; only the view itself is new.
+            p.output(d.retained_bytes()?, usize::MAX)?;
+            p.output(VIEW_BYTES, i.max_output_bytes)?;
             FrDiagonal(Arc::new(d))
         }
         ("arkworks-diagonal/vector.dot", [Vector(w), FrDiagonal(d)]) => {
@@ -59,7 +80,8 @@ pub(crate) fn apply(
         ("dalek-diagonal/curve.scale_each", [RistrettoVector(f), RistrettoGroups(b)]) => {
             equal_len(f.len(), b.len())?;
             let d = Diagonal::new(f.clone(), b.clone())?;
-            p.output(d.retained_bytes()?, i.max_output_bytes)?;
+            p.output(d.retained_bytes()?, usize::MAX)?;
+            p.output(VIEW_BYTES, i.max_output_bytes)?;
             RistrettoDiagonal(Arc::new(d))
         }
         ("dalek-diagonal/curve.msm", [RistrettoVector(w), RistrettoDiagonal(d)]) => {

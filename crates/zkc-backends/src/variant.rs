@@ -2,7 +2,7 @@
 //! never issues authority and frame admission still authenticates every leaf.
 use crate::{Result, Value, refused};
 use std::sync::Arc;
-use zkc_runtime::interactive::{PhysicalType, Value as RuntimeValue, VariantDescriptor};
+use zkc_runtime::interactive::{Backing, PhysicalType, Value as RuntimeValue, VariantDescriptor};
 
 #[derive(Clone, Debug)]
 pub struct Variant {
@@ -10,6 +10,11 @@ pub struct Variant {
     descriptor: Arc<VariantDescriptor>,
     alternative: usize,
     payload: Arc<[Value]>,
+    /// Charge of the payload allocation: descriptor, header, payload slots and
+    /// storage the payload keeps inline. Payload allocations are separate.
+    spine: usize,
+    /// No active leaf carries a capability.
+    resource_free: bool,
 }
 impl Variant {
     pub fn new(
@@ -21,14 +26,43 @@ impl Variant {
             zkc_runtime::interactive::LogicalType::variant(descriptor.clone()),
         )
         .map_err(|_| refused("variant-payload-representation"))?;
+        let inline = payload.iter().try_fold(0usize, |sum, value| {
+            sum.checked_add(value.retained_parts(&mut |_| false))
+        });
+        let spine = inline
+            .and_then(|bytes| Self::storage_bytes(&descriptor, payload.len(), bytes))
+            .unwrap_or(usize::MAX);
+        let resource_free = payload.iter().all(Value::is_resource_free);
         let value = Self {
             physical_type,
             descriptor,
             alternative,
             payload: payload.into(),
+            spine,
+            resource_free,
         };
         value.validate()?;
         Ok(value)
+    }
+    /// Report the payload allocation and, when it is newly retained, the
+    /// payload's own allocations.
+    pub(crate) fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
+        if shared(self.spine()) {
+            for value in self.payload.iter() {
+                value.retained_parts(shared);
+            }
+        }
+        0
+    }
+    fn spine(&self) -> Backing {
+        Backing::of(&self.payload, self.spine)
+    }
+    /// Contents fix validation only when no capability can be retired later.
+    pub(crate) fn validation_backing(&self) -> Option<Backing> {
+        self.resource_free.then(|| self.spine())
+    }
+    pub(crate) fn is_resource_free(&self) -> bool {
+        self.resource_free
     }
     pub(crate) fn physical_type(&self) -> &PhysicalType {
         &self.physical_type

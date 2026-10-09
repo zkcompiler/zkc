@@ -2,8 +2,8 @@
 use crate::{Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
 use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Invocation, KernelSignature, LogicalType, OperationBinding,
-    PhysicalType, Value as RuntimeValue,
+    AttributeRule, Backing, BoundSignature, Invocation, KernelSignature, LogicalType,
+    OperationBinding, PhysicalType, Value as RuntimeValue,
 };
 
 const _: () = assert!(std::mem::size_of::<Value>() <= 512);
@@ -47,10 +47,25 @@ pub struct Sequence {
     elements: Arc<[Value]>,
     nodes: usize,
     bytes: usize,
+    /// Charge of the element allocation itself: its header, element slots and
+    /// storage the elements keep inline. Elements' own allocations are separate.
+    spine: usize,
+    /// No element, at any depth, carries a capability.
+    resource_free: bool,
 }
 
 fn add(a: usize, b: usize) -> Result<usize> {
     a.checked_add(b).ok_or_else(|| exhausted("sequence-size"))
+}
+struct Measured {
+    nodes: usize,
+    bytes: usize,
+    spine: usize,
+    resource_free: bool,
+}
+/// Storage a value keeps in its own slot rather than in a shared allocation.
+fn inline(value: &Value) -> usize {
+    value.retained_parts(&mut |_| false)
 }
 fn nodes(value: &Value) -> Result<usize> {
     match value {
@@ -68,25 +83,23 @@ impl Sequence {
         .map_err(|_| refused("sequence-representation"))?;
         let element_type =
             PhysicalType::default_for(element).map_err(|_| refused("sequence-element"))?;
-        let (nodes, bytes) = Self::measure(&physical_type, &element_type, &values)?;
-        policy.vector_width(nodes, 512)?;
+        let measured = Self::measure(&physical_type, &element_type, &values)?;
+        policy.vector_width(measured.nodes, 512)?;
         // Vec and the exact Arc allocation may coexist during conversion.
         policy.output(
-            add(bytes, crate::value::size(values.len(), 512)?)?,
+            add(measured.bytes, crate::value::size(values.len(), 512)?)?,
             usize::MAX,
         )?;
         Ok(Self {
             physical_type,
             elements: values.into(),
-            nodes,
-            bytes,
+            nodes: measured.nodes,
+            bytes: measured.bytes,
+            spine: measured.spine,
+            resource_free: measured.resource_free,
         })
     }
-    fn measure(
-        ty: &PhysicalType,
-        element: &PhysicalType,
-        values: &[Value],
-    ) -> Result<(usize, usize)> {
+    fn measure(ty: &PhysicalType, element: &PhysicalType, values: &[Value]) -> Result<Measured> {
         let mut count = 1;
         let mut bytes = add(256, ty.logical().descriptor_bytes())?;
         bytes = add(
@@ -96,14 +109,43 @@ impl Sequence {
                 .checked_mul(512)
                 .ok_or_else(|| exhausted("sequence-size"))?,
         )?;
+        let mut spine = bytes;
+        let mut resource_free = true;
         for value in values {
             if value.physical_type() != *element {
                 return Err(refused("sequence-element"));
             }
             count = add(count, nodes(value)?)?;
             bytes = add(bytes, value.retained_bytes())?;
+            spine = add(spine, inline(value))?;
+            resource_free &= value.is_resource_free();
         }
-        Ok((count, bytes))
+        Ok(Measured {
+            nodes: count,
+            bytes,
+            spine,
+            resource_free,
+        })
+    }
+    /// Report the element allocation and, when it is newly retained, each
+    /// element's own allocations. Element slots belong to this allocation.
+    pub(crate) fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
+        if shared(self.spine()) {
+            for element in self.elements.iter() {
+                element.retained_parts(shared);
+            }
+        }
+        0
+    }
+    fn spine(&self) -> Backing {
+        Backing::of(&self.elements, self.spine)
+    }
+    /// Contents fix validation only when no capability can be retired later.
+    pub(crate) fn validation_backing(&self) -> Option<Backing> {
+        self.resource_free.then(|| self.spine())
+    }
+    pub(crate) fn is_resource_free(&self) -> bool {
+        self.resource_free
     }
     pub fn elements(&self) -> &[Value] {
         &self.elements
@@ -152,23 +194,34 @@ pub(crate) fn apply(
     invocation: &Invocation<'_>,
     policy: &Policy,
 ) -> Result<Vec<Value>> {
-    let result = match (name, args) {
-        ("sequence.empty", []) => Value::Sequence(Sequence::new(
-            invocation.binding.signature().outputs[0]
-                .logical()
-                .sequence_element()
-                .ok_or_else(|| refused("sequence-type"))?
-                .clone(),
-            vec![],
-            policy,
-        )?),
-        ("sequence.length", [Value::Sequence(v)]) => Value::Index(v.elements.len() as u64),
+    // Each arm states the storage it newly allocates; shared storage is not new.
+    let (result, allocated) = match (name, args) {
+        ("sequence.empty", []) => {
+            let empty = Value::Sequence(Sequence::new(
+                invocation.binding.signature().outputs[0]
+                    .logical()
+                    .sequence_element()
+                    .ok_or_else(|| refused("sequence-type"))?
+                    .clone(),
+                vec![],
+                policy,
+            )?);
+            let bytes = empty.retained_bytes();
+            (empty, bytes)
+        }
+        ("sequence.length", [Value::Sequence(v)]) => {
+            let length = Value::Index(v.elements.len() as u64);
+            let bytes = length.retained_bytes();
+            (length, bytes)
+        }
         ("sequence.at", [Value::Sequence(v), Value::Index(i)]) => {
             let index = usize::try_from(*i).map_err(|_| refused("sequence-index"))?;
-            v.elements
+            let element = v
+                .elements
                 .get(index)
                 .ok_or_else(|| refused("sequence-index"))?
-                .clone()
+                .clone();
+            (element, 0)
         }
         ("sequence.append", [Value::Sequence(v), element]) => {
             let logical = v.physical_type.logical();
@@ -184,12 +237,14 @@ pub(crate) fn apply(
             }
             let count = add(v.nodes, nodes(element)?)?;
             let bytes = add(add(v.bytes, 512)?, element.retained_bytes())?;
+            let spine = add(add(v.spine, 512)?, inline(element))?;
             policy.vector_width(count, 512)?;
             let length = add(v.elements.len(), 1)?;
-            // Old input, new Vec and new Arc can all be live. The charge is
-            // independent of refcounts and precedes cloning or allocation.
+            policy.output(bytes, usize::MAX)?;
+            // The new Vec and Arc of element slots can both be live; elements
+            // and the old sequence are shared. This precedes any allocation.
             policy.output(
-                add(add(v.bytes, bytes)?, crate::value::size(length, 512)?)?,
+                add(spine, crate::value::size(length, 512)?)?,
                 invocation.max_output_bytes,
             )?;
             let mut values = Vec::new();
@@ -200,16 +255,20 @@ pub(crate) fn apply(
             values.push(element.clone());
             // The immutable prefix already owns exact cached charges. Only
             // the added element changes them; do not measure the prefix again.
-            Value::Sequence(Sequence {
+            let appended = Value::Sequence(Sequence {
                 physical_type: v.physical_type.clone(),
                 elements: values.into(),
                 nodes: count,
                 bytes,
-            })
+                spine,
+                resource_free: v.resource_free && element.is_resource_free(),
+            });
+            (appended, 0)
         }
         _ => return Err(refused("kernel-operands")),
     };
-    policy.output(result.retained_bytes(), invocation.max_output_bytes)?;
+    policy.output(result.retained_bytes(), usize::MAX)?;
+    policy.output(allocated, invocation.max_output_bytes)?;
     Ok(vec![result])
 }
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[

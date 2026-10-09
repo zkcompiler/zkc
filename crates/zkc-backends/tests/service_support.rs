@@ -219,6 +219,10 @@ fn excessive_work_budget_refuses_before_leasing_and_retains_backend_custody() {
             iterations: Limits::ITERATIONS + 1,
             ..WorkBudget::default()
         },
+        WorkBudget {
+            logical_bytes: Limits::LOGICAL_BYTES + 1,
+            ..WorkBudget::default()
+        },
     ] {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
@@ -259,6 +263,7 @@ fn excessive_work_budget_refuses_before_leasing_and_retains_backend_custody() {
             WorkBudget {
                 instructions: 0,
                 iterations: 0,
+                logical_bytes: 0,
             },
         )
         .unwrap_or_else(|e| panic!("{}", e.error));

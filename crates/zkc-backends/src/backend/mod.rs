@@ -4,6 +4,7 @@ mod policy;
 pub(crate) mod registry;
 mod resource_unit;
 mod validation;
+mod work;
 use crate::SetupRegistry;
 use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
 pub use policy::{EntryPolicy, PortConstraint};
@@ -339,6 +340,9 @@ impl Backend for NativeBackend {
             services.leave();
         }
         validation.and(cleanup)
+    }
+    fn operand_work(&self, i: &Invocation<'_>, args: &[Value]) -> Option<u64> {
+        work::operand_work(&i.binding.declaration().contract, args)
     }
     fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
         self.core.resources.active(i.frame)?;

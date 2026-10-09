@@ -154,10 +154,11 @@ participant before agreement testing. Header checks follow roster order and
 stop at the first local failure; later roles are not inspected after that stop. If all are valid but disagree, the driver
 reports a contract failure without body entry. Zero skips the body and yields its
 initial state; otherwise induction runs from zero to count minus one. Child loop
-frames borrow immutable captures from their parent; retained-value accounting
-charges the full retained bytes of each parent/child view, including shared
-backing, once per frame/iteration. The destination stores names, not another
-retained payload. Live service leases
+frames borrow immutable captures from their parent. Under the
+[retained-value ledgers](capacity.md#retained-values-and-logical-work) a borrowed
+capture adds no storage; its shared allocations stay charged once while any
+binding retains them, and inline values are charged per frame/iteration. The
+destination stores names, not another retained payload. Live service leases
 belong to the entry and survive inner frame return.
 
 Reports, transfer hooks and cancellation checks include the complete outer-to-inner
@@ -249,11 +250,12 @@ Default driver caps are 32768 dispatches, 4096 bytes per wire payload or hook
 replacement, and 16 MiB accumulated original plus replacement bytes. Hosts may
 lower these caps. `ValueBudget` separately controls runner retention; the joint
 driver requires its live and cumulative charges to fit 64 MiB and 256 MiB.
-`RunLimits.work` separately selects instruction/iteration ceilings. Requests above
+`RunLimits.work` separately selects instruction, iteration and logical-work
+ceilings, the last at most 4 GiB. Requests above
 any installed driver ceiling refuse before entry and preserve caller-owned inputs.
 `Report.limits` records the requested policy without silent clamping. The lower-level
-`Runner` refuses instruction/iteration allowances above its hard ceilings but
-permits configurable live and cumulative retained-value budgets. Its 64 MiB
+`Runner` refuses instruction, iteration and logical-work allowances above its hard
+ceilings but permits configurable live and cumulative retained-value budgets. Its 64 MiB
 individual-value ceiling remains independent of those aggregate budgets.
 The driver reserves reached-step and result-port capacity before any entry.
 Cancellation includes the bounded host reason and can occur between send and
@@ -348,8 +350,9 @@ cannot be multiplied by splitting data across payload children.
 
 Both adapters check selected setup associations recursively, backend value
 validity, entry constraints and invocation-wide retained/work limits before
-issuance. Native data incurs its retained charge even when immutable backing is
-shared; wire data also incurs scan/decode work. Wire-byte limits apply to encoded
+issuance. Native data incurs its loading charge even when immutable backing is
+shared; wire data also incurs scan/decode work. Inside each runner, entry
+retention charges shared storage once. Wire-byte limits apply to encoded
 data, while value/collection limits apply to both forms. A native value need not
 fit an unused wire buffer. All authorized setup material, including receive-only
 keys, incurs scan work before import and a retained charge. Prepared calls own
@@ -416,8 +419,9 @@ and 16 MiB cumulative native wire bytes, with 16777216 external-kernel work unit
 per role. Both API and CLI refuse requests above these ceilings without clamping.
 Structural bundle and native-capacity requests likewise refuse above their own
 installed bounds. Reports retain the requested admission, capacity and execution
-limits. Per-runner instruction, iteration and retained-value budgets are
-separate from structural schedule size and runtime dispatch occurrences.
+limits. Per-runner instruction, iteration, logical-work and retained-value
+budgets are separate from structural schedule size and runtime dispatch
+occurrences.
 
 `zkc.bundle-result/0` retains the primary outcome, reached schedule, pending-wire
 metadata, role states before/after cancellation, outputs, usage and backend work.

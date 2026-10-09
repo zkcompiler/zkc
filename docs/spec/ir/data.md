@@ -61,12 +61,17 @@ This representation is bounded; it makes no throughput claim.
 
 Each sequence caches its expanded node count and conservative retained-byte
 charge. Count the sequence root, every nested variant/sequence occurrence and each leaf;
-sharing does not reduce either charge. The current storage estimate is 256
+sharing does not reduce either charge. Runner
+[retained-value ledgers](../runtime/capacity.md#retained-values-and-logical-work)
+separately count the element slice and each element's allocations once while
+they are retained. The current storage estimate is 256
 wrapper bytes, the complete logical descriptor estimate, 512 bytes per element
 slot, and each element's retained charge. Formation checks exact element physical
 types. Construction checks counts before inspecting elements, then checks peak
-storage before copying into the immutable slice. Append also charges coexistence
-of its old input, new vector and new slice before allocation.
+storage before copying into the immutable slice. Before allocation, append checks
+the complete result against the per-value ceiling and its new vector and slice
+of element slots against the invocation allowance; the old input and elements
+are shared.
 
 Expanded nodes use `Policy.max_table_elements`; bytes use the existing value-byte
 policy. A zero node budget cannot hold an empty sequence. A backend additionally

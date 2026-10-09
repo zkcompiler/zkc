@@ -1,5 +1,5 @@
 use super::model::LogicalOrigin;
-use super::{BoundSignature, OperationBinding, Origin, PhysicalType, ResolvedBinding};
+use super::{Backing, BoundSignature, OperationBinding, Origin, PhysicalType, ResolvedBinding};
 use std::{fmt, sync::Arc};
 
 /// Trusted adapter value, preferably an enum of typed immutable/Arc-backed values.
@@ -48,7 +48,25 @@ pub trait Value: Clone {
     /// A private key/capability disguised as a public value must fail here.
     fn validate_serializable(&self) -> Result<(), BackendError>;
     /// Conservative retained payload bytes; count shared backing in full.
+    /// This full charge bounds one value and measures logical operand work.
     fn retained_bytes(&self) -> usize;
+    /// Partition `retained_bytes` into storage owned by this binding alone
+    /// (returned) and immutable allocations it shares, reported to `shared`
+    /// with [`Backing::of`]. When `shared` returns true, also report the
+    /// allocations that allocation itself retains, recursively; inline storage
+    /// inside a shared allocation belongs to that allocation's charge. With all
+    /// allocations distinct, the reported bytes sum to `retained_bytes`.
+    /// The default reports no sharing, so every binding is charged in full.
+    fn retained_parts(&self, _shared: &mut dyn FnMut(Backing) -> bool) -> usize {
+        self.retained_bytes()
+    }
+    /// An allocation whose immutable contents, together with the physical type,
+    /// alone determine backend validation of this value. Return it only for
+    /// values carrying no capability or other changeable authority. The Runner
+    /// then reuses one successful validation for aliases bound at the same time.
+    fn validation_backing(&self) -> Option<Backing> {
+        None
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,7 +153,9 @@ pub struct Invocation<'a> {
     pub logical_origin: &'a LogicalOrigin,
     pub attributes: &'a [String],
     /// Backend must check allocation/shape bounds before allocating its result.
-    /// This is an output payload ceiling, not a reservation of external PCS scratch.
+    /// This bounds newly allocated result storage; storage a result shares with
+    /// its operands is already retained. It is not a reservation of external
+    /// PCS scratch. The Runner still checks the full charge of each result.
     pub max_output_bytes: usize,
 }
 impl Invocation<'_> {
@@ -235,6 +255,17 @@ pub trait Backend {
         exit: FrameExit,
         outputs: &[Self::Value],
     ) -> Result<(), BackendError>;
+    /// Upper bound on the operand bytes this installed implementation reads,
+    /// for kernels that access only part of their operands, such as one opening
+    /// of a committed table. The Runner charges it as logical work before
+    /// `apply`. `None` charges the full retained bytes of every operand.
+    fn operand_work(
+        &self,
+        _invocation: &Invocation<'_>,
+        _arguments: &[Self::Value],
+    ) -> Option<u64> {
+        None
+    }
     fn apply(
         &mut self,
         invocation: &Invocation<'_>,

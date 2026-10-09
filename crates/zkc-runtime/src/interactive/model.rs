@@ -27,8 +27,11 @@ impl Limits {
     pub const LIVE_VALUES: usize = 16_384;
     /// Hard per-value ceiling and default live-value budget.
     pub const VALUE_BYTES: usize = 64 * 1024 * 1024;
-    /// Default cumulative retained-value budget; callers may configure another value.
+    /// Default cumulative fresh-allocation budget; callers may configure another value.
     pub const TOTAL_VALUE_BYTES: usize = 256 * 1024 * 1024;
+    /// Hard and default cumulative logical-work ceiling: operand bytes read and
+    /// result bytes allocated by kernels and services, charged at every use.
+    pub const LOGICAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

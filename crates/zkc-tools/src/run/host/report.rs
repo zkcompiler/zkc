@@ -139,7 +139,8 @@ impl HostReport {
                 }).collect::<Vec<_>>();
                 json!({"role":role.role,"before":state(&role.before),"after":state(&role.after),"cancelled":role.cancelled,
                     "usage":role.usage.map(|u|json!({"instructions":u.instructions,"iterations":u.iterations,
-                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes})),
+                        "live_values":u.live_values,"live_value_bytes":u.live_value_bytes,"total_value_bytes":u.total_value_bytes,
+                        "logical_bytes":u.logical_bytes})),
                     "external_work":backend.external_work_spent(),"ring_work":backend.ring_work_spent(),"active_frames":backend.active_frames(),
                     "live_resource_units":backend.live_resource_units(),"retained_output_units":unit_count(&role.outputs),"outputs":if include_outputs {Some(outputs)} else {None},
                     "return_at":role.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s}))})

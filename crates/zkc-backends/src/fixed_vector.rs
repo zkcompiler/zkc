@@ -2,7 +2,7 @@
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
 use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
+    AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Representation, Type,
 };
 
@@ -43,12 +43,24 @@ impl FixedVector {
         // Includes the small, fixed-shape field/N descriptor and shared storage.
         bytes(self.elements.len())
     }
+    /// Element storage, shared with the vector it converts from or to; the
+    /// descriptor charge belongs to each binding.
+    pub(crate) fn backing(&self) -> Result<Backing> {
+        Ok(Backing::of(
+            &self.elements,
+            crate::value::size(self.elements.len(), 4)?,
+        ))
+    }
 }
 
+const DESCRIPTOR_BYTES: usize = 1024;
 fn bytes(length: usize) -> Result<usize> {
     crate::value::size(length, 4)?
-        .checked_add(1024)
+        .checked_add(DESCRIPTOR_BYTES)
         .ok_or_else(|| exhausted("output-bytes"))
+}
+pub(crate) fn owned_bytes() -> usize {
+    DESCRIPTOR_BYTES
 }
 
 /// Independent native advertisement; never call the runtime operation resolver.
@@ -95,7 +107,9 @@ pub(crate) fn apply(
 ) -> Result<Vec<Value>> {
     let value = match (name, args) {
         ("fixed_vector.from_vector", [Value::KoalaBearVector(elements)]) => {
-            policy.output(bytes(elements.len())?, invocation.max_output_bytes)?;
+            // The fixed vector shares the elements; only its descriptor is new.
+            policy.output(bytes(elements.len())?, usize::MAX)?;
+            policy.output(DESCRIPTOR_BYTES, invocation.max_output_bytes)?;
             Value::FixedVector(FixedVector::new(
                 invocation.binding.signature().outputs[0].logical(),
                 elements.clone(),
@@ -103,10 +117,8 @@ pub(crate) fn apply(
         }
         ("fixed_vector.to_vector", [Value::FixedVector(value)]) => {
             value.validate()?;
-            policy.output(
-                crate::value::size(value.elements.len(), 4)?,
-                invocation.max_output_bytes,
-            )?;
+            // The vector shares the existing elements; nothing new is allocated.
+            policy.output(crate::value::size(value.elements.len(), 4)?, usize::MAX)?;
             Value::KoalaBearVector(value.elements.clone())
         }
         ("fixed_vector.dot", [Value::FixedVector(a), Value::FixedVector(b)]) => {

@@ -736,12 +736,14 @@ impl NativeProofReport {
         report["external_work_limit"] = json!(self.external_work_limit);
         report["iterations"] = json!(self.usage.iterations);
         report["total_value_bytes"] = json!(self.usage.total_value_bytes);
+        report["logical_bytes"] = json!(self.usage.logical_bytes);
         report["attempts"] = json!(self.attempts.iter().map(|r| json!({
             "attempt":r.attempt, "decision":match &r.decision {
                 Ok(true)=>"complete", Ok(false)=>"retry", Err(_)=>"stopped"},
             "error":r.decision.as_ref().err(), "messages":r.messages,"bytes":r.bytes,
             "instructions":r.usage.instructions,"iterations":r.usage.iterations,
-            "total_value_bytes":r.usage.total_value_bytes,"transcript":r.transcript,
+            "total_value_bytes":r.usage.total_value_bytes,"logical_bytes":r.usage.logical_bytes,
+            "transcript":r.transcript,
             "external_work":r.external_work,
             "ring_work":r.ring_work,
             "return_at":r.return_at.as_ref().map(|(o,s)|json!({"origin":o.json(),"site":s})),

@@ -30,8 +30,10 @@ Both APIs preserve role, session, entry and dynamic occurrence separation.
 A rejected cut does not advance the role. Cancellation and failure close frames
 in reverse entry order; completed backend effects are never rolled back.
 
-Value retention, instruction work, iterations and stack depth have independent
-limits. Loading failures return backend custody. A stopped or completed runner
+Value retention, instruction work, iterations, logical work and stack depth have
+independent limits. Retention counts each shared immutable allocation a value
+reports once while bound; operands are charged as logical work at every use.
+Loading failures return backend custody. A stopped or completed runner
 cannot be reused as a fresh proof execution. Inspection does not consume values.
 
 `operations/` assembles independently authored logical contracts and physical

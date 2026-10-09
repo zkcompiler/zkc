@@ -4,7 +4,7 @@ use zkc_arkworks::{
     Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
 };
 use zkc_runtime::interactive::{
-    Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
+    Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };
 
 /// Explicit per-value, transport and service-store execution ceilings.
@@ -584,6 +584,76 @@ impl Value {
             Self::wire_retained_bytes_bound(ty.kind(), wire_len, policy)
         }
     }
+    /// No capability is carried, directly or by any active nested value.
+    pub(crate) fn is_resource_free(&self) -> bool {
+        match self {
+            Self::Sequence(v) => v.is_resource_free(),
+            Self::Variant(v) => v.is_resource_free(),
+            other => other.capability().is_none(),
+        }
+    }
+    /// The one immutable allocation holding this leaf's whole retained charge.
+    /// Inline scalars and capabilities have none; composites report parts.
+    fn leaf_backing(&self) -> Option<Backing> {
+        let bytes = self.retained_bytes();
+        Some(match self {
+            Self::OraclePath(_, p) | Self::OracleRoots(_, p) => Backing::of(p, bytes),
+            Self::OracleState(s) => s.backing().ok()?,
+            Self::Bn254Matrix(m) => m.backing().ok()?,
+            Self::Matrix(m) => m.backing().ok()?,
+            Self::RistrettoMatrix(m) => m.backing().ok()?,
+            Self::KoalaBearMatrix(m) => m.backing().ok()?,
+            Self::KoalaBearExt8Matrix(m) => m.backing().ok()?,
+            Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
+            Self::Bn254G1Vector(v) => Backing::of(v, bytes),
+            Self::Bn254G2Vector(v) => Backing::of(v, bytes),
+            Self::Indices(v) => Backing::of(v, bytes),
+            Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => {
+                Backing::of(v, bytes)
+            }
+            Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => Backing::of(v, bytes),
+            Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => Backing::of(v, bytes),
+            Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => Backing::of(v, bytes),
+            Self::RistrettoGroups(v) => Backing::of(v, bytes),
+            Self::Groups(v) => Backing::of(v, bytes),
+            Self::Table(t) => Backing::of(t, bytes),
+            Self::TableMsb(t) => Backing::of(t, bytes),
+            Self::OpeningState(s) => Backing::of(s, bytes),
+            Self::Proof(p) => Backing::of(p, bytes),
+            Self::ProverKey(k) => Backing::of(k, bytes),
+            Self::VerifierKey(k) => Backing::of(k, bytes),
+            Self::Commitment(c) => Backing::of(c, bytes),
+            Self::Sequence(_)
+            | Self::Variant(_)
+            | Self::FieldArray(_)
+            | Self::FixedVector(_)
+            | Self::FrDiagonal(_)
+            | Self::RistrettoDiagonal(_)
+            | Self::OracleStates(..)
+            | Self::ResourceUnit(_)
+            | Self::Bn254Field(_)
+            | Self::Bn254Round(_)
+            | Self::Bn254G1(_)
+            | Self::Bn254Gt(_)
+            | Self::Bn254G2(_)
+            | Self::OracleRoot(..)
+            | Self::Index(_)
+            | Self::KoalaBearExt8Field(_)
+            | Self::KoalaBearExt8Round(_)
+            | Self::KoalaBearField(_)
+            | Self::KoalaBearRound(_)
+            | Self::RistrettoField(_)
+            | Self::RistrettoRound(_)
+            | Self::RistrettoGroup(_)
+            | Self::Field(_)
+            | Self::Round(_)
+            | Self::Bool(_)
+            | Self::Rng(_)
+            | Self::Nonce(_)
+            | Self::Transcript(_)
+            | Self::Curve(_) => return None,
+        })
+    }
     pub(crate) fn capability(&self) -> Option<&Capability> {
         match self {
             Self::ResourceUnit(t) => Some(t.capability()),
@@ -821,6 +891,50 @@ impl RuntimeValue for Value {
         }
         .unwrap_or(usize::MAX)
     }
+    fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
+        // A value whose conservative charge cannot be computed stays unshared;
+        // its maximal charge refuses retention.
+        if self.retained_bytes() == usize::MAX {
+            return usize::MAX;
+        }
+        let parts = match self {
+            Self::Sequence(v) => Ok(v.retained_parts(shared)),
+            Self::Variant(v) => Ok(v.retained_parts(shared)),
+            Self::FieldArray(v) => v.backing().map(|backing| {
+                shared(backing);
+                crate::field_array::owned_bytes()
+            }),
+            Self::FixedVector(v) => v.backing().map(|backing| {
+                shared(backing);
+                crate::fixed_vector::owned_bytes()
+            }),
+            Self::FrDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
+            Self::RistrettoDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
+            Self::OracleStates(_, states) => crate::oracle::states_parts(states, shared),
+            leaf => Ok(match leaf.leaf_backing() {
+                Some(backing) => {
+                    shared(backing);
+                    0
+                }
+                None => leaf.retained_bytes(),
+            }),
+        };
+        parts.unwrap_or(usize::MAX)
+    }
+    fn validation_backing(&self) -> Option<Backing> {
+        // Validation of these values depends only on immutable contents, the
+        // backend's fixed policy and setup registry, and the physical type.
+        match self {
+            Self::Sequence(v) => v.validation_backing(),
+            Self::Variant(v) => v.validation_backing(),
+            Self::FieldArray(v) => v.backing().ok(),
+            Self::FixedVector(v) => v.backing().ok(),
+            Self::FrDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
+            Self::RistrettoDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
+            Self::OracleStates(_, states) => crate::oracle::states_list(states).ok(),
+            leaf => leaf.leaf_backing(),
+        }
+    }
 }
 
 // Central payload charge shared by runtime accounting and pre-import bounds.
@@ -1037,5 +1151,148 @@ mod custody_traversal_tests {
             .visit_active_leaves(&mut |leaf| native.validate_value(leaf))
             .unwrap_err();
         assert_eq!(error.code, "refused:capability-unissued");
+    }
+}
+
+#[cfg(test)]
+mod retained_parts_tests {
+    use super::*;
+    use serde_json::json;
+    use std::collections::HashSet;
+
+    /// Owned bytes and distinct allocations, as one first retention reports them.
+    fn parts(value: &Value) -> (usize, Vec<Backing>) {
+        let mut seen = HashSet::new();
+        let mut shared = vec![];
+        let owned = value.retained_parts(&mut |backing| {
+            let new = seen.insert(backing);
+            if new {
+                shared.push(backing);
+            }
+            new
+        });
+        (owned, shared)
+    }
+    fn charged(value: &Value) -> usize {
+        let (owned, shared) = parts(value);
+        owned + shared.iter().map(Backing::bytes).sum::<usize>()
+    }
+    fn pack(name: &str, values: Vec<Value>) -> Value {
+        let types: Vec<_> = values
+            .iter()
+            .map(|v| v.physical_type().logical().spelling())
+            .collect();
+        let logical = LogicalType::parse(&zkc_test_support::variants::logical(
+            name,
+            json!([["inactive", []], ["active", types]]),
+        ))
+        .unwrap();
+        Value::pack_variant(logical.variant_descriptor().unwrap().clone(), 1, values).unwrap()
+    }
+    fn sequence(values: Vec<Value>) -> Value {
+        let element = values[0].physical_type().logical().clone();
+        Value::Sequence(crate::Sequence::new(element, values, &Policy::default()).unwrap())
+    }
+
+    #[test]
+    fn parts_partition_the_full_charge_and_identify_allocations_not_contents() {
+        let ext: Arc<[crate::KoalaBearExt8]> =
+            vec![crate::KoalaBearExt8::from(crate::KoalaBear::new(2)); 16].into();
+        let vector = Value::KoalaBearExt8Vector(ext.clone());
+        let equal = Value::KoalaBearExt8Vector(ext.to_vec().into());
+        // Equal contents in a separate allocation are a different backing.
+        assert_ne!(parts(&vector).1, parts(&equal).1);
+        assert_eq!(parts(&vector).1, parts(&vector.clone()).1);
+        let scalars: Arc<[Scalar]> = vec![Scalar::from(3); 8].into();
+        let other: Arc<[Scalar]> = vec![Scalar::from(3); 8].into();
+        let diagonal = Value::FrDiagonal(Arc::new(
+            crate::diagonal::Diagonal::new(scalars.clone(), other.clone()).unwrap(),
+        ));
+        let array = Value::FieldArray(
+            crate::FieldArray::new(
+                LogicalType::field_array(Identity::Bls12381Fr, 8).unwrap(),
+                scalars.clone(),
+            )
+            .unwrap(),
+        );
+        let shape = crate::plonky3::oracle::Shape::new(2, 8, 1 << 20).unwrap();
+        let (_, tree) = crate::plonky3::oracle::commit(ext.to_vec(), shape, 1 << 26).unwrap();
+        let state = crate::oracle::State::Extension(Arc::new(tree));
+        let states = Value::OracleStates(
+            crate::oracle::Domain::Extension,
+            vec![state.clone(), state.clone()].into(),
+        );
+        let distinct = [
+            vector.clone(),
+            Value::Vector(scalars.clone()),
+            diagonal.clone(),
+            array.clone(),
+            Value::OracleState(state.clone()),
+            Value::Index(4),
+            sequence(vec![Value::Index(1), Value::Index(2)]),
+            sequence(vec![vector.clone(), equal.clone()]),
+            pack("Pair", vec![vector.clone(), Value::Index(1)]),
+        ];
+        for value in &distinct {
+            assert_eq!(charged(value), value.retained_bytes(), "{:?}", value.ty());
+        }
+        // A view retains both parents in full; an array shares its vector's elements.
+        let vector_backing = parts(&Value::Vector(scalars.clone())).1[0];
+        assert!(parts(&diagonal).1.contains(&vector_backing));
+        assert!(
+            parts(&diagonal)
+                .1
+                .contains(&parts(&Value::Vector(other)).1[0])
+        );
+        assert_eq!(parts(&array).1, [vector_backing]);
+        // Repeated allocations inside one value are charged once.
+        let state_backing = parts(&Value::OracleState(state)).1[0];
+        assert_eq!(parts(&states).1[1..], [state_backing]);
+        assert!(charged(&states) < states.retained_bytes());
+        let repeated = sequence(vec![vector.clone(), vector.clone()]);
+        assert_eq!(
+            charged(&repeated) + vector.retained_bytes(),
+            repeated.retained_bytes()
+        );
+        // Nested parts are reported only when the enclosing allocation is new.
+        let mut reported = 0;
+        repeated.retained_parts(&mut |_| {
+            reported += 1;
+            false
+        });
+        assert_eq!(reported, 1);
+    }
+
+    #[test]
+    fn validation_reuse_is_offered_only_without_capabilities() {
+        let mut native = crate::NativeBackend::new(
+            Policy::default(),
+            crate::EntryPolicy::new(crate::Domain::new("P", "s", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let rng = native
+            .issue_rng_for(
+                Identity::Bls12381Fr,
+                crate::Domain::new("P", "s", "main", None),
+                1,
+            )
+            .unwrap();
+        assert_eq!(rng.validation_backing(), None);
+        let plain = pack("Plain", vec![Value::Index(1), Value::Bool(true)]);
+        let resourced = pack("Resourced", vec![Value::Index(1), rng]);
+        assert!(plain.validation_backing().is_some());
+        assert_eq!(resourced.validation_backing(), None);
+        assert!(
+            sequence(vec![plain.clone(), plain])
+                .validation_backing()
+                .is_some()
+        );
+        // Sequences cannot hold capabilities at all.
+        let element = resourced.physical_type().logical().clone();
+        assert!(crate::Sequence::new(element, vec![resourced], &Policy::default()).is_err());
+        assert_eq!(Value::Index(1).validation_backing(), None);
+        let vector = Value::KoalaBearVector(vec![crate::KoalaBear::new(1); 4].into());
+        assert_eq!(vector.validation_backing(), Some(parts(&vector).1[0]));
     }
 }
